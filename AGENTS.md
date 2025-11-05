@@ -59,6 +59,7 @@ Provide a reproducible, open foundation for autonomous AI-powered organizations:
 ---
 **Goal:** this repo proves a fully self-hosted, crypto-funded AI + Web3 company template can exist—minimal, verifiable, and owned by its DAO.
 
+CRITICAL: as you are assembling each file, you do NOT write custom code. You must find and copy working impementations from OSS for each file, or our sister repositories at https://github.com/Cogni-DAO
 
 [ ] .env.example                  # sample env vars for all services
 [ ] .env.local.example            # local-only env template (never committed)
@@ -77,6 +78,8 @@ Provide a reproducible, open foundation for autonomous AI-powered organizations:
 [ ] Dockerfile                    # build reproducible app image
 [ ] README.md                     # high-level docs
 [ ] CHANGELOG.md                  # version history / release notes
+[ ] vitest.config.ts              # single unified unit/integration test config
+[ ] playwright.config.ts          # browser test config (repo root)
 
 [ ] infra/                        # infrastructure definitions (Terraform + Docker)
 [ ] ├── docker-compose.yml        # local dev composition: web + litellm + loki
@@ -132,17 +135,41 @@ Provide a reproducible, open foundation for autonomous AI-powered organizations:
 [ ] │   ├── primitives/           # layout primitives (Flex, Grid)
 [ ] │   └── index.ts
 [ ] │
-[ ] ├── lib/                      # core framework-agnostic logic
-[ ] │   ├── env/                  # zod-validated env management
-[ ] │   ├── ai/                   # LangGraph + LiteLLM orchestration
-[ ] │   ├── web3/                 # wagmi/viem config + utils
-[ ] │   ├── logging/              # pino + transports
-[ ] │   ├── schemas/              # zod schemas shared across layers
-[ ] │   ├── constants/            # shared enums + route constants
-[ ] │   ├── db/                   # drizzle or prisma adapter
-[ ] │   ├── config/               # app-wide feature flags
-[ ] │   └── util/                 # pure helpers (strings, dates, crypto)
-[ ] │
+[ ] ├── lib/                                   # core framework-agnostic logic
+[ ] │   ├── env/                               # zod-validated env management
+[ ] │   │   ├── server.ts                      # PRIVATE vars: DATABASE_URL, LITELLM_ADMIN_KEY, OPENROUTER_KEY
+[ ] │   │   ├── client.ts                      # PUBLIC vars: NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+[ ] │   │   └── index.ts                       # unify exports (Env), helpers (requireEnv)
+[ ] │   ├── ai/                                # LangGraph + LiteLLM orchestration
+[ ] │   │   ├── client.ts                      # OpenAI-compatible fetch → LiteLLM proxy
+[ ] │   │   ├── graphs/proof-of-concept.ts     # minimal LangGraph example
+[ ] │   │   └── litellm/router.ts              # model aliases, retries, fallbacks
+[ ] │   ├── web3/                              # wagmi/viem config + utils
+[ ] │   │   ├── config.ts                      # createConfig({ chains, transports, connectors })
+[ ] │   │   ├── chains.ts                      # supported chain list + ids
+[ ] │   │   └── connectors.ts                  # injected, walletconnect, coinbase, safe
+[ ] │   ├── logging/                           # pino + transports
+[ ] │   │   ├── logger.ts                      # base pino instance (prod/dev formatting)
+[ ] │   │   └── transports/pino-loki.ts        # optional Loki transport wiring
+[ ] │   ├── schemas/                           # zod schemas shared across layers
+[ ] │   │   ├── api.ts                         # request/response DTOs
+[ ] │   │   └── usage.ts                       # AI usage record schema (userId, model, tokens)
+[ ] │   ├── constants/                         # shared enums + route constants
+[ ] │   │   ├── routes.ts                      # canonical route paths
+[ ] │   │   └── models.ts                      # model ids, provider names
+[ ] │   ├── db/                                # Vultr-hosted Postgres (crypto-paid) for LiteLLM accounts
+[ ] │   │   ├── schema/                        # drizzle/prisma schema objects
+[ ] │   │   │   ├── accounts.ts                # users, api_keys, wallet addresses
+[ ] │   │   │   └── usage.ts                   # metering: prompt_tokens, completion_tokens, cost
+[ ] │   │   ├── client.ts                      # db client init (drizzle or prisma) from Env.DATABASE_URL
+[ ] │   │   └── migrations.ts                  # migration runner bootstrap
+[ ] │   ├── config/                            # app-wide feature flags
+[ ] │   │   └── app.ts                         # toggles: enablePayments, enableLoki, enableLangfuse
+[ ] │   └── util/                              # pure helpers (strings, dates, crypto)
+[ ] │       ├── strings.ts                     # titleCase, slugify
+[ ] │       ├── dates.ts                       # toISO, durationFmt
+[ ] │       └── crypto.ts                      # randomId, stableHash
+
 [ ] ├── styles/                   # global design system files
 [ ] │   ├── tailwind.preset.ts
 [ ] │   ├── tailwind.css
@@ -160,15 +187,10 @@ Provide a reproducible, open foundation for autonomous AI-powered organizations:
 [ ] ├── unit/                     # isolated function + component tests
 [ ] ├── integration/              # multi-module behavior tests
 [ ] └── setup.ts                  # test env bootstrap
-[ ]
+
 [ ] e2e/                          # playwright specs
 [ ] ├── auth.spec.ts
-[ ] ├── proposals.spec.ts
-[ ] └── playwright.config.ts
-[ ]
-[ ] vitest.config.ts              # single unified unit/integration test config
-[ ] playwright.config.ts          # browser test config (optional duplicate root)
-[ ]
+[ ] └── proposals.spec.ts
 [ ] scripts/                      # helper CLI scripts
 [ ] ├── generate-types.ts         # schema/type generator
 [ ] ├── seed-db.ts                # populate local db
