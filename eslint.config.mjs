@@ -154,6 +154,8 @@ export default [
       "coverage/**",
       "*.d.ts",
       "node_modules/**",
+      "commitlint.config.cjs",
+      "*.config.cjs",
     ],
   },
 ];
