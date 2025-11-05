@@ -1,0 +1,33 @@
+name: Security
+on:
+  pull_request:
+  schedule:
+    - cron: "0 9 * * 1"  # weekly, Mondays 09:00 UTC
+
+permissions:
+  contents: read  # no code-scanning writes needed
+
+jobs:
+  dependency-review:
+    name: Dependency Review (PR only)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+
+  scorecard:
+    name: OpenSSF Scorecard (weekly)
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: ossf/scorecard-action@v2.3.1
+        with:
+          results_file: results.sarif
+          publish_results: false   # set true if you want the public Scorecard badge
+      - uses: actions/upload-artifact@v4
+        with:
+          name: scorecard-sarif
+          path: results.sarif
