@@ -44,6 +44,7 @@ Provide a reproducible, open foundation for autonomous AI-powered organizations:
 
 - **Styling:** Tailwind preset + shadcn/ui only. No inline styles, no arbitrary values.
 - **Linting:** ESLint (typescript, boundaries, tailwind, import rules) + Prettier required.
+- **Git Commits:** Conventional Commits enforced via commitlint. Format: `type(scope): subject` ≤72 chars.
 
 ### Tailwind ESLint
 
@@ -121,6 +122,7 @@ CRITICAL: as you are assembling each file, you do NOT write custom code. You mus
 [x] tsconfig.json # typescript + alias paths
 [x] tsconfig.eslint.json # eslint-specific typescript config
 [ ] package.json # deps, scripts, engines
+[x] commitlint.config.cjs # conventional commits enforcement
 [ ] middleware.ts # global middleware (auth, rate-limit, headers)
 [ ] Dockerfile # build reproducible app image
 [ ] README.md # high-level docs
