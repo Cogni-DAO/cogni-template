@@ -16,6 +16,7 @@ Provide a reproducible, open foundation for autonomous AI-powered organizations:
 4. **Open-Source Stack Only** — no proprietary SaaS dependencies.
 5. **Strict Code Discipline** — lint, type, and style enforcement identical across all Cogni repos.
 6. **Proof-of-Concept Scope** — implement minimal working integrations only; no product logic.
+7. **Documentation** - Every subdirectory has an AGENTS.md file, following the model of AGENTS_template.md
 
 ---
 ## Architectural Overview
@@ -55,6 +56,25 @@ Provide a reproducible, open foundation for autonomous AI-powered organizations:
 - Closed-source SDKs.
 - Inline styling or arbitrary Tailwind values.
 - CommonJS or untyped packages.
+
+---
+## Usage
+```bash
+# Development server
+pnpm dev
+
+# Type checking  
+pnpm typecheck
+
+# Linting
+pnpm lint
+
+# Testing
+pnpm test
+
+# Build
+pnpm build
+```
 
 ---
 **Goal:** this repo proves a fully self-hosted, crypto-funded AI + Web3 company template can exist—minimal, verifiable, and owned by its DAO.
