@@ -1,0 +1,13 @@
+optConfig:
+  optIn: true   # or ensure the repo is otherwise enabled
+action: fix
+enforceDefault: true
+enforceOnAdmins: true
+requireUpToDateBranch: true
+requireApproval: false
+approvalCount: 0
+requireStatusChecks:
+  - context: CI
+  - context: Security
+  - context: Release
+  - context: Cogni Git PR Review
