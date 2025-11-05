@@ -1,7 +1,6 @@
 name: CI - PR
 on:
-  pull_request:
-    branches: [ main ]
+  pull_request
 permissions:
   contents: read
 concurrency:
@@ -10,17 +9,23 @@ concurrency:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
     steps:
       - uses: actions/checkout@v4
+      - name: Install pnpm
+        run: npm install -g pnpm
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          # Auto-caching is enabled when package.json has "packageManager"
-          # Otherwise: cache: 'npm'
+          cache: 'pnpm'
+
       - name: Repository policy check
         run: |
           npm install -g repolinter
           repolinter lint -c repolinter.json .
-      - run: npm ci
-      - run: npm run lint --if-present
-      - run: npm test
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - run: pnpm run check
+      - run: pnpm run build
