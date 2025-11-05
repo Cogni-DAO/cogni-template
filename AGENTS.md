@@ -110,15 +110,16 @@ CRITICAL: as you are assembling each file, you do NOT write custom code. You mus
 [ ] .env.example # sample env vars for all services
 [ ] .env.local.example # local-only env template (never committed)
 [ ] .gitignore # standard git ignore list
-[ ] .prettierrc # code formatting config
-[ ] .prettierignore # excludes build/artifacts from prettier
-[ ] .eslintrc.json # eslint config (includes boundaries, tailwind rules)
-[ ] .nvmrc # node version pin (e.g., v20)
-[ ] .editorconfig # IDE whitespace, newline rules
-[ ] next.config.mjs # Next.js app config (ESM)
+[x] .prettierrc # code formatting config
+[x] .prettierignore # excludes build/artifacts from prettier
+[x] eslint.config.mjs # eslint config (includes boundaries, tailwind rules)
+[x] .nvmrc # node version pin (e.g., v20)
+[x] .editorconfig # IDE whitespace, newline rules
+[ ] next.config.ts # Next.js app config (ESM)
 [ ] postcss.config.mjs # PostCSS/Tailwind pipeline config
-[ ] tailwind.config.ts # Tailwind theme, preset imports
-[ ] tsconfig.json # typescript + alias paths
+[x] tailwind.config.ts # Tailwind theme, preset imports
+[x] tsconfig.json # typescript + alias paths
+[x] tsconfig.eslint.json # eslint-specific typescript config
 [ ] package.json # deps, scripts, engines
 [ ] middleware.ts # global middleware (auth, rate-limit, headers)
 [ ] Dockerfile # build reproducible app image
