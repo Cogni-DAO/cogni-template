@@ -5,17 +5,20 @@
 Based on current Next.js baseline and leverage analysis, this plan prioritizes CI-first approach with atomic, testable stages.
 
 ### ✅ Current Baseline (Complete)
+
 - [x] Next.js App Router with TypeScript
-- [x] ESLint + Prettier configuration  
+- [x] ESLint + Prettier configuration
 - [x] Basic Tailwind CSS setup
 - [x] Initial project structure
 
 ---
 
 ## Stage 1: Core Configuration Hardening
+
 **Goal**: Enforce strict code discipline with comprehensive linting rules
 
 ### Files to Create/Update:
+
 - [ ] `.eslintrc.json` - Add typescript, boundaries, tailwind, import rules
 - [ ] `.prettierrc` - Standardize code formatting
 - [ ] `.prettierignore` - Exclude build artifacts
@@ -25,6 +28,7 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 - [ ] Update `package.json` scripts for typecheck, husky, lint-staged
 
 ### Validation:
+
 - [ ] `pnpm lint` passes with zero warnings
 - [ ] `pnpm typecheck` passes
 - [ ] All files format consistently
@@ -32,13 +36,16 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 ---
 
 ## Stage 2: Early DAO Governance + CI Foundation
+
 **Goal**: Install cogni-git-review, have a repo-spec and simple CI github action.
 
 ### Files to Create:
-- [ ] `.cogni/repo-spec.yaml` - Repository rules and governance (user handled)  
+
+- [ ] `.cogni/repo-spec.yaml` - Repository rules and governance (user handled)
 - [ ] `.github/workflows/ci.yml` - Basic CI pipeline (user handled)
 
 ### Validation:
+
 - [ ] GitHub Actions run on push/PR
 - [ ] Pre-commit hooks block bad commits
 - [ ] Branch protection enforces CI checks
@@ -46,27 +53,32 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 ---
 
 ## Stage 3: Environment & Type Safety
+
 **Goal**: Bulletproof environment variable management with zod validation
 
 ### Files to Create:
+
 - [ ] `.env.example` - Sample environment variables (with DATABASE_URL using sslmode=require)
 - [ ] `.env.local.example` - Local-only template (never committed)
 - [ ] `src/lib/env/server.ts` - Private vars (DATABASE_URL, API keys)
-- [ ] `src/lib/env/client.ts` - Public vars (NEXT_PUBLIC_*)
+- [ ] `src/lib/env/client.ts` - Public vars (NEXT*PUBLIC*\*)
 - [ ] `src/lib/env/index.ts` - Unified exports and helpers
-- [ ] Update `tsconfig.json` - Add path aliases (@/, @/lib/*)
+- [ ] Update `tsconfig.json` - Add path aliases (@/, @/lib/\*)
 
 ### Validation:
+
 - [ ] Invalid env vars cause build failures
 - [ ] Type safety for all environment access
 - [ ] Clear separation of client/server variables
 
 ---
 
-## Stage 4: Design System + Lint Enforcement  
+## Stage 4: Design System + Lint Enforcement
+
 **Goal**: Tailwind preset with shadcn/ui and strict style rules
 
 ### Files to Create:
+
 - [ ] `tailwind.config.ts` - Custom preset with design tokens
 - [ ] `src/styles/tailwind.preset.ts` - Reusable theme configuration
 - [ ] `src/styles/tailwind.css` - Global styles and utilities
@@ -75,6 +87,7 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 - [ ] Install shadcn/ui CLI and base components
 
 ### Validation:
+
 - [ ] Lint blocks arbitrary Tailwind classes
 - [ ] shadcn/ui components render correctly
 - [ ] Consistent theme variables across components
@@ -82,9 +95,11 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 ---
 
 ## Stage 5: Core Dependencies + Providers
+
 **Goal**: Install and wire essential web3, AI, and utility packages
 
 ### Files to Create/Update:
+
 - [ ] `package.json` - Add wagmi, viem, RainbowKit, LiteLLM, zod, etc.
 - [ ] `src/app/providers.tsx` - Client providers (QueryClient, Wagmi, RainbowKit)
 - [ ] `src/lib/web3/config.ts` - wagmi configuration
@@ -93,6 +108,7 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 - [ ] `src/lib/logging/logger.ts` - Pino logger configuration
 
 ### Validation:
+
 - [ ] All providers render without errors
 - [ ] Wallet connection UI appears
 - [ ] Logger outputs structured logs
@@ -100,17 +116,20 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 ---
 
 ## Stage 6: Minimal Routes + Health Check
+
 **Goal**: Basic routing structure with operational endpoints
 
 ### Files to Create:
+
 - [ ] `src/app/api/health/route.ts` - Readiness/liveness probe
 - [ ] `src/app/(public)/layout.tsx` - Unauthenticated route layout
 - [ ] `src/app/(public)/page.tsx` - Public landing page
-- [ ] `src/app/(protected)/layout.tsx` - Auth-required route layout  
+- [ ] `src/app/(protected)/layout.tsx` - Auth-required route layout
 - [ ] `src/app/(protected)/page.tsx` - Protected dashboard
 - [ ] `middleware.ts` - Global middleware (auth, rate-limit, headers)
 
 ### Validation:
+
 - [ ] `/api/health` returns 200 OK
 - [ ] Route groups render correctly
 - [ ] Middleware processes requests
@@ -118,9 +137,11 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 ---
 
 ## Stage 7: Web3 Integration
+
 **Goal**: Wallet connection and signature verification
 
 ### Files to Create:
+
 - [ ] `src/app/api/web3/verify/route.ts` - Signature verification endpoint
 - [ ] `src/features/wallet/components/ConnectButton.tsx` - Wallet connection UI
 - [ ] `src/features/wallet/hooks/useWalletAuth.ts` - Authentication logic
@@ -128,6 +149,7 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 - [ ] `src/lib/schemas/api.ts` - Request/response DTOs
 
 ### Validation:
+
 - [ ] Wallet connects successfully
 - [ ] Signature verification works
 - [ ] Protected routes require wallet auth
@@ -135,9 +157,11 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 ---
 
 ## Stage 8: AI Layer Proof of Concept
+
 **Goal**: LiteLLM proxy with basic LangGraph workflow
 
 ### Files to Create:
+
 - [ ] `src/app/api/ai/chat/route.ts` - Chat completion endpoint
 - [ ] `src/app/api/ai/stream/route.ts` - Streaming response handler
 - [ ] `src/lib/ai/client.ts` - OpenAI-compatible client → LiteLLM proxy
@@ -146,6 +170,7 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 - [ ] `infra/litellm/config.yaml` - LiteLLM proxy configuration
 
 ### Validation:
+
 - [ ] LiteLLM proxy responds to API calls
 - [ ] Chat endpoint returns completions
 - [ ] Usage tracking works
@@ -153,9 +178,11 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 ---
 
 ## Stage 9: Database Integration (Vultr Postgres)
+
 **Goal**: Crypto-paid Postgres for user accounts and usage tracking
 
 ### Files to Create:
+
 - [ ] `src/lib/db/client.ts` - Database client from DATABASE_URL
 - [ ] `src/lib/db/schema.ts` - Single schema file (accounts, api_keys, usage tables)
 - [ ] `src/lib/db/migrations.ts` - Migration runner
@@ -164,6 +191,7 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 - [ ] `scripts/migrate.ts` - Database migration runner
 
 ### Validation:
+
 - [ ] Database connection successful
 - [ ] Migrations run without errors
 - [ ] Usage data persists correctly
@@ -171,11 +199,13 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 ---
 
 ## Stage 10: Testing Framework
+
 **Goal**: Comprehensive test coverage with vitest and playwright
 
 ### Files to Create:
+
 - [ ] `vitest.config.ts` - Unit/integration test configuration
-- [ ] `playwright.config.ts` - End-to-end test configuration  
+- [ ] `playwright.config.ts` - End-to-end test configuration
 - [ ] `tests/setup.ts` - Test environment bootstrap
 - [ ] `tests/unit/env.test.ts` - Environment validation tests
 - [ ] `tests/integration/api.test.ts` - API endpoint tests
@@ -184,6 +214,7 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 - [ ] Update GitHub Actions to run tests
 
 ### Validation:
+
 - [ ] Unit tests pass in CI
 - [ ] Integration tests cover API routes
 - [ ] E2E tests validate user workflows
@@ -191,9 +222,11 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 ---
 
 ## Stage 11: Infrastructure as Code
+
 **Goal**: Docker, docker-compose, and deployment configurations
 
 ### Files to Create:
+
 - [ ] `Dockerfile` - Production container build
 - [ ] `infra/docker-compose.yml` - Local development stack
 - [ ] `infra/loki/` - Logging stack configuration
@@ -202,16 +235,19 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 - [ ] Update CI to build and deploy containers
 
 ### Validation:
+
 - [ ] Local stack runs with docker-compose
 - [ ] Production build succeeds
 - [ ] Deployment pipeline works
 
 ---
 
-## Stage 12: Full DAO Runtime Integration  
+## Stage 12: Full DAO Runtime Integration
+
 **Goal**: Complete DAO governance with treasury and deployment controls
 
 ### Files to Create:
+
 - [ ] `scripts/generate-types.ts` - Schema/type generation
 - [ ] `src/features/proposals/` - DAO proposal management feature
 - [ ] `src/lib/config/app.ts` - Feature flags and toggles
@@ -219,7 +255,8 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 - [ ] Treasury → OpenRouter → Akash deployment flow
 
 ### Validation:
-- [ ] DAO governance works end-to-end  
+
+- [ ] DAO governance works end-to-end
 - [ ] Treasury controls deployments
 - [ ] All systems integrate correctly
 
@@ -228,8 +265,9 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 ## Success Criteria
 
 Each stage must satisfy:
+
 1. **Atomic**: Can be developed and tested independently
-2. **Validated**: Has clear success/failure criteria  
+2. **Validated**: Has clear success/failure criteria
 3. **Committed**: Clean git history with working state
 4. **CI-Protected**: All changes validated by automated checks
 5. **OSS-Compliant**: Uses only open-source dependencies
