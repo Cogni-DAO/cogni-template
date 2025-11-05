@@ -1,0 +1,48 @@
+{
+    "$schema": "https://raw.githubusercontent.com/todogroup/repolinter/master/rulesets/schema.json",
+    "version": 2,
+    "axioms": {},
+    "rules": {
+      "license-file-exists": {
+        "level": "error",
+        "rule": {
+          "type": "file-existence",
+          "options": { "globsAny": ["LICENSE", "LICENSE.*", "license", "license.*"] }
+        },
+        "policyInfo": "A LICENSE file is required."
+      },
+      "readme-file-exists": {
+        "level": "error",
+        "rule": {
+          "type": "file-existence",
+          "options": { "globsAny": ["README.md", "README.MD"] }
+        },
+        "policyInfo": "A README.md at repo root is required."
+      },
+      "codeowners-file-exists": {
+        "level": "error",
+        "rule": {
+          "type": "file-existence",
+          "options": { "globsAny": [".github/CODEOWNERS", "CODEOWNERS"] }
+        },
+        "policyInfo": "CODEOWNERS is required to enable review ownership."
+      },
+      "cogni-repospec-exists": {
+        "level": "error",
+        "rule": {
+          "type": "file-existence",
+          "options": { "globsAny": [".cogni/repo-spec.yaml"] }
+        },
+        "policyInfo": "Cogni governance contract must exist."
+      },
+      "workflows-folder-present": {
+        "level": "warning",
+        "rule": {
+          "type": "file-existence",
+          "options": { "globsAny": [".github/workflows/**"] }
+        },
+        "policyInfo": "At least one GitHub Actions workflow should exist."
+      }
+    }
+  }
+  
