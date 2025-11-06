@@ -1,0 +1,28 @@
+name: "Lint PR"
+
+on:
+  pull_request:
+    types:
+      - opened
+      - edited
+      - reopened
+      - synchronize
+
+jobs:
+  main:
+    name: Validate PR title
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Conventional-commit parsing stays default
+          # Add a subject regex that *disallows* certain phrases:
+          subjectPattern: '^(?!.*\b(?:(?:[Cc]omplete)|(?:[Cc]omprehensive)|(?:[Ff]inal)|(?:[Pp]roduction[ ]+[Rr]eady))\b).+'
+          subjectPatternError: |
+            The subject "{subject}" in PR title "{title}" includes prohibited words:
+            complete, comprehensive, final, or "production ready".
+            These terms reflect improper understanding of the project and code.

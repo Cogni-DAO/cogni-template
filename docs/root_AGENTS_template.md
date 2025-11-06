@@ -1,14 +1,10 @@
-# AGENTS.md — Cogni-Template MetaPrompt
+# AGENTS.md — [Project Name] MetaPrompt
 
 > Scope: repository-wide orientation for all agents. Keep ≤150 lines. Subdirs inherit from this.
 
 ## Mission
 
-Provide a reproducible, open-source foundation for autonomous AI-powered organizations:
-
-- All infra deployable via open tooling (Docker + OpenTofu + Akash)
-- All accounting and payments via DAO-controlled crypto wallets
-- Strict reproducibility and code discipline across all Cogni repos
+[1-3 sentences describing the project's core purpose and goals]
 
 ## Workflow Guiding Principles
 
@@ -16,7 +12,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - **Compact progress:** Summarize after each step.
 - **Prune aggressively:** Delete noise, keep signal.
 - **Delegate cleanly:** Use subagents with narrow scopes.
-- **Validate early:** Run `pnpm check` before proposing commits.
+- **Validate early:** Run quality checks before proposing commits.
 - **Update docs:** Reflect any surface changes in AGENTS.md.
 
 ## Agent Behavior
@@ -28,27 +24,24 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 ## Environment
 
-- **Framework:** Next.js (TypeScript, App Router)
-- **Infra:** Docker + OpenTofu → Akash
-- **Toolchain:** pnpm, ESLint, Prettier, Vitest, Playwright
-- **CI entrypoint:** `pnpm check`
+- **Framework:** [Primary framework/language]
+- **Infra:** [Infrastructure stack]
+- **Toolchain:** [Development tools]
+- **CI entrypoint:** [Main quality check command]
 
 ## Pointers
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Implementation Plan](docs/IMPLEMENTATION_PLAN.md)
-- [Repo Specification](.cogni/repo-spec.yaml)
+- [Repo Specification](.cogni/repo-spec.yaml) <!-- optional -->
 - [Subdir AGENTS.md Policy](docs/subdir_AGENTS_template.md)
 - [Style & Lint Rules](docs/STYLE.md)
 
 ## Usage
 
 ```bash
-pnpm dev            # start dev server
-pnpm build          # build for production
-pnpm check          # lint + type + format validation
-pnpm test           # run unit tests
-pnpm format         # prettier format fixes
-pnpm check:agentsmd # lint AGENTS.md documentation
-pnpm e2e            # end-to-end tests
+[command]        # [description]
+[command]        # [description]
+[command]        # [description]
+[command]        # [description]
 ```

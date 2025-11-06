@@ -1,51 +1,80 @@
-# /src — Application Source Code
+# src · AGENTS.md
+
+> Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
+
+## Metadata
+
+- **Owners:** @derekg1729
+- **Last reviewed:** 2025-11-06
+- **Status:** draft
 
 ## Purpose
 
-This directory contains the complete Next.js application source code for the Cogni-Template, implementing a fully web3-enclosed, crypto-funded AI + Web3 company template.
+Next.js application source implementing hexagonal architecture for a fully web3-enclosed, crypto-funded AI application. Contains all layers from delivery to domain.
 
-## Key Directories
+## Pointers
 
-- `app/` — Next.js App Router (layouts, pages, API routes)
-- `components/` — Shared UI components and design system primitives
-- `features/` — Domain-specific vertical slices with strict boundaries
-- `lib/` — Core framework-agnostic business logic and integrations
-- `styles/` — Global design system and Tailwind configuration
-- `types/` — Global TypeScript type definitions
-- `assets/` — Static icons and images imported in code
+- [Root AGENTS.md](../AGENTS.md)
+- [Architecture](../docs/ARCHITECTURE.md)
+
+## Boundaries
+
+```json
+{
+  "layer": "meta",
+  "may_import": ["*"],
+  "must_not_import": []
+}
+```
+
+## Public Surface
+
+- **Exports:** Next.js application
+- **Routes (if any):** All app routes via app/
+- **CLI (if any):** none
+- **Env/Config keys:** Via shared/env/ schemas
+- **Files considered API:** app/ routes, features/ exports, components/ exports
+
+## Ports (optional)
+
+- **Uses ports:** All ports defined in ports/
+- **Implements ports:** Via adapters/
+- **Contracts (required if implementing):** tests/contract/ coverage
 
 ## Responsibilities
 
-- **Frontend UI**: Next.js App Router with TypeScript, Tailwind, shadcn/ui components
-- **Web3 Integration**: Wallet authentication via wagmi + RainbowKit + viem
-- **AI Orchestration**: LiteLLM proxy → OpenRouter → LangGraph workflows → Langfuse analytics
-- **API Layer**: Next.js route handlers for health checks, AI endpoints, web3 verification
-- **Data Layer**: Type-safe database operations with Postgres via Drizzle/Prisma
-- **Environment Management**: Zod-validated environment variables with client/server separation
+- This directory **does**: Implement hexagonal architecture, provide delivery layer, domain logic, infrastructure
+- This directory **does not**: Contain build tools, deployment config, external test utilities
 
-## Architecture Rules
+## Usage
 
-- **Feature Boundaries**: No cross-feature imports (enforced by ESLint boundaries)
-- **Type Safety**: No `any` types, full TypeScript coverage with strict configuration
-- **OSS-Only**: All dependencies must be open source
-- **Web3 Enclosure**: All resources authenticated by connected wallets
-- **Crypto Accounting**: Infrastructure and usage funded by DAO-controlled wallets
+Minimal local commands:
+
+```bash
+pnpm dev
+pnpm build
+pnpm typecheck
+```
 
 ## Standards
 
-- **Linting**: ESLint with typescript, boundaries, tailwind, import rules
-- **Formatting**: Prettier with consistent configuration
-- **Styling**: Tailwind preset + shadcn/ui components, no arbitrary values
-- **Testing**: vitest for unit/integration, Playwright for E2E
-- **Documentation**: Every subdirectory has AGENTS.md following this template
+- Hexagonal architecture: app → features → ports → core, adapters → ports → core
+- Strict layer boundaries enforced via ESLint
+- All subdirs have AGENTS.md files
 
 ## Dependencies
 
-**Internal**: Each subdirectory imports only from `lib/` or its own scope
-**External**: wagmi, viem, RainbowKit, LiteLLM, LangGraph, Langfuse, zod, pino, drizzle
+- **Internal:** Hexagonal layer structure: app/, bootstrap/, features/, ports/, core/, adapters/, shared/
+- **External:** Next.js, React, TypeScript, web3 stack, AI stack
+
+## Change Protocol
+
+- Update this file when **Exports** or major structure changes
+- Bump **Last reviewed** date
+- Update ESLint boundary rules if **Boundaries** changed
+- Each subdir maintains its own AGENTS.md
 
 ## Notes
 
-- Copy working implementations from OSS repos or https://github.com/Cogni-DAO
-- Never write custom code when proven patterns exist
-- All API integrations must be crypto-funded (no traditional payment providers)
+- Every subdirectory has detailed AGENTS.md with specific layer rules
+- Dependencies flow inward per hexagonal architecture principles

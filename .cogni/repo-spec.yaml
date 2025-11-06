@@ -1,0 +1,50 @@
+# Cogni Git Review Repository Specification Template
+# Copy this file to .cogni/repo-spec.yaml and customize for your repository
+
+schema_version: "0.1.4"
+
+intent:
+  name: cogni-template
+
+# Control GitHub check conclusion behavior for gate errors/timeouts
+# false (default): errors/timeouts result in 'neutral' conclusion (non-blocking)
+# true: errors/timeouts result in 'failure' conclusion (blocks merge)
+fail_on_error: true
+
+cogni_dao:
+  dao_contract: "0x067d3d827fAb4F3cE7c7A3D3b97F5898d490761D" # Current Cogni parent DAO Contract Address
+  plugin_contract: "0x67966e0e9E30fEA545f2EeDE4253f96e1Fb68E2c" # DAO's Aragon Voting Plugin Address
+  signal_contract: "0x685350a73E7bC60143568d32040EE3d79C0b11DD" # DAO's CogniSignal Contract Address
+  chain_id: "11155111" # Chain ID: Sepolia
+  base_url: "https://proposal.cognidao.org" # v0 Base URL: cogni-proposal-launcher service
+
+# Gates run in the order they appear below.
+gates:
+  # Built-in gates (run directly in bot process)
+  - type: review-limits
+    id: review_limits
+    with:
+      max_changed_files: 30
+      max_total_diff_kb: 500
+
+  # Ensure */*/AGENTS.md files are updated when code changes
+  - type: agents-md-sync
+    id: agents_md_sync
+    # with:  # Optional configuration
+    #   code_patterns: ["src/**/*.js", "lib/**/*.ts"]  # Files that require doc updates
+    #   doc_pattern: "CLAUDE.md"                       # Documentation file to check. Default is AGENTS.md
+
+  - type: ai-rule
+    with:
+      rule_file: pr-syntropy-coherence.yaml
+  - type: ai-rule
+    with:
+      rule_file: patterns-and-docs.yaml
+  - type: ai-rule
+    with:
+      rule_file: repo-goal-alignment.yaml
+
+  ## template for adding a new rule.
+  # - type: ai-rule
+  #   with:
+  #     rule_file: ai-rule-template.yaml

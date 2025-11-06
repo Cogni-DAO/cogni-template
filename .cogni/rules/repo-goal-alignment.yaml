@@ -1,0 +1,19 @@
+id: cogni-git-review-repo-goal-alignment
+schema_version: "0.3"
+blocking: true
+workflow_id: goal-evaluations
+
+evaluations:
+  - proper-ci-cd: This PR implements improvements to the CI/CD pipeline. Ensuring clean, tested, and deployed code.
+  - standard-cogni-template: This PR contributes to building a standardized template for a typescript AI application.
+  - test-coverage: This PR improves test coverage or reliability of existing features.
+
+success_criteria:
+  neutral_on_missing_metrics: true
+  any_of:
+    - metric: proper-ci-cd
+      gte: 0.8
+    - metric: standard-cogni-template
+      gte: 0.8
+    - metric: test-coverage
+      gte: 0.8
