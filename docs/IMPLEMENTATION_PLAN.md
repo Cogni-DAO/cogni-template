@@ -43,14 +43,14 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 
 ### Files to Create:
 
-- [ ] `.cogni/repo-spec.yaml` - Repository rules and governance (user handled)
-- [ ] `.github/workflows/ci.yml` - Basic CI pipeline (user handled)
+- [x] `.cogni/repo-spec.yaml` - Repository rules and governance (user handled)
+- [x] `.github/workflows/ci.yml` - Basic CI pipeline (user handled)
 
 ### Validation:
 
-- [ ] GitHub Actions run on push/PR
-- [ ] Pre-commit hooks block bad commits
-- [ ] Branch protection enforces CI checks
+- [x] GitHub Actions run on push/PR
+- [x] Pre-commit hooks block bad commits
+- [x] Branch protection enforces CI checks
 
 ---
 

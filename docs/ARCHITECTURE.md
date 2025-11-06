@@ -74,17 +74,17 @@ Every dependency points inward.
 [ ] package.json # deps, scripts, engines
 [ ] Dockerfile # reproducible build
 [ ] .dockerignore # ignore node_modules, artifacts, .env.\*
-[ ] LICENSE # OSS license
-[ ] CODEOWNERS # review ownership
-[ ] SECURITY.md # disclosure policy
-[ ] CONTRIBUTING.md # contribution standards
+[x] LICENSE # OSS license
+[x] CODEOWNERS # review ownership
+[x] SECURITY.md # disclosure policy
+[x] CONTRIBUTING.md # contribution standards
 [ ] README.md # overview
 [ ] CHANGELOG.md # releases
 [ ] middleware.ts # headers, session/API-key guard, basic rate-limit
 [ ] vitest.config.ts # unit/integration
 [ ] playwright.config.ts # UI/e2e
 
-[ ] docs/
+[x] docs/
 [ ] └── ARCHITECTURE.md # narrative + diagrams (longform)
 
 [ ] infra/ # infra (minimal → full)
@@ -100,12 +100,12 @@ Every dependency points inward.
 [ ] ├── fonts/
 [ ] └── images/
 
-[ ] src/
-[ ] ├── bootstrap/ # composition root (DI)
+[x] src/
+[x] ├── bootstrap/ # composition root (DI)
 [ ] │ ├── container.ts # wires adapters → ports
 [ ] │ └── config.ts # Zod-validated env
 [ ] │
-[ ] ├── app/ # delivery (Next UI + routes)
+[x] ├── app/ # delivery (Next UI + routes)
 [ ] │ ├── layout.tsx
 [ ] │ ├── page.tsx
 [ ] │ ├── providers.tsx # QueryClient, Wagmi, RainbowKit
@@ -119,7 +119,7 @@ Every dependency points inward.
 [ ] │ ├── keys/create/route.ts # API-key issuance
 [ ] │ └── web3/verify/route.ts # calls wallet verification port
 [ ] │
-[ ] ├── features/ # application services
+[x] ├── features/ # application services
 [ ] │ ├── auth/
 [ ] │ │ ├── actions.ts
 [ ] │ │ └── services/
@@ -132,7 +132,7 @@ Every dependency points inward.
 [ ] │ ├── constants.ts
 [ ] │ └── index.ts
 [ ] │
-[ ] ├── core/ # domain: entities, rules, invariants
+[x] ├── core/ # domain: entities, rules, invariants
 [ ] │ ├── auth/
 [ ] │ │ ├── session.ts
 [ ] │ │ └── rules.ts
@@ -143,7 +143,7 @@ Every dependency points inward.
 [ ] │ ├── model.ts
 [ ] │ └── rules.ts
 [ ] │
-[ ] ├── ports/ # contracts (minimal interfaces)
+[x] ├── ports/ # contracts (minimal interfaces)
 [ ] │ ├── ai.port.ts # AIService { complete(): Promise<…> }
 [ ] │ ├── wallet.port.ts # WalletService { verifySignature(...) }
 [ ] │ ├── auth.port.ts # AuthService { issueNonce, verifySiwe, session }
@@ -155,7 +155,7 @@ Every dependency points inward.
 [ ] │ ├── clock.port.ts # Clock { now(): Date }
 [ ] │ └── rng.port.ts # Rng { uuid(): string }
 [ ] │
-[ ] ├── adapters/ # infrastructure implementations (no UI)
+[x] ├── adapters/ # infrastructure implementations (no UI)
 [ ] │ ├── server/
 [ ] │ │ ├── ai/litellm.adapter.ts # AIService impl
 [ ] │ │ ├── auth/siwe.adapter.ts # nonce + session store
@@ -171,7 +171,7 @@ Every dependency points inward.
 [ ] │ ├── worker/ # background jobs (future)
 [ ] │ └── cli/ # command-line adapters (future)
 [ ] │
-[ ] ├── shared/ # small, pure, framework-agnostic
+[x] ├── shared/ # small, pure, framework-agnostic
 [ ] │ ├── env/
 [ ] │ │ ├── server.ts # Zod-validated private vars
 [ ] │ │ ├── client.ts # validated public vars
@@ -206,18 +206,19 @@ Every dependency points inward.
 [ ] ├── icons/
 [ ] └── images/
 
-[ ] tests/
+[x] tests/
 [ ] ├── unit/ # core rules + features with mocked ports
 [ ] ├── integration/ # adapters against local services
 [ ] ├── contract/ # reusable port contract harness
 [ ] └── setup.ts
 
-[ ] e2e/
+[x] e2e/
 [ ] ├── auth.spec.ts
 [ ] └── ai.spec.ts
 
-[ ] scripts/
+[x] scripts/
 [ ] ├── generate-types.ts
+[ ] ├── validate-agents-md.mjs
 [ ] ├── seed-db.ts
 [ ] └── migrate.ts
 
