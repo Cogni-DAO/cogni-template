@@ -6,11 +6,11 @@ This repository defines the **Cogni-Template**, a fully web3-enclosed, open-sour
 
 ## Mission
 
-Provide a reproducible, open foundation for autonomous AI-powered organizations:
+Provide a reproducible, open source foundation for autonomous AI-powered organizations:
 
 - Every service deployable through open-source infrastructure.
 - Every payment, credit, and interaction handled via crypto wallets.
-- Every decision recorded and enforceable by DAO control files inside `.cogni/`.
+- Strict architecture and style rules, empowering syntropy via AI code contributions globally
 
 ---
 
@@ -26,50 +26,22 @@ Provide a reproducible, open foundation for autonomous AI-powered organizations:
 
 ---
 
-## Architectural Overview
+## Pointers
 
-- **Frontend:** Next.js (App Router, TypeScript, Tailwind, shadcn/ui components).
-- **Web3 Layer:** wagmi + RainbowKit + viem for wallet auth and transaction flow.
-- **AI Layer:** LiteLLM proxy → OpenRouter crypto API → LangGraph workflows → Langfuse analytics.
-- **Backend API:** Next.js route handlers for health, AI, and web3 verification.
-- **Storage/State:** Postgres (for LiteLLM account + API key mapping) hosted by Vultr
-- **DAO Integration:** `.cogni/` directory defines `dao.json`, `repo-spec.yaml`, and permission schema for DAO wallet + git operations.
-- **Infra:** OpenTofu/Terraform modules + Dockerfiles for Akash deployment and local parity.
-- **Observability:** Pino → Loki transport; Langfuse for AI run tracing.
-- **CI/CD:** GitHub Actions or Jenkinsfile templates covering lint → test → build → deploy.
-
----
+- [Architecture](docs/ARCHITECTURE.md) - System design and structure
+- [Implementation Plan](docs/IMPLEMENTATION_PLAN.md) - Current development roadmap
+- [Repo Specification](.cogni/repo-spec.yaml) - DAO governance rules
 
 ## Strict Rules
 
 - **Styling:** Tailwind preset + shadcn/ui only. No inline styles, no arbitrary values.
 - **Linting:** ESLint (typescript, boundaries, tailwind, import rules) + Prettier required.
 - **Git Commits:** Conventional Commits enforced via commitlint. Format: `type(scope): subject` ≤72 chars.
-
-### Tailwind ESLint
-
-- Using `@poupe/eslint-plugin-tailwindcss` due to pnpm resolver issues with the official beta.
-- To switch back:
-  1. `pnpm add -D eslint-plugin-tailwindcss@latest`
-  2. In `eslint.config.mjs`, swap plugin import and key:
-     - enable `officialTailwind`, disable `communityTailwind`
-  3. Remove `@poupe/eslint-plugin-tailwindcss` if stable
 - **Type Safety:** No `any`. Full TypeScript coverage.
 - **File System Boundaries:** `features/` modules isolated; no cross-feature imports.
 - **No External Secrets:** All env vars defined via `.env.ts` schema; no hardcoded keys.
-- **OSS-First Dependencies:** next.js, wagmi, viem, liteLLM, langgraph, langfuse, pino, loki, zod, tailwind, shadcn/ui.
+- **OSS-First Dependencies:** Core stack only (see docs/STYLE.md for details).
 - **Tests:** vitest + playwright only.
-
----
-
-## Expected Behavior
-
-- [ ] Users connect wallets → obtain API key → consume AI credits.
-- [ ] DAO treasury funds OpenRouter account and Akash deployment via crypto.
-- [ ] LiteLLM proxy meters usage, updates token balance, and reports to Langfuse.
-- [ ] All actions observable through Langfuse dashboards and Loki logs.
-- [ ] CI/CD ensures zero drift between local and deployed builds.
-- [ ] Any new Cogni project clones this template and extends only the `features/` domain.
 
 ---
 
@@ -98,15 +70,13 @@ pnpm check
 # Auto-fix linting and formatting issues
 pnpm lint:fix
 
+pnpm format
+
 # Testing (not yet implemented)
 pnpm test
 ```
 
 ---
-
-**Goal:** this repo proves a fully self-hosted, crypto-funded AI + Web3 company template can exist—minimal, verifiable, and owned by its DAO.
-
-CRITICAL: as you are assembling each file, you do NOT write custom code. You must find and copy working impementations from OSS for each file, or our sister repositories at https://github.com/Cogni-DAO
 
 # Workflow Guiding Principles:
 

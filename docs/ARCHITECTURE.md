@@ -1,20 +1,56 @@
 # Cogni-Template Architecture
 
 Strict **Hexagonal (Ports & Adapters)** for a full-stack TypeScript app on **Next.js App Router**.  
-Purpose: a **fully open-source, crypto-funded AI template** with clean domain boundaries.  
+Purpose: a **fully open-source, crypto-only AI Application** with clean domain boundaries.  
 Every dependency points inward.
 
 ---
 
-## Core Intent
+## System Layers (by directory)
 
-- **Layers:** `app → features → ports → core`, and `adapters → ports → core`.
-- **Web3:** Wallet auth and payment via connected wallets.
-- **AI:** **LiteLLM → OpenRouter (crypto-paid)**; LangGraph deferred to v2.
-- **Observability:** **Langfuse** via telemetry port, logs via **Pino**, optional **Loki** later.
-- **Data:** **Drizzle + Postgres** for state.
-- **Infra:** **Docker Compose** first; **OpenTofu/Terraform → Akash** later.
-- **Discipline:** 100% OSS, strict lint/type/style rules, contract tests per port.
+## System Layers (by directory)
+
+- **src/bootstrap/** → Composition root (DI/factories), env (Zod), exports a container/getPort().
+- **src/app/** → Delivery/UI + Next.js API routes. Imports only **features/ports/shared**.
+- **src/features/** → Vertical slices (use cases): `proposals/`, `auth/`… orchestrate **core** via **ports**.
+- **src/ports/** → Contracts/interfaces only.
+- **src/core/** → Pure domain. No I/O/time/RNG; inject via ports.
+- **src/adapters/** → Infra implementations of ports. No UI.
+  - `server/` (drizzle, langfuse, pino, siwe, viem, litellm, rate-limit, clock, rng)
+  - `worker/`, `cli/` (future)
+- **src/shared/** → Small, pure utilities: env/, schemas/ (DTOs, mappers), constants/, util/.
+- **src/components/** → Shared presentational UI.
+- **src/styles/** → Tailwind preset, globals, theme tokens.
+- **src/types/** → Global TS types.
+- **src/assets/** → Icons/images imported by code.
+
+- **public/** → Static files.
+- **infra/** → Docker Compose, LiteLLM config, Langfuse, Terraform/OpenTofu → Akash.
+- **docs/** → ARCHITECTURE, IMPLEMENTATION_PLAN, ADRs.
+- **tests/** → Unit (core/features with mocked ports), integration (adapters), contract (port compliance), setup.
+- **e2e/** → Playwright API/UI specs.
+- **scripts/** → Migrations, seeds, generators.
+
+## Configuration Directories
+
+**Committed dotfolders:**
+
+- **.allstar/** → GitHub Allstar security policy enforcement
+- **.claude/, .cursor/** → Code AI assistant configuration
+- **.cogni/** → DAO governance (`repo-spec.yaml`, policies, AI code review files)
+- **.github/workflows/** → CI/CD automation (lint, test, build, deploy gates)
+- **.husky/** → Git hooks (pre-commit, commit-msg validation)
+
+### Intent anchors (keep in mind)
+
+- Hexagonal: `app → features → ports → core` and `adapters → ports → core`. Dependencies point inward.
+- 100% OSS stack. Strict lint/type/style. Env validated at boot. Contract tests required for every adapter.
+
+### Vertical slicing
+
+- Each feature is a slice under **features/** with its own `actions/`, `services/`, `components/`, `hooks/`, `types/`, `constants/`.
+- Slices may depend on **core** and **ports** only. Never on other slices or **adapters**.
+- Public surface changes in a slice must update that slice’s `AGENTS.md` and pass contract tests.
 
 ---
 
@@ -80,7 +116,7 @@ Every dependency points inward.
 [ ] │ ├── keys/create/route.ts # API-key issuance
 [ ] │ └── web3/verify/route.ts # calls wallet verification port
 [ ] │
-[ ] ├── features/ # application services (no adapters)
+[ ] ├── features/ # application services
 [ ] │ ├── auth/
 [ ] │ │ ├── actions.ts
 [ ] │ │ └── services/
