@@ -6,16 +6,45 @@ Purpose: a **fully open-source, crypto-only AI Application** with clean domain b
 **Crypto-only Accounting** — infrastructure, LLM usage, and deployments funded by DAO-controlled wallets.  
 Every dependency points inward.
 
----
+### Hexagonal Design
 
-## System Layers (by directory)
+**What "Hexagonal (Ports & Adapters)" means:**
+
+- **Core:** Pure domain logic with no framework dependencies or I/O
+- **Ports:** Interfaces that define what the domain needs from the outside world
+- **Adapters:** Implement ports using real technology (DB, HTTP, LLM, etc.)
+- **Features:** Orchestrate core domain logic through ports
+- **Delivery:** External entry points (app, mcp) that call features
+- **Dependencies:** Always point inward toward the core
+
+**Why we use it here:**
+
+1. Swap infrastructure without touching domain logic
+2. Test domain logic without network dependencies
+3. Keep Next.js/MCP framework code out of business logic
+4. Enable strict import enforcement by architectural layer
+
+- Hexagonal: `app → features → ports → core` and `adapters → ports → core`. Dependencies point inward.
+- 100% OSS stack. Strict lint/type/style. Env validated at boot. Contract tests required for every adapter.
+- **Proof-of-Concept Scope** — implement minimal working integrations only; no product logic.
+
+**References:**  
+Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksforgeeks.org/system-design/hexagonal-architecture-system-design/)
+
+### Vertical slicing
+
+- Each feature is a slice under **features/** with its own `actions/`, `services/`, `components/`, `hooks/`, `types/`, `constants/`.
+- Slices may depend on **core** and **ports** only. Never on other slices or **adapters**.
+- Public surface changes in a slice must update that slice’s `AGENTS.md` and pass contract tests.
+
+---
 
 ## System Layers (by directory)
 
 - **src/bootstrap/** → Composition root (DI/factories), env (Zod), exports a container/getPort().
 - **src/contracts/** → Operation contracts (id, Zod in/out, scopes, version). No logic.
 - **src/mcp/** → MCP host bootstrap. Registers tools mapped 1:1 to contracts.
-- **src/app/** → Delivery/UI + Next.js API routes. Imports only **features/ports/shared**.
+- **src/app/** → Delivery/UI + Next.js API routes. Imports only **features/ports/shared/contracts**.
 - **src/features/** → Vertical slices (use cases): `proposals/`, `auth/`… orchestrate **core** via **ports**.
 - **src/ports/** → Contracts/interfaces only.
 - **src/core/** → Pure domain. No I/O/time/RNG; inject via ports.
@@ -44,18 +73,6 @@ Every dependency points inward.
 - **.cogni/** → DAO governance (`repo-spec.yaml`, policies, AI code review files)
 - **.github/workflows/** → CI/CD automation (lint, test, build, deploy gates)
 - **.husky/** → Git hooks (pre-commit, commit-msg validation)
-
-### Intent anchors (keep in mind)
-
-- Hexagonal: `app → features → ports → core` and `adapters → ports → core`. Dependencies point inward.
-- 100% OSS stack. Strict lint/type/style. Env validated at boot. Contract tests required for every adapter.
-- **Proof-of-Concept Scope** — implement minimal working integrations only; no product logic.
-
-### Vertical slicing
-
-- Each feature is a slice under **features/** with its own `actions/`, `services/`, `components/`, `hooks/`, `types/`, `constants/`.
-- Slices may depend on **core** and **ports** only. Never on other slices or **adapters**.
-- Public surface changes in a slice must update that slice’s `AGENTS.md` and pass contract tests.
 
 ---
 
@@ -241,9 +258,9 @@ Every dependency points inward.
   - `ports` → `core`.
   - `features` → `ports|core|shared`.
   - `app` → `features|ports|shared|contracts` (never adapters|core).
-  - `adapters` → `ports|shared` (never `app|features|core`).
+  - `adapters` → `ports|shared|types` (never `app|features|core`).
   - `contracts` → `shared|types` only. Never imported by `features|ports|core`.
-  - `mcp` → `contracts|bootstrap|features|shared|ports` (never `app|components`).
+  - `mcp` → `contracts|bootstrap|features|ports` (never `app|components`).
 - **ESLint**: flat config with path rules; `eslint-plugin-boundaries`.
 - **Dependency-cruiser**: optional CI gate for graph violations.
 - **Contracts**: `tests/contract` must pass for any adapter.

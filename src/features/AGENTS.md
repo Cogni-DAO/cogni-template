@@ -81,4 +81,4 @@ pnpm typecheck
 
 ## Notes
 
-- Features must not cross-import each other
+- Features must not cross-import each other (enforced by ESLint no-restricted-imports rule)

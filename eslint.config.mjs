@@ -94,6 +94,7 @@ export default [
 
       // Import resolution
       "import/no-unresolved": "error",
+      "import/no-cycle": "error",
 
       // Block parent relatives only. Aliases unaffected.
       "no-restricted-imports": [
@@ -115,109 +116,129 @@ export default [
       "boundaries/element-types": [
         "error",
         {
-          default: "allow",
+          default: "disallow",
           rules: [
-            // Core can only import from core (standalone domain)
-            {
-              from: "core",
-              disallow: [
-                "app",
-                "features",
-                "adapters/*",
-                "ports",
-                "shared",
-                "contracts",
-                "mcp",
-              ],
-            },
-
-            // Ports can only import from core
-            {
-              from: "ports",
-              disallow: [
-                "app",
-                "features",
-                "adapters/*",
-                "shared",
-                "contracts",
-                "mcp",
-              ],
-            },
-
-            // Features can import from ports, core, shared (forbidden from contracts)
+            { from: "core", allow: ["core/**"] },
+            { from: "ports", allow: ["ports/**", "core/**", "types/**"] },
             {
               from: "features",
-              disallow: ["app", "adapters/*", "contracts", "mcp"],
-            },
-
-            // Contracts can only import from shared, types (protocol-agnostic)
-            {
-              from: "contracts",
-              allow: ["shared/**", "types/**"],
-              disallow: [
-                "app/**",
+              allow: [
                 "features/**",
-                "adapters/**",
-                "core/**",
                 "ports/**",
-                "mcp/**",
+                "core/**",
+                "shared/**",
+                "types/**",
               ],
             },
-
-            // App can import from features, ports, shared, contracts (never adapters, core)
+            {
+              from: "contracts",
+              allow: ["contracts/**", "shared/**", "types/**"],
+            },
             {
               from: "app",
-              allow: ["features/**", "ports/**", "shared/**", "contracts/**"],
-              disallow: ["adapters/**", "core/**"],
+              allow: [
+                "app/**",
+                "features/**",
+                "ports/**",
+                "shared/**",
+                "contracts/**",
+                "types/**",
+                "components/**",
+                "styles/**",
+              ],
             },
-
-            // MCP can import contracts, bootstrap, features, shared, ports
             {
               from: "mcp",
               allow: [
+                "mcp/**",
+                "features/**",
+                "ports/**",
                 "contracts/**",
                 "bootstrap/**",
-                "features/**",
-                "shared/**",
-                "ports/**",
               ],
-              disallow: ["app/**", "components/**", "core/**", "adapters/**"],
             },
-
-            // Adapters can import from ports, shared, contracts (never app, features, core)
             {
               from: "adapters/server",
-              allow: ["ports/**", "shared/**", "contracts/**"],
-              disallow: ["app/**", "features/**", "core/**"],
+              allow: [
+                "adapters/server/**",
+                "ports/**",
+                "shared/**",
+                "types/**",
+              ],
             },
-            { from: "adapters/worker", disallow: ["app", "features", "core"] },
-            { from: "adapters/cli", disallow: ["app", "features", "core"] },
-
-            // Tests can import anything
+            {
+              from: "adapters/worker",
+              allow: [
+                "adapters/worker/**",
+                "ports/**",
+                "shared/**",
+                "types/**",
+              ],
+            },
+            {
+              from: "adapters/cli",
+              allow: ["adapters/cli/**", "ports/**", "shared/**", "types/**"],
+            },
+            { from: "shared", allow: ["shared/**", "types/**"] },
+            {
+              from: "bootstrap",
+              allow: [
+                "bootstrap/**",
+                "ports/**",
+                "adapters/**",
+                "shared/**",
+                "types/**",
+              ],
+            },
+            {
+              from: "components",
+              allow: ["components/**", "shared/**", "types/**", "styles/**"],
+            },
+            { from: "styles", allow: ["styles/**"] },
+            { from: "assets", allow: ["assets/**"] },
             { from: "tests", allow: ["**/*"] },
             { from: "e2e", allow: ["**/*"] },
+            {
+              from: "scripts",
+              allow: ["scripts/**", "ports/**", "shared/**", "types/**"],
+            },
           ],
         },
       ],
-      // TODO: Fix no-unknown-files rule configuration
-      // "boundaries/no-unknown-files": [
-      //   "error",
-      //   {
-      //     ignore: [
-      //       "**/*.test.*",
-      //       "**/*.spec.*",
-      //       "scripts/**",
-      //       "eslint.config.mjs",
-      //       "postcss.config.mjs",
-      //       "next.config.ts",
-      //       "tailwind.config.ts",
-      //       "commitlint.config.cjs",
-      //     ],
-      //   },
-      // ],
+      "boundaries/no-unknown-files": "error",
+      "boundaries/entry-point": [
+        "error",
+        {
+          default: "disallow",
+          rules: [
+            {
+              target: [
+                "features",
+                "ports",
+                "adapters/server",
+                "shared",
+                "contracts",
+              ],
+              allow: ["**/index.ts", "**/index.tsx"],
+            },
+          ],
+        },
+      ],
     },
     settings: {
       "import/resolver": { typescript: true },
+      "boundaries/ignore": [
+        "**/*.test.*",
+        "**/*.spec.*",
+        "tests/**",
+        "e2e/**",
+        "scripts/**",
+        "eslint.config.mjs",
+        "postcss.config.mjs",
+        "next.config.ts",
+        "tailwind.config.ts",
+        "commitlint.config.cjs",
+      ],
       "boundaries/alias": {
         "@core/*": ["src/core/*"],
         "@ports/*": ["src/ports/*"],
@@ -260,12 +281,33 @@ export default [
     },
   },
 
+  // Features isolation - block cross-feature imports
+  {
+    files: ["src/features/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            // forbid importing any other feature via alias
+            {
+              group: ["@features/*"],
+              message: "No cross-feature imports. Depend on ports/core only.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // Test file overrides
   {
-    files: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}"],
+    files: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}", "tests/**", "e2e/**"],
     rules: {
       "boundaries/entry-point": "off",
       "boundaries/element-types": "off",
+      "boundaries/no-unknown-files": "off",
+      "no-restricted-imports": "off",
     },
   },
 

@@ -73,9 +73,15 @@ function validateBoundaries(block) {
     "core",
     "adapters/server",
     "adapters/worker",
+    "adapters/cli",
     "contracts",
+    "mcp",
     "shared",
     "types",
+    "bootstrap",
+    "components",
+    "styles",
+    "assets",
     "tests",
     "e2e",
     "scripts",
@@ -89,6 +95,18 @@ function validateBoundaries(block) {
     throw new Error(
       "Boundaries: may_import and must_not_import must be arrays"
     );
+  }
+
+  // Normalize and dedupe arrays
+  j.may_import = [...new Set(j.may_import.map(String))];
+  j.must_not_import = [...new Set(j.must_not_import.map(String))];
+
+  // Warn if may_import is empty (unless fully isolated with must_not_import: ["*"])
+  if (
+    j.may_import.length === 0 &&
+    !(j.must_not_import.length === 1 && j.must_not_import[0] === "*")
+  ) {
+    console.warn(`Warning: may_import is empty - this is probably a mistake`);
   }
 
   // Validate imports are subsets of valid layers (allow wildcards like "*")
@@ -176,9 +194,11 @@ function validateSubdirAgents(file, content) {
   // 3) check for prohibited words
   validateProhibitedWords(file, content);
 
-  // Optional scope line check (warn only)
+  // Enforce scope line strictly for subdirs
   if (!/^> Scope: this directory only\./m.test(content)) {
-    console.warn(`${file}: Warning - missing scope line`);
+    throw new Error(
+      `${file}: missing required scope line '> Scope: this directory only.'`
+    );
   }
 }
 

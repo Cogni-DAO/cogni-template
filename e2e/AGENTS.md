@@ -25,8 +25,8 @@ End-to-end Playwright tests for API routes and UI workflows.
 ```json
 {
   "layer": "e2e",
-  "may_import": [],
-  "must_not_import": ["*"]
+  "may_import": ["*"],
+  "must_not_import": []
 }
 ```
 
