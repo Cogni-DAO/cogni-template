@@ -1,42 +1,88 @@
 # [subdir-name] · AGENTS.md
 
+> Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
+
+## Metadata
+
+- **Owners:** @handle1 @handle2 <!-- ≥1 required -->
+- **Last reviewed:** YYYY-MM-DD <!-- YYYY-MM-DD format -->
+- **Reviewed in PR:** #123 <!-- required when Public Surface changes -->
+- **Status:** stable | draft | deprecated
+
 ## Purpose
 
-What this directory or module is for.
-
-## Key Files
-
-index.ts # entrypoint
-utils.ts # helper functions
-config.json # local configuration
-...
+1–2 sentences: what this directory does in the system.
 
 ## Pointers
 
-- [Root AGENTS.md](../AGENTS.md) - Core principles and rules
-- [Architecture](../docs/ARCHITECTURE.md) - System design and structure
+- [Root AGENTS.md](../../AGENTS.md) <!-- adjust depth -->
+- [Architecture](../../docs/ARCHITECTURE.md) <!-- adjust depth -->
+- [Related ADRs](../../docs/adr/) <!-- optional -->
+
+## Boundaries
+
+**Validated by:** `eslint-plugin-boundaries` (or `import/no-restricted-paths`).  
+**Machine-readable boundary spec (required):**
+
+```json
+{
+  "layer": "...",
+  "may_import": [...],
+  "must_not_import": [...]
+}
+```
+
+- **Layer:** app | features | ports | core | adapters/server | adapters/worker | shared | tests | e2e | scripts
+- **May import:** [allowed layers/paths]
+- **Must not import:** [forbidden layers/paths]
+
+## Public Surface
+
+- **Exports:** modules/types that other dirs may rely on
+- **Routes (if any):**
+  - App/pages: `/feature/page`, `/feature/[id]`
+  - API: `/api/feature` [GET, POST]
+- **CLI (if any):** `pnpm feature:do-thing`
+- **Env/Config keys:** `NEXT_PUBLIC_FEATURE_FLAG`, `FEATURE_TIMEOUT_MS` | `none`
+- **Files considered API:** [list | `none`]
+
+## Ports (optional)
+
+- **Uses ports:** `AIService`, `CreditsRepo` | `none`
+- **Implements ports:** `Telemetry`, `ApiKeyRepo` | `none`
+- **Contracts (required if implementing):** `tests/contract/<port>.contract.ts`
 
 ## Responsibilities
 
-- What logic or service this module handles.
-- Any cross-module dependencies or interfaces.
+- This directory **does**: …
+- This directory **does not**: …
 
 ## Usage
 
-- How to run, test, or build just this part.
-- Example commands or scripts (pnpm run test:module).
+Minimal local commands:
+
+```bash
+pnpm test -w path/to/this
+pnpm build -w path/to/this
+```
 
 ## Standards
 
-- Any overrides or additions to global coding style.
-- Expected comment/documentation format.
-- Lint/test coverage expectations.
+- Overrides to global coding/style rules (only if needed)
+- Test expectations (e.g., unit required; contract tests if implementing a port)
 
 ## Dependencies
 
-- Internal dependencies (imports from other packages)
-- External packages or APIs
+- **Internal:** imports within repo (paths)
+- **External:** NPM packages/services
+
+## Change Protocol
+
+- Update this file when **Exports**, **Routes**, or **Env/Config** change
+- Bump **Last reviewed** and set **Reviewed in PR: #<num>**
+- Update ESLint boundary rules if **Boundaries** changed
+- Ensure boundary lint + (if Ports) **contract tests** pass
 
 ## Notes
 
-- Known issues, TODOs, or AI hints (e.g., “Do not edit generated files.”)
+- TODOs, caveats, "do not edit generated files," migrations
