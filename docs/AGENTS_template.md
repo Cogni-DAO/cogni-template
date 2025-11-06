@@ -11,6 +11,11 @@ utils.ts # helper functions
 config.json # local configuration
 ...
 
+## Pointers
+
+- [Root AGENTS.md](../AGENTS.md) - Core principles and rules
+- [Architecture](../docs/ARCHITECTURE.md) - System design and structure
+
 ## Responsibilities
 
 - What logic or service this module handles.

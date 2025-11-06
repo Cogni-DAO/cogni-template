@@ -108,139 +108,16 @@ pnpm test
 
 CRITICAL: as you are assembling each file, you do NOT write custom code. You must find and copy working impementations from OSS for each file, or our sister repositories at https://github.com/Cogni-DAO
 
-[ ] .env.example # sample env vars for all services
-[ ] .env.local.example # local-only env template (never committed)
-[ ] .gitignore # standard git ignore list
-[x] .prettierrc # code formatting config
-[x] .prettierignore # excludes build/artifacts from prettier
-[x] eslint.config.mjs # eslint config (includes boundaries, tailwind rules)
-[x] .nvmrc # node version pin (e.g., v20)
-[x] .editorconfig # IDE whitespace, newline rules
-[ ] next.config.ts # Next.js app config (ESM)
-[ ] postcss.config.mjs # PostCSS/Tailwind pipeline config
-[x] tailwind.config.ts # Tailwind theme, preset imports
-[x] tsconfig.json # typescript + alias paths
-[x] tsconfig.eslint.json # eslint-specific typescript config
-[ ] package.json # deps, scripts, engines
-[x] commitlint.config.cjs # conventional commits enforcement
-[ ] middleware.ts # global middleware (auth, rate-limit, headers)
-[ ] Dockerfile # build reproducible app image
-[ ] README.md # high-level docs
-[ ] CHANGELOG.md # version history / release notes
-[ ] vitest.config.ts # single unified unit/integration test config
-[ ] playwright.config.ts # browser test config (repo root)
+# Workflow Guiding Principles:
 
-[ ] infra/ # infrastructure definitions (Terraform + Docker)
-[ ] ├── docker-compose.yml # local dev composition: web + litellm + loki
-[ ] ├── litellm/ # litellm deployment config
-[ ] │ └── config.yaml # model provider routing + budgets
-[ ] ├── loki/ # optional logging stack
-[ ] ├── grafana/ # dashboards, metrics
-[ ] └── terraform/ # IaC modules (ECS/Fly/DigitalOcean etc.)
+- _Spec First:_ Always begin with clear task specs—not just code—before work starts.
+- _Compact Progress:_ After each step, distill state and next actions. Only keep essentials in context.
+- _Prune Aggressively:_ Remove old/noisy or irrelevant details. Regularly re-compact files and logs for clarity.
+- _Delegate with Subagents:_ Use focused subagents and only retain concise outputs from them.
+- _Keep Context Lean:_ Don’t exceed 40% context window; summarize and reset often.
+- _Structured Planning:_ List every file, change, and test in your plan before implementation.
+- _Review Early:_ Validate research and plan before code. Prioritize catching errors early.
+- _Continuously Update:_ Mark tasks complete, keep progress visible, and re-compact context as you go.
+- _No Bad Info:_ Incorrect or noisy info must be purged—better to have less but accurate context.
 
-[ ] public/ # static assets served by Next
-[ ] ├── robots.txt
-[ ] ├── sitemap.xml
-[ ] ├── manifest.json
-[ ] ├── fonts/
-[ ] └── images/
-
-[ ] src/
-[ ] ├── app/ # Next.js App Router root
-[ ] │ ├── layout.tsx # global layout
-[ ] │ ├── page.tsx # landing page
-[ ] │ ├── providers.tsx # client providers (QueryClient, Wagmi, RainbowKit)
-[ ] │ ├── error.tsx # component-level error boundary
-[ ] │ ├── global-error.tsx # global catch-all error UI
-[ ] │ ├── not-found.tsx # 404 fallback
-[ ] │ ├── loading.tsx # route loading skeleton
-[ ] │ ├── template.tsx # route template for sublayouts
-[ ] │ ├── globals.css # tailwind entrypoint
-[ ] │ ├── (public)/ # unauthenticated routes
-[ ] │ │ ├── layout.tsx
-[ ] │ │ └── page.tsx
-[ ] │ ├── (protected)/ # auth-required routes
-[ ] │ │ ├── layout.tsx
-[ ] │ │ └── page.tsx
-[ ] │ └── api/ # Next server routes
-[ ] │ ├── health/route.ts # readiness probe
-[ ] │ ├── ai/ # LLM endpoints
-[ ] │ │ ├── chat/route.ts
-[ ] │ │ └── stream/route.ts
-[ ] │ └── web3/verify/route.ts # wallet signature verification
-[ ] │
-[ ] ├── features/ # domain logic (vertical slices)
-[ ] │ └── proposals/
-[ ] │ ├── components/ # feature-specific UI
-[ ] │ ├── hooks/ # feature hooks (wagmi, ai)
-[ ] │ ├── services/ # API + data logic
-[ ] │ ├── actions.ts # server actions
-[ ] │ ├── types.ts # feature types
-[ ] │ ├── constants.ts # feature constants
-[ ] │ └── index.ts
-[ ] │
-[ ] ├── components/ # shared UI system
-[ ] │ ├── ui/ # reusable styled UI components
-[ ] │ ├── primitives/ # layout primitives (Flex, Grid)
-[ ] │ └── index.ts
-[ ] │
-[ ] ├── lib/ # core framework-agnostic logic
-[ ] │ ├── env/ # zod-validated env management
-[ ] │ │ ├── server.ts # PRIVATE vars: DATABASE_URL, LITELLM_ADMIN_KEY, OPENROUTER_KEY
-[ ] │ │ ├── client.ts # PUBLIC vars: NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
-[ ] │ │ └── index.ts # unify exports (Env), helpers (requireEnv)
-[ ] │ ├── ai/ # LangGraph + LiteLLM orchestration
-[ ] │ │ ├── client.ts # OpenAI-compatible fetch → LiteLLM proxy
-[ ] │ │ ├── graphs/proof-of-concept.ts # minimal LangGraph example
-[ ] │ │ └── litellm/router.ts # model aliases, retries, fallbacks
-[ ] │ ├── web3/ # wagmi/viem config + utils
-[ ] │ │ ├── config.ts # createConfig({ chains, transports, connectors })
-[ ] │ │ ├── chains.ts # supported chain list + ids
-[ ] │ │ └── connectors.ts # injected, walletconnect, coinbase, safe
-[ ] │ ├── logging/ # pino + transports
-[ ] │ │ ├── logger.ts # base pino instance (prod/dev formatting)
-[ ] │ │ └── transports/pino-loki.ts # optional Loki transport wiring
-[ ] │ ├── schemas/ # zod schemas shared across layers
-[ ] │ │ ├── api.ts # request/response DTOs
-[ ] │ │ └── usage.ts # AI usage record schema (userId, model, tokens)
-[ ] │ ├── constants/ # shared enums + route constants
-[ ] │ │ ├── routes.ts # canonical route paths
-[ ] │ │ └── models.ts # model ids, provider names
-[ ] │ ├── db/ # Vultr-hosted Postgres (crypto-paid) for LiteLLM accounts
-[ ] │ │ ├── schema/ # drizzle/prisma schema objects
-[ ] │ │ │ ├── accounts.ts # users, api_keys, wallet addresses
-[ ] │ │ │ └── usage.ts # metering: prompt_tokens, completion_tokens, cost
-[ ] │ │ ├── client.ts # db client init (drizzle or prisma) from Env.DATABASE_URL
-[ ] │ │ └── migrations.ts # migration runner bootstrap
-[ ] │ ├── config/ # app-wide feature flags
-[ ] │ │ └── app.ts # toggles: enablePayments, enableLoki, enableLangfuse
-[ ] │ └── util/ # pure helpers (strings, dates, crypto)
-[ ] │ ├── strings.ts # titleCase, slugify
-[ ] │ ├── dates.ts # toISO, durationFmt
-[ ] │ └── crypto.ts # randomId, stableHash
-
-[ ] ├── styles/ # global design system files
-[ ] │ ├── tailwind.preset.ts
-[ ] │ ├── tailwind.css
-[ ] │ └── theme.ts
-[ ] │
-[ ] ├── types/ # global TypeScript types (rarely needed)
-[ ] │ ├── index.d.ts
-[ ] │ └── global.d.ts
-[ ] │
-[ ] └── assets/ # static icons + images imported in code
-[ ] ├── icons/
-[ ] └── images/
-[ ]
-[ ] tests/ # vitest-based test suites
-[ ] ├── unit/ # isolated function + component tests
-[ ] ├── integration/ # multi-module behavior tests
-[ ] └── setup.ts # test env bootstrap
-
-[ ] e2e/ # playwright specs
-[ ] ├── auth.spec.ts
-[ ] └── proposals.spec.ts
-[ ] scripts/ # helper CLI scripts
-[ ] ├── generate-types.ts # schema/type generator
-[ ] ├── seed-db.ts # populate local db
-[ ] └── migrate.ts # db migrations
+Follow these to ensure reliable, aligned, and efficient agent workflows.
