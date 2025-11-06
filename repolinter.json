@@ -138,6 +138,30 @@
         }
       },
       "policyInfo": "Pin Node in package.json engines."
+    },
+    "only-approved-root-entries": {
+      "level": "error",
+      "rule": {
+        "type": "git-list-tree",
+        "options": {
+          "denylist": [
+            "^(?!(",
+            "README\\.md|CONTRIBUTING\\.md|SECURITY\\.md|CODE_OF_CONDUCT\\.md|",
+            "LICENSE(\\..*)?|",
+            "AGENTS\\.md|AGENTS_template\\.md|CLAUDE\\.md|",
+            "\\.editorconfig|\\.gitignore|\\.nvmrc|\\.prettierignore|\\.prettierrc(\\..*)?|",
+            "commitlint\\.config\\.cjs|eslint\\.config\\.mjs|repolinter\\.json|",
+            "package\\.json|pnpm-lock\\.yaml|",
+            "tsconfig\\.json|tsconfig\\.eslint\\.json|",
+            "tailwind\\.config\\.ts|postcss\\.config\\.mjs|",
+            "next\\.config\\.ts|next-env\\.d\\.ts|",
+            "\\.allstar|\\.claude|\\.cogni|\\.cursor|\\.github|\\.husky|docs|src|public",
+            ")$)[^/]+$"
+          ],
+          "ignoreCase": true
+        }
+      },
+      "policyInfo": "Only approved files and directories allowed at repository root."
     }
   }
 }
