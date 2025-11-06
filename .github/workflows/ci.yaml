@@ -19,12 +19,9 @@ jobs:
           node-version: "20"
           cache: "pnpm"
 
-      - name: Repository policy check
-        run: |
-          npm install -g repolinter
-          repolinter lint -c repolinter.json .
-
       - name: Install
         run: pnpm install --frozen-lockfile
+      - name: Repository policy check
+        run: pnpm repo-check
       - run: pnpm check
       - run: pnpm run build

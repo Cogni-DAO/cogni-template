@@ -12,6 +12,7 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check",
+    "repo-check": "repolinter lint -c repolinter.json .",
     "prepare": "husky"
   },
   "engines": {

@@ -162,6 +162,32 @@
         }
       },
       "policyInfo": "Only approved files and directories allowed at repository root."
+    },
+    "required-directories": {
+      "level": "error",
+      "rule": {
+        "type": "file-existence",
+        "options": {
+          "globsAny": [
+            "src/app/",
+            "src/features/",
+            "src/ports/",
+            "src/core/",
+            "src/adapters/server/",
+            "src/shared/",
+            "src/bootstrap/",
+            "docs/",
+            "infra/",
+            "public/",
+            "tests/",
+            "e2e/",
+            "scripts/",
+            ".cogni/",
+            ".allstar/"
+          ]
+        }
+      },
+      "policyInfo": "All essential hexagonal, infra, and test directories must exist."
     }
   }
 }
