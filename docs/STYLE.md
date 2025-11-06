@@ -32,3 +32,11 @@ To switch back to the official plugin when stable:
 - **OSS-First:** next.js, wagmi, viem, liteLLM, langgraph, langfuse, pino, loki, zod, tailwind, shadcn/ui.
 - **No CommonJS:** ESM and typed packages only.
 - **Tests:** vitest + playwright only.
+
+## Do Not Add
+
+- Product-specific logic
+- External payment providers
+- Closed-source SDKs
+- Inline styling or arbitrary Tailwind values
+- CommonJS or untyped packages

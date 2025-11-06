@@ -2,6 +2,8 @@
 
 Strict **Hexagonal (Ports & Adapters)** for a full-stack TypeScript app on **Next.js App Router**.  
 Purpose: a **fully open-source, crypto-only AI Application** with clean domain boundaries.  
+**Web3 Enclosure** — all resources authenticated by connected wallets.  
+**Crypto-only Accounting** — infrastructure, LLM usage, and deployments funded by DAO-controlled wallets.  
 Every dependency points inward.
 
 ---
@@ -45,6 +47,7 @@ Every dependency points inward.
 
 - Hexagonal: `app → features → ports → core` and `adapters → ports → core`. Dependencies point inward.
 - 100% OSS stack. Strict lint/type/style. Env validated at boot. Contract tests required for every adapter.
+- **Proof-of-Concept Scope** — implement minimal working integrations only; no product logic.
 
 ### Vertical slicing
 

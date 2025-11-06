@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import globals from "globals";
 import nextPlugin from "@next/eslint-plugin-next";
 // Tailwind CSS linting
 // import officialTailwind from "eslint-plugin-tailwindcss"; // TODO: switch back when v4 stable
@@ -15,15 +16,26 @@ import unused from "eslint-plugin-unused-imports";
 export default [
   js.configs.recommended,
 
+  // JS/MJS config files - use Espree (default JS parser)
   {
-    files: ["**/*.{ts,tsx,js,mjs,cjs}"],
+    files: ["**/*.mjs", "**/*.cjs"],
+    languageOptions: {
+      sourceType: "module",
+      ecmaVersion: "latest",
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+
+  // TypeScript files only
+  {
+    files: ["**/*.ts", "**/*.tsx"],
     languageOptions: {
       parser: tsParser,
       parserOptions: {
-        projectService: {
-          allowDefaultProject: ["*config*.mjs", "eslint.config.mjs"],
-          defaultProject: "./tsconfig.eslint.json",
-        },
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
         ecmaFeatures: {
           jsx: true,
         },

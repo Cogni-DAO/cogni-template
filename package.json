@@ -11,7 +11,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "check": "pnpm typecheck && pnpm lint && pnpm format:check",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:agentsmd",
+    "check:agentsmd": "node scripts/validate-agents-md.mjs",
     "repo-check": "repolinter lint -c repolinter.json .",
     "prepare": "husky"
   },
@@ -49,6 +50,8 @@
     "eslint-plugin-no-inline-styles": "^1.0.5",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "eslint-plugin-unused-imports": "^4.3.0",
+    "globals": "^16.5.0",
+    "globby": "^15.0.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6",
     "prettier": "^3.6.2",
