@@ -2,34 +2,44 @@ It is time to create a commit message for our current staged changes. Your job i
 
 Your process:
 
-1. **File Analysis**: First, examine ALL files that have been changed by using `git diff`, and reading actual file contents and documentation. Read through each: file changed, and corresponding AGENTS.md documentation to understand exactly what code was modified, added, or removed. Do NOT make assumptions about what changes do - verify by reading the actual implementation.
+1. **File Analysis**: Use `git status` to see all changed files, then `git diff` to examine the exact changes being made.
 
-2. **Code Impact Verification**: For each file changed, understand what the code actually does by examining:
-   - Function/method implementations that were modified
-   - Import/export changes and their implications
-   - Configuration changes and their exact effects
-   - Test changes and what they validate
-   - Only describe what you can directly observe in the code changes
+2. **Scope Check**: Ensure changes are cohesive and serve a single purpose. If you find disjoint features, recommend splitting into separate commits.
 
-3. **Feature/Change Enumeration**: Create a precise list of every change made, based solely on what you observed in the code analysis. Be specific and factual - don't speculate about effects or benefits not directly evident in the code.
+3. **Commit Message**: Use Conventional Commits. Subject is imperative, ≤ 72 chars, no trailing period. Scope is lowercase kebab-case and maps to the affected area (e.g., `app`, `features`, `infra`, `docs`). Use body only when needed for rationale or context. If the commit introduces a breaking change include a `BREAKING CHANGE:` footer with the impact and required actions.
 
-4. **Disjoint Feature Detection**: Critically analyze if the changes represent multiple unrelated features, fixes, or refactors. If you find disjoint features (changes that serve different purposes or could be implemented independently), you MUST call this out explicitly and recommend splitting into multiple separate commits.
+**Format:** `type(scope): description`
 
-5. **Git Message Creation**: If changes are coherent and related, proceed to write the appropriate Commit message. Prioritize clean, short commit messages. Avoid overhyping, use WIP whenever not fully complete.
+**Types:** feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert
 
-The commit message should be structured as follows:
+Be factual, avoid overhyping. Nothing is ever Production ready, nor comprehensive. Any commits with those words will be rejected
 
-<type>[optional scope]: <description>
+**Examples**
 
-[optional body]
+- `feat(login): add oauth callback route`
+- `refactor(core): extract price calc into pure function`
+- `fix(adapters): handle null tenant id`
+- `build(release): pin node to v20.17`
+- `docs(architecture): clarify ports vs adapters`
 
-[optional footer(s)]
+**Footers**
 
-The commit contains the following structural elements, to communicate intent to the consumers of your library:
+- `BREAKING CHANGE: rename env VAR_X to VAR_Y; update deploy secrets`
+- `Refs: #123`
 
-fix: a commit of the type fix patches a bug in your codebase (this correlates with PATCH in Semantic Versioning).
-feat: a commit of the type feat introduces a new feature to the codebase (this correlates with MINOR in Semantic Versioning).
-BREAKING CHANGE: a commit that has a footer BREAKING CHANGE:, or appends a ! after the type/scope, introduces a breaking API change (correlating with MAJOR in Semantic Versioning). A BREAKING CHANGE can be part of commits of any type.
-types other than fix: and feat: are allowed, for example @commitlint/config-conventional (based on the Angular convention) recommends build:, chore:, ci:, docs:, style:, refactor:, perf:, test:, and others.
-footers other than BREAKING CHANGE: <description> may be provided and follow a convention similar to git trailer format.
-Additional types are not mandated by the Conventional Commits specification, and have no implicit effect in Semantic Versioning (unless they include a BREAKING CHANGE). A scope may be provided to a commit’s type, to provide additional contextual information and is contained within parenthesis, e.g., feat(parser): add ability to parse arrays.
+## Breaking changes
+
+- Keep header ≤ 72 chars; leave one blank line before footers.
+- Always add a footer explaining impact:
+
+  ```
+  BREAKING CHANGE: describe impact and required migration steps
+  ```
+
+**Example**
+
+```
+feat(auth): require 2FA for login
+
+BREAKING CHANGE: login now requires TOTP; update tests and client flows.
+```

@@ -8,6 +8,7 @@ It's time to update documentation (specifically, \*/AGENTS.md files). Look at al
    Rules for writing documentation:
    - Write in present tense describing current functionality. Avoid temporal markers like 'new', 'updated', 'recently added', 'now supports'
    - Maintain consistency with existing documentation patterns in the project
+   - Uphold the existing document structure and required sections - do not reorganize or remove standard headings
    - Follow DRY principles with coding. Don't repeat yourself
    - Use clear, concise language optimized for AI agent comprehension. structure documentation so future AI agents can quickly understand:
      -- Current capabilities and limitations
@@ -18,3 +19,5 @@ It's time to update documentation (specifically, \*/AGENTS.md files). Look at al
 
    - In general, your Documentation updates should simplify and reduce documentation size of each file, not increase. Large documents are hard to process. Clean simple documents improve comprehension.
    - Never, EVER, use words like "complete", "comprehensive", "final", "production ready", etc. Words like this are red flags, indicate improper understandanding of the code, and will result in your changes being rejected.
+
+4. **Validate Documentation**: Run `pnpm check:agentsmd` to ensure all AGENTS.md files pass validation.
