@@ -6,7 +6,7 @@ Your process:
 
 2. **Code Impact Verification**: For each file changed, understand what the code actually does by examining:
    - Function/method implementations that were modified
-   - Import/export changes and their implications  
+   - Import/export changes and their implications
    - Configuration changes and their exact effects
    - Test changes and what they validate
    - Only describe what you can directly observe in the code changes
@@ -15,9 +15,10 @@ Your process:
 
 4. **Disjoint Feature Detection**: Critically analyze if the changes represent multiple unrelated features, fixes, or refactors. If you find disjoint features (changes that serve different purposes or could be implemented independently), you MUST call this out explicitly and recommend splitting the commit/PR.
 
-5. **Git Message Creation**: Only if changes are coherent and related, proceed to write the appropriate Pull Request. Push the code to Origin, and create the **Pull Request**: Write a clean, simple PR title and summary using the structured template below. 
-   
+5. **Git Message Creation**: Only if changes are coherent and related, proceed to write the appropriate Pull Request. Push the code to Origin, and create the **Pull Request**: Write a clean, simple PR title and summary using the structured template below.
+
    **PR Template Format:**
+
    ```
    ## Context
    Problem and why it matters.
@@ -46,6 +47,7 @@ Your process:
    - If unsure about rollout/backout procedures, state `<!-- Rollout procedure: [needs definition] -->` rather than guessing
 
    **Example PR:**
+
    ```
    Title: fix: resolve E2E test connectivity and deployment issues
 
@@ -59,7 +61,7 @@ Your process:
    - Auth: Env-aware installation ID mapping for dev vs prod.
 
    ## Risk & Impact
-   Modules edited: 
+   Modules edited:
    - e2e and .do directories
    - constrained to test files, and preview deployment configuration
    - preview app spec updated URL path. any current webhooks to the old URL need to be updated.
@@ -72,21 +74,24 @@ Your process:
    - User stated manual validation
 
    ```
-   
 
 **Code Quality & Architecture (Required ≥0.8)**:
+
 - Create 1:1 mapping between git message and actual code changes - no exaggeration, no omissions
 - Ensure coherent, singular purpose - reject mixed unrelated changes
 - Verify no duplication of existing functionality
 - Confirm no reimplementation of mature OSS tools
 
 **Repository Goal Alignment (Required ≥0.8)**:
+
 - Demonstrate how changes advance the Cogni Admin GitHub bot for DAO-controlled repository management
 
 **Documentation & Patterns (One Required ≥0.9)**:
+
 - Follow established patterns, OR document new patterns clearly, OR improve accessibility for contributors, OR document new dependencies
 
 **Writing Style & Precision Requirements**:
+
 - Stay grounded and factual - no hype or marketing language
 - **AVOID BANNED BUZZWORDS**: Never use terms like "production ready", "comprehensive", "robust", "enterprise-grade", "scalable", "performant" - these are red flags, and your message will be rejected.
 - **Be concise and precise**: Every statement must be directly verifiable from the code changes

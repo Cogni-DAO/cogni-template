@@ -6,7 +6,7 @@ Your process:
 
 2. **Code Impact Verification**: For each file changed, understand what the code actually does by examining:
    - Function/method implementations that were modified
-   - Import/export changes and their implications  
+   - Import/export changes and their implications
    - Configuration changes and their exact effects
    - Test changes and what they validate
    - Only describe what you can directly observe in the code changes
@@ -24,8 +24,6 @@ The commit message should be structured as follows:
 [optional body]
 
 [optional footer(s)]
-
-
 
 The commit contains the following structural elements, to communicate intent to the consumers of your library:
 

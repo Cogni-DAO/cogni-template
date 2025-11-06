@@ -8,7 +8,7 @@ evaluations:
       This PR follows established patterns visible in the codebase
       (e.g., consistent framework usage, architectural conventions, error handling approaches).
       If deviating from patterns, there is clear justification for the change.
-  
+
   - documents-new-patterns: >
       If this PR introduces a new pattern or approach not seen before in the codebase,
       it documents the pattern clearly so other contributors can follow it.

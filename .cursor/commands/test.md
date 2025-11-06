@@ -1,4 +1,4 @@
-Ensure everything works. run the full test suite: 
+Ensure everything works. run the full test suite:
 'npm test'
 'npm lint'
 'npm build'
