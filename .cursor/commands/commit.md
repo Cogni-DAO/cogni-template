@@ -4,9 +4,9 @@ Your process:
 
 1. **File Analysis**: Use `git status` to see all changed files, then `git diff` to examine the exact changes being made.
 
-2. **Scope Check**: Ensure changes are cohesive and serve a single purpose. If you find disjoint features, recommend splitting into separate commits.
+2. **Scope Check**: Ensure changes are cohesive and serve a single purpose. If you find disjoint features, you MUST call this out, and design a split into separate commits.
 
-3. **Commit Message**: Use Conventional Commits. Subject is imperative, ≤ 72 chars, no trailing period. Scope is lowercase kebab-case and maps to the affected area (e.g., `app`, `features`, `infra`, `docs`). Use body only when needed for rationale or context. If the commit introduces a breaking change include a `BREAKING CHANGE:` footer with the impact and required actions.
+3. **Commit Message**: Use Conventional Commits. Subject is imperative, ≤ 72 chars, no trailing period. Scope is lowercase kebab-case and maps to the affected area (e.g., `app`, `features`, `infra`, `docs`). 90% of commits should be 1 line only. Only the most complex changes recieve a commit body. If the commit introduces a breaking change include a `BREAKING CHANGE:` footer with the impact and required actions.
 
 **Format:** `type(scope): description`
 
