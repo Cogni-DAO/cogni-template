@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Polyform-Shield-1.0.0
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 
 /**
  * Purpose: Root layout component for Next.js App Router with Geist font configuration and global styles.

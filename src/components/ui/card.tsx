@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Polyform-Shield-1.0.0
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 
 /**
  * Purpose: Card component system with semantic parts for structured content layout and information hierarchy.
