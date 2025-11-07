@@ -110,7 +110,16 @@ export default [
 
       // Tailwind rules (community plugin has different rule names)
       // TODO: restore official rules when switching back to official plugin
-      // "tailwindcss/no-arbitrary-value": "error",
+      "tailwindcss/no-conflicting-utilities": "error",
+      "tailwindcss/no-arbitrary-value-overuse": [
+        "error",
+        {
+          allowedUtilities: ["rounded-[--radius]", "shadow-[--shadow]"],
+        },
+      ],
+      "tailwindcss/prefer-theme-tokens": "error",
+      "tailwindcss/valid-theme-function": "error",
+      "tailwindcss/valid-apply-directive": "error",
       // "tailwindcss/classnames-order": "off", // Prettier plugin handles order
 
       // No inline styles
