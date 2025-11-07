@@ -152,6 +152,7 @@
             "\\.editorconfig|\\.gitignore|\\.nvmrc|\\.prettierignore|\\.prettierrc(\\..*)?|",
             "\\.env\\.example|",
             "commitlint\\.config\\.cjs|eslint\\.config\\.mjs|repolinter\\.json|",
+            "components\\.json|",
             "package\\.json|pnpm-lock\\.yaml|",
             "tsconfig\\.json|tsconfig\\.eslint\\.json|",
             "tailwind\\.config\\.ts|postcss\\.config\\.mjs|",
