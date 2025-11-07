@@ -26,6 +26,9 @@
       }
     ],
     "paths": {
+      "@/*": ["src/*"],
+      "@/components/*": ["src/components/*"],
+      "@/shared/*": ["src/shared/*"],
       "@core/*": ["src/core/*"],
       "@ports/*": ["src/ports/*"],
       "@features/*": ["src/features/*"],

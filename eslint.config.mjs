@@ -9,7 +9,9 @@ import tsParser from "@typescript-eslint/parser";
 import prettierConfig from "eslint-config-prettier";
 import boundaries from "eslint-plugin-boundaries";
 import importPlugin from "eslint-plugin-import";
+import jsxA11y from "eslint-plugin-jsx-a11y";
 import noInlineStyles from "eslint-plugin-no-inline-styles";
+import reactHooks from "eslint-plugin-react-hooks";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 import unused from "eslint-plugin-unused-imports";
 
@@ -56,6 +58,8 @@ export default [
       "unused-imports": unused,
       import: importPlugin,
       boundaries: boundaries,
+      "jsx-a11y": jsxA11y,
+      "react-hooks": reactHooks,
     },
     rules: {
       ...tsPlugin.configs.strict.rules,
@@ -108,9 +112,38 @@ export default [
         },
       ],
 
+      // React hooks rules
+      "react-hooks/rules-of-hooks": "error",
+      "react-hooks/exhaustive-deps": "warn",
+
+      // Accessibility rules
+      ...jsxA11y.configs.recommended.rules,
+      "jsx-a11y/alt-text": "error",
+      "jsx-a11y/anchor-is-valid": "error",
+      "jsx-a11y/aria-props": "error",
+      "jsx-a11y/interactive-supports-focus": "error",
+
       // Tailwind rules (community plugin has different rule names)
       // TODO: restore official rules when switching back to official plugin
-      // "tailwindcss/no-arbitrary-value": "error",
+      "tailwindcss/no-conflicting-utilities": "error",
+      "tailwindcss/no-arbitrary-value-overuse": [
+        "error",
+        {
+          maxPerFile: 10,
+          maxPerRule: 3,
+          allowedUtilities: ["rounded-[--radius]", "shadow-[--shadow]"],
+        },
+      ],
+      "tailwindcss/prefer-theme-tokens": [
+        "warn", // Will be error in CI for main branch
+        {
+          categories: ["colors", "spacing"],
+        },
+      ],
+      "tailwindcss/valid-theme-function": "error",
+      "tailwindcss/valid-apply-directive": "error",
+      // TODO: Add when available in @poupe plugin
+      // "tailwindcss/no-custom-classname": "warn",
       // "tailwindcss/classnames-order": "off", // Prettier plugin handles order
 
       // No inline styles
@@ -122,8 +155,8 @@ export default [
         {
           default: "disallow",
           rules: [
-            { from: "core", allow: ["core/**"] },
-            { from: "ports", allow: ["ports/**", "core/**", "types/**"] },
+            { from: "core", allow: ["core"] },
+            { from: "ports", allow: ["ports", "core", "types"] },
             {
               from: "features",
               allow: [
@@ -225,6 +258,10 @@ export default [
               ],
               allow: ["**/index.ts", "**/index.tsx"],
             },
+            {
+              target: ["components"],
+              allow: ["**/index.ts", "**/index.tsx"],
+            },
           ],
         },
       ],
@@ -243,21 +280,6 @@ export default [
         "tailwind.config.ts",
         "commitlint.config.cjs",
       ],
-      "boundaries/alias": {
-        "@core/*": ["src/core/*"],
-        "@ports/*": ["src/ports/*"],
-        "@features/*": ["src/features/*"],
-        "@app/*": ["src/app/*"],
-        "@adapters/*": ["src/adapters/*"],
-        "@shared/*": ["src/shared/*"],
-        "@bootstrap/*": ["src/bootstrap/*"],
-        "@components/*": ["src/components/*"],
-        "@styles/*": ["src/styles/*"],
-        "@types/*": ["src/types/*"],
-        "@assets/*": ["src/assets/*"],
-        "@contracts/*": ["src/contracts/*"],
-        "@mcp/*": ["src/mcp/*"],
-      },
       tailwindcss: {
         config: "tailwind.config.ts",
         callees: ["clsx", "cn", "classnames"],

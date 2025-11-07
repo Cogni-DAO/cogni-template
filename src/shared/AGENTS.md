@@ -37,11 +37,11 @@ Low-level building blocks used across the repo. Primitives and reusable shapes (
 
 ## Public Surface
 
-- **Exports:** DTOs, mappers, constants, utilities
+- **Exports:** DTOs, mappers, constants, utilities, cn function
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** Environment schema definitions
-- **Files considered API:** All exported utilities and schemas
+- **Files considered API:** env/index.ts, util/index.ts
 
 ## Ports (optional)
 
@@ -73,7 +73,7 @@ pnpm typecheck
 ## Dependencies
 
 - **Internal:** shared/ only
-- **External:** zod, utility libraries only
+- **External:** zod, clsx, tailwind-merge, utility libraries
 
 ## Change Protocol
 
