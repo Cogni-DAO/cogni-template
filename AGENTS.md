@@ -12,7 +12,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 ## Workflow Guiding Principles
 
-- **Spec first:** Write the plan before code.
+- **Spec first:** Write the plan before code. Confirm the plan with the user.
 - **Compact progress:** Summarize after each step.
 - **Prune aggressively:** Delete noise, keep signal.
 - **Delegate cleanly:** Use subagents with narrow scopes.

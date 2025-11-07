@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-06
+- **Last reviewed:** 2025-11-07
 - **Status:** draft
 
 ## Purpose
@@ -83,4 +83,4 @@ pnpm check:agentsmd  # Validate all AGENTS.md files
 ## Notes
 
 - Scripts must be idempotent and safe to re-run
-- AGENTS.md validator enforces standards for both root and subdir AGENTS.md
+- AGENTS.md validator enforces hexagonal import standards for AGENTS.md

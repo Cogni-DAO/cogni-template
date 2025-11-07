@@ -1,0 +1,35 @@
+import { z } from "zod";
+
+const serverSchema = z.object({
+  NODE_ENV: z
+    .enum(["development", "test", "production"])
+    .default("development"),
+
+  // Required now
+  APP_BASE_URL: z.string().url(),
+  DATABASE_URL: z.string().min(1),
+  SESSION_SECRET: z.string().min(32),
+
+  // LLM (Stage 8)
+  LITELLM_BASE_URL: z.string().url(),
+  LITELLM_ADMIN_KEY: z.string().min(1),
+  OPENROUTER_API_KEY: z.string().min(1),
+  DEFAULT_MODEL: z.string().default("openrouter/auto"),
+
+  // Optional
+  PORT: z.coerce.number().default(3000),
+  PINO_LOG_LEVEL: z
+    .enum(["trace", "debug", "info", "warn", "error"])
+    .default("info"),
+});
+
+const parsed = serverSchema.parse(process.env);
+
+export const serverEnv = {
+  ...parsed,
+  isDev: parsed.NODE_ENV === "development",
+  isTest: parsed.NODE_ENV === "test",
+  isProd: parsed.NODE_ENV === "production",
+};
+
+export type ServerEnv = typeof serverEnv;

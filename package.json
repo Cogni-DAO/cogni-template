@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:agentsmd",
     "check:agentsmd": "node scripts/validate-agents-md.mjs",
+    "test": "vitest run",
     "repo-check": "repolinter lint -c repolinter.json .",
     "prepare": "husky"
   },
@@ -31,7 +32,8 @@
   "dependencies": {
     "next": "16.0.1",
     "react": "19.2.0",
-    "react-dom": "19.2.0"
+    "react-dom": "19.2.0",
+    "zod": "^4.1.12"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.8.1",
@@ -62,6 +64,7 @@
     "prettier-plugin-tailwindcss": "^0.7.1",
     "repolinter": "^0.12.0",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.0.7"
   }
 }
