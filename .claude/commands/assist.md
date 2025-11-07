@@ -1,4 +1,4 @@
-We need to get help from another developer. Take a step back, look at all of the files involved in this problem we are facing. Write up a summary, including:
+We need to get help from another developer. Take a step back, look at all of the files involved in this problem we are facing. Inline, share a summary. Including:
 
 - What you are trying to do
 - The changes you were making

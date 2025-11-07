@@ -1,4 +1,4 @@
-It's time to update documentation for this branch — both `*/AGENTS.md` files and top-of-file headers.
+It's time to update documentation for this branch — both `*/AGENTS.md` files and top-of-file headers. Start by reading [ARCHITECTURE.md](docs/ARCHITECTURE.md) and [STYLE.md](docs/STYLE.md)
 
 ---
 
