@@ -23,5 +23,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Repository policy check
         run: pnpm repo-check
+      - name: REUSE SPDX compliance
+        uses: fsfe/reuse-action@v6
       - run: pnpm check
       - run: pnpm run build

@@ -1,0 +1,10 @@
+version = 1
+SPDX-PackageName = "cogni-template"
+SPDX-PackageSupplier = "Organization: CogniDAO"
+SPDX-PackageDownloadLocation = "https://github.com/Cogni-DAO/cogni-template"
+
+[[annotations]]
+path = "**"
+precedence = "closest"
+SPDX-FileCopyrightText = "2025 CogniDAO contributors"
+SPDX-License-Identifier = "LicenseRef-PolyForm-Shield-1.0.0"
