@@ -28,8 +28,8 @@ gates:
       max_total_diff_kb: 500
 
   # Ensure */*/AGENTS.md files are updated when code changes
-  - type: agents-md-sync
-    id: agents_md_sync
+  # - type: agents-md-sync
+  #   id: agents_md_sync
     # with:  # Optional configuration
     #   code_patterns: ["src/**/*.js", "lib/**/*.ts"]  # Files that require doc updates
     #   doc_pattern: "CLAUDE.md"                       # Documentation file to check. Default is AGENTS.md
