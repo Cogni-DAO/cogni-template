@@ -16,7 +16,7 @@ All `src/**/*.{ts,tsx}` require:
 2. TSDoc block: Purpose, Scope, Invariants, Side-effects, Notes, Links, `@public`/`@internal`/`@beta`
 
 ```typescript
-// SPDX-License-Identifier: Polyform-Shield-1.0.0
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 /**
  * Purpose: [1-3 sentences]
  * Scope: [what it owns; what it doesn't]

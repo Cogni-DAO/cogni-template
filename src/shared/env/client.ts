@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Polyform-Shield-1.0.0
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 
 /**
  * Purpose: Client-side environment variable validation for Next.js public env vars using Zod schema.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Polyform-Shield-1.0.0
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 
 /**
  * Purpose: TypeScript mirrors of CSS design tokens for type-safe Tailwind CSS usage and token validation.

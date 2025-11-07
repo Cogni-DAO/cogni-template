@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Polyform-Shield-1.0.0
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 
 /**
  * Purpose: Server-side environment variable validation and type-safe configuration schema using Zod.
