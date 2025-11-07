@@ -11,7 +11,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:agentsmd",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:agentsmd && pnpm repo-check",
     "check:agentsmd": "node scripts/validate-agents-md.mjs",
     "test": "vitest run",
     "repo-check": "repolinter lint -c repolinter.json .",
