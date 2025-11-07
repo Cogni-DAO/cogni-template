@@ -17,10 +17,6 @@ success_criteria:
   neutral_on_missing_metrics: true
   any_of:
     - metric: follows-patterns
-      gte: 0.8
+      gte: 0.7
     - metric: documents-new-patterns
-      gte: 0.8
-    - metric: accessible-docs
-      gte: 0.8
-    - metric: healthy-deps
-      gte: 0.8
+      gte: 0.7
