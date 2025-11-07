@@ -126,7 +126,7 @@ When adding/removing keys, update:
 
 - schema in server.ts or client.ts,
 - Vars by layer list above,
-- .env.example and .env.local.example,
+- .env.example,
 - tests touching env.
 
 Bump Last reviewed date. Ensure pnpm lint && pnpm typecheck pass.

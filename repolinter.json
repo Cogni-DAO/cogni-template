@@ -150,6 +150,7 @@
             "LICENSE(\\..*)?|",
             "AGENTS\\.md|AGENTS_template\\.md|CLAUDE\\.md|",
             "\\.editorconfig|\\.gitignore|\\.nvmrc|\\.prettierignore|\\.prettierrc(\\..*)?|",
+            "\\.env\\.example|",
             "commitlint\\.config\\.cjs|eslint\\.config\\.mjs|repolinter\\.json|",
             "package\\.json|pnpm-lock\\.yaml|",
             "tsconfig\\.json|tsconfig\\.eslint\\.json|",
