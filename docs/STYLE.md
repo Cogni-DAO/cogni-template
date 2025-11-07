@@ -248,7 +248,7 @@ pnpm reuse:addheader
 ```
 
 **In CI:**
-REUSE lint is included in `pnpm check`. Add to CI workflow:
+REUSE lint should be run separately in CI (not included in `pnpm check` to avoid local dev failures):
 
 ```yaml
 - run: pnpm reuse:lint

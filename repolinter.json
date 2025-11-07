@@ -17,7 +17,9 @@
       "level": "error",
       "rule": {
         "type": "file-existence",
-        "options": { "globsAny": ["README.md", "README.MD"] }
+        "options": {
+          "globsAny": ["README.md", "README.MD"]
+        }
       },
       "policyInfo": "A README.md at repo root is required."
     },
@@ -25,7 +27,9 @@
       "level": "error",
       "rule": {
         "type": "file-existence",
-        "options": { "globsAny": [".github/CODEOWNERS", "CODEOWNERS"] }
+        "options": {
+          "globsAny": [".github/CODEOWNERS", "CODEOWNERS"]
+        }
       },
       "policyInfo": "CODEOWNERS is required to enable review ownership."
     },
@@ -33,7 +37,9 @@
       "level": "error",
       "rule": {
         "type": "file-existence",
-        "options": { "globsAny": [".cogni/repo-spec.yaml"] }
+        "options": {
+          "globsAny": [".cogni/repo-spec.yaml"]
+        }
       },
       "policyInfo": "Cogni governance contract must exist."
     },
@@ -41,7 +47,9 @@
       "level": "warning",
       "rule": {
         "type": "file-existence",
-        "options": { "globsAny": [".github/workflows/**"] }
+        "options": {
+          "globsAny": [".github/workflows/**"]
+        }
       },
       "policyInfo": "At least one GitHub Actions workflow should exist."
     },
@@ -49,7 +57,9 @@
       "level": "error",
       "rule": {
         "type": "file-existence",
-        "options": { "globsAny": [".editorconfig"] }
+        "options": {
+          "globsAny": [".editorconfig"]
+        }
       },
       "policyInfo": ".editorconfig is required for consistent editors."
     },
@@ -57,7 +67,9 @@
       "level": "error",
       "rule": {
         "type": "file-existence",
-        "options": { "globsAny": [".gitignore"] }
+        "options": {
+          "globsAny": [".gitignore"]
+        }
       },
       "policyInfo": ".gitignore is required."
     },
@@ -65,7 +77,9 @@
       "level": "error",
       "rule": {
         "type": "file-existence",
-        "options": { "globsAny": [".prettierrc", ".prettierrc.*"] }
+        "options": {
+          "globsAny": [".prettierrc", ".prettierrc.*"]
+        }
       },
       "policyInfo": "Prettier config is required."
     },
@@ -73,7 +87,9 @@
       "level": "error",
       "rule": {
         "type": "file-existence",
-        "options": { "globsAny": ["eslint.config.mjs"] }
+        "options": {
+          "globsAny": ["eslint.config.mjs"]
+        }
       },
       "policyInfo": "ESLint flat config is required."
     },
@@ -81,7 +97,9 @@
       "level": "error",
       "rule": {
         "type": "file-existence",
-        "options": { "globsAny": ["commitlint.config.cjs"] }
+        "options": {
+          "globsAny": ["commitlint.config.cjs"]
+        }
       },
       "policyInfo": "Commitlint config is required."
     },
@@ -89,7 +107,9 @@
       "level": "warning",
       "rule": {
         "type": "file-existence",
-        "options": { "globsAny": ["CONTRIBUTING.md"] }
+        "options": {
+          "globsAny": ["CONTRIBUTING.md"]
+        }
       },
       "policyInfo": "Contributor guidelines recommended."
     },
@@ -97,7 +117,9 @@
       "level": "warning",
       "rule": {
         "type": "file-existence",
-        "options": { "globsAny": ["SECURITY.md"] }
+        "options": {
+          "globsAny": ["SECURITY.md"]
+        }
       },
       "policyInfo": "Security policy recommended."
     },
@@ -105,7 +127,9 @@
       "level": "warning",
       "rule": {
         "type": "file-existence",
-        "options": { "globsAny": ["CODE_OF_CONDUCT.md"] }
+        "options": {
+          "globsAny": ["CODE_OF_CONDUCT.md"]
+        }
       },
       "policyInfo": "Code of Conduct recommended."
     },
@@ -124,7 +148,9 @@
       "level": "warning",
       "rule": {
         "type": "file-existence",
-        "options": { "globsAny": [".husky/pre-commit", ".husky/pre-push"] }
+        "options": {
+          "globsAny": [".husky/pre-commit", ".husky/pre-push"]
+        }
       },
       "policyInfo": "Local hooks recommended."
     },
@@ -157,7 +183,7 @@
             "tsconfig\\.json|tsconfig\\.eslint\\.json|",
             "tailwind\\.config\\.ts|postcss\\.config\\.mjs|",
             "next\\.config\\.ts|next-env\\.d\\.ts|",
-            "\\.allstar|\\.claude|\\.cogni|\\.cursor|\\.github|\\.husky|docs|src|public",
+            "\\.allstar|\\.claude|\\.cogni|\\.cursor|\\.github|\\.husky|\\.reuse|docs|src|public",
             ")$)[^/]+$"
           ],
           "ignoreCase": true

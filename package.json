@@ -11,10 +11,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:agentsmd && pnpm repo-check && pnpm reuse:lint",
+    "check": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm check:agentsmd && pnpm repo-check",
     "check:agentsmd": "node scripts/validate-agents-md.mjs",
-    "reuse:lint": "reuse lint",
-    "reuse:addheader": "reuse addheader --license Polyform-Noncommercial-1.0.0 --copyright 'Cogni Template Contributors'",
     "test": "vitest run",
     "repo-check": "repolinter lint -c repolinter.json .",
     "prepare": "husky"
