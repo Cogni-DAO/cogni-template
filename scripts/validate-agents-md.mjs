@@ -217,6 +217,10 @@ function validateBoundaries(block, filePathRaw) {
   // 5) Declared may_import must be subset of policy for this layer
   const policy = POLICY_ALLOW[j.layer];
   if (policy) {
+    // If the policy contains "*", allow any explicit list in the doc.
+    if (policy.includes("*")) {
+      return; // accept any may_import for this layer
+    }
     const extras = j.may_import.filter((x) => {
       if (x === "*" || policy.includes(x)) return false;
       // Handle "adapters" wildcard in policy matching "adapters/server", etc.
