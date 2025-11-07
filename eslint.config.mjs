@@ -13,6 +13,7 @@ import jsxA11y from "eslint-plugin-jsx-a11y";
 import noInlineStyles from "eslint-plugin-no-inline-styles";
 import reactHooks from "eslint-plugin-react-hooks";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
+import tsdoc from "eslint-plugin-tsdoc";
 import unused from "eslint-plugin-unused-imports";
 
 /** @type {import('eslint').Linter.Config[]} */
@@ -60,6 +61,7 @@ export default [
       boundaries: boundaries,
       "jsx-a11y": jsxA11y,
       "react-hooks": reactHooks,
+      tsdoc: tsdoc,
     },
     rules: {
       ...tsPlugin.configs.strict.rules,
@@ -148,6 +150,16 @@ export default [
 
       // No inline styles
       "no-inline-styles/no-inline-styles": "error",
+
+      // File header documentation: REUSE enforces SPDX, tsdoc validates TSDoc syntax
+      "tsdoc/syntax": "error",
+      // Avoid mid-code comments (allow eslint-disable and ts-ignore)
+      "no-inline-comments": [
+        "error",
+        {
+          ignorePattern: "eslint-disable|ts-ignore|ts-expect-error|ts-check",
+        },
+      ],
 
       // Hexagonal architecture boundaries enforcement
       "boundaries/element-types": [
@@ -334,6 +346,8 @@ export default [
       "boundaries/element-types": "off",
       "boundaries/no-unknown-files": "off",
       "no-restricted-imports": "off",
+      "tsdoc/syntax": "off",
+      "no-inline-comments": "off",
     },
   },
 
@@ -354,6 +368,7 @@ export default [
       "dist/**",
       "coverage/**",
       "*.d.ts",
+      "**/*.gen.*",
       "node_modules/**",
       "commitlint.config.cjs",
       "*.config.cjs",

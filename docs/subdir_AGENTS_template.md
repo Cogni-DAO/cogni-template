@@ -14,9 +14,8 @@
 
 ## Pointers
 
-- [Root AGENTS.md](../../AGENTS.md) <!-- adjust depth -->
-- [Architecture](../../docs/ARCHITECTURE.md) <!-- adjust depth -->
-- [Related ADRs](../../docs/adr/) <!-- optional -->
+- [Key files/docs](../path): <!-- Insert most relevant key file(s) or documentation links here -->
+- [Related ADRs](../../docs/adr/) <!-- optional, add specific ADRs if available -->
 
 ## Boundaries
 
