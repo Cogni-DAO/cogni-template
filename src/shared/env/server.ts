@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: Polyform-Shield-1.0.0
+
+/**
+ * Purpose: Server-side environment variable validation and type-safe configuration schema using Zod.
+ * Scope: Validates process.env for server runtime; provides serverEnv object. Does not handle client-side env vars.
+ * Invariants: All required env vars validated at startup; provides boolean flags for NODE_ENV variants; fails fast on invalid env.
+ * Side-effects: process.env
+ * Notes: Includes LLM config for Stage 8; validates URLs and secrets; provides default values where appropriate.
+ * Links: Environment configuration specification
+ * @public
+ */
+
 import { z } from "zod";
 
 const serverSchema = z.object({

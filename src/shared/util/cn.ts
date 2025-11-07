@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: Polyform-Shield-1.0.0
 
 /**
- * @packageDocumentation
  * Purpose: Merges Tailwind CSS class names with conflict resolution via clsx and tailwind-merge.
  * Scope: Provides cn() utility for combining class names. Does not handle CSS-in-JS or style objects.
  * Invariants: Always returns valid class string; handles undefined/null gracefully.

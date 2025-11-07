@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: Polyform-Shield-1.0.0
+
+/**
+ * Purpose: Public surface for environment configuration module with validated env objects and utility helpers.
+ * Scope: Re-exports client/server env and provides raw env access helpers. Does not export internal schemas.
+ * Invariants: Only re-exports public APIs; utility helpers fail fast on missing vars; maintains type safety.
+ * Side-effects: process.env
+ * Notes: Includes fallback helpers for edge cases; changes here affect environment module public API contract.
+ * Links: ARCHITECTURE.md#public-surface
+ * @public
+ */
+
 export type { ClientEnv } from "./client";
 export { clientEnv } from "./client";
 export type { ServerEnv } from "./server";

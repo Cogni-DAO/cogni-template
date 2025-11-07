@@ -1,6 +1,13 @@
+// SPDX-License-Identifier: Polyform-Shield-1.0.0
+
 /**
- * MCP Server Stub
- * Future: Auto-generated from src/contracts/** operations
+ * Purpose: Placeholder for Model Context Protocol server implementation with contract-based tool registration.
+ * Scope: Future MCP server bootstrap and tool registration. Does not implement actual MCP protocol yet.
+ * Invariants: Throws error until implemented; maintains contract-first design principles.
+ * Side-effects: none
+ * Notes: Will auto-generate from src/contracts/** operations; includes auth/rate-limit guards.
+ * Links: MCP specification, Stage 8 implementation plan
+ * @internal
  */
 
 // Placeholder for future MCP server implementation

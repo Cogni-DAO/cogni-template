@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: Polyform-Shield-1.0.0
+
+/**
+ * Purpose: Card component system with semantic parts for structured content layout and information hierarchy.
+ * Scope: Provides Card container and semantic parts (Header, Title, Description, Content, Footer). Does not handle data fetching.
+ * Invariants: Forwards ref; maintains consistent spacing and theming; supports all HTMLDivElement attributes.
+ * Side-effects: none
+ * Notes: Follows shadcn/ui Card component patterns; uses semantic naming for accessibility.
+ * Links: shadcn/ui Card component specification
+ * @public
+ */
+
 import * as React from "react";
 
 import { cn } from "@/shared/util";

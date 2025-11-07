@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: Polyform-Shield-1.0.0
+
+/**
+ * Purpose: Home page component showcasing design system features and Cogni Template capabilities.
+ * Scope: Renders landing page with design tokens, components preview, and architecture info. Does not handle routing.
+ * Invariants: Displays consistent branding; showcases UI components; provides external links with security attributes.
+ * Side-effects: none
+ * Notes: Uses shadcn/ui components for consistent styling and theme integration.
+ * Links: Route /
+ * @public
+ */
+
 import Image from "next/image";
 import type { ReactNode } from "react";
 

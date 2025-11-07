@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: Polyform-Shield-1.0.0
+
+/**
+ * Purpose: Button component with Radix Slot composition and cva variants for consistent UI interactions.
+ * Scope: Provides Button component and buttonVariants. Does not handle form submission or navigation.
+ * Invariants: Forwards ref; accepts aria-* and data-* unchanged; always renders valid button element or slot.
+ * Side-effects: none
+ * Notes: Uses Radix Slot for composition; cva for variant management; supports asChild pattern.
+ * Links: shadcn/ui Button component specification
+ * @public
+ */
+
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import * as React from "react";
