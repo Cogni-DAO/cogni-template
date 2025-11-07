@@ -183,6 +183,7 @@
             "tsconfig\\.json|tsconfig\\.eslint\\.json|",
             "tailwind\\.config\\.ts|postcss\\.config\\.mjs|",
             "next\\.config\\.ts|next-env\\.d\\.ts|",
+            "vitest\\.config\\.mts|",
             "\\.allstar|\\.claude|\\.cogni|\\.cursor|\\.github|\\.husky|\\.reuse|REUSE\\.toml|LICENSES|docs|src|public",
             ")$)[^/]+$"
           ],
