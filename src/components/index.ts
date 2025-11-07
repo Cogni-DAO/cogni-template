@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
  * Purpose: Public surface for components module via re-exports of shared UI components.

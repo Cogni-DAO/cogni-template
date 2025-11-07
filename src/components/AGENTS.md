@@ -39,7 +39,7 @@ Shared presentational UI. No business logic, no data fetching. Design tokens and
 
 ## Public Surface
 
-- **Exports:** UI components, variants, types via `components/index.ts`
+- **Exports:** UI components and widgets via `components/index.ts`
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none

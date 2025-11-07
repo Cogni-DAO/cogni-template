@@ -1,3 +1,15 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Purpose: Animated terminal component displaying progressive installation steps with copy functionality.
+ * Scope: Widget for showcasing CLI installation process; manages local animation state.
+ * Invariants: Steps animate sequentially; copy button shows feedback; maintains accessibility.
+ * Side-effects: time (animation timers), IO (clipboard write)
+ * Notes: Used on landing page to demonstrate setup process; self-contained animation logic.
+ * Links: ARCHITECTURE.md#components-widgets
+ * @public
+ */
 "use client";
 
 import { Check, Copy } from "lucide-react";
