@@ -22,8 +22,14 @@ Verify concrete adapter implementations against real-ish dependencies with minim
 ```json
 {
   "layer": "tests",
-  "may_import": ["src/adapters", "src/ports", "src/shared", "tests/contract"],
-  "must_not_import": ["src/core", "src/features", "src/app", "src/mcp"]
+  "may_import": [
+    "adapters/server",
+    "adapters/worker",
+    "ports",
+    "shared",
+    "tests"
+  ],
+  "must_not_import": ["core", "features", "app", "mcp"]
 }
 ```
 
@@ -40,12 +46,32 @@ Verify concrete adapter implementations against real-ish dependencies with minim
 - This directory **does:** run port contract suites against concrete adapters; smoke test infra clients (DB, LLM proxy, wallet verification)
 - This directory **does not:** test domain/business logic, UI, or Next routes
 
+## Usage
+
+```bash
+pnpm test:int
+vitest run tests/integration
+pnpm test tests/integration/adapters/ai
+```
+
 ## Standards
 
 - Adapters must pass their port contract: import tests/contract/ports/\*.contract.ts and run the suite
 - Dependencies: prefer dockerized locals (postgres, litellm, langfuse). If using third-party, restrict to official sandboxes; forbid production hosts
 - Setup/teardown: create and migrate schema per run; isolate data; clean shutdown
 - Timing: avoid real time sensitivity; use deterministic inputs; allow retries only for transient network on localhost
+
+## Dependencies
+
+- **Internal:** src/adapters, src/ports, src/shared, tests/contract
+- **External:** vitest, docker (for local testing), test environment configs
+
+## Change Protocol
+
+- Update integration tests when adapter implementations change
+- Run full contract suites when port interfaces change
+- Bump **Last reviewed** date
+- Ensure clean test environment setup/teardown
 
 ## Notes
 

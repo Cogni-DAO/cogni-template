@@ -22,8 +22,14 @@ Deterministic test doubles for unit tests with no I/O dependencies.
 ```json
 {
   "layer": "tests",
-  "may_import": ["src/ports"],
-  "must_not_import": ["src/adapters", "src/features", "src/core", "src/app"]
+  "may_import": ["ports"],
+  "must_not_import": [
+    "adapters/server",
+    "adapters/worker",
+    "features",
+    "core",
+    "app"
+  ]
 }
 ```
 
@@ -40,7 +46,29 @@ Deterministic test doubles for unit tests with no I/O dependencies.
 - This directory **does:** provide controllable, deterministic test doubles for ports
 - This directory **does not:** perform real I/O or connect to external services
 
+## Usage
+
+```bash
+# Import in unit tests
+import { FakeClock, FakeRng, FakeTelemetry } from "@tests/_fakes"
+```
+
 ## Standards
 
 - No I/O, no time, no RNG - all controllable
 - Minimal and deterministic behavior only
+
+## Dependencies
+
+- **Internal:** none
+- **External:** none
+
+## Change Protocol
+
+- Update this file when **Exports**, **Routes**, or **Env/Config** change
+- Bump **Last reviewed** date
+- Update ESLint boundary rules if **Boundaries** changed
+
+## Notes
+
+- Keep fakes minimal and deterministic only

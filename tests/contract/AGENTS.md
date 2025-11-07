@@ -22,8 +22,8 @@ Reusable contract tests that verify port implementations are swappable.
 ```json
 {
   "layer": "tests",
-  "may_import": ["src/ports", "src/core"],
-  "must_not_import": ["src/adapters", "src/features", "src/app"]
+  "may_import": ["ports", "core"],
+  "must_not_import": ["adapters/server", "adapters/worker", "features", "app"]
 }
 ```
 
@@ -40,7 +40,30 @@ Reusable contract tests that verify port implementations are swappable.
 - This directory **does:** define expected behavior for port implementations
 - This directory **does not:** test specific adapters or business logic
 
+## Usage
+
+```bash
+pnpm test tests/contract
+pnpm test tests/contract/ports
+```
+
 ## Standards
 
 - Every port must have a contract test suite
 - Adapters run these contracts in integration tests
+
+## Dependencies
+
+- **Internal:** src/ports, src/core
+- **External:** vitest
+
+## Change Protocol
+
+- Update contract tests when port interfaces change
+- Bump **Last reviewed** date
+- Ensure all adapters pass updated contract suites
+
+## Notes
+
+- Contract tests define the behavioral specification for ports
+- Keep contract tests independent of specific adapter implementations

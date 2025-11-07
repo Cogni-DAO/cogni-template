@@ -40,7 +40,28 @@ Static test data for consistent test scenarios across unit and integration tests
 - This directory **does:** provide consistent test data for reproducible tests
 - This directory **does not:** contain logic or executable code
 
+## Usage
+
+```bash
+# Import test data in tests
+import proposals from "@tests/_fixtures/proposals.json"
+```
+
 ## Standards
 
 - JSON only, no executable code
 - Keep data realistic but minimal
+
+## Dependencies
+
+- **Internal:** none
+- **External:** none
+
+## Change Protocol
+
+- Update this file when **Exports**, **Routes**, or **Env/Config** change
+- Bump **Last reviewed** date
+
+## Notes
+
+- Whenever creating a fixture, first grab real data and directly model after it
