@@ -54,24 +54,30 @@ Based on current Next.js baseline and leverage analysis, this plan prioritizes C
 
 ---
 
-## Stage 3: Environment & Type Safety
+## Stage 3: Environment & Type Safety ✅
 
 **Goal**: Bulletproof environment variable management with zod validation
 
 ### Files to Create:
 
-- [ ] `.env.example` - Sample environment variables (with DATABASE_URL using sslmode=require)
-- [ ] `.env.local.example` - Local-only template (never committed)
-- [ ] `src/lib/env/server.ts` - Private vars (DATABASE_URL, API keys)
-- [ ] `src/lib/env/client.ts` - Public vars (NEXT*PUBLIC*\*)
-- [ ] `src/lib/env/index.ts` - Unified exports and helpers
-- [ ] Update `tsconfig.json` - Add path aliases (@/, @/lib/\*)
+- [x] `.env.example` - Sample environment variables (with DATABASE_URL using sslmode=require)
+- [x] `.env.local.example` - Local-only template (never committed)
+- [x] `src/shared/env/server.ts` - Private vars (DATABASE_URL, API keys)
+- [x] `src/shared/env/client.ts` - Public vars (NEXT*PUBLIC*\*)
+- [x] `src/shared/env/index.ts` - Unified exports and helpers
+- [x] `src/shared/env/AGENTS.md` - Documentation for env management
+- [x] Update `.gitignore` - Allow .env.example files to be committed
+- [x] Add `zod` dependency to package.json
+- [x] Path aliases already configured in tsconfig.json (@shared/\*)
 
 ### Validation:
 
-- [ ] Invalid env vars cause build failures
-- [ ] Type safety for all environment access
-- [ ] Clear separation of client/server variables
+- [x] Invalid env vars cause build failures (via Zod validation)
+- [x] Type safety for all environment access
+- [x] Clear separation of client/server variables
+- [x] Development mode allows linting without production secrets
+- [x] Cross-field validation (Loki, Langfuse all-or-nothing)
+- [x] Context-aware env object with runtime guards
 
 ---
 

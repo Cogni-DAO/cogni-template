@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-06
-- **Status:** draft
+- **Last reviewed:** 2025-11-07
+- **Status:** stable
 
 ## Purpose
 
-Unit, integration, and contract tests including setup and test utilities.
+Provide fast, reliable verification per layer. Enforce port contracts so any adapter is swappable without changing domain logic.
 
 ## Pointers
 
@@ -29,49 +29,48 @@ Unit, integration, and contract tests including setup and test utilities.
 
 ## Public Surface
 
-- **Exports:** Test utilities, mocks, setup functions
-- **Routes (if any):** none
-- **CLI (if any):** pnpm test, vitest commands
-- **Env/Config keys:** Test-specific environment variables
-- **Files considered API:** setup.ts, test utilities
+- **Exports:** none
+- **Routes:** none
+- **CLI:** pnpm test, pnpm test:unit, pnpm test:int, pnpm test:changed
+- **Env/Config keys:** none
+- **Files considered API:** contract/ports/\*_/_.contract.ts (test-only API for adapters)
 
 ## Ports (optional)
 
-- **Uses ports:** All ports (for testing)
-- **Implements ports:** Mock implementations
-- **Contracts (required if implementing):** Contract test harnesses
+- **Uses ports:** all unit tests mock ports
+- **Implements ports:** none
+- **Contracts:** suites in tests/contract/ports/\*.contract.ts. Every adapter test must import and pass its suite.
 
 ## Responsibilities
 
-- This directory **does**: Test core rules, features with mocked ports, adapter integration
-- This directory **does not**: Contain production code, UI components
+- This directory **does:** unit tests for core/features, contract suites for ports, integration tests for adapters.
+- This directory **does not:** run UI/e2e, define production code, or host HTTP route tests (kept in /e2e).
 
 ## Usage
 
-Minimal local commands:
-
 ```bash
 pnpm test
-vitest run
+pnpm test:unit
+pnpm test:int
 ```
 
 ## Standards
 
-- Unit tests for core and features
-- Contract tests for all port implementations
+- **Unit:** no I/O, no time, no RNG. Use \_fakes.
+- **Contract:** define expected behavior once per port; adapters run the same suite.
+- **Integration:** real infra where feasible; clean setup/teardown in each spec.
 
 ## Dependencies
 
-- **Internal:** All layers for testing
-- **External:** vitest, testing utilities
+- **Internal:** src/core, src/features, src/ports, src/adapters, src/shared
+- **External:** vitest, ts-node/tsconfig support, any local stubs needed for adapters
 
 ## Change Protocol
 
-- Update this file when **Exports**, **Routes**, or **Env/Config** change
-- Bump **Last reviewed** date
-- Update ESLint boundary rules if **Boundaries** changed
-- Ensure boundary lint + (if Ports) **contract tests** pass
+When port behavior changes, update the matching \*.contract.ts suite and adapters' integration specs.
+Bump Last reviewed date and ensure boundary lint passes.
 
 ## Notes
 
-- Mock adapters for deterministic testing
+- Keep \_fakes minimal and deterministic.
+- Prefer contract-first when adding a new adapter
