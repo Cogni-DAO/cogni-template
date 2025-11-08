@@ -121,7 +121,7 @@ function validateBoundaries(block, filePathRaw) {
   const POLICY_ALLOW = {
     core: ["core"],
     ports: ["ports", "core", "types"],
-    features: ["features", "ports", "core", "shared", "types"],
+    features: ["features", "ports", "core", "shared", "types", "components"],
     contracts: ["contracts", "shared", "types"],
     app: [
       "app",

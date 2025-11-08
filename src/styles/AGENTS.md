@@ -88,3 +88,21 @@ pnpm typecheck
 - CSS is source of truth for all design token values
 - ui.ts is the single source of truth for component styling
 - ESLint blocks literal className usage to enforce API discipline
+
+### ui.ts Growth Management
+
+**Budget:** Keep src/styles/ui.ts ≤ 400 LOC and ≤ ~12 factories.
+
+**When budget exceeded, split by domain:**
+
+```
+src/styles/ui/
+  layout.ts      # container, section, grid
+  typography.ts  # heading, paragraph, prose
+  inputs.ts      # button, input, select, switch
+  data.ts        # card(+parts), badge, avatar(+parts)
+  overlays.ts    # popoverContent, dialogContent, sheetContent
+  index.ts       # explicit re-exports (no export *)
+```
+
+**Rules remain unchanged:** CVA-only, token classes only, no literals outside this folder. ESLint scope applies to `src/styles/ui/**/*.ts`. Barrel is explicit in `ui/index.ts`.

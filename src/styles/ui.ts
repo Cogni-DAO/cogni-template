@@ -10,7 +10,7 @@
  * @public
  */
 
-import { cva } from "class-variance-authority";
+import { cva, type VariantProps } from "class-variance-authority";
 
 /**
  * Avatar component styling with consistent sizing variants
@@ -116,7 +116,7 @@ export const badge = cva(
   "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
   {
     variants: {
-      variant: {
+      intent: {
         default:
           "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
         secondary:
@@ -130,10 +130,264 @@ export const badge = cva(
         md: "px-2.5 py-0.5 text-xs",
         lg: "px-3 py-1 text-sm",
       },
-    },
+    } as const,
     defaultVariants: {
-      variant: "default",
+      intent: "default",
       size: "md",
     },
   }
 );
+
+/**
+ * Container styling for responsive layout wrappers with width and padding variants
+ */
+export const container = cva("mx-auto px-4 sm:px-6 lg:px-8", {
+  variants: {
+    size: {
+      sm: "max-w-3xl",
+      md: "max-w-5xl",
+      lg: "max-w-7xl",
+      xl: "max-w-screen-xl",
+      full: "max-w-full",
+    },
+    spacing: {
+      none: "",
+      sm: "py-8",
+      md: "py-12",
+      lg: "py-16",
+      xl: "py-20",
+    },
+  } as const,
+  defaultVariants: {
+    size: "lg",
+    spacing: "none",
+  },
+});
+
+/**
+ * Section styling for page sections with surface variants for theming
+ */
+export const section = cva("w-full", {
+  variants: {
+    surface: {
+      default: "",
+      card: "bg-card",
+      muted: "bg-muted",
+      inverse: "bg-primary text-primary-foreground",
+    },
+  } as const,
+  defaultVariants: {
+    surface: "default",
+  },
+});
+
+/**
+ * Grid layout styling with responsive column and gap variants
+ */
+export const grid = cva("", {
+  variants: {
+    cols: {
+      "1": "",
+      "2": "grid lg:grid-cols-2",
+      "3": "grid lg:grid-cols-3",
+      "4": "grid lg:grid-cols-4",
+      "12": "grid lg:grid-cols-12",
+    },
+    gap: {
+      sm: "gap-4 lg:gap-6",
+      md: "gap-6 lg:gap-8",
+      lg: "gap-8 lg:gap-12",
+    },
+    align: {
+      default: "",
+      center: "items-center",
+    },
+  } as const,
+  defaultVariants: {
+    gap: "md",
+  },
+});
+
+/**
+ * Heading typography with level scale and tone variants
+ */
+export const heading = cva("font-bold tracking-tight", {
+  variants: {
+    level: {
+      h1: "text-4xl sm:text-5xl md:text-6xl",
+      h2: "text-3xl sm:text-4xl",
+      h3: "text-xl sm:text-2xl",
+      h4: "text-lg font-semibold",
+      h5: "text-base font-semibold",
+    },
+    tone: {
+      default: "text-foreground",
+      subdued: "text-muted-foreground",
+      invert: "text-background",
+    },
+  } as const,
+  defaultVariants: {
+    level: "h2",
+    tone: "default",
+  },
+});
+
+/**
+ * Paragraph styling with size and tone variants
+ */
+export const paragraph = cva("", {
+  variants: {
+    size: {
+      sm: "text-sm",
+      md: "text-base",
+      lg: "text-lg",
+      xl: "text-xl",
+    },
+    tone: {
+      default: "text-foreground",
+      subdued: "text-muted-foreground",
+      invert: "text-background",
+    },
+  } as const,
+  defaultVariants: {
+    size: "md",
+    tone: "subdued",
+  },
+});
+
+/**
+ * Prose styling for rich text content with size and tone variants
+ */
+export const prose = cva("prose", {
+  variants: {
+    size: {
+      sm: "prose-sm",
+      md: "prose-base",
+      lg: "prose-lg",
+      xl: "prose-xl",
+    },
+    tone: {
+      default: "",
+      invert: "prose-invert",
+    },
+  } as const,
+  defaultVariants: {
+    size: "md",
+    tone: "default",
+  },
+});
+
+/**
+ * Terminal frame styling for code display and interactive terminals
+ */
+export const terminalFrame = cva("rounded-lg shadow-lg font-mono", {
+  variants: {
+    surface: {
+      default: "bg-card text-card-foreground",
+      inverse: "bg-primary text-primary-foreground",
+    },
+    size: {
+      sm: "text-xs",
+      md: "text-sm",
+      lg: "text-base",
+    },
+  },
+  defaultVariants: {
+    surface: "inverse",
+    size: "md",
+  },
+} as const);
+
+/**
+ * Terminal dot styling for window controls
+ */
+export const terminalDot = cva("h-3 w-3 rounded-full", {
+  variants: {
+    color: {
+      red: "bg-red-500",
+      yellow: "bg-amber-500",
+      green: "bg-green-500",
+    },
+  } as const,
+  defaultVariants: {
+    color: "red",
+  },
+});
+
+/**
+ * Terminal body styling for content area
+ */
+export const terminalBody = cva("p-4 space-y-2");
+
+/**
+ * Icon button styling for interactive icons
+ */
+export const iconButton = cva(
+  "text-muted-foreground hover:text-foreground transition-colors"
+);
+
+/**
+ * Icon sizing variants for consistent icon dimensions
+ */
+export const icon = cva("", {
+  variants: {
+    size: {
+      sm: "h-4 w-4",
+      md: "h-5 w-5",
+      lg: "h-6 w-6",
+      xl: "h-8 w-8",
+    },
+  } as const,
+  defaultVariants: {
+    size: "md",
+  },
+});
+
+/**
+ * Reveal animation styling for progressive disclosure patterns
+ */
+export const reveal = cva("transition-opacity", {
+  variants: {
+    state: {
+      hidden: "opacity-0",
+      visible: "opacity-100",
+    },
+    duration: {
+      fast: "duration-150",
+      normal: "duration-300",
+      slow: "duration-500",
+    },
+    delay: {
+      none: "",
+      d150: "delay-150",
+      d300: "delay-300",
+      d450: "delay-450",
+    },
+  } as const,
+  defaultVariants: {
+    state: "visible",
+    duration: "normal",
+    delay: "none",
+  },
+});
+
+/**
+ * Terminal prompt styling with semantic tone variants
+ */
+export const prompt = cva("font-mono", {
+  variants: {
+    tone: {
+      default: "text-foreground",
+      success: "text-green-400",
+    },
+  } as const,
+  defaultVariants: {
+    tone: "default",
+  },
+});
+
+// Export variant types for external use
+export type ButtonSize = VariantProps<typeof button>["size"];
+export type BadgeIntent = VariantProps<typeof badge>["intent"];
+export type ContainerSize = VariantProps<typeof container>["size"];
+export type HeadingLevel = VariantProps<typeof heading>["level"];

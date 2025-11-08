@@ -118,21 +118,21 @@ export default [
               message: "Do not import from parent directories. Use aliases.",
             },
             {
-              group: ["@/components/ui/*"],
+              group: ["@/components/vendor/**"],
               message:
-                "Use @/components/kit/* wrappers instead of direct ui imports",
+                "Use @/components/kit/* wrappers instead of direct vendor imports",
             },
           ],
           paths: [
             {
               name: "clsx",
               message:
-                "Only allowed in src/styles/** - use styling API from @/styles/ui instead",
+                "Only allowed in src/styles/** and src/components/vendor/** - use styling API from @/styles/ui instead",
             },
             {
               name: "tailwind-merge",
               message:
-                "Only allowed in src/styles/** - use styling API from @/styles/ui instead",
+                "Only allowed in src/styles/** and src/components/vendor/** - use styling API from @/styles/ui instead",
             },
           ],
         },
@@ -366,19 +366,23 @@ export default [
     },
   },
 
-  // Features isolation - block cross-feature imports
+  // Features: only import the barrel or kit subpaths
   {
     files: ["src/features/**/*.{ts,tsx}"],
     rules: {
+      "import/no-internal-modules": [
+        "error",
+        {
+          allow: ["@/components", "@/components/kit/**"],
+        },
+      ],
       "no-restricted-imports": [
         "error",
         {
           patterns: [
-            // forbid importing any other feature via alias
-            {
-              group: ["@features/*"],
-              message: "No cross-feature imports. Depend on ports/core only.",
-            },
+            "@/features/**", // no cross-feature via alias
+            "@/components/vendor/**", // never touch vendor
+            "@/styles/**", // never touch styles direct
           ],
         },
       ],
@@ -409,7 +413,17 @@ export default [
     },
   },
 
-  // Kit layer - allow ui imports but no literal classes (CVA outputs only)
+  // Vendor layer - allow clsx/tailwind-merge and literal classes, no repo imports
+  {
+    files: ["src/components/vendor/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": "off",
+      "no-literal-classnames/no-literal-classnames": "off",
+      "no-restricted-syntax": "off",
+    },
+  },
+
+  // Kit layer - allow vendor imports but no literal classes (CVA outputs only)
   {
     files: ["src/components/kit/**/*.{ts,tsx}"],
     rules: {
@@ -421,18 +435,17 @@ export default [
               group: ["../**"],
               message: "Do not import from parent directories. Use aliases.",
             },
-            // Remove @/components/ui/* restriction for kit layer
           ],
           paths: [
             {
               name: "clsx",
               message:
-                "Only allowed in src/styles/** - use styling API from @/styles/ui instead",
+                "Only allowed in src/styles/** and src/components/vendor/** - use styling API from @/styles/ui instead",
             },
             {
               name: "tailwind-merge",
               message:
-                "Only allowed in src/styles/** - use styling API from @/styles/ui instead",
+                "Only allowed in src/styles/** and src/components/vendor/** - use styling API from @/styles/ui instead",
             },
           ],
         },

@@ -22,8 +22,14 @@ Vertical slices containing use cases like auth/ and proposals/. Orchestrates cor
 ```json
 {
   "layer": "features",
-  "may_import": ["ports", "core", "shared"],
-  "must_not_import": ["app", "adapters/server", "adapters/worker", "features"]
+  "may_import": ["ports", "core", "shared", "components"],
+  "must_not_import": [
+    "app",
+    "adapters/server",
+    "adapters/worker",
+    "features",
+    "styles"
+  ]
 }
 ```
 
@@ -58,6 +64,7 @@ pnpm typecheck
 ## Standards
 
 - Each feature isolated with own actions/, services/, components/, hooks/, types/, constants/
+- Features import components via kit/barrel only; vendor and styles are blocked by ESLint
 - Unit tests with mocked ports required
 
 ## Dependencies

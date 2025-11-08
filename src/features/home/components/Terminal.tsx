@@ -1,0 +1,61 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+
+/**
+ * Purpose: Animated terminal component displaying progressive installation steps with copy functionality.
+ * Scope: Feature component for home page showcasing CLI installation process; manages animation state.
+ * Invariants: Steps animate sequentially; copy button shows feedback; maintains accessibility.
+ * Side-effects: time (animation timers), IO (clipboard write)
+ * Notes: Composes TerminalFrame with feature-specific state and animation logic.
+ * Links: src/components/kit/data-display/TerminalFrame.tsx
+ * @public
+ */
+
+"use client";
+
+import { useEffect, useState } from "react";
+
+import { TerminalFrame } from "@/components/kit/data-display/TerminalFrame";
+import { reveal, prompt } from "@/styles/ui";
+
+export function Terminal(): React.ReactElement {
+  const steps = [
+    "git clone https://github.com/cogni-template/cogni-template",
+    "pnpm install",
+    "pnpm db:setup",
+    "pnpm db:migrate",
+    "pnpm db:seed",
+    "pnpm dev 🎉",
+  ];
+  const [currentStep, setCurrentStep] = useState(0);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [currentStep, steps.length]);
+
+  const onCopy = (): void => {
+    navigator.clipboard.writeText(steps.join("\n"));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <TerminalFrame onCopy={onCopy} copied={copied}>
+      {steps.map((step, index) => (
+        <div
+          key={index}
+          className={reveal({
+            state: index > currentStep ? "hidden" : "visible",
+            duration: "normal",
+            delay: "none",
+          })}
+        >
+          <span className={prompt({ tone: "success" })}>$</span> {step}
+        </div>
+      ))}
+    </TerminalFrame>
+  );
+}

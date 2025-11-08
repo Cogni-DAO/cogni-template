@@ -16,7 +16,7 @@ Purpose: consistent, testable UI with clean boundaries and enforced design token
 
 ## Boundaries
 
-- UI may import: `shared`, `styles`, `types`, and feature-facing hooks/actions.
+- Pages/features may import kit only; kit may import @/styles/ui only; vendor never imported directly.
 - UI must not import: `core`, `ports`, `adapters`, `contracts`, or DB/IO.
 - Widgets can own local UI state only.
 
@@ -31,18 +31,14 @@ Purpose: consistent, testable UI with clean boundaries and enforced design token
 
 All styling flows through `src/styles/ui.ts` CVA factories. ESLint blocks literal `className` strings to enforce design token discipline.
 
-**Policy:** Pages must use kit layout and mdx wrappers; literal className is banned app-wide. Only `src/styles/ui.ts` may contain class literals for CVA factory definitions.
+**Policy:** Pages must use kit layout and mdx wrappers; literal className is banned app-wide. Only `src/styles/ui.ts` may contain class literals for CVA factory definitions. CVA outputs are final; no class merging in app code.
 
 ```tsx
-// Import from centralized styling API
-import { button, avatar, card } from "@/styles/ui";
-
-// Use typed variants
-<button className={button({ variant: "primary", size: "lg" })}>
-  Submit
-</button>
-<div className={avatar({ size: "md" })} />
-<div className={card({ variant: "elevated" })} />
+// src/components/kit/Button.tsx
+import { button } from "@/styles/ui";
+export function Button({ variant, size, ...p }) {
+  return <button className={button({ variant, size })} {...p} />;
+}
 ```
 
 ### Available Styling Factories
@@ -61,19 +57,28 @@ All variants provide TypeScript autocompletion and use design tokens exclusively
 Configured rules block all literal className usage:
 
 ```javascript
+"no-literal-classnames/no-literal-classnames": "error",
 "no-restricted-syntax": [
   "error",
   {
     selector: "JSXAttribute[name.name='className'] Literal",
     message: "Use styling API from @/styles/ui. Literal className forbidden."
+  },
+  {
+    selector: "JSXAttribute[name.name='className'] JSXExpressionContainer > CallExpression[callee.name='cn'] Literal",
+    message: "Use styling API from @/styles/ui. cn() with literal strings forbidden."
   }
 ],
 "no-restricted-imports": [
   "error",
   {
+    patterns: [{
+      group: ["@/components/ui/*"],
+      message: "Use @/components/kit/* wrappers instead of direct ui imports"
+    }],
     paths: [{
       name: "clsx",
-      message: "Only allowed in src/styles/** - use styling API instead"
+      message: "Only allowed in src/styles/** - use styling API from @/styles/ui instead"
     }]
   }
 ]
@@ -84,17 +89,8 @@ Configured rules block all literal className usage:
 ### Using Styling API
 
 ```tsx
-// src/components/ui/button.tsx
-"use client";
-import { button } from "@/styles/ui";
-import type { VariantProps } from "class-variance-authority";
-
-export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
-  VariantProps<typeof button>;
-
-export function Button({ variant, size, ...props }: ButtonProps) {
-  return <button className={button({ variant, size })} {...props} />;
-}
+// Import from kit in pages
+import { Button } from "@/components/kit/Button";
 ```
 
 ### Adding New Styling Variants
@@ -123,17 +119,6 @@ export const button = cva(
 ```
 
 TypeScript automatically enforces available variants with full intellisense.
-
-## Third-Party Component Escape Hatch
-
-For components requiring literal classes:
-
-```tsx
-{
-  /* eslint-disable-next-line -- vendor requires literal classes */
-}
-<ThirdPartyComponent className="prose prose-sm max-w-none" />;
-```
 
 ## Naming conventions
 

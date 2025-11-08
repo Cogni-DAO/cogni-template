@@ -11,5 +11,5 @@
  * @public
  */
 
-export * from "./ui";
-export { Terminal } from "./widgets/terminal";
+export { Avatar, AvatarImage, AvatarFallback } from "./kit/data-display/avatar";
+export { TerminalFrame } from "./kit/data-display/TerminalFrame";

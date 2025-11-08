@@ -5,7 +5,7 @@
  * Scope: Provides typed Avatar variants wrapping shadcn/ui primitives. Does not modify underlying UI components.
  * Invariants: Forwards all props to ui components; maintains ref forwarding; provides size variants via CVA.
  * Side-effects: none
- * Notes: Wraps src/components/ui/avatar to keep shadcn components pure and updatable.
+ * Notes: Wraps vendor/ui-primitives/shadcn/avatar to keep shadcn components pure and updatable.
  * Links: src/styles/ui.ts, docs/STYLEGUIDE_UI.md
  * @public
  */
@@ -19,7 +19,7 @@ import {
   Avatar as AvatarRoot,
   AvatarFallback as AvatarFb,
   AvatarImage as AvatarImg,
-} from "@/components/ui/avatar";
+} from "@/components/vendor/ui-primitives/shadcn/avatar";
 import { avatar, avatarFallback, avatarImage } from "@/styles/ui";
 
 export interface AvatarProps

@@ -67,20 +67,27 @@ pnpm lint
 
 ## Standards
 
-- **Subdirs:**
-  - `ui/` — shadcn base. Do Not Edit. Treat as vendor code. Keep close to upstream. No feature logic.
-  - `primitives/` — stateless building blocks that wrap or extend `ui/` with CVA.
-  - `widgets/` — composite, stateful UI reused across features (tables, terminal, markdown viewer).
-  - `layout/` — shells, headers, nav, footers.
-  - `overlays/` — modal, drawer, toast presenters.
-  - `forms/` — composed fields and resolvers.
-  - `icons/` — app-specific SVGs.
-  - `index.ts` — curated exports; do not export private internals.
+```
+src/components/
+  vendor/ui-primitives/  # vendored primitives. do not edit. do not export.
+    shadcn/              # shadcn/ui components
+  kit/                   # wrappers only. no className prop.
+    layout/              # Container, Section, Grid
+    inputs/              # Button, Input, Select, Switch
+    data-display/        # Card(+parts), Badge, Avatar(+parts)
+    navigation/          # Tabs, Breadcrumbs, Pagination
+    feedback/            # Alert, ToastPresenter
+    typography/          # Heading, Paragraph
+    mdx/                 # Prose, mdx components map
+  icons/                 # app SVGs
+  index.ts               # curated exports from kit only
+```
+
 - **Placement Rules:**
   - Single-route or one-off → keep colocated with that route or in `features/<slice>/components/`.
-  - Reused by ≥2 slices → promote to `components/widgets/`.
-  - Stateless + generic → `components/primitives/`.
-  - shadcn-generated files → stay in `components/ui/` unmodified; wrap to customize.
+  - Reused by ≥2 slices → promote to `components/kit/`.
+  - Stateless + generic → `components/kit/`.
+  - shadcn-generated files → stay in `vendor/ui-primitives/shadcn/` unmodified; wrap in kit/ to customize.
 - **Styling:** Use tokens from `src/styles/` only. No arbitrary Tailwind values. Prefer CVA for variants. Variant props must be typed. No inline styles except approved CSS vars.
 - **Testing:** Snapshot widgets and critical primitives. No network. Client-only tests isolate interactivity.
 
@@ -93,7 +100,6 @@ pnpm lint
 
 - Update **Last reviewed** and this file when exports or subdir rules change.
 - Run boundary lint. Refuse merges that import outside `may_import`.
-- For shadcn updates, follow `docs/UPDATING_SHADCN.md`.
 
 ## Notes
 

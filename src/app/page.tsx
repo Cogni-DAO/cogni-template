@@ -1,7 +1,8 @@
 import { ArrowRight, CreditCard, Database } from "lucide-react";
 import type { ReactElement } from "react";
 
-import { Button, Terminal } from "@/components";
+import { Button } from "@/components/vendor/ui-primitives/shadcn/button";
+import { Terminal } from "@/features/home/components/Terminal";
 
 export default function HomePage(): ReactElement {
   return (
