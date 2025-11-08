@@ -15,7 +15,7 @@ Shared presentational UI. No business logic, no data fetching. Design tokens and
 ## Pointers
 
 - [Architecture](../../docs/ARCHITECTURE.md)
-- [UI Style Guide](../../docs/STYLEGUIDE_UI.md)
+- [UI Implementation Guide](../../docs/UI_IMPLEMENTATION_GUIDE.md)
 - [Updating shadcn/ui](../../docs/UPDATING_SHADCN.md)
 
 ## Boundaries
@@ -57,6 +57,8 @@ Shared presentational UI. No business logic, no data fetching. Design tokens and
 - This directory **does not**: Domain rules, DB/IO, network calls, adapter logic.
 
 ## Usage
+
+**IMPORTANT: If you are making any changes to files in this directory, you must read:** [`docs/UI_IMPLEMENTATION_GUIDE.md`](../../docs/UI_IMPLEMENTATION_GUIDE.md)
 
 Minimal local commands:
 
@@ -105,4 +107,4 @@ src/components/
 
 - Promotion policy: colocate → second consumer → promote. Keep root lean.
 - Each file: short header with Purpose, Scope, Invariants. No inline commentary drift.
-- Rationale and examples live in `docs/STYLEGUIDE_UI.md`.
+- Implementation workflows live in `docs/UI_IMPLEMENTATION_GUIDE.md`.
