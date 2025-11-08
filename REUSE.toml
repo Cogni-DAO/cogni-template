@@ -15,6 +15,14 @@ precedence = "closest"
 SPDX-FileCopyrightText = "2025 CogniDAO contributors"
 SPDX-License-Identifier = "LicenseRef-PolyForm-Shield-1.0.0"
 
+# Vendor UI components
+[[annotations]]
+path = "src/components/vendor/**"
+precedence = "closest"
+SPDX-License-Identifier = "MIT"
+SPDX-FileCopyrightText = "Upstream UI component authors"
+
+# Default for everything else
 [[annotations]]
 path = "**"
 precedence = "closest"
