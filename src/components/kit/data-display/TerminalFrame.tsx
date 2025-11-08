@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
+ * Module: `@components/kit/data-display/TerminalFrame`
  * Purpose: Stateless terminal frame with CVA styling for code display and interactive terminals.
  * Scope: Provides terminal chrome and slots content. Does not handle state, animation, or clipboard.
  * Invariants: Forwards all props except className; maintains ref forwarding; blocks className prop.

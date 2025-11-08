@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Purpose: Hero section component for landing pages with two-column layout.
- * Scope: Provides reusable hero section with text/visual columns. Does not handle content data.
- * Invariants: Uses only CVA factories from styles/ui; maintains responsive design; no inline Tailwind.
+ * Module: `@components/kit/sections/Hero`
+ * Purpose: Reusable hero section with two-column layout.
+ * Scope: Renders text/visual columns. Does not handle content data.
+ * Invariants: Responsive design; uses layout primitives.
  * Side-effects: none
- * Notes: Composes layout primitives for hero sections. Reusable across pages.
+ * Notes: Composes pageContainer, section, twoColumn.
  * Links: src/styles/ui/layout.ts
  * @public
  */

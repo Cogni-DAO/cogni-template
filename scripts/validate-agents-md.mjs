@@ -1,4 +1,18 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@scripts/validate-agents-md`
+ * Purpose: Validates AGENTS.md file structure and required sections across all directories.
+ * Scope: Enforces heading requirements, metadata format, line limits. Does NOT validate content accuracy.
+ * Invariants: All AGENTS.md files must have required headings; stay under 150 lines; valid metadata format.
+ * Side-effects: IO
+ * Notes: Exits with error code if validation fails; supports CI/CD pipeline integration.
+ * Links: docs/templates/agents_subdir_template.md
+ * @public
+ */
+
 /* eslint-env node */
 import { readFileSync } from "node:fs";
 

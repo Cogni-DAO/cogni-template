@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Purpose: CVA styling factories for Hero component layout patterns.
- * Scope: Provides hero-specific responsive layout classes. Does not handle content styling.
- * Invariants: All classes use Tailwind utilities; maintains responsive breakpoint consistency.
+ * Module: `@components/kit/sections/hero.styles`
+ * Purpose: Hero-specific layout styling factories.
+ * Scope: Provides responsive layout classes for Hero component. Does not handle content styling.
+ * Invariants: Uses Tailwind utilities; consistent breakpoints.
  * Side-effects: none
- * Notes: Hero-specific layout patterns that aren't generic enough for global styles/ui.
+ * Notes: Component-specific patterns not suitable for global styles.
  * Links: src/components/kit/sections/Hero.tsx
  * @public
  */

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
+ * Module: `@styles/ui/overlays`
  * Purpose: Overlay component styling factories (terminals, modals, dialogs).
  * Scope: Provides CVA factories for overlay and interactive surface components. Does not handle positioning logic.
  * Invariants: All variants use design tokens; factories return valid Tailwind class strings; maintains z-index hierarchy.

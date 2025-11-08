@@ -1,3 +1,17 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@app/page`
+ * Purpose: Homepage with hero section and feature showcase.
+ * Scope: Renders landing page content. Does not handle routing.
+ * Invariants: Responsive design.
+ * Side-effects: none
+ * Notes: Composes Hero and Terminal components.
+ * Links: src/components/kit/sections/Hero.tsx, src/features/home/components/Terminal.tsx
+ * @public
+ */
+
 import { ArrowRight, CreditCard, Database } from "lucide-react";
 import type { ReactElement } from "react";
 

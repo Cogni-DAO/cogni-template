@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
+ * Module: `@components/kit/data-display/Avatar`
  * Purpose: Avatar component wrapper with CVA styling API and design token enforcement.
  * Scope: Provides typed Avatar variants wrapping shadcn/ui primitives. Does not modify underlying UI components.
  * Invariants: Forwards all props to ui components; maintains ref forwarding; provides size variants via CVA.

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
+ * Module: `@components/kit/animation/Reveal`
  * Purpose: Reveal animation component wrapper with CVA styling API for progressive disclosure patterns.
  * Scope: Provides typed reveal variants wrapping CVA factories. Does not handle animation logic or timing.
  * Invariants: Forwards all props except className to div element; maintains ref forwarding; blocks className prop.

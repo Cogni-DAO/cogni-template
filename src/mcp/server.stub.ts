@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
+ * Module: `@mcp/server.stub`
  * Purpose: Placeholder for Model Context Protocol server implementation with contract-based tool registration.
  * Scope: Future MCP server bootstrap and tool registration. Does not implement actual MCP protocol yet.
  * Invariants: Throws error until implemented; maintains contract-first design principles.

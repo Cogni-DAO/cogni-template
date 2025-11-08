@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Purpose: Data display component styling factories (cards, badges, avatars).
+ * Module: `@styles/ui/data`
+ * Purpose: Data display component styling factories.
  * Scope: Provides CVA factories for data presentation components. Does not handle data fetching or processing.
  * Invariants: All variants use design tokens; factories return valid Tailwind class strings; maintains elevation hierarchy.
  * Side-effects: none

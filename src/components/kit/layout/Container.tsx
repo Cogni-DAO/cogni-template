@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
+ * Module: `@components/kit/layout/Container`
  * Purpose: Container component wrapper with CVA sizing and spacing variants.
  * Scope: Provides typed container variants using CVA factories. Does not handle responsive logic beyond CSS.
  * Invariants: Forwards all props except className to div element; maintains ref forwarding; blocks className prop.

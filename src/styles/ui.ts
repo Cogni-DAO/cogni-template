@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
+ * Module: `@styles/ui`
  * Purpose: Centralized styling API using CVA factories for design token enforcement and type-safe variants.
  * Scope: Provides all component styling via typed factories. Does not handle CSS-in-JS or runtime theme switching.
  * Invariants: All variants use design tokens; factories return valid Tailwind class strings; TypeScript enforces variant types.

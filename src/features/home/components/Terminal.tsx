@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
+ * Module: `@features/home/components/Terminal`
  * Purpose: Animated terminal component displaying progressive installation steps with copy functionality.
- * Scope: Feature component for home page showcasing CLI installation process; manages animation state.
+ * Scope: Feature component for home page showcasing CLI installation process; manages animation state. Does NOT handle actual CLI execution.
  * Invariants: Steps animate sequentially; copy button shows feedback; maintains accessibility.
  * Side-effects: time (animation timers), IO (clipboard write)
  * Notes: Composes TerminalFrame with feature-specific state and animation logic.

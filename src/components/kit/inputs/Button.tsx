@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
+ * Module: `@components/kit/inputs/Button`
  * Purpose: Button component wrapper using CVA styling with Radix Slot composition for interactive actions.
  * Scope: Provides Button component with variant props. Does not handle form submission or navigation routing.
  * Invariants: Forwards ref; blocks className prop; accepts aria-* and data-* unchanged; always renders valid button or slot.

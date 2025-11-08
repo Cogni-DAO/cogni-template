@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Purpose: Root layout component for Next.js App Router with Geist font configuration and global styles.
+ * Module: `@app/layout`
+ * Purpose: Root layout component for Next.js App Router with font configuration and global styles.
  * Scope: Provides HTML structure and font loading for entire application. Does not handle routing or content.
  * Invariants: Renders valid HTML5 structure; applies consistent font variables; includes global CSS.
  * Side-effects: none

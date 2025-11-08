@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Purpose: Barrel exports for split CVA styling factories organized by component domain.
+ * Module: `@styles/ui`
+ * Purpose: Barrel exports for split styling factories organized by domain.
  * Scope: Re-exports all CVA factories from domain-specific modules. Does not contain factory definitions.
  * Invariants: Explicit exports only (no export *); maintains backward compatibility; prevents circular dependencies.
  * Side-effects: none

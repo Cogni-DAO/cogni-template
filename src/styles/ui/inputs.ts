@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
+ * Module: `@styles/ui/inputs`
  * Purpose: Input component styling factories (buttons, forms, controls).
  * Scope: Provides CVA factories for interactive input components. Does not handle component logic.
  * Invariants: All variants use design tokens; factories return valid Tailwind class strings.

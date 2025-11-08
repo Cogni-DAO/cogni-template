@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Purpose: Layout component styling factories (containers, sections, grids).
+ * Module: `@styles/ui/layout`
+ * Purpose: Layout component styling factories.
  * Scope: Provides CVA factories for layout and spacing components. Does not handle responsive breakpoint logic.
  * Invariants: All variants use design tokens; factories return valid Tailwind class strings; maintains responsive patterns.
  * Side-effects: none

@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Purpose: Typography component styling factories (headings, paragraphs, prose).
+ * Module: `@styles/ui/typography`
+ * Purpose: Typography component styling factories.
  * Scope: Provides CVA factories for text presentation components. Does not handle content processing.
  * Invariants: All variants use design tokens; factories return valid Tailwind class strings; maintains typographic hierarchy.
  * Side-effects: none

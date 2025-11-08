@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
+ * Module: `@components`
  * Purpose: Public surface for components module via re-exports of shared UI components.
  * Scope: Re-exports components only. Does not export internal utilities or development helpers.
  * Invariants: Only re-exports from component files; no circular dependencies; maintains type exports.
