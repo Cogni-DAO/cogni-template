@@ -2,7 +2,7 @@
 /* eslint-env node */
 import { readFileSync } from "node:fs";
 
-import { globby } from "globby";
+import fg from "fast-glob";
 
 const REQ_HEADINGS = [
   "Metadata",
@@ -334,11 +334,7 @@ function validate(file) {
 }
 
 // Find all AGENTS.md files including the root one
-const files = await globby([
-  "**/AGENTS.md",
-  "AGENTS.md",
-  "!**/node_modules/**",
-]);
+const files = await fg(["**/AGENTS.md", "AGENTS.md", "!**/node_modules/**"]);
 for (const f of files) {
   try {
     validate(f);
