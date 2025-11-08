@@ -41,6 +41,8 @@ const EXCLUDE = [
   "**/icons/**",
   "**/*.svg.tsx",
   "docs/**",
+  // Vendor components maintain their own licensing
+  "**/vendor/**",
 ];
 const MAX_HEADER_LINES = 40;
 const ALLOWED_SIDE_EFFECTS = [
@@ -51,11 +53,13 @@ const ALLOWED_SIDE_EFFECTS = [
   "process.env",
   "global",
 ];
-const MODULE_PATTERN = /^`@[-a-z0-9_/]+`$/;
+const MODULE_PATTERN = /^`@[A-Za-z0-9_/.-]+`$/;
 
+// REUSE-IgnoreStart
 const SPDX_LICENSE =
   "// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0";
 const SPDX_COPYRIGHT = "// SPDX-FileCopyrightText: 2025 Cogni-DAO";
+// REUSE-IgnoreEnd
 
 // Anchored label regexes inside a TSDoc block line prefix "*"
 const RX = {
@@ -124,6 +128,10 @@ function findHeader(
 ): { header: string; startLine: number; endLine: number } | null {
   const lines = source.split(/\r?\n/);
   let i = 0;
+
+  // Optional shebang for scripts
+  if (lines[i]?.startsWith("#!")) i++;
+
   // allow up to 2 SPDX lines
   let spdxCount = 0;
   while (i < lines.length && lines[i] && SPDX_LINE.test(lines[i] ?? "")) {
