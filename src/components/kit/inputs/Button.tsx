@@ -1,0 +1,42 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+
+/**
+ * Purpose: Button component wrapper using CVA styling with Radix Slot composition for interactive actions.
+ * Scope: Provides Button component with variant props. Does not handle form submission or navigation routing.
+ * Invariants: Forwards ref; blocks className prop; accepts aria-* and data-* unchanged; always renders valid button or slot.
+ * Side-effects: none
+ * Notes: Uses CVA factory from \@/styles/ui - no literal classes allowed; supports asChild pattern.
+ * Links: docs/UI_IMPLEMENTATION_GUIDE.md
+ * @public
+ */
+
+import { Slot } from "@radix-ui/react-slot";
+import type { VariantProps } from "class-variance-authority";
+import type { ComponentProps } from "react";
+import { forwardRef } from "react";
+
+import { button } from "@/styles/ui";
+
+type ButtonNoClass = Omit<ComponentProps<"button">, "className">;
+
+export interface ButtonProps
+  extends ButtonNoClass,
+    VariantProps<typeof button> {
+  asChild?: boolean;
+}
+
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ variant, size, asChild = false, ...props }, ref) => {
+    const Comp = asChild ? Slot : "button";
+    return (
+      <Comp
+        data-slot="button"
+        className={button({ variant, size })}
+        ref={ref}
+        {...props}
+      />
+    );
+  }
+);
+
+Button.displayName = "Button";

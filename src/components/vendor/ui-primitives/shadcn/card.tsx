@@ -12,7 +12,7 @@
 
 import * as React from "react";
 
-import { cn } from "./_vendor_utils";
+import { cn } from "./_vendorUtils";
 
 const Card = React.forwardRef<
   HTMLDivElement,
