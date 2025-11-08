@@ -322,21 +322,21 @@ export default [
           rules: [
             {
               target: [
-                "features",
                 "ports",
                 "adapters/server",
                 "shared",
                 "contracts",
+                "components",
               ],
-              allow: ["**/index.ts", "**/index.tsx"],
-            },
-            {
-              target: ["components"],
               allow: ["**/index.ts", "**/index.tsx"],
             },
             {
               target: ["styles"],
               allow: ["ui.ts"],
+            },
+            {
+              target: ["features"],
+              allow: ["**/*.{ts,tsx}"],
             },
           ],
         },

@@ -44,8 +44,8 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 - **src/bootstrap/** → Composition root (DI/factories), env (Zod), exports a container/getPort().
 - **src/contracts/** → Operation contracts (id, Zod in/out, scopes, version). No logic.
 - **src/mcp/** → MCP host bootstrap. Registers tools mapped 1:1 to contracts.
-- **src/app/** → Delivery/UI + Next.js API routes. Imports only **features/ports/shared/contracts**.
-- **src/features/** → Vertical slices (use cases): `proposals/`, `auth/`… orchestrate **core** via **ports**.
+- **src/app/** → Delivery/UI + Next.js API routes. See import rules below.
+- **src/features/** → Vertical slices (use cases): `proposals/`, `auth/`… See import rules below.
 - **src/ports/** → Contracts/interfaces only.
 - **src/core/** → Pure domain. No I/O/time/RNG; inject via ports.
 - **src/adapters/** → Infra implementations of ports. No UI.
