@@ -11,9 +11,12 @@ import boundaries from "eslint-plugin-boundaries";
 import importPlugin from "eslint-plugin-import";
 import jsxA11y from "eslint-plugin-jsx-a11y";
 import noInlineStyles from "eslint-plugin-no-inline-styles";
+import noLiteralClassnames from "eslint-plugin-no-literal-classnames";
+import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 import tsdoc from "eslint-plugin-tsdoc";
+import unicorn from "eslint-plugin-unicorn";
 import unused from "eslint-plugin-unused-imports";
 
 /** @type {import('eslint').Linter.Config[]} */
@@ -56,12 +59,15 @@ export default [
       tailwindcss: communityTailwind,
       "simple-import-sort": simpleImportSort,
       "no-inline-styles": noInlineStyles,
+      "no-literal-classnames": noLiteralClassnames,
       "unused-imports": unused,
       import: importPlugin,
       boundaries: boundaries,
       "jsx-a11y": jsxA11y,
+      react: react,
       "react-hooks": reactHooks,
       tsdoc: tsdoc,
+      unicorn: unicorn,
     },
     rules: {
       ...tsPlugin.configs.strict.rules,
@@ -106,13 +112,66 @@ export default [
       "import/no-unresolved": "error",
       "import/no-cycle": "error",
 
-      // Block parent relatives only. Aliases unaffected.
+      // Block parent relatives and restricted imports
       "no-restricted-imports": [
         "error",
         {
-          patterns: ["../*", "../../*", "../../../*", "../../../../*"],
+          patterns: [
+            {
+              group: ["../**"],
+              message: "Do not import from parent directories. Use aliases.",
+            },
+            {
+              group: ["@/components/vendor/**"],
+              message:
+                "Use @/components/kit/* wrappers instead of direct vendor imports",
+            },
+          ],
+          paths: [
+            {
+              name: "clsx",
+              message:
+                "Only allowed in src/styles/** and src/components/vendor/** - use styling API from @/styles/ui instead",
+            },
+            {
+              name: "tailwind-merge",
+              message:
+                "Only allowed in src/styles/** and src/components/vendor/** - use styling API from @/styles/ui instead",
+            },
+          ],
         },
       ],
+
+      // Block literal className usage - force styling API
+      "no-literal-classnames/no-literal-classnames": "error",
+
+      // Block specific className patterns
+      "no-restricted-syntax": [
+        "error",
+        // 1) Direct string literal as the attribute value
+        {
+          selector: "JSXAttribute[name.name='className'] > Literal",
+          message:
+            "Use CVA from @/styles/ui. Direct string className forbidden.",
+        },
+        // 2) Template literal directly used as the attribute value
+        {
+          selector:
+            "JSXAttribute[name.name='className'] > JSXExpressionContainer > TemplateLiteral",
+          message:
+            "Use CVA from @/styles/ui. Template literal className forbidden.",
+        },
+        // 3) cn(...) with any literal arg anywhere under className
+        {
+          selector:
+            "JSXAttribute[name.name='className'] > JSXExpressionContainer CallExpression[callee.name='cn'] Literal",
+          message:
+            "Use CVA from @/styles/ui. cn(...) with literal strings forbidden.",
+        },
+      ],
+
+      // React rules
+      "react/react-in-jsx-scope": "off",
 
       // React hooks rules
       "react-hooks/rules-of-hooks": "error",
@@ -177,6 +236,7 @@ export default [
                 "core/**",
                 "shared/**",
                 "types/**",
+                "components",
               ],
             },
             {
@@ -262,17 +322,21 @@ export default [
           rules: [
             {
               target: [
-                "features",
                 "ports",
                 "adapters/server",
                 "shared",
                 "contracts",
+                "components",
               ],
               allow: ["**/index.ts", "**/index.tsx"],
             },
             {
-              target: ["components"],
-              allow: ["**/index.ts", "**/index.tsx"],
+              target: ["styles"],
+              allow: ["ui.ts"],
+            },
+            {
+              target: ["features"],
+              allow: ["**/*.{ts,tsx}"],
             },
           ],
         },
@@ -315,26 +379,122 @@ export default [
         { type: "tests", pattern: "tests/**" },
         { type: "e2e", pattern: "e2e/**" },
         { type: "scripts", pattern: "scripts/**" },
+        { type: "docs", pattern: "docs/**" },
       ],
     },
   },
 
-  // Features isolation - block cross-feature imports
+  // Features: only import the barrel or kit subpaths
   {
     files: ["src/features/**/*.{ts,tsx}"],
+    rules: {
+      "import/no-internal-modules": [
+        "error",
+        {
+          allow: ["@/components", "@/components/kit/**"],
+        },
+      ],
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            "@/features/**", // no cross-feature via alias
+            "@/components/vendor/**", // never touch vendor
+            "@/styles/**", // never touch styles direct
+          ],
+        },
+      ],
+    },
+  },
+
+  // Styles layer - allow clsx/tailwind-merge and literal classes
+  {
+    files: ["src/styles/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": [
         "error",
         {
           patterns: [
-            // forbid importing any other feature via alias
             {
-              group: ["@features/*"],
-              message: "No cross-feature imports. Depend on ports/core only.",
+              group: ["../**"],
+              message: "Do not import from parent directories. Use aliases.",
+            },
+            // Remove clsx/tailwind-merge path restrictions for styles layer
+            // Remove @/components/ui/* restriction for styles layer
+          ],
+          // No paths restrictions - allow clsx and tailwind-merge here
+        },
+      ],
+      // Allow literal classes inside styling API factories
+      "no-literal-classnames/no-literal-classnames": "off",
+      "no-restricted-syntax": "off",
+    },
+  },
+
+  // Vendor layer - allow clsx/tailwind-merge and literal classes, no repo imports
+  {
+    files: ["src/components/vendor/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": "off",
+      "no-literal-classnames/no-literal-classnames": "off",
+      "no-restricted-syntax": "off",
+    },
+  },
+
+  // Kit layer - allow vendor imports but no literal classes (CVA outputs only)
+  {
+    files: ["src/components/kit/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["../**"],
+              message: "Do not import from parent directories. Use aliases.",
+            },
+          ],
+          paths: [
+            {
+              name: "clsx",
+              message:
+                "Only allowed in src/styles/** and src/components/vendor/** - use styling API from @/styles/ui instead",
+            },
+            {
+              name: "tailwind-merge",
+              message:
+                "Only allowed in src/styles/** and src/components/vendor/** - use styling API from @/styles/ui instead",
             },
           ],
         },
       ],
+      // Kit components must not use className at all - expose CVA variants instead
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Identifier[name='className']",
+          message:
+            "Kit components must not use `className`; expose CVA variants instead.",
+        },
+      ],
+    },
+  },
+
+  // Kit components must be PascalCase
+  {
+    files: ["src/components/kit/**/*.{ts,tsx}"],
+    rules: {
+      "unicorn/filename-case": ["error", { cases: { pascalCase: true } }],
+      "import/no-default-export": "error",
+    },
+  },
+
+  // Helpers not TSX may be camelCase
+  {
+    files: ["src/components/**/*.ts"],
+    ignores: ["**/*.tsx"],
+    rules: {
+      "unicorn/filename-case": ["error", { cases: { camelCase: true } }],
     },
   },
 
@@ -359,6 +519,15 @@ export default [
     },
   },
 
+  // Documentation template overrides - disable TSDoc rules for example files
+  {
+    files: ["docs/templates/**/*.{ts,tsx}"],
+    rules: {
+      "tsdoc/syntax": "off",
+      "jsdoc/*": "off",
+    },
+  },
+
   prettierConfig,
 
   {
@@ -372,6 +541,7 @@ export default [
       "node_modules/**",
       "commitlint.config.cjs",
       "*.config.cjs",
+      "test*/**/fixtures/**",
     ],
   },
 ];

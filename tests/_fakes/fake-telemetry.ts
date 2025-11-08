@@ -2,6 +2,17 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
+ * Module: `@tests/_fakes/fake-telemetry`
+ * Purpose: Verifies telemetry-dependent module behavior under captured telemetry conditions.
+ * Scope: Captures and stores telemetry events for verification. Does NOT send data to external services.
+ * Invariants: Events/traces stored in memory; query methods return immutable copies; reset clears all data.
+ * Side-effects: none
+ * Notes: Use in unit tests to verify telemetry calls; supports event and trace verification.
+ * Links: tests/setup.ts
+ * @public
+ */
+
+/**
  * Fake telemetry implementation for unit tests.
  *
  * Captures telemetry calls for verification without

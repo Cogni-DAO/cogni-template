@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@adapters/server/wallet/viem`
+ * Purpose: Verifies Viem wallet adapter integration and port contract compliance under test blockchain conditions.
+ * Scope: Covers adapter implementation and wallet port contract. Does NOT test blockchain network itself.
+ * Invariants: Adapter passes port contract; test blockchain integration works; stub tests until implementation added.
+ * Side-effects: IO
+ * Notes: Stub implementation - will expand when Viem adapter implemented; runs port contract test suite.
+ * Links: src/adapters/server/wallet/, tests/contract/ports/wallet.port.contract.ts
+ * @public
+ */
+
 import { describe, it } from "vitest";
 
 /**

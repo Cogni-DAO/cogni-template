@@ -4,6 +4,26 @@ SPDX-PackageSupplier = "Organization: CogniDAO"
 SPDX-PackageDownloadLocation = "https://github.com/Cogni-DAO/cogni-template"
 
 [[annotations]]
+path = "docs/**"
+precedence = "closest"
+SPDX-FileCopyrightText = "2025 CogniDAO contributors"
+SPDX-License-Identifier = "LicenseRef-PolyForm-Shield-1.0.0"
+
+[[annotations]]
+path = "*/AGENTS.md"
+precedence = "closest"
+SPDX-FileCopyrightText = "2025 CogniDAO contributors"
+SPDX-License-Identifier = "LicenseRef-PolyForm-Shield-1.0.0"
+
+# Vendor UI components
+[[annotations]]
+path = "src/components/vendor/**"
+precedence = "closest"
+SPDX-License-Identifier = "MIT"
+SPDX-FileCopyrightText = "Upstream UI component authors"
+
+# Default for everything else
+[[annotations]]
 path = "**"
 precedence = "closest"
 SPDX-FileCopyrightText = "2025 CogniDAO contributors"

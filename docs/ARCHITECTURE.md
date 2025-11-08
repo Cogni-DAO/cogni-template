@@ -44,8 +44,8 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 - **src/bootstrap/** → Composition root (DI/factories), env (Zod), exports a container/getPort().
 - **src/contracts/** → Operation contracts (id, Zod in/out, scopes, version). No logic.
 - **src/mcp/** → MCP host bootstrap. Registers tools mapped 1:1 to contracts.
-- **src/app/** → Delivery/UI + Next.js API routes. Imports only **features/ports/shared/contracts**.
-- **src/features/** → Vertical slices (use cases): `proposals/`, `auth/`… orchestrate **core** via **ports**.
+- **src/app/** → Delivery/UI + Next.js API routes. See import rules below.
+- **src/features/** → Vertical slices (use cases): `proposals/`, `auth/`… See import rules below.
 - **src/ports/** → Contracts/interfaces only.
 - **src/core/** → Pure domain. No I/O/time/RNG; inject via ports.
 - **src/adapters/** → Infra implementations of ports. No UI.
@@ -104,7 +104,8 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] playwright.config.ts # UI/e2e
 
 [x] docs/
-[ ] └── ARCHITECTURE.md # narrative + diagrams (longform)
+[x] ├── ARCHITECTURE.md # narrative + diagrams (longform)
+[x] └── UI_IMPLEMENTATION_GUIDE.md # practical UI development workflows
 
 [ ] infra/ # infra (minimal → full)
 [ ] ├── docker-compose.yml # web + postgres + litellm + langfuse
@@ -147,6 +148,7 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] │ └── web3/verify/route.ts # calls wallet verification port
 [ ] │
 [x] ├── features/ # application services
+[x] │ ├── home/
 [ ] │ ├── auth/
 [ ] │ │ ├── actions.ts
 [ ] │ │ └── services/
@@ -199,10 +201,10 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] │ └── cli/ # command-line adapters (future)
 [ ] │
 [x] ├── shared/ # small, pure, framework-agnostic
-[ ] │ ├── env/
-[ ] │ │ ├── server.ts # Zod-validated private vars
-[ ] │ │ ├── client.ts # validated public vars
-[ ] │ │ └── index.ts
+[x] │ ├── env/
+[x] │ │ ├── server.ts # Zod-validated private vars
+[x] │ │ ├── client.ts # validated public vars
+[x] │ │ └── index.ts
 [ ] │ ├── schemas/
 [ ] │ │ ├── api.ts # request/response DTOs
 [ ] │ │ ├── usage.ts # usage schema
@@ -215,15 +217,20 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] │ ├── dates.ts
 [ ] │ └── crypto.ts
 [ ] │
-[ ] ├── components/ # shared presentational UI
-[ ] │ ├── ui/
-[ ] │ ├── primitives/
-[ ] │ └── index.ts
+[x] ├── components/ # shared presentational UI
+[x] │ ├── kit/
+[x] │ │ ├── layout/ # Container
+[x] │ │ ├── data-display/ # Avatar, TerminalFrame
+[x] │ │ ├── animation/ # Reveal
+[x] │ │ └── typography/ # Prompt
+[x] │ ├── vendor/
+[x] │ │ └── ui-primitives/
+[x] │ │ └── shadcn/ # button, avatar, card, \_vendor_utils
+[x] │ └── index.ts
 [ ] │
-[ ] ├── styles/
-[ ] │ ├── tailwind.preset.ts
-[ ] │ ├── tailwind.css
-[ ] │ └── theme.ts
+[x] ├── styles/
+[x] │ ├── tailwind.preset.ts
+[x] │ └── ui.ts
 [ ] │
 [ ] ├── types/
 [ ] │ ├── index.d.ts

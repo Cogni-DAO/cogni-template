@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@tests/contract/harness/factory`
+ * Purpose: Verifies contract test harness creation and infrastructure setup under isolated test conditions.
+ * Scope: Covers test environment creation, resource management, and cleanup. Does NOT mock external services or ports.
+ * Invariants: Each harness gets fresh infrastructure; resources cleaned up on teardown; real service dependencies maintained.
+ * Side-effects: IO
+ * Notes: Creates temporary directories, HTTP servers, and process spawning for contract test isolation.
+ * Links: tests/contract/ports/
+ * @public
+ */
+
 import { mkdtempSync, rmSync } from "node:fs";
 import http from "node:http";
 import { tmpdir } from "node:os";

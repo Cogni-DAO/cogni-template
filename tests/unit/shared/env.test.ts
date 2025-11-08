@@ -1,3 +1,17 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@shared/env/server`
+ * Purpose: Verifies environment variable validation and schema parsing of server and client env modules under different env conditions.
+ * Scope: Covers Zod schema validation, env var processing, and error cases. Does NOT test actual env loading or runtime behavior.
+ * Invariants: Module cache resets between tests; env vars restore consistently; validation errors throw with expected messages.
+ * Side-effects: process.env
+ * Notes: Uses vi.resetModules for fresh imports; tests both server and client schemas; env restoration via beforeEach/afterEach.
+ * Links: src/shared/env/server.ts, src/shared/env/client.ts
+ * @public
+ */
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const ORIGINAL_ENV = { ...process.env };
