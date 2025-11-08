@@ -88,6 +88,8 @@ pnpm typecheck
 - CSS is source of truth for all design token values
 - ui.ts is the single source of truth for component styling
 - ESLint blocks literal className usage to enforce API discipline
+- CVA parameters (e.g., `gap: "xs"`) are allowed; direct literals (e.g., `className="flex"`) are blocked
+- Terminal components (src/features/home/components/Terminal.tsx, src/components/kit/data-display/TerminalFrame.tsx) serve as reference implementation for CVA-only patterns
 
 ### ui.ts Growth Management
 

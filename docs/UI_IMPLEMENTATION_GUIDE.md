@@ -24,6 +24,8 @@ Here's the ~50-line developer guide.
 
 **kit/** calls CVA: `className={button({ size, intent })}`. Do not forward className.
 
+**CVA parameters allowed:** ESLint permits string literals inside CVA calls like `row({ gap: "xs" })` but blocks direct className literals like `className="flex gap-2"`.
+
 **Vendor must not import @/\***. Keep local \_vendor_utils if shadcn needs cn.
 
 ## When you need a new primitive or pattern
@@ -66,11 +68,20 @@ Here's the ~50-line developer guide.
 
 3. **Promotion rule:** if two+ features need it, move the composed component into kit/ and add to barrel.
 
+## Examples
+
+**Terminal components** demonstrate the CVA-only pattern:
+
+- `src/features/home/components/Terminal.tsx` (features) imports from @/components barrel
+- `src/components/kit/data-display/TerminalFrame.tsx` (kit) uses CVA: `className={terminalDot({ color: "red" })}`
+- `src/styles/ui.ts` defines factories: `terminalDot`, `terminalHeader`, `row`, `pad`
+
 ## Checklist before commit (many verified by `pnpm check`)
 
 - [ ] No literal className outside styles/ui.ts.
 - [ ] Feature code imports only from @/components (barrel) or @/components/kit/\*.
 - [ ] Kit wrappers do not forward className.
+- [ ] CVA parameters use design tokens (e.g., `gap: "xs"` not `gap: "gap-2"`).
 - [ ] Vendor files have no @/\* imports.
 - [ ] Barrel exports updated if a new kit component was added.
 - [ ] ESLint passes. Visual parity verified.
