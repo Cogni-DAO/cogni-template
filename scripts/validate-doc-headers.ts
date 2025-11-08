@@ -3,9 +3,9 @@
 
 /**
  * Module: `@scripts/validate-doc-headers`
- * Purpose: Validates TSDoc headers in TypeScript files for required documentation fields and format compliance.
+ * Purpose: Validates SPDX headers and TSDoc headers in TypeScript files for required documentation fields and format compliance.
  * Scope: Scans e2e, infra, scripts, src, tests directories for .ts/.tsx files; does not validate runtime behavior or generated files.
- * Invariants: All required fields must be present and non-empty; Module field must match `@layer/path` pattern; side-effects must be from allowed list.
+ * Invariants: Required fields non-empty; Module matches `@layer/path`; SPDX headers exact match.
  * Side-effects: IO
  * Notes: Supports parenthetical descriptions in side-effects; enforces unified header format across source and test files.
  * Links: docs/STYLE.md, scripts/validate-agents-md.mjs
@@ -53,6 +53,10 @@ const ALLOWED_SIDE_EFFECTS = [
 ];
 const MODULE_PATTERN = /^`@[-a-z0-9_/]+`$/;
 
+const SPDX_LICENSE =
+  "// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0";
+const SPDX_COPYRIGHT = "// SPDX-FileCopyrightText: 2025 Cogni-DAO";
+
 // Anchored label regexes inside a TSDoc block line prefix "*"
 const RX = {
   module: /^\s*\*\s*Module:\s*(.+)\s*$/m,
@@ -77,6 +81,42 @@ function err(
   col = 1
 ): Violation {
   return { file, code, msg, line, col };
+}
+
+function validateSpdxHeader(file: string, source: string): Violation[] {
+  const v: Violation[] = [];
+  const lines = source.split(/\r?\n/);
+
+  let i = 0;
+
+  // Optional shebang for scripts
+  if (lines[i]?.startsWith("#!")) i++;
+
+  const licenseLine = lines[i] ?? "";
+  const copyrightLine = lines[i + 1] ?? "";
+
+  if (licenseLine.trim() !== SPDX_LICENSE) {
+    v.push(
+      err(
+        file,
+        "SH001",
+        `missing-or-wrong-SPDX-license: expected "${SPDX_LICENSE}"`,
+        i + 1
+      )
+    );
+  }
+  if (copyrightLine.trim() !== SPDX_COPYRIGHT) {
+    v.push(
+      err(
+        file,
+        "SH002",
+        `missing-or-wrong-SPDX-copyright: expected "${SPDX_COPYRIGHT}"`,
+        i + 2
+      )
+    );
+  }
+
+  return v;
 }
 
 function findHeader(
@@ -229,14 +269,17 @@ async function main(): Promise<void> {
   const violations: Violation[] = [];
   for (const f of files) {
     const src = readFileSync(f, "utf8");
+    const fileRel = relative(process.cwd(), f);
+
+    // 1) SPDX first
+    violations.push(...validateSpdxHeader(fileRel, src));
+
+    // 2) Then header detection + label validation
     const header = findHeader(src);
     if (!header) {
-      violations.push(
-        err(relative(process.cwd(), f), "DH001", "missing-header")
-      );
+      violations.push(err(fileRel, "DH001", "missing-header"));
       continue;
     }
-    const fileRel = relative(process.cwd(), f);
     const vs = validateHeader(fileRel, header.header);
     violations.push(...vs);
   }
