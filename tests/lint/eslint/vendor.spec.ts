@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@tests/lint/eslint/vendor`
+ * Purpose: Verifies vendor and styles layers have proper exemptions from styling rules.
+ * Scope: Covers vendor literal classes, styles imports. Does NOT test vendor boundaries.
+ * Invariants: Vendor/styles exempt from className restrictions; other rules still apply.
+ * Side-effects: IO (via runEslint temp file creation)
+ * Notes: Tests layer-specific rule overrides in eslint.config.mjs.
+ * Links: eslint.config.mjs vendor/styles overrides, src/components/vendor/
+ * @public
+ */
+
 import { describe, expect, it } from "vitest";
 
 import { lintFixture } from "./runEslint";

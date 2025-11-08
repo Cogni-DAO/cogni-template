@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@tests/lint/canary`
+ * Purpose: Verifies core ESLint policy enforcement across layers stays active.
+ * Scope: Covers rule activation for features, kit, styles layers. Does NOT test rule logic.
+ * Invariants: Core policies must be enabled; no config drift; layer overrides work.
+ * Side-effects: none
+ * Notes: Smoke tests to catch ESLint config regressions quickly.
+ * Links: eslint.config.mjs, tests/lint/eslint/*.spec.ts
+ * @public
+ */
+
 import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
 

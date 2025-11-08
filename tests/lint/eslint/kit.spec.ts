@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@tests/lint/eslint/kit`
+ * Purpose: Verifies kit component purity rules forbid className usage completely.
+ * Scope: Covers className prop forwarding and literal usage. Does NOT test other kit rules.
+ * Invariants: Kit components must use CVA only; no className anywhere in kit layer.
+ * Side-effects: IO (via runEslint temp file creation)
+ * Notes: Tests the strict no-restricted-syntax rule blocking Identifier[name='className'].
+ * Links: eslint.config.mjs kit layer rules, src/components/kit/
+ * @public
+ */
+
 import { describe, expect, it } from "vitest";
 
 import { lintFixture } from "./runEslint";

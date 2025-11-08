@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@tests/lint/eslint/styling`
+ * Purpose: Verifies CVA-only styling policy blocks literal className usage.
+ * Scope: Covers direct literals, cn() calls, template literals. Does NOT test boundaries.
+ * Invariants: All literal className usage must be blocked; CVA usage allowed.
+ * Side-effects: IO (via runEslint temp file creation)
+ * Notes: Tests no-restricted-syntax and no-literal-classnames plugin rules.
+ * Links: eslint.config.mjs styling rules, src/styles/ui/
+ * @public
+ */
+
 import { describe, expect, it } from "vitest";
 
 import { lintFixture } from "./runEslint";

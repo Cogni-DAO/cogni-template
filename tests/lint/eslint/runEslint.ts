@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@tests/lint/eslint/runEslint`
+ * Purpose: Test harness for running ESLint against temporary fixture files with real config.
+ * Scope: Creates temp projects, patches config for testing. Does NOT modify actual config.
+ * Invariants: Uses real eslint.config.mjs; strips type-checking; preserves all other rules.
+ * Side-effects: IO (creates/deletes temp files and directories)
+ * Notes: Handles plugin deduplication, TypeScript project setup, path resolution.
+ * Links: eslint.config.mjs, tests/lint/fixtures/
+ * @public
+ */
+
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -8,7 +19,7 @@ import { pathToFileURL } from "node:url";
 
 import { ESLint } from "eslint";
 
-type ESLintConfig = ESLint.ConfigData & {
+type ESLintConfig = Omit<ESLint.ConfigData, "plugins"> & {
   languageOptions?: {
     parserOptions?: {
       project?: string;
@@ -16,6 +27,7 @@ type ESLintConfig = ESLint.ConfigData & {
       projects?: string[];
     };
   };
+  plugins?: Record<string, object>;
 };
 
 interface TSRule {
@@ -74,7 +86,7 @@ async function disableTypedTsRules(
 
 // Preserve plugins in each entry but dedupe identical plugin objects
 function preservePluginContext(flat: ESLintConfig[]): ESLintConfig[] {
-  const seenPlugins = Object.create(null);
+  const seenPlugins: Record<string, object> = Object.create(null);
 
   // First pass: collect unique plugin objects
   for (const entry of flat) {
@@ -91,7 +103,7 @@ function preservePluginContext(flat: ESLintConfig[]): ESLintConfig[] {
   // This prevents ESLint plugin redefinition errors while preserving context
   for (const entry of flat) {
     if (entry.plugins) {
-      const updatedPlugins: Record<string, unknown> = {};
+      const updatedPlugins: Record<string, object> = {};
       for (const [name, _] of Object.entries(entry.plugins)) {
         if (seenPlugins[name]) {
           updatedPlugins[name] = seenPlugins[name];

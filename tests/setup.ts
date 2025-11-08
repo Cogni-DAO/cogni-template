@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@tests/setup`
+ * Purpose: Verifies global test environment setup and isolation across all test suites under controlled conditions.
+ * Scope: Configures test environment, env vars, and cleanup hooks. Does NOT mock specific services or ports.
+ * Invariants: Tests run in isolation; env vars reset between suites; minimal configuration prevents validation errors.
+ * Side-effects: process.env
+ * Notes: Integration tests override minimal env vars; beforeAll/afterEach hooks ensure test isolation.
+ * Links: vitest.config.mts
+ * @public
+ */
+
 import { afterEach, beforeAll } from "vitest";
 
 /**

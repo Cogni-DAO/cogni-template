@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@tests/lint/eslint/boundaries`
+ * Purpose: Verifies hexagonal architecture boundaries via eslint-plugin-boundaries.
+ * Scope: Covers core/ports/app/shared layer isolation. Does NOT test import resolution.
+ * Invariants: Layers must respect dependency direction; no circular references.
+ * Side-effects: IO (via runEslint temp file creation)
+ * Notes: Tests boundaries/element-types rule enforcement across architecture layers.
+ * Links: eslint.config.mjs boundaries settings, docs/ARCHITECTURE.md
+ * @public
+ */
+
 import { describe, expect, it } from "vitest";
 
 import { lintFixture } from "./runEslint";

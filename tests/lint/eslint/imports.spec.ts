@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@tests/lint/eslint/imports`
+ * Purpose: Verifies features layer import restrictions prevent cross-dependencies.
+ * Scope: Covers features->components, cross-feature imports. Does NOT test other layers.
+ * Invariants: Features can import components/kit but not styles directly or other features.
+ * Side-effects: IO (via runEslint temp file creation)
+ * Notes: Tests import/no-internal-modules and no-restricted-imports rules.
+ * Links: eslint.config.mjs features overrides, src/features/
+ * @public
+ */
+
 import { describe, expect, it } from "vitest";
 
 import { lintFixture } from "./runEslint";
