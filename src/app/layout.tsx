@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Purpose: Root layout component for Next.js App Router with Geist font configuration and global styles.
+ * Module: `@app/layout`
+ * Purpose: Root layout component for Next.js App Router with font configuration and global styles.
  * Scope: Provides HTML structure and font loading for entire application. Does not handle routing or content.
  * Invariants: Renders valid HTML5 structure; applies consistent font variables; includes global CSS.
  * Side-effects: none
@@ -15,6 +17,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
 import type { ReactNode } from "react";
+
+import { pageShell } from "@/styles/ui";
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -32,9 +36,7 @@ export default function RootLayout({
 }>): ReactNode {
   return (
     <html lang="en" className={manrope.className}>
-      <body className="bg-background text-foreground min-h-[100dvh] antialiased">
-        {children}
-      </body>
+      <body className={pageShell()}>{children}</body>
     </html>
   );
 }

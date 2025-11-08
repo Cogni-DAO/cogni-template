@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
+ * Module: `@shared/env/client`
  * Purpose: Client-side environment variable validation for Next.js public env vars using Zod schema.
  * Scope: Validates NEXT_PUBLIC_* env vars for browser runtime; provides clientEnv object. Does not handle server-only vars.
  * Invariants: Only processes NEXT_PUBLIC_ prefixed vars; validates at build time; fails fast on missing required vars.

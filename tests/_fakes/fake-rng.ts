@@ -2,6 +2,17 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
+ * Module: `@tests/_fakes/fake-rng`
+ * Purpose: Verifies random-dependent module behavior under controlled randomness conditions.
+ * Scope: Provides deterministic random values for testing. Does NOT replace system crypto/Math.random globally.
+ * Invariants: Values cycle through predefined sequence; state resets consistently; supports custom sequences.
+ * Side-effects: none
+ * Notes: Use in unit tests requiring predictable randomness; supports UUID generation patterns.
+ * Links: tests/setup.ts
+ * @public
+ */
+
+/**
  * Fake RNG implementation for deterministic unit tests.
  *
  * Provides predictable random values for testing logic

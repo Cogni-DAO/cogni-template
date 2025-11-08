@@ -1,6 +1,17 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@adapters/server/ai/litellm`
+ * Purpose: Verifies LiteLLM adapter integration and port contract compliance under real service conditions.
+ * Scope: Covers adapter implementation and AI port contract. Does NOT test LiteLLM service itself.
+ * Invariants: Adapter passes port contract; real service integration works; stub tests until implementation added.
+ * Side-effects: IO
+ * Notes: Stub implementation - will expand when LiteLLM adapter implemented; runs port contract test suite.
+ * Links: src/adapters/server/ai/, tests/contract/ports/ai.port.contract.ts
+ * @public
+ */
+
 import { describe, it } from "vitest";
 
 /**

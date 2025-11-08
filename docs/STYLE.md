@@ -10,25 +10,33 @@ Code style principles for Cogni-Template. Enforcement in config files (`eslint.c
 
 ## File Headers
 
-All `src/**/*.{ts,tsx}` require:
+All TypeScript/JavaScript files require TSDoc headers with SPDX license information.
 
-1. SPDX license comment (first line)
-2. TSDoc block: Purpose, Scope, Invariants, Side-effects, Notes, Links, `@public`/`@internal`/`@beta`
+### Source Files Example
 
 ```typescript
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
 /**
- * Purpose: [1-3 sentences]
- * Scope: [what it owns; what it doesn't]
- * Invariants: [≤3 guarantees]
- * Side-effects: none | IO | time | randomness | process.env | global
- * Notes: [≤3 gotchas]
- * Links: [ADR-###, Contract XYZ]
+ * Module: `@shared/env/server`
+ * Purpose: Server-side environment variable validation and type-safe configuration schema using Zod.
+ * Scope: Validates process.env for server runtime; provides serverEnv object. Does not handle client-side env vars.
+ * Invariants: All required env vars validated at startup; provides boolean flags for NODE_ENV variants; fails fast on invalid env.
+ * Side-effects: process.env
+ * Notes: Includes LLM config for Stage 8; validates URLs and secrets; provides default values where appropriate.
+ * Links: Environment configuration specification
  * @public
  */
 ```
 
-Examples: `src/components/ui/button.tsx`, `src/shared/env/client.ts`
+### Header Templates
+
+Use these templates for different file types:
+
+- **Source code**: [header_source_template.ts](templates/header_source_template.ts)
+- **Unit/integration tests**: [header_test_template.ts](templates/header_test_template.ts)
+- **End-to-end tests**: [header_e2e_template.ts](templates/header_e2e_template.ts)
 
 ## Architecture & Imports
 

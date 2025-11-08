@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-07
+- **Last reviewed:** 2025-11-08
 - **Status:** draft
 
 ## Purpose
@@ -38,11 +38,11 @@ Design system token definitions and TypeScript mirrors for theming.
 
 ## Public Surface
 
-- **Exports:** Design token name arrays, TypeScript types
+- **Exports:** Design token name arrays, TypeScript types, CVA styling factories
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none
-- **Files considered API:** tailwind.preset.ts
+- **Files considered API:** tailwind.preset.ts, ui.ts, ui/index.ts
 
 ## Ports (optional)
 
@@ -52,8 +52,8 @@ Design system token definitions and TypeScript mirrors for theming.
 
 ## Responsibilities
 
-- This directory **does**: Export token name constants for TypeScript usage
-- This directory **does not**: Define token values (CSS is source of truth)
+- This directory **does**: Export token name constants for TypeScript usage, provide CVA styling factories for components
+- This directory **does not**: Define token values (CSS is source of truth), contain component logic
 
 ## Usage
 
@@ -68,18 +68,42 @@ pnpm typecheck
 - CSS variables in app/globals.css are source of truth
 - TypeScript exports provide names only, not values
 - Token names mirror CSS variable naming
+- CVA factories use design tokens exclusively - no arbitrary Tailwind values
+- All component styling must flow through ui.ts barrel (which re-exports from ui/ domain modules)
 
 ## Dependencies
 
 - **Internal:** none
-- **External:** none (pure TypeScript)
+- **External:** class-variance-authority (for CVA factories)
 
 ## Change Protocol
 
 - Update this file when **Exports** change
 - Bump **Last reviewed** date
 - Token names must match CSS variables in app/globals.css
+- CVA factory changes require updating components that use them
 
 ## Notes
 
 - CSS is source of truth for all design token values
+- ui.ts barrel is the single source of truth for component styling API
+- Domain-split architecture: ui.ts re-exports from ui/ domain modules (inputs.ts, data.ts, layout.ts, typography.ts, overlays.ts)
+- ESLint blocks literal className usage to enforce API discipline
+- CVA parameters (e.g., `gap: "xs"`) are allowed; direct literals (e.g., `className="flex"`) are blocked
+- Terminal components (src/features/home/components/Terminal.tsx, src/components/kit/data-display/TerminalFrame.tsx) serve as reference implementation for CVA-only patterns
+
+### Architecture: Domain-Split CVA Factories
+
+```
+src/styles/
+  ui.ts          # barrel export (21 LOC) - backward compatibility
+  ui/
+    index.ts     # explicit re-exports from domain modules
+    inputs.ts    # button factories
+    data.ts      # card, badge, avatar factories
+    layout.ts    # container, section, grid, row, pad factories
+    typography.ts # heading, paragraph, prose, prompt factories
+    overlays.ts  # terminal, icon, reveal factories
+```
+
+**Rules:** CVA-only, token classes only, no literals outside styles/. ESLint scope applies to `src/styles/ui/**/*.ts`. Individual ui/ domain modules manage their own growth - see ui/AGENTS.md for further splitting guidance.

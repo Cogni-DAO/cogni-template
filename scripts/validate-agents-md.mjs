@@ -1,8 +1,22 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@scripts/validate-agents-md`
+ * Purpose: Validates AGENTS.md file structure and required sections across all directories.
+ * Scope: Enforces heading requirements, metadata format, line limits. Does NOT validate content accuracy.
+ * Invariants: All AGENTS.md files must have required headings; stay under 150 lines; valid metadata format.
+ * Side-effects: IO
+ * Notes: Exits with error code if validation fails; supports CI/CD pipeline integration.
+ * Links: docs/templates/agents_subdir_template.md
+ * @public
+ */
+
 /* eslint-env node */
 import { readFileSync } from "node:fs";
 
-import { globby } from "globby";
+import fg from "fast-glob";
 
 const REQ_HEADINGS = [
   "Metadata",
@@ -121,7 +135,7 @@ function validateBoundaries(block, filePathRaw) {
   const POLICY_ALLOW = {
     core: ["core"],
     ports: ["ports", "core", "types"],
-    features: ["features", "ports", "core", "shared", "types"],
+    features: ["features", "ports", "core", "shared", "types", "components"],
     contracts: ["contracts", "shared", "types"],
     app: [
       "app",
@@ -334,11 +348,7 @@ function validate(file) {
 }
 
 // Find all AGENTS.md files including the root one
-const files = await globby([
-  "**/AGENTS.md",
-  "AGENTS.md",
-  "!**/node_modules/**",
-]);
+const files = await fg(["**/AGENTS.md", "AGENTS.md", "!**/node_modules/**"]);
 for (const f of files) {
   try {
     validate(f);
