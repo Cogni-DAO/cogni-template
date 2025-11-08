@@ -12,12 +12,12 @@
 
 "use client";
 
+import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
 
-import { TerminalFrame } from "@/components/kit/data-display/TerminalFrame";
-import { reveal, prompt } from "@/styles/ui";
+import { Prompt, Reveal, TerminalFrame } from "@/components";
 
-export function Terminal(): React.ReactElement {
+export function Terminal(): ReactElement {
   const steps = [
     "git clone https://github.com/cogni-template/cogni-template",
     "pnpm install",
@@ -45,16 +45,14 @@ export function Terminal(): React.ReactElement {
   return (
     <TerminalFrame onCopy={onCopy} copied={copied}>
       {steps.map((step, index) => (
-        <div
+        <Reveal
           key={index}
-          className={reveal({
-            state: index > currentStep ? "hidden" : "visible",
-            duration: "normal",
-            delay: "none",
-          })}
+          state={index > currentStep ? "hidden" : "visible"}
+          duration="normal"
+          delay="none"
         >
-          <span className={prompt({ tone: "success" })}>$</span> {step}
-        </div>
+          <Prompt tone="success">$</Prompt> {step}
+        </Reveal>
       ))}
     </TerminalFrame>
   );

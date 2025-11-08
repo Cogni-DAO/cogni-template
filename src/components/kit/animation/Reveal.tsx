@@ -1,0 +1,30 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+
+/**
+ * Purpose: Reveal animation component wrapper with CVA styling API for progressive disclosure patterns.
+ * Scope: Provides typed reveal variants wrapping CVA factories. Does not handle animation logic or timing.
+ * Invariants: Forwards all props except className to div element; maintains ref forwarding; blocks className prop.
+ * Side-effects: none
+ * Notes: Uses CVA factory from \@/styles/ui - no literal classes allowed.
+ * Links: src/styles/ui.ts, docs/UI_IMPLEMENTATION_GUIDE.md
+ * @public
+ */
+
+"use client";
+
+import type { VariantProps } from "class-variance-authority";
+import type { HTMLAttributes } from "react";
+import { forwardRef } from "react";
+
+import { reveal } from "@/styles/ui";
+
+type DivNoClass = Omit<HTMLAttributes<HTMLDivElement>, "className">;
+
+export interface RevealProps extends DivNoClass, VariantProps<typeof reveal> {}
+
+export const Reveal = forwardRef<HTMLDivElement, RevealProps>(
+  ({ state, duration, delay, ...props }, ref) => (
+    <div ref={ref} className={reveal({ state, duration, delay })} {...props} />
+  )
+);
+Reveal.displayName = "Reveal";

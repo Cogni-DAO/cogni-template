@@ -12,6 +12,7 @@ import importPlugin from "eslint-plugin-import";
 import jsxA11y from "eslint-plugin-jsx-a11y";
 import noInlineStyles from "eslint-plugin-no-inline-styles";
 import noLiteralClassnames from "eslint-plugin-no-literal-classnames";
+import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 import tsdoc from "eslint-plugin-tsdoc";
@@ -63,6 +64,7 @@ export default [
       import: importPlugin,
       boundaries: boundaries,
       "jsx-a11y": jsxA11y,
+      react: react,
       "react-hooks": reactHooks,
       tsdoc: tsdoc,
       unicorn: unicorn,
@@ -146,18 +148,30 @@ export default [
       // Block specific className patterns
       "no-restricted-syntax": [
         "error",
+        // 1) Direct string literal as the attribute value
         {
-          selector: "JSXAttribute[name.name='className'] Literal",
+          selector: "JSXAttribute[name.name='className'] > Literal",
           message:
-            "Use styling API from @/styles/ui. Literal className forbidden.",
+            "Use CVA from @/styles/ui. Direct string className forbidden.",
         },
+        // 2) Template literal directly used as the attribute value
         {
           selector:
-            "JSXAttribute[name.name='className'] JSXExpressionContainer > CallExpression[callee.name='cn'] Literal",
+            "JSXAttribute[name.name='className'] > JSXExpressionContainer > TemplateLiteral",
           message:
-            "Use styling API from @/styles/ui. cn() with literal strings forbidden.",
+            "Use CVA from @/styles/ui. Template literal className forbidden.",
+        },
+        // 3) cn(...) with any literal arg anywhere under className
+        {
+          selector:
+            "JSXAttribute[name.name='className'] > JSXExpressionContainer CallExpression[callee.name='cn'] Literal",
+          message:
+            "Use CVA from @/styles/ui. cn(...) with literal strings forbidden.",
         },
       ],
+
+      // React rules
+      "react/react-in-jsx-scope": "off",
 
       // React hooks rules
       "react-hooks/rules-of-hooks": "error",
@@ -222,6 +236,7 @@ export default [
                 "core/**",
                 "shared/**",
                 "types/**",
+                "components",
               ],
             },
             {

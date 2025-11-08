@@ -5,33 +5,35 @@
  * Scope: Provides terminal chrome and slots content. Does not handle state, animation, or clipboard.
  * Invariants: Forwards all props except className; maintains ref forwarding; blocks className prop.
  * Side-effects: none
- * Notes: Uses CVA factories from @/styles/ui - no literal classes allowed.
- * Links: src/styles/ui.ts, docs/STYLEGUIDE_UI.md
- * @public
+ * Notes: Uses CVA factories from \@/styles/ui - no literal classes allowed.
+ * Links: src/styles/ui.ts, docs/UI_IMPLEMENTATION_GUIDE.md
+ * \@public
  */
 
 "use client";
 
 import type { VariantProps } from "class-variance-authority";
 import { Check, Copy } from "lucide-react";
-import * as React from "react";
+import type { HTMLAttributes, ReactElement, ReactNode } from "react";
 
 import {
-  terminalFrame,
-  terminalDot,
-  terminalBody,
-  iconButton,
   icon,
+  iconButton,
+  row,
+  terminalBody,
+  terminalDot,
+  terminalFrame,
+  terminalHeader,
 } from "@/styles/ui";
 
-type DivNoClass = Omit<React.HTMLAttributes<HTMLDivElement>, "className">;
+type DivNoClass = Omit<HTMLAttributes<HTMLDivElement>, "className">;
 
 export interface TerminalFrameProps
   extends DivNoClass,
     VariantProps<typeof terminalFrame> {
   onCopy?: () => void;
   copied?: boolean;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export function TerminalFrame({
@@ -41,11 +43,11 @@ export function TerminalFrame({
   copied,
   children,
   ...props
-}: TerminalFrameProps) {
+}: TerminalFrameProps): ReactElement {
   return (
     <div className={terminalFrame({ surface, size })} {...props}>
-      <div className="flex items-center justify-between p-4">
-        <div className="flex space-x-2">
+      <div className={terminalHeader()}>
+        <div className={row({ gap: "xs" })}>
           <span className={terminalDot({ color: "red" })} />
           <span className={terminalDot({ color: "yellow" })} />
           <span className={terminalDot({ color: "green" })} />
