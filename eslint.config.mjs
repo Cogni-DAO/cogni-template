@@ -468,7 +468,15 @@ export default [
           ],
         },
       ],
-      // Kit uses CVA outputs only - no literal classes allowed
+      // Kit components must not use className at all - expose CVA variants instead
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Identifier[name='className']",
+          message:
+            "Kit components must not use `className`; expose CVA variants instead.",
+        },
+      ],
     },
   },
 
@@ -533,6 +541,7 @@ export default [
       "node_modules/**",
       "commitlint.config.cjs",
       "*.config.cjs",
+      "test*/**/fixtures/**",
     ],
   },
 ];
