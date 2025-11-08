@@ -34,7 +34,7 @@
 - [Architecture](docs/ARCHITECTURE.md)
 - [Implementation Plan](docs/IMPLEMENTATION_PLAN.md)
 - [Repo Specification](.cogni/repo-spec.yaml) <!-- optional -->
-- [Subdir AGENTS.md Policy](docs/subdir_AGENTS_template.md)
+- [Subdir AGENTS.md Policy](docs/templates/subdir_AGENTS_template.md)
 - [Style & Lint Rules](docs/STYLE.md)
 
 ## Usage

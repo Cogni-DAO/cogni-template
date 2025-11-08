@@ -28,7 +28,7 @@ It's time to update documentation for this branch — both `*/AGENTS.md` files a
 - Use **present tense** only. Never write “new,” “updated,” “final,” or “production ready.”
 - Simplify and shorten docs. Remove dead or duplicated lines.
 - Keep behavior details inside file headers, not `AGENTS.md`.
-- For new directories, seed from `docs/subdir_AGENTS_template.md`.
+- For new directories, seed from `docs/templates/subdir_AGENTS_template.md`.
 
 ---
 
