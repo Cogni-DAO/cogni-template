@@ -108,6 +108,9 @@ importers:
       eslint-plugin-no-inline-styles:
         specifier: ^1.0.5
         version: 1.0.5
+      eslint-plugin-no-literal-classnames:
+        specifier: ^1.2.0
+        version: 1.2.0(eslint@9.39.1(jiti@2.6.1))
       eslint-plugin-react-hooks:
         specifier: ^5.1.0
         version: 5.2.0(eslint@9.39.1(jiti@2.6.1))
@@ -2103,6 +2106,12 @@ packages:
 
   eslint-plugin-no-inline-styles@1.0.5:
     resolution: {integrity: sha512-nftOfHV/ag0P0vEPQ3p54HVpGCp6k/E+pHdYnRm2wDK8QhClfmMjrCw+POL5RH/SN1AmTifCTh5VzkeubLgMpA==}
+
+  eslint-plugin-no-literal-classnames@1.2.0:
+    resolution: {integrity: sha512-gEu3iRf9+dPsImyMGTSVJ74Jvlpr1dr9hCCZoJK2Sj93jtgu4nBXQgjQG/RGXTxdXE7Z2Qya4lUsAxKcswT3sQ==}
+    engines: {node: '>=8.10.0'}
+    peerDependencies:
+      eslint: '>=5.16.0'
 
   eslint-plugin-react-hooks@5.2.0:
     resolution: {integrity: sha512-+f15FfK64YQwZdJNELETdn5ibXEUQmW1DZL6KXhNnc2heoy/sg9VJJeT7n8TlMWouzWqSWavFkIhHyIbIAEapg==}
@@ -5900,6 +5909,10 @@ snapshots:
   eslint-plugin-no-inline-styles@1.0.5:
     dependencies:
       lodash.get: 4.4.2
+
+  eslint-plugin-no-literal-classnames@1.2.0(eslint@9.39.1(jiti@2.6.1)):
+    dependencies:
+      eslint: 9.39.1(jiti@2.6.1)
 
   eslint-plugin-react-hooks@5.2.0(eslint@9.39.1(jiti@2.6.1)):
     dependencies:

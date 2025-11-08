@@ -11,6 +11,7 @@ import boundaries from "eslint-plugin-boundaries";
 import importPlugin from "eslint-plugin-import";
 import jsxA11y from "eslint-plugin-jsx-a11y";
 import noInlineStyles from "eslint-plugin-no-inline-styles";
+import noLiteralClassnames from "eslint-plugin-no-literal-classnames";
 import reactHooks from "eslint-plugin-react-hooks";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 import tsdoc from "eslint-plugin-tsdoc";
@@ -56,6 +57,7 @@ export default [
       tailwindcss: communityTailwind,
       "simple-import-sort": simpleImportSort,
       "no-inline-styles": noInlineStyles,
+      "no-literal-classnames": noLiteralClassnames,
       "unused-imports": unused,
       import: importPlugin,
       boundaries: boundaries,
@@ -106,11 +108,52 @@ export default [
       "import/no-unresolved": "error",
       "import/no-cycle": "error",
 
-      // Block parent relatives only. Aliases unaffected.
+      // Block parent relatives and restricted imports
       "no-restricted-imports": [
         "error",
         {
-          patterns: ["../*", "../../*", "../../../*", "../../../../*"],
+          patterns: [
+            {
+              group: ["../**"],
+              message: "Do not import from parent directories. Use aliases.",
+            },
+            {
+              group: ["@/components/ui/*"],
+              message:
+                "Use @/components/kit/* wrappers instead of direct ui imports",
+            },
+          ],
+          paths: [
+            {
+              name: "clsx",
+              message:
+                "Only allowed in src/styles/** - use styling API from @/styles/ui instead",
+            },
+            {
+              name: "tailwind-merge",
+              message:
+                "Only allowed in src/styles/** - use styling API from @/styles/ui instead",
+            },
+          ],
+        },
+      ],
+
+      // Block literal className usage - force styling API
+      "no-literal-classnames/no-literal-classnames": "error",
+
+      // Block specific className patterns
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "JSXAttribute[name.name='className'] Literal",
+          message:
+            "Use styling API from @/styles/ui. Literal className forbidden.",
+        },
+        {
+          selector:
+            "JSXAttribute[name.name='className'] JSXExpressionContainer > CallExpression[callee.name='cn'] Literal",
+          message:
+            "Use styling API from @/styles/ui. cn() with literal strings forbidden.",
         },
       ],
 
@@ -274,6 +317,10 @@ export default [
               target: ["components"],
               allow: ["**/index.ts", "**/index.tsx"],
             },
+            {
+              target: ["styles"],
+              allow: ["ui.ts"],
+            },
           ],
         },
       ],
@@ -335,6 +382,62 @@ export default [
           ],
         },
       ],
+    },
+  },
+
+  // Styles layer - allow clsx/tailwind-merge and literal classes
+  {
+    files: ["src/styles/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["../**"],
+              message: "Do not import from parent directories. Use aliases.",
+            },
+            // Remove clsx/tailwind-merge path restrictions for styles layer
+            // Remove @/components/ui/* restriction for styles layer
+          ],
+          // No paths restrictions - allow clsx and tailwind-merge here
+        },
+      ],
+      // Allow literal classes inside styling API factories
+      "no-literal-classnames/no-literal-classnames": "off",
+      "no-restricted-syntax": "off",
+    },
+  },
+
+  // Kit layer - allow ui imports but no literal classes (CVA outputs only)
+  {
+    files: ["src/components/kit/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["../**"],
+              message: "Do not import from parent directories. Use aliases.",
+            },
+            // Remove @/components/ui/* restriction for kit layer
+          ],
+          paths: [
+            {
+              name: "clsx",
+              message:
+                "Only allowed in src/styles/** - use styling API from @/styles/ui instead",
+            },
+            {
+              name: "tailwind-merge",
+              message:
+                "Only allowed in src/styles/** - use styling API from @/styles/ui instead",
+            },
+          ],
+        },
+      ],
+      // Kit uses CVA outputs only - no literal classes allowed
     },
   },
 

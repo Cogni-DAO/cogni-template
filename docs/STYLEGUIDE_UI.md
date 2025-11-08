@@ -1,6 +1,6 @@
 # UI Style Guide
 
-Purpose: consistent, testable UI with clean boundaries. Read this before adding or moving components.
+Purpose: consistent, testable UI with clean boundaries and enforced design tokens. All styling flows through centralized CVA API with ESLint blocking literal className usage.
 
 ## Directory model
 
@@ -25,96 +25,120 @@ Purpose: consistent, testable UI with clean boundaries. Read this before adding 
 - Mark client components: `"use client"`.
 - Keep server-only logic in routes or loaders. Pass data as props.
 
-## Styling rules
+## Centralized Styling API
 
-- Design tokens from `src/styles/` only.
-- No arbitrary Tailwind values. No inline styles, except approved CSS vars.
-- Use CVA for variants. Type variant props.
+### Core Principle: Zero Literal Classes
 
-### Example
+All styling flows through `src/styles/ui.ts` CVA factories. ESLint blocks literal `className` strings to enforce design token discipline.
+
+**Policy:** Pages must use kit layout and mdx wrappers; literal className is banned app-wide. Only `src/styles/ui.ts` may contain class literals for CVA factory definitions.
 
 ```tsx
-// src/components/primitives/button.tsx
-"use client";
-import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "@/src/shared/util/strings";
+// Import from centralized styling API
+import { button, avatar, card } from "@/styles/ui";
 
-const button = cva(
-  "inline-flex items-center justify-center rounded-md text-sm font-medium focus:outline-none focus:ring-1",
+// Use typed variants
+<button className={button({ variant: "primary", size: "lg" })}>
+  Submit
+</button>
+<div className={avatar({ size: "md" })} />
+<div className={card({ variant: "elevated" })} />
+```
+
+### Available Styling Factories
+
+Defined in `src/styles/ui.ts`:
+
+- `avatar({ size })` - User profile display with consistent sizing
+- `button({ variant, size })` - Interactive buttons with design system variants
+- `card({ variant })` - Content containers and surfaces
+- `badge({ variant, size })` - Status indicators and labels
+
+All variants provide TypeScript autocompletion and use design tokens exclusively.
+
+### ESLint Enforcement
+
+Configured rules block all literal className usage:
+
+```javascript
+"no-restricted-syntax": [
+  "error",
   {
-    variants: {
-      intent: { primary: "", secondary: "", ghost: "" },
-      size: { sm: "h-8 px-3", md: "h-9 px-4", lg: "h-10 px-6" },
-    },
-    defaultVariants: { intent: "primary", size: "md" },
+    selector: "JSXAttribute[name.name='className'] Literal",
+    message: "Use styling API from @/styles/ui. Literal className forbidden."
   }
-);
+],
+"no-restricted-imports": [
+  "error",
+  {
+    paths: [{
+      name: "clsx",
+      message: "Only allowed in src/styles/** - use styling API instead"
+    }]
+  }
+]
+```
+
+## Component Implementation
+
+### Using Styling API
+
+```tsx
+// src/components/ui/button.tsx
+"use client";
+import { button } from "@/styles/ui";
+import type { VariantProps } from "class-variance-authority";
 
 export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
   VariantProps<typeof button>;
 
-export function Button({ className, intent, size, ...props }: ButtonProps) {
-  return (
-    <button className={cn(button({ intent, size }), className)} {...props} />
-  );
+export function Button({ variant, size, ...props }: ButtonProps) {
+  return <button className={button({ variant, size })} {...props} />;
 }
 ```
 
-## Naming conventions
+### Adding New Styling Variants
 
-- Folder name = component name in kebab-case. File `index.tsx` exports default.
-- Variant prop names: `intent`, `tone`, `size`, `state`, `shape`, `elevation`.
-- Keep public exports curated in `src/components/index.ts`.
-
-## File headers
-
-Top-of-file doc block:
+Update centralized factory in `src/styles/ui.ts`:
 
 ```typescript
-/**
- * Purpose: one sentence on the role.
- * Scope: what it owns; what it avoids.
- * Invariants: 1–3 guarantees (render shape, a11y, variant behavior).
- */
-```
-
-## Styling rules
-
-- Design tokens from `src/styles/` only.
-- No arbitrary Tailwind values. No inline styles, except approved CSS vars.
-- Use CVA for variants. Type variant props.
-
-Example:
-
-```ts
-// src/components/primitives/button.tsx
-"use client";
-import { cva, type VariantProps } from "class-variance-authority";
-import { cn } from "@/src/shared/util/strings";
-
-const button = cva(
-  "inline-flex items-center justify-center rounded-md text-sm font-medium focus:outline-none focus:ring-1",
+export const button = cva(
+  "inline-flex items-center justify-center rounded-md font-medium",
   {
     variants: {
-      intent: { primary: "", secondary: "", ghost: "" },
-      size: { sm: "h-8 px-3", md: "h-9 px-4", lg: "h-10 px-6" }
+      variant: {
+        primary: "bg-primary text-primary-foreground hover:bg-primary/90",
+        secondary: "bg-secondary text-secondary-foreground",
+        accent: "bg-accent text-accent-foreground hover:bg-accent/90",
+      },
+      size: {
+        sm: "h-8 px-3 text-sm",
+        md: "h-10 px-4 py-2",
+        lg: "h-12 px-8 text-lg",
+      },
     },
-    defaultVariants: { intent: "primary", size: "md" }
+    defaultVariants: { variant: "primary", size: "md" },
   }
 );
+```
 
-export type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> &
-  VariantProps<typeof button>;
+TypeScript automatically enforces available variants with full intellisense.
 
-export function Button({ className, intent, size, ...props }: ButtonProps) {
-  return <button className={cn(button({ intent, size }), className)} {...props} />;
+## Third-Party Component Escape Hatch
+
+For components requiring literal classes:
+
+```tsx
+{
+  /* eslint-disable-next-line -- vendor requires literal classes */
 }
+<ThirdPartyComponent className="prose prose-sm max-w-none" />;
 ```
 
 ## Naming conventions
 
 - Folder name = component name in kebab-case. File `index.tsx` exports default.
-- Variant prop names: `intent`, `tone`, `size`, `state`, `shape`, `elevation`.
+- Variant prop names: `variant`, `size`, `tone`, `state`, `shape`, `elevation`.
 - Keep public exports curated in `src/components/index.ts`.
 
 ## File headers
@@ -163,7 +187,10 @@ Top-of-file doc block:
 
 - [ ] Directory placement correct?
 - [ ] Imports within boundary?
-- [ ] CVA variants typed and documented?
+- [ ] Uses styling API from `@/styles/ui` (no literal className)?
+- [ ] No direct clsx/cn imports outside styles layer?
+- [ ] Variants use design tokens from `src/styles/tailwind.preset.ts`?
 - [ ] A11y checks passed?
 - [ ] Tests added and green?
 - [ ] `components/index.ts` updated if public?
+- [ ] ESLint passes with new no-literal-className rules?
