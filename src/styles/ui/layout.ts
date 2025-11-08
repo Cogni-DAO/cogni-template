@@ -13,6 +13,40 @@
 import { cva, type VariantProps } from "class-variance-authority";
 
 /**
+ * Page shell styling for full-page body wrapper
+ */
+export const pageShell = cva(
+  "bg-background text-foreground min-h-[100dvh] antialiased"
+);
+
+/**
+ * Page container styling for centered content with responsive max-width
+ */
+export const pageContainer = cva("mx-auto w-full px-4 sm:px-6 lg:px-8", {
+  variants: {
+    maxWidth: {
+      md: "max-w-2xl",
+      lg: "max-w-4xl",
+      xl: "max-w-6xl",
+    },
+  },
+  defaultVariants: { maxWidth: "lg" },
+});
+
+/**
+ * Two-column responsive layout with optional reverse flow
+ */
+export const twoColumn = cva("grid gap-8 lg:grid-cols-2 lg:items-center", {
+  variants: {
+    reverse: {
+      false: "",
+      true: "lg:grid-flow-col-dense",
+    },
+  },
+  defaultVariants: { reverse: false },
+});
+
+/**
  * Container styling for responsive layout wrappers with width and padding variants
  */
 export const container = cva("mx-auto px-4 sm:px-6 lg:px-8", {
@@ -126,6 +160,48 @@ export const pad = cva("", {
   } as const,
   defaultVariants: {
     p: "none",
+  },
+});
+
+/**
+ * Flex container styling with alignment and spacing variants
+ */
+export const flex = cva("flex", {
+  variants: {
+    direction: {
+      row: "flex-row",
+      col: "flex-col",
+    },
+    align: {
+      start: "items-start",
+      center: "items-center",
+      end: "items-end",
+    },
+    justify: {
+      start: "justify-start",
+      center: "justify-center",
+      between: "justify-between",
+      end: "justify-end",
+    },
+    wrap: {
+      wrap: "flex-wrap",
+      nowrap: "flex-nowrap",
+    },
+    spacing: {
+      none: "",
+      xs: "mt-2",
+      sm: "mt-4",
+      md: "mt-6",
+      lg: "mt-8",
+      xl: "mt-10",
+    },
+  } as const,
+  defaultVariants: {
+    direction: "row",
+    align: "start",
+    justify: "start",
+    wrap: "nowrap",
+    spacing: "none",
   },
 });
 

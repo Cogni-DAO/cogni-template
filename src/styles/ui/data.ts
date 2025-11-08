@@ -107,5 +107,19 @@ export const badge = cva(
   }
 );
 
+/**
+ * Icon box styling for feature icons
+ */
+export const iconBox = cva(
+  "flex items-center justify-center rounded-md text-white",
+  {
+    variants: {
+      size: { md: "h-12 w-12" },
+      color: { orange: "bg-orange-500" },
+    },
+    defaultVariants: { size: "md", color: "orange" },
+  }
+);
+
 // Export variant types for external use
 export type BadgeIntent = VariantProps<typeof badge>["intent"];

@@ -11,7 +11,17 @@
  */
 
 // Layout components
-export { container, grid, pad, row, section } from "./layout";
+export {
+  container,
+  flex,
+  grid,
+  pad,
+  pageContainer,
+  pageShell,
+  row,
+  section,
+  twoColumn,
+} from "./layout";
 
 // Data display components
 export {
@@ -23,13 +33,14 @@ export {
   cardContent,
   cardFooter,
   cardHeader,
+  iconBox,
 } from "./data";
 
 // Input components
 export { button } from "./inputs";
 
 // Typography components
-export { heading, paragraph, prompt, prose } from "./typography";
+export { heading, paragraph, prompt, prose, textAccent } from "./typography";
 
 // Overlay components
 export {

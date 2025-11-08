@@ -16,6 +16,8 @@ import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
 import type { ReactNode } from "react";
 
+import { pageShell } from "@/styles/ui";
+
 const manrope = Manrope({
   subsets: ["latin"],
 });
@@ -32,9 +34,7 @@ export default function RootLayout({
 }>): ReactNode {
   return (
     <html lang="en" className={manrope.className}>
-      <body className="bg-background text-foreground min-h-[100dvh] antialiased">
-        {children}
-      </body>
+      <body className={pageShell()}>{children}</body>
     </html>
   );
 }

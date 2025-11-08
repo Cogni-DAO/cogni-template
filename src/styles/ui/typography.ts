@@ -52,10 +52,19 @@ export const paragraph = cva("", {
       subdued: "text-muted-foreground",
       invert: "text-background",
     },
+    spacing: {
+      none: "",
+      xs: "mt-1",
+      sm: "mt-2",
+      md: "mt-3",
+      lg: "mt-4",
+      xl: "mt-5",
+    },
   } as const,
   defaultVariants: {
     size: "md",
     tone: "subdued",
+    spacing: "none",
   },
 });
 
@@ -95,6 +104,11 @@ export const prompt = cva("font-mono", {
     tone: "default",
   },
 });
+
+/**
+ * Accent text styling for highlighted spans
+ */
+export const textAccent = cva("block text-orange-500");
 
 // Export variant types for external use
 export type HeadingLevel = VariantProps<typeof heading>["level"];
