@@ -32,7 +32,8 @@ interface NavigationLinkProps extends VariantProps<typeof navLink> {
 }
 
 function norm(path: string): string {
-  const u = path.split(/[?#]/)[0];
+  const parts = path.split(/[?#]/);
+  const u = parts[0] ?? "";
   return u !== "/" ? u.replace(/\/+$/, "") : "/";
 }
 
