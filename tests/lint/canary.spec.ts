@@ -52,17 +52,40 @@ describe("ESLint Config Canary", () => {
     ).toBe(2); // error
   });
 
-  it("styles layer allows literals", async () => {
+  it("styles layer allows literals and enforces CVA variant extraction", async () => {
     const eslint = new ESLint({ cwd: process.cwd() });
     const cfg = await eslint.calculateConfigForFile("src/styles/ui.ts");
     const rules = cfg.rules ?? {};
 
-    expect(
-      rules["no-literal-classnames/no-literal-classnames"]?.[0] ??
-        rules["no-literal-classnames/no-literal-classnames"]
-    ).toBe(0); // off - allows literals
-    expect(
-      rules["no-restricted-syntax"]?.[0] ?? rules["no-restricted-syntax"]
-    ).toBe(0); // off - allows literals
+    // literals allowed in styles
+    expect(rules["no-literal-classnames/no-literal-classnames"]?.[0]).toBe(0);
+
+    // CVA inline variant maps forbidden
+    const nrs = rules["no-restricted-syntax"];
+    const sev = Array.isArray(nrs) ? nrs[0] : nrs;
+    expect(sev).toBe(2);
+
+    // optional: assert selector/message to catch drift
+    const opt = Array.isArray(nrs) ? (nrs[1]?.[0] ?? nrs[1]) : undefined;
+    expect(opt?.selector).toContain("CallExpression[callee.name='cva']");
+    expect(opt?.message).toContain("Define variant maps");
+  });
+
+  it("theme.ts uses styles policy", async () => {
+    const eslint = new ESLint({ cwd: process.cwd() });
+    const cfg = await eslint.calculateConfigForFile("src/styles/theme.ts");
+    const rules = cfg.rules ?? {};
+    expect(rules["no-literal-classnames/no-literal-classnames"]?.[0]).toBe(0);
+    const nrs = rules["no-restricted-syntax"];
+    expect(Array.isArray(nrs) ? nrs[0] : nrs).toBe(2);
+  });
+
+  it("kit layer blocks literals", async () => {
+    const eslint = new ESLint({ cwd: process.cwd() });
+    const cfg = await eslint.calculateConfigForFile(
+      "src/components/kit/Button.tsx"
+    );
+    const rules = cfg.rules ?? {};
+    expect(rules["no-literal-classnames/no-literal-classnames"]?.[0]).toBe(2);
   });
 });
