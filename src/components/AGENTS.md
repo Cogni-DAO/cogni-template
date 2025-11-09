@@ -90,7 +90,7 @@ src/components/
   - Reused by ≥2 slices → promote to `components/kit/`.
   - Stateless + generic → `components/kit/`.
   - shadcn-generated files → stay in `vendor/ui-primitives/shadcn/` unmodified; wrap in kit/ to customize.
-- **Styling:** Use tokens from `src/styles/` only. No arbitrary Tailwind values. Prefer CVA for variants. Variant props must be typed. No inline styles except approved CSS vars.
+- **Styling:** Use tokens from `src/styles/` only. No arbitrary Tailwind values. Prefer CVA for variants. Variant props must be typed. No inline styles except approved CSS vars. Kit components accept typed props from theme.ts and call CVAs; no className.
 - **Testing:** Snapshot widgets and critical primitives. No network. Client-only tests isolate interactivity.
 
 ## Dependencies

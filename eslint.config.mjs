@@ -434,7 +434,16 @@ export default [
       ],
       // Allow literal classes inside styling API factories
       "no-literal-classnames/no-literal-classnames": "off",
-      "no-restricted-syntax": "off",
+      // Ban inline variant maps inside cva(...) so authors must use typed `*Variants` consts
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector:
+            "CallExpression[callee.name='cva'] ObjectExpression > Property[key.name='variants'] ObjectExpression > Property > ObjectExpression",
+          message:
+            "Define variant maps in a `const *Variants` with `satisfies Record<…Key,string>` and pass the identifier.",
+        },
+      ],
     },
   },
 
