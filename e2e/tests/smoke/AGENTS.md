@@ -1,4 +1,4 @@
-# e2e · AGENTS.md
+# smoke · AGENTS.md
 
 > Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
 
@@ -10,12 +10,12 @@
 
 ## Purpose
 
-End-to-end Playwright tests for API routes and UI workflows.
+Production-safe smoke tests that verify critical functionality without data mutations.
 
 ## Pointers
 
-- [Root AGENTS.md](../AGENTS.md)
-- [Architecture](../docs/ARCHITECTURE.md)
+- [E2E AGENTS.md](../../AGENTS.md)
+- [Playwright Config](../../../playwright.config.ts)
 
 ## Boundaries
 
@@ -31,8 +31,8 @@ End-to-end Playwright tests for API routes and UI workflows.
 
 - **Exports:** none
 - **Routes (if any):** Tests all routes externally
-- **CLI (if any):** pnpm e2e, pnpm e2e:smoke, pnpm e2e:prod, pnpm e2e:all, pnpm e2e:debug, pnpm e2e:report
-- **Env/Config keys:** E2E_BASE_URL
+- **CLI (if any):** pnpm e2e:smoke, pnpm e2e:prod
+- **Env/Config keys:** none
 - **Files considered API:** none
 
 ## Ports (optional)
@@ -43,25 +43,23 @@ End-to-end Playwright tests for API routes and UI workflows.
 
 ## Responsibilities
 
-- This directory **does**: Test end-to-end user workflows via browser automation
-- This directory **does not**: Import internal code, contain production logic
+- This directory **does**: Test prod-safe workflows, UI rendering, accessibility
+- This directory **does not**: Mutate data, test write operations, rely on test fixtures
 
 ## Usage
 
 Minimal local commands:
 
 ```bash
-pnpm e2e        # staging-full tests (ignores smoke/)
-pnpm e2e:smoke  # smoke tests (smoke/ only)
+pnpm e2e:smoke  # run smoke tests only
 pnpm e2e:prod   # alias for e2e:smoke
-pnpm e2e:all    # both projects
 ```
 
 ## Standards
 
-- Black-box testing only
-- Directory-based test organization: tests/smoke/ (prod-safe), tests/full/ (staging-only)
-- Environment-driven via E2E_BASE_URL
+- Read-only operations only
+- No test data dependencies
+- Fast execution (< 30s total)
 
 ## Dependencies
 
@@ -77,4 +75,5 @@ pnpm e2e:all    # both projects
 
 ## Notes
 
-- Tests must not depend on internal implementation details
+- Tests tagged for smoke project in playwright.config.ts
+- Must be safe to run against production environments
