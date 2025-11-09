@@ -271,6 +271,7 @@ export default [
         "postcss.config.mjs",
         "next.config.ts",
         "tailwind.config.ts",
+        "playwright.config.ts",
         "commitlint.config.cjs",
       ],
       tailwindcss: {

@@ -1,4 +1,4 @@
-# e2e · AGENTS.md
+# full · AGENTS.md
 
 > Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
 
@@ -10,12 +10,12 @@
 
 ## Purpose
 
-End-to-end Playwright tests for API routes and UI workflows.
+Staging-only tests including write operations and complex workflows.
 
 ## Pointers
 
-- [Root AGENTS.md](../AGENTS.md)
-- [Architecture](../docs/ARCHITECTURE.md)
+- [E2E AGENTS.md](../../AGENTS.md)
+- [Playwright Config](../../../playwright.config.ts)
 
 ## Boundaries
 
@@ -31,8 +31,8 @@ End-to-end Playwright tests for API routes and UI workflows.
 
 - **Exports:** none
 - **Routes (if any):** Tests all routes externally
-- **CLI (if any):** pnpm e2e, pnpm e2e:smoke, pnpm e2e:prod, pnpm e2e:all, pnpm e2e:debug, pnpm e2e:report
-- **Env/Config keys:** E2E_BASE_URL
+- **CLI (if any):** pnpm e2e
+- **Env/Config keys:** none
 - **Files considered API:** none
 
 ## Ports (optional)
@@ -43,25 +43,22 @@ End-to-end Playwright tests for API routes and UI workflows.
 
 ## Responsibilities
 
-- This directory **does**: Test end-to-end user workflows via browser automation
-- This directory **does not**: Import internal code, contain production logic
+- This directory **does**: Test full user journeys, write operations, complex flows
+- This directory **does not**: Run against production, contain production logic
 
 ## Usage
 
 Minimal local commands:
 
 ```bash
-pnpm e2e        # staging-full tests (ignores smoke/)
-pnpm e2e:smoke  # smoke tests (smoke/ only)
-pnpm e2e:prod   # alias for e2e:smoke
-pnpm e2e:all    # both projects
+pnpm e2e        # run full tests only
 ```
 
 ## Standards
 
-- Black-box testing only
-- Directory-based test organization: tests/smoke/ (prod-safe), tests/full/ (staging-only)
-- Environment-driven via E2E_BASE_URL
+- Write operations allowed
+- Test fixtures and seeding permitted
+- Full user journey coverage expected
 
 ## Dependencies
 
@@ -77,4 +74,5 @@ pnpm e2e:all    # both projects
 
 ## Notes
 
-- Tests must not depend on internal implementation details
+- Tests excluded from smoke project in playwright.config.ts
+- Safe for staging environments only
