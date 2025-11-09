@@ -48,4 +48,4 @@ export const featureItem = cva("mt-10 lg:mt-0");
 /**
  * Small icon sizing (for lucide icons)
  */
-export const smallIcon = cva("h-6 w-6");
+export const smallIcon = cva("h-[var(--size-icon-md)] w-[var(--size-icon-md)]");

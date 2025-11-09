@@ -12,14 +12,37 @@
  * @public
  */
 
-import { colorKeys, type RadiusKey, radiusKeys } from "./theme";
+import {
+  colorKeys,
+  type IconSizeKey,
+  iconSizeKeys,
+  type RadiusKey,
+  radiusKeys,
+  type SpacingSemanticKey,
+  spacingSemanticKeys,
+  statusKeys,
+} from "./theme";
 
 // Color tokens mapped to CSS custom properties for Tailwind config
-export const colors = Object.fromEntries(
-  colorKeys.map((key) => [key, `hsl(var(--${key}))`])
-);
+export const colors = {
+  ...Object.fromEntries(colorKeys.map((key) => [key, `hsl(var(--${key}))`])),
+  // Status colors
+  ...Object.fromEntries(
+    statusKeys.map((key) => [key, `hsl(var(--color-${key}))`])
+  ),
+};
 
 // Radius tokens mapped to CSS custom properties for Tailwind config
 export const borderRadius = Object.fromEntries(
   radiusKeys.map((key) => [key, `var(--radius-${key})`])
 ) as Record<RadiusKey, string>;
+
+// Spacing tokens mapped to CSS custom properties for Tailwind config
+export const spacing = Object.fromEntries(
+  spacingSemanticKeys.map((key) => [key, `var(--spacing-${key})`])
+) as Record<SpacingSemanticKey, string>;
+
+// Size tokens for icons and components
+export const size = Object.fromEntries(
+  iconSizeKeys.map((key) => [`icon-${key}`, `var(--size-icon-${key})`])
+) as Record<`icon-${IconSizeKey}`, string>;

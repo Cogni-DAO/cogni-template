@@ -77,3 +77,11 @@ export type DurationKey = (typeof durationKeys)[number];
 // Z-index keys (layering hierarchy)
 export const zIndexKeys = ["base", "overlay", "modal"] as const;
 export type ZIndexKey = (typeof zIndexKeys)[number];
+
+// Status color keys (for semantic state indicators)
+export const statusKeys = ["danger", "warning", "success"] as const;
+export type StatusKey = (typeof statusKeys)[number];
+
+// Icon size keys (for consistent icon sizing)
+export const iconSizeKeys = ["sm", "md", "lg"] as const;
+export type IconSizeKey = (typeof iconSizeKeys)[number];

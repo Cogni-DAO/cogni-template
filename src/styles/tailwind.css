@@ -118,6 +118,24 @@
   --color-chart-3: hsl(var(--chart-3));
   --color-chart-4: hsl(var(--chart-4));
   --color-chart-5: hsl(var(--chart-5));
+
+  /* Status colors */
+  --color-danger: hsl(0 84.2% 60.2%);
+  --color-warning: hsl(43 74% 66%);
+  --color-success: hsl(142 71% 45%);
+
+  /* Icon sizes */
+  --size-icon-sm: 1rem;
+  --size-icon-md: 1.5rem;
+  --size-icon-lg: 2rem;
+
+  /* Spacing scale */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
