@@ -7,51 +7,19 @@
  * Scope: Provides typed token names for colors, radius, fonts. Does not define actual CSS values or styles.
  * Invariants: CSS is source of truth; all tokens reference CSS custom properties; maintains type safety for design system.
  * Side-effects: none
- * Notes: All actual values defined in src/app/globals.css; provides const assertions for strict typing.
+ * Notes: Colors/radius resolve via CSS custom properties; font stacks are defined here and consumed via Tailwind (e.g. font-sans in globals.css).
  * Links: Design token specification, Tailwind CSS configuration
  * @public
  */
 
-// Color token names (no values - reference CSS variables)
-export const colors = [
-  "background",
-  "foreground",
-  "card",
-  "card-foreground",
-  "popover",
-  "popover-foreground",
-  "primary",
-  "primary-foreground",
-  "secondary",
-  "secondary-foreground",
-  "muted",
-  "muted-foreground",
-  "accent",
-  "accent-foreground",
-  "destructive",
-  "destructive-foreground",
-  "border",
-  "input",
-  "ring",
-  "chart-1",
-  "chart-2",
-  "chart-3",
-  "chart-4",
-  "chart-5",
-] as const;
+import { colorKeys, type RadiusKey, radiusKeys } from "./theme";
 
-// Radius token names (no values - reference CSS variables)
-export const radius = [
-  "radius-sm",
-  "radius-md",
-  "radius-lg",
-  "radius-xl",
-] as const;
+// Color tokens mapped to CSS custom properties for Tailwind config
+export const colors = Object.fromEntries(
+  colorKeys.map((key) => [key, `hsl(var(--${key}))`])
+);
 
-// Font token names for TypeScript typing
-export const fontFamily = ["sans"] as const;
-
-// Type helpers
-export type ColorToken = (typeof colors)[number];
-export type RadiusToken = (typeof radius)[number];
-export type FontFamilyToken = (typeof fontFamily)[number];
+// Radius tokens mapped to CSS custom properties for Tailwind config
+export const borderRadius = Object.fromEntries(
+  radiusKeys.map((key) => [key, `var(--radius-${key})`])
+) as Record<RadiusKey, string>;

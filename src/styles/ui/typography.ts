@@ -14,96 +14,150 @@
 
 import { cva, type VariantProps } from "class-variance-authority";
 
+import type {
+  FontFamilyKey,
+  FontWeightKey,
+  SizeKey,
+  SpacingSemanticKey,
+} from "@/styles/theme";
+
+const headingLevelVariants = {
+  h1: "text-4xl font-bold tracking-tight sm:text-5xl md:text-6xl",
+  h2: "text-3xl font-bold sm:text-4xl",
+  h3: "text-lg font-medium",
+  h4: "text-base font-medium",
+} as const;
+
+const headingToneVariants = {
+  default: "text-foreground",
+  subdued: "text-muted-foreground",
+  invert: "text-background",
+} as const;
+
+const headingFamilyVariants = {
+  sans: "font-sans",
+  mono: "font-mono",
+  display: "font-display",
+} satisfies Record<FontFamilyKey, string>;
+
+const headingWeightVariants = {
+  regular: "font-normal",
+  medium: "font-medium",
+  bold: "font-bold",
+} satisfies Record<FontWeightKey, string>;
+
 /**
  * Heading typography with level scale and tone variants
  */
-export const heading = cva("font-bold tracking-tight", {
+export const heading = cva("", {
   variants: {
-    level: {
-      h1: "text-4xl sm:text-5xl md:text-6xl",
-      h2: "text-3xl sm:text-4xl",
-      h3: "text-xl sm:text-2xl",
-      h4: "text-lg font-semibold",
-      h5: "text-base font-semibold",
-    },
-    tone: {
-      default: "text-foreground",
-      subdued: "text-muted-foreground",
-      invert: "text-background",
-    },
-  } as const,
+    level: headingLevelVariants,
+    tone: headingToneVariants,
+    family: headingFamilyVariants,
+    weight: headingWeightVariants,
+  },
   defaultVariants: {
     level: "h2",
     tone: "default",
+    family: "sans",
+    weight: "bold",
   },
 });
+
+const paragraphSizeVariants = {
+  sm: "text-sm",
+  md: "text-base",
+  lg: "text-lg",
+  xl: "text-xl",
+} satisfies Record<SizeKey, string>;
+
+const paragraphToneVariants = {
+  default: "text-foreground",
+  subdued: "text-muted-foreground",
+  invert: "text-background",
+} as const;
+
+const paragraphFamilyVariants = {
+  sans: "font-sans",
+  mono: "font-mono",
+  display: "font-display",
+} satisfies Record<FontFamilyKey, string>;
+
+const paragraphSpacingVariants = {
+  none: "",
+  xs: "mt-2",
+  sm: "mt-3",
+  md: "mt-3",
+  lg: "mt-5",
+  xl: "mt-8",
+} satisfies Record<SpacingSemanticKey, string>;
 
 /**
  * Paragraph styling with size and tone variants
  */
 export const paragraph = cva("", {
   variants: {
-    size: {
-      sm: "text-sm",
-      md: "text-base",
-      lg: "text-lg",
-      xl: "text-xl",
-    },
-    tone: {
-      default: "text-foreground",
-      subdued: "text-muted-foreground",
-      invert: "text-background",
-    },
-    spacing: {
-      none: "",
-      xs: "mt-1",
-      sm: "mt-2",
-      md: "mt-3",
-      lg: "mt-4",
-      xl: "mt-5",
-    },
-  } as const,
+    size: paragraphSizeVariants,
+    tone: paragraphToneVariants,
+    family: paragraphFamilyVariants,
+    spacing: paragraphSpacingVariants,
+  },
   defaultVariants: {
     size: "md",
     tone: "subdued",
-    spacing: "none",
+    family: "sans",
+    spacing: "md",
   },
 });
+
+const proseSizeVariants = {
+  sm: "prose-sm",
+  md: "prose-base",
+  lg: "prose-lg",
+  xl: "prose-xl",
+} satisfies Record<SizeKey, string>;
+
+const proseToneVariants = {
+  default: "",
+  invert: "prose-invert",
+} as const;
 
 /**
  * Prose styling for rich text content with size and tone variants
  */
 export const prose = cva("prose", {
   variants: {
-    size: {
-      sm: "prose-sm",
-      md: "prose-base",
-      lg: "prose-lg",
-      xl: "prose-xl",
-    },
-    tone: {
-      default: "",
-      invert: "prose-invert",
-    },
-  } as const,
+    size: proseSizeVariants,
+    tone: proseToneVariants,
+  },
   defaultVariants: {
     size: "md",
     tone: "default",
   },
 });
 
+const promptToneVariants = {
+  default: "text-foreground",
+  success: "text-green-400",
+} as const;
+
+const promptFamilyVariants = {
+  sans: "font-sans",
+  mono: "font-mono",
+  display: "font-display",
+} satisfies Record<FontFamilyKey, string>;
+
 /**
  * Terminal prompt styling with semantic tone variants
  */
-export const prompt = cva("font-mono", {
+export const prompt = cva("", {
   variants: {
-    tone: {
-      default: "text-foreground",
-      success: "text-green-400",
-    },
-  } as const,
+    tone: promptToneVariants,
+    family: promptFamilyVariants,
+  },
   defaultVariants: {
     tone: "default",
+    family: "mono",
   },
 });
 
@@ -112,5 +166,34 @@ export const prompt = cva("font-mono", {
  */
 export const textAccent = cva("block text-orange-500");
 
+const brandTextSizeVariants = {
+  sm: "text-base font-semibold",
+  md: "text-lg font-semibold",
+  lg: "text-xl font-semibold",
+  xl: "text-2xl font-semibold",
+} satisfies Record<SizeKey, string>;
+
+const brandTextToneVariants = {
+  default: "text-foreground",
+  subdued: "text-muted-foreground",
+  invert: "text-background",
+} as const;
+
+/**
+ * Brand text styling for logo and branding elements
+ */
+export const brandText = cva("tracking-tight", {
+  variants: {
+    size: brandTextSizeVariants,
+    tone: brandTextToneVariants,
+  } as const,
+  defaultVariants: {
+    size: "lg",
+    tone: "default",
+  },
+});
+
 // Export variant types for external use
 export type HeadingLevel = VariantProps<typeof heading>["level"];
+export type BrandTextSize = VariantProps<typeof brandText>["size"];
+export type BrandTextTone = VariantProps<typeof brandText>["tone"];

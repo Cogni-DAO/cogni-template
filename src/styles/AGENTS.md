@@ -42,7 +42,7 @@ Design system token definitions and TypeScript mirrors for theming.
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none
-- **Files considered API:** tailwind.preset.ts, ui.ts, ui/index.ts
+- **Files considered API:** tailwind.preset.ts, ui.ts, ui/index.ts, theme.ts
 
 ## Ports (optional)
 
@@ -65,11 +65,20 @@ pnpm typecheck
 
 ## Standards
 
-- CSS variables in app/globals.css are source of truth
+- CSS variables in src/styles/tailwind.css are source of truth
 - TypeScript exports provide names only, not values
 - Token names mirror CSS variable naming
 - CVA factories use design tokens exclusively - no arbitrary Tailwind values
+- theme.ts exports only token keys and types for CVA variant props
 - All component styling must flow through ui.ts barrel (which re-exports from ui/ domain modules)
+
+### CVA + theme.ts Checklist
+
+- [ ] Token values live in tailwind.css and tailwind.preset.ts
+- [ ] src/styles/theme.ts exports keys and types only
+- [ ] In src/styles/ui/\**, declare `const *Variants = { … } satisfies Record<TokenKey,string>` and pass into cva. No inline variant objects
+- [ ] Tailwind strings appear only in cva base or \*Variants consts
+- [ ] Kit props are typed from theme.ts; features import kit only
 
 ## Dependencies
 
@@ -80,7 +89,7 @@ pnpm typecheck
 
 - Update this file when **Exports** change
 - Bump **Last reviewed** date
-- Token names must match CSS variables in app/globals.css
+- Token names must match CSS variables in src/styles/tailwind.css
 - CVA factory changes require updating components that use them
 
 ## Notes

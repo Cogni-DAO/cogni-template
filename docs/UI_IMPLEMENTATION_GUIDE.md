@@ -14,6 +14,8 @@ Here's the ~50-line developer guide.
 
 **Docs:** docs/UI_IMPLEMENTATION_GUIDE.md (this guide), src/components/AGENTS.md, src/styles/AGENTS.md.
 
+**Building full features?** See [Feature Development Guide](FEATURE_DEVELOPMENT_GUIDE.md) for the complete architecture workflow.
+
 ## Rules (must follow)
 
 **No literal className anywhere** except src/styles/ui.ts.
@@ -27,6 +29,24 @@ Here's the ~50-line developer guide.
 **CVA parameters allowed:** ESLint permits string literals inside CVA calls like `row({ gap: "xs" })` but blocks direct className literals like `className="flex gap-2"`.
 
 **Vendor must not import @/\***. Keep local \_vendor_utils if shadcn needs cn.
+
+## Design Token Architecture
+
+**Design tokens live in tailwind.css + tailwind.preset.ts**; theme.ts exposes their keys for typing; only ui.ts and kit components may use them.
+
+**Features never see theme details** - they only use typed props and CVA factories.
+
+## CVA + theme.ts Standard
+
+**Token values live in tailwind.css and tailwind.preset.ts.**
+
+**src/styles/theme.ts exports keys and types only.**
+
+**In src/styles/ui/**, declare `const *Variants = { … } satisfies Record<TokenKey,string>` and pass into cva. No inline variant objects.
+
+**Tailwind strings appear only in cva base or \*Variants consts.**
+
+**Kit props are typed from theme.ts; features import kit only.**
 
 ## When you need a new primitive or pattern
 
@@ -81,7 +101,7 @@ Here's the ~50-line developer guide.
 - [ ] No literal className outside styles/ui.ts.
 - [ ] Feature code imports only from @/components (barrel) or @/components/kit/\*.
 - [ ] Kit wrappers do not forward className.
-- [ ] CVA parameters use design tokens (e.g., `gap: "xs"` not `gap: "gap-2"`).
+- [ ] CVA parameters use design tokens from theme.ts types (e.g., `gap: "xs"` not `gap: "gap-2"`).
 - [ ] Vendor files have no @/\* imports.
 - [ ] Barrel exports updated if a new kit component was added.
 - [ ] ESLint passes. Visual parity verified.

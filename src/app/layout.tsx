@@ -12,12 +12,15 @@
  * @public
  */
 
-import "./globals.css";
+import "@/styles/tailwind.css";
 
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
+import Script from "next/script";
+import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
 
+import { Header } from "@/components";
 import { pageShell } from "@/styles/ui";
 
 const manrope = Manrope({
@@ -35,8 +38,21 @@ export default function RootLayout({
   children: ReactNode;
 }>): ReactNode {
   return (
-    <html lang="en" className={manrope.className}>
-      <body className={pageShell()}>{children}</body>
+    <html lang="en" className={manrope.className} suppressHydrationWarning>
+      <head>
+        <Script src="/theme-init.js" strategy="beforeInteractive" />
+      </head>
+      <body className={pageShell()}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <Header />
+          {children}
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

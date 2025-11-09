@@ -14,6 +14,15 @@
 
 import { cva, type VariantProps } from "class-variance-authority";
 
+import type { SizeKey } from "@/styles/theme";
+
+const avatarSizeVariants = {
+  sm: "size-6",
+  md: "size-8",
+  lg: "size-12",
+  xl: "size-16",
+} satisfies Record<SizeKey, string>;
+
 /**
  * Avatar component styling with consistent sizing variants
  */
@@ -21,12 +30,7 @@ export const avatar = cva(
   "relative flex shrink-0 overflow-hidden rounded-full",
   {
     variants: {
-      size: {
-        sm: "size-6",
-        md: "size-8",
-        lg: "size-12",
-        xl: "size-16",
-      },
+      size: avatarSizeVariants,
     },
     defaultVariants: {
       size: "md",
@@ -46,6 +50,12 @@ export const avatarFallback = cva(
   "flex size-full items-center justify-center rounded-full bg-muted"
 );
 
+const cardVariants = {
+  default: "",
+  elevated: "shadow-lg",
+  interactive: "cursor-pointer transition-shadow hover:shadow-md",
+} as const;
+
 /**
  * Card container styling with elevation variants
  */
@@ -53,11 +63,7 @@ export const card = cva(
   "rounded-lg border bg-card text-card-foreground shadow-sm",
   {
     variants: {
-      variant: {
-        default: "",
-        elevated: "shadow-lg",
-        interactive: "cursor-pointer transition-shadow hover:shadow-md",
-      },
+      variant: cardVariants,
     },
     defaultVariants: {
       variant: "default",
@@ -80,6 +86,23 @@ export const cardContent = cva("p-6 pt-0");
  */
 export const cardFooter = cva("flex items-center p-6 pt-0");
 
+const badgeIntentVariants = {
+  default:
+    "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
+  secondary:
+    "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
+  destructive:
+    "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
+  outline: "text-foreground",
+} as const;
+
+const badgeSizeVariants = {
+  sm: "px-1.5 py-0.5 text-xs",
+  md: "px-2.5 py-0.5 text-xs",
+  lg: "px-3 py-1 text-sm",
+  xl: "px-4 py-1.5 text-base",
+} satisfies Record<SizeKey, string>;
+
 /**
  * Badge component styling for status indicators
  */
@@ -87,20 +110,8 @@ export const badge = cva(
   "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
   {
     variants: {
-      intent: {
-        default:
-          "border-transparent bg-primary text-primary-foreground shadow hover:bg-primary/80",
-        secondary:
-          "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
-        destructive:
-          "border-transparent bg-destructive text-destructive-foreground shadow hover:bg-destructive/80",
-        outline: "text-foreground",
-      },
-      size: {
-        sm: "px-1.5 py-0.5 text-xs",
-        md: "px-2.5 py-0.5 text-xs",
-        lg: "px-3 py-1 text-sm",
-      },
+      intent: badgeIntentVariants,
+      size: badgeSizeVariants,
     } as const,
     defaultVariants: {
       intent: "default",
@@ -109,6 +120,20 @@ export const badge = cva(
   }
 );
 
+const iconBoxSizeVariants = {
+  sm: "h-8 w-8",
+  md: "h-12 w-12",
+  lg: "h-16 w-16",
+  xl: "h-20 w-20",
+} satisfies Record<SizeKey, string>;
+
+const iconBoxColorVariants = {
+  orange: "bg-orange-500",
+  blue: "bg-blue-500",
+  green: "bg-green-500",
+  red: "bg-red-500",
+} as const;
+
 /**
  * Icon box styling for feature icons
  */
@@ -116,8 +141,8 @@ export const iconBox = cva(
   "flex items-center justify-center rounded-md text-white",
   {
     variants: {
-      size: { md: "h-12 w-12" },
-      color: { orange: "bg-orange-500" },
+      size: iconBoxSizeVariants,
+      color: iconBoxColorVariants,
     },
     defaultVariants: { size: "md", color: "orange" },
   }

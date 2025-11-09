@@ -177,6 +177,7 @@
             "AGENTS\\.md|AGENTS_template\\.md|CLAUDE\\.md|",
             "\\.editorconfig|\\.gitignore|\\.nvmrc|\\.prettierignore|\\.prettierrc(\\..*)?|",
             "\\.env\\.example|",
+            "\\.mcp\\.json|",
             "commitlint\\.config\\.cjs|eslint\\.config\\.mjs|repolinter\\.json|",
             "components\\.json|",
             "package\\.json|pnpm-lock\\.yaml|",

@@ -16,6 +16,8 @@ export { Reveal } from "./kit/animation/Reveal";
 export { Avatar, AvatarFallback, AvatarImage } from "./kit/data-display/Avatar";
 export { TerminalFrame } from "./kit/data-display/TerminalFrame";
 export { Button } from "./kit/inputs/Button";
+export { ModeToggle } from "./kit/inputs/ModeToggle";
 export { Container } from "./kit/layout/Container";
+export { Header } from "./kit/layout/Header";
 export { Hero } from "./kit/sections";
 export { Prompt } from "./kit/typography/Prompt";
