@@ -37,6 +37,8 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [Implementation Plan](docs/IMPLEMENTATION_PLAN.md)
+- [Feature Development Guide](docs/FEATURE_DEVELOPMENT_GUIDE.md)
+- [UI Implementation Guide](docs/UI_IMPLEMENTATION_GUIDE.md)
 - [Repo Specification](.cogni/repo-spec.yaml)
 - [Subdir AGENTS.md Policy](docs/templates/agents_subdir_template.md)
 - [Style & Lint Rules](docs/STYLE.md)

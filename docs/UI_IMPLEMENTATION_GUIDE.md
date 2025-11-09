@@ -14,6 +14,8 @@ Here's the ~50-line developer guide.
 
 **Docs:** docs/UI_IMPLEMENTATION_GUIDE.md (this guide), src/components/AGENTS.md, src/styles/AGENTS.md.
 
+**Building full features?** See [Feature Development Guide](FEATURE_DEVELOPMENT_GUIDE.md) for the complete architecture workflow.
+
 ## Rules (must follow)
 
 **No literal className anywhere** except src/styles/ui.ts.
