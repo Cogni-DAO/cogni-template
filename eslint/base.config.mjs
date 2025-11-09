@@ -1,9 +1,24 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@eslint/base.config.mjs`
+ * Purpose: Core ESLint rules for TypeScript, imports, and Node.js best practices.
+ * Scope: Covers TypeScript files, import sorting/resolution, code quality rules, process.env restrictions. Does not handle React/Next.js rules.
+ * Invariants: All TypeScript files validated; imports sorted; process.env restricted to allowed files.
+ * Side-effects: none
+ * Notes: Includes n/no-process-env rule with allowlist for env files and infrastructure.
+ * Links: eslint.config.mjs, app.config.mjs
+ * @public
+ */
+
 import js from "@eslint/js";
 import globals from "globals";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 import tsParser from "@typescript-eslint/parser";
 import prettierConfig from "eslint-config-prettier";
 import importPlugin from "eslint-plugin-import";
+import nodePlugin from "eslint-plugin-n";
 import simpleImportSort from "eslint-plugin-simple-import-sort";
 import tsdoc from "eslint-plugin-tsdoc";
 import unicorn from "eslint-plugin-unicorn";
@@ -49,6 +64,7 @@ export default [
       import: importPlugin,
       tsdoc: tsdoc,
       unicorn: unicorn,
+      n: nodePlugin,
     },
     rules: {
       ...tsPlugin.configs.strict.rules,
@@ -91,6 +107,9 @@ export default [
       "import/no-unresolved": "error",
       "import/no-cycle": "error",
 
+      // Node.js rules
+      "n/no-process-env": "error",
+
       // File header documentation: REUSE enforces SPDX, tsdoc validates TSDoc syntax
       "tsdoc/syntax": "error",
       // Avoid mid-code comments (allow eslint-disable and ts-ignore)
@@ -104,6 +123,19 @@ export default [
     settings: {
       "import/resolver": { typescript: true },
     },
+  },
+
+  // Allow process.env only in environment files and E2E infrastructure
+  {
+    files: [
+      "src/shared/env/**/*.{ts,tsx}",
+      "e2e/**/*.{ts,tsx}",
+      "playwright.config.ts",
+      "tests/**/*.ts",
+      "scripts/**/*.ts",
+      "docs/templates/**/*.ts",
+    ],
+    rules: { "n/no-process-env": "off" },
   },
 
   prettierConfig,
@@ -121,6 +153,7 @@ export default [
       "*.config.cjs",
       "test*/**/fixtures/**",
       "**/*.md",
+      "**/*.css",
       "**/.env*",
     ],
   },
