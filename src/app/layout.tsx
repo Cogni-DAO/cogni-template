@@ -38,7 +38,7 @@ export default function RootLayout({
   children: ReactNode;
 }>): ReactNode {
   return (
-    <html lang="en" className={manrope.className}>
+    <html lang="en" className={manrope.className} suppressHydrationWarning>
       <head>
         <Script src="/theme-init.js" strategy="beforeInteractive" />
       </head>

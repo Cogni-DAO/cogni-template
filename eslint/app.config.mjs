@@ -91,6 +91,17 @@ export default [
         },
       ],
 
+      // Block direct document.documentElement manipulation to enforce ThemeProvider usage
+      "no-restricted-properties": [
+        "error",
+        {
+          object: "document",
+          property: "documentElement",
+          message:
+            "Theme and <html> class mutations must go through ThemeProvider / ModeToggle.",
+        },
+      ],
+
       // React rules
       "react/react-in-jsx-scope": "off",
 
@@ -400,6 +411,14 @@ export default [
     files: ["src/**/font*.{ts,tsx}"],
     rules: {
       "no-inline-styles/no-inline-styles": "off",
+    },
+  },
+
+  // Theme initialization script override - allow document.documentElement access
+  {
+    files: ["public/theme-init.js"],
+    rules: {
+      "no-restricted-properties": "off",
     },
   },
 
