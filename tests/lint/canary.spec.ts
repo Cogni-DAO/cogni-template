@@ -88,4 +88,17 @@ describe("ESLint Config Canary", () => {
     const rules = cfg.rules ?? {};
     expect(rules["no-literal-classnames/no-literal-classnames"]?.[0]).toBe(2);
   });
+
+  it.skip("no-raw-tailwind rule enforced in source files", async () => {
+    const eslint = new ESLint({ cwd: process.cwd() });
+    const cfg = await eslint.calculateConfigForFile(
+      "src/components/kit/Button.tsx"
+    );
+    const rules = cfg.rules ?? {};
+
+    expect(
+      rules["no-raw-tailwind/no-raw-tailwind-classes"]?.[0] ??
+        rules["no-raw-tailwind/no-raw-tailwind-classes"]
+    ).toBe(2); // error (currently warn=1, so this will fail until we enforce)
+  });
 });
