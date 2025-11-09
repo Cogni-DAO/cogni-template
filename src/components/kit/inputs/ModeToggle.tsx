@@ -6,7 +6,7 @@
  * Purpose: Theme toggle dropdown component using shadcn DropdownMenu primitives with next-themes integration.
  * Scope: Provides ModeToggle dropdown with current theme display and selection options. Does not handle theme persistence (next-themes handles this).
  * Invariants: Uses next-themes hook; blocks className prop; forwards ref; shows current theme in trigger with icon + label.
- * Side-effects: theme state changes via setTheme, localStorage updates via next-themes
+ * Side-effects: global (theme state changes via setTheme; localStorage updates via next-themes)
  * Notes: Uses CVA factory from `@/styles/ui` for trigger styling; dropdown items show Light/Dark/System with active indicators.
  * Links: docs/UI_IMPLEMENTATION_GUIDE.md, next-themes documentation
  * @public
