@@ -27,8 +27,7 @@ const buttonToneVariants = {
     "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
   secondary:
     "bg-secondary text-secondary-foreground shadow-xs hover:bg-secondary/80",
-  ghost:
-    "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
+  ghost: "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
   link: "text-primary underline-offset-4 hover:underline",
 } as const;
 
@@ -58,12 +57,13 @@ const modeToggleBase =
 
 const modeToggleToneVariants = {
   ghost: "hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50",
-  outline: "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
+  outline:
+    "border bg-background shadow-xs hover:bg-accent hover:text-accent-foreground dark:bg-input/30 dark:border-input dark:hover:bg-input/50",
 } as const;
 
 const modeToggleSizeVariants = {
   sm: "h-8 w-8",
-  md: "h-9 w-9", 
+  md: "h-9 w-9",
   lg: "h-10 w-10",
   xl: "h-12 w-12",
 } satisfies Record<SizeKey, string>;
