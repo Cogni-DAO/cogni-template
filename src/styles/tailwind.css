@@ -126,8 +126,21 @@
 
   /* Icon sizes */
   --size-icon-sm: 1rem;
-  --size-icon-md: 1.5rem;
-  --size-icon-lg: 2rem;
+  --size-icon-md: 1.25rem;
+  --size-icon-lg: 1.5rem;
+  --size-icon-xl: 2rem;
+  --size-icon-2xl: 3rem;
+  --size-icon-3xl: 4rem;
+  --size-icon-4xl: 5rem;
+
+  /* Component widths */
+  --size-dropdown-sm: 8rem;
+  --size-dropdown-md: 9rem;
+  --size-dropdown-lg: 10rem;
+  --size-dropdown-xl: 12rem;
+
+  /* Terminal dots */
+  --size-dot: 0.75rem;
 
   /* Spacing scale */
   --spacing-xs: 0.25rem;

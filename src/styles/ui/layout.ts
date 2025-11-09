@@ -49,20 +49,20 @@ const spacingVariants = {
 
 const gapVariants = {
   none: "",
-  xs: "gap-1",
-  sm: "gap-4 lg:gap-6",
-  md: "gap-6 lg:gap-8",
-  lg: "gap-8 lg:gap-12",
-  xl: "gap-12 lg:gap-16",
+  xs: "gap-[var(--spacing-xs)]",
+  sm: "gap-[var(--spacing-xl)] lg:gap-[var(--spacing-lg)]",
+  md: "gap-[var(--spacing-lg)] lg:gap-[var(--spacing-xl)]",
+  lg: "gap-[var(--spacing-xl)] lg:gap-[var(--size-icon-xl)]",
+  xl: "gap-[var(--size-icon-xl)] lg:gap-[var(--size-icon-2xl)]",
 } satisfies Record<SpacingSemanticKey, string>;
 
 const paddingVariants = {
   none: "",
-  xs: "p-1",
-  sm: "p-2",
-  md: "p-4",
-  lg: "p-6",
-  xl: "p-8",
+  xs: "p-[var(--spacing-xs)]",
+  sm: "p-[var(--spacing-sm)]",
+  md: "p-[var(--spacing-md)]",
+  lg: "p-[var(--spacing-lg)]",
+  xl: "p-[var(--spacing-xl)]",
 } satisfies Record<SpacingSemanticKey, string>;
 
 /**
@@ -97,26 +97,32 @@ const twoColumnReverseVariants = {
 /**
  * Two-column responsive layout with optional reverse flow
  */
-export const twoColumn = cva("grid gap-8 lg:grid-cols-2 lg:items-center", {
-  variants: {
-    reverse: twoColumnReverseVariants,
-  },
-  defaultVariants: { reverse: false },
-});
+export const twoColumn = cva(
+  "grid gap-[var(--spacing-xl)] lg:grid-cols-2 lg:items-center",
+  {
+    variants: {
+      reverse: twoColumnReverseVariants,
+    },
+    defaultVariants: { reverse: false },
+  }
+);
 
 /**
  * Container styling for responsive layout wrappers with width and padding variants
  */
-export const container = cva("mx-auto px-4 sm:px-6 lg:px-8", {
-  variants: {
-    size: containerAllSizeVariants,
-    spacing: spacingVariants,
-  },
-  defaultVariants: {
-    size: "lg",
-    spacing: "none",
-  },
-});
+export const container = cva(
+  "mx-auto px-[var(--spacing-md)] sm:px-[var(--spacing-lg)] lg:px-[var(--spacing-xl)]",
+  {
+    variants: {
+      size: containerAllSizeVariants,
+      spacing: spacingVariants,
+    },
+    defaultVariants: {
+      size: "lg",
+      spacing: "none",
+    },
+  }
+);
 
 const sectionSurfaceVariants = {
   default: "",
@@ -167,11 +173,11 @@ export const grid = cva("", {
 // Row-specific gap variants (smaller scale than grid)
 const rowGapVariants = {
   none: "",
-  xs: "gap-2",
-  sm: "gap-3",
-  md: "gap-4",
-  lg: "gap-6",
-  xl: "gap-8",
+  xs: "gap-[var(--spacing-sm)]",
+  sm: "gap-[var(--size-dot)]",
+  md: "gap-[var(--spacing-md)]",
+  lg: "gap-[var(--spacing-lg)]",
+  xl: "gap-[var(--spacing-xl)]",
 } satisfies Record<SpacingSemanticKey, string>;
 
 /**

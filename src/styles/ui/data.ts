@@ -74,17 +74,19 @@ export const card = cva(
 /**
  * Card header styling for consistent spacing
  */
-export const cardHeader = cva("flex flex-col space-y-1.5 p-6");
+export const cardHeader = cva(
+  "flex flex-col space-y-[var(--spacing-sm)] p-[var(--spacing-lg)];"
+);
 
 /**
  * Card content styling with proper padding
  */
-export const cardContent = cva("p-6 pt-0");
+export const cardContent = cva("p-[var(--spacing-lg)] pt-0");
 
 /**
  * Card footer styling with border and spacing
  */
-export const cardFooter = cva("flex items-center p-6 pt-0");
+export const cardFooter = cva("flex items-center p-[var(--spacing-lg)] pt-0");
 
 const badgeIntentVariants = {
   default:
@@ -97,17 +99,17 @@ const badgeIntentVariants = {
 } as const;
 
 const badgeSizeVariants = {
-  sm: "px-1.5 py-0.5 text-xs",
-  md: "px-2.5 py-0.5 text-xs",
-  lg: "px-3 py-1 text-sm",
-  xl: "px-4 py-1.5 text-base",
+  sm: "px-[var(--spacing-sm)] py-[var(--spacing-xs)] text-xs",
+  md: "px-[var(--spacing-md)] py-[var(--spacing-xs)] text-xs",
+  lg: "px-[var(--spacing-lg)] py-[var(--spacing-sm)] text-sm",
+  xl: "px-[var(--spacing-xl)] py-[var(--spacing-sm)] text-base",
 } satisfies Record<SizeKey, string>;
 
 /**
  * Badge component styling for status indicators
  */
 export const badge = cva(
-  "inline-flex items-center rounded-md border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center rounded-md border px-[var(--spacing-md)] py-[var(--spacing-xs)] text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
   {
     variants: {
       intent: badgeIntentVariants,
@@ -121,17 +123,17 @@ export const badge = cva(
 );
 
 const iconBoxSizeVariants = {
-  sm: "h-8 w-8",
-  md: "h-12 w-12",
-  lg: "h-16 w-16",
-  xl: "h-20 w-20",
+  sm: "h-[var(--size-icon-lg)] w-[var(--size-icon-lg)]",
+  md: "h-[var(--size-icon-xl)] w-[var(--size-icon-xl)]",
+  lg: "h-[var(--size-icon-2xl)] w-[var(--size-icon-2xl)]",
+  xl: "h-[var(--size-icon-3xl)] w-[var(--size-icon-3xl)]",
 } satisfies Record<SizeKey, string>;
 
 const iconBoxColorVariants = {
-  orange: "bg-orange-500",
-  blue: "bg-blue-500",
-  green: "bg-green-500",
-  red: "bg-red-500",
+  orange: "bg-warning",
+  blue: "bg-primary",
+  green: "bg-success",
+  red: "bg-danger",
 } as const;
 
 /**

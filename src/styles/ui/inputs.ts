@@ -32,13 +32,16 @@ const buttonToneVariants = {
 } as const;
 
 const buttonSizeVariants = {
-  sm: "h-8 rounded-md gap-1.5 px-3 has-[>svg]:px-2.5",
-  md: "h-9 px-4 py-2 has-[>svg]:px-3",
-  lg: "h-10 rounded-md px-6 has-[>svg]:px-4",
-  xl: "h-12 rounded-lg px-8 has-[>svg]:px-6",
+  sm: "h-[var(--size-icon-lg)] rounded-md gap-[var(--spacing-sm)] px-[var(--spacing-lg)] has-[>svg]:px-[var(--spacing-md)]",
+  md: "h-[var(--size-icon-xl)] px-[var(--spacing-xl)] py-[var(--spacing-sm)] has-[>svg]:px-[var(--spacing-lg)]",
+  lg: "h-[var(--size-icon-2xl)] rounded-md px-[var(--spacing-lg)] has-[>svg]:px-[var(--spacing-xl)]",
+  xl: "h-[var(--size-icon-3xl)] rounded-lg px-[var(--spacing-xl)] has-[>svg]:px-[var(--spacing-lg)]",
 } satisfies Record<SizeKey, string>;
 
-const buttonIconVariants = { true: "size-9", false: "" } as const;
+const buttonIconVariants = {
+  true: "size-[var(--size-icon-xl)]",
+  false: "",
+} as const;
 
 /**
  * Button component styling matching reference repo with modern focus states
@@ -62,10 +65,10 @@ const modeToggleToneVariants = {
 } as const;
 
 const modeToggleSizeVariants = {
-  sm: "h-8 w-8",
-  md: "h-9 w-9",
-  lg: "h-10 w-10",
-  xl: "h-12 w-12",
+  sm: "h-[var(--size-icon-lg)] w-[var(--size-icon-lg)]",
+  md: "h-[var(--size-icon-xl)] w-[var(--size-icon-xl)]",
+  lg: "h-[var(--size-icon-2xl)] w-[var(--size-icon-2xl)]",
+  xl: "h-[var(--size-icon-3xl)] w-[var(--size-icon-3xl)]",
 } satisfies Record<SizeKey, string>;
 
 /**

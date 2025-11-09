@@ -138,7 +138,7 @@ export const prose = cva("prose", {
 
 const promptToneVariants = {
   default: "text-foreground",
-  success: "text-green-400",
+  success: "text-success",
 } as const;
 
 const promptFamilyVariants = {
@@ -164,7 +164,7 @@ export const prompt = cva("", {
 /**
  * Accent text styling for highlighted spans
  */
-export const textAccent = cva("block text-orange-500");
+export const textAccent = cva("block text-warning");
 
 const brandTextSizeVariants = {
   sm: "text-base font-semibold",
