@@ -175,6 +175,7 @@
             "README\\.md|CONTRIBUTING\\.md|SECURITY\\.md|CODE_OF_CONDUCT\\.md|",
             "LICENSE(\\..*)?|",
             "AGENTS\\.md|AGENTS_template\\.md|CLAUDE\\.md|",
+            "Dockerfile|",
             "\\.editorconfig|\\.gitignore|\\.nvmrc|\\.prettierignore|\\.prettierrc(\\..*)?|",
             "\\.env\\.example|",
             "\\.mcp\\.json|",

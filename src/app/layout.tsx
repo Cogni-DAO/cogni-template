@@ -20,7 +20,7 @@ import Script from "next/script";
 import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
 
-import { Header } from "@/components";
+import { Header, SkipLink } from "@/components";
 import { pageShell } from "@/styles/ui";
 
 const manrope = Manrope({
@@ -43,6 +43,7 @@ export default function RootLayout({
         <Script src="/theme-init.js" strategy="beforeInteractive" />
       </head>
       <body className={pageShell()}>
+        <SkipLink />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
@@ -50,7 +51,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Header />
-          {children}
+          <main id="main">{children}</main>
         </ThemeProvider>
       </body>
     </html>

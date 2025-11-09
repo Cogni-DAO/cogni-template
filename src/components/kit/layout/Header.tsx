@@ -16,12 +16,12 @@ import { CircleIcon } from "lucide-react";
 import Link from "next/link";
 import type { ReactElement } from "react";
 
-import { Container, ModeToggle } from "@/components";
-import { brandText, header, icon, navLink, row } from "@/styles/ui";
+import { Container, ModeToggle, NavigationLink } from "@/components";
+import { brandText, header, icon, row } from "@/styles/ui";
 
 export function Header(): ReactElement {
   return (
-    <header className={header()}>
+    <header role="banner" className={header()}>
       <Container size="lg">
         <div
           className={row({ justify: "between", align: "center", gap: "md" })}
@@ -32,13 +32,13 @@ export function Header(): ReactElement {
           </Link>
 
           <div className={row({ align: "center", gap: "md" })}>
-            <nav className={row({ align: "center", gap: "md" })}>
-              <Link href="/pricing" className={navLink({ size: "sm" })}>
-                Pricing
-              </Link>
-              <Link href="/docs" className={navLink({ size: "sm" })}>
-                Docs
-              </Link>
+            <nav
+              aria-label="Primary"
+              className={row({ align: "center", gap: "md" })}
+            >
+              <NavigationLink href="/">Home</NavigationLink>
+              <NavigationLink href="/pricing">Pricing</NavigationLink>
+              <NavigationLink href="/docs">Docs</NavigationLink>
             </nav>
 
             <ModeToggle />

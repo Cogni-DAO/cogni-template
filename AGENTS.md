@@ -51,6 +51,6 @@ pnpm build          # build for production
 pnpm check          # lint + type + format validation
 pnpm test           # run unit tests
 pnpm format         # prettier format fixes
-pnpm check:agentsmd # lint AGENTS.md documentation
+pnpm check:docs # lint AGENTS.md documentation
 pnpm e2e            # end-to-end tests
 ```

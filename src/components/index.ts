@@ -19,5 +19,7 @@ export { Button } from "./kit/inputs/Button";
 export { ModeToggle } from "./kit/inputs/ModeToggle";
 export { Container } from "./kit/layout/Container";
 export { Header } from "./kit/layout/Header";
+export { NavigationLink } from "./kit/navigation/NavigationLink";
+export { SkipLink } from "./kit/navigation/SkipLink";
 export { Hero } from "./kit/sections";
 export { Prompt } from "./kit/typography/Prompt";

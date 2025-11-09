@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-08
+- **Last reviewed:** 2025-11-09
 - **Status:** draft
 
 ## Purpose
@@ -42,7 +42,7 @@ Shared presentational UI. No business logic, no data fetching. Design tokens and
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none
-- **Files considered API:** `index.ts`, `widgets/*/index.tsx`, `ui/index.ts`
+- **Files considered API:** `index.ts`, `kit/*/index.tsx`
 
 ## Ports (optional)
 
