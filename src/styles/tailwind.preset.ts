@@ -14,6 +14,8 @@
 
 import {
   colorKeys,
+  type DropdownSizeKey,
+  dropdownSizeKeys,
   type IconSizeKey,
   iconSizeKeys,
   type RadiusKey,
@@ -46,3 +48,11 @@ export const spacing = Object.fromEntries(
 export const size = Object.fromEntries(
   iconSizeKeys.map((key) => [`icon-${key}`, `var(--size-icon-${key})`])
 ) as Record<`icon-${IconSizeKey}`, string>;
+
+// Width tokens for dropdowns and components
+export const width = Object.fromEntries(
+  dropdownSizeKeys.map((key) => [
+    `dropdown-${key}`,
+    `var(--size-dropdown-${key})`,
+  ])
+) as Record<`dropdown-${DropdownSizeKey}`, string>;

@@ -83,5 +83,17 @@ export const statusKeys = ["danger", "warning", "success"] as const;
 export type StatusKey = (typeof statusKeys)[number];
 
 // Icon size keys (for consistent icon sizing)
-export const iconSizeKeys = ["sm", "md", "lg"] as const;
+export const iconSizeKeys = [
+  "sm",
+  "md",
+  "lg",
+  "xl",
+  "2xl",
+  "3xl",
+  "4xl",
+] as const;
 export type IconSizeKey = (typeof iconSizeKeys)[number];
+
+// Dropdown size keys (for dropdown width variants)
+export const dropdownSizeKeys = ["sm", "md", "lg", "xl"] as const;
+export type DropdownSizeKey = (typeof dropdownSizeKeys)[number];

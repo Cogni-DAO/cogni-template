@@ -43,32 +43,39 @@ export const terminalFrame = cva("rounded-lg shadow-lg font-mono", {
 } as const);
 
 const terminalDotColorVariants = {
-  red: "bg-red-500",
-  yellow: "bg-amber-500",
-  green: "bg-green-500",
+  red: "bg-danger",
+  yellow: "bg-warning",
+  green: "bg-success",
 } as const;
 
 /**
  * Terminal dot styling for window controls
  */
-export const terminalDot = cva("h-3 w-3 rounded-full", {
-  variants: {
-    color: terminalDotColorVariants,
-  } as const,
-  defaultVariants: {
-    color: "red",
-  },
-});
+export const terminalDot = cva(
+  "h-[var(--size-dot)] w-[var(--size-dot)] rounded-full",
+  {
+    variants: {
+      color: terminalDotColorVariants,
+    } as const,
+    defaultVariants: {
+      color: "red",
+    },
+  }
+);
 
 /**
  * Terminal header styling for window controls bar
  */
-export const terminalHeader = cva("flex items-center justify-between p-4");
+export const terminalHeader = cva(
+  "flex items-center justify-between p-[var(--spacing-md)] mb-[var(--spacing-xs)]"
+);
 
 /**
  * Terminal body styling for content area
  */
-export const terminalBody = cva("p-4 space-y-2");
+export const terminalBody = cva(
+  "p-[var(--spacing-md)] space-y-[var(--spacing-sm)]"
+);
 
 /**
  * Icon button styling for interactive icons
@@ -85,10 +92,10 @@ const iconToneVariants = {
 } as const;
 
 const iconSizeVariants = {
-  sm: "h-4 w-4",
-  md: "h-5 w-5",
-  lg: "h-6 w-6",
-  xl: "h-8 w-8",
+  sm: "h-[var(--size-icon-sm)] w-[var(--size-icon-sm)]",
+  md: "h-[var(--size-icon-md)] w-[var(--size-icon-md)]",
+  lg: "h-[var(--size-icon-lg)] w-[var(--size-icon-lg)]",
+  xl: "h-[var(--size-icon-xl)] w-[var(--size-icon-xl)]",
 } satisfies Record<SizeKey, string>;
 
 /**
@@ -184,10 +191,10 @@ export const navLink = cva("transition-colors", {
 });
 
 const dropdownContentSizeVariants = {
-  sm: "w-32",
-  md: "w-36",
-  lg: "w-40",
-  xl: "w-48",
+  sm: "w-[var(--size-dropdown-sm)]",
+  md: "w-[var(--size-dropdown-md)]",
+  lg: "w-[var(--size-dropdown-lg)]",
+  xl: "w-[var(--size-dropdown-xl)]",
 } satisfies Record<SizeKey, string>;
 
 /**
@@ -205,13 +212,15 @@ export const dropdownContent = cva("", {
 /**
  * Dropdown menu item styling with icon and text layout
  */
-export const dropdownMenuItem = cva("flex items-center gap-2");
+export const dropdownMenuItem = cva(
+  "flex items-center gap-[var(--spacing-sm)]"
+);
 
 const dropdownMenuCheckSizeVariants = {
-  sm: "h-4 w-4 ml-auto",
-  md: "h-5 w-5 ml-auto",
-  lg: "h-6 w-6 ml-auto",
-  xl: "h-8 w-8 ml-auto",
+  sm: "h-[var(--size-icon-sm)] w-[var(--size-icon-sm)] ml-auto",
+  md: "h-[var(--size-icon-md)] w-[var(--size-icon-md)] ml-auto",
+  lg: "h-[var(--size-icon-lg)] w-[var(--size-icon-lg)] ml-auto",
+  xl: "h-[var(--size-icon-xl)] w-[var(--size-icon-xl)] ml-auto",
 } satisfies Record<SizeKey, string>;
 
 /**
