@@ -16,7 +16,6 @@ Shared presentational UI. No business logic, no data fetching. Design tokens and
 
 - [Architecture](../../docs/ARCHITECTURE.md)
 - [UI Implementation Guide](../../docs/UI_IMPLEMENTATION_GUIDE.md)
-- [Updating shadcn/ui](../../docs/UPDATING_SHADCN.md)
 
 ## Boundaries
 

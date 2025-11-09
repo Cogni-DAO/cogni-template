@@ -15,7 +15,6 @@ Vendored UI primitive building blocks copied into the repository for local maint
 ## Pointers
 
 - [UI Implementation Guide](../../../../docs/UI_IMPLEMENTATION_GUIDE.md)
-- [Updating shadcn](../../../../docs/UPDATING_SHADCN.md)
 
 ## Boundaries
 
@@ -76,6 +75,8 @@ pnpm build -w path/to/this
 
 ## Notes
 
+- In general, NO editing code in this dir. Direct OSS copies only. Allowed edits:
+  - Minimal TypeScript compatibility patches (no behavioral changes).
 - Folder structure: shadcn/, radix-examples/ (only if you copy example code)
 - \_vendor_utils.ts: local cn helper so vendor code doesn't import repo utils
 - ESLint blocks @/\* imports in vendor/\*\*, allows clsx/tailwind-merge only here
