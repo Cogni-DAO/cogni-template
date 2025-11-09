@@ -271,6 +271,7 @@ export default [
         "postcss.config.mjs",
         "next.config.ts",
         "tailwind.config.ts",
+        "playwright.config.ts",
         "commitlint.config.cjs",
       ],
       tailwindcss: {
@@ -417,6 +418,14 @@ export default [
   // Theme initialization script override - allow document.documentElement access
   {
     files: ["public/theme-init.js"],
+    rules: {
+      "no-restricted-properties": "off",
+    },
+  },
+
+  // E2E tests override - allow document.documentElement access for theme testing
+  {
+    files: ["e2e/**/*.{ts,spec.ts}"],
     rules: {
       "no-restricted-properties": "off",
     },

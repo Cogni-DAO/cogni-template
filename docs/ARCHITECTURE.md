@@ -101,7 +101,7 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] CHANGELOG.md # releases
 [ ] middleware.ts # headers, session/API-key guard, basic rate-limit
 [x] vitest.config.mts # unit/integration
-[ ] playwright.config.ts # UI/e2e
+[x] playwright.config.ts # UI/e2e
 
 [x] docs/
 [x] ├── ARCHITECTURE.md # narrative + diagrams (longform)
