@@ -6,7 +6,7 @@
  * Purpose: Browser instrumentation for tracking HTML class mutations during page load.
  * Scope: Sets up MutationObserver for <html> class changes and counter. Does not affect page functionality.
  * Invariants: Counts class attribute changes on documentElement; initializes counter to 0.
- * Side-effects: global (modifies window.__classChangeCount__, adds MutationObserver)
+ * Side-effects: global
  * Notes: Used by theme FOUC prevention tests to detect class thrashing.
  * Links: e2e/types/global.d.ts
  * @internal
