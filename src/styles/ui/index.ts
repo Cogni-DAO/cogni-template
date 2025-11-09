@@ -17,6 +17,7 @@ export {
   container,
   flex,
   grid,
+  header,
   pad,
   pageContainer,
   pageShell,
@@ -39,7 +40,7 @@ export {
 } from "./data";
 
 // Input components
-export { button } from "./inputs";
+export { button, modeToggle } from "./inputs";
 
 // Typography components
 export { heading, paragraph, prompt, prose, textAccent } from "./typography";
@@ -53,6 +54,7 @@ export {
   terminalDot,
   terminalFrame,
   terminalHeader,
+  themeIcon,
 } from "./overlays";
 
 // Export variant types for external use

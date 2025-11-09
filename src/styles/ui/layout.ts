@@ -207,5 +207,19 @@ export const flex = cva("flex", {
   },
 });
 
+/**
+ * Header styling for site header with border, background, and padding
+ */
+export const header = cva("border-b border-border bg-background", {
+  variants: {
+    pad: {
+      md: "py-4",
+    },
+  },
+  defaultVariants: {
+    pad: "md",
+  },
+});
+
 // Export variant types for external use
 export type ContainerSize = VariantProps<typeof container>["size"];

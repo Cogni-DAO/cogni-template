@@ -86,6 +86,21 @@ export const icon = cva("", {
 });
 
 /**
+ * Theme icon animation for smooth transitions in ModeToggle
+ */
+export const themeIcon = cva("transition-all", {
+  variants: {
+    state: {
+      visible: "rotate-0 scale-100",
+      hidden: "rotate-90 scale-0",
+    },
+  } as const,
+  defaultVariants: {
+    state: "visible",
+  },
+});
+
+/**
  * Reveal animation styling for progressive disclosure patterns
  */
 export const reveal = cva("transition-opacity", {
