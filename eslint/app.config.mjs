@@ -423,6 +423,14 @@ export default [
     },
   },
 
+  // E2E tests override - allow document.documentElement access for theme testing
+  {
+    files: ["e2e/**/*.{ts,spec.ts}"],
+    rules: {
+      "no-restricted-properties": "off",
+    },
+  },
+
   // Allow layout.tsx to import global Tailwind CSS
   {
     files: ["src/app/layout.tsx"],
