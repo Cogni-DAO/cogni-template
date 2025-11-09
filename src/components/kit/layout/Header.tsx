@@ -17,36 +17,30 @@ import Link from "next/link";
 import type { ReactElement } from "react";
 
 import { Container, ModeToggle } from "@/components";
-import { header, row } from "@/styles/ui";
+import { brandText, header, icon, navLink, row } from "@/styles/ui";
 
 export function Header(): ReactElement {
   return (
     <header className={header()}>
       <Container size="lg">
-        <div className={row({ justify: "between", align: "center", gap: "md" })}>
+        <div
+          className={row({ justify: "between", align: "center", gap: "md" })}
+        >
           <Link href="/" className={row({ align: "center", gap: "sm" })}>
-            <CircleIcon className="h-6 w-6 text-primary" />
-            <span className="text-xl font-semibold text-foreground">
-              Cogni
-            </span>
+            <CircleIcon className={icon({ size: "lg", tone: "primary" })} />
+            <span className={brandText({ size: "lg" })}>Cogni</span>
           </Link>
-          
+
           <div className={row({ align: "center", gap: "md" })}>
             <nav className={row({ align: "center", gap: "md" })}>
-              <Link
-                href="/pricing"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
+              <Link href="/pricing" className={navLink({ size: "sm" })}>
                 Pricing
               </Link>
-              <Link
-                href="/docs"
-                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-              >
+              <Link href="/docs" className={navLink({ size: "sm" })}>
                 Docs
               </Link>
             </nav>
-            
+
             <ModeToggle />
           </div>
         </div>
