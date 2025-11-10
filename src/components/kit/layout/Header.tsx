@@ -16,7 +16,12 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactElement } from "react";
 
-import { Container, ModeToggle, NavigationLink } from "@/components";
+import {
+  Container,
+  GithubButton,
+  ModeToggle,
+  NavigationLink,
+} from "@/components";
 import { brandText, header, row } from "@/styles/ui";
 
 export function Header(): ReactElement {
@@ -45,6 +50,19 @@ export function Header(): ReactElement {
             >
               <NavigationLink href="/docs">Docs</NavigationLink>
             </nav>
+
+            <GithubButton
+              username="cogni-DAO"
+              repo="cogni-template"
+              size="lg"
+              variant="outline"
+              showGithubIcon={true}
+              showStarIcon={true}
+              initialStars={0}
+              targetStars={1729}
+              autoAnimate={true}
+              animationDuration={10}
+            />
 
             <ModeToggle />
           </div>

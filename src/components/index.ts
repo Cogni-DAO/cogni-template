@@ -14,6 +14,7 @@
 
 export { Reveal } from "./kit/animation/Reveal";
 export { Avatar, AvatarFallback, AvatarImage } from "./kit/data-display/Avatar";
+export { GithubButton } from "./kit/data-display/GithubButton";
 export { TerminalFrame } from "./kit/data-display/TerminalFrame";
 export { Button } from "./kit/inputs/Button";
 export { ModeToggle } from "./kit/inputs/ModeToggle";
