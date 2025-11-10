@@ -12,12 +12,12 @@
  * @public
  */
 
-import { CircleIcon } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import type { ReactElement } from "react";
 
 import { Container, ModeToggle, NavigationLink } from "@/components";
-import { brandText, header, icon, row } from "@/styles/ui";
+import { brandText, header, row } from "@/styles/ui";
 
 export function Header(): ReactElement {
   return (
@@ -27,8 +27,15 @@ export function Header(): ReactElement {
           className={row({ justify: "between", align: "center", gap: "md" })}
         >
           <Link href="/" className={row({ align: "center", gap: "sm" })}>
-            <CircleIcon className={icon({ size: "lg", tone: "primary" })} />
-            <span className={brandText({ size: "lg" })}>Cogni</span>
+            <Image
+              src="/TransparentBrainOnly.png"
+              alt="Cogni Brain Logo"
+              width={32}
+              height={32}
+            />
+            <span className={brandText({ size: "lg", tone: "gradient" })}>
+              Cogni
+            </span>
           </Link>
 
           <div className={row({ align: "center", gap: "md" })}>
@@ -36,8 +43,6 @@ export function Header(): ReactElement {
               aria-label="Primary"
               className={row({ align: "center", gap: "md" })}
             >
-              <NavigationLink href="/">Home</NavigationLink>
-              <NavigationLink href="/pricing">Pricing</NavigationLink>
               <NavigationLink href="/docs">Docs</NavigationLink>
             </nav>
 

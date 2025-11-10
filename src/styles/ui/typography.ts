@@ -204,6 +204,8 @@ const brandTextToneVariants = {
   default: "text-foreground",
   subdued: "text-muted-foreground",
   invert: "text-background",
+  gradient:
+    "bg-gradient-to-r from-chart-2 via-chart-1 to-chart-4 bg-clip-text text-transparent",
 } as const;
 
 /**
