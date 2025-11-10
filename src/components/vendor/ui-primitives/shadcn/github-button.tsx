@@ -101,14 +101,14 @@ function GithubButton({
   inViewOptions = { once: true },
   transition,
   ...props
-}: GithubButtonProps) {
+}: GithubButtonProps): React.JSX.Element {
   const [currentStars, setCurrentStars] = useState(initialStars);
   const [isAnimating, setIsAnimating] = useState(false);
   const [starProgress, setStarProgress] = useState(filled ? 100 : 0);
   const [hasAnimated, setHasAnimated] = useState(false);
 
   // Format number with units
-  const formatNumber = (num: number) => {
+  const formatNumber = (num: number): string => {
     const units = ["k", "M", "B", "T"];
 
     if (roundStars && num >= 1000) {
@@ -138,7 +138,7 @@ function GithubButton({
     const endValue = targetStars;
     const duration = animationDuration * 1000;
 
-    const animate = () => {
+    const animate = (): void => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
 
@@ -196,7 +196,7 @@ function GithubButton({
     }
   }, [autoAnimate, useInViewTrigger, isInView, hasAnimated, startAnimation]);
 
-  const navigateToRepo = () => {
+  const navigateToRepo = (): void => {
     if (!repoUrl) {
       return;
     }
@@ -224,7 +224,7 @@ function GithubButton({
     }
   };
 
-  const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+  const handleClick = (event: React.MouseEvent<HTMLButtonElement>): void => {
     if (onClick) {
       onClick(event);
       return;
@@ -237,7 +237,9 @@ function GithubButton({
     }
   };
 
-  const handleKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+  const handleKeyDown = (
+    event: React.KeyboardEvent<HTMLButtonElement>
+  ): void => {
     // Handle Enter and Space key presses for accessibility
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
