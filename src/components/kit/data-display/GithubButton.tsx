@@ -4,9 +4,9 @@
 /**
  * Module: `@components/kit/data-display/GithubButton`
  * Purpose: GitHub stars button wrapper component with typed props and CVA integration.
- * Scope: Provides GitHub stars button functionality without className prop. Uses vendor component internally.
+ * Scope: Provides GitHub stars button functionality without className prop. Uses vendor component internally. Does not fetch live GitHub data or handle authentication.
  * Invariants: No className forwarding; uses typed props only; integrates with design system.
- * Side-effects: Makes GitHub API calls for live star counts
+ * Side-effects: none
  * Notes: Wraps vendor GithubButton component to enforce architecture patterns.
  * Links: docs/UI_IMPLEMENTATION_GUIDE.md
  * @public

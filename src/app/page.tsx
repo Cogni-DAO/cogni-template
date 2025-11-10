@@ -57,23 +57,23 @@ export default function HomePage(): ReactElement {
         <div className={container({ size: "lg", spacing: "xl" })}>
           <div className={grid({ cols: "12", gap: "md" })}>
             <div className={heroTextWrapper({ width: "fixed" })}>
-              <h1 className={heading({ level: "h1" })}>
-                <span className={codeSyntax({ token: "operator" })} style={{ paddingRight: "20px" }}>while</span>
-                <span className={codeSyntax({ token: "variable" })} style={{ paddingRight: "5px" }}>
+              <h1 className={heading({ level: "h1", family: "mono", weight: "regular" })}>
+                <span className={`${codeSyntax({ token: "operator" })} pr-[var(--spacing-hero-xl)]`}>while</span>
+                <span className={`${codeSyntax({ token: "variable" })} pr-[var(--spacing-hero-xs)]`}>
                   together
                 </span>
-                <span className={codeSyntax({ token: "parenthesis" })} style={{ paddingRight: "5px" }}>(</span>
-                <span style={{ display: "inline-block", width: "170px" }}>
-                  <HeroActionWords actions={HERO_ACTIONS} token="delimiter" />
+                <span className={`${codeSyntax({ token: "parenthesis" })} pr-[var(--spacing-hero-xs)]`}>(</span>
+                <span className="inline-block w-[var(--width-action-words)]">
+                  <HeroActionWords actions={HERO_ACTIONS} token="keyword" />
                 </span>
-                <span className={codeSyntax({ token: "parenthesis" })} style={{ paddingRight: "5px" }}>)</span>
-                <span className={codeSyntax({ token: "delimiter" })} style={{ paddingRight: "5px" }}>
+                <span className={`${codeSyntax({ token: "parenthesis" })} pr-[var(--spacing-hero-xs)]`}>)</span>
+                <span className={`${codeSyntax({ token: "delimiter" })} pr-[var(--spacing-hero-xs)]`}>
                   {"{"}
                 </span>
-                <div style={{ paddingTop: "20px" }} />
+                <div className="pt-[var(--spacing-hero-xl)]" />
               </h1>
-              <h1 className={heading({ level: "h1", tone: "subdued" })}>
-                <span className={codeSyntax({ token: "operator" } )} style={{paddingRight: "135px"}}></span>{" "}
+              <h1 className={heading({ level: "h1", tone: "subdued", family: "mono", weight: "regular" })}>
+                <span className={`${codeSyntax({ token: "operator" })} pr-[var(--spacing-rainbow)]`}></span>{" "}
                 <span className={codeSyntax({ token: "property" })}>
                   community
                 </span>
@@ -81,8 +81,8 @@ export default function HomePage(): ReactElement {
                   {"++;"}
                 </span>
               </h1>
-              <div style={{ paddingTop: "20px" }} />
-              <h1 className={heading({ level: "h1", tone: "subdued" })}>
+              <div className="pt-[var(--spacing-hero-xl)]" />
+              <h1 className={heading({ level: "h1", tone: "subdued", family: "mono", weight: "regular" })}>
                 <span className={codeSyntax({ token: "delimiter" })}>
                   {" }"}
                 </span>

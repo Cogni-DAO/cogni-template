@@ -38,6 +38,7 @@ export const colorKeys = [
   "chart-3",
   "chart-4",
   "chart-5",
+  "chart-6",
 ] as const;
 
 // Radius token keys (semantic keys for CVA props - map to CSS vars)

@@ -135,6 +135,7 @@ function findHeader(
   // allow up to 2 SPDX lines
   let spdxCount = 0;
   while (i < lines.length && lines[i] && SPDX_LINE.test(lines[i] ?? "")) {
+    i++
     spdxCount++;
     i++;
     if (spdxCount > 2) break;

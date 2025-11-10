@@ -172,7 +172,7 @@ export const textAccent = cva("block text-warning");
 export const heroActionWords = cva("text-primary font-semibold");
 
 const codeSyntaxTokenVariants = {
-  keyword: "!text-chart-1",
+  keyword: "!text-chart-6",
   operator: "!text-chart-2",
   variable: "!text-chart-5",
   punctuation: "!text-muted-foreground",
