@@ -12,26 +12,24 @@
  * @public
  */
 
-// VALUE_PREFIX: Comprehensive list of all value-bearing Tailwind utility prefixes
-// These utilities carry values (colors, sizes, spacing, etc.) and must be tokenized
-const VALUE_PREFIX =
-  /^(bg|text|border|from|to|via|fill|stroke|ring|ring-offset|h|min-h|max-h|w|min-w|max-w|size|p|px|py|pt|pr|pb|pl|m|mx|my|mt|mr|mb|ml|gap|space-x|space-y|rounded|rounded-t|rounded-r|rounded-b|rounded-l|rounded-tl|rounded-tr|rounded-br|rounded-bl|top|right|bottom|left|inset|inset-x|inset-y|z|opacity|duration|delay|scale|scale-x|scale-y|rotate|translate-x|translate-y|leading|tracking)-/;
-
-// ALLOWED_VAR: Generalized token reference pattern - any utility with var(--token) format
+// ALLOWED_VAR: Token reference pattern - any utility with var(--token) format
 const ALLOWED_VAR =
   /^[a-z0-9-]+-\[(?:var\(--[a-z0-9-]+\)|hsl\(var\(--[a-z0-9-]+\)\))\]$/i;
 
 // ALLOWED_SEMANTIC_COLOR: Semantic color tokens for color-related utilities
 const ALLOWED_SEMANTIC_COLOR =
-  /^(bg|text|border|from|to|via|fill|stroke|ring)-(background|foreground|card|popover|primary|secondary|muted|accent|destructive|border|input|ring|chart-[1-5])(-foreground)?$/;
+  /^(bg|text|border|from|to|via|fill|stroke|ring|ring-offset)-(background|foreground|card|popover|primary|secondary|muted|accent|destructive|border|input|ring|chart-[1-5])(-foreground)?$/;
 
 // ALLOWED_SEMANTIC_SIZE: Semantic size tokens for sizing utilities
 const ALLOWED_SEMANTIC_SIZE =
   /^(h|w|gap|rounded|rounded-t|rounded-r|rounded-b|rounded-l|rounded-tl|rounded-tr|rounded-br|rounded-bl)-(none|sm|md|lg|xl|full)$/;
 
-// SCALE_SUFFIX: Detects raw scale values that should be tokenized
-// Catches numeric scales, fractions, and named scales (xs, sm, lg, xl, 2xl, etc.)
-const SCALE_SUFFIX = /^(?:\d.*|[0-9]+\/[0-9]+|xs|sm|base|lg|xl|[2-9]xl)$/;
+// RAW_COLOR_SUFFIX: named palette or basic colors => must be tokenized
+const RAW_COLOR_SUFFIX =
+  /^(black|white|transparent|current|(red|rose|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|slate|gray|zinc|neutral|stone)(-[0-9]{2,3})?)$/;
+
+// SCALE_SUFFIX: any numeric / fraction / scale-ish suffix
+const SCALE_SUFFIX = /(\d|[0-9]+\/[0-9]+|xs|sm|base|lg|xl|[2-9]xl)$/;
 
 /**
  * Check individual Tailwind class token for violations
@@ -39,34 +37,44 @@ const SCALE_SUFFIX = /^(?:\d.*|[0-9]+\/[0-9]+|xs|sm|base|lg|xl|[2-9]xl)$/;
  * @returns {string | null} - Error message or null if valid
  */
 function checkClassToken(token) {
-  // Skip non-value-bearing utilities (structural classes like flex, grid, etc.)
-  if (!VALUE_PREFIX.test(token)) return null;
+  const original = token;
+
+  // Ignore structural utilities with no '-' at all (e.g. "flex", "grid")
+  if (!original.includes("-")) return null;
+
+  // Handle negative utilities: -translate-y-2, -mt-4, etc.
+  const negativeStripped = original.startsWith("-")
+    ? original.slice(1)
+    : original;
+  const t = negativeStripped;
 
   // Allow tokenized variants: prefix-[var(--token)]
-  if (ALLOWED_VAR.test(token)) return null;
+  if (ALLOWED_VAR.test(t)) return null;
 
-  // Allow semantic color utilities
-  if (ALLOWED_SEMANTIC_COLOR.test(token)) return null;
+  // Allow semantic utilities first
+  if (ALLOWED_SEMANTIC_COLOR.test(t)) return null;
+  if (ALLOWED_SEMANTIC_SIZE.test(t)) return null;
 
-  // Allow semantic size utilities
-  if (ALLOWED_SEMANTIC_SIZE.test(token)) return null;
-
-  // Extract suffix after the prefix
-  const match = token.match(/^[a-z0-9-]+-(.+)$/);
+  // Split into prefix + suffix (first dash only)
+  const match = t.match(/^([a-z0-9-]+)-(.*)$/i);
   if (!match) return null;
 
-  const suffix = match[1];
+  const suffix = match[2];
 
-  // Flag bracket notation that's not a token reference
-  if (suffix.startsWith("[") && !ALLOWED_VAR.test(token)) {
-    return `Raw Tailwind value "${token}" is not allowed. Use a tokenized variant (prefix-[var(--token)]) or a semantic utility.`;
+  // Arbitrary values must be tokenized: prefix-[...]
+  if (suffix.startsWith("[")) {
+    if (!ALLOWED_VAR.test(t)) {
+      return `Raw Tailwind value "${original}" is not allowed. Use a tokenized variant (prefix-[var(--token)]) or a semantic utility.`;
+    }
+    return null;
   }
 
-  // Flag scale-based suffixes (numeric, named scales)
-  if (SCALE_SUFFIX.test(suffix)) {
-    return `Raw Tailwind value "${token}" is not allowed. Use a tokenized variant (prefix-[var(--token)]) or a semantic utility.`;
+  // Raw palette suffixes or scale-like suffixes must be tokenized or semantic
+  if (RAW_COLOR_SUFFIX.test(suffix) || SCALE_SUFFIX.test(suffix)) {
+    return `Raw Tailwind value "${original}" is not allowed. Use a tokenized variant (prefix-[var(--token)]) or a semantic utility.`;
   }
 
+  // Anything else: treated as structural or semantic we don't care about
   return null;
 }
 
@@ -76,12 +84,19 @@ function checkClassToken(token) {
  * @returns {string | null} - Error message or null if valid
  */
 function checkText(text) {
-  // Split text into potential class tokens and check each one
-  const tokens = text.split(/\s+/);
+  const rawTokens = text.split(/\s+/);
 
-  for (const token of tokens) {
-    const error = checkClassToken(token);
-    if (error) return error;
+  for (const rawToken of rawTokens) {
+    if (!rawToken) continue;
+
+    // Split variant chains: hover:bg-red-500 -> ["hover", "bg-red-500"]
+    const segments = rawToken.split(":");
+
+    for (const segment of segments) {
+      if (!segment) continue;
+      const error = checkClassToken(segment);
+      if (error) return error;
+    }
   }
 
   return null;
