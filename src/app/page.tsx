@@ -15,7 +15,7 @@
 import { ArrowRight, CreditCard, Database } from "lucide-react";
 import type { ReactElement } from "react";
 
-import { Button } from "@/components";
+import { Button, HeroActionWords } from "@/components";
 import {
   featureContent,
   featureItem,
@@ -34,8 +34,17 @@ import {
   iconBox,
   paragraph,
   section,
-  textAccent,
 } from "@/styles/ui";
+
+const HERO_ACTIONS = [
+  "build",
+  "code",
+  "invest",
+  "learn",
+  "educate",
+  "earn",
+  "buy",
+];
 
 export default function HomePage(): ReactElement {
   return (
@@ -45,8 +54,8 @@ export default function HomePage(): ReactElement {
           <div className={grid({ cols: "12", gap: "md" })}>
             <div className={heroTextWrapper()}>
               <h1 className={heading({ level: "h1" })}>
-                Communal AI Tech
-                <span className={textAccent()}>Co-Owned on Web3</span>
+                Together(
+                <HeroActionWords actions={HERO_ACTIONS} />)
               </h1>
               <p className={paragraph({ size: "lg", tone: "subdued" })}>
                 Create autonomous AI-powered organizations with crypto-only

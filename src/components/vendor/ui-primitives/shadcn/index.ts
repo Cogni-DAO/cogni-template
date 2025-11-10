@@ -25,3 +25,4 @@ export {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "./dropdown-menu";
+export { FlipWords } from "./flip-words";

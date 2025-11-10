@@ -166,6 +166,11 @@ export const prompt = cva("", {
  */
 export const textAccent = cva("block text-warning");
 
+/**
+ * Hero action words styling for animated flip words component
+ */
+export const heroActionWords = cva("text-primary font-semibold");
+
 const brandTextSizeVariants = {
   sm: "text-base font-semibold",
   md: "text-lg font-semibold",

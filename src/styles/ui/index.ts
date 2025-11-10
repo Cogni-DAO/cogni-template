@@ -46,6 +46,7 @@ export { button, modeToggle } from "./inputs";
 export {
   brandText,
   heading,
+  heroActionWords,
   paragraph,
   prompt,
   prose,
