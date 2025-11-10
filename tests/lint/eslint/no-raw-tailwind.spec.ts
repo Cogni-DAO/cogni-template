@@ -116,11 +116,11 @@ describe("No Raw Tailwind ESLint Rule", () => {
     );
   });
 
-  // Test Group 6: Text scale utilities (text-4xl, text-sm, etc.)
-  it("should catch text scale utilities", async () => {
+  // Test Group 6: Arbitrary text utilities (should still be caught)
+  it("should catch arbitrary text size utilities", async () => {
     const { warnings, messages } = await lintFixture(
       "src/components/test.tsx",
-      `export const Component = () => <div className="text-4xl text-sm text-base text-2xl" />;`,
+      `export const Component = () => <div className="text-[14px] text-[1.5rem] text-[var(--custom)]" />;`,
       { focusRulePrefixes: ["no-raw-tailwind"] }
     );
 
@@ -129,7 +129,7 @@ describe("No Raw Tailwind ESLint Rule", () => {
       expect.arrayContaining([
         expect.objectContaining({
           ruleId: "no-raw-tailwind/no-raw-tailwind-classes",
-          message: expect.stringContaining('Raw Tailwind value "text-4xl"'),
+          message: expect.stringContaining('Raw Tailwind value "text-[14px]"'),
         }),
       ])
     );
@@ -449,5 +449,18 @@ describe("No Raw Tailwind ESLint Rule", () => {
     );
 
     expect(warnings).toBeGreaterThan(0);
+  });
+
+  // Test Group 22: Semantic text and prose utilities (should be allowed)
+  it("should allow standard Tailwind text and prose utilities", async () => {
+    const { warnings } = await lintFixture(
+      "src/components/test.tsx",
+      `export const Component = () => (
+        <div className="text-sm text-base text-lg text-xl text-2xl text-3xl text-4xl prose-sm prose-base prose-lg prose-xl text-transparent" />
+      );`,
+      { focusRulePrefixes: ["no-raw-tailwind"] }
+    );
+
+    expect(warnings).toBe(0);
   });
 });

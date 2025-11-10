@@ -30,6 +30,10 @@ const ALLOWED_SEMANTIC_SIZE =
 // ALLOWED_STRUCTURAL: Structural selectors and utilities that should be allowed
 const ALLOWED_STRUCTURAL = /^(has-\[>svg\]|text-transparent)$/;
 
+// ALLOWED_SEMANTIC_TEXT: Tailwind text scale + typography prose utilities
+const ALLOWED_SEMANTIC_TEXT =
+  /^(text-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl)|prose-(sm|base|lg|xl)|text-transparent)$/;
+
 // RAW_COLOR_SUFFIX: named palette or basic colors => must be tokenized
 const RAW_COLOR_SUFFIX =
   /^(black|white|transparent|current|(red|rose|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|slate|gray|zinc|neutral|stone)(-[0-9]{2,3})?)$/;
@@ -60,6 +64,7 @@ function checkClassToken(token) {
   // Allow semantic utilities first
   if (ALLOWED_SEMANTIC_COLOR.test(t)) return null;
   if (ALLOWED_SEMANTIC_SIZE.test(t)) return null;
+  if (ALLOWED_SEMANTIC_TEXT.test(t)) return null;
   if (ALLOWED_STRUCTURAL.test(t)) return null;
   if (ALLOWED_CHART_TOKENS.test(t)) return null;
 
