@@ -18,7 +18,7 @@ import { cva } from "class-variance-authority";
  * Hero content text wrapper with responsive alignment and max-width
  */
 export const heroTextWrapper = cva(
-  "sm:text-center md:mx-auto md:max-w-[var(--size-container-lg)] lg:col-span-12 lg:text-left lg:mb-8",
+  "sm:text-center md:mx-auto md:max-w-[var(--size-container-lg)] lg:col-span-12 lg:text-left lg:mb-[var(--spacing-xl)]",
   {
     variants: {
       width: {
@@ -36,7 +36,7 @@ export const heroTextWrapper = cva(
  * Hero button container with responsive positioning and text alignment
  */
 export const heroButtonContainer = cva(
-  "mt-[var(--spacing-xl)] text-center -mx-8 sm:-mx-16 md:-mx-32"
+  "mt-[var(--spacing-xl)] text-center -mx-[var(--spacing-xl)] sm:-mx-[var(--spacing-4xl)] md:-mx-[var(--spacing-5xl)]"
 );
 
 /**

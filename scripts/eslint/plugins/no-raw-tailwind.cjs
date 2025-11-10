@@ -28,7 +28,8 @@ const ALLOWED_SEMANTIC_SIZE =
   /^(h|w|gap|rounded|rounded-t|rounded-r|rounded-b|rounded-l|rounded-tl|rounded-tr|rounded-br|rounded-bl)-(none|sm|md|lg|xl|full)$/;
 
 // ALLOWED_STRUCTURAL: Structural selectors and utilities that should be allowed
-const ALLOWED_STRUCTURAL = /^(has-\[>svg\]|text-transparent)$/;
+const ALLOWED_STRUCTURAL =
+  /^(has-\[>svg\]|text-transparent|shrink-0|pt-0|mt-0|border-transparent|text-white|z-50|ring-2|ring-offset-2|bg-(primary|secondary|destructive)\/80|col-span-12|min-w-\[min\(100%,48ch\)\])$/;
 
 // ALLOWED_SEMANTIC_TEXT: Tailwind text scale + typography prose utilities
 const ALLOWED_SEMANTIC_TEXT =

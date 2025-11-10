@@ -15,10 +15,10 @@
 import { cva, type VariantProps } from "class-variance-authority";
 
 import type {
+  BasicSpacingKey,
   FontFamilyKey,
   FontWeightKey,
   SizeKey,
-  SpacingSemanticKey,
 } from "@/styles/theme";
 
 const headingLevelVariants = {
@@ -85,12 +85,12 @@ const paragraphFamilyVariants = {
 
 const paragraphSpacingVariants = {
   none: "",
-  xs: "mt-2",
-  sm: "mt-3",
-  md: "mt-3",
-  lg: "mt-5",
-  xl: "mt-8",
-} satisfies Record<SpacingSemanticKey, string>;
+  xs: "mt-[var(--spacing-xs-plus)]",
+  sm: "mt-[var(--spacing-md-plus)]",
+  md: "mt-[var(--spacing-md-plus)]",
+  lg: "mt-[var(--spacing-xl-plus)]",
+  xl: "mt-[var(--spacing-2xl-plus)]",
+} satisfies Record<BasicSpacingKey, string>;
 
 /**
  * Paragraph styling with size and tone variants
