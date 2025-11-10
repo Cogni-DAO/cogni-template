@@ -45,6 +45,7 @@ export { button, modeToggle } from "./inputs";
 // Typography components
 export {
   brandText,
+  codeSyntax,
   heading,
   heroActionWords,
   paragraph,

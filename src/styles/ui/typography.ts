@@ -171,6 +171,28 @@ export const textAccent = cva("block text-warning");
  */
 export const heroActionWords = cva("text-primary font-semibold");
 
+const codeSyntaxTokenVariants = {
+  keyword: "!text-chart-1",
+  operator: "!text-chart-2",
+  variable: "!text-chart-5",
+  punctuation: "!text-muted-foreground",
+  parenthesis: "!text-chart-3",
+  property: "!text-chart-1",
+  delimiter: "!text-chart-4",
+} as const;
+
+/**
+ * Code syntax coloring for terminal-style text
+ */
+export const codeSyntax = cva("", {
+  variants: {
+    token: codeSyntaxTokenVariants,
+  },
+  defaultVariants: {
+    token: "keyword",
+  },
+});
+
 const brandTextSizeVariants = {
   sm: "text-base font-semibold",
   md: "text-lg font-semibold",

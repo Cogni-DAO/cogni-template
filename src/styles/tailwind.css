@@ -85,11 +85,17 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
-    --chart-1: 220 70% 50%;
+    --chart-1: 250 36% 69%; /* teal – property / "rules:" */
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
-    --chart-4: 280 65% 60%;
-    --chart-5: 340 75% 55%;
+    --chart-4: 280 80% 70%;
+    /*--chart-5: 340 75% 55%;
+    /* updated chart colors based on editor token colors */
+
+    /*--chart-2: 246 75% 78%; /* blue-violet – operators */
+    --chart-3: 32 100% 69%; /* magenta – extra accent */
+    /*--chart-4: 276 25% 59%; /* purple – delimiters like "{" */
+    --chart-5: 32 64% 69%; /* peach/orange – hero/action strings */
   }
 }
 

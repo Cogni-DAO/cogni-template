@@ -26,6 +26,7 @@ import {
 } from "@/components/kit/sections";
 import { Terminal } from "@/features/home/components/Terminal";
 import {
+  codeSyntax,
   container,
   flex,
   grid,
@@ -39,11 +40,12 @@ import {
 const HERO_ACTIONS = [
   "build",
   "code",
-  "invest",
-  "learn",
-  "educate",
+  "own",
+  "grow",
   "earn",
+  "learn",
   "buy",
+  "win",
 ];
 
 export default function HomePage(): ReactElement {
@@ -52,16 +54,30 @@ export default function HomePage(): ReactElement {
       <section className={section()}>
         <div className={container({ size: "lg", spacing: "xl" })}>
           <div className={grid({ cols: "12", gap: "md" })}>
-            <div className={heroTextWrapper()}>
+            <div className={heroTextWrapper({ width: "fixed" })}>
               <h1 className={heading({ level: "h1" })}>
-                Together(
-                <HeroActionWords actions={HERO_ACTIONS} />)
+                <span className={codeSyntax({ token: "variable" })}>
+                  together
+                </span>
+                <span className={codeSyntax({ token: "parenthesis" })}>(</span>
+                <HeroActionWords actions={HERO_ACTIONS} token="delimiter" />
+                <span className={codeSyntax({ token: "parenthesis" })}>)</span>
+                <span className={codeSyntax({ token: "delimiter" })}>
+                  {"{"}
+                </span>
               </h1>
-              <p className={paragraph({ size: "lg", tone: "subdued" })}>
-                Create autonomous AI-powered organizations with crypto-only
-                accounting and open-source infrastructure. Web3-native from the
-                ground up.
-              </p>
+              <h1 className={heading({ level: "h1", tone: "subdued" })}>
+                <span className={codeSyntax({ token: "operator" })}>
+                  return
+                </span>{" "}
+                <span className={codeSyntax({ token: "property" })}>
+                  community-source
+                </span>
+                <span className={codeSyntax({ token: "delimiter" })}>
+                  {" }"}
+                </span>
+                <span className={codeSyntax({ token: "punctuation" })}>;</span>
+              </h1>
               <div className={heroButtonContainer()}>
                 <a
                   href="https://github.com/cogni-template/cogni-template"

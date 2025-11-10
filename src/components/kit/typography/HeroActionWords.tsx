@@ -17,7 +17,7 @@
 import type { ReactElement } from "react";
 
 import { FlipWords } from "@/components/vendor/ui-primitives/shadcn";
-import { heroActionWords } from "@/styles/ui";
+import { codeSyntax } from "@/styles/ui";
 
 interface HeroActionWordsProps {
   actions: string[];
@@ -26,17 +26,29 @@ interface HeroActionWordsProps {
    * Default ~1s to match hero rhythm.
    */
   durationMs?: number;
+  /**
+   * Syntax token type for styling.
+   * Default variable (green).
+   */
+  token?:
+    | "keyword"
+    | "operator"
+    | "variable"
+    | "punctuation"
+    | "property"
+    | "delimiter";
 }
 
 export function HeroActionWords({
   actions,
   durationMs = 1000,
+  token = "variable",
 }: HeroActionWordsProps): ReactElement {
   return (
     <FlipWords
       words={actions}
       duration={durationMs}
-      className={heroActionWords()}
+      className={codeSyntax({ token })}
     />
   );
 }
