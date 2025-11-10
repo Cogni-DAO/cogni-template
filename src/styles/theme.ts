@@ -46,11 +46,17 @@ export const radiusKeys = ["none", "sm", "md", "lg", "xl", "full"] as const;
 // Semantic spacing keys (for CVA props - map to spacing scale)
 export const spacingSemanticKeys = [
   "none",
+  "2xs",
   "xs",
   "sm",
   "md",
+  "md-plus",
   "lg",
   "xl",
+  "2xl",
+  "3xl",
+  "4xl",
+  "5xl",
 ] as const;
 
 // Size token keys (common component sizes)
@@ -97,3 +103,40 @@ export type IconSizeKey = (typeof iconSizeKeys)[number];
 // Dropdown size keys (for dropdown width variants)
 export const dropdownSizeKeys = ["sm", "md", "lg", "xl"] as const;
 export type DropdownSizeKey = (typeof dropdownSizeKeys)[number];
+
+// Typography size keys
+export const textSizeKeys = [
+  "xs",
+  "sm",
+  "base",
+  "lg",
+  "xl",
+  "2xl",
+  "3xl",
+  "4xl",
+] as const;
+export type TextSizeKey = (typeof textSizeKeys)[number];
+
+// Container size keys
+export const containerSizeKeys = [
+  "sm",
+  "md",
+  "lg",
+  "xl",
+  "2xl",
+  "3xl",
+  "screen",
+] as const;
+export type ContainerSizeKey = (typeof containerSizeKeys)[number];
+
+// Shadow keys
+export const shadowKeys = ["xs", "sm", "lg"] as const;
+export type ShadowKey = (typeof shadowKeys)[number];
+
+// Animation keys
+export const animationKeys = ["fast", "normal", "slow"] as const;
+export type AnimationKey = (typeof animationKeys)[number];
+
+// Prose size keys
+export const proseSizeKeys = ["xs", "sm", "base", "lg", "xl"] as const;
+export type ProseSizeKey = (typeof proseSizeKeys)[number];

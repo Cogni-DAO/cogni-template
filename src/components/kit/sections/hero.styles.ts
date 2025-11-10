@@ -18,7 +18,7 @@ import { cva } from "class-variance-authority";
  * Hero content text wrapper with responsive alignment and max-width
  */
 export const heroTextWrapper = cva(
-  "sm:text-center md:mx-auto md:max-w-4xl lg:col-span-12 lg:text-left lg:mb-8",
+  "sm:text-center md:mx-auto md:max-w-[var(--size-container-lg)] lg:col-span-12 lg:text-left lg:mb-8",
   {
     variants: {
       width: {
@@ -36,25 +36,25 @@ export const heroTextWrapper = cva(
  * Hero button container with responsive positioning and text alignment
  */
 export const heroButtonContainer = cva(
-  "mt-8 text-center -mx-8 sm:-mx-16 md:-mx-32"
+  "mt-[var(--spacing-xl)] text-center -mx-8 sm:-mx-16 md:-mx-32"
 );
 
 /**
  * Hero visual container with responsive grid positioning and flex behavior
  */
 export const heroVisualContainer = cva(
-  "relative mt-3 sm:mx-auto lg:col-span-12 lg:mx-auto lg:mt-0 lg:max-w-none"
+  "relative mt-[var(--spacing-md-plus)] sm:mx-auto lg:col-span-12 lg:mx-auto lg:mt-0 lg:max-w-none"
 );
 
 /**
  * Feature content wrapper with top margin
  */
-export const featureContent = cva("mt-5");
+export const featureContent = cva("mt-[var(--spacing-lg)]");
 
 /**
  * Feature item with responsive top margin
  */
-export const featureItem = cva("mt-10 lg:mt-0");
+export const featureItem = cva("mt-[var(--spacing-2xl)] lg:mt-0");
 
 /**
  * Small icon sizing (for lucide icons)

@@ -24,6 +24,9 @@ const ALLOWED_SEMANTIC_COLOR =
 const ALLOWED_SEMANTIC_SIZE =
   /^(h|w|gap|rounded|rounded-t|rounded-r|rounded-b|rounded-l|rounded-tl|rounded-tr|rounded-br|rounded-bl)-(none|sm|md|lg|xl|full)$/;
 
+// ALLOWED_STRUCTURAL: Structural selectors that should be allowed
+const ALLOWED_STRUCTURAL = /^has-\[>svg\]$/;
+
 // RAW_COLOR_SUFFIX: named palette or basic colors => must be tokenized
 const RAW_COLOR_SUFFIX =
   /^(black|white|transparent|current|(red|rose|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|slate|gray|zinc|neutral|stone)(-[0-9]{2,3})?)$/;
@@ -54,6 +57,7 @@ function checkClassToken(token) {
   // Allow semantic utilities first
   if (ALLOWED_SEMANTIC_COLOR.test(t)) return null;
   if (ALLOWED_SEMANTIC_SIZE.test(t)) return null;
+  if (ALLOWED_STRUCTURAL.test(t)) return null;
 
   // Split into prefix + suffix (first dash only)
   const match = t.match(/^([a-z0-9-]+)-(.*)$/i);
