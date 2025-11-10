@@ -43,9 +43,11 @@ const HERO_ACTIONS = [
   "own",
   "grow",
   "earn",
-  "learn",
+  "gov",
   "buy",
-  "win",
+  "help",
+  "share",
+  "solve",
 ];
 
 export default function HomePage(): ReactElement {
@@ -56,27 +58,34 @@ export default function HomePage(): ReactElement {
           <div className={grid({ cols: "12", gap: "md" })}>
             <div className={heroTextWrapper({ width: "fixed" })}>
               <h1 className={heading({ level: "h1" })}>
-                <span className={codeSyntax({ token: "variable" })}>
+                <span className={codeSyntax({ token: "operator" })} style={{ paddingRight: "20px" }}>while</span>
+                <span className={codeSyntax({ token: "variable" })} style={{ paddingRight: "5px" }}>
                   together
                 </span>
-                <span className={codeSyntax({ token: "parenthesis" })}>(</span>
-                <HeroActionWords actions={HERO_ACTIONS} token="delimiter" />
-                <span className={codeSyntax({ token: "parenthesis" })}>)</span>
-                <span className={codeSyntax({ token: "delimiter" })}>
+                <span className={codeSyntax({ token: "parenthesis" })} style={{ paddingRight: "5px" }}>(</span>
+                <span style={{ display: "inline-block", width: "170px" }}>
+                  <HeroActionWords actions={HERO_ACTIONS} token="delimiter" />
+                </span>
+                <span className={codeSyntax({ token: "parenthesis" })} style={{ paddingRight: "5px" }}>)</span>
+                <span className={codeSyntax({ token: "delimiter" })} style={{ paddingRight: "5px" }}>
                   {"{"}
                 </span>
+                <div style={{ paddingTop: "20px" }} />
               </h1>
               <h1 className={heading({ level: "h1", tone: "subdued" })}>
-                <span className={codeSyntax({ token: "operator" })}>
-                  return
-                </span>{" "}
+                <span className={codeSyntax({ token: "operator" } )} style={{paddingRight: "135px"}}></span>{" "}
                 <span className={codeSyntax({ token: "property" })}>
-                  community-source
+                  community
                 </span>
+                <span className={codeSyntax({ token: "punctuation" })}>
+                  {"++;"}
+                </span>
+              </h1>
+              <div style={{ paddingTop: "20px" }} />
+              <h1 className={heading({ level: "h1", tone: "subdued" })}>
                 <span className={codeSyntax({ token: "delimiter" })}>
                   {" }"}
                 </span>
-                <span className={codeSyntax({ token: "punctuation" })}>;</span>
               </h1>
               <div className={heroButtonContainer()}>
                 <a
@@ -84,7 +93,7 @@ export default function HomePage(): ReactElement {
                   target="_blank"
                 >
                   <Button size="lg" variant="outline">
-                    Deploy your own
+                    Launch Your Own
                     <ArrowRight className={icon({ size: "md" })} />
                   </Button>
                 </a>
