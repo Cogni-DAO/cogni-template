@@ -17,10 +17,10 @@ import { cva, type VariantProps } from "class-variance-authority";
 import type { SizeKey } from "@/styles/theme";
 
 const avatarSizeVariants = {
-  sm: "size-6",
-  md: "size-8",
-  lg: "size-12",
-  xl: "size-16",
+  sm: "size-[var(--size-icon-sm)]",
+  md: "size-[var(--size-icon-lg)]",
+  lg: "size-[var(--size-icon-2xl)]",
+  xl: "size-[var(--size-icon-4xl)]",
 } satisfies Record<SizeKey, string>;
 
 /**
@@ -52,7 +52,7 @@ export const avatarFallback = cva(
 
 const cardVariants = {
   default: "",
-  elevated: "shadow-lg",
+  elevated: "shadow-[var(--shadow-lg)]",
   interactive: "cursor-pointer transition-shadow hover:shadow-md",
 } as const;
 
@@ -60,7 +60,7 @@ const cardVariants = {
  * Card container styling with elevation variants
  */
 export const card = cva(
-  "rounded-lg border bg-card text-card-foreground shadow-sm",
+  "rounded-lg border bg-card text-card-foreground shadow-[var(--shadow-sm)]",
   {
     variants: {
       variant: cardVariants,
@@ -75,7 +75,7 @@ export const card = cva(
  * Card header styling for consistent spacing
  */
 export const cardHeader = cva(
-  "flex flex-col space-y-[var(--spacing-sm)] p-[var(--spacing-lg)];"
+  "flex flex-col space-y-[var(--spacing-sm)] p-[var(--spacing-lg)]"
 );
 
 /**
@@ -99,17 +99,17 @@ const badgeIntentVariants = {
 } as const;
 
 const badgeSizeVariants = {
-  sm: "px-[var(--spacing-sm)] py-[var(--spacing-xs)] text-xs",
-  md: "px-[var(--spacing-md)] py-[var(--spacing-xs)] text-xs",
-  lg: "px-[var(--spacing-lg)] py-[var(--spacing-sm)] text-sm",
-  xl: "px-[var(--spacing-xl)] py-[var(--spacing-sm)] text-base",
+  sm: "px-[var(--spacing-sm)] py-[var(--spacing-xs)] text-[var(--text-xs)]",
+  md: "px-[var(--spacing-md)] py-[var(--spacing-xs)] text-[var(--text-xs)]",
+  lg: "px-[var(--spacing-lg)] py-[var(--spacing-sm)] text-[var(--text-sm)]",
+  xl: "px-[var(--spacing-xl)] py-[var(--spacing-sm)] text-[var(--text-base)]",
 } satisfies Record<SizeKey, string>;
 
 /**
  * Badge component styling for status indicators
  */
 export const badge = cva(
-  "inline-flex items-center rounded-md border px-[var(--spacing-md)] py-[var(--spacing-xs)] text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center rounded-md border px-[var(--spacing-md)] py-[var(--spacing-xs)] text-[var(--text-xs)] font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
   {
     variants: {
       intent: badgeIntentVariants,
