@@ -27,3 +27,39 @@ jobs:
         uses: fsfe/reuse-action@v6
       - run: pnpm check
       - run: pnpm run build
+      
+      # API Integration Tests
+      - name: Start Next.js server
+        run: |
+          pnpm start -- --port 3000 --hostname 0.0.0.0 &
+          echo $! > nextjs.pid
+        env:
+          NODE_ENV: production
+          
+      - name: Wait for server readiness
+        env:
+          TEST_BASE_URL: http://127.0.0.1:3000
+        run: |
+          for i in {1..30}; do
+            if curl -sSf "$TEST_BASE_URL/api/v1/meta/health" > /dev/null; then
+              echo "Server is up"
+              exit 0
+            fi
+            echo "Waiting for server..."
+            sleep 2
+          done
+          echo "Server did not start in time"
+          exit 1
+          
+      - name: Run API tests
+        env:
+          TEST_BASE_URL: http://127.0.0.1:3000
+        run: pnpm test:api
+          
+      - name: Stop Next.js server
+        if: always()
+        run: |
+          if [ -f nextjs.pid ]; then
+            kill $(cat nextjs.pid) || true
+            rm nextjs.pid
+          fi

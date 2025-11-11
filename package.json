@@ -19,6 +19,7 @@
     "check:docs:agents": "node scripts/validate-agents-md.mjs",
     "check:docs:headers": "tsx scripts/validate-doc-headers.ts",
     "test": "vitest run",
+    "test:api": "vitest run --config vitest.api.config.mts",
     "e2e": "dotenv -e .env.e2e -- playwright test --project=staging-full",
     "e2e:smoke": "dotenv -e .env.e2e -- playwright test --project=smoke",
     "e2e:prod": "pnpm e2e:smoke",
