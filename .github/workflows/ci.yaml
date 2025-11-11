@@ -31,7 +31,7 @@ jobs:
       # API Integration Tests
       - name: Start Next.js server
         run: |
-          pnpm start -- --port 3000 --hostname 0.0.0.0 &
+          pnpm start &
           echo $! > nextjs.pid
         env:
           NODE_ENV: production
