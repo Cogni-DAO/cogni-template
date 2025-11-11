@@ -8,7 +8,7 @@
  * Invariants: Adapter passes port contract; test blockchain integration works; stub tests until implementation added.
  * Side-effects: IO
  * Notes: Stub implementation - will expand when Viem adapter implemented; runs port contract test suite.
- * Links: src/adapters/server/wallet/, tests/contract/ports/wallet.port.contract.ts
+ * Links: src/adapters/server/wallet/, tests/ports/wallet.port.spec.ts
  * @public
  */
 

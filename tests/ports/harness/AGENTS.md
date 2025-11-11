@@ -1,20 +1,20 @@
-# tests/contract/harness · AGENTS.md
+# tests/ports/harness · AGENTS.md
 
 > Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
 
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-07
-- **Status:** stable
+- **Last reviewed:** 2025-11-11
+- **Status:** draft
 
 ## Purpose
 
-Shared helpers to spin up and tear down resources for contract and adapter tests. Minimal, deterministic, no production deps.
+Shared helpers to spin up and tear down resources for port tests and adapter tests. Minimal, deterministic, no production deps.
 
 ## Pointers
 
-- [Contract suites](../ports/)
+- [Port tests](../)
 - [Integration tests](../../integration/)
 - [Architecture](../../../docs/ARCHITECTURE.md)
 
@@ -38,14 +38,14 @@ Shared helpers to spin up and tear down resources for contract and adapter tests
 
 ## Responsibilities
 
-- This directory **does:** provide temp dirs, local stubs, and cleanup hooks
+- This directory **does:** provide temp dirs, local stubs, and cleanup hooks for port tests
 - This directory **does not:** define business logic or test routes/UI
 
 ## Usage
 
 ```bash
 # in adapter specs
-import { makeHarness, dispose } from '../contract/harness/factory'
+import { makeHarness, dispose } from '../ports/harness/factory'
 ```
 
 ## Standards
@@ -56,7 +56,7 @@ import { makeHarness, dispose } from '../contract/harness/factory'
 
 ## Dependencies
 
-- **Internal:** tests/contract/ports/**, src/ports/**
+- **Internal:** tests/ports/**, src/ports/**
 - **External:** node:http only (MVP)
 
 ## Change Protocol
@@ -67,4 +67,4 @@ import { makeHarness, dispose } from '../contract/harness/factory'
 ## Notes
 
 - Keep harness utilities minimal and reusable
-- Focus on setup/teardown automation for contract tests
+- Focus on setup/teardown automation for port behavior tests

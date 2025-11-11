@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-07
+- **Last reviewed:** 2025-11-11
 - **Status:** stable
 
 ## Purpose
@@ -31,7 +31,7 @@ Provide fast, reliable verification per layer. Enforce port contracts so any ada
 
 - **Exports:** none
 - **Routes:** none
-- **CLI:** pnpm test, pnpm test:unit, pnpm test:int, pnpm test:changed
+- **CLI:** pnpm test, pnpm test:api
 - **Env/Config keys:** none
 - **Files considered API:** contract/ports/\*_/_.contract.ts (test-only API for adapters)
 
@@ -43,15 +43,14 @@ Provide fast, reliable verification per layer. Enforce port contracts so any ada
 
 ## Responsibilities
 
-- This directory **does:** unit tests for core/features, contract suites for ports, integration tests for adapters.
-- This directory **does not:** run UI/e2e, define production code, or host HTTP route tests (kept in /e2e).
+- This directory **does:** unit tests for core/features, contract suites for ports, integration tests for adapters, API integration tests for HTTP routes.
+- This directory **does not:** run UI/e2e, define production code.
 
 ## Usage
 
 ```bash
-pnpm test
-pnpm test:unit
-pnpm test:int
+pnpm test       # unit + ports + integration (no server required)
+pnpm test:api   # HTTP API tests (requires running Next.js server)
 ```
 
 ## Standards
@@ -59,6 +58,7 @@ pnpm test:int
 - **Unit:** no I/O, no time, no RNG. Use \_fakes.
 - **Contract:** define expected behavior once per port; adapters run the same suite.
 - **Integration:** real infra where feasible; clean setup/teardown in each spec.
+- **API:** HTTP tests against running Next.js server; validate contract compliance and status codes.
 
 ## Dependencies
 

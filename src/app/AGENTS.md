@@ -1,0 +1,79 @@
+# app · AGENTS.md
+
+> Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
+
+## Metadata
+
+- **Owners:** @derek @core-dev
+- **Last reviewed:** 2025-11-11
+- **Status:** draft
+
+## Purpose
+
+Next.js App Router delivery layer. UI pages and API routes that expose features to external clients.
+
+## Pointers
+
+- [Root AGENTS.md](../../AGENTS.md)
+- [Architecture](../../docs/ARCHITECTURE.md)
+- [Feature Development Guide](../../docs/FEATURE_DEVELOPMENT_GUIDE.md)
+
+## Boundaries
+
+```json
+{
+  "layer": "app",
+  "may_import": ["features", "contracts", "shared", "components"],
+  "must_not_import": ["adapters/server", "adapters/worker", "core", "ports"]
+}
+```
+
+## Public Surface
+
+- **Exports:** none
+- **Routes (if any):**
+  - App pages: `/` (homepage)
+  - API: `/api/v1/meta/health`, `/api/v1/meta/openapi`, `/api/v1/meta/route-manifest`
+- **CLI (if any):** none
+- **Env/Config keys:** none
+- **Files considered API:** layout.tsx, page.tsx, api/\*\*/route.ts
+
+## Ports (optional)
+
+- **Uses ports:** none
+- **Implements ports:** none
+- **Contracts:** none
+
+## Responsibilities
+
+- This directory **does**: expose UI pages and HTTP endpoints; validate requests with contracts
+- This directory **does not**: contain business logic, port implementations, or direct database access
+
+## Usage
+
+```bash
+pnpm dev     # start dev server
+pnpm build   # build for production
+```
+
+## Standards
+
+- API routes must validate input/output with contracts
+- UI pages use features and components only
+- No business logic in routes or pages
+
+## Dependencies
+
+- **Internal:** features, contracts, shared, components
+- **External:** next, react
+
+## Change Protocol
+
+- Update this file when **Routes** change
+- Bump **Last reviewed** date
+- Ensure contract validation passes
+
+## Notes
+
+- Uses Next.js App Router patterns
+- API routes are thin adapters that delegate to features

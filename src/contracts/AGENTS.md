@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-11-07
+- **Last reviewed:** 2025-11-11
 - **Status:** draft
 
 ## Purpose
@@ -37,11 +37,11 @@ Single source of truth for externally callable operations. Each file defines an 
 
 ## Public Surface
 
-- **Exports:** \*.contract.ts with { id, summary, input, output, scopes }
+- **Exports:** \*.contract.ts with { id, summary, input, output }; http/router.v1.ts (ts-rest contracts); http/openapi.v1.ts (OpenAPI generation)
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none
-- **Files considered API:** \*_/_.contract.ts
+- **Files considered API:** \*.contract.ts, http/router.v1.ts, http/openapi.v1.ts
 
 ## Ports (optional)
 
@@ -70,7 +70,7 @@ pnpm -w typecheck
 ## Dependencies
 
 - **Internal:** shared/schemas (primitives), types/
-- **External:** zod
+- **External:** zod, @ts-rest/core, @ts-rest/open-api
 
 ## Change Protocol
 
@@ -79,4 +79,5 @@ pnpm -w typecheck
 
 ## Notes
 
-- Future: generators will emit Next routes, MCP tools, and OpenAPI from these files.
+- HTTP layer (http/) contains ts-rest router and OpenAPI generation from protocol-neutral contracts.
+- Protocol-neutral contracts enable both HTTP (ts-rest) and MCP tool generation.

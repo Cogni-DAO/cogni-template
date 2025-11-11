@@ -15,7 +15,7 @@ Verify concrete adapter implementations against real-ish dependencies with minim
 ## Pointers
 
 - [Adapters source](../../src/adapters/)
-- [Contract suites](../contract/)
+- [Port tests](../ports/)
 
 ## Boundaries
 
@@ -43,7 +43,7 @@ Verify concrete adapter implementations against real-ish dependencies with minim
 
 ## Responsibilities
 
-- This directory **does:** run port contract suites against concrete adapters; smoke test infra clients (DB, LLM proxy, wallet verification)
+- This directory **does:** run port test suites against concrete adapters; smoke test infra clients (DB, LLM proxy, wallet verification)
 - This directory **does not:** test domain/business logic, UI, or Next routes
 
 ## Usage
@@ -56,20 +56,20 @@ pnpm test tests/integration/adapters/ai
 
 ## Standards
 
-- Adapters must pass their port contract: import tests/contract/ports/\*.contract.ts and run the suite
+- Adapters must pass their port tests: import tests/ports/\*.port.spec.ts and run the suite
 - Dependencies: prefer dockerized locals (postgres, litellm, langfuse). If using third-party, restrict to official sandboxes; forbid production hosts
 - Setup/teardown: create and migrate schema per run; isolate data; clean shutdown
 - Timing: avoid real time sensitivity; use deterministic inputs; allow retries only for transient network on localhost
 
 ## Dependencies
 
-- **Internal:** src/adapters, src/ports, src/shared, tests/contract
+- **Internal:** src/adapters, src/ports, src/shared, tests/ports
 - **External:** vitest, docker (for local testing), test environment configs
 
 ## Change Protocol
 
 - Update integration tests when adapter implementations change
-- Run full contract suites when port interfaces change
+- Run full port test suites when port interfaces change
 - Bump **Last reviewed** date
 - Ensure clean test environment setup/teardown
 

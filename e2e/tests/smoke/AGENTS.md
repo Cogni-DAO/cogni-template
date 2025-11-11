@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-09
+- **Last reviewed:** 2025-11-11
 - **Status:** draft
 
 ## Purpose
 
-Production-safe smoke tests that verify critical functionality without data mutations.
+Production-safe smoke tests that verify critical functionality without data mutations. Includes dynamic accessibility testing that discovers routes via API manifest.
 
 ## Pointers
 
@@ -43,8 +43,8 @@ Production-safe smoke tests that verify critical functionality without data muta
 
 ## Responsibilities
 
-- This directory **does**: Test prod-safe workflows, UI rendering, accessibility
-- This directory **does not**: Mutate data, test write operations, rely on test fixtures
+- This directory **does**: Test prod-safe workflows, UI rendering, accessibility via dynamic route discovery
+- This directory **does not**: Mutate data, test write operations, rely on test fixtures or hardcoded routes
 
 ## Usage
 
@@ -77,3 +77,4 @@ pnpm e2e:prod   # alias for e2e:smoke
 
 - Tests tagged for smoke project in playwright.config.ts
 - Must be safe to run against production environments
+- a11y-all-routes.spec.ts dynamically discovers routes via /api/v1/meta/route-manifest
