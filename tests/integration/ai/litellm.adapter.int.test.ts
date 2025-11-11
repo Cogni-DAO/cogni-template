@@ -8,7 +8,7 @@
  * Invariants: Adapter passes port contract; real service integration works; stub tests until implementation added.
  * Side-effects: IO
  * Notes: Stub implementation - will expand when LiteLLM adapter implemented; runs port contract test suite.
- * Links: src/adapters/server/ai/, tests/contract/ports/ai.port.contract.ts
+ * Links: src/adapters/server/ai/, tests/ports/ai.port.spec.ts
  * @public
  */
 

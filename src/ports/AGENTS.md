@@ -5,12 +5,13 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-06
+- **Last reviewed:** 2025-11-12
 - **Status:** draft
 
 ## Purpose
 
-Contracts and interfaces only. Defines minimal interfaces that adapters implement and features use.
+Define **port interfaces** that the domain depends on and adapters must implement.
+Ports describe _what_ the domain needs from external services, not _how_ they work.
 
 ## Pointers
 
@@ -35,50 +36,48 @@ Contracts and interfaces only. Defines minimal interfaces that adapters implemen
 
 ## Public Surface
 
-- **Exports:** Interface definitions, contracts
-- **Routes (if any):** none
-- **CLI (if any):** none
-- **Env/Config keys:** none
-- **Files considered API:** All \*.port.ts files
+- **Exports:** Port interfaces only
+- **Routes:** none
+- **CLI:** none
+- **Env/Config:** none
+- **Files considered API:** all \*.port.ts files
 
-## Ports (optional)
-
-- **Uses ports:** none
-- **Implements ports:** none
-- **Contracts (required if implementing):** Contract tests in tests/contract/
+Note: src/ports/** is separate from src/contracts/**.
+Ports = internal dependencies; contracts = edge IO (HTTP/MCP).
 
 ## Responsibilities
 
-- This directory **does**: Define contracts, specify interfaces, document port requirements
-- This directory **does not**: Contain implementations, business logic, or concrete dependencies
+- This directory **does:** Define interfaces for external dependencies (DB, AI, wallet, clock, rng, queues, etc.); Document expectations and invariants for each port (e.g. idempotency, error semantics)
+- This directory **does not:** Contain implementations or concrete dependencies; Contain business logic, HTTP handlers, or framework code; Import adapters, features, or delivery layers
 
 ## Usage
 
-Minimal local commands:
+Each port must have port behavior tests in tests/ports/\*\*
 
-```bash
-pnpm typecheck
-pnpm lint
-```
+Example: tests/ports/credits.port.spec.ts
+
+Port tests verify that all adapters obey the port's interface and invariants
+
+These tests are separate from edge tests for src/contracts/\*\*
 
 ## Standards
 
-- Interface-only files
-- Each port must have corresponding contract test
+- Files are interface-only (interface, type), no classes or side effects
+- Port filenames end with .port.ts (e.g. credits.port.ts, clock.port.ts)
+- All time and randomness must go through ports (Clock, Rng) to keep domain deterministic
 
 ## Dependencies
 
-- **Internal:** core/
-- **External:** None (pure interfaces)
+- **Internal:** src/core
+- **External:** none
 
 ## Change Protocol
 
-- Update this file when **Exports**, **Routes**, or **Env/Config** change
-- Bump **Last reviewed** date
-- Update ESLint boundary rules if **Boundaries** changed
-- Ensure boundary lint + (if Ports) **contract tests** pass
+- Update this file when Exports or boundaries change
+- Bump Last reviewed date
+- Ensure ESLint boundary rules still pass and all tests/ports/\*\* still pass
 
 ## Notes
 
-- All adapters must implement these interfaces
-- Inject `Clock` and `Rng` via ports to keep domain deterministic
+- Port tests are located in tests/ports/\*\* to validate adapter conformance
+- Ports define contracts for internal dependencies, separate from external API contracts
