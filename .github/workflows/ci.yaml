@@ -27,7 +27,7 @@ jobs:
         uses: fsfe/reuse-action@v6
       - run: pnpm check
       - run: pnpm run build
-      
+
       # API Integration Tests
       - name: Start Next.js server
         run: |
@@ -35,7 +35,7 @@ jobs:
           echo $! > nextjs.pid
         env:
           NODE_ENV: production
-          
+
       - name: Wait for server readiness
         env:
           TEST_BASE_URL: http://127.0.0.1:3000
@@ -50,12 +50,12 @@ jobs:
           done
           echo "Server did not start in time"
           exit 1
-          
+
       - name: Run API tests
         env:
           TEST_BASE_URL: http://127.0.0.1:3000
         run: pnpm test:api
-          
+
       - name: Stop Next.js server
         if: always()
         run: |
