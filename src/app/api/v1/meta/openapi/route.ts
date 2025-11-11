@@ -1,0 +1,23 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@app/api/v1/meta/openapi`
+ * Purpose: HTTP endpoint serving OpenAPI v3 specification for API documentation.
+ * Scope: Returns JSON OpenAPI document. Does not include sensitive/internal operations.
+ * Invariants: Static response; matches ts-rest router exactly.
+ * Side-effects: IO (HTTP response)
+ * Notes: Generated from ts-rest contracts; used by API documentation tools.
+ * Links: \@contracts/http/openapi.v1, ts-rest router
+ * @internal
+ */
+
+import { NextResponse } from "next/server";
+
+import { OpenAPIV1 } from "@/contracts/http/openapi.v1";
+
+export const dynamic = "force-static";
+
+export function GET(): NextResponse {
+  return NextResponse.json(OpenAPIV1);
+}

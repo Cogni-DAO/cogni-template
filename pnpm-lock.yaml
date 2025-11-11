@@ -23,6 +23,12 @@ importers:
       '@radix-ui/react-slot':
         specifier: ^1.2.4
         version: 1.2.4(@types/react@19.2.2)(react@19.2.0)
+      '@ts-rest/core':
+        specifier: ^3.52.1
+        version: 3.52.1(@types/node@20.19.24)(zod@4.1.12)
+      '@ts-rest/open-api':
+        specifier: ^3.52.1
+        version: 3.52.1(@ts-rest/core@3.52.1(@types/node@20.19.24)(zod@4.1.12))(zod@4.1.12)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -198,6 +204,12 @@ packages:
   '@alloc/quick-lru@5.2.0':
     resolution: {integrity: sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw==}
     engines: {node: '>=10'}
+
+  '@anatine/zod-openapi@1.14.2':
+    resolution: {integrity: sha512-q0qHfnuNYVKu0Swrnnvfj9971AEyW7c8v9jCOZGCl5ZbyGMNG4RPyJkRcMi/JC8CRfdOe0IDfNm1nNsi2avprg==}
+    peerDependencies:
+      openapi3-ts: ^2.0.0 || ^3.0.0
+      zod: ^3.20.0
 
   '@antfu/ni@25.0.0':
     resolution: {integrity: sha512-9q/yCljni37pkMr4sPrI3G4jqdIk074+iukc5aFJl7kmDCCsiJrbZ6zKxnES1Gwg+i9RcDZwvktl23puGslmvA==}
@@ -1543,6 +1555,23 @@ packages:
 
   '@ts-morph/common@0.27.0':
     resolution: {integrity: sha512-Wf29UqxWDpc+i61k3oIOzcUfQt79PIT9y/MWfAGlrkjg6lBC1hwDECLXPVJAhWjiGbfBCxZd65F/LIZF3+jeJQ==}
+
+  '@ts-rest/core@3.52.1':
+    resolution: {integrity: sha512-tAjz7Kxq/grJodcTA1Anop4AVRDlD40fkksEV5Mmal88VoZeRKAG8oMHsDwdwPZz+B/zgnz0q2sF+cm5M7Bc7g==}
+    peerDependencies:
+      '@types/node': ^18.18.7 || >=20.8.4
+      zod: ^3.22.3
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+      zod:
+        optional: true
+
+  '@ts-rest/open-api@3.52.1':
+    resolution: {integrity: sha512-VY91g6HFzCe1/fNgX4Y3HzaJbIdztCGHTg34drkh7bKgtNOizLJLXV0wwIkMwLGvjhRHojJxnwYxHjGMIkScwg==}
+    peerDependencies:
+      '@ts-rest/core': ~3.52.0
+      zod: ^3.22.3
 
   '@tybys/wasm-util@0.10.1':
     resolution: {integrity: sha512-9tTaPJLSiejZKx+Bmog4uSubteqTvFrVrURwkmHixBo0G4seD0zUxp98E1DzUBJxLQ3NPwXrGKDiVjwx/DpPsg==}
@@ -3848,6 +3877,9 @@ packages:
     resolution: {integrity: sha512-VXJjc87FScF88uafS3JllDgvAm+c/Slfz06lorj2uAY34rlUu0Nt+v8wreiImcrgAjjIHp1rXpTDlLOGw29WwQ==}
     engines: {node: '>=18'}
 
+  openapi3-ts@2.0.2:
+    resolution: {integrity: sha512-TxhYBMoqx9frXyOgnRHufjQfPXomTIHYKhSKJ6jHfj13kS8OEIhvmE8CTuQyKtjjWttAjX5DPxM1vmalEpo8Qw==}
+
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
     engines: {node: '>= 0.8.0'}
@@ -4669,6 +4701,10 @@ packages:
     peerDependencies:
       typescript: '>=4.0.0'
 
+  ts-deepmerge@6.2.1:
+    resolution: {integrity: sha512-8CYSLazCyj0DJDpPIxOFzJG46r93uh6EynYjuey+bxcLltBeqZL7DMfaE5ZPzZNFlav7wx+2TDa/mBl8gkTYzw==}
+    engines: {node: '>=14.13.1'}
+
   ts-morph@26.0.0:
     resolution: {integrity: sha512-ztMO++owQnz8c/gIENcM9XfCEzgoGphTv+nKpYNM1bgsdOVC/jRZuEBf6N+mLLDNg68Kl+GgUZfOySaRiG1/Ug==}
 
@@ -4989,6 +5025,10 @@ packages:
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
 
+  yaml@1.10.2:
+    resolution: {integrity: sha512-r3vXyErRCYJ7wg28yvBY5VSoAF8ZvlcW9/BwUzEtUsjvX/DKs24dIkuwjtuprwJJHsbyUbLApepYTR1BN4uHrg==}
+    engines: {node: '>= 6'}
+
   yaml@2.8.1:
     resolution: {integrity: sha512-lcYcMxX2PO9XMGvAJkJ3OsNMw+/7FKes7/hgerGUYWIoWu5j/+YQqcZr5JnPZWzOsEBgMbSbiSTn/dv/69Mkpw==}
     engines: {node: '>= 14.6'}
@@ -5043,6 +5083,12 @@ packages:
 snapshots:
 
   '@alloc/quick-lru@5.2.0': {}
+
+  '@anatine/zod-openapi@1.14.2(openapi3-ts@2.0.2)(zod@4.1.12)':
+    dependencies:
+      openapi3-ts: 2.0.2
+      ts-deepmerge: 6.2.1
+      zod: 4.1.12
 
   '@antfu/ni@25.0.0':
     dependencies:
@@ -6288,6 +6334,18 @@ snapshots:
       fast-glob: 3.3.3
       minimatch: 10.1.1
       path-browserify: 1.0.1
+
+  '@ts-rest/core@3.52.1(@types/node@20.19.24)(zod@4.1.12)':
+    optionalDependencies:
+      '@types/node': 20.19.24
+      zod: 4.1.12
+
+  '@ts-rest/open-api@3.52.1(@ts-rest/core@3.52.1(@types/node@20.19.24)(zod@4.1.12))(zod@4.1.12)':
+    dependencies:
+      '@anatine/zod-openapi': 1.14.2(openapi3-ts@2.0.2)(zod@4.1.12)
+      '@ts-rest/core': 3.52.1(@types/node@20.19.24)(zod@4.1.12)
+      openapi3-ts: 2.0.2
+      zod: 4.1.12
 
   '@tybys/wasm-util@0.10.1':
     dependencies:
@@ -8724,6 +8782,10 @@ snapshots:
     dependencies:
       mimic-function: 5.0.1
 
+  openapi3-ts@2.0.2:
+    dependencies:
+      yaml: 1.10.2
+
   optionator@0.9.4:
     dependencies:
       deep-is: 0.1.4
@@ -9624,6 +9686,8 @@ snapshots:
       picomatch: 4.0.3
       typescript: 5.9.3
 
+  ts-deepmerge@6.2.1: {}
+
   ts-morph@26.0.0:
     dependencies:
       '@ts-morph/common': 0.27.0
@@ -9970,6 +10034,8 @@ snapshots:
   yallist@2.1.2: {}
 
   yallist@3.1.1: {}
+
+  yaml@1.10.2: {}
 
   yaml@2.8.1: {}
 

@@ -4,15 +4,15 @@
 /**
  * Module: `@features/site-meta/routeManifest`
  * Purpose: Site-wide route manifest and types for meta endpoints and e2e testing.
- * Scope: Defines all public routes with tags; excludes auth/private routes.
+ * Scope: Defines all public routes with tags. Does not include auth/private routes.
  * Invariants: Version remains stable; route paths match actual app structure.
  * Side-effects: none
  * Notes: Central source of truth for route discovery contracts.
- * Links: /api/meta/routes endpoint, e2e a11y testing
+ * Links: /api/v1/meta/route-manifest endpoint, e2e a11y testing
  * @internal
  */
 
-export type RouteTag = "public" | "a11y-smoke" | "auth" | "docs";
+export type RouteTag = "public" | "auth" | "docs";
 
 export interface RouteEntry {
   readonly path: string;
@@ -27,8 +27,8 @@ export interface RouteManifest {
 export const routeManifest: RouteManifest = {
   version: 1,
   routes: [
-    { path: "/", tags: ["public", "a11y-smoke"] },
-    { path: "/docs", tags: ["public", "docs", "a11y-smoke"] },
-    { path: "/pricing", tags: ["public", "a11y-smoke"] },
+    { path: "/", tags: ["public"] },
+    { path: "/docs", tags: ["public", "docs"] },
+    { path: "/pricing", tags: ["public"] },
   ],
 };

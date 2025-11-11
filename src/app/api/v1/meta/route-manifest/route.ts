@@ -2,25 +2,25 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@app/api/v1/meta/routes`
+ * Module: `@app/api/v1/meta/route-manifest`
  * Purpose: HTTP endpoint exposing site route manifest for e2e testing.
- * Scope: Returns JSON route manifest; excludes sensitive/auth routes.
+ * Scope: Returns JSON route manifest. Does not include sensitive/auth routes.
  * Invariants: Static response; validates against contract schema.
- * Side-effects: HTTP response
+ * Side-effects: IO (HTTP response)
  * Notes: Hex architecture adapter using contract validation; v1 API versioning.
- * Links: \@contracts/meta.routes.read.v1.contract, \@features/site-meta/routeManifest
+ * Links: \@contracts/meta.route-manifest.read.v1.contract, \@features/site-meta/routeManifest
  * @internal
  */
 
 import { NextResponse } from "next/server";
 
-import { metaRoutesOutputSchema } from "@/contracts/meta.routes.read.v1.contract";
+import { metaRouteManifestOperation } from "@/contracts/meta.route-manifest.read.v1.contract";
 import { routeManifest } from "@/features/site-meta/routeManifest";
 
 export const dynamic = "force-static";
 
 export function GET(): NextResponse {
   const payload = { version: 1 as const, routes: routeManifest.routes };
-  const parsed = metaRoutesOutputSchema.parse(payload);
+  const parsed = metaRouteManifestOperation.output.parse(payload);
   return NextResponse.json(parsed);
 }

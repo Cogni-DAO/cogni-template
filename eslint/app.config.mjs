@@ -251,7 +251,11 @@ export default [
             },
             {
               target: ["contracts"],
-              allow: ["**/*.contract.ts"],
+              allow: [
+                "**/*.contract.ts",
+                "http/router.v1.ts",
+                "http/openapi.v1.ts",
+              ],
             },
             {
               target: ["styles"],

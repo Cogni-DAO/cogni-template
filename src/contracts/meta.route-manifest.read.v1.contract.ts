@@ -2,13 +2,13 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@contracts/meta.routes.read.v1.contract`
+ * Module: `@contracts/meta.route-manifest.read.v1.contract`
  * Purpose: Contract for meta routes endpoint exposing site route manifest.
- * Scope: Defines HTTP contract for route discovery; excludes auth/private routes.
+ * Scope: Defines HTTP contract for route discovery. Does not include auth/private routes.
  * Invariants: Stable API contract; schema validates all responses.
  * Side-effects: none
  * Notes: Used by e2e testing and future MCP tooling; follows hex architecture.
- * Links: \@features/site-meta/routeManifest, /api/v1/meta/routes endpoint
+ * Links: \@features/site-meta/routeManifest, /api/v1/meta/route-manifest endpoint
  * @internal
  */
 
@@ -26,10 +26,12 @@ export const metaRoutesOutputSchema = z.object({
   routes: z.array(routeEntrySchema),
 });
 
-export const metaRoutesContract = {
-  id: "meta.routes.read.v1",
-  method: "GET" as const,
-  path: "/api/v1/meta/routes",
+// Protocol-neutral operation metadata.
+// This is what both HTTP (ts-rest) and MCP will consume.
+export const metaRouteManifestOperation = {
+  id: "meta.route-manifest.read.v1",
+  summary: "Route manifest for UI + e2e",
+  description: "Lists public routes and tags for a11y and agents.",
   input: null,
   output: metaRoutesOutputSchema,
-};
+} as const;
