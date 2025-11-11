@@ -33,25 +33,25 @@ Port behavior tests that verify implementations are swappable and conform to exp
 - **Routes:** none
 - **CLI:** imported by integration tests
 - **Env/Config keys:** none
-- **Files considered API:** `*.port.spec.ts`
+- **Files considered API:** `harness/*.port.harness.ts`, `*.adapter.spec.ts`
 
 ## Responsibilities
 
-- This directory **does:** define expected behavior for port implementations
-- This directory **does not:** test specific adapters or business logic
+- This directory **does:** define expected behavior for port implementations via harness contracts; test adapter compliance
+- This directory **does not:** test business logic or internal adapter implementation details
 
 ## Usage
 
 ```bash
 pnpm test tests/ports
-pnpm test tests/ports/ai.port.spec.ts
+pnpm test tests/ports/wallet.viem.adapter.spec.ts
 ```
 
 ## Standards
 
-- Every port must have a behavior test suite
-- Adapters run these tests in integration tests
-- Port tests map 1:1 to src/ports/\*\* interfaces
+- Every port must have a harness contract in harness/ directory
+- Adapter specs register with harness contracts to ensure compliance
+- Port tests verify adapter implementations match expected behavior
 
 ## Dependencies
 
@@ -66,5 +66,5 @@ pnpm test tests/ports/ai.port.spec.ts
 
 ## Notes
 
-- Port behavior tests define the specification for implementations
-- Keep tests independent of specific adapter implementations
+- Harness contracts define the specification for implementations; adapters must pass
+- Test harnesses provide shared infrastructure and cleanup utilities
