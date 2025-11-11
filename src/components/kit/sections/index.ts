@@ -23,4 +23,3 @@ export {
   heroVisualContainer,
   smallIcon,
 } from "./hero.styles";
-export { HomeHeroSection } from "./HomeHeroSection";

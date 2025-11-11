@@ -17,7 +17,7 @@
 import type { ReactElement } from "react";
 
 import { FlipWords } from "@/components/vendor/ui-primitives/shadcn";
-import { codeSyntax } from "@/styles/ui";
+import { codeToken } from "@/styles/ui";
 
 interface HeroActionWordsProps {
   actions: string[];
@@ -30,25 +30,28 @@ interface HeroActionWordsProps {
    * Syntax token type for styling.
    * Default variable (green).
    */
-  token?:
+  kind?:
     | "keyword"
     | "operator"
     | "variable"
     | "punctuation"
     | "property"
-    | "delimiter";
+    | "delimiter"
+    | "parenthesis"
+    | "identifier"
+    | "accent";
 }
 
 export function HeroActionWords({
   actions,
   durationMs = 1000,
-  token = "variable",
+  kind = "variable",
 }: HeroActionWordsProps): ReactElement {
   return (
     <FlipWords
       words={actions}
       duration={durationMs}
-      className={codeSyntax({ token })}
+      className={codeToken({ kind, spacingRight: "none" })}
     />
   );
 }

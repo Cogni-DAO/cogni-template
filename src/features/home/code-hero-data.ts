@@ -18,7 +18,7 @@ export const heroLine1: CodeToken[] = [
   { id: "while", kind: "operator", text: "while", spacingRight: "xl" },
   { id: "together", kind: "variable", text: "together", spacingRight: "xs" },
   { id: "paren-open", kind: "parenthesis", text: "(", spacingRight: "xs" },
-  // This will be replaced by HeroActionWords
+  // This will be replaced by HeroActionWords via tokenReplacements
   { id: "action-word", kind: "keyword", text: "build", spacingRight: "none" },
   { id: "paren-close", kind: "parenthesis", text: ")", spacingRight: "xs" },
   { id: "brace-open", kind: "delimiter", text: "{", spacingRight: "xs" },

@@ -22,13 +22,18 @@ export { Container } from "./kit/layout/Container";
 export { Header } from "./kit/layout/Header";
 export { NavigationLink } from "./kit/navigation/NavigationLink";
 export { SkipLink } from "./kit/navigation/SkipLink";
-export { Hero } from "./kit/sections";
 export {
-  CodeHeroLine,
+  Hero,
+  heroButtonContainer,
+  heroTextWrapper,
+  heroVisualContainer,
+} from "./kit/sections";
+export {
   type CodeToken,
+  CodeTokenLine,
   HeroActionContainer,
   HeroCodeBlock,
-  HeroCodeSpacing,
 } from "./kit/typography/CodeHero";
 export { HeroActionWords } from "./kit/typography/HeroActionWords";
 export { Prompt } from "./kit/typography/Prompt";
+export { container, grid, section } from "@/styles/ui";

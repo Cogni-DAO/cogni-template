@@ -13,6 +13,7 @@
  */
 
 import type { ReactElement, ReactNode } from "react";
+import { createElement } from "react";
 
 import {
   codeToken,
@@ -43,29 +44,45 @@ export interface CodeToken {
 }
 
 // Components
-interface CodeHeroLineProps {
+interface CodeTokenLineProps {
   tokens: CodeToken[];
   /**
    * Typography tone for the entire line.
    * Default uses standard foreground color.
    */
   tone?: "default" | "subdued";
+  /**
+   * Heading level for semantic HTML.
+   * Default h1 for main hero content.
+   */
+  level?: "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "p";
+  /**
+   * Replace specific tokens with custom content.
+   * For token id X, render the provided content instead of token.text.
+   */
+  tokenReplacements?: Record<string, ReactNode>;
 }
 
-export function CodeHeroLine({
+export function CodeTokenLine({
   tokens,
   tone = "default",
-}: CodeHeroLineProps): ReactElement {
-  return (
-    <h1
-      className={heading({
-        level: "h1",
+  level = "h1",
+  tokenReplacements,
+}: CodeTokenLineProps): ReactElement {
+  return createElement(
+    level,
+    {
+      // eslint-disable-next-line no-restricted-syntax
+      className: heading({
+        level: level === "p" ? "h1" : (level as "h1" | "h2" | "h3" | "h4"),
         tone,
         family: "mono",
         weight: "regular",
-      })}
-    >
-      {tokens.map((token) => (
+      }),
+    },
+    tokens.map((token) => {
+      const replacement = tokenReplacements?.[token.id];
+      return (
         <span
           key={token.id}
           className={codeToken({
@@ -73,10 +90,10 @@ export function CodeHeroLine({
             spacingRight: token.spacingRight,
           })}
         >
-          {token.text}
+          {replacement ?? token.text}
         </span>
-      ))}
-    </h1>
+      );
+    })
   );
 }
 
@@ -103,16 +120,4 @@ export function HeroActionContainer({
   children,
 }: HeroActionContainerProps): ReactElement {
   return <div className={heroActionContainer()}>{children}</div>;
-}
-
-interface HeroCodeSpacingProps {
-  children: ReactNode;
-  spacing?: "none" | "normal";
-}
-
-export function HeroCodeSpacing({
-  children,
-  spacing = "none",
-}: HeroCodeSpacingProps): ReactElement {
-  return <div className={heroCodeBlock({ spacing })}>{children}</div>;
 }

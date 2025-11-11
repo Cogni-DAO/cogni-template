@@ -15,11 +15,10 @@
 import type { ReactElement } from "react";
 
 import {
-  CodeHeroLine,
+  CodeTokenLine,
   HeroActionContainer,
   HeroActionWords,
   HeroCodeBlock,
-  HeroCodeSpacing,
 } from "@/components";
 
 import {
@@ -32,25 +31,27 @@ import {
 export function HeroContent(): ReactElement {
   return (
     <HeroCodeBlock>
-      {/* Line 1: while together(action) { */}
-      <CodeHeroLine tokens={heroLine1} />
-
-      {/* Action words component inline where the action token would be */}
-      <HeroCodeSpacing spacing="normal">
-        <HeroActionContainer>
-          <HeroActionWords actions={HERO_ACTIONS} token="keyword" />
-        </HeroActionContainer>
-      </HeroCodeSpacing>
+      {/* Line 1: while together(action) { with inline animated action word */}
+      <CodeTokenLine
+        tokens={heroLine1}
+        tokenReplacements={{
+          "action-word": (
+            <HeroActionContainer>
+              <HeroActionWords actions={HERO_ACTIONS} kind="keyword" />
+            </HeroActionContainer>
+          ),
+        }}
+      />
 
       {/* Line 2: community++; */}
-      <HeroCodeSpacing spacing="normal">
-        <CodeHeroLine tokens={heroLine2} tone="subdued" />
-      </HeroCodeSpacing>
+      <HeroCodeBlock spacing="normal">
+        <CodeTokenLine tokens={heroLine2} tone="subdued" level="p" />
+      </HeroCodeBlock>
 
       {/* Line 3: } */}
-      <HeroCodeSpacing spacing="normal">
-        <CodeHeroLine tokens={heroLine3} tone="subdued" />
-      </HeroCodeSpacing>
+      <HeroCodeBlock spacing="normal">
+        <CodeTokenLine tokens={heroLine3} tone="subdued" level="p" />
+      </HeroCodeBlock>
     </HeroCodeBlock>
   );
 }

@@ -166,47 +166,6 @@ export const prompt = cva("", {
  */
 export const textAccent = cva("block text-warning");
 
-/**
- * Hero action words styling for animated flip words component
- */
-export const heroActionWords = cva("text-primary font-semibold");
-
-const codeSyntaxTokenVariants = {
-  keyword: "!text-[var(--color-chart-6)]",
-  operator: "!text-[var(--color-chart-2)]",
-  variable: "!text-[var(--color-chart-5)]",
-  punctuation: "!text-muted-foreground",
-  parenthesis: "!text-[var(--color-chart-3)]",
-  property: "!text-[var(--color-chart-1)]",
-  delimiter: "!text-[var(--color-chart-4)]",
-  // Aliases for hero code components
-  // Same as variable
-  identifier: "!text-[var(--color-chart-5)]",
-  // Same as property
-  accent: "!text-[var(--color-chart-1)]",
-} as const;
-
-const codeSyntaxSpacingRightVariants = {
-  none: "",
-  xs: "pr-[var(--spacing-hero-xs)]",
-  xl: "pr-[var(--spacing-hero-xl)]",
-  rainbow: "pr-[var(--spacing-rainbow)]",
-} as const;
-
-/**
- * Code syntax coloring for terminal-style text with optional right spacing
- */
-export const codeSyntax = cva("", {
-  variants: {
-    token: codeSyntaxTokenVariants,
-    spacingRight: codeSyntaxSpacingRightVariants,
-  },
-  defaultVariants: {
-    token: "keyword",
-    spacingRight: "none",
-  },
-});
-
 const brandTextSizeVariants = {
   sm: "text-base font-semibold",
   md: "text-lg font-semibold",

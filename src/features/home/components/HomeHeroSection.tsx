@@ -15,11 +15,13 @@
 import type { ReactElement, ReactNode } from "react";
 
 import {
+  container,
+  grid,
   heroButtonContainer,
   heroTextWrapper,
   heroVisualContainer,
-} from "@/components/kit/sections/hero.styles";
-import { container, grid, section } from "@/styles/ui";
+  section,
+} from "@/components";
 
 interface HomeHeroSectionProps {
   /**

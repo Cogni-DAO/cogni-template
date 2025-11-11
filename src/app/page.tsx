@@ -16,10 +16,10 @@ import { ArrowRight } from "lucide-react";
 import type { ReactElement } from "react";
 
 import { Button } from "@/components";
-import { HomeHeroSection } from "@/components/kit/sections";
 import { FeaturesSection } from "@/features/home/components/FeaturesSection";
 import { HeroContent } from "@/features/home/components/HeroContent";
 import { HomeCtaSection } from "@/features/home/components/HomeCtaSection";
+import { HomeHeroSection } from "@/features/home/components/HomeHeroSection";
 import { Terminal } from "@/features/home/components/Terminal";
 
 export default function HomePage(): ReactElement {

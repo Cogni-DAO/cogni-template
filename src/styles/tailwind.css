@@ -178,7 +178,7 @@
   --spacing-hero-xs: 0.3125rem; /* 5px - syntax element spacing */
   --spacing-hero-xl: 1.25rem; /* 20px - syntax element spacing */
   --spacing-rainbow: 8.4375rem; /* 135px - rainbow action words spacing */
-  --width-action-words: 10.625rem; /* 170px - action words container width */
+  --width-action-words: 11.6875rem; /* 187px - action words container width (10% wider) */
 
   /* Typography scale */
   --text-xs: 0.75rem; /* 12px */

@@ -25,10 +25,18 @@ describe("Features Import Boundaries", () => {
     expect(errors).toBe(0);
   });
 
-  it.skip("blocks feature importing styles directly", async () => {
+  it("blocks feature importing styles directly", async () => {
     const { errors } = await lintFixture(
       "src/features/auth/components/LoginForm.tsx",
       `import { button } from "@/styles/ui"; export const LoginForm = () => <div className={button()} />;`
+    );
+    expect(errors).toBeGreaterThan(0);
+  });
+
+  it("blocks feature importing container, grid, section from styles/ui", async () => {
+    const { errors } = await lintFixture(
+      "src/features/home/components/HomeHeroSection.tsx",
+      `import { container, grid, section } from "@/styles/ui"; export const HomeHero = () => <div className={container()} />;`
     );
     expect(errors).toBeGreaterThan(0);
   });

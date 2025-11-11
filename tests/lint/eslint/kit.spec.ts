@@ -40,4 +40,31 @@ describe("Kit Layer Purity", () => {
     );
     expect(errors).toBe(0);
   });
+
+  it.skip("allows internal className usage with createElement", async () => {
+    const { errors } = await lintFixture(
+      "src/components/kit/typography/CodeTokenLine.tsx",
+      `import { createElement } from "react"; import { heading, codeToken } from "@/styles/ui";
+      
+      export function CodeTokenLine({ tokens }: { tokens: Array<{ id: string; text: string }> }) {
+        return createElement(
+          "h1",
+          {
+            className: heading({
+              level: "h1",
+              tone: "default", 
+              family: "mono",
+              weight: "regular",
+            }),
+          },
+          tokens.map((token) => (
+            <span key={token.id} className={codeToken({ kind: "keyword" })}>
+              {token.text}
+            </span>
+          ))
+        );
+      }`
+    );
+    expect(errors).toBe(0);
+  });
 });
