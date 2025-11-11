@@ -154,6 +154,20 @@ export async function lintFixture(
 
   writeFileSync(path.join(root, "next-env.d.ts"), ""); // silence Next typings
 
+  // Copy CSS fixture for no-raw-tailwind rule token validation
+  mkdirSync(path.join(root, "src/styles"), { recursive: true });
+  const cssFixture = readFileSync(
+    path.resolve("tests/lint/fixtures/styles/tailwind.css"),
+    "utf8"
+  );
+  const cssFixturePath = path.join(root, "src/styles/tailwind.css");
+  writeFileSync(cssFixturePath, cssFixture, {
+    encoding: "utf8",
+  });
+
+  // Set env var for no-raw-tailwind rule to use fixture CSS
+  process.env.NO_RAW_TW_CSS = cssFixturePath;
+
   // Create source file with proper directory structure
   const absFile = path.join(root, relPath);
   mkdirSync(path.dirname(absFile), { recursive: true });
