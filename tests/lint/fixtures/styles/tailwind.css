@@ -1,0 +1,18 @@
+/* Test fixture CSS tokens for no-raw-tailwind rule */
+:root {
+  /* Test tokens used in test suite */
+  --custom: #000000;
+  --color-primary: hsl(210 100% 50%);
+  --size-icon-md: 1.5rem;
+  --space-sm: 0.5rem;
+  --chart-6: hsl(280 100% 50%);
+  --primary: hsl(210 100% 50%);
+  --width-sidebar: 16rem;
+  --foreground: hsl(0 0% 3.9%);
+
+  /* Additional semantic tokens */
+  --secondary: hsl(210 40% 60%);
+  --muted: hsl(210 40% 95%);
+  --accent: hsl(210 40% 90%);
+  --destructive: hsl(0 84% 60%);
+}

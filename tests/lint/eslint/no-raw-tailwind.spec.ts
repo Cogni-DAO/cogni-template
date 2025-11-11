@@ -90,7 +90,7 @@ describe("No Raw Tailwind ESLint Rule", () => {
         expect.objectContaining({
           ruleId: "no-raw-tailwind/no-raw-tailwind-classes",
           message: expect.stringContaining(
-            'Raw Tailwind value "bg-primary/80"'
+            'Raw Tailwind value "from-slate-900/60"'
           ),
         }),
       ])
@@ -129,7 +129,9 @@ describe("No Raw Tailwind ESLint Rule", () => {
       expect.arrayContaining([
         expect.objectContaining({
           ruleId: "no-raw-tailwind/no-raw-tailwind-classes",
-          message: expect.stringContaining('Raw Tailwind value "text-[14px]"'),
+          message: expect.stringContaining(
+            'Raw arbitrary value not allowed. Use bracketed tokens with var(--token) syntax. In "text-[14px]"'
+          ),
         }),
       ])
     );
@@ -374,7 +376,9 @@ describe("No Raw Tailwind ESLint Rule", () => {
       expect.arrayContaining([
         expect.objectContaining({
           ruleId: "no-raw-tailwind/no-raw-tailwind-classes",
-          message: expect.stringContaining('Raw Tailwind value "w-[2px]"'),
+          message: expect.stringContaining(
+            'Raw arbitrary value not allowed. Use bracketed tokens with var(--token) syntax. In "w-[2px]"'
+          ),
         }),
       ])
     );
@@ -393,7 +397,9 @@ describe("No Raw Tailwind ESLint Rule", () => {
       expect.arrayContaining([
         expect.objectContaining({
           ruleId: "no-raw-tailwind/no-raw-tailwind-classes",
-          message: expect.stringContaining('Raw Tailwind value "min-h-[50vh]"'),
+          message: expect.stringContaining(
+            'Raw arbitrary value not allowed. Use bracketed tokens with var(--token) syntax. In "min-h-[50vh]"'
+          ),
         }),
       ])
     );
@@ -462,5 +468,191 @@ describe("No Raw Tailwind ESLint Rule", () => {
     );
 
     expect(warnings).toBe(0);
+  });
+
+  // Validation Test 1: File scoping - should only flag className violations, not SVG paths or token arrays
+  it("should only flag className violations with proper file scoping", async () => {
+    // Test SVG path in non-UI file (should be ignored)
+    const { warnings: svgWarnings } = await lintFixture(
+      "src/utils/svg.ts", // Outside target directories
+      `export const path = "M10 20 C20 20, 20 10, 10 10 C0 10, 0 20, 10 20 z";
+       export const numbers = ["1-2.235", "chart-1", "chart-2"];`,
+      { focusRulePrefixes: ["no-raw-tailwind"] }
+    );
+    expect(svgWarnings).toBe(0);
+
+    // Test token array in theme.ts (should be ignored due to filename filtering)
+    const { warnings: themeWarnings } = await lintFixture(
+      "src/styles/theme.ts",
+      `export const colorKeys = ["chart-1", "chart-2", "chart-3"] as const;`,
+      { focusRulePrefixes: ["no-raw-tailwind"] }
+    );
+    expect(themeWarnings).toBe(0);
+
+    // Test real className violation in UI file (should be flagged)
+    const { warnings: uiWarnings, messages } = await lintFixture(
+      "src/components/test.tsx",
+      `export const Component = () => <div className="w-4" />;`,
+      { focusRulePrefixes: ["no-raw-tailwind"] }
+    );
+    expect(uiWarnings).toBeGreaterThan(0);
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringContaining("w-4"),
+          ruleId: "no-raw-tailwind/no-raw-tailwind-classes",
+        }),
+      ])
+    );
+  });
+
+  // Validation Test 2: Complex string extraction
+  it("should extract strings from complex className expressions", async () => {
+    const { warnings, messages } = await lintFixture(
+      "src/components/test.tsx",
+      `import { cn } from "@/lib/utils";
+       export const Component = ({ cond, t }: any) => (
+         <div className={cn(["w-4", cond && "h-8"], \`bg-red-500 \${t}\`)} />
+       );`,
+      { focusRulePrefixes: ["no-raw-tailwind"] }
+    );
+
+    expect(warnings).toBeGreaterThan(0);
+    // Should flag all three violations: w-4, h-8, bg-red-500
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          message: expect.stringContaining("w-4"),
+          ruleId: "no-raw-tailwind/no-raw-tailwind-classes",
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining("h-8"),
+          ruleId: "no-raw-tailwind/no-raw-tailwind-classes",
+        }),
+        expect.objectContaining({
+          message: expect.stringContaining("bg-red-500"),
+          ruleId: "no-raw-tailwind/no-raw-tailwind-classes",
+        }),
+      ])
+    );
+    expect(messages.length).toBeGreaterThanOrEqual(3);
+  });
+
+  // Tests for patterns that SHOULD pass but currently fail (linting logic violations)
+  // These tests document what our rule should allow per the UI architecture goals
+
+  it("SHOULD allow semantic aliases with opacity (currently fails)", async () => {
+    const { warnings, messages } = await lintFixture(
+      "src/components/test.tsx",
+      `export const Component = () => <div className="bg-primary/80 text-muted/60 border-accent/20" />;`,
+      { focusRulePrefixes: ["no-raw-tailwind"] }
+    );
+
+    // This test expects NO warnings - these should be allowed
+    // Currently fails because rule doesn't recognize semantic aliases with opacity
+    expect(warnings).toBe(0);
+    expect(messages).toEqual([]);
+  });
+
+  it("SHOULD allow selector utilities with zero/alias (currently fails)", async () => {
+    const { warnings, messages } = await lintFixture(
+      "src/components/test.tsx",
+      `export const Component = () => <div className="has-[>svg]:pl-0 has-[.active]:bg-primary" />;`,
+      { focusRulePrefixes: ["no-raw-tailwind"] }
+    );
+
+    // This test expects NO warnings - selector + zero + alias should be allowed
+    expect(warnings).toBe(0);
+    expect(messages).toEqual([]);
+  });
+
+  it("SHOULD block selector utilities with raw numeric values", async () => {
+    const { warnings, messages } = await lintFixture(
+      "src/components/test.tsx",
+      `export const Component = () => <div className="has-[>svg]:pl-2" />;`,
+      { focusRulePrefixes: ["no-raw-tailwind"] }
+    );
+
+    // This test expects warnings - raw numeric spacing should be blocked
+    expect(warnings).toBeGreaterThan(0);
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: "no-raw-tailwind/no-raw-tailwind-classes",
+          message: expect.stringContaining('Raw Tailwind value "pl-2"'),
+        }),
+      ])
+    );
+  });
+
+  it("SHOULD allow selector utilities with bracketed tokens", async () => {
+    const { warnings, messages } = await lintFixture(
+      "src/components/test.tsx",
+      `export const Component = () => <div className="has-[>svg]:pl-[var(--space-sm)]" />;`,
+      { focusRulePrefixes: ["no-raw-tailwind"] }
+    );
+
+    // This test expects NO warnings - selector + bracketed token should be allowed
+    expect(warnings).toBe(0);
+    expect(messages).toEqual([]);
+  });
+
+  it("SHOULD block hand-typed min()/calc() expressions (currently works)", async () => {
+    const { warnings, messages } = await lintFixture(
+      "src/components/test.tsx",
+      `export const Component = () => <div className="min-w-[min(100%,48ch)] w-[calc(100%-2rem)] max-w-[min(100%,80ch)]" />;`,
+      { focusRulePrefixes: ["no-raw-tailwind"] }
+    );
+
+    // This test expects warnings - hand-typed math should be blocked
+    // Design: use semantic alias min-w-measure instead
+    expect(warnings).toBeGreaterThan(0);
+    expect(messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: "no-raw-tailwind/no-raw-tailwind-classes",
+          message: expect.stringContaining("Raw arbitrary value not allowed"),
+        }),
+      ])
+    );
+  });
+
+  it("SHOULD allow bracketed token references (currently fails for some)", async () => {
+    const { warnings, messages } = await lintFixture(
+      "src/components/test.tsx",
+      `export const Component = () => <div className="text-[var(--chart-6)] bg-[var(--primary)] w-[var(--width-sidebar)]" />;`,
+      { focusRulePrefixes: ["no-raw-tailwind"] }
+    );
+
+    // This test expects NO warnings - bracketed var() tokens should always be allowed
+    // Currently may fail if tokens don't exist in CSS file
+    expect(warnings).toBe(0);
+    expect(messages).toEqual([]);
+  });
+
+  it("SHOULD allow important modifier with tokens (currently fails)", async () => {
+    const { warnings, messages } = await lintFixture(
+      "src/components/test.tsx",
+      `export const Component = () => <div className="!text-[var(--foreground)] !bg-primary/80" />;`,
+      { focusRulePrefixes: ["no-raw-tailwind"] }
+    );
+
+    // This test expects NO warnings - important + tokens/aliases should be allowed
+    // Currently fails because rule doesn't strip ! before checking patterns
+    expect(warnings).toBe(0);
+    expect(messages).toEqual([]);
+  });
+
+  it("SHOULD allow CSS keywords for paint properties (currently fails)", async () => {
+    const { warnings, messages } = await lintFixture(
+      "src/components/test.tsx",
+      `export const Component = () => <div className="text-transparent bg-current border-transparent" />;`,
+      { focusRulePrefixes: ["no-raw-tailwind"] }
+    );
+
+    // This test expects NO warnings - CSS keywords should be allowed
+    // Currently fails because rule doesn't recognize CSS keyword exceptions
+    expect(warnings).toBe(0);
+    expect(messages).toEqual([]);
   });
 });

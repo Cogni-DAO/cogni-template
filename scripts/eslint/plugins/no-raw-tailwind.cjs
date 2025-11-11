@@ -4,100 +4,231 @@
 /**
  * Module: `@scripts/eslint/plugins/no-raw-tailwind`
  * Purpose: ESLint rule that enforces design token usage over raw Tailwind utility classes.
- * Scope: Detects ALL value-bearing Tailwind utilities and enforces tokenization. Per-token scanning catches current and future violations.
- * Invariants: All value-bearing utilities must use semantic names or -[var(--token)] format; structural utilities allowed raw.
- * Side-effects: none
- * Notes: Token-based scanning replaces string-level matching for comprehensive coverage.
- * Links: eslint/no-raw-tailwind.config.mjs, src/styles/theme.ts, src/styles/tailwind.css
+ * Scope: Runtime CSS parsing validates bracketed vars against actual tokens; blocks raw palette/numeric utilities.
+ * Invariants: Bracketed vars must reference existing CSS custom properties; structural utilities allowed raw.
+ * Side-effects: Reads src/styles/tailwind.css once per lint run
+ * Notes: Self-contained rule with runtime token extraction - no build step required.
+ * Links: eslint/no-raw-tailwind.config.mjs, src/styles/tailwind.css
  * @public
  */
 
-// ALLOWED_VAR: Token reference pattern - any utility with var(--token) format
-const ALLOWED_VAR =
-  /^[a-z0-9-]+-\[(?:var\(--[a-z0-9-]+\)|hsl\(var\(--[a-z0-9-]+\)\))\]$/i;
+const fs = require("fs");
+const path = require("path");
 
-// ALLOWED_SEMANTIC_COLOR: Semantic color tokens for color-related utilities
-const ALLOWED_SEMANTIC_COLOR =
-  /^(bg|text|border|from|to|via|fill|stroke|ring|ring-offset)-(background|foreground|card|popover|primary|secondary|muted|accent|destructive|border|input|ring|chart-[1-5])(-foreground)?$/;
+// Per-path cache for parsed tokens
+const tokenCache = new Map();
 
-// ALLOWED_CHART_TOKENS: Chart color tokens as standalone values
-const ALLOWED_CHART_TOKENS = /^chart-[1-5]$/;
+/**
+ * Resolve CSS file path with support for test overrides
+ * @param {any} context - ESLint rule context
+ * @returns {string} - Absolute path to CSS file
+ */
+function resolveCssPath(context) {
+  // 1) explicit option wins
+  const optPath =
+    (context.options && context.options[0] && context.options[0].cssPath) ||
+    null;
+  if (optPath) return path.resolve(optPath);
 
-// ALLOWED_SEMANTIC_SIZE: Semantic size tokens for sizing utilities
+  // 2) env var for tests
+  if (process.env.NO_RAW_TW_CSS) return path.resolve(process.env.NO_RAW_TW_CSS);
+
+  // 3) default: project cwd
+  return path.join(
+    context.getCwd ? context.getCwd() : process.cwd(),
+    "src/styles/tailwind.css"
+  );
+}
+
+// BRACKETED_PATTERN: Generic pattern to find any bracketed utility
+const BRACKETED_PATTERN = /^([a-z0-9-]+)-\[(.+)\]$/i;
+
+// TOKEN_PATTERN: Extract all var(--token) references from bracketed content
+const TOKEN_PATTERN = /var\(--([a-z0-9-]+)\)/gi;
+
+// ALLOWED_STRUCTURAL: Only truly structural utilities (layout, display, position)
+const ALLOWED_STRUCTURAL =
+  /^(has-\[>svg\]|shrink-0|flex|grid|inline|block|hidden|relative|absolute|fixed|sticky|col-span-\d+)$/;
+
+// ALLOWED_SEMANTIC_TEXT: Only semantic text scale utilities
+const ALLOWED_SEMANTIC_TEXT =
+  /^(text-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl)|prose-(sm|base|lg|xl))$/;
+
+// ALLOWED_SEMANTIC_SIZE: Only semantic size tokens
 const ALLOWED_SEMANTIC_SIZE =
   /^(h|w|gap|rounded|rounded-t|rounded-r|rounded-b|rounded-l|rounded-tl|rounded-tr|rounded-br|rounded-bl)-(none|sm|md|lg|xl|full)$/;
 
-// ALLOWED_STRUCTURAL: Structural selectors and utilities that should be allowed
-const ALLOWED_STRUCTURAL =
-  /^(has-\[>svg\]|text-transparent|shrink-0|pt-0|mt-0|border-transparent|text-white|z-50|ring-2|ring-offset-2|bg-(primary|secondary|destructive)\/80|col-span-12|min-w-\[min\(100%,48ch\)\])$/;
+// ALLOWED_KEYWORDS: CSS keywords for paint properties (transparent, current)
+const ALLOWED_KEYWORDS =
+  /^(bg|text|border|ring|stroke|fill|ring-offset)-(transparent|current)$/i;
 
-// ALLOWED_SEMANTIC_TEXT: Tailwind text scale + typography prose utilities
-const ALLOWED_SEMANTIC_TEXT =
-  /^(text-(xs|sm|base|lg|xl|2xl|3xl|4xl|5xl|6xl)|prose-(sm|base|lg|xl)|text-transparent)$/;
+// ALLOWED_ZERO: Zero-only structural utilities
+const ALLOWED_ZERO =
+  /^(?:m[trblxy]?|p[trblxy]?|gap|space-[xy]|inset|top|right|bottom|left|pt|mt|pr|mr|pb|mb|pl|ml)-0$/;
+
+// HAS_SELECTOR: Selector utilities like has-[>svg]
+const HAS_SELECTOR = /^has-\[.+\]$/;
+
+// LAYOUT_MATH: Narrow layout math exception
+const LAYOUT_MATH = /^(min|max)-w-\[min\(100%,\s*\d+ch\)\]$/;
+
+// ALIAS_WITH_OPACITY: Semantic aliases with optional opacity
+const ALIAS_WITH_OPACITY =
+  /^(bg|text|border|ring|from|via|to|fill|stroke)-(primary|secondary|muted|accent|destructive|ring|foreground|background|card|popover|border|input)(\/\d{1,3}%?)?$/i;
 
 // RAW_COLOR_SUFFIX: named palette or basic colors => must be tokenized
 const RAW_COLOR_SUFFIX =
-  /^(black|white|transparent|current|(red|rose|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|slate|gray|zinc|neutral|stone)(-[0-9]{2,3})?)$/;
+  /^(black|white|(red|rose|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|slate|gray|zinc|neutral|stone)(-[0-9]{2,3})?)$/;
 
 // SCALE_SUFFIX: any numeric / fraction / scale-ish suffix
 const SCALE_SUFFIX = /(\d|[0-9]+\/[0-9]+|xs|sm|base|lg|xl|[2-9]xl)$/;
 
 /**
- * Check individual Tailwind class token for violations
- * @param {string} token - Single Tailwind class (e.g., "bg-red-500", "h-4")
+ * Extract CSS custom properties from tailwind.css content
+ * @param {string} cssContent - CSS file content
+ * @returns {Set<string>} - Set of token names (without -- prefix)
+ */
+function extractTokensFromCSS(cssContent) {
+  const tokenPattern = /--([a-z0-9-]+)\s*:/gi;
+
+  // Use matchAll to avoid lastIndex issues
+  const tokens = new Set(
+    [...cssContent.matchAll(tokenPattern)].map((m) => m[1])
+  );
+
+  return tokens;
+}
+
+/**
+ * Get CSS tokens for a specific path, with caching
+ * @param {string} cssPath - Path to CSS file
+ * @returns {Set<string>} - Set of available CSS custom property names
+ */
+function getTokensForPath(cssPath) {
+  if (tokenCache.has(cssPath)) {
+    return tokenCache.get(cssPath);
+  }
+
+  try {
+    const cssContent = fs.readFileSync(cssPath, "utf-8");
+    const tokens = extractTokensFromCSS(cssContent);
+    tokenCache.set(cssPath, tokens);
+    return tokens;
+  } catch {
+    // Cache empty set to avoid repeated IO
+    console.warn(
+      `no-raw-tailwind: Could not read ${cssPath}, allowing all bracketed vars`
+    );
+    const empty = new Set();
+    tokenCache.set(cssPath, empty);
+    return empty;
+  }
+}
+
+/**
+ * Extract and validate tokens from bracketed content
+ * @param {string} bracketContent - Content inside brackets
+ * @param {Set<string>} cssTokens - Available CSS tokens
+ * @param {string} cssPath - Path to CSS file for error messages
  * @returns {string | null} - Error message or null if valid
  */
-function checkClassToken(token) {
+function validateTokensInBrackets(bracketContent, cssTokens, cssPath) {
+  // Extract all var(--token) references using matchAll to avoid lastIndex issues
+  const tokens = [...bracketContent.matchAll(TOKEN_PATTERN)].map((m) => m[1]);
+
+  // If no tokens found, this is a raw arbitrary value - block it
+  if (tokens.length === 0) {
+    return `Raw arbitrary value not allowed. Use bracketed tokens with var(--token) syntax.`;
+  }
+
+  // Validate all tokens exist in CSS (if we have token data)
+  if (cssTokens.size > 0) {
+    for (const tokenName of tokens) {
+      if (!cssTokens.has(tokenName)) {
+        return `Token "--${tokenName}" not found in ${cssPath}. Use an existing token or add it to the CSS.`;
+      }
+    }
+  }
+
+  return null; // All tokens valid
+}
+
+/**
+ * Check individual Tailwind class token for violations
+ * @param {string} token - Single Tailwind class (e.g., "bg-red-500", "h-4")
+ * @param {Set<string>} cssTokens - Available CSS tokens
+ * @param {string} cssPath - Path to CSS file for error messages
+ * @returns {string | null} - Error message or null if valid
+ */
+function checkClassToken(token, cssTokens, cssPath) {
   const original = token;
 
+  // Strip ! prefix and leading - for proper validation
+  let t = original;
+  if (t.startsWith("!")) t = t.slice(1);
+  if (t.startsWith("-")) t = t.slice(1);
+
   // Ignore structural utilities with no '-' at all (e.g. "flex", "grid")
-  if (!original.includes("-")) return null;
+  if (!t.includes("-")) return null;
 
-  // Handle negative utilities: -translate-y-2, -mt-4, etc.
-  const negativeStripped = original.startsWith("-")
-    ? original.slice(1)
-    : original;
-  const t = negativeStripped;
+  // Check for selector utilities first (has-[>svg], etc.)
+  if (HAS_SELECTOR.test(t)) return null;
 
-  // Allow tokenized variants: prefix-[var(--token)]
-  if (ALLOWED_VAR.test(t)) return null;
+  // Check for bracketed values: any-prefix-[content]
+  const bracketedMatch = t.match(BRACKETED_PATTERN);
+  if (bracketedMatch) {
+    const bracketContent = bracketedMatch[2];
+    const tokenError = validateTokensInBrackets(
+      bracketContent,
+      cssTokens,
+      cssPath
+    );
+    if (tokenError) {
+      return `${tokenError} In "${original}".`;
+    }
+    return null; // Valid bracketed usage with tokens
+  }
 
-  // Allow semantic utilities first
-  if (ALLOWED_SEMANTIC_COLOR.test(t)) return null;
+  // Allow semantic utilities
   if (ALLOWED_SEMANTIC_SIZE.test(t)) return null;
   if (ALLOWED_SEMANTIC_TEXT.test(t)) return null;
   if (ALLOWED_STRUCTURAL.test(t)) return null;
-  if (ALLOWED_CHART_TOKENS.test(t)) return null;
 
-  // Split into prefix + suffix (first dash only)
+  // Allow CSS keywords for paint properties
+  if (ALLOWED_KEYWORDS.test(t)) return null;
+
+  // Allow zero-only structural utilities
+  if (ALLOWED_ZERO.test(t)) return null;
+
+  // Allow narrow layout math
+  if (LAYOUT_MATH.test(t)) return null;
+
+  // Allow semantic aliases with optional opacity
+  if (ALIAS_WITH_OPACITY.test(t)) return null;
+
+  // Split into prefix + suffix for further analysis
   const match = t.match(/^([a-z0-9-]+)-(.*)$/i);
   if (!match) return null;
 
   const suffix = match[2];
 
-  // Arbitrary values must be tokenized: prefix-[...]
-  if (suffix.startsWith("[")) {
-    if (!ALLOWED_VAR.test(t)) {
-      return `Raw Tailwind value "${original}" is not allowed. Use a tokenized variant (prefix-[var(--token)]) or a semantic utility.`;
-    }
-    return null;
-  }
-
-  // Raw palette suffixes or scale-like suffixes must be tokenized or semantic
+  // Raw palette suffixes or scale-like suffixes must be tokenized
   if (RAW_COLOR_SUFFIX.test(suffix) || SCALE_SUFFIX.test(suffix)) {
-    return `Raw Tailwind value "${original}" is not allowed. Use a tokenized variant (prefix-[var(--token)]) or a semantic utility.`;
+    return `Raw Tailwind value "${original}" is not allowed. Use a bracketed token (prefix-[var(--token)]) or a semantic utility.`;
   }
 
-  // Anything else: treated as structural or semantic we don't care about
+  // Anything else: likely structural or valid semantic we don't restrict
   return null;
 }
 
 /**
  * Check text for raw Tailwind violations by scanning individual tokens
  * @param {string} text - Text content to check
+ * @param {Set<string>} cssTokens - Available CSS tokens
+ * @param {string} cssPath - Path to CSS file for error messages
  * @returns {string | null} - Error message or null if valid
  */
-function checkText(text) {
+function checkText(text, cssTokens, cssPath) {
   const rawTokens = text.split(/\s+/);
 
   for (const rawToken of rawTokens) {
@@ -108,7 +239,7 @@ function checkText(text) {
 
     for (const segment of segments) {
       if (!segment) continue;
-      const error = checkClassToken(segment);
+      const error = checkClassToken(segment, cssTokens, cssPath);
       if (error) return error;
     }
   }
@@ -132,26 +263,156 @@ module.exports = {
        * @param {any} context
        */
       create(context) {
+        // Early return if not in target directories
+        const filename = context.getFilename();
+        if (
+          !/(src\/(components|features|styles\/ui)\/|src\/app\/)/.test(filename)
+        ) {
+          return {};
+        }
+
+        // Get CSS tokens for this context
+        const cssPath = resolveCssPath(context);
+        const cssTokens = getTokensForPath(cssPath);
+
+        // Track imported local names for cva|clsx|cn
+        const trackedNames = new Set(["cva", "clsx", "cn"]);
+
         /**
          * @param {any} node
          * @param {string} text
          */
         function reportIfBad(node, text) {
-          const msg = checkText(text);
+          const msg = checkText(text, cssTokens, cssPath);
           if (msg) context.report({ node, message: msg });
+        }
+
+        /**
+         * Extract strings from various AST node types
+         * @param {any} node
+         * @returns {Generator<[any, string]>}
+         */
+        function* extractStrings(node) {
+          if (!node) return;
+          switch (node.type) {
+            case "Literal":
+              if (typeof node.value === "string") yield [node, node.value];
+              break;
+            case "TemplateLiteral":
+              for (const q of node.quasis)
+                if (q.value?.raw) yield [q, q.value.raw];
+              break;
+            case "ArrayExpression":
+              for (const el of node.elements) if (el) yield* extractStrings(el);
+              break;
+            case "ConditionalExpression":
+              yield* extractStrings(node.consequent);
+              yield* extractStrings(node.alternate);
+              break;
+            case "LogicalExpression":
+            case "BinaryExpression":
+              yield* extractStrings(node.left);
+              yield* extractStrings(node.right);
+              break;
+            case "JSXExpressionContainer":
+              yield* extractStrings(node.expression);
+              break;
+            case "TaggedTemplateExpression":
+              yield* extractStrings(node.quasi);
+              break;
+            // add more if your codebase uses other shapes
+          }
         }
         return {
           /**
+           * Track imports to update local names for cva|clsx|cn
            * @param {any} node
            */
-          Literal(node) {
-            if (typeof node.value === "string") reportIfBad(node, node.value);
+          ImportDeclaration(node) {
+            if (node.source && typeof node.source.value === "string") {
+              const source = node.source.value;
+              // Track imports from class-variance-authority, clsx, classnames
+              if (
+                ["class-variance-authority", "clsx", "classnames"].includes(
+                  source
+                )
+              ) {
+                for (const spec of node.specifiers) {
+                  if (spec.type === "ImportSpecifier" && spec.imported) {
+                    const imported = spec.imported.name;
+                    const local = spec.local.name;
+                    if (["cva", "clsx", "cn"].includes(imported)) {
+                      trackedNames.add(local);
+                    }
+                  } else if (spec.type === "ImportDefaultSpecifier") {
+                    // Default import (e.g., import clsx from 'clsx')
+                    trackedNames.add(spec.local.name);
+                  }
+                }
+              }
+            }
           },
+
           /**
+           * Check className JSX attributes
            * @param {any} node
            */
-          TemplateElement(node) {
-            reportIfBad(node, node.value.raw || "");
+          JSXAttribute(node) {
+            if (node.name && node.name.name === "className" && node.value) {
+              for (const [n, s] of extractStrings(node.value)) {
+                reportIfBad(n, s);
+              }
+            }
+          },
+
+          /**
+           * Check CVA/clsx/cn function calls
+           * @param {any} node
+           */
+          CallExpression(node) {
+            let isTrackedCall = false;
+
+            // Handle direct calls (cva, clsx, cn)
+            if (
+              node.callee &&
+              node.callee.name &&
+              trackedNames.has(node.callee.name)
+            ) {
+              isTrackedCall = true;
+            }
+            // Handle member expressions (e.g., utils.cn)
+            else if (
+              node.callee &&
+              node.callee.type === "MemberExpression" &&
+              node.callee.property &&
+              trackedNames.has(node.callee.property.name)
+            ) {
+              isTrackedCall = true;
+            }
+
+            if (isTrackedCall) {
+              for (const arg of node.arguments) {
+                for (const [n, s] of extractStrings(arg)) {
+                  reportIfBad(n, s);
+                }
+              }
+            }
+          },
+
+          /**
+           * Check object properties in CVA variant objects
+           * @param {any} node
+           */
+          Property(node) {
+            // Only check properties that are likely CVA variant values
+            if (
+              node.value &&
+              /\b[a-z-]+(-\w+|\[\w\])/i.test(node.value.raw || "")
+            ) {
+              for (const [n, s] of extractStrings(node.value)) {
+                reportIfBad(n, s);
+              }
+            }
           },
         };
       },
