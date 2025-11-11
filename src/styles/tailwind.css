@@ -98,7 +98,7 @@
     --chart-3: 32 100% 95%; /* magenta – extra accent */
     /*--chart-4: 276 25% 59%; /* purple – delimiters like "{" */
     --chart-5: 20 90% 80%; /* peach/orange – hero/action strings */
-     /* teal – property / "rules:" */
+    /* teal – property / "rules:" */
   }
 }
 
@@ -226,6 +226,7 @@
 
   /* Typography utilities */
   --underline-offset: 4px;
+  --measure: 48ch; /* Typography measure for readable line lengths */
 
   /* Prose system */
   --prose-xs: 0.75rem;
@@ -255,6 +256,10 @@
   /* Ring/border widths */
   --ring-width-sm: 3px;
 
+  /* Ring offset width scale */
+  --ring-offset-w-sm: 2px;
+  --ring-offset-w-md: 4px;
+
   /* Grid system */
   --grid-cols-2: repeat(2, minmax(0, 1fr));
   --grid-cols-3: repeat(3, minmax(0, 1fr));
@@ -263,6 +268,11 @@
 
   /* Viewport dimensions */
   --height-screen-dvh: 100dvh;
+
+  /* Z-index layers (align with theme.ts zIndexKeys) */
+  --z-base: 0;
+  --z-overlay: 50;
+  --z-modal: 100;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

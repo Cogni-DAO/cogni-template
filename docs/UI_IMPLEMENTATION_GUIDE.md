@@ -1,107 +1,98 @@
-# New UI Feature — How to implement
+# UI Implementation Guide
 
-Here's the ~50-line developer guide.
+A practical guide to our layered UI architecture with CVA styling.
 
-## Directories
+## Architecture Layers (Import Rules)
 
-**src/components/vendor/ui-primitives/** — vendored code (e.g., shadcn). Read-only.
+```
+app/           → features, components (kit)
+features/      → components (kit only)
+components/kit → styles/ui, vendor/ui-primitives
+styles/ui      → styles/theme.ts (types only)
+```
 
-**src/components/kit/** — wrappers only. No className prop. Uses CVA from @/styles/ui.
+**Key Rule**: Each layer imports only from layers below. Features NEVER import `@/styles/ui` directly.
 
-**src/features/<slice>/components/** — feature composition only. Uses kit.
+## Directory Structure & Component Placement
 
-**src/styles/ui.ts** — single styling API (CVA factories). Only place with class literals.
+- **`src/components/kit/`** - Reusable components across features. Styled wrappers using CVA. No className prop.
+- **`src/components/app/shell/`** - Global layout components (AppShell, MainHeader, Footer)
+- **`src/components/app/common/`** - Cross-feature app components (UserMenu, DaoStatusBadge)
+- **`src/features/*/components/`** - Feature-specific components (used only once). Use kit components.
+- **`src/features/*/experimental/components/`** - Rapid experimentation. Raw Tailwind allowed by linter. Code will not pass review until converted to project standards.
+- **`src/styles/ui/`** - CVA factories using design tokens. Only place with className literals.
+- **`src/components/vendor/ui-primitives/`** - Vendored code (shadcn). Read-only, no @/\* imports.
 
-**Docs:** docs/UI_IMPLEMENTATION_GUIDE.md (this guide), src/components/AGENTS.md, src/styles/AGENTS.md.
+**Placement Decision**: Building for reuse? → `components/kit/`. Feature-specific? → `features/*/components/`. Need to experiment quickly? → `features/*/experimental/components/`.
 
-**Building full features?** See [Feature Development Guide](FEATURE_DEVELOPMENT_GUIDE.md) for the complete architecture workflow.
+**Promotion Rules**: feature → app/common (2+ features, Cogni-specific) → kit (generic, domain-neutral)
 
-## Rules (must follow)
+## Core Workflow
 
-**No literal className anywhere** except src/styles/ui.ts.
+### 1. Before Building Anything
 
-**Pages/features import kit only.** Never import vendor or styles directly.
+**Avoid implementing new primitives at all costs!** Scan `/src/components/kit/` first and prioritize reuse. If not found, check shadcn or Radix for appropriate primitives.
 
-**Features imports enforced by ESLint:** allow only @/components and @/components/kit/**; block @/styles/** and @/components/vendor/\*\*.
+### 2. Need New Styling?
 
-**kit/** calls CVA: `className={button({ size, intent })}`. Do not forward className.
+1. **Maximize reuse of existing tokens** - Only create new ones with user approval for truly novel work
+2. **Extend existing components** rather than creating new ones
+3. **Add CVA factory** in `src/styles/ui/` if absolutely needed
+4. **Export from barrel** at `src/components/index.ts`
 
-**CVA parameters allowed:** ESLint permits string literals inside CVA calls like `row({ gap: "xs" })` but blocks direct className literals like `className="flex gap-2"`.
+### 3. Extending vs Creating
 
-**Vendor must not import @/\***. Keep local \_vendor_utils if shadcn needs cn.
+**❌ Wrong**: Create new component (IconButton, TextWithSpacing)  
+**✅ Right**: Extend existing component with new props (Button.rightIcon)
 
-## Design Token Architecture
+**Naming**: Kit stays canonical (`CtaSection`), features get domain prefix (`HomeCtaSection`). See `/home` components for examples.
 
-**Design tokens live in tailwind.css + tailwind.preset.ts**; theme.ts exposes their keys for typing; only ui.ts and kit components may use them.
+## Using Vendor Components (shadcn/Radix)
 
-**Features never see theme details** - they only use typed props and CVA factories.
+### shadcn Integration
 
-## CVA + theme.ts Standard
+1. **Use shadcn CLI** to generate component OR copy from docs
+2. **Place files under** `src/components/vendor/ui-primitives/shadcn/`
+3. **Replace imports** (e.g., cn) with local `./vendorUtils`
+4. **Never re-export vendor** - always wrap via kit
+5. **Examples**: See existing files in `/src/components/vendor/ui-primitives/shadcn/`
 
-**Token values live in tailwind.css and tailwind.preset.ts.**
+### Radix Integration
 
-**src/styles/theme.ts exports keys and types only.**
+1. **Import @radix-ui/react-\*** directly in kit wrappers
+2. **Style via CVA** - no className prop
+3. **Examples**: See `/src/components/kit/` for Radix usage patterns
 
-**In src/styles/ui/**, declare `const *Variants = { … } satisfies Record<TokenKey,string>` and pass into cva. No inline variant objects.
+## Styling Rules
 
-**Tailwind strings appear only in cva base or \*Variants consts.**
+- **No className literals** anywhere except `src/styles/ui/`
+- **Kit components** call `className={factory({ size, variant })}`
+- **Features** only use kit component props, never direct styling
+- **CVA parameters** allowed, direct className literals blocked by ESLint
 
-**Kit props are typed from theme.ts; features import kit only.**
+**CVA Pattern**: Declare `const *Variants = { ... } satisfies Record<TokenKey,string>` and pass into cva. No inline variant objects.
 
-## When you need a new primitive or pattern
+## Token Architecture
 
-1. **Define tokens in Tailwind preset** if missing.
+**Values**: `tailwind.css` (single source of truth)  
+**Types**: `theme.ts` (keys only, no values)  
+**Minimal Workflow**: Adding new token requires only 2 files: add `--token` to tailwind.css, add key to theme.ts, use `prefix-[var(--token)]`
 
-2. **Add a CVA factory in src/styles/ui.ts** (tokens only; generic variants: size|tone|intent|elevation).
+**Bracketed Token Syntax**: Use `prefix-[var(--token)]` for direct token access (e.g., `text-[var(--chart-6)]`, `ring-offset-[var(--ring-offset-w-sm)]`). Prefer semantic utilities (`bg-primary`) when available. ESLint blocks raw utilities (`text-white`, `z-50`) and enforces token usage.
 
-3. **Create a kit wrapper in src/components/kit/...:**
-   - Import the CVA factory.
-   - Omit className from props.
-   - Forward ref. Apply `className={factory({...})}`.
+**Examples**: Study `/src/styles/ui/inputs.ts`, `/src/styles/ui/layout.ts` for implementation patterns
 
-4. **Export from src/components/index.ts** (barrel).
+## Barrel Exports
 
-## Using shadcn (vendored)
+Always update `src/components/index.ts` when adding kit components.  
+**Examples**: See existing exports in `/src/components/index.ts`
 
-1. **Use the shadcn CLI** to generate a component OR copy from docs.
+## Validation Checklist
 
-2. **Place files under src/components/vendor/ui-primitives/shadcn/**.
-
-3. **Replace repo imports** (e.g., cn) with local ./\_vendor_utils.
-
-4. **Do not re-export vendor.** Always wrap via kit.
-
-**No re-exports from src/components/index.ts.** Always wrap via kit.
-
-## Using Radix (npm)
-
-1. **Import @radix-ui/react-\*** directly in kit wrappers.
-
-2. **Style via CVA.** No className prop.
-
-## Feature implementation flow
-
-1. **Start in src/features/<slice>/components/** and compose kit components.
-
-2. **If you discover a missing primitive/variant:**
-   - Add CVA in styles/ui.ts → add kit wrapper → continue composing.
-
-3. **Promotion rule:** if two+ features need it, move the composed component into kit/ and add to barrel.
-
-## Examples
-
-**Terminal components** demonstrate the CVA-only pattern:
-
-- `src/features/home/components/Terminal.tsx` (features) imports from @/components barrel
-- `src/components/kit/data-display/TerminalFrame.tsx` (kit) uses CVA: `className={terminalDot({ color: "red" })}`
-- `src/styles/ui.ts` defines factories: `terminalDot`, `terminalHeader`, `row`, `pad`
-
-## Checklist before commit (many verified by `pnpm check`)
-
-- [ ] No literal className outside styles/ui.ts.
-- [ ] Feature code imports only from @/components (barrel) or @/components/kit/\*.
-- [ ] Kit wrappers do not forward className.
-- [ ] CVA parameters use design tokens from theme.ts types (e.g., `gap: "xs"` not `gap: "gap-2"`).
-- [ ] Vendor files have no @/\* imports.
-- [ ] Barrel exports updated if a new kit component was added.
-- [ ] ESLint passes. Visual parity verified.
+- [ ] Scanned existing components for reuse opportunities
+- [ ] Features import only from `@/components`
+- [ ] Kit components don't forward className prop
+- [ ] All styling goes through CVA factories
+- [ ] Used existing tokens (new tokens need user approval)
+- [ ] Barrel exports updated for new components
+- [ ] `pnpm check` passes
