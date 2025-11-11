@@ -4,7 +4,7 @@
 /**
  * Module: `@scripts/eslint/plugins/no-vendor-sdk-imports`
  * Purpose: ESLint rule that prevents vendor SDK imports in core application code, enforcing hexagonal architecture.
- * Scope: Blocks proprietary SaaS SDKs from src/** to prevent vendor lock-in and maintain portability.
+ * Scope: Blocks proprietary SaaS SDKs from src/** to prevent vendor lock-in and maintain portability. Does not restrict infra adapter implementations.
  * Invariants: Core code must use infra adapters; vendor SDKs only allowed in src/infra/**.
  * Side-effects: none
  * Notes: Covers observability, auth, BaaS, queue/cache, feature flags, and chat SDKs per hexagonal architecture.

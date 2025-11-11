@@ -56,3 +56,9 @@ export const width = Object.fromEntries(
     `var(--size-dropdown-${key})`,
   ])
 ) as Record<`dropdown-${DropdownSizeKey}`, string>;
+
+// Typography measure utilities
+export const measureUtilities = {
+  ".min-w-measure": { minWidth: "min(100%, var(--measure))" },
+  ".max-w-measure": { maxWidth: "min(100%, var(--measure))" },
+};

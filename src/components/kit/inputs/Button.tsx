@@ -14,10 +14,10 @@
 
 import { Slot } from "@radix-ui/react-slot";
 import type { VariantProps } from "class-variance-authority";
-import type { ComponentProps } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { forwardRef } from "react";
 
-import { button } from "@/styles/ui";
+import { button, icon } from "@/styles/ui";
 
 type ButtonNoClass = Omit<ComponentProps<"button">, "className">;
 
@@ -25,10 +25,29 @@ export interface ButtonProps
   extends ButtonNoClass,
     VariantProps<typeof button> {
   asChild?: boolean;
+  /**
+   * Right icon component (Lucide icon)
+   */
+  rightIcon?: ReactNode;
+  /**
+   * Icon size variant
+   */
+  iconSize?: "sm" | "md" | "lg";
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant, size, asChild = false, ...props }, ref) => {
+  (
+    {
+      variant,
+      size,
+      asChild = false,
+      rightIcon,
+      iconSize = "md",
+      children,
+      ...props
+    },
+    ref
+  ) => {
     const Comp = asChild ? Slot : "button";
     return (
       <Comp
@@ -36,7 +55,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         className={button({ variant, size })}
         ref={ref}
         {...props}
-      />
+      >
+        {children}
+        {rightIcon && (
+          <span className={icon({ size: iconSize })} aria-hidden="true">
+            {rightIcon}
+          </span>
+        )}
+      </Comp>
     );
   }
 );

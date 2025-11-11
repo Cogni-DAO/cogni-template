@@ -12,6 +12,8 @@
  * @public
  */
 
+export { CtaSection } from "./CtaSection";
+export { FeaturesGrid } from "./FeaturesGrid";
 export { Hero } from "./Hero";
 export {
   featureContent,
@@ -21,3 +23,4 @@ export {
   heroVisualContainer,
   smallIcon,
 } from "./hero.styles";
+export { HomeHeroSection } from "./HomeHeroSection";
