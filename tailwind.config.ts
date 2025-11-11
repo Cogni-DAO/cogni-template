@@ -1,4 +1,7 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
+
+import { measureUtilities } from "./src/styles/tailwind.preset";
 
 export default {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
@@ -11,4 +14,9 @@ export default {
       },
     },
   },
+  plugins: [
+    plugin(({ addUtilities }) => {
+      addUtilities(measureUtilities);
+    }),
+  ],
 } satisfies Config;

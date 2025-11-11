@@ -23,7 +23,7 @@ export const heroTextWrapper = cva(
     variants: {
       width: {
         auto: "",
-        fixed: "[&>h1]:min-w-[min(100%,48ch)]",
+        fixed: "[&>h1]:min-w-measure",
       },
     },
     defaultVariants: {

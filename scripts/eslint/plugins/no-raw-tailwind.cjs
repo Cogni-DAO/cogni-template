@@ -4,9 +4,9 @@
 /**
  * Module: `@scripts/eslint/plugins/no-raw-tailwind`
  * Purpose: ESLint rule that enforces design token usage over raw Tailwind utility classes.
- * Scope: Runtime CSS parsing validates bracketed vars against actual tokens; blocks raw palette/numeric utilities.
+ * Scope: Runtime CSS parsing validates bracketed vars against actual tokens; blocks raw palette/numeric utilities. Does not validate build-time compilation.
  * Invariants: Bracketed vars must reference existing CSS custom properties; structural utilities allowed raw.
- * Side-effects: Reads src/styles/tailwind.css once per lint run
+ * Side-effects: IO (reads src/styles/tailwind.css once per lint run)
  * Notes: Self-contained rule with runtime token extraction - no build step required.
  * Links: eslint/no-raw-tailwind.config.mjs, src/styles/tailwind.css
  * @public
