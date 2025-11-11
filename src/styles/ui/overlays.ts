@@ -242,5 +242,5 @@ export const dropdownMenuCheck = cva("", {
  * Skip link styling for accessibility navigation
  */
 export const skipLink = cva(
-  "sr-only focus:not-sr-only focus:absolute focus:top-[var(--position-sm)] focus:left-[var(--position-sm)] focus:z-50 focus:px-[var(--position-sm)] focus:py-[var(--spacing-sm)] focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:shadow-[var(--shadow-lg)] transition-all duration-[var(--duration-fast)]"
+  "sr-only focus:not-sr-only focus:absolute focus:top-[var(--position-sm)] focus:left-[var(--position-sm)] focus:z-[var(--z-overlay)] focus:px-[var(--position-sm)] focus:py-[var(--spacing-sm)] focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:shadow-[var(--shadow-lg)] transition-all duration-[var(--duration-fast)]"
 );

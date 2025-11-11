@@ -109,7 +109,7 @@ const badgeSizeVariants = {
  * Badge component styling for status indicators
  */
 export const badge = cva(
-  "inline-flex items-center rounded-md border px-[var(--spacing-md)] py-[var(--spacing-xs)] text-[var(--text-xs)] font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center rounded-md border px-[var(--spacing-md)] py-[var(--spacing-xs)] text-[var(--text-xs)] font-semibold transition-colors focus:outline-none focus:ring-[var(--ring-width-sm)] focus:ring-ring focus:ring-offset-[var(--ring-offset-w-sm)]",
   {
     variants: {
       intent: badgeIntentVariants,
@@ -140,7 +140,7 @@ const iconBoxColorVariants = {
  * Icon box styling for feature icons
  */
 export const iconBox = cva(
-  "flex items-center justify-center rounded-md text-white",
+  "flex items-center justify-center rounded-md text-[var(--color-white)]",
   {
     variants: {
       size: iconBoxSizeVariants,

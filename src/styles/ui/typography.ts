@@ -172,24 +172,38 @@ export const textAccent = cva("block text-warning");
 export const heroActionWords = cva("text-primary font-semibold");
 
 const codeSyntaxTokenVariants = {
-  keyword: "!text-chart-6",
-  operator: "!text-chart-2",
-  variable: "!text-chart-5",
+  keyword: "!text-[var(--color-chart-6)]",
+  operator: "!text-[var(--color-chart-2)]",
+  variable: "!text-[var(--color-chart-5)]",
   punctuation: "!text-muted-foreground",
-  parenthesis: "!text-chart-3",
-  property: "!text-chart-1",
-  delimiter: "!text-chart-4",
+  parenthesis: "!text-[var(--color-chart-3)]",
+  property: "!text-[var(--color-chart-1)]",
+  delimiter: "!text-[var(--color-chart-4)]",
+  // Aliases for hero code components
+  // Same as variable
+  identifier: "!text-[var(--color-chart-5)]",
+  // Same as property
+  accent: "!text-[var(--color-chart-1)]",
+} as const;
+
+const codeSyntaxSpacingRightVariants = {
+  none: "",
+  xs: "pr-[var(--spacing-hero-xs)]",
+  xl: "pr-[var(--spacing-hero-xl)]",
+  rainbow: "pr-[var(--spacing-rainbow)]",
 } as const;
 
 /**
- * Code syntax coloring for terminal-style text
+ * Code syntax coloring for terminal-style text with optional right spacing
  */
 export const codeSyntax = cva("", {
   variants: {
     token: codeSyntaxTokenVariants,
+    spacingRight: codeSyntaxSpacingRightVariants,
   },
   defaultVariants: {
     token: "keyword",
+    spacingRight: "none",
   },
 });
 
@@ -205,7 +219,7 @@ const brandTextToneVariants = {
   subdued: "text-muted-foreground",
   invert: "text-background",
   gradient:
-    "bg-gradient-to-r from-chart-2 via-chart-1 to-chart-4 bg-clip-text text-transparent",
+    "bg-gradient-to-r from-[var(--color-chart-2)] via-[var(--color-chart-1)] to-[var(--color-chart-4)] bg-clip-text text-transparent",
 } as const;
 
 /**
