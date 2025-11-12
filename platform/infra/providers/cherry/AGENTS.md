@@ -21,9 +21,9 @@ Cherry Servers cloud provider configurations split between immutable VM provisio
 
 ```json
 {
-  "layer": "infrastructure",
-  "may_import": ["../../files", "terraform_modules"],
-  "must_not_import": ["../../../../src/**"]
+  "layer": "infra",
+  "may_import": [],
+  "must_not_import": ["*"]
 }
 ```
 

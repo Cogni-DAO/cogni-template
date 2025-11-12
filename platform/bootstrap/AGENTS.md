@@ -21,9 +21,9 @@ Development environment setup installers for one-time machine and repository con
 
 ```json
 {
-  "layer": "platform",
-  "may_import": ["external_package_managers"],
-  "must_not_import": ["../../src/**"]
+  "layer": "infra",
+  "may_import": [],
+  "must_not_import": ["*"]
 }
 ```
 

@@ -20,9 +20,9 @@ Future Akash Network deployment configurations for decentralized cloud infrastru
 
 ```json
 {
-  "layer": "infrastructure",
-  "may_import": ["../../files", "terraform_modules"],
-  "must_not_import": ["../../../../src/**"]
+  "layer": "infra",
+  "may_import": [],
+  "must_not_import": ["*"]
 }
 ```
 

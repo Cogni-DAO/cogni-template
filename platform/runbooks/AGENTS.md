@@ -21,7 +21,7 @@ Operational procedures and documentation for deployment, rollback, and incident 
 
 ```json
 {
-  "layer": "documentation",
+  "layer": "infra",
   "may_import": [],
   "must_not_import": ["*"]
 }

@@ -130,6 +130,7 @@ function validateBoundaries(block, filePathRaw) {
     { re: /^e2e\//, layer: "e2e" },
     { re: /^scripts\//, layer: "scripts" },
     { re: /^infra\//, layer: "infra" },
+    { re: /^platform\//, layer: "infra" },
   ];
 
   const POLICY_ALLOW = {
@@ -257,6 +258,16 @@ function validateBoundaries(block, filePathRaw) {
         `Boundaries: contracts may not import ${banned.join("|")}`
       );
     }
+  }
+
+  // 7) src/** layers may not import platform/** (CI/IaC not runtime dependency)
+  if (
+    filePath.startsWith("src/") &&
+    j.may_import.some((x) => x === "platform" || x.startsWith("platform/"))
+  ) {
+    throw new Error(
+      `Boundaries: src layers cannot import platform/** (CI/IaC not runtime dependency)`
+    );
   }
 }
 

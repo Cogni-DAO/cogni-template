@@ -22,9 +22,9 @@ Service-specific configurations for supporting infrastructure like LLM routing, 
 
 ```json
 {
-  "layer": "infrastructure",
-  "may_import": ["../files", "docker_configs"],
-  "must_not_import": ["../../../src/**"]
+  "layer": "infra",
+  "may_import": [],
+  "must_not_import": ["*"]
 }
 ```
 

@@ -21,9 +21,9 @@ SSH-based application deployment with health validation for existing Cherry Serv
 
 ```json
 {
-  "layer": "infrastructure",
-  "may_import": ["../../../files", "terraform_providers"],
-  "must_not_import": ["../../../../../src/**"]
+  "layer": "infra",
+  "may_import": [],
+  "must_not_import": ["*"]
 }
 ```
 

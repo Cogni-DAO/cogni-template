@@ -1,21 +1,23 @@
 # bootstrap · AGENTS.md
 
-> Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
+> Scope: this directory only. ≤150 lines. Do not restate root policies.
 
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-06
+- **Last reviewed:** 2025-11-12
 - **Status:** draft
 
 ## Purpose
 
-System setup script and application bootstrap. Contains the system dependency installation script and dependency injection container for application runtime.
+Application composition root. Provides environment validation and dependency injection wiring for runtime.  
+System setup installers were moved to `platform/bootstrap/` and are out of scope here.
 
 ## Pointers
 
 - [Root AGENTS.md](../../AGENTS.md)
 - [Architecture](../../docs/ARCHITECTURE.md)
+- [Platform bootstrap (installers)](../../platform/bootstrap/README.md)
 
 ## Boundaries
 
@@ -23,69 +25,59 @@ System setup script and application bootstrap. Contains the system dependency in
 {
   "layer": "bootstrap",
   "may_import": [
-    "bootstrap",
     "ports",
     "adapters/server",
     "adapters/worker",
     "adapters/cli",
     "shared",
-    "types"
+    "types",
+    "bootstrap"
   ],
-  "must_not_import": ["app", "features", "core"]
+  "must_not_import": [
+    "app",
+    "features",
+    "core",
+    "contracts",
+    "components",
+    "styles",
+    "assets"
+  ]
 }
 ```
 
 ## Public Surface
 
-- **Exports:** container.ts, config.ts
+- **Exports:** Application bootstrap functions
 - **Routes (if any):** none
-- **CLI (if any):** bootstrap script for system setup
-- **Env/Config keys:** All environment variables via Zod validation
-- **Files considered API:** container.ts, config.ts, bootstrap
-
-## Ports (optional)
-
-- **Uses ports:** none
-- **Implements ports:** none
-- **Contracts (required if implementing):** none
+- **CLI (if any):** none
+- **Env/Config keys:** none
+- **Files considered API:** none
 
 ## Responsibilities
 
-- This directory **does**: Install system dependencies, wire adapters to ports, validate environment variables, provide DI container
-- This directory **does not**: Contain business logic, UI components, or feature-specific code
+- This directory **does**: Environment validation, dependency injection wiring
+- This directory **does not**: System installation, platform configuration
 
 ## Usage
 
-System setup:
-
-```bash
-src/bootstrap/bootstrap  # install all system dependencies
-```
-
-Development validation:
-
-```bash
-pnpm typecheck
-pnpm lint
-```
+Bootstrap application runtime dependencies.
 
 ## Standards
 
-- Zod-validated environment variables
-- No business logic - pure composition
+- Environment validation before startup
+- Clean dependency injection patterns
 
 ## Dependencies
 
-- **Internal:** adapters/, ports/, shared/
-- **External:** zod
+- **Internal:** ports, adapters, shared, types
+- **External:** Node.js runtime
 
 ## Change Protocol
 
-- Update this file when **Exports**, **Routes**, or **Env/Config** change
+- Update this file when **bootstrap interfaces** change
 - Bump **Last reviewed** date
-- Update ESLint boundary rules if **Boundaries** changed
-- Ensure boundary lint + (if Ports) **contract tests** pass
 
 ## Notes
 
-- Bootstrap order: config → adapters → ports → container
+- System installers moved to platform/bootstrap/
+- Focus on runtime composition only
