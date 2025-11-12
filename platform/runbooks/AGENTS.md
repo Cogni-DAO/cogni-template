@@ -1,0 +1,77 @@
+# runbooks · AGENTS.md
+
+> Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
+
+## Metadata
+
+- **Owners:** @derekg1729
+- **Last reviewed:** 2025-11-12
+- **Status:** draft
+
+## Purpose
+
+Operational procedures and documentation for deployment, rollback, and incident response.
+
+## Pointers
+
+- [DEPLOY.md](DEPLOY.md): Deployment procedures and troubleshooting
+- [ROLLBACK.md](ROLLBACK.md): Emergency rollback procedures
+
+## Boundaries
+
+```json
+{
+  "layer": "documentation",
+  "may_import": [],
+  "must_not_import": ["*"]
+}
+```
+
+## Public Surface
+
+- **Exports:** none
+- **Routes (if any):** none
+- **CLI (if any):** none
+- **Env/Config keys:** none
+- **Files considered API:** `*.md` runbook documents
+
+## Ports (optional)
+
+- **Uses ports:** none
+- **Implements ports:** none
+- **Contracts (required if implementing):** none
+
+## Responsibilities
+
+- This directory **does**: Document operational procedures and incident response
+- This directory **does not**: Contain executable scripts or configurations
+
+## Usage
+
+Minimal local commands:
+
+```bash
+# Reference only - no executable commands
+```
+
+## Standards
+
+- Step-by-step procedures with clear prerequisites
+- Include troubleshooting sections for common issues
+- Reference specific commands and environment variables
+
+## Dependencies
+
+- **Internal:** none
+- **External:** none
+
+## Change Protocol
+
+- Update this file when **new runbooks** are added
+- Bump **Last reviewed** date
+- Update runbooks when deployment procedures change
+
+## Notes
+
+- Documentation only - executable scripts belong in ../ci/scripts/
+- Procedures should be tested and validated with actual deployments

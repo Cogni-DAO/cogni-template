@@ -20,17 +20,13 @@ resource "cherryservers_server" "server" {
     region       = var.region
     image        = var.image
     ssh_key_ids  = [cherryservers_ssh_key.my_ssh_key.id]
-    user_data    = base64encode(templatefile("${path.module}/cloud-init.tmpl.yaml", {
-        domain = var.domain
-    }))
+    user_data    = base64encode(file("${path.module}/bootstrap.yaml"))
+    
+    lifecycle {
+        ignore_changes = [user_data]
+    }
 }
 
-resource "null_resource" "wait_http_ok" {
-  depends_on = [cherryservers_server.server]
-  provisioner "local-exec" {
-    command = "bash -lc 'for i in {1..60}; do curl -fsS https://${var.domain}/api/v1/meta/health && exit 0; sleep 5; done; exit 1'"
-  }
-}
 
 resource "cherryservers_ssh_key" "my_ssh_key" {
     name       = "cogni-key"

@@ -44,11 +44,3 @@ variable "tags" {
   default     = {}
 }
 
-variable "domain" {
-  type        = string
-  description = "FQDN served by Caddy (e.g., canary.cognidao.org)"
-  validation {
-    condition     = length(var.domain) > 0
-    error_message = "domain must be non-empty."
-  }
-}

@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni DAO
+
+# Example configuration for Cherry app deployment
+
+domain       = "canary.cognidao.org"
+app_image    = "ghcr.io/cogni-dao/cogni-template:production-<shortsha>"
+host         = "5.199.173.64" # or DNS
+ssh_user     = "root"
