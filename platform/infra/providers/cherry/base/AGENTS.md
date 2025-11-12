@@ -21,9 +21,9 @@ Immutable VM provisioning with static OS-level bootstrap for Cherry Servers infr
 
 ```json
 {
-  "layer": "infrastructure",
-  "may_import": ["terraform_providers"],
-  "must_not_import": ["../../../../../src/**"]
+  "layer": "infra",
+  "may_import": [],
+  "must_not_import": ["*"]
 }
 ```
 

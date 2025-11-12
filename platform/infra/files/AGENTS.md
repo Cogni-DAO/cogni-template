@@ -21,9 +21,9 @@ Shared templates and utility scripts for infrastructure deployments across all p
 
 ```json
 {
-  "layer": "infrastructure",
-  "may_import": ["external_tools"],
-  "must_not_import": ["../../../src/**"]
+  "layer": "infra",
+  "may_import": [],
+  "must_not_import": ["*"]
 }
 ```
 

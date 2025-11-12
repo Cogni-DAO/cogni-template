@@ -21,9 +21,9 @@ CI/CD automation scripts and configuration documentation for multiple pipeline s
 
 ```json
 {
-  "layer": "platform",
-  "may_import": ["../infra", "external_tools"],
-  "must_not_import": ["../../src/**"]
+  "layer": "infra",
+  "may_import": [],
+  "must_not_import": ["*"]
 }
 ```
 

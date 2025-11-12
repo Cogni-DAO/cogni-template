@@ -21,9 +21,9 @@ Platform-level tooling for infrastructure, CI/CD, development environment setup,
 
 ```json
 {
-  "layer": "platform",
-  "may_import": ["external_tools", "terraform_modules"],
-  "must_not_import": ["src/**"]
+  "layer": "infra",
+  "may_import": [],
+  "must_not_import": ["*"]
 }
 ```
 
