@@ -5,7 +5,7 @@ write_files:
   - path: /etc/caddy/Caddyfile
     permissions: "0644"
     content: |
-      new.cognidao.org {
+      ${domain} {
         encode zstd gzip
         reverse_proxy app:3000
       }

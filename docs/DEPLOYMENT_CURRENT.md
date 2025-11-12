@@ -41,10 +41,10 @@ docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/cogni-dao/cogn
 
 ```bash
 # Connect to server
-ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/derekg_cogni_canary root@new.cognidao.org
+ssh -o StrictHostKeyChecking=accept-new -i ~/.ssh/derekg_cogni_canary root@canary.cognidao.org
 
 # Reset SSH fingerprint if changed
-ssh-keygen -R new.cognidao.org
+ssh-keygen -R canary.cognidao.org
 
 # Check cloud-init execution logs
 sed -n '1,200p' /var/log/cloud-init-output.log

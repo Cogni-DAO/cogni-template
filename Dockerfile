@@ -19,6 +19,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
+RUN apk add --no-cache curl
 
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
@@ -29,5 +30,9 @@ USER nextjs
 EXPOSE 3000
 ENV PORT=3000
 ENV NODE_ENV=production
+ENV HOSTNAME=0.0.0.0
+
+HEALTHCHECK --interval=10s --timeout=2s --start-period=15s --retries=3 \
+  CMD curl -fsS http://0.0.0.0:3000/api/v1/meta/health || exit 1
 
 CMD ["node", "server.js"]

@@ -4,6 +4,9 @@
 # Required: Your Cherry Servers project ID
 project_id = "YOUR_PROJECT_ID"
 
+# Required: Domain for HTTPS deployment
+domain = "canary.cognidao.org"
+
 # Optional overrides (defaults are shown)
 # region = "eu_nord_1"
 # image = "ubuntu_22_04"  
