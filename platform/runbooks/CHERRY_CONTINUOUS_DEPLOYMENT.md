@@ -120,8 +120,10 @@ SSH to VM and check containers:
 ```bash
 ssh root@your-vm-ip
 docker ps
+# Expected: app, caddy, promtail containers running
 docker logs app
 docker logs caddy
+docker logs promtail
 ```
 
 ### Application Logs
@@ -130,9 +132,26 @@ docker logs caddy
 # App logs
 docker logs -f app
 
-# Caddy access logs
-docker exec caddy tail -f /var/log/caddy/access.log
+# Caddy access logs (JSON format)
+docker exec caddy tail -f /data/logs/caddy/access.log
+
+# Caddy error logs
+docker exec caddy tail -f /data/logs/caddy/error.log
+
+# Promtail status
+curl http://vm-ip:9080/ready
+curl http://vm-ip:9080/metrics
 ```
+
+### Log Aggregation
+
+Promtail automatically ships all container logs to Loki with labels:
+
+- `{container="app"}` - Application logs
+- `{container="caddy"}` - Reverse proxy logs
+- `{container="promtail"}` - Log shipper logs
+
+Access via Loki/Grafana dashboard or API queries.
 
 ## Troubleshooting
 
@@ -181,6 +200,17 @@ platform/ci/scripts/deploy.sh   # Deploy via OpenTofu
 ```
 
 These scripts can be called from any CI system (GitHub Actions, Jenkins, etc.).
+
+### Deployment Artifacts
+
+The `deploy.sh` script generates CI artifacts in `$RUNNER_TEMP/deploy-$GITHUB_RUN_ID/`:
+
+- `plan.log` - Terraform plan output (no sensitive data)
+- `apply.log` - Terraform apply output
+- `deployment.json` - Deployment metadata and timestamps
+- `tfplan` - Terraform plan file
+
+Upload these as CI artifacts for audit trail and debugging.
 
 ## Emergency Procedures
 

@@ -14,6 +14,7 @@ Service-specific configurations for supporting infrastructure like LLM routing, 
 
 ## Pointers
 
+- [loki-promtail/](loki-promtail/): Log aggregation and monitoring stack
 - [litellm/](litellm/): LLM model routing and budget configurations
 - [langfuse/](langfuse/): Observability and telemetry stack
 - [postgres/](postgres/): Database service configurations

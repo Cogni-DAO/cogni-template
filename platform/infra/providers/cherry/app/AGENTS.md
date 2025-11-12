@@ -10,7 +10,7 @@
 
 ## Purpose
 
-SSH-based application deployment with health validation for existing Cherry Servers VMs.
+SSH-based application deployment with monitoring and health validation for existing Cherry Servers VMs.
 
 ## Pointers
 
@@ -43,7 +43,7 @@ SSH-based application deployment with health validation for existing Cherry Serv
 
 ## Responsibilities
 
-- This directory **does**: Deploy containerized apps via SSH, configure reverse proxy, validate health
+- This directory **does**: Deploy containerized apps via SSH, configure reverse proxy and monitoring, validate health
 - This directory **does not**: Provision VMs or manage infrastructure lifecycle
 
 ## Usage
@@ -63,7 +63,7 @@ tofu apply -var="app_image=ghcr.io/repo:tag"
 
 ## Dependencies
 
-- **Internal:** `../../../files/scripts/wait-for-health.sh`
+- **Internal:** `../../../files/scripts/wait-for-health.sh`, `../../../services/loki-promtail/promtail-config.yaml`
 - **External:** SSH connectivity to target VM, Docker runtime
 
 ## Change Protocol
@@ -76,3 +76,4 @@ tofu apply -var="app_image=ghcr.io/repo:tag"
 
 - Requires existing VM from ../base/ with SSH access
 - Uses templatefile() for dynamic Caddyfile generation
+- Deploys 3 containers: app, caddy, promtail

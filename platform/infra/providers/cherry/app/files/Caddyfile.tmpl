@@ -1,4 +1,16 @@
 ${domain} {
   encode zstd gzip
   reverse_proxy app:3000
+  
+  log {
+    output file /data/logs/caddy/access.log
+    format json
+  }
+  
+  handle_errors {
+    log {
+      output file /data/logs/caddy/error.log 
+      format json
+    }
+  }
 }

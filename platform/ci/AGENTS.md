@@ -43,7 +43,7 @@ CI/CD automation scripts and configuration documentation for multiple pipeline s
 
 ## Responsibilities
 
-- This directory **does**: Provide CI-agnostic deployment automation and documentation
+- This directory **does**: Provide CI-agnostic deployment automation with artifact capture and documentation
 - This directory **does not**: Contain pipeline YAML definitions or application logic
 
 ## Usage
@@ -59,8 +59,8 @@ scripts/deploy.sh
 ## Standards
 
 - Provider-agnostic scripts callable from any CI system
-- Environment variable based configuration
-- Fail-fast with clear error messages
+- Environment variable based configuration with sensitive value protection
+- Fail-fast with clear error messages and artifact capture
 
 ## Dependencies
 

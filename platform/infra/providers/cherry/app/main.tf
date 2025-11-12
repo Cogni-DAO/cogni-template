@@ -31,14 +31,28 @@ resource "null_resource" "deploy_app" {
     destination = "/etc/caddy/Caddyfile"
   }
 
-  # Deploy containers (same order as old cloud-init)
+  # Create required directories
+  provisioner "remote-exec" {
+    inline = [
+      "mkdir -p /etc/promtail /var/lib/promtail"
+    ]
+  }
+
+  # Upload Promtail configuration
+  provisioner "file" {
+    source      = "${path.module}/../../../services/loki-promtail/promtail-config.yaml"
+    destination = "/etc/promtail/config.yaml"
+  }
+
+  # Deploy containers with monitoring
   provisioner "remote-exec" {
     inline = [
       "docker network create web || true",
       "docker pull ${var.app_image}",
-      "docker rm -f app caddy || true",
+      "docker rm -f app caddy promtail || true",
       "docker run -d --name app --network web --restart=always ${var.app_image}",
       "docker run -d --name caddy --network web --restart=always -p 80:80 -p 443:443 -v /etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro -v caddy_data:/data -v caddy_config:/config caddy:2",
+      "docker run -d --name promtail --network web --restart=always -v /etc/promtail/config.yaml:/etc/promtail/config.yaml:ro -v /var/lib/promtail:/var/lib/promtail -v /var/run/docker.sock:/var/run/docker.sock:ro -v /var/lib/docker/containers:/var/lib/docker/containers:ro grafana/promtail:2.9.0 -config.file=/etc/promtail/config.yaml",
       "docker ps"
     ]
   }
