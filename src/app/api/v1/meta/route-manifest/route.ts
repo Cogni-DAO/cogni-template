@@ -15,7 +15,7 @@
 import { NextResponse } from "next/server";
 
 import { metaRouteManifestOperation } from "@/contracts/meta.route-manifest.read.v1.contract";
-import { routeManifest } from "@/features/site-meta/routeManifest";
+import { routeManifest } from "@/features/site-meta/services/routeManifest";
 
 export const dynamic = "force-static";
 
