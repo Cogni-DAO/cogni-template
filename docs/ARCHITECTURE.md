@@ -29,7 +29,8 @@ Every dependency points inward.
 - **Proof-of-Concept Scope** — implement minimal working integrations only; no product logic.
 
 **References:**  
-Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksforgeeks.org/system-design/hexagonal-architecture-system-design/)
+Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksforgeeks.org/system-design/hexagonal-architecture-system-design/)  
+[Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) - Infrastructure and CI/CD overview
 
 ### Vertical slicing
 
@@ -42,6 +43,7 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 ## System Layers (by directory)
 
 - **src/bootstrap/** → Composition root (DI/factories), env (Zod), exports a container/getPort().
+- **platform/** → Infrastructure tooling, CI/CD scripts, deployment automation, dev setup.
 - **src/contracts/** → Operation contracts (id, Zod in/out, scopes, version). No logic.
 - **src/mcp/** → MCP host bootstrap. Registers tools mapped 1:1 to contracts.
 - **src/app/** → Delivery/UI + Next.js API routes. See import rules below.
@@ -107,11 +109,29 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] ├── ARCHITECTURE.md # narrative + diagrams (longform)
 [x] └── UI_IMPLEMENTATION_GUIDE.md # practical UI development workflows
 
-[ ] infra/ # infra (minimal → full)
-[ ] ├── docker-compose.yml # web + postgres + litellm + langfuse
-[ ] ├── litellm/config.yaml # model routing + budgets
-[ ] ├── langfuse/ # self-hosted observability
-[ ] └── terraform/ # IaC modules (Akash/OpenTofu)
+[ ] platform/ # platform tooling and infrastructure
+[ ] ├── infra/ # Infrastructure as Code and deployment configs
+[ ] │ ├── providers/
+[ ] │ │ ├── cherry/
+[ ] │ │ │ ├── base/ # VM + static bootstrap (immutable)
+[ ] │ │ │ └── app/ # SSH deploy + health gate (mutable)
+[ ] │ │ └── akash/ # FUTURE provider
+[ ] │ ├── services/
+[ ] │ │ ├── litellm/ # LLM model routing + budgets
+[ ] │ │ ├── langfuse/ # Observability stack
+[ ] │ │ └── postgres/ # Database configs
+[ ] │ ├── stacks/
+[ ] │ │ └── local-compose/ # Local development stack
+[ ] │ ├── files/ # Shared templates and utility scripts
+[ ] │ └── modules/ # Reusable Terraform modules
+[ ] ├── ci/
+[ ] │ ├── github/ # README, env mapping, badges (no YAML workflows)
+[ ] │ ├── jenkins/ # Jenkinsfile, controller notes  
+[ ] │ └── scripts/ # Provider-agnostic build/push/deploy shims
+[ ] ├── bootstrap/ # One-time dev machine setup installers
+[ ] │ ├── install/ # Focused installer scripts (tofu, pnpm, docker, reuse)
+[ ] │ └── README.md # Installation instructions
+[ ] └── runbooks/ # Deploy, rollback, incident docs
 
 [ ] public/
 [ ] ├── robots.txt

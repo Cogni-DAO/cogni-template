@@ -1,8 +1,12 @@
 import { defineConfig } from "vitest/config";
 import path from "path";
 import { fileURLToPath } from "node:url";
+import { config } from "dotenv";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Load .env.test for API integration tests
+config({ path: ".env.test" });
 
 export default defineConfig({
   test: {

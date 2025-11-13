@@ -29,7 +29,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 ## Environment
 
 - **Framework:** Next.js (TypeScript, App Router)
-- **Infra:** Docker + OpenTofu → Akash
+- **Infra:** Docker + OpenTofu → Spheron (managed Akash)
 - **Toolchain:** pnpm, ESLint, Prettier, Vitest, Playwright
 - **CI entrypoint:** `pnpm check`
 
@@ -52,6 +52,6 @@ pnpm check          # lint + type + format validation
 pnpm test           # run unit/integration tests (no server required)
 pnpm test:api        # API integration tests (requires server)
 pnpm format         # prettier format fixes
-pnpm check:docs # lint AGENTS.md documentation
+pnpm check:docs     # lint AGENTS.md documentation
 pnpm e2e            # end-to-end tests
 ```

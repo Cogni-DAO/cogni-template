@@ -105,6 +105,9 @@ importers:
       conventional-changelog-conventionalcommits:
         specifier: '7'
         version: 7.0.2
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       dotenv-cli:
         specifier: ^11.0.0
         version: 11.0.0

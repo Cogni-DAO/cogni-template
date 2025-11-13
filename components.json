@@ -17,6 +17,7 @@
     "ui": "@/components/vendor/ui-primitives/shadcn/_vendorUtils"
   },
   "registries": {
-    "@aceternity": "https://ui.aceternity.com/registry/{name}.json"
+    "@aceternity": "https://ui.aceternity.com/registry/{name}.json",
+    "@reui": "https://reui.io/r/{name}.json"
   }
 }

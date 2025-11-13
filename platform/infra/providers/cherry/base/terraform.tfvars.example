@@ -1,0 +1,21 @@
+# Cherry Servers Configuration Example
+# Copy this to terraform.tfvars and fill in your values
+
+# Required: Your Cherry Servers project ID
+project_id = "YOUR_PROJECT_ID"
+
+# Required: Domain for HTTPS deployment
+domain = "canary.cognidao.org"
+
+# Optional overrides (defaults are shown)
+# region = "eu_nord_1"
+# image = "ubuntu_22_04"  
+# plan = "cloud_vps_1"
+# hostname = "cogni-canary"
+# public_key_path = "~/.ssh/id_rsa.pub"
+
+# Optional tags
+# tags = {
+#   Environment = "development"
+#   Project     = "cogni-template"
+# }

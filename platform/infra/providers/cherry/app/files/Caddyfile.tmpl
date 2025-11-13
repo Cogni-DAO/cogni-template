@@ -1,0 +1,16 @@
+{
+  log {
+    level INFO
+    format json
+    output file /data/logs/caddy/caddy.log
+  }
+}
+
+${domain} {
+  encode zstd gzip
+  reverse_proxy app:3000
+  log {
+    format json
+    output file /data/logs/caddy/access.log
+  }
+}

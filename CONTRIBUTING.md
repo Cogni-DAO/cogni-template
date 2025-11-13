@@ -9,8 +9,18 @@ Use that path sparingly — voting is reserved for meaningful exceptions or gove
 
 ## Prerequisites
 
+**First time setup:**
+
+```bash
+src/bootstrap/bootstrap  # installs Node, pnpm, OpenTofu, Docker + all project dependencies
+```
+
+**Manual setup (if bootstrap fails):**
+
 - Node 20
-- PNPM 9
+- pnpm 9
+- OpenTofu (for infrastructure deployment)
+- Docker (for containerization)
 - Install dependencies:
   ```bash
   pnpm i
