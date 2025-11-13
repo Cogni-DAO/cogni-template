@@ -45,7 +45,7 @@ export class LiteLlmAdapter implements LlmService {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${serverEnv.LITELLM_ADMIN_KEY}`,
+            Authorization: `Bearer ${serverEnv.LITELLM_MASTER_KEY}`,
           },
           body: JSON.stringify(requestBody),
           /** 30 second timeout */
