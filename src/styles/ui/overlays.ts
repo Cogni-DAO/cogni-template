@@ -18,6 +18,7 @@ import type { SizeKey } from "@/styles/theme";
 
 const terminalFrameSurfaceVariants = {
   default: "bg-card text-card-foreground",
+  muted: "bg-muted text-muted-foreground",
   inverse: "bg-primary text-primary-foreground",
 } as const;
 
@@ -39,7 +40,7 @@ export const terminalFrame = cva(
       size: terminalFrameSizeVariants,
     },
     defaultVariants: {
-      surface: "inverse",
+      surface: "muted",
       size: "md",
     },
   } as const

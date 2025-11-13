@@ -131,7 +131,7 @@ const iconBoxSizeVariants = {
 
 const iconBoxColorVariants = {
   orange: "bg-warning",
-  blue: "bg-primary",
+  blue: "bg-[var(--color-chart-6)]",
   green: "bg-success",
   red: "bg-danger",
 } as const;
@@ -146,7 +146,7 @@ export const iconBox = cva(
       size: iconBoxSizeVariants,
       color: iconBoxColorVariants,
     },
-    defaultVariants: { size: "md", color: "orange" },
+    defaultVariants: { size: "md", color: "blue" },
   }
 );
 
