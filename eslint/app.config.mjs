@@ -179,6 +179,7 @@ export default [
                 "types/**",
                 "components/**",
                 "styles/**",
+                "bootstrap/**",
               ],
             },
             {
@@ -263,7 +264,19 @@ export default [
             },
             {
               target: ["features"],
-              allow: ["**/*.{ts,tsx}"],
+              allow: ["**/services/*.{ts,tsx}", "**/components/*.{ts,tsx}"],
+            },
+            {
+              target: ["core"],
+              allow: ["**/public.ts"],
+            },
+            {
+              target: ["bootstrap"],
+              allow: ["container.ts"],
+            },
+            {
+              target: ["app"],
+              allow: ["**/*.{ts,tsx}", "_facades/**/*.server.ts"],
             },
           ],
         },
@@ -318,7 +331,13 @@ export default [
       "import/no-internal-modules": [
         "error",
         {
-          allow: ["@/components", "@/components/kit/**"],
+          allow: [
+            "@/components",
+            "@/components/kit/**",
+            "@/core", // alias -> src/core/public.ts
+            "@/ports", // alias -> src/ports/index.ts
+            "@/shared",
+          ],
         },
       ],
       "no-restricted-imports": [
@@ -328,6 +347,28 @@ export default [
             "@/features/**", // no cross-feature via alias
             "@/components/vendor/**", // never touch vendor
             "@/styles/**", // never touch styles direct
+            "@/adapters/**", // features may not import adapters
+            "@/bootstrap/**", // features may not import bootstrap
+            "@/core/**", // forces use of "@/core" only
+          ],
+        },
+      ],
+      "@typescript-eslint/consistent-type-imports": [
+        "error",
+        { prefer: "type-imports" },
+      ],
+    },
+  },
+
+  // App layer: block direct adapter imports (bootstrap is the only ingress)
+  {
+    files: ["src/app/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            "@/adapters/**", // app must not import adapters directly
           ],
         },
       ],

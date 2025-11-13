@@ -23,7 +23,7 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
 ```json
 {
   "layer": "ports",
-  "may_import": ["core"],
+  "may_import": ["ports", "core", "types"],
   "must_not_import": [
     "app",
     "features",

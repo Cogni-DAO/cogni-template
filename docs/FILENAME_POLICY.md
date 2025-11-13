@@ -1,9 +1,7 @@
 # Filename Policy // [num] rule in `eslint.config.mjs`
 
 **Global config exclusions:** ✅ common tool configs (_config_, _.rc_, next-env.d.ts), middleware.ts, AGENTS.md files. // 1
-
-**Barrels:** ✅ index.ts banned globally; allowed only in src/components/**, src/shared/**, and src/features/\*/index.ts. // 2, 3, 4, 4a
-
+/
 **Components:** ✅ src/components/**, src/features/\*/components/** → PascalCase(.client|.server)?.tsx; helpers camelCase.ts; no default exports. // 5, 6
 
 **Hooks:** ✅ **/hooks/** → useName.ts|tsx only. No colocated tests or stories. // 7, 8

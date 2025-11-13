@@ -23,8 +23,17 @@ Next.js App Router delivery layer. UI pages and API routes that expose features 
 ```json
 {
   "layer": "app",
-  "may_import": ["features", "contracts", "shared", "components"],
-  "must_not_import": ["adapters/server", "adapters/worker", "core", "ports"]
+  "may_import": [
+    "app",
+    "features",
+    "ports",
+    "shared",
+    "contracts",
+    "types",
+    "components",
+    "styles"
+  ],
+  "must_not_import": ["adapters/server", "adapters/worker", "core"]
 }
 ```
 

@@ -23,6 +23,8 @@ export default [
       "src/shared/**/index.ts",
       "src/features/*/index.ts",
       "src/styles/**/index.ts",
+      "src/ports/index.ts",
+      "src/adapters/server/index.ts",
       "tests/_fakes/index.ts",
     ],
     plugins: {
