@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-11-11
+- **Last reviewed:** 2025-11-13
 - **Status:** draft
 
 ## Purpose
@@ -42,7 +42,7 @@ Next.js App Router delivery layer. UI pages and API routes that expose features 
 - **Exports:** none
 - **Routes (if any):**
   - App pages: `/` (homepage)
-  - API: `/api/v1/meta/health`, `/api/v1/meta/openapi`, `/api/v1/meta/route-manifest`
+  - API: `/api/v1/meta/health`, `/api/v1/meta/openapi`, `/api/v1/meta/route-manifest`, `/api/v1/ai/completion`
 - **CLI (if any):** none
 - **Env/Config keys:** none
 - **Files considered API:** layout.tsx, page.tsx, api/\*\*/route.ts

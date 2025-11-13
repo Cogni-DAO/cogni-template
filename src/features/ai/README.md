@@ -148,8 +148,8 @@ export const aiCompleteOperation = {
 #### `src/features/ai/services/complete.ts`
 
 **Scope:** Use case orchestration
-**Role:** Coordinate core rules and port calls
-**Dependencies:** `@/core/chat/*`, `@/ports/llm.port.ts` ONLY
+**Role:** Coordinate core rules, port calls, set output timestamp
+**Dependencies:** `@/core/chat/*`, `@/ports/llm.port` ONLY
 
 ```typescript
 import {
@@ -426,7 +426,7 @@ export interface ChatInputProps {
 
 #### Streaming Support
 
-- Extend `LlmService.complete()` to return `AsyncGenerator<MessageChunk>`
+- Add separate `LlmService.stream()` method returning `AsyncIterable<MessageChunk>`
 - Update adapter to handle streaming responses
 - Add streaming endpoint alongside existing complete endpoint
 
