@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import tsconfigPaths from "vite-tsconfig-paths";
 import path from "path";
 import { fileURLToPath } from "node:url";
 
@@ -36,16 +37,9 @@ export default defineConfig({
     testTimeout: 10_000,
     hookTimeout: 10_000,
   },
+  plugins: [tsconfigPaths()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
-      "@shared": path.resolve(__dirname, "./src/shared"),
-      "@core": path.resolve(__dirname, "./src/core"),
-      "@ports": path.resolve(__dirname, "./src/ports"),
-      "@features": path.resolve(__dirname, "./src/features"),
-      "@adapters": path.resolve(__dirname, "./src/adapters"),
-      "@components": path.resolve(__dirname, "./src/components"),
-      "@contracts": path.resolve(__dirname, "./src/contracts"),
       "@tests": path.resolve(__dirname, "./tests"),
     },
   },

@@ -1,0 +1,108 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@tests/_fakes/ai/fake-llm.service`
+ * Purpose: Controllable LLM service mock for testing AI completion flows.
+ * Scope: Mock responses and call logging. Does NOT test real LLM integration.
+ * Invariants: All calls logged; responses configurable; deterministic behavior.
+ * Side-effects: none
+ * Notes: Supports delay simulation and error injection for testing.
+ * Links: LlmService port
+ * @public
+ */
+
+import type { LlmService, Message } from "../../../src/ports/index";
+
+export interface FakeLlmOptions {
+  shouldThrow?: boolean;
+  errorMessage?: string;
+  responseContent?: string;
+  finishReason?: string;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
+  delay?: number;
+}
+
+export class FakeLlmService implements LlmService {
+  private options: FakeLlmOptions;
+  public callLog: {
+    messages: Message[];
+    model?: string;
+    temperature?: number;
+    maxTokens?: number;
+  }[] = [];
+
+  constructor(options: FakeLlmOptions = {}) {
+    this.options = {
+      responseContent: "Mock AI response",
+      finishReason: "stop",
+      ...options,
+    };
+  }
+
+  async completion(params: {
+    messages: Message[];
+    model?: string;
+    temperature?: number;
+    maxTokens?: number;
+  }): Promise<{
+    message: Message;
+    usage?: {
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+    };
+    finishReason?: string;
+    providerMeta?: Record<string, unknown>;
+  }> {
+    // Log the call for assertions
+    this.callLog.push({ ...params });
+
+    // Simulate delay if configured
+    if (this.options.delay) {
+      await new Promise((resolve) => setTimeout(resolve, this.options.delay));
+    }
+
+    // Throw error if configured
+    if (this.options.shouldThrow) {
+      throw new Error(this.options.errorMessage ?? "Mock LLM error");
+    }
+
+    // Return mock response
+    const response = {
+      message: {
+        role: "assistant" as const,
+        content: this.options.responseContent ?? "Default mock response",
+      },
+      finishReason: this.options.finishReason,
+      providerMeta: {
+        model: params.model ?? "mock-model",
+        provider: "fake",
+        requestId: "fake-request-id",
+      },
+    };
+
+    if (this.options.usage) {
+      response.usage = this.options.usage;
+    }
+
+    return response;
+  }
+
+  // Test utilities
+  reset(): void {
+    this.callLog = [];
+  }
+
+  wasCalled(): boolean {
+    return this.callLog.length > 0;
+  }
+
+  getLastCall(): (typeof this.callLog)[0] | undefined {
+    return this.callLog[this.callLog.length - 1];
+  }
+}
