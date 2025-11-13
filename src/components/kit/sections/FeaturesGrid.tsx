@@ -55,7 +55,7 @@ function FeatureGridItem({
 }: FeatureItemProps): ReactElement {
   return (
     <div className={isFirst ? "" : featureItem()}>
-      <div className={iconBox()}>
+      <div className={iconBox({ size: "lg" })}>
         {typeof icon === "object" && icon && "type" in icon ? (
           <icon.type className={smallIcon()} />
         ) : (
