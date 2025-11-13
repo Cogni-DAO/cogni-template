@@ -78,4 +78,4 @@ override.tf.json
 terraform.rc
 
 # LiteLLM configuration (contains API keys)
-litellm.config.yaml
+**/litellm.config.yaml
