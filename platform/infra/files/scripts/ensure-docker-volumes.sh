@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# SPDX-License-Identifier: PolyForm-Shield-1.0.0
-# SPDX-FileCopyrightText: 2025 Cogni DAO
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 set -euo pipefail
 
