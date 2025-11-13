@@ -28,7 +28,13 @@ import {
   filterSystemMessages,
   normalizeMessageRole,
 } from "@/core";
-import { toCoreMessages } from "@/features/ai/services/mappers";
+import {
+  type MessageDto,
+  toCoreMessages,
+} from "@/features/ai/services/mappers";
+
+// Type for security testing - allows invalid roles
+type SecurityTestMessage = Omit<MessageDto, "role"> & { role: string };
 
 describe("security/ai/validation", () => {
   describe("system role injection protection", () => {
@@ -54,12 +60,12 @@ describe("security/ai/validation", () => {
       const timestamp = "2025-01-01T00:00:00Z";
 
       // Act & Assert
-      expect(() => toCoreMessages([systemDto], timestamp)).toThrow(
-        ChatValidationError
-      );
-      expect(() => toCoreMessages([systemDto], timestamp)).toThrow(
-        "Invalid role: system"
-      );
+      expect(() =>
+        toCoreMessages([systemDto as SecurityTestMessage], timestamp)
+      ).toThrow(ChatValidationError);
+      expect(() =>
+        toCoreMessages([systemDto as SecurityTestMessage], timestamp)
+      ).toThrow("Invalid role: system");
     });
 
     it("should reject system role variations in normalization", () => {
@@ -75,7 +81,7 @@ describe("security/ai/validation", () => {
           const timestamp = "2025-01-01T00:00:00Z";
           expect(() =>
             toCoreMessages(
-              [{ role: role as "system", content: "test" }],
+              [{ role, content: "test" } as SecurityTestMessage],
               timestamp
             )
           ).toThrow(ChatValidationError);
@@ -86,7 +92,9 @@ describe("security/ai/validation", () => {
     it("should block system role at contract level", () => {
       // Arrange - Contract should not allow system role
       const invalidInput = {
-        messages: [{ role: "system", content: "Evil prompt" }],
+        messages: [
+          { role: "system", content: "Evil prompt" } as SecurityTestMessage,
+        ],
       };
 
       // Act & Assert
@@ -135,39 +143,30 @@ describe("security/ai/validation", () => {
     it("should reject malformed message structures", () => {
       const malformedCases = errorCases.missing_fields;
 
-      malformedCases.forEach((invalidMessage, index) => {
+      malformedCases.forEach((invalidMessage, _index) => {
         const input = { messages: [invalidMessage] };
         const result = aiCompletionOperation.input.safeParse(input);
-        expect(result.success).toBe(
-          false,
-          `Case ${index} should fail: ${JSON.stringify(invalidMessage)}`
-        );
+        expect(result.success).toBe(false);
       });
     });
 
     it("should reject wrong data types", () => {
       const wrongTypeCases = errorCases.wrong_types;
 
-      wrongTypeCases.forEach((invalidMessage, index) => {
+      wrongTypeCases.forEach((invalidMessage, _index) => {
         const input = { messages: [invalidMessage] };
         const result = aiCompletionOperation.input.safeParse(input);
-        expect(result.success).toBe(
-          false,
-          `Case ${index} should fail: ${JSON.stringify(invalidMessage)}`
-        );
+        expect(result.success).toBe(false);
       });
     });
 
     it("should reject invalid role values", () => {
       const invalidRoleCases = errorCases.invalid_roles;
 
-      invalidRoleCases.forEach((invalidMessage, index) => {
+      invalidRoleCases.forEach((invalidMessage, _index) => {
         const input = { messages: [invalidMessage] };
         const result = aiCompletionOperation.input.safeParse(input);
-        expect(result.success).toBe(
-          false,
-          `Case ${index} should fail: ${JSON.stringify(invalidMessage)}`
-        );
+        expect(result.success).toBe(false);
       });
     });
 
@@ -196,8 +195,8 @@ describe("security/ai/validation", () => {
       const coreMessages = toCoreMessages([clientMessage], serverTimestamp);
 
       // Assert
-      expect(coreMessages[0].timestamp).toBe(serverTimestamp);
-      expect(coreMessages[0].timestamp).not.toBe("1970-01-01T00:00:00Z");
+      expect(coreMessages[0]?.timestamp).toBe(serverTimestamp);
+      expect(coreMessages[0]?.timestamp).not.toBe("1970-01-01T00:00:00Z");
     });
   });
 
@@ -209,7 +208,7 @@ describe("security/ai/validation", () => {
       try {
         // Act
         toCoreMessages(
-          [invalidInput as { role: string; content: string }],
+          [invalidInput as SecurityTestMessage],
           "2025-01-01T00:00:00Z"
         );
       } catch (error) {

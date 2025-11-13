@@ -12,7 +12,8 @@
  * @public
  */
 
-import type { LlmService, Message } from "../../../src/ports/index";
+import type { Message } from "@/core";
+import type { LlmService } from "@/ports";
 
 export interface FakeLlmOptions {
   shouldThrow?: boolean;
@@ -73,18 +74,31 @@ export class FakeLlmService implements LlmService {
     }
 
     // Return mock response
-    const response = {
+    const response: {
+      message: Message;
+      usage?: {
+        promptTokens: number;
+        completionTokens: number;
+        totalTokens: number;
+      };
+      finishReason?: string;
+      providerMeta?: Record<string, unknown>;
+    } = {
       message: {
         role: "assistant" as const,
         content: this.options.responseContent ?? "Default mock response",
+        timestamp: new Date().toISOString(),
       },
-      finishReason: this.options.finishReason,
       providerMeta: {
         model: params.model ?? "mock-model",
         provider: "fake",
         requestId: "fake-request-id",
       },
     };
+
+    if (this.options.finishReason) {
+      response.finishReason = this.options.finishReason;
+    }
 
     if (this.options.usage) {
       response.usage = this.options.usage;

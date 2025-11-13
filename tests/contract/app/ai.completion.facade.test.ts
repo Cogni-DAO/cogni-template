@@ -82,7 +82,9 @@ describe("app/_facades/ai/completion.server", () => {
 
       // Verify feature was called with mapped core messages
       const executeCall = mockExecute.mock.calls[0];
-      const coreMessages = executeCall[0];
+      expect(executeCall).toBeDefined();
+      const coreMessages = executeCall?.[0];
+      expect(coreMessages).toBeDefined();
 
       expect(coreMessages).toHaveLength(2);
       expect(coreMessages[0]).toEqual({
@@ -95,8 +97,8 @@ describe("app/_facades/ai/completion.server", () => {
         content: "Hi there",
         timestamp: "2025-01-01T12:00:00.000Z",
       });
-      expect(executeCall[1]).toBe(fakeLlm);
-      expect(executeCall[2]).toBe(fakeClock);
+      expect(executeCall?.[1]).toBe(fakeLlm);
+      expect(executeCall?.[2]).toBe(fakeClock);
     });
 
     it("should map ChatValidationError to structured error response", async () => {
@@ -169,7 +171,9 @@ describe("app/_facades/ai/completion.server", () => {
 
       // Assert - all input messages should get the same timestamp
       const executeCall = mockExecute.mock.calls[0];
-      const coreMessages = executeCall[0];
+      expect(executeCall).toBeDefined();
+      const coreMessages = executeCall?.[0];
+      expect(coreMessages).toBeDefined();
 
       expect(coreMessages).toEqual([
         { role: "user", content: "First", timestamp: fixedTime },

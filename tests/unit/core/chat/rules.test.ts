@@ -103,7 +103,7 @@ describe("core/chat/rules", () => {
       // Total: 90 chars, limit: 50, should remove first 2 messages
       const result = trimConversationHistory(messages, 50);
       expect(result).toHaveLength(1);
-      expect(result[0].content).toBe("A".repeat(30));
+      expect(result[0]?.content).toBe("A".repeat(30));
     });
 
     it("should handle exact boundary case", () => {
@@ -120,7 +120,7 @@ describe("core/chat/rules", () => {
       ];
       const result = trimConversationHistory(messages, 40);
       expect(result).toHaveLength(1);
-      expect(result[0].content).toBe("✨".repeat(30));
+      expect(result[0]?.content).toBe("✨".repeat(30));
     });
   });
 
@@ -130,9 +130,9 @@ describe("core/chat/rules", () => {
       const result = filterSystemMessages(messages);
 
       expect(result).toHaveLength(3); // user, assistant, user
-      expect(result[0].role).toBe("user");
-      expect(result[1].role).toBe("assistant");
-      expect(result[2].role).toBe("user");
+      expect(result[0]?.role).toBe("user");
+      expect(result[1]?.role).toBe("assistant");
+      expect(result[2]?.role).toBe("user");
     });
 
     it("should return empty array when only system messages", () => {
