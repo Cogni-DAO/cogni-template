@@ -286,11 +286,11 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 
 - **Imports**
   - `core` → only `core` (standalone).
-  - `ports` → `core`.
-  - `features` → `@/core|@/ports|@/shared|@/components` (never adapters|bootstrap|deep paths).
-  - `app` → `@/features/*/services/*|@/bootstrap/container|@/contracts/*|@/shared` (never adapters|core).
-  - `adapters` → `@/ports|@/shared` (never `app|features|core`).
-  - `contracts` → `@/shared` only. Never imported by `features|ports|core`.
+  - `ports` → `@/core`, `@/types`.
+  - `features` → `@/core|@/ports|@/shared|@/types|@/components` (never adapters|bootstrap|deep paths).
+  - `app` → `@/features/*/services/*|@/bootstrap/container|@/contracts/*|@/shared|@/ports|@/styles` (never adapters|core).
+  - `adapters` → `@/ports|@/shared|@/types` (never `app|features|core`).
+  - `contracts` → `@/shared|@/types` only. Never imported by `features|ports|core`.
   - `bootstrap` → `@/adapters/server|@/ports` (DI composition only).
   - `mcp` → `@/contracts|@/bootstrap|@/features/*/services/*|@/ports` (never `app|components`).
 - **ESLint**: flat config with path rules; `eslint-plugin-boundaries`.
