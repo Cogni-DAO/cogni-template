@@ -50,10 +50,16 @@ describe("Features Import Boundaries", () => {
   });
 
   it.skip("blocks parent-relative imports", async () => {
-    const { errors } = await lintFixture(
+    // SKIP: ESLint fails to block parent-relative imports
+    // Expected: >0 errors (should be blocked), Actual: 0 errors (allowed by plugin)
+    const { errors, messages } = await lintFixture(
       "src/features/auth/components/LoginForm.tsx",
-      `import { utils } from "../../../shared/util"; export default utils;`
+      `import { utils } from "../../../shared/util"; export default utils;`,
+      { focusRulePrefixes: ["no-restricted-imports"] }
     );
     expect(errors).toBeGreaterThan(0);
+    expect(messages.some((m) => m.ruleId === "no-restricted-imports")).toBe(
+      true
+    );
   });
 });
