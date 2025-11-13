@@ -35,7 +35,8 @@ describe("env schemas", () => {
       LITELLM_BASE_URL: "http://localhost:4000",
       LITELLM_MASTER_KEY: "adminkey",
       OPENROUTER_API_KEY: "or-key",
-      NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: "proj",
+      // TODO: Add when wallet integration is ready
+      // NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: "proj",
       NEXT_PUBLIC_CHAIN_ID: "1",
     });
 
