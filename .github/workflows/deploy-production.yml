@@ -45,8 +45,12 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          eval "$(ssh-agent -s)"
-          echo "$SSH_DEPLOY_KEY" | tr -d '\r' | ssh-add -
+          
+          # Write key file
+          echo "$SSH_DEPLOY_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          
+          # Known hosts
           ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
         env:
           SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}

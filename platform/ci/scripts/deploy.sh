@@ -47,6 +47,10 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# SSH configuration
+SSH_KEY_PATH="${SSH_KEY_PATH:-$HOME/.ssh/deploy_key}"
+SSH_OPTS="-i $SSH_KEY_PATH -o StrictHostKeyChecking=yes"
+
 # Validate required environment variables
 if [[ -z "${APP_IMAGE:-}" ]]; then
     log_error "APP_IMAGE is required (dynamic variable from CI)"
@@ -163,19 +167,19 @@ chmod +x "$ARTIFACT_DIR/deploy-remote.sh"
 
 # Copy docker-compose.yml and configs to VM via SSH
 log_info "Uploading docker-compose.yml and configuration files..."
-ssh -o StrictHostKeyChecking=no root@"$VM_HOST" "mkdir -p /opt/cogni/runtime /etc/caddy /etc/promtail /etc/litellm /var/lib/promtail"
+ssh $SSH_OPTS root@"$VM_HOST" "mkdir -p /opt/cogni/runtime /etc/caddy /etc/promtail /etc/litellm /var/lib/promtail"
 
 # Upload docker-compose.yml
-scp platform/infra/services/runtime/docker-compose.yml root@"$VM_HOST":/opt/cogni/runtime/
+scp $SSH_OPTS platform/infra/services/runtime/docker-compose.yml root@"$VM_HOST":/opt/cogni/runtime/
 
 # Upload configuration files
-scp platform/infra/services/runtime/configs/Caddyfile.tmpl root@"$VM_HOST":/etc/caddy/Caddyfile
-scp platform/infra/services/runtime/configs/promtail-config.yaml root@"$VM_HOST":/etc/promtail/config.yaml
-scp platform/infra/services/runtime/configs/litellm.config.yaml root@"$VM_HOST":/etc/litellm/config.yaml
+scp $SSH_OPTS platform/infra/services/runtime/configs/Caddyfile.tmpl root@"$VM_HOST":/etc/caddy/Caddyfile
+scp $SSH_OPTS platform/infra/services/runtime/configs/promtail-config.yaml root@"$VM_HOST":/etc/promtail/config.yaml
+scp $SSH_OPTS platform/infra/services/runtime/configs/litellm.config.yaml root@"$VM_HOST":/etc/litellm/config.yaml
 
 # Upload and execute deployment script
-scp "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
-ssh -o StrictHostKeyChecking=no root@"$VM_HOST" \
+scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
+ssh $SSH_OPTS root@"$VM_HOST" \
     "DOMAIN='$DOMAIN' APP_IMAGE='$APP_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' bash /tmp/deploy-remote.sh"
 
 # Health validation
