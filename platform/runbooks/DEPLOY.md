@@ -49,7 +49,7 @@ Set SSH deploy keys (requires GitHub admin auth):
 gh secret set SSH_DEPLOY_KEY --env preview --body "$(cat ~/.ssh/cogni_template_preview_deploy)"
 
 # Production environment
-gh secret set SSH_DEPLOY_KEY --env production --body "$(cat ~/.ssh/cogni_template_prod_deploy)"
+gh secret set SSH_DEPLOY_KEY --env production --body "$(cat ~/.ssh/cogni_template_production_deploy)"
 ```
 
 Also add to GitHub Environment Secrets:
