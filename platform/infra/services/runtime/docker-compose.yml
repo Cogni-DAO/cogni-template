@@ -37,10 +37,8 @@ services:
     healthcheck:
       test:
         [
-          "CMD",
-          "curl",
-          "-f",
-          "http://localhost:${LITELLM_PORT:-4000}/health/readiness",
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:${LITELLM_PORT:-4000}/health/readiness || exit 1",
         ]
       interval: 10s
       timeout: 2s
