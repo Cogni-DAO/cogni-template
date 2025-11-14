@@ -17,7 +17,6 @@ on:
   workflow_run:
     workflows: ["Build & Test Preview"]
     types: [completed]
-    branches: [main]
 
 permissions:
   contents: read
@@ -32,6 +31,7 @@ jobs:
   build-push-deploy:
     runs-on: ubuntu-latest
     environment: preview
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     env:
       NEXT_TELEMETRY_DISABLED: 1
       IMAGE_NAME: ${{ format('ghcr.io/{0}', lower(github.repository)) }}
