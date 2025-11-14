@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-push-deploy:
+  deploy-image:
     runs-on: ubuntu-latest
     environment: preview
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'

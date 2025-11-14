@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-test:
+  build-image:
     runs-on: ubuntu-latest
     environment: production
     env:
