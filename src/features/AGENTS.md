@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-06
+- **Last reviewed:** 2025-11-13
 - **Status:** draft
 
 ## Purpose
@@ -22,16 +22,19 @@ Vertical slices containing use cases like auth/ and proposals/. Orchestrates cor
 ```json
 {
   "layer": "features",
-  "may_import": ["ports", "core", "shared", "components"],
+  "may_import": ["features", "ports", "core", "shared", "types", "components"],
   "must_not_import": [
     "app",
     "adapters/server",
     "adapters/worker",
-    "features",
+    "bootstrap",
+    "contracts",
     "styles"
   ]
 }
 ```
+
+**Import Rules:** See [ARCHITECTURE.md Enforcement Rules](../../docs/ARCHITECTURE.md#enforcement-rules) for canonical entry points (@/core, @/ports, etc.) and type-only requirements.
 
 ## Public Surface
 

@@ -25,8 +25,8 @@ export class FakeClock {
     this.currentTime = new Date(initialTime);
   }
 
-  now(): Date {
-    return new Date(this.currentTime);
+  now(): string {
+    return this.currentTime.toISOString();
   }
 
   advance(milliseconds: number): void {

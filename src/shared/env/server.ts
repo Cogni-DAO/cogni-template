@@ -26,7 +26,7 @@ const serverSchema = z.object({
 
   // LLM (Stage 8)
   LITELLM_BASE_URL: z.string().url(),
-  LITELLM_ADMIN_KEY: z.string().min(1),
+  LITELLM_MASTER_KEY: z.string().min(1),
   OPENROUTER_API_KEY: z.string().min(1),
   DEFAULT_MODEL: z.string().default("openrouter/auto"),
 

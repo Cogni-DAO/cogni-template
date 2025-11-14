@@ -147,6 +147,7 @@ function validateBoundaries(block, filePathRaw) {
       "types",
       "components",
       "styles",
+      "bootstrap",
     ],
     mcp: ["mcp", "features", "ports", "contracts", "bootstrap"],
     "adapters/server": ["adapters/server", "ports", "shared", "types"],

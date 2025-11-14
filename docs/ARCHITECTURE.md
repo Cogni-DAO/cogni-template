@@ -286,12 +286,13 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 
 - **Imports**
   - `core` → only `core` (standalone).
-  - `ports` → `core`.
-  - `features` → `ports|core|shared`.
-  - `app` → `features|ports|shared|contracts` (never adapters|core).
-  - `adapters` → `ports|shared|types` (never `app|features|core`).
-  - `contracts` → `shared|types` only. Never imported by `features|ports|core`.
-  - `mcp` → `contracts|bootstrap|features|ports` (never `app|components`).
+  - `ports` → `@/core`, `@/types`.
+  - `features` → `@/core|@/ports|@/shared|@/types|@/components` (never adapters|bootstrap|deep paths).
+  - `app` → `@/features/*/services/*|@/bootstrap/container|@/contracts/*|@/shared|@/ports|@/styles` (never adapters|core).
+  - `adapters` → `@/ports|@/shared|@/types` (never `app|features|core`).
+  - `contracts` → `@/shared|@/types` only. Never imported by `features|ports|core`.
+  - `bootstrap` → `@/adapters/server|@/ports` (DI composition only).
+  - `mcp` → `@/contracts|@/bootstrap|@/features/*/services/*|@/ports` (never `app|components`).
 - **ESLint**: flat config with path rules; `eslint-plugin-boundaries`.
 - **Dependency-cruiser**: optional CI gate for graph violations.
 - **Contracts**: `tests/contract` must pass for any adapter.
@@ -351,4 +352,3 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 - **Auth is centralized.** Use one `guard()` for session/API-key scopes, rate-limit, idempotency. No per-route ad-hoc checks.
 - **Observability is mandatory.** Trace every call with `contractId`, `subject`, and cost/usage. Log denials.
 - **Adapters are pure infra.** No UI, no business rules. Implement ports only. Promote creeping helpers into ports or core.
-- \*\*

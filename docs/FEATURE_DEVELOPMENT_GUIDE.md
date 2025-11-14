@@ -8,15 +8,7 @@ Imports point inward only.
 
 ## Layer Import Policy
 
-**app** → features only.
-
-**features** → ports, contracts, pure types from core. Never adapters.
-
-**adapters** → ports and infra libs. Never app or features.
-
-**core** is pure. No I/O, time, RNG, or framework.
-
-**contracts** expose Zod input/output and an id string. No infra.
+See [ARCHITECTURE.md Enforcement Rules](ARCHITECTURE.md#enforcement-rules) for canonical import patterns and entry points.
 
 ## Minimal Feature Workflow (Gated)
 

@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-11-11
+- **Last reviewed:** 2025-11-13
 - **Status:** draft
 
 ## Purpose

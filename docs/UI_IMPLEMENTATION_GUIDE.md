@@ -4,14 +4,13 @@ A practical guide to our layered UI architecture with CVA styling.
 
 ## Architecture Layers (Import Rules)
 
-```
-app/           → features, components (kit)
-features/      → components (kit only)
-components/kit → styles/ui, vendor/ui-primitives
-styles/ui      → styles/theme.ts (types only)
-```
+See [ARCHITECTURE.md Enforcement Rules](ARCHITECTURE.md#enforcement-rules) for canonical import patterns and entry points.
 
-**Key Rule**: Each layer imports only from layers below. Features NEVER import `@/styles/ui` directly.
+**UI-specific rules**:
+
+- `components/kit` → `@/styles/ui`, vendor/ui-primitives
+- `features` → `@/components` only (never `@/styles/ui` directly)
+- `app` → `@/components`, `@/features/*/components/*`
 
 ## Directory Structure & Component Placement
 

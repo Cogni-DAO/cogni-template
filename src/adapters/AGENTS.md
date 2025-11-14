@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-06
+- **Last reviewed:** 2025-11-13
 - **Status:** draft
 
 ## Purpose
@@ -22,7 +22,7 @@ Infrastructure implementations of ports including server/, worker/, and cli/ ada
 ```json
 {
   "layer": "adapters/server",
-  "may_import": ["ports", "shared"],
+  "may_import": ["adapters/server", "ports", "shared", "types"],
   "must_not_import": ["app", "features", "core"]
 }
 ```
