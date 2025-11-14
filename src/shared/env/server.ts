@@ -25,7 +25,7 @@ const serverSchema = z.object({
   // TODO: Enable when session management is implemented
   // SESSION_SECRET: z.string().min(32),
 
-  // LLM (Stage 8) - LITELLM_BASE_URL defaults to deployment-aware configuration
+  // LLM (Stage 8) - App only needs proxy access, not provider keys
   LITELLM_BASE_URL: z
     .string()
     .url()
@@ -35,7 +35,6 @@ const serverSchema = z.object({
         : "http://localhost:4000"
     ),
   LITELLM_MASTER_KEY: z.string().min(1),
-  OPENROUTER_API_KEY: z.string().min(1),
   DEFAULT_MODEL: z.string().default("openrouter/auto"),
 
   // Optional

@@ -9,11 +9,15 @@
 
 ### Critical Deployment Blockers
 
-- [ ] **Fix tag mismatch crisis**: Align image tags between build and deploy workflows
-  - Preview: `preview-${{ github.sha }}` vs `preview-pr${{ env.PR_NUMBER }}-${SHORT_SHA}`
-  - Production: `prod-${{ github.sha }}` vs `production-${{ github.sha }}`
-- [ ] **Create missing LiteLLM config file**: Create `platform/infra/services/litellm/litellm.config.yaml`
-- [ ] **Fix deploy.sh to use terraform.tfvars**: Remove env var validation for values already in .tfvars file
+- [x] **Fix tag mismatch crisis**: Align image tags between build and deploy workflows
+  - ✅ All workflows now use consistent `app-${{ github.sha }}` tagging
+  - ✅ Single image per commit strategy implemented
+- [x] **Create missing LiteLLM config file**: Create `platform/infra/services/litellm/litellm.config.yaml`
+- [x] **Fix deploy.sh to use terraform.tfvars**: ✅ Implemented proper secrets/config separation
+  - ✅ Created `env.preview.tfvars` and `env.prod.tfvars` with non-secret config
+  - ✅ Updated `variables.tf` with clear sections for topology/secrets
+  - ✅ Modified `deploy.sh` to use environment-specific tfvars + validate secrets
+  - ✅ Removed old `terraform.tfvars` with mixed secrets
 - [ ] **Add SSH private key handling**: Add `ssh_private_key` to terraform.tfvars or create secure injection mechanism
 
 ## Priority 1 (P1) - Core Functionality
