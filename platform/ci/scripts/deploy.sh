@@ -4,8 +4,30 @@
 
 set -euo pipefail
 
-# Error trap
-trap 'code=$?; echo "[ERROR] deploy failed"; exit $code' ERR
+on_fail() {
+  code=$?
+  echo "[ERROR] deploy failed (exit $code), collecting debug info from VM..."
+
+  if [[ -n "${VM_HOST:-}" ]]; then
+    ssh -o StrictHostKeyChecking=no root@"$VM_HOST" <<'EOF' || true
+      echo "=== docker compose ps ==="
+      cd /opt/cogni/runtime && docker compose ps || echo "docker compose ps failed"
+
+      echo "=== logs: app ==="
+      cd /opt/cogni/runtime && docker compose logs --tail 80 app || true
+
+      echo "=== logs: litellm ==="
+      cd /opt/cogni/runtime && docker compose logs --tail 80 litellm || true
+
+      echo "=== logs: caddy ==="
+      cd /opt/cogni/runtime && docker compose logs --tail 80 caddy || true
+EOF
+  fi
+
+  exit "$code"
+}
+
+trap on_fail ERR
 
 # Colors for output  
 RED='\033[0;31m'
@@ -116,8 +138,6 @@ APP_IMAGE=${APP_IMAGE}
 DATABASE_URL=${DATABASE_URL}
 LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
 OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-LITELLM_PORT=4000
-APP_PORT=3000
 ENV_EOF
 
 log_info "Pulling latest images..."
@@ -164,35 +184,28 @@ ssh -o StrictHostKeyChecking=no root@"$VM_HOST" \
 
 # Health validation
 log_info "Validating deployment health..."
-sleep 30  # Give services time to fully start
 
-for i in {1..12}; do  # 5 minute timeout (12 * 25s)
-    if curl -fsS "https://$DOMAIN/api/v1/meta/health" > /dev/null 2>&1; then
-        log_info "✅ App health check passed: https://$DOMAIN/api/v1/meta/health"
-        break
-    elif [ $i -eq 12 ]; then
-        log_error "❌ App health check failed after 5 minutes"
-        log_error "Check deployment logs: ssh root@$VM_HOST 'cd /opt/cogni/runtime && docker compose logs'"
-        exit 1
-    else
-        log_warn "Attempt $i/12: App not ready yet, waiting 25s..."
-        sleep 25
-    fi
-done
+max_attempts=3
+sleep_seconds=3
 
-for i in {1..12}; do  # 5 minute timeout
-    if curl -fsS "https://ai.$DOMAIN/health/readiness" > /dev/null 2>&1; then
-        log_info "✅ LiteLLM health check passed: https://ai.$DOMAIN/health/readiness"
-        break
-    elif [ $i -eq 12 ]; then
-        log_error "❌ LiteLLM health check failed after 5 minutes"
-        log_error "Check deployment logs: ssh root@$VM_HOST 'cd /opt/cogni/runtime && docker compose logs litellm'"
-        exit 1
-    else
-        log_warn "Attempt $i/12: LiteLLM not ready yet, waiting 25s..."
-        sleep 25
+check_url() {
+  local url="$1"
+  local label="$2"
+
+  for i in $(seq 1 "$max_attempts"); do
+    if curl -fsS "$url" >/dev/null 2>&1; then
+      log_info "✅ $label health check passed: $url"
+      return 0
     fi
-done
+    log_warn "Attempt ${i}/${max_attempts}: $label not ready yet, waiting ${sleep_seconds}s..."
+    sleep "$sleep_seconds"
+  done
+
+  log_error "❌ $label did not become ready after $((max_attempts * sleep_seconds))s: $url"
+  return 1
+}
+
+check_url "https://$DOMAIN/api/v1/meta/health" "App"
 
 # Store deployment metadata
 log_info "Recording deployment metadata..."
