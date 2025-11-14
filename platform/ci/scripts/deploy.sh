@@ -26,45 +26,34 @@ log_error() {
 }
 
 # Validate required environment variables
-if [[ -z "${TF_VAR_app_image:-}" ]]; then
-    log_error "TF_VAR_app_image is required (dynamic variable from CI)"
-    log_error "Example: export TF_VAR_app_image=ghcr.io/cogni-dao/cogni-template:app-abc123"
+if [[ -z "${APP_IMAGE:-}" ]]; then
+    log_error "APP_IMAGE is required (dynamic variable from CI)"
+    log_error "Example: export APP_IMAGE=ghcr.io/cogni-dao/cogni-template:app-abc123"
     exit 1
 fi
 
 # Environment selection - MUST be explicitly set for security
 if [[ -z "${DEPLOY_ENVIRONMENT:-}" ]]; then
-    log_error "DEPLOY_ENVIRONMENT must be explicitly set to 'preview' or 'prod'"
+    log_error "DEPLOY_ENVIRONMENT must be explicitly set to 'preview' or 'production'"
     log_error "This prevents accidental production deployments"
     log_error "Example: export DEPLOY_ENVIRONMENT=preview"
     exit 1
 fi
 
 ENVIRONMENT="$DEPLOY_ENVIRONMENT"
-if [[ "$ENVIRONMENT" != "preview" && "$ENVIRONMENT" != "prod" ]]; then
-    log_error "DEPLOY_ENVIRONMENT must be 'preview' or 'prod'"
+if [[ "$ENVIRONMENT" != "preview" && "$ENVIRONMENT" != "production" ]]; then
+    log_error "DEPLOY_ENVIRONMENT must be 'preview' or 'production'"
     log_error "Current value: $ENVIRONMENT"
     exit 1
 fi
 
-# Check if environment-specific tfvars exists
-DEPLOY_DIR="platform/infra/providers/cherry/app"
-ENV_TFVARS="$DEPLOY_DIR/env.${ENVIRONMENT}.tfvars"
-if [[ ! -f "$ENV_TFVARS" ]]; then
-    log_error "Environment tfvars not found: $ENV_TFVARS"
-    log_error "Available environments: preview, prod"
-    exit 1
-fi
-
-log_info "Deploying to environment: $ENVIRONMENT"
-log_info "Using tfvars file: $ENV_TFVARS"
-
 # Validate required secrets are provided as environment variables
 REQUIRED_SECRETS=(
-    "TF_VAR_database_url"
-    "TF_VAR_ssh_private_key" 
-    "TF_VAR_litellm_master_key"
-    "TF_VAR_openrouter_api_key"
+    "DOMAIN"
+    "DATABASE_URL"
+    "LITELLM_MASTER_KEY"
+    "OPENROUTER_API_KEY"
+    "VM_HOST"
 )
 
 MISSING_SECRETS=()
@@ -87,34 +76,123 @@ fi
 
 log_info "✅ All required secrets provided via environment variables"
 
-# Set artifact directory (DEPLOY_DIR already set above)
+# Set artifact directory
 ARTIFACT_DIR="${RUNNER_TEMP:-/tmp}/deploy-${GITHUB_RUN_ID:-$$}"
 mkdir -p "$ARTIFACT_DIR"
 
-log_info "Deploying to Cherry Servers..."
-log_info "App image: $TF_VAR_app_image"
-log_info "Environment: $ENVIRONMENT (domain/host from tfvars)"
+log_info "Deploying to Cherry Servers via Docker Compose..."
+log_info "App image: $APP_IMAGE"
+log_info "Environment: $ENVIRONMENT"
+log_info "Domain: $DOMAIN"
+log_info "VM Host: $VM_HOST"
 log_info "Artifact directory: $ARTIFACT_DIR"
 
-# Print Terraform version
-tofu version
+# Deploy runtime stack via SSH + Docker Compose
+log_info "Connecting to VM and deploying containers..."
 
-# Initialize Terraform
-log_info "Initializing Terraform..."
-tofu -chdir="$DEPLOY_DIR" init -upgrade -input=false -lock-timeout=5m
+# Create deployment script for remote execution
+cat > "$ARTIFACT_DIR/deploy-remote.sh" << 'EOF'
+#!/bin/bash
+set -euo pipefail
 
-# Plan deployment - don't capture logs to prevent secret leaks
-log_info "Planning deployment..."
-tofu -chdir="$DEPLOY_DIR" plan \
-  -var-file="env.${ENVIRONMENT}.tfvars" \
-  -input=false -no-color -lock-timeout=5m \
-  -out="$ARTIFACT_DIR/tfplan"
+log_info() {
+    echo -e "\033[0;32m[INFO]\033[0m $1"
+}
 
-# Apply deployment - don't capture logs to prevent secret leaks
-log_info "Applying deployment..."
-tofu -chdir="$DEPLOY_DIR" apply \
-  -auto-approve -no-color -lock-timeout=5m \
-  "$ARTIFACT_DIR/tfplan"
+log_info "Setting up runtime environment on VM..."
+
+# Create required directories
+sudo mkdir -p /etc/caddy /etc/promtail /etc/litellm /var/lib/promtail
+
+# Create runtime directory and copy docker-compose.yml
+sudo mkdir -p /opt/cogni/runtime
+cd /opt/cogni/runtime
+
+# Write environment file
+log_info "Creating runtime environment file..."
+cat > .env << ENV_EOF
+DOMAIN=${DOMAIN}
+APP_IMAGE=${APP_IMAGE}
+DATABASE_URL=${DATABASE_URL}
+LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+LITELLM_PORT=4000
+APP_PORT=3000
+ENV_EOF
+
+log_info "Pulling latest images..."
+docker compose pull
+
+log_info "Stopping existing containers..."
+docker compose down || true
+
+log_info "Starting runtime stack..."
+docker compose up -d
+
+log_info "Waiting for containers to be ready..."
+sleep 10
+
+log_info "Checking container status..."
+docker compose ps
+
+log_info "✅ Deployment complete!"
+EOF
+
+# Make deployment script executable
+chmod +x "$ARTIFACT_DIR/deploy-remote.sh"
+
+# Copy docker-compose.yml and configs to VM via SSH
+log_info "Uploading docker-compose.yml and configuration files..."
+ssh -o StrictHostKeyChecking=no root@"$VM_HOST" "mkdir -p /opt/cogni/runtime /etc/caddy /etc/promtail /etc/litellm /var/lib/promtail"
+
+# Upload docker-compose.yml
+scp platform/infra/services/runtime/docker-compose.yml root@"$VM_HOST":/opt/cogni/runtime/
+
+# Upload configuration files
+scp platform/infra/services/runtime/configs/Caddyfile.tmpl root@"$VM_HOST":/etc/caddy/Caddyfile.tmpl
+scp platform/infra/services/runtime/configs/promtail-config.yaml root@"$VM_HOST":/etc/promtail/config.yaml
+scp platform/infra/services/runtime/configs/litellm.config.yaml root@"$VM_HOST":/etc/litellm/config.yaml
+
+# Process Caddyfile template
+log_info "Processing Caddyfile template..."
+ssh -o StrictHostKeyChecking=no root@"$VM_HOST" "sed 's/\${domain}/'$DOMAIN'/g' /etc/caddy/Caddyfile.tmpl > /etc/caddy/Caddyfile"
+
+# Upload and execute deployment script
+scp "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
+ssh -o StrictHostKeyChecking=no root@"$VM_HOST" \
+    "DOMAIN='$DOMAIN' APP_IMAGE='$APP_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' bash /tmp/deploy-remote.sh"
+
+# Health validation
+log_info "Validating deployment health..."
+sleep 30  # Give services time to fully start
+
+for i in {1..12}; do  # 5 minute timeout (12 * 25s)
+    if curl -fsS "https://$DOMAIN/api/v1/meta/health" > /dev/null 2>&1; then
+        log_info "✅ App health check passed: https://$DOMAIN/api/v1/meta/health"
+        break
+    elif [ $i -eq 12 ]; then
+        log_error "❌ App health check failed after 5 minutes"
+        log_error "Check deployment logs: ssh root@$VM_HOST 'cd /opt/cogni/runtime && docker compose logs'"
+        exit 1
+    else
+        log_warn "Attempt $i/12: App not ready yet, waiting 25s..."
+        sleep 25
+    fi
+done
+
+for i in {1..12}; do  # 5 minute timeout
+    if curl -fsS "https://ai.$DOMAIN/health/readiness" > /dev/null 2>&1; then
+        log_info "✅ LiteLLM health check passed: https://ai.$DOMAIN/health/readiness"
+        break
+    elif [ $i -eq 12 ]; then
+        log_error "❌ LiteLLM health check failed after 5 minutes"
+        log_error "Check deployment logs: ssh root@$VM_HOST 'cd /opt/cogni/runtime && docker compose logs litellm'"
+        exit 1
+    else
+        log_warn "Attempt $i/12: LiteLLM not ready yet, waiting 25s..."
+        sleep 25
+    fi
+done
 
 # Store deployment metadata
 log_info "Recording deployment metadata..."
@@ -122,19 +200,28 @@ cat > "$ARTIFACT_DIR/deployment.json" << EOF
 {
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "environment": "$ENVIRONMENT",
-  "app_image": "$TF_VAR_app_image",
+  "app_image": "$APP_IMAGE",
+  "domain": "$DOMAIN",
+  "vm_host": "$VM_HOST",
   "commit": "${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo 'unknown')}",
   "ref": "${GITHUB_REF_NAME:-$(git branch --show-current 2>/dev/null || echo 'unknown')}",
   "actor": "${GITHUB_ACTOR:-$(whoami)}"
 }
 EOF
 
-log_info "✅ Deployment complete!"
+log_info "✅ Docker Compose deployment complete!"
 log_info ""
-log_info "Deployment artifacts in $ARTIFACT_DIR:"
-log_info "  - plan.log: Terraform plan output"  
-log_info "  - apply.log: Terraform apply output"
+log_info "🌐 Application URLs:"
+log_info "  - Main App: https://$DOMAIN"
+log_info "  - AI API: https://ai.$DOMAIN" 
+log_info "  - Health Check: https://$DOMAIN/api/v1/meta/health"
+log_info "  - AI Health: https://ai.$DOMAIN/health/readiness"
+log_info ""
+log_info "📁 Deployment artifacts in $ARTIFACT_DIR:"
 log_info "  - deployment.json: Deployment metadata"
-log_info "  - tfplan: Terraform plan file"
+log_info "  - deploy-remote.sh: Remote deployment script"
 log_info ""
-log_info "CI should upload $ARTIFACT_DIR/* as artifacts"
+log_info "🔧 Deployment management:"
+log_info "  - SSH access: ssh root@$VM_HOST"
+log_info "  - Container logs: cd /opt/cogni/runtime && docker compose logs"
+log_info "  - Container status: cd /opt/cogni/runtime && docker compose ps"

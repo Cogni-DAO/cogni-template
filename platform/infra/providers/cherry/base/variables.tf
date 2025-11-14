@@ -33,6 +33,6 @@ variable "region" {
 variable "public_key_path" {
   description = "Path to SSH public key"
   type        = string
-  default     = "~/.ssh/derekg_cogni_canary.pub"
+  # No default - specified in env.*.tfvars
 }
 

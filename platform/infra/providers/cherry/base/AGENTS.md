@@ -10,12 +10,12 @@
 
 ## Purpose
 
-Immutable VM provisioning with static OS-level bootstrap for Cherry Servers infrastructure.
+Immutable VM provisioning with SSH deploy key management and Docker/Docker Compose installation for Cherry Servers infrastructure.
 
 ## Pointers
 
-- [main.tf](main.tf): VM resource definitions
-- [bootstrap.yaml](bootstrap.yaml): Static cloud-init configuration
+- [DEPLOY.md](../../../runbooks/DEPLOY.md): Step-by-step setup guide
+- [DEPLOYMENT_ARCHITECTURE.md](../../../runbooks/DEPLOYMENT_ARCHITECTURE.md): Architecture overview
 
 ## Boundaries
 
@@ -43,8 +43,8 @@ Immutable VM provisioning with static OS-level bootstrap for Cherry Servers infr
 
 ## Responsibilities
 
-- This directory **does**: Create and configure Cherry Servers VMs with OS-level setup
-- This directory **does not**: Deploy applications or handle container orchestration
+- This directory **does**: VM provisioning, SSH deploy key installation, Docker/Docker Compose bootstrap, VM host output to GitHub secrets
+- This directory **does not**: Application deployment (handled by SSH + Docker Compose from GitHub Actions)
 
 ## Usage
 
@@ -71,9 +71,10 @@ tofu apply
 
 - Update this file when **VM configuration variables** change
 - Bump **Last reviewed** date
-- Coordinate with ../app/ for SSH connectivity requirements
+- VM changes affect SSH deployment workflows
 
 ## Notes
 
-- Creates immutable VMs with Docker and basic tools only
-- App deployment handled separately in ../app/ via SSH
+- OpenTofu-only layer (no application concerns)
+- Outputs VM host IP to GitHub Environment Secrets for SSH deployment
+- See runbooks/ for setup and architecture details
