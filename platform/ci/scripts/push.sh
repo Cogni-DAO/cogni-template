@@ -36,15 +36,6 @@ if [[ -z "${IMAGE_TAG:-}" ]]; then
     exit 1
 fi
 
-if [[ -z "${GHCR_PAT:-}" ]]; then
-    log_error "GHCR_PAT is required (GitHub Container Registry token)"
-    exit 1
-fi
-
-if [[ -z "${GHCR_USERNAME:-}" ]]; then
-    log_error "GHCR_USERNAME is required (GitHub username)"
-    exit 1
-fi
 
 # Ensure IMAGE_NAME is lowercase for Docker registry compatibility
 IMAGE_NAME=$(echo "${IMAGE_NAME}" | tr '[:upper:]' '[:lower:]')
@@ -54,8 +45,6 @@ FULL_IMAGE="${IMAGE_NAME}:${IMAGE_TAG}"
 
 log_info "Pushing Docker image to GHCR..."
 log_info "Image: $FULL_IMAGE"
-log_info "Registry: ghcr.io"
-log_info "Username: $GHCR_USERNAME"
 
 # Verify image exists locally first
 if ! docker inspect "$FULL_IMAGE" > /dev/null 2>&1; then
@@ -63,9 +52,6 @@ if ! docker inspect "$FULL_IMAGE" > /dev/null 2>&1; then
     exit 1
 fi
 
-# Authenticate with GHCR
-log_info "Authenticating with GitHub Container Registry..."
-echo "$GHCR_PAT" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
 
 # Push the image
 log_info "Pushing image..."
@@ -86,6 +72,3 @@ else
     exit 1
 fi
 
-# Clean up credentials
-docker logout ghcr.io > /dev/null 2>&1 || true
-log_info "GHCR logout completed"

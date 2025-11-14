@@ -107,10 +107,14 @@ jobs:
         run: |
           docker rm -f test-container || true
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Push to GHCR
-        env:
-          GHCR_PAT: ${{ secrets.GITHUB_TOKEN }}
-          GHCR_USERNAME: ${{ github.actor }}
         run: platform/ci/scripts/push.sh
 
       - name: Build summary
