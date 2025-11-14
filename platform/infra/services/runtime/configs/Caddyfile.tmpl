@@ -14,12 +14,3 @@
     output file /data/logs/caddy/access.log
   }
 }
-
-ai.{$DOMAIN} {
-  encode zstd gzip
-  reverse_proxy litellm:4000
-  log {
-    format json
-    output file /data/logs/caddy/ai-access.log
-  }
-}
