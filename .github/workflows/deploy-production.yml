@@ -20,20 +20,24 @@ jobs:
     environment: production
     env:
       NEXT_TELEMETRY_DISABLED: 1
-      IMAGE_NAME: ${{ format('ghcr.io/{0}', lower(github.repository)) }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set image tag
-        id: image_tag
+      - name: Set image vars
+        id: image_vars
         run: |
+          # Ensure IMAGE_NAME is lowercase for Docker registry compatibility
+          IMAGE_NAME=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          
           if [ -n "${{ github.event.inputs.image_tag }}" ]; then
             IMAGE_TAG="${{ github.event.inputs.image_tag }}"
           else
             IMAGE_TAG="app-${GITHUB_SHA}"
           fi
+          
+          echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
           echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
           echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
 
