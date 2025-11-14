@@ -6,7 +6,7 @@
   }
 }
 
-${domain} {
+{$DOMAIN}, www.{$DOMAIN} {
   encode zstd gzip
   reverse_proxy app:3000
   log {
@@ -15,7 +15,7 @@ ${domain} {
   }
 }
 
-ai.${domain} {
+ai.{$DOMAIN} {
   encode zstd gzip
   reverse_proxy litellm:4000
   log {

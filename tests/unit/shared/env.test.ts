@@ -29,7 +29,6 @@ describe("env schemas", () => {
   it("parses minimal valid env", async () => {
     Object.assign(process.env, {
       NODE_ENV: "test",
-      APP_BASE_URL: "http://localhost:3000",
       DATABASE_URL: "postgres://u:p@h:5432/db?sslmode=require",
       // TODO: SESSION_SECRET: "x".repeat(32),
       // LITELLM_BASE_URL: auto-detects based on NODE_ENV
@@ -42,7 +41,9 @@ describe("env schemas", () => {
     const { serverEnv } = await import("../../../src/shared/env/server");
     const { clientEnv } = await import("../../../src/shared/env/client");
 
-    expect(serverEnv.APP_BASE_URL).toBe("http://localhost:3000");
+    expect(serverEnv.DATABASE_URL).toBe(
+      "postgres://u:p@h:5432/db?sslmode=require"
+    );
     expect(clientEnv.NEXT_PUBLIC_CHAIN_ID).toBe(1);
   });
 

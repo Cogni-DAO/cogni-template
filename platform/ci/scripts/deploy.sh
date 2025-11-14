@@ -169,13 +169,9 @@ ssh -o StrictHostKeyChecking=no root@"$VM_HOST" "mkdir -p /opt/cogni/runtime /et
 scp platform/infra/services/runtime/docker-compose.yml root@"$VM_HOST":/opt/cogni/runtime/
 
 # Upload configuration files
-scp platform/infra/services/runtime/configs/Caddyfile.tmpl root@"$VM_HOST":/etc/caddy/Caddyfile.tmpl
+scp platform/infra/services/runtime/configs/Caddyfile.tmpl root@"$VM_HOST":/etc/caddy/Caddyfile
 scp platform/infra/services/runtime/configs/promtail-config.yaml root@"$VM_HOST":/etc/promtail/config.yaml
 scp platform/infra/services/runtime/configs/litellm.config.yaml root@"$VM_HOST":/etc/litellm/config.yaml
-
-# Process Caddyfile template
-log_info "Processing Caddyfile template..."
-ssh -o StrictHostKeyChecking=no root@"$VM_HOST" "sed 's/\${domain}/'$DOMAIN'/g' /etc/caddy/Caddyfile.tmpl > /etc/caddy/Caddyfile"
 
 # Upload and execute deployment script
 scp "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
