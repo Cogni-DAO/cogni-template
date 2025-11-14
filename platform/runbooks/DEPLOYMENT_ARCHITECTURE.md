@@ -6,193 +6,144 @@ Build once. Push to GHCR. Deploy via OpenTofu to Cherry with SSH-based deploymen
 
 Split between immutable infrastructure (VM) and mutable application deployment.
 
-## Architecture Split
+## Two-Layer Architecture
 
 ### Base Infrastructure (`platform/infra/providers/cherry/base/`)
 
-- **Purpose**: One-time VM provisioning with static OS bootstrap
-- **Immutable**: VM configuration frozen after initial deployment
-- **Contains**: Server creation, SSH keys, minimal cloud-init (Docker + tools only)
+- **Purpose**: VM provisioning with Cherry Servers API
+- **Environment separation**: `env.preview.tfvars`, `env.prod.tfvars`
+- **Creates**: `preview-cogni`, `prod-cogni` VMs with SSH keys
+- **No app secrets**: Only VM topology configuration
 
 ### App Deployment (`platform/infra/providers/cherry/app/`)
 
-- **Purpose**: SSH-based container deployment and configuration
-- **Mutable**: Updated on every deployment
-- **Contains**: Container orchestration, Caddy configuration, health validation
+- **Purpose**: SSH-based container deployment to existing VMs
+- **Environment separation**: `env.preview.tfvars`, `env.prod.tfvars`
+- **Deploys**: App + LiteLLM + Caddy + Promtail containers
+- **Runtime secrets**: From GitHub Environment Secrets → CI env vars
 
-## Component Overview
-
-### Docker Image
-
-- Built with `HEALTHCHECK CMD curl -fsS http://localhost:3000/api/v1/meta/health || exit 1`
-- Tagged as `production-${short_sha}` for immutable deployments
-- Pushed to GHCR with authentication
-
-### Infrastructure Files
+## File Structure
 
 ```
 platform/infra/providers/cherry/
-├── base/
-│   ├── main.tf                    # VM creation with lifecycle ignore
-│   ├── variables.tf               # VM sizing, SSH keys, region
-│   ├── bootstrap.yaml             # Minimal cloud-init (Docker only)
-│   └── terraform.tfvars.example
-└── app/
-    ├── main.tf                    # SSH deployment + health gate
-    ├── variables.tf               # domain, app_image, SSH connection
-    ├── files/Caddyfile.tmpl       # Reverse proxy template
-    └── terraform.tfvars.example
+├── base/                           # VM provisioning
+│   ├── main.tf                     # Cherry provider + VM resources
+│   ├── variables.tf                # environment, vm_name_prefix, plan, region
+│   ├── env.preview.tfvars         # Preview VM config (smaller)
+│   └── env.prod.tfvars            # Production VM config
+└── app/                            # Container deployment
+    ├── main.tf                     # SSH deployment + health gate
+    ├── variables.tf                # Secrets vs topology separation
+    ├── env.preview.tfvars         # Preview app config
+    ├── env.prod.tfvars            # Production app config
+    └── files/Caddyfile.tmpl       # Reverse proxy template
 ```
 
-### CI/CD Scripts (`platform/ci/scripts/`)
+## Container Stack
+
+**Single image per commit**: `app-${sha}` tagged, reused across environments
+**Runtime containers**:
+
+- `app`: Next.js application with environment-specific runtime config
+- `litellm`: AI proxy service on `ai.${domain}` subdomain
+- `caddy`: HTTPS termination and routing
+- `promtail`: Log aggregation
+
+## CI/CD Scripts
 
 Provider-agnostic scripts callable from any CI system:
 
-- **`build.sh`**: Build linux/amd64 image with standardized tagging
-- **`push.sh`**: GHCR authentication and push
-- **`deploy.sh`**: OpenTofu deployment with variable injection
+```bash
+platform/ci/scripts/build.sh     # Build linux/amd64 image
+platform/ci/scripts/push.sh      # GHCR authentication and push
+platform/ci/scripts/deploy.sh    # OpenTofu deployment with env selection
+```
 
-### Deployment Flow
+## Deployment Flow
 
-1. **Build Stage**
+### VM Creation (One-time per environment)
 
-   ```bash
-   platform/ci/scripts/build.sh
-   # Builds: ${IMAGE}:production-${short_sha}
-   ```
+```bash
+export CHERRY_AUTH_TOKEN=token
+tofu apply -var-file=platform/infra/providers/cherry/base/env.preview.tfvars
+```
 
-2. **Push Stage**
+### App Deployment (Repeatable)
 
-   ```bash
-   platform/ci/scripts/push.sh
-   # Authenticates with GHCR_PAT
-   # Pushes tagged image
-   ```
+```bash
+# Set environment and secrets
+export DEPLOY_ENVIRONMENT=preview  # or prod
+export TF_VAR_app_image=ghcr.io/cogni-dao/cogni-template:app-abc123
+export TF_VAR_database_url=postgresql://...
+export TF_VAR_ssh_private_key="$(cat ~/.ssh/key)"
+export TF_VAR_litellm_master_key=key
+export TF_VAR_openrouter_api_key=key
 
-3. **Deploy Stage**
-   ```bash
-   platform/ci/scripts/deploy.sh
-   # Sets: TF_VAR_app_image, TF_VAR_domain, TF_VAR_host, TF_VAR_ssh_private_key
-   # Runs: tofu -chdir=platform/infra/providers/cherry/app apply -auto-approve
-   ```
+# Deploy
+platform/ci/scripts/build.sh && platform/ci/scripts/push.sh
+platform/ci/scripts/deploy.sh
+```
 
-## SSH Deployment Process
+## Secrets Management
 
-The app deployment via SSH executes:
+**GitHub Environment Secrets** (preview, production):
 
-1. **File Transfer**: Upload rendered Caddyfile from template
-2. **Container Updates**:
-   ```bash
-   docker network create web || true
-   docker pull ${app_image}
-   docker rm -f app caddy || true
-   docker run -d --name app --network web --restart=always ${app_image}
-   docker run -d --name caddy --network web --restart=always \
-     -p 80:80 -p 443:443 \
-     -v /etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro \
-     -v caddy_data:/data -v caddy_config:/config \
-     caddy:2
-   ```
-3. **Health Validation**: Curl loop to `https://${domain}/api/v1/meta/health` (5min timeout)
+- `DATABASE_URL_{PREVIEW,PROD}`
+- `SSH_PRIVATE_KEY_{PREVIEW,PROD}`
+- `LITELLM_MASTER_KEY_{PREVIEW,PROD}`
+- `OPENROUTER_API_KEY_{PREVIEW,PROD}`
+- `CHERRY_AUTH_TOKEN`
 
-## Required Secrets
+**Never in tfvars**: All sensitive values come from GitHub secrets → CI env vars → TF variables
 
-### GitHub Secrets (for CI)
+## Environment Configuration
 
-- `GHCR_PAT`: GitHub Container Registry personal access token
-- `CHERRY_AUTH_TOKEN`: Cherry Servers API authentication
-- `TF_VAR_domain`: Target deployment domain
-- `TF_VAR_host`: Cherry VM IP address (from base deployment)
-- `TF_VAR_ssh_private_key`: SSH private key in PEM format
+**Base Layer** (`env.preview.tfvars`):
 
-### Environment Variables
+```hcl
+environment = "preview"
+vm_name_prefix = "cogni"
+plan = "cloud_vps_1"          # Smaller for preview
+project_id = "254586"
+region = "LT-Siauliai"
+```
 
-- `TF_VAR_app_image`: Set at deployment time to specific image:tag
-- SSH connection variables injected by CI scripts
+**App Layer** (`env.preview.tfvars`):
+
+```hcl
+environment = "preview"
+domain = "preview.cognidao.org"
+host = "preview.vm.ip"         # From base layer output
+app_port = 3000
+litellm_port = 4000
+```
 
 ## State Management
 
-### Current: Local State
+**Separate states per environment**: No Terraform workspaces
 
-- Terraform state files in provider directories
-- `.gitignore` excludes `terraform.tfstate*` files
-- Manual state management during development
+- Base: `cherry-base-${environment}.tfstate`
+- App: `cherry-app-${environment}.tfstate`
 
-### Future: Remote Backend
+**Future remote backend**:
 
-- S3 + DynamoDB (or equivalent) for state storage and locking
-- Configured in provider `backend` blocks
-- State isolation between base/ and app/ deployments
-
-## Branching and Deployment
-
-- **Trigger**: Push to `production` branch only
-- **Tagging**: `production-${short_sha}` for traceability
-- **Rollback**: Redeploy with previous `TF_VAR_app_image` tag
-- **Emergency**: Use `tofu apply -replace` for full VM recreation
-
-## Observability
-
-### Current (Minimal)
-
-- Container status via `docker ps` over SSH
-- Application logs via `docker logs app`
-- Caddy access logs on persistent volume
-
-### Future Enhancements
-
-- Vector/Promtail log shipping
-- Prometheus metrics collection
-- Grafana dashboards for deployment monitoring
-
-## Multi-Environment Support
-
-### Current: Single Environment
-
-- One base VM, one app deployment
-- Environment-specific domains via `TF_VAR_domain`
-
-### Future: Environment Separation
-
-- Separate base/ deployments per environment
-- Environment-specific variable files
-- Branch-based deployment triggers
-
-## Disaster Recovery
-
-### Rollback Process
-
-1. Identify previous working image tag
-2. Set `TF_VAR_app_image` to previous tag
-3. Run `tofu apply` - health gate validates success
-
-### Complete Recovery
-
-1. Redeploy base infrastructure if needed
-2. Update DNS A records to new VM IP
-3. Deploy latest known-good application image
-4. Verify health checks and monitoring
-
-## Jenkins Integration (Future)
-
-The same `platform/ci/scripts/*` will be reused:
-
-```groovy
-// Jenkinsfile mirrors GitHub Actions structure
-pipeline {
-  stages {
-    stage('Build') { sh 'platform/ci/scripts/build.sh' }
-    stage('Push')  { sh 'platform/ci/scripts/push.sh' }
-    stage('Deploy'){ sh 'platform/ci/scripts/deploy.sh' }
-  }
+```hcl
+backend "s3" {
+  key = "cherry-base-${var.environment}.tfstate"
 }
 ```
 
-Environment injection handled by Jenkins credential management.
+## Health Validation
 
-## Security Considerations
+1. **Container healthchecks**: Docker HEALTHCHECK in Dockerfile
+2. **App health**: `https://${domain}/api/v1/meta/health`
+3. **AI health**: `https://ai.${domain}/health/readiness`
+4. **Deployment gate**: 5min curl loop validates deployment success
 
-- SSH private keys never logged or persisted
-- Container registry authentication via short-lived tokens
-- Health check endpoints provide minimal system information
-- Infrastructure state isolation between immutable/mutable components
+## Current vs Target State
+
+**Current**: Single production VM at `5.199.173.64`
+**Target**: Environment-separated VMs:
+
+- Preview: `preview-cogni` (to be created)
+- Production: `prod-cogni` (migrate existing)

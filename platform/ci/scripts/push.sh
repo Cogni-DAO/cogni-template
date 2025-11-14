@@ -70,7 +70,7 @@ docker push "$FULL_IMAGE"
 
 # Verify push was successful
 log_info "Verifying push..."
-if docker pull "$FULL_IMAGE" > /dev/null 2>&1; then
+if docker pull --platform linux/amd64 "$FULL_IMAGE" > /dev/null 2>&1; then
     # Clean up the pulled verification image to save space
     docker rmi "$FULL_IMAGE" > /dev/null 2>&1 || true
     

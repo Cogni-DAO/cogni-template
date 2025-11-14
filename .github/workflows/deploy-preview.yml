@@ -2,7 +2,7 @@ name: Deploy (Preview)
 
 on:
   pull_request:
-    branches: [a]
+    branches: [main]
     types: [opened, synchronize, reopened]
   workflow_dispatch:
     inputs:
@@ -38,8 +38,7 @@ jobs:
       - name: Set image tag
         id: image_tag
         run: |
-          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
-          IMAGE_TAG="preview-pr${{ env.PR_NUMBER }}-${SHORT_SHA}"
+          IMAGE_TAG="app-${{ github.sha }}"
           echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
           echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
 

@@ -66,6 +66,6 @@ if docker inspect "$FULL_IMAGE" > /dev/null 2>&1; then
     log_info "Healthcheck configured: $(docker inspect "$FULL_IMAGE" --format '{{if .Config.Healthcheck}}Yes{{else}}No{{end}}')"
     log_info "Next step: Run push.sh to push to GHCR"
 else
-    log_error "Build verification failed - image not found"
+    log_error "Build verification failed - image not found (maybe you're on ARM, the build was x64)"
     exit 1
 fi

@@ -34,7 +34,6 @@ describe("env schemas", () => {
       // TODO: SESSION_SECRET: "x".repeat(32),
       // LITELLM_BASE_URL: auto-detects based on NODE_ENV
       LITELLM_MASTER_KEY: "adminkey",
-      OPENROUTER_API_KEY: "or-key",
       // TODO: Add when wallet integration is ready
       // NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: "proj",
       NEXT_PUBLIC_CHAIN_ID: "1",

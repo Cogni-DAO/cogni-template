@@ -20,7 +20,7 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: 1
       IMAGE_NAME: ghcr.io/${{ github.repository }}
-      IMAGE_TAG: production-${{ github.sha }}
+      IMAGE_TAG: app-${{ github.sha }}
 
     steps:
       - name: Checkout
