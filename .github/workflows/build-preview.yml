@@ -11,10 +11,12 @@ on:
       - "next.config.ts"
       - "tailwind.config.ts"
       - "tsconfig.json"
+      - "platform/ci/**"
   workflow_dispatch:
 
 permissions:
   contents: read
+  packages: write
 
 concurrency:
   group: build-preview-${{ github.workflow }}-${{ github.ref }}
@@ -27,19 +29,23 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: 1
       IMAGE_NAME: ghcr.io/${{ github.repository }}
-      IMAGE_TAG: app-${{ github.sha }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set image tag
+        id: image_tag
+        run: |
+          IMAGE_TAG="app-${GITHUB_SHA}"
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Build image
         env:
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          IMAGE_TAG: ${{ env.IMAGE_TAG }}
           # Build-time environment variables for Docker build
           APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -61,7 +67,7 @@ jobs:
             -e DATABASE_URL=${{ secrets.DATABASE_URL }} \
             -e LITELLM_MASTER_KEY=${{ secrets.LITELLM_MASTER_KEY }} \
             -e OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }} \
-            ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+            ${IMAGE_NAME}:${IMAGE_TAG}
 
           # Wait for startup (with timeout)
           echo "Waiting for container to be ready..."
@@ -101,14 +107,19 @@ jobs:
         if: always()
         run: |
           docker rm -f test-container || true
-          docker rmi ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} || true
+
+      - name: Push to GHCR
+        env:
+          GHCR_PAT: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USERNAME: ${{ github.actor }}
+        run: platform/ci/scripts/push.sh
 
       - name: Build summary
         run: |
           echo "## ✅ Build & Test Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Image:** \`${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Image:** \`${IMAGE_NAME}:${IMAGE_TAG}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${GITHUB_SHA}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Platform:** linux/amd64" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Tests Passed" >> $GITHUB_STEP_SUMMARY
