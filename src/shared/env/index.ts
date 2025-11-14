@@ -12,6 +12,8 @@
  * @public
  */
 
+export type { BuildEnv } from "./build";
+export { buildEnv } from "./build";
 export type { ClientEnv } from "./client";
 export { clientEnv } from "./client";
 export type { ServerEnv } from "./server";

@@ -5,7 +5,7 @@
  * Module: `@shared/env/server`
  * Purpose: Server-side environment variable validation and type-safe configuration schema using Zod.
  * Scope: Validates process.env for server runtime; provides serverEnv object. Does not handle client-side env vars.
- * Invariants: All required env vars validated at startup; provides boolean flags for NODE_ENV variants; fails fast on invalid env.
+ * Invariants: All required env vars validated on first access; provides boolean flags for NODE_ENV variants; fails fast on invalid env.
  * Side-effects: process.env
  * Notes: Includes LLM config for Stage 8; validates URLs and secrets; provides default values where appropriate.
  * Links: Environment configuration specification
@@ -44,13 +44,40 @@ const serverSchema = z.object({
     .default("info"),
 });
 
-const parsed = serverSchema.parse(process.env);
-
-export const serverEnv = {
-  ...parsed,
-  isDev: parsed.NODE_ENV === "development",
-  isTest: parsed.NODE_ENV === "test",
-  isProd: parsed.NODE_ENV === "production",
+type ParsedEnv = z.infer<typeof serverSchema> & {
+  isDev: boolean;
+  isTest: boolean;
+  isProd: boolean;
 };
 
-export type ServerEnv = typeof serverEnv;
+let _serverEnv: ParsedEnv | null = null;
+
+function getServerEnv(): ParsedEnv {
+  if (_serverEnv === null) {
+    const parsed = serverSchema.parse(process.env);
+    _serverEnv = {
+      ...parsed,
+      isDev: parsed.NODE_ENV === "development",
+      isTest: parsed.NODE_ENV === "test",
+      isProd: parsed.NODE_ENV === "production",
+    };
+  }
+  return _serverEnv;
+}
+
+export const serverEnv = new Proxy({} as ParsedEnv, {
+  get(_, prop) {
+    return getServerEnv()[prop as keyof ParsedEnv];
+  },
+  ownKeys() {
+    return Reflect.ownKeys(getServerEnv());
+  },
+  getOwnPropertyDescriptor(_, prop) {
+    return Reflect.getOwnPropertyDescriptor(getServerEnv(), prop);
+  },
+  has(_, prop) {
+    return prop in getServerEnv();
+  },
+}) as ParsedEnv;
+
+export type ServerEnv = ParsedEnv;
