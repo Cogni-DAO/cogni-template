@@ -59,17 +59,26 @@ jobs:
           GHCR_USERNAME: ${{ github.actor }}
         run: platform/ci/scripts/push.sh
 
+      - name: Setup SSH deploy key
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          eval "$(ssh-agent -s)"
+          echo "$SSH_DEPLOY_KEY" | tr -d '\r' | ssh-add -
+          ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+          VM_HOST: ${{ secrets.VM_HOST }}
+
       - name: Deploy to Cherry Servers (Preview)
         env:
-          TF_VAR_app_image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          TF_VAR_domain: ${{ secrets.TF_VAR_PREVIEW_DOMAIN }}
-          TF_VAR_host: ${{ secrets.TF_VAR_PREVIEW_HOST }}
-          TF_VAR_ssh_private_key: ${{ secrets.TF_VAR_PREVIEW_SSH_PRIVATE_KEY }}
-          TF_VAR_litellm_master_key: ${{ secrets.TF_VAR_PREVIEW_LITELLM_MASTER_KEY }}
-          TF_VAR_openrouter_api_key: ${{ secrets.TF_VAR_PREVIEW_OPENROUTER_API_KEY }}
-          TF_VAR_litellm_port: 4000
-          TF_VAR_litellm_host: "127.0.0.1"
-          CHERRY_AUTH_TOKEN: ${{ secrets.CHERRY_AUTH_TOKEN }}
+          DEPLOY_ENVIRONMENT: preview
+          APP_IMAGE: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          DOMAIN: ${{ secrets.DOMAIN }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          VM_HOST: ${{ secrets.VM_HOST }}
         run: platform/ci/scripts/deploy.sh
 
       - name: Upload deployment artifacts
@@ -87,7 +96,7 @@ jobs:
         with:
           script: |
             const prNumber = context.payload.pull_request.number;
-            const previewDomain = '${{ secrets.TF_VAR_PREVIEW_DOMAIN }}';
+            const previewDomain = '${{ secrets.DOMAIN }}';
             const imageTag = '${{ env.IMAGE_TAG }}';
             const commitSha = '${{ github.sha }}';
 
@@ -117,8 +126,8 @@ jobs:
         run: |
           echo "## 🚀 Preview Deployment Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Preview URL:** https://${{ secrets.TF_VAR_PREVIEW_DOMAIN }}" >> $GITHUB_STEP_SUMMARY
-          echo "**AI API URL:** https://ai.${{ secrets.TF_VAR_PREVIEW_DOMAIN }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Preview URL:** https://${{ secrets.DOMAIN }}" >> $GITHUB_STEP_SUMMARY
+          echo "**AI API URL:** https://ai.${{ secrets.DOMAIN }}" >> $GITHUB_STEP_SUMMARY
           echo "**Image:** \`${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**PR:** #${{ env.PR_NUMBER }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY

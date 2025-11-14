@@ -1,0 +1,89 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+# Cogni Runtime Stack
+# Environment-agnostic container stack for app + litellm + caddy + promtail
+# Secrets and config come from environment variables set by CI
+
+services:
+  app:
+    image: ${APP_IMAGE}
+    container_name: app
+    restart: always
+    networks:
+      - web
+    environment:
+      - NODE_ENV=production
+      - APP_BASE_URL=https://${DOMAIN}
+      - DATABASE_URL=${DATABASE_URL}
+      - LITELLM_BASE_URL=http://litellm:${LITELLM_PORT:-4000}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+    depends_on:
+      litellm:
+        condition: service_healthy
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm
+    restart: unless-stopped
+    networks:
+      - web
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+    volumes:
+      - /etc/litellm/config.yaml:/app/config.yaml:ro
+    command: --config /app/config.yaml --host 0.0.0.0 --port ${LITELLM_PORT:-4000}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://localhost:${LITELLM_PORT:-4000}/health/readiness",
+        ]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 30s
+
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: always
+    networks:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+      - litellm
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: promtail
+    restart: always
+    networks:
+      - web
+    volumes:
+      - /etc/promtail/config.yaml:/etc/promtail/config.yaml:ro
+      - /var/lib/promtail:/var/lib/promtail
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yaml
+
+networks:
+  web:
+    name: web
+    external: false
+
+volumes:
+  caddy_data:
+    name: caddy_data
+  caddy_config:
+    name: caddy_config

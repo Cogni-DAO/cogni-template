@@ -2,9 +2,11 @@
 
 ## Goal
 
-Build once. Push to GHCR. Deploy via OpenTofu to Cherry with SSH-based deployment. Gate on HTTPS health validation.
+Set up VMs once, continuous CI/CD after.
 
-Split between immutable infrastructure (VM) and mutable application deployment.
+Split between immutable infrastructure (OpenTofu) and mutable application deployment (Docker Compose).
+
+Build once. Push to GHCR. Deploy via GitHub Actions + Docker Compose to Cherry VMs. Gate on HTTPS health validation.
 
 ## Two-Layer Architecture
 
@@ -12,31 +14,35 @@ Split between immutable infrastructure (VM) and mutable application deployment.
 
 - **Purpose**: VM provisioning with Cherry Servers API
 - **Environment separation**: `env.preview.tfvars`, `env.prod.tfvars`
-- **Creates**: `preview-cogni`, `prod-cogni` VMs with SSH keys
-- **No app secrets**: Only VM topology configuration
+- **Creates**: `preview-cogni`, `production-cogni` VMs with SSH deploy keys
+- **Authentication**: SSH public keys only, VM host output to GitHub secrets
 
-### App Deployment (`platform/infra/providers/cherry/app/`)
+### App Deployment (`platform/infra/services/runtime/`)
 
-- **Purpose**: SSH-based container deployment to existing VMs
-- **Environment separation**: `env.preview.tfvars`, `env.prod.tfvars`
-- **Deploys**: App + LiteLLM + Caddy + Promtail containers
-- **Runtime secrets**: From GitHub Environment Secrets → CI env vars
+- **Purpose**: Docker Compose stack for container deployment to existing VMs
+- **Environment separation**: GitHub Environment Secrets
+- **Deploys**: App + LiteLLM + Caddy + Promtail containers via `docker-compose.yml`
+- **Deployment**: SSH from GitHub Actions (no Terraform for app layer)
 
 ## File Structure
 
 ```
-platform/infra/providers/cherry/
-├── base/                           # VM provisioning
-│   ├── main.tf                     # Cherry provider + VM resources
-│   ├── variables.tf                # environment, vm_name_prefix, plan, region
-│   ├── env.preview.tfvars         # Preview VM config (smaller)
-│   └── env.prod.tfvars            # Production VM config
-└── app/                            # Container deployment
-    ├── main.tf                     # SSH deployment + health gate
-    ├── variables.tf                # Secrets vs topology separation
-    ├── env.preview.tfvars         # Preview app config
-    ├── env.prod.tfvars            # Production app config
-    └── files/Caddyfile.tmpl       # Reverse proxy template
+platform/infra/
+├── providers/cherry/base/          # VM provisioning (OpenTofu only)
+│   ├── keys/                       # SSH public keys (committed)
+│   │   ├── cogni_preview_deploy.pub
+│   │   └── cogni_prod_deploy.pub
+│   ├── main.tf                     # Cherry provider + VM resources + outputs
+│   ├── variables.tf                # environment, vm_name_prefix, plan, region, public_key_path
+│   ├── env.preview.tfvars         # Preview VM config
+│   ├── env.prod.tfvars            # Production VM config
+│   └── bootstrap.yaml             # Cloud-init VM setup
+└── services/runtime/               # Container stack (Docker Compose)
+    ├── docker-compose.yml         # App + LiteLLM + Caddy + Promtail
+    └── configs/                   # Service configuration files
+        ├── Caddyfile.tmpl
+        ├── promtail-config.yaml
+        └── litellm.config.yaml
 ```
 
 ## Container Stack
@@ -49,89 +55,56 @@ platform/infra/providers/cherry/
 - `caddy`: HTTPS termination and routing
 - `promtail`: Log aggregation
 
-## CI/CD Scripts
+## GitHub Actions Workflows (Primary Interface)
 
-Provider-agnostic scripts callable from any CI system:
+**Build & Test Pipeline:**
 
-```bash
-platform/ci/scripts/build.sh     # Build linux/amd64 image
-platform/ci/scripts/push.sh      # GHCR authentication and push
-platform/ci/scripts/deploy.sh    # OpenTofu deployment with env selection
-```
+- `ci.yaml` - Static checks (lint, type, REUSE) on all PRs
+- `build-preview.yml` - Docker build + health tests (triggered by app changes)
+- `build-prod.yml` - Docker build + health tests for production
 
-## Deployment Flow
+**Deployment Pipeline:**
 
-### VM Creation (One-time per environment)
+- `deploy-preview.yml` - **Auto-triggered on PR**: Build → Push GHCR → SSH → Docker Compose
+- `deploy-production.yml` - **Auto-triggered on main**: Build → Push GHCR → SSH → Docker Compose
+- `provision-base.yml` - **Manual VM provisioning** via OpenTofu workflow dispatch
 
-```bash
-export CHERRY_AUTH_TOKEN=token
-tofu apply -var-file=platform/infra/providers/cherry/base/env.preview.tfvars
-```
+**End-to-End Testing:**
 
-### App Deployment (Repeatable)
+- `e2e-test-preview.yml` - Runs after preview deployment completes
 
-```bash
-# Set environment and secrets
-export DEPLOY_ENVIRONMENT=preview  # or prod
-export TF_VAR_app_image=ghcr.io/cogni-dao/cogni-template:app-abc123
-export TF_VAR_database_url=postgresql://...
-export TF_VAR_ssh_private_key="$(cat ~/.ssh/key)"
-export TF_VAR_litellm_master_key=key
-export TF_VAR_openrouter_api_key=key
+## Getting Started
 
-# Deploy
-platform/ci/scripts/build.sh && platform/ci/scripts/push.sh
-platform/ci/scripts/deploy.sh
-```
+**First-time setup**: See [DEPLOY.md](DEPLOY.md) for step-by-step guide.
+
+## Deployment Flows
+
+**VM Provisioning (One-time)**: GitHub Actions "Provision Base Infrastructure" workflow  
+**App Deployment (Routine)**: Auto-triggered on PR/main → SSH → `docker compose up`
+
+**Manual deployments**: See [DEPLOY.md](DEPLOY.md)
 
 ## Secrets Management
 
-**GitHub Environment Secrets** (preview, production):
+**GitHub Environment Secrets** (clean naming):
 
-- `DATABASE_URL_{PREVIEW,PROD}`
-- `SSH_PRIVATE_KEY_{PREVIEW,PROD}`
-- `LITELLM_MASTER_KEY_{PREVIEW,PROD}`
-- `OPENROUTER_API_KEY_{PREVIEW,PROD}`
-- `CHERRY_AUTH_TOKEN`
+- **`preview`/`production`**: `DATABASE_URL`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `SSH_DEPLOY_KEY`, `VM_HOST`, `DOMAIN`
+- **`cherry-base`**: `CHERRY_AUTH_TOKEN` (isolated from app deployments)
 
-**Never in tfvars**: All sensitive values come from GitHub secrets → CI env vars → TF variables
+**SSH Security**: Private keys never in Terraform state. SSH agent authentication only.
+**Deployment**: Github Actions and Docker Compose for app deployment. Faster, simpler rollbacks.
 
 ## Environment Configuration
 
-**Base Layer** (`env.preview.tfvars`):
-
-```hcl
-environment = "preview"
-vm_name_prefix = "cogni"
-plan = "cloud_vps_1"          # Smaller for preview
-project_id = "254586"
-region = "LT-Siauliai"
-```
-
-**App Layer** (`env.preview.tfvars`):
-
-```hcl
-environment = "preview"
-domain = "preview.cognidao.org"
-host = "preview.vm.ip"         # From base layer output
-app_port = 3000
-litellm_port = 4000
-```
+**Base Layer**: VM topology in `env.{preview,prod}.tfvars`  
+**Runtime**: Environment secrets → Docker Compose `.env` on VM
 
 ## State Management
 
-**Separate states per environment**: No Terraform workspaces
+**Terraform state**: Only for base infrastructure (VMs)
 
 - Base: `cherry-base-${environment}.tfstate`
-- App: `cherry-app-${environment}.tfstate`
-
-**Future remote backend**:
-
-```hcl
-backend "s3" {
-  key = "cherry-base-${var.environment}.tfstate"
-}
-```
+- App: No Terraform state (Docker Compose managed)
 
 ## Health Validation
 
@@ -140,10 +113,7 @@ backend "s3" {
 3. **AI health**: `https://ai.${domain}/health/readiness`
 4. **Deployment gate**: 5min curl loop validates deployment success
 
-## Current vs Target State
+## Current State
 
-**Current**: Single production VM at `5.199.173.64`
-**Target**: Environment-separated VMs:
-
-- Preview: `preview-cogni` (to be created)
-- Production: `prod-cogni` (migrate existing)
+**Live**: Production VM with automated deployment pipeline
+**Available**: Preview environment ready for provisioning via GitHub Actions

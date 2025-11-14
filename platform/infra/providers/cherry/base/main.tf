@@ -27,6 +27,7 @@ resource "cherryservers_server" "server" {
     image        = "ubuntu_22_04"
     ssh_key_ids  = [cherryservers_ssh_key.key.id]
     user_data    = base64encode(file("${path.module}/bootstrap.yaml"))
+    allow_reinstall = true
     
     lifecycle {
         ignore_changes = [user_data]
@@ -34,6 +35,12 @@ resource "cherryservers_server" "server" {
 }
 
 resource "cherryservers_ssh_key" "key" {
-    name       = "${var.environment}-cogni-key"
-    public_key = file(var.public_key_path)
+    name       = "cogni-${var.environment}-deploy"
+    public_key = file("${path.module}/${var.public_key_path}")
+}
+
+output "vm_host" {
+  description = "Public IP address of the provisioned VM"
+  value       = tolist(cherryservers_server.server.ip_addresses)[0].address
+  sensitive   = false
 }
