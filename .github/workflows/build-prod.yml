@@ -31,7 +31,6 @@ jobs:
 
       # Build-time dummy env vars (schema-valid, non-secret)
       NODE_ENV: test
-      APP_BASE_URL: http://localhost:3000
       DATABASE_URL: sqlite://build.db
       LITELLM_MASTER_KEY: build-key
 
@@ -64,7 +63,6 @@ jobs:
           docker run -d --name test-container \
             -p 3000:3000 \
             -e NODE_ENV=production \
-            -e APP_BASE_URL=http://localhost:3000 \
             -e DATABASE_URL=sqlite://test.db \
             -e LITELLM_MASTER_KEY=test-key \
             -e OPENROUTER_API_KEY=test-key \

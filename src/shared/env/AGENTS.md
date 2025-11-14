@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-07
+- **Last reviewed:** 2025-11-14
 - **Status:** draft
 
 ## Purpose
@@ -60,7 +60,6 @@ Single source of truth for environment variables. Validates at load time with Zo
 
 Required now:
 
-- APP_BASE_URL (url)
 - DATABASE_URL
 - TODO: SESSION_SECRET (≥32 chars) - commented out until session management is implemented
 

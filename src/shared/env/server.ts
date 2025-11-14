@@ -36,7 +36,6 @@ const serverSchema = z.object({
     .default("development"),
 
   // Required now
-  APP_BASE_URL: z.string().url(),
   DATABASE_URL: z.string().min(1),
   // TODO: Enable when session management is implemented
   // SESSION_SECRET: z.string().min(32),
