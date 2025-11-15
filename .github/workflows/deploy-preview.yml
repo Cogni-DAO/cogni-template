@@ -109,16 +109,6 @@ jobs:
         run: |
           docker rm -f test-container || true
 
-  push:
-    runs-on: ubuntu-latest
-    needs: build
-    env:
-      IMAGE_NAME: ${{ needs.build.outputs.image_name }}
-      IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -131,7 +121,7 @@ jobs:
 
   deploy:
     runs-on: ubuntu-latest
-    needs: [build, push]
+    needs: build
     environment: preview
     env:
       NEXT_TELEMETRY_DISABLED: 1
