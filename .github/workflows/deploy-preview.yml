@@ -171,7 +171,7 @@ jobs:
       - name: Deploy to Cherry Servers
         run: platform/ci/scripts/deploy.sh
         env:
-          SSH_KEY_PATH: ~/.ssh/deploy_key
+          SSH_KEY_PATH: $HOME/.ssh/deploy_key
 
       - name: Upload deployment artifacts
         if: always()
