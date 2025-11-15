@@ -51,12 +51,21 @@ platform/infra/
 
 - Preview: `preview-${GITHUB_SHA}`
 - Production: `prod-${GITHUB_SHA}`
-  **Runtime containers**:
+
+**Runtime containers**:
 
 - `app`: Next.js application with environment-specific runtime config
-- `litellm`: AI proxy service on `ai.${domain}` subdomain
+- `litellm`: AI proxy service
 - `caddy`: HTTPS termination and routing
 - `promtail`: Log aggregation
+
+**Registry Authentication**:
+
+For private GHCR images, VMs authenticate using bot account credentials:
+
+- **Manual setup required**: Create GitHub PAT for `Cogni-1729` (our bot, you'll need your own) with `read:packages` scope
+- **Environment secrets**: `GHCR_DEPLOY_TOKEN` (PAT), `GHCR_USERNAME=Cogni-1729`
+- **Deploy flow**: CI injects `docker login ghcr.io` before `docker compose pull`
 
 ## GitHub Actions Workflows (Primary Interface)
 
@@ -91,8 +100,10 @@ platform/infra/
 
 **GitHub Environment Secrets** (clean naming):
 
-- **`preview`/`production`**: `DATABASE_URL`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `SSH_DEPLOY_KEY`, `VM_HOST`, `DOMAIN`
+- **`preview`/`production`**: `DATABASE_URL`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `SSH_DEPLOY_KEY`, `VM_HOST`, `DOMAIN`, `GHCR_DEPLOY_TOKEN`
 - **`cherry-base`**: `CHERRY_AUTH_TOKEN` (isolated from app deployments)
+
+**Private Registry Access**: `GHCR_DEPLOY_TOKEN` enables pulling private images from GitHub Container Registry using `Cogni-1729` bot account.
 
 **SSH Security**: Private keys never in Terraform state. SSH agent authentication only.
 **Deployment**: Github Actions and Docker Compose for app deployment. Faster, simpler rollbacks.
