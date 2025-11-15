@@ -140,7 +140,6 @@ jobs:
     timeout-minutes: 15
     environment: preview-E2E-testing
     env:
-      NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: 1
       E2E_BASE_URL: https://${{ vars.DOMAIN }}
     steps:
@@ -157,8 +156,11 @@ jobs:
         with:
           version: 9
 
-      - name: Install dependencies
+      - name: Install dependencies (including dev for Playwright)
         run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps
 
       - name: Run Playwright E2E against preview
         run: pnpm e2e
