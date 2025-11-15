@@ -21,11 +21,9 @@ import { Prompt, Reveal, TerminalFrame } from "@/components";
 
 export function Terminal(): ReactElement {
   const steps = [
-    "git clone https://github.com/cogni-template/cogni-template",
-    "pnpm install",
-    "pnpm db:setup",
-    "pnpm db:migrate",
-    "pnpm db:seed",
+    "git clone https://github.com/Cogni-DAO/cogni-template",
+    "cd cogni-template",
+    "pnpm setup local",
     "pnpm dev 🎉",
   ];
   const [currentStep, setCurrentStep] = useState(0);

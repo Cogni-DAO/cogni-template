@@ -1,36 +1,75 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Cogni Template
 
-## Getting Started
+A production-ready Next.js template for AI-powered autonomous organizations.
 
-First, run the development server:
+## There are 2 ways you could be using this repository! Which are you?
+
+### 1. 👨‍💻 Contributor: Improve the Template
+
+**Goal:** Develop improvements and merge back into CogniDAO repo  
+_We love you! ❤️_
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/Cogni-DAO/cogni-template
+cd cogni-template
+pnpm setup local  # Automated setup TODO: lol sorry, cp .env.example .env
+pnpm dev          # Start developing! TODO: compose up with Litellm
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**You'll need:** [OpenRouter API key](https://openrouter.ai/keys) for AI features
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### 2. 🚀 Fork Owner: Launch Your Own DAO
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**Goal:** Create your own autonomous organization with custom features  
+_We love you too, go for it! 🎯_
 
-## Learn More
+```bash
+pnpm setup local                    # Local development
+pnpm setup infra --env preview      # Infrastructure + SSH keys
+pnpm setup infra --env production   # Production infrastructure
+pnpm setup github --env preview     # GitHub secrets + branch protection
+pnpm setup github --env production  # Production GitHub setup
+```
 
-To learn more about Next.js, take a look at the following resources:
+---
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Setup Status: What's Scripted vs Manual
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+_We're working to automate more of this! Want to help? Contribute setup automation._
 
-## Deploy on Vercel
+### ✅ Current Script Support
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **`platform/bootstrap/install/*`** - Tool installation (pnpm, docker, tofu, reuse)
+- **`tofu apply`** - VM provisioning (when manually configured)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+### ⚠️ Current Manual Setup Required
+
+**For Contributors:**
+
+- Get [OpenRouter API key](https://openrouter.ai/keys) for AI features
+- Copy `.env.example` → `.env.local` and fill in values
+- `pnpm install` and `pnpm dev`
+
+**For Fork Owners (everything above, plus):**
+
+**Infra Setup** _(see [deploy.md](platform/runbooks/DEPLOY.md) for details)_
+
+- Generate SSH keys for deployment, move to folder, commit
+- Get [Cherry Servers auth token](https://portal.cherryservers.com/settings/api-keys)
+- Update `.tfvars` files with your settings
+- Run `tofu apply`
+
+**GitHub Environment Setup**
+
+- Create [GitHub PAT](https://github.com/settings/tokens/new?scopes=read:packages) for container registry CI/CD
+- Enable your git repo to contribute packages to your git org
+- Set up GitHub environments and secrets manually
+- Configure branch protection rules
+
+**DAO Setup**
+
+- Run `make dao-setup` from [cogni-signal-evm-contracts](https://github.com/Cogni-DAO/cogni-signal-evm-contracts)
+
+---
+
+**Coming Soon:** `pnpm setup local|infra|github|dao` commands to automate these steps!

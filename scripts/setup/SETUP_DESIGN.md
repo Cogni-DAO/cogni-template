@@ -1,0 +1,158 @@
+# Cogni Template Setup System
+
+## Goal
+
+**Get developers from fresh clone to working setup in 3 commands or less.**
+
+Two distinct user journeys:
+
+1. **Contributors:** Local development only (no CI/CD needed)
+2. **Fork Owners:** Full deployment pipeline with GitHub Actions + Cherry VMs
+
+## User Personas
+
+### Persona 1: Contributor
+
+- **Goal:** Contribute to cogni-template
+- **Needs:** Local development environment only
+- **Setup:** `pnpm setup local` and done
+
+### Persona 2: Fork Owner
+
+- **Goal:** Deploy their own instance with full CI/CD
+- **Needs:** Local development + complete deployment pipeline
+- **Setup:** Sequential commands handling all dependencies
+
+## The Simple Workflows
+
+### For Contributors: `pnpm setup local`
+
+**Single command gets you developing:**
+
+```bash
+git clone https://github.com/Cogni-DAO/cogni-template
+cd cogni-template
+pnpm setup local
+pnpm dev  # You're ready!
+```
+
+**What it does:**
+
+1. Copy `.env.example` → `.env.local`
+2. Generate secure random values:
+   - `LITELLM_MASTER_KEY` (sk-xxx format)
+   - `DATABASE_URL` (sqlite://local.db)
+3. Prompt for manual `OPENROUTER_API_KEY`
+4. Run `platform/bootstrap/install/install-pnpm.sh`
+5. `pnpm install` and setup git hooks
+
+**No SSH keys, no Docker, no Cherry VMs, no GitHub secrets.**
+
+### For Fork Owners: Sequential Setup
+
+**Three-step flow handles all dependencies:**
+
+```bash
+# Step 1: Local development setup
+pnpm setup local
+
+# Step 2: Infrastructure (SSH keys + VMs)
+pnpm setup infra --env preview
+pnpm setup infra --env production
+
+# Step 3: GitHub integration (secrets + CI/CD)
+pnpm setup github --env preview
+pnpm setup github --env production
+```
+
+## Detailed Fork Owner Flow
+
+### Step 1: Local Setup (`pnpm setup local`)
+
+- Same as contributor flow above
+- Gets local development working first
+
+### Step 2: Infrastructure (`pnpm setup infra --env <preview|production>`)
+
+**Handles SSH key + VM provisioning:**
+
+1. **Generate SSH keypair:**
+   - `ssh-keygen -t ed25519 -f ~/.ssh/<repo-name>_<env>_deploy`
+   - Copy public key → `platform/infra/providers/cherry/base/keys/`
+   - **Manual:** User commits public key to repo
+
+2. **Update Terraform vars:**
+   - Auto-detect repo name from git remote
+   - Update `.tfvars`: `vm_name_prefix`, `public_key_path`
+   - Cherry API: create/get `project_id` automatically
+
+3. **Provision Cherry VM:**
+   - Validate `CHERRY_AUTH_TOKEN`
+   - `tofu init && tofu apply -var-file=env.<env>.tfvars`
+
+4. **Save outputs:**
+   - Extract `vm_host` → write to `.env.<env>` file
+
+### Step 3: GitHub Integration (`pnpm setup github --env <preview|production>`)
+
+**Uses SSH keys + VM outputs from Step 2:**
+
+1. **Create GitHub environment** (`preview` or `production`)
+
+2. **Set all required secrets:**
+   - **Runtime secrets:** Fresh generation per environment
+     - `DATABASE_URL` (postgres connection to VM)
+     - `LITELLM_MASTER_KEY` (new random sk-xxx key)
+     - `OPENROUTER_API_KEY` (prompt if not in local env)
+   - **Deployment secrets:** From previous steps
+     - `SSH_DEPLOY_KEY` (from `~/.ssh/cogni_template_<env>_deploy`)
+     - `VM_HOST` (from `.env.<env>` file)
+     - `DOMAIN` (prompt user for their domain)
+     - `GHCR_DEPLOY_TOKEN` (prompt user to create GitHub PAT)
+
+3. **Apply branch protection rules:**
+   - `main`: 2 required reviews, required checks, enforce for admins
+   - `staging`: 1 required review, required checks
+
+4. **Print GitHub Apps checklist:**
+   - Install URLs for: `cogni-git-review`, `cogni-git-admin`, `sonarcloud`
+
+## Key Dependencies Resolved
+
+**SSH Keys:** Generated in Step 2 → Used in Step 3  
+**VM_HOST:** Generated in Step 2 → Used in Step 3  
+**Secrets:** Fresh generation for each environment (no sharing local ↔ GitHub)
+
+## Implementation Notes
+
+**TypeScript-first:**
+
+- `scripts/setup/bootstrap.ts` with subcommands: `local`, `infra`, `github`
+- Hard-coded secret lists and branch rules (no YAML specs for v0)
+- Uses `gh` CLI for GitHub API, assumes user Auth
+- Disable Vercel telemetry: pnpm exec next telemetry disable
+
+**Error handling:**
+
+- Fail fast with clear next steps
+- Check prerequisites before starting (gh auth, tofu install, etc.)
+- Idempotent operations (safe to re-run)
+
+## Success Criteria
+
+✅ **Contributor:** `pnpm setup local` → `pnpm dev` works in under 2 minutes  
+✅ **Fork Owner:** 3 commands → full CI/CD pipeline with auto-deploy on PRs  
+✅ **No manual secret copying** between environments  
+✅ **Clear dependency handling** (SSH keys → infra → GitHub)  
+✅ **Eliminates 60+ step DEPLOY.md** with automated flow
+
+## Future Evolution
+
+When patterns stabilize, extract to:
+
+- **Declarative specs:** `.cogni/setup.yaml` configuration
+- **Multi-repo tool:** `cogni-admin` CLI package
+- **DAO integration:** Automated multisig + plugin deployment
+- **GitLab support:** Host-abstracted adapters
+
+**v0 Focus:** Script-based, this-repo-only, maximum simplicity.
