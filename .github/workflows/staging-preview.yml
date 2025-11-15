@@ -1,0 +1,237 @@
+name: Staging Preview
+
+on:
+  push:
+    branches: [staging]
+
+permissions:
+  contents: write
+  packages: write
+  pull-requests: write
+
+concurrency:
+  group: staging-preview-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      image_name: ${{ steps.meta.outputs.image_name }}
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      NODE_ENV: test
+      DATABASE_URL: sqlite://build.db
+      LITELLM_MASTER_KEY: build-key
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set image metadata
+        id: meta
+        run: |
+          IMAGE_NAME=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE_TAG="preview-${GITHUB_SHA}"
+          echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
+          echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Repository policy check
+        run: pnpm repo-check
+
+      - name: REUSE SPDX compliance
+        uses: fsfe/reuse-action@v6
+
+      - name: Lint + unit + API tests (mocked LLM)
+        run: pnpm check
+
+      - name: Run unit tests
+        run: pnpm test
+
+      - name: Run API tests (mocked LLM)
+        run: pnpm test:api
+        env:
+          OPENROUTER_API_KEY: test-key
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        env:
+          IMAGE_NAME: ${{ steps.meta.outputs.image_name }}
+          IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+        run: platform/ci/scripts/build.sh
+
+  push:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image
+        env:
+          IMAGE_NAME: ${{ needs.build.outputs.image_name }}
+          IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+        run: platform/ci/scripts/push.sh
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build, push]
+    environment:
+      name: preview
+      url: https://${{ vars.DOMAIN }}
+    env:
+      IMAGE_NAME: ${{ needs.build.outputs.image_name }}
+      IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+      APP_IMAGE: ${{ needs.build.outputs.image_name }}:${{ needs.build.outputs.image_tag }}
+      DOMAIN: ${{ vars.DOMAIN }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      VM_HOST: ${{ secrets.VM_HOST }}
+      GHCR_DEPLOY_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
+      GHCR_USERNAME: Cogni-1729
+      DEPLOY_ENVIRONMENT: preview
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH deploy key
+        run: |
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          echo "${{ secrets.SSH_DEPLOY_KEY }}" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
+
+          # Test SSH connection
+          echo "Testing SSH connection..."
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=10 root@"$VM_HOST" "echo 'SSH test successful'" || {
+            echo "SSH test failed. Key fingerprint:"
+            ssh-keygen -lf ~/.ssh/deploy_key || echo "Could not read key fingerprint"
+            exit 1
+          }
+
+      - name: Deploy to preview
+        run: platform/ci/scripts/deploy.sh
+
+      - name: Upload deployment artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: preview-deployment-artifacts-${{ github.run_id }}
+          path: ${{ runner.temp }}/deploy-${{ github.run_id }}/
+          if-no-files-found: warn
+          retention-days: 14
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: deploy
+    timeout-minutes: 15
+    environment: preview-E2E-testing
+    env:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: 1
+      E2E_BASE_URL: https://${{ vars.DOMAIN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Playwright E2E against preview
+        run: pnpm e2e
+
+      - name: Upload E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-artifacts-${{ github.run_id }}
+          path: e2e/artifacts/
+          if-no-files-found: warn
+          retention-days: 7
+
+  promote:
+    runs-on: ubuntu-latest
+    needs: [build, push, deploy, e2e]
+    if: ${{ success() }}
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute release branch name
+        id: meta
+        run: |
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-8)
+          DATE=$(date -u +%Y%m%d)
+          BRANCH="release/${DATE}-${SHORT_SHA}"
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+      - name: Create/update release PR
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ steps.meta.outputs.branch }}
+          branch-suffix: "none"
+          base: main
+          title: "release: ${{ steps.meta.outputs.branch }}"
+          labels: |
+            release
+            auto-promote
+          body: |
+            ## 🚀 Automated Release Promotion
+
+            Automated promotion from staging after successful preview deployment and E2E testing.
+
+            **Source Branch:** `staging`
+            **Source SHA:** `${{ github.sha }}`
+            **Release Branch:** `${{ steps.meta.outputs.branch }}`
+
+            ### ✅ Prerequisites Completed
+            - Staging build successful
+            - Preview deployment successful  
+            - E2E tests passed on preview environment
+
+            ### 🔄 Next Steps
+            - CI checks will run for the release→main merge
+            - Upon approval + green checks, this will trigger production build
+            - Production deployment via manual workflow_dispatch
+
+            ---
+
+            *This PR is automatically created when staging passes all tests.*
+          commit-message: "chore: create release branch ${{ steps.meta.outputs.branch }} from staging"
