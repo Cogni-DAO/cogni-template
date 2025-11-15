@@ -1,17 +1,8 @@
-name: Build & Deploy Preview
+name: Preview
 
 on:
   pull_request:
     branches: [main]
-    paths:
-      - "src/**"
-      - "Dockerfile"
-      - "package.json"
-      - "pnpm-lock.yaml"
-      - "next.config.ts"
-      - "tailwind.config.ts"
-      - "tsconfig.json"
-      - "platform/ci/**"
   workflow_dispatch:
 
 permissions:
