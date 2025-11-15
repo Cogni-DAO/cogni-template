@@ -150,6 +150,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -193,45 +195,44 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: staging
+          token: ${{ github.token }}
 
       - name: Compute release branch name
         id: meta
         run: |
           SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-8)
           DATE=$(date -u +%Y%m%d)
-          BRANCH="release/${DATE}-${SHORT_SHA}"
-          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "branch=release/${DATE}-${SHORT_SHA}" >> $GITHUB_OUTPUT
 
-      - name: Create/update release PR
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          branch: ${{ steps.meta.outputs.branch }}
-          base: main
-          title: "release: ${{ steps.meta.outputs.branch }}"
-          labels: |
-            release
-            auto-promote
-          body: |
-            ## 🚀 Automated Release Promotion
+      - name: Create and push release branch from staging
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "${{ steps.meta.outputs.branch }}" origin/staging
+          git push origin "${{ steps.meta.outputs.branch }}"
 
-            Automated promotion from staging after successful preview deployment and E2E testing.
+      - name: Create PR body with commit list
+        run: |
+          mkdir -p /tmp/pr
+          cat > /tmp/pr/body.md << 'EOF'
+          ## 🚀 Automated Release Promotion
 
-            **Source Branch:** `staging`
-            **Source SHA:** `${{ github.sha }}`
-            **Release Branch:** `${{ steps.meta.outputs.branch }}`
+          Source: `staging`
+          Target: `main`
 
-            ### ✅ Prerequisites Completed
-            - Staging build successful
-            - Preview deployment successful  
-            - E2E tests passed on preview environment
+          ### Commits in this release
+          EOF
+          # Append one-line commits from main..HEAD (release branch)
+          git log --oneline origin/main..HEAD >> /tmp/pr/body.md
 
-            ### 🔄 Next Steps
-            - CI checks will run for the release→main merge
-            - Upon approval + green checks, this will trigger production build
-            - Production deployment via manual workflow_dispatch
-
-            ---
-
-            *This PR is automatically created when staging passes all tests.*
-          commit-message: "chore: create release branch ${{ steps.meta.outputs.branch }} from staging"
+      - name: Create PR release/* -> main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh pr create \
+            --base main \
+            --head "${{ steps.meta.outputs.branch }}" \
+            --title "release: ${{ steps.meta.outputs.branch }}" \
+            --body-file /tmp/pr/body.md \
+          || gh pr view --head "${{ steps.meta.outputs.branch }}" >/dev/null
