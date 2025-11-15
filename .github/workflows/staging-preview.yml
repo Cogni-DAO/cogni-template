@@ -159,6 +159,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps
+
       - name: Run Playwright E2E against preview
         run: pnpm e2e
 
