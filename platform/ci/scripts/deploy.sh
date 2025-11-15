@@ -165,6 +165,9 @@ LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
 OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
 ENV_EOF
 
+log_info "Logging into GHCR for private image pulls..."
+echo "${GHCR_DEPLOY_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+
 log_info "Pulling latest images..."
 docker compose pull
 
@@ -198,7 +201,7 @@ rsync -av -e "ssh $SSH_OPTS" \
 # Upload and execute deployment script
 scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
 ssh $SSH_OPTS root@"$VM_HOST" \
-    "DOMAIN='$DOMAIN' APP_IMAGE='$APP_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' bash /tmp/deploy-remote.sh"
+    "DOMAIN='$DOMAIN' APP_IMAGE='$APP_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' bash /tmp/deploy-remote.sh"
 
 # Health validation
 log_info "Validating deployment health..."
