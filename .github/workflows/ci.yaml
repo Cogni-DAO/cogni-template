@@ -10,6 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NEXT_TELEMETRY_DISABLED: 1
+      # dummy env vars for build
+      NODE_ENV: test
+      DATABASE_URL: sqlite://build.db
+      LITELLM_MASTER_KEY: build-key
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,4 +30,4 @@ jobs:
       - name: REUSE SPDX compliance
         uses: fsfe/reuse-action@v6
       - run: pnpm check
-      # Static CI checks only, no building
+      - run: pnpm build

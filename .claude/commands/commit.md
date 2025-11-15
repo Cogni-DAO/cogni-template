@@ -8,6 +8,8 @@ Your process:
 
 3. **Commit Message**: Use Conventional Commits. Subject is imperative, ≤ 72 chars, no trailing period. Scope is lowercase kebab-case and maps to the affected area (e.g., `app`, `features`, `infra`, `docs`). 90% of commits should be 1 line only. Only the most complex changes recieve a commit body. If the commit introduces a breaking change include a `BREAKING CHANGE:` footer with the impact and required actions.
 
+4. **Commit**: Create the commit
+
 **Format:** `type(scope): description`
 
 **Types:** feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert

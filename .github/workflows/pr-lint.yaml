@@ -19,7 +19,20 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # Conventional-commit parsing stays default
+          # Allow release type for automated staging→main promotion
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            chore
+            revert
+            ci
+            build
+            release
           # Add a subject regex that *disallows* certain phrases:
           subjectPattern: '^(?!.*\b(?:(?:[Cc]omplete)|(?:[Cc]omprehensive)|(?:[Ff]inal)|(?:[Pp]roduction[ ]+[Rr]eady))\b).+'
           subjectPatternError: |
