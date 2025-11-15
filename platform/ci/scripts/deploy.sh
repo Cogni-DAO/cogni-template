@@ -6,13 +6,13 @@ set -euo pipefail
 
 # Resolve repo root robustly
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 on_fail() {
   code=$?
   echo "[ERROR] deploy failed (exit $code), collecting debug info from VM..."
 
-  if [[ -n "${VM_HOST:-}" && -f "$SSH_KEY_PATH" ]]; then
+  if [[ -n "${VM_HOST:-}" && -n "${SSH_KEY_PATH:-}" && -f "$SSH_KEY_PATH" ]]; then
     ssh $SSH_OPTS root@"$VM_HOST" <<'EOF' || true
       echo "=== docker compose ps ==="
       cd /opt/cogni-runtime && docker compose ps || echo "docker compose ps failed"
@@ -52,22 +52,29 @@ log_error() {
 }
 
 # SSH configuration
-SSH_KEY_PATH="${SSH_KEY_PATH:-$HOME/.ssh/deploy_key}"
-SSH_OPTS="-i $SSH_KEY_PATH -o StrictHostKeyChecking=yes"
+if [[ -n "${SSH_KEY_PATH:-}" ]]; then
+    # Explicit SSH key path provided (CI or manual override)
+    log_info "Using explicit SSH key: $SSH_KEY_PATH"
+    SSH_OPTS="-i $SSH_KEY_PATH -o StrictHostKeyChecking=yes"
 
-# Validate SSH key exists and has correct permissions
-if [[ ! -f "$SSH_KEY_PATH" ]]; then
-    log_error "SSH key not found at: $SSH_KEY_PATH"
-    log_error "Make sure the 'Setup SSH deploy key' step completed successfully"
-    exit 1
+    # Validate SSH key exists
+    if [[ ! -f "$SSH_KEY_PATH" ]]; then
+        log_error "SSH key not found at: $SSH_KEY_PATH"
+        log_error "In CI: ensure the 'Setup SSH deploy key' step created this key"
+        exit 1
+    fi
+
+    # Validate SSH key permissions (Linux + macOS)
+    if [[ "$(stat -c %a "$SSH_KEY_PATH" 2>/dev/null || stat -f %A "$SSH_KEY_PATH" 2>/dev/null)" != "600" ]]; then
+        log_error "SSH key permissions must be 600: $SSH_KEY_PATH"
+        log_error "Run: chmod 600 \"$SSH_KEY_PATH\""
+        exit 1
+    fi
+else
+    # Local development: rely on default SSH agent / ~/.ssh/config
+    SSH_OPTS="-o StrictHostKeyChecking=yes"
+    log_info "Using default SSH configuration (no explicit SSH_KEY_PATH)"
 fi
-
-if [[ "$(stat -c %a "$SSH_KEY_PATH" 2>/dev/null || stat -f %A "$SSH_KEY_PATH" 2>/dev/null)" != "600" ]]; then
-    log_error "SSH key has incorrect permissions. Expected 600, got: $(stat -c %a "$SSH_KEY_PATH" 2>/dev/null || stat -f %A "$SSH_KEY_PATH" 2>/dev/null)"
-    exit 1
-fi
-
-log_info "SSH key validated: $SSH_KEY_PATH"
 
 # Validate required environment variables
 if [[ -z "${APP_IMAGE:-}" ]]; then
