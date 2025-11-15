@@ -109,9 +109,7 @@ platform/infra/
 ## Health Validation
 
 1. **Container healthchecks**: Docker HEALTHCHECK in Dockerfile
-2. **App health**: `https://${domain}/api/v1/meta/health`
-3. **AI health**: `https://ai.${domain}/health/readiness`
-4. **Deployment gate**: 5min curl loop validates deployment success
+2. **App health**: `https://${domain}/api/v1/meta/health` successful curl
 
 ## Current State
 
