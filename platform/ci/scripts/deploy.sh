@@ -15,16 +15,16 @@ on_fail() {
   if [[ -n "${VM_HOST:-}" ]]; then
     ssh $SSH_OPTS root@"$VM_HOST" <<'EOF' || true
       echo "=== docker compose ps ==="
-      cd /opt/cogni-runtime && docker compose ps || echo "docker compose ps failed"
+      cd /opt/cogni-template-runtime && docker compose ps || echo "docker compose ps failed"
 
       echo "=== logs: app ==="
-      cd /opt/cogni-runtime && docker compose logs --tail 80 app || true
+      cd /opt/cogni-template-runtime && docker compose logs --tail 80 app || true
 
       echo "=== logs: litellm ==="
-      cd /opt/cogni-runtime && docker compose logs --tail 80 litellm || true
+      cd /opt/cogni-template-runtime && docker compose logs --tail 80 litellm || true
 
       echo "=== logs: caddy ==="
-      cd /opt/cogni-runtime && docker compose logs --tail 80 caddy || true
+      cd /opt/cogni-template-runtime && docker compose logs --tail 80 caddy || true
 EOF
   fi
 
@@ -146,11 +146,14 @@ log_info() {
 
 log_info "Setting up runtime environment on VM..."
 
+# Set compose project name for consistent container naming
+export COMPOSE_PROJECT_NAME=cogni-template-runtime
+
 # Create required directories for data persistence
 sudo mkdir -p /var/lib/promtail
 
 # Change to runtime bundle directory
-cd /opt/cogni-runtime
+cd /opt/cogni-template-runtime
 
 # Write environment file
 log_info "Creating runtime environment file..."
@@ -169,7 +172,7 @@ log_info "Stopping existing containers..."
 docker compose down || true
 
 log_info "Starting runtime stack..."
-docker compose up -d
+docker compose up -d --remove-orphans
 
 log_info "Waiting for containers to be ready..."
 sleep 10
@@ -185,12 +188,12 @@ chmod +x "$ARTIFACT_DIR/deploy-remote.sh"
 
 # Deploy runtime bundle to VM via rsync
 log_info "Deploying runtime bundle to VM..."
-ssh $SSH_OPTS root@"$VM_HOST" "mkdir -p /opt/cogni-runtime"
+ssh $SSH_OPTS root@"$VM_HOST" "mkdir -p /opt/cogni-template-runtime"
 
 # Upload entire runtime bundle atomically
 rsync -av -e "ssh $SSH_OPTS" \
   "$REPO_ROOT/platform/infra/services/runtime/" \
-  root@"$VM_HOST":/opt/cogni-runtime/
+  root@"$VM_HOST":/opt/cogni-template-runtime/
 
 # Upload and execute deployment script
 scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
@@ -250,5 +253,5 @@ log_info "  - deploy-remote.sh: Remote deployment script"
 log_info ""
 log_info "🔧 Deployment management:"
 log_info "  - SSH access: ssh root@$VM_HOST"
-log_info "  - Container logs: cd /opt/cogni/runtime && docker compose logs"
-log_info "  - Container status: cd /opt/cogni/runtime && docker compose ps"
+log_info "  - Container logs: cd /opt/cogni-template-runtime && docker compose logs"
+log_info "  - Container status: cd /opt/cogni-template-runtime && docker compose ps"
