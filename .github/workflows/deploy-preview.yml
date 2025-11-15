@@ -124,7 +124,7 @@ jobs:
     needs: build
     environment:
       name: preview
-      url: https://${{ secrets.DOMAIN }}
+      url: https://${{ env.DOMAIN }}
     env:
       NEXT_TELEMETRY_DISABLED: 1
       PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
