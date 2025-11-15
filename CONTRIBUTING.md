@@ -70,4 +70,38 @@ src/bootstrap/bootstrap  # installs Node, pnpm, OpenTofu, Docker + all project d
 Do not disclose security vulnerabilities here.  
 See `SECURITY.md` for private reporting instructions.
 
+## GitHub Actions Workflow Redesign (TODO)
+
+Update existing workflows for secure, fork-safe CI/CD pipeline:
+
+**Workflow Updates:**
+
+- [ ] Update `ci.yaml` - untrusted CI for PRs to staging (no secrets, mocked LLM)
+- [ ] Update `build-preview.yml` - build preview images, trigger on push to staging
+- [ ] Update `deploy-preview.yml` - deploy to preview infra after build-preview
+- [ ] Update `e2e-test-preview.yml` - run full E2E tests against preview deployment
+- [ ] Update `build-prod.yml` - build prod-<sha> images on push to main
+- [ ] Update `deploy-production.yml` - manual workflow_dispatch with IMAGE_TAG parameter
+
+**Branch Protection:**
+
+- [ ] Create `staging` branch as primary integration branch
+- [ ] Configure staging protection: require ci.yaml + review, accept fork PRs
+- [ ] Configure main protection: require ci.yaml + review, staging-only PRs
+- [ ] Update default PR target from main to staging
+
+**Security Model:**
+
+- [ ] Remove secrets from ci.yaml (fork-safe, mocked LLM only)
+- [ ] Configure preview secrets for deploy-preview.yml
+- [ ] Configure production secrets for deploy-production.yml
+- [ ] Restrict deploy-production.yml to manual trigger only
+
+**Process Flow:**
+
+- [ ] Fork→staging: ci.yaml validates, build-preview.yml creates images
+- [ ] Staging deploy: deploy-preview.yml + e2e-test-preview.yml with real secrets
+- [ ] Staging→main: ci.yaml final check, build-prod.yml on merge
+- [ ] Production: manual deploy-production.yml with specific IMAGE_TAG
+
 Thank you for helping grow the Cogni ecosystem responsibly.
