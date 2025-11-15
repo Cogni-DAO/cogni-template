@@ -77,8 +77,6 @@ override.tf.json
 .terraformrc
 terraform.rc
 
-# LiteLLM configuration (contains API keys)
-**/litellm.config.yaml
 
 # SSH keys - private keys must NEVER be committed
 *.key

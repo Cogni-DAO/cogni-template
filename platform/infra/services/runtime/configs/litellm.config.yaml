@@ -1,0 +1,20 @@
+# LiteLLM Configuration Example
+# Copy this to litellm.config.yaml and update with your API keys
+
+model_list:
+  # OpenAI GPT-4o Mini via OpenRouter
+  - model_name: openai/gpt-4o-mini
+    litellm_params:
+      model: gpt-4o-mini
+      api_key: "os.environ/OPENROUTER_API_KEY"
+      api_base: "https://openrouter.ai/api/v1"
+
+  # Anthropic Claude 3 Haiku via OpenRouter
+  - model_name: openrouter/anthropic/claude-3-haiku
+    litellm_params:
+      model: anthropic/claude-3-haiku
+      api_key: "os.environ/OPENROUTER_API_KEY"
+      api_base: "https://openrouter.ai/api/v1"
+
+general_settings:
+  master_key: "os.environ/LITELLM_MASTER_KEY"

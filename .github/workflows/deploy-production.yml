@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-push-deploy:
+  deploy-image:
     runs-on: ubuntu-latest
     environment: production
     env:
@@ -34,7 +34,7 @@ jobs:
           if [ -n "${{ github.event.inputs.image_tag }}" ]; then
             IMAGE_TAG="${{ github.event.inputs.image_tag }}"
           else
-            IMAGE_TAG="app-${GITHUB_SHA}"
+            IMAGE_TAG="prod-${GITHUB_SHA}"
           fi
 
           echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
@@ -45,9 +45,26 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          eval "$(ssh-agent -s)"
-          echo "$SSH_DEPLOY_KEY" | tr -d '\r' | ssh-add -
+
+          # Write key file
+          echo "$SSH_DEPLOY_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          # Validate key file
+          echo "SSH key file size: $(wc -c ~/.ssh/deploy_key)"
+          echo "SSH key first line: $(head -1 ~/.ssh/deploy_key)"
+          echo "SSH key last line: $(tail -1 ~/.ssh/deploy_key)"
+
+          # Known hosts
           ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
+
+          # Test SSH connection
+          echo "Testing SSH connection..."
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=10 root@"$VM_HOST" "echo 'SSH test successful'" || {
+            echo "SSH test failed. Key fingerprint:"
+            ssh-keygen -lf ~/.ssh/deploy_key || echo "Could not read key fingerprint"
+            exit 1
+          }
         env:
           SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
           VM_HOST: ${{ secrets.VM_HOST }}
@@ -55,7 +72,7 @@ jobs:
       - name: Deploy to Cherry Servers
         env:
           DEPLOY_ENVIRONMENT: production
-          APP_IMAGE: ${IMAGE_NAME}:${IMAGE_TAG}
+          APP_IMAGE: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           DOMAIN: ${{ secrets.DOMAIN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
@@ -78,11 +95,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Image:** \`${IMAGE_NAME}:${IMAGE_TAG}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Domain:** \`${{ secrets.DOMAIN }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**AI Subdomain:** \`ai.${{ secrets.DOMAIN }}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** \`${GITHUB_SHA}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Services Deployed" >> $GITHUB_STEP_SUMMARY
           echo "- 🎯 **Main App:** \`${{ secrets.DOMAIN }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- 🤖 **LiteLLM AI:** \`ai.${{ secrets.DOMAIN }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- 📊 **Promtail Logging:** Container monitoring active" >> $GITHUB_STEP_SUMMARY
           echo "- 🔀 **Caddy Proxy:** SSL termination & routing" >> $GITHUB_STEP_SUMMARY

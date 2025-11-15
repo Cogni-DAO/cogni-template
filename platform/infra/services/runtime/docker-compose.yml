@@ -32,7 +32,7 @@ services:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
     volumes:
-      - /etc/litellm/config.yaml:/app/config.yaml:ro
+      - ./configs/litellm.config.yaml:/app/config.yaml:ro
     command: --config /app/config.yaml --host 0.0.0.0 --port 4000
     healthcheck:
       test:
@@ -57,7 +57,7 @@ services:
     environment:
       - DOMAIN=${DOMAIN}
     volumes:
-      - /etc/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./configs/Caddyfile.tmpl:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
@@ -71,7 +71,7 @@ services:
     networks:
       - web
     volumes:
-      - /etc/promtail/config.yaml:/etc/promtail/config.yaml:ro
+      - ./configs/promtail-config.yaml:/etc/promtail/config.yaml:ro
       - /var/lib/promtail:/var/lib/promtail
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro

@@ -41,6 +41,6 @@ resource "cherryservers_ssh_key" "key" {
 
 output "vm_host" {
   description = "Public IP address of the provisioned VM"
-  value       = tolist(cherryservers_server.server.ip_addresses)[0].address
+  value       = cherryservers_server.server.primary_ip
   sensitive   = false
 }

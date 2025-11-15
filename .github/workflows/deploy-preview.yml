@@ -1,9 +1,18 @@
-name: Deploy (Preview)
+name: Build & Deploy Preview
 
 on:
-  workflow_run:
-    workflows: ["Build & Test Preview"]
-    types: [completed]
+  pull_request:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "Dockerfile"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "next.config.ts"
+      - "tailwind.config.ts"
+      - "tsconfig.json"
+      - "platform/ci/**"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -11,60 +20,155 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: deploy-preview-${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+  group: preview-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  build-push-deploy:
+  build:
     runs-on: ubuntu-latest
-    environment: preview
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     env:
       NEXT_TELEMETRY_DISABLED: 1
-      PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
-
+      # Build-time dummy env vars (schema-valid, non-secret)
+      NODE_ENV: test
+      DATABASE_URL: sqlite://build.db
+      LITELLM_MASTER_KEY: build-key
+    outputs:
+      image_name: ${{ steps.image_vars.outputs.image_name }}
+      image_tag: ${{ steps.image_vars.outputs.image_tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Set image vars
         id: image_vars
         run: |
           # Ensure IMAGE_NAME is lowercase for Docker registry compatibility
           IMAGE_NAME=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-
-          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
-            IMAGE_TAG="${{ github.event.inputs.image_tag }}"
-          else
-            IMAGE_TAG="app-${GITHUB_SHA}"
-          fi
+          IMAGE_TAG="preview-${GITHUB_SHA}"
 
           echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
           echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+          echo "image_name=${IMAGE_NAME}" >> $GITHUB_OUTPUT
           echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        run: platform/ci/scripts/build.sh
+
+      - name: Test container startup
+        run: |
+          echo "Testing container startup and health check..."
+
+          # Start container in background with test env vars
+          docker run -d --name test-container \
+            -p 3000:3000 \
+            -e NODE_ENV=production \
+            -e DATABASE_URL=sqlite://test.db \
+            -e LITELLM_MASTER_KEY=test-key \
+            -e OPENROUTER_API_KEY=test-key \
+            ${IMAGE_NAME}:${IMAGE_TAG}
+
+          # Wait for startup (with timeout)
+          echo "Waiting for container to be ready..."
+          for i in {1..30}; do
+            if docker inspect test-container --format='{{.State.Health.Status}}' | grep -q healthy; then
+              echo "Container is healthy"
+              break
+            elif [ $i -eq 30 ]; then
+              echo "Container failed to become healthy within timeout"
+              docker logs test-container
+              exit 1
+            else
+              echo "Attempt $i/30: Container not healthy yet, waiting..."
+              sleep 2
+            fi
+          done
+
+      - name: Test health endpoint
+        run: |
+          echo "Testing health endpoint..."
+          # Test the health endpoint (allowing for startup time)
+          for i in {1..10}; do
+            if curl -f http://localhost:3000/api/v1/meta/health; then
+              echo "Health endpoint responding correctly"
+              break
+            elif [ $i -eq 10 ]; then
+              echo "Health endpoint test failed"
+              docker logs test-container
+              exit 1
+            else
+              echo "Attempt $i/10: Health endpoint not ready, waiting..."
+              sleep 3
+            fi
+          done
+
+      - name: Cleanup test container
+        if: always()
+        run: |
+          docker rm -f test-container || true
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push to GHCR
+        run: platform/ci/scripts/push.sh
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: preview
+      url: https://${{ env.DOMAIN }}
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      PR_NUMBER: ${{ github.event.pull_request.number || github.event.inputs.pr_number }}
+      IMAGE_NAME: ${{ needs.build.outputs.image_name }}
+      IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+      APP_IMAGE: ${{ needs.build.outputs.image_name }}:${{ needs.build.outputs.image_tag }}
+      DEPLOY_ENVIRONMENT: preview
+      DOMAIN: ${{ secrets.DOMAIN }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      VM_HOST: ${{ secrets.VM_HOST }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup SSH deploy key
         run: |
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          eval "$(ssh-agent -s)"
-          echo "$SSH_DEPLOY_KEY" | tr -d '\r' | ssh-add -
+
+          # Write key file
+          echo "$SSH_DEPLOY_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+          # Validate key file
+          echo "SSH key file size: $(wc -c ~/.ssh/deploy_key)"
+          echo "SSH key first line: $(head -1 ~/.ssh/deploy_key)"
+          echo "SSH key last line: $(tail -1 ~/.ssh/deploy_key)"
+
+          # Known hosts
           ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
+
+          # Test SSH connection
+          echo "Testing SSH connection..."
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=10 root@"$VM_HOST" "echo 'SSH test successful'" || {
+            echo "SSH test failed. Key fingerprint:"
+            ssh-keygen -lf ~/.ssh/deploy_key || echo "Could not read key fingerprint"
+            exit 1
+          }
         env:
           SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
-          VM_HOST: ${{ secrets.VM_HOST }}
 
-      - name: Deploy to Cherry Servers (Preview)
-        env:
-          DEPLOY_ENVIRONMENT: preview
-          APP_IMAGE: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
-          DOMAIN: ${{ secrets.DOMAIN }}
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-          VM_HOST: ${{ secrets.VM_HOST }}
+      - name: Deploy to Cherry Servers
         run: platform/ci/scripts/deploy.sh
 
       - name: Upload deployment artifacts
@@ -76,45 +180,11 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Comment on PR
-        if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const prNumber = context.payload.pull_request.number;
-            const previewDomain = '${{ secrets.DOMAIN }}';
-            const imageTag = process.env.IMAGE_TAG;
-            const imageName = process.env.IMAGE_NAME;
-            const commitSha = process.env.GITHUB_SHA;
-
-            const body = `## 🚀 Preview Deployment
-
-            **Preview URL:** https://${previewDomain}
-            **AI API URL:** https://ai.${previewDomain}
-            **Image:** \`${imageName}:${imageTag}\`
-            **Commit:** \`${commitSha}\`
-
-            ### Services Available
-            - 🎯 **Main App:** [${previewDomain}](https://${previewDomain})
-            - 🤖 **LiteLLM AI:** [ai.${previewDomain}](https://ai.${previewDomain})
-            - 🔍 **Health Check:** [${previewDomain}/api/v1/meta/health](https://${previewDomain}/api/v1/meta/health)
-            - 🤖 **AI Health Check:** [ai.${previewDomain}/health/readiness](https://ai.${previewDomain}/health/readiness)
-
-            > This preview will be updated automatically when you push new commits to this PR.`;
-
-            github.rest.issues.createComment({
-              issue_number: prNumber,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: body
-            });
-
       - name: Deployment summary
         run: |
           echo "## 🚀 Preview Deployment Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Preview URL:** https://${{ secrets.DOMAIN }}" >> $GITHUB_STEP_SUMMARY
-          echo "**AI API URL:** https://ai.${{ secrets.DOMAIN }}" >> $GITHUB_STEP_SUMMARY
           echo "**Image:** \`${IMAGE_NAME}:${IMAGE_TAG}\`" >> $GITHUB_STEP_SUMMARY
           echo "**PR:** #${{ env.PR_NUMBER }}" >> $GITHUB_STEP_SUMMARY
           echo "**Commit:** \`${GITHUB_SHA}\`" >> $GITHUB_STEP_SUMMARY

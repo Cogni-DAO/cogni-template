@@ -40,15 +40,18 @@ platform/infra/
 └── services/runtime/               # Container stack (Docker Compose)
     ├── docker-compose.yml         # App + LiteLLM + Caddy + Promtail
     └── configs/                   # Service configuration files
-        ├── Caddyfile.tmpl
-        ├── promtail-config.yaml
-        └── litellm.config.yaml
+        ├── Caddyfile.tmpl         # (mounted as ./configs/Caddyfile.tmpl)
+        ├── promtail-config.yaml   # (mounted as ./configs/promtail-config.yaml)
+        └── litellm.config.yaml    # (mounted as ./configs/litellm.config.yaml)
 ```
 
 ## Container Stack
 
-**Single image per commit**: `app-${sha}` tagged, reused across environments
-**Runtime containers**:
+**Environment-specific image tags**: Same IMAGE_NAME, environment-aware tags:
+
+- Preview: `preview-${GITHUB_SHA}`
+- Production: `prod-${GITHUB_SHA}`
+  **Runtime containers**:
 
 - `app`: Next.js application with environment-specific runtime config
 - `litellm`: AI proxy service on `ai.${domain}` subdomain
@@ -65,7 +68,7 @@ platform/infra/
 
 **Deployment Pipeline:**
 
-- `deploy-preview.yml` - **Auto-triggered on PR**: Build → Push GHCR → SSH → Docker Compose
+- `deploy-preview.yml` - **Auto-triggered on PR**: Build + Push + Deploy (consolidated workflow)
 - `deploy-production.yml` - **Auto-triggered on main**: Build → Push GHCR → SSH → Docker Compose
 - `provision-base.yml` - **Manual VM provisioning** via OpenTofu workflow dispatch
 
@@ -80,7 +83,7 @@ platform/infra/
 ## Deployment Flows
 
 **VM Provisioning (One-time)**: GitHub Actions "Provision Base Infrastructure" workflow  
-**App Deployment (Routine)**: Auto-triggered on PR/main → SSH → `docker compose up`
+**App Deployment (Routine)**: Auto-triggered on PR/main → rsync bundle → SSH → `docker compose up`
 
 **Manual deployments**: See [DEPLOY.md](DEPLOY.md)
 
@@ -109,9 +112,7 @@ platform/infra/
 ## Health Validation
 
 1. **Container healthchecks**: Docker HEALTHCHECK in Dockerfile
-2. **App health**: `https://${domain}/api/v1/meta/health`
-3. **AI health**: `https://ai.${domain}/health/readiness`
-4. **Deployment gate**: 5min curl loop validates deployment success
+2. **App health**: `https://${domain}/api/v1/meta/health` successful curl
 
 ## Current State
 

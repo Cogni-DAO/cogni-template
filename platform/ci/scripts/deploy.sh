@@ -4,23 +4,27 @@
 
 set -euo pipefail
 
+# Resolve repo root robustly
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+
 on_fail() {
   code=$?
   echo "[ERROR] deploy failed (exit $code), collecting debug info from VM..."
 
   if [[ -n "${VM_HOST:-}" ]]; then
-    ssh -o StrictHostKeyChecking=no root@"$VM_HOST" <<'EOF' || true
+    ssh $SSH_OPTS root@"$VM_HOST" <<'EOF' || true
       echo "=== docker compose ps ==="
-      cd /opt/cogni/runtime && docker compose ps || echo "docker compose ps failed"
+      cd /opt/cogni-template-runtime && docker compose ps || echo "docker compose ps failed"
 
       echo "=== logs: app ==="
-      cd /opt/cogni/runtime && docker compose logs --tail 80 app || true
+      cd /opt/cogni-template-runtime && docker compose logs --tail 80 app || true
 
       echo "=== logs: litellm ==="
-      cd /opt/cogni/runtime && docker compose logs --tail 80 litellm || true
+      cd /opt/cogni-template-runtime && docker compose logs --tail 80 litellm || true
 
       echo "=== logs: caddy ==="
-      cd /opt/cogni/runtime && docker compose logs --tail 80 caddy || true
+      cd /opt/cogni-template-runtime && docker compose logs --tail 80 caddy || true
 EOF
   fi
 
@@ -46,6 +50,25 @@ log_warn() {
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
+
+# SSH configuration  
+SSH_KEY_PATH="${SSH_KEY_PATH:-$HOME/.ssh/deploy_key}"
+
+if [[ -f "$SSH_KEY_PATH" ]]; then
+    # Found deploy key (CI or explicit local override)
+    log_info "SSH key validated: $SSH_KEY_PATH"
+    SSH_OPTS="-i $SSH_KEY_PATH -o StrictHostKeyChecking=yes"
+    
+    # Validate permissions
+    if [[ "$(stat -c %a "$SSH_KEY_PATH" 2>/dev/null || stat -f %A "$SSH_KEY_PATH" 2>/dev/null)" != "600" ]]; then
+        log_error "SSH key has incorrect permissions. Expected 600, got: $(stat -c %a "$SSH_KEY_PATH" 2>/dev/null || stat -f %A "$SSH_KEY_PATH" 2>/dev/null)"
+        exit 1
+    fi
+else
+    # No deploy key found - use default SSH (local development)
+    log_info "No deploy key found, using default SSH configuration"
+    SSH_OPTS="-o StrictHostKeyChecking=yes"
+fi
 
 # Validate required environment variables
 if [[ -z "${APP_IMAGE:-}" ]]; then
@@ -123,12 +146,14 @@ log_info() {
 
 log_info "Setting up runtime environment on VM..."
 
-# Create required directories
-sudo mkdir -p /etc/caddy /etc/promtail /etc/litellm /var/lib/promtail
+# Set compose project name for consistent container naming
+export COMPOSE_PROJECT_NAME=cogni-template-runtime
 
-# Create runtime directory and copy docker-compose.yml
-sudo mkdir -p /opt/cogni/runtime
-cd /opt/cogni/runtime
+# Create required directories for data persistence
+sudo mkdir -p /var/lib/promtail
+
+# Change to runtime bundle directory
+cd /opt/cogni-template-runtime
 
 # Write environment file
 log_info "Creating runtime environment file..."
@@ -147,7 +172,7 @@ log_info "Stopping existing containers..."
 docker compose down || true
 
 log_info "Starting runtime stack..."
-docker compose up -d
+docker compose up -d --remove-orphans
 
 log_info "Waiting for containers to be ready..."
 sleep 10
@@ -161,21 +186,18 @@ EOF
 # Make deployment script executable
 chmod +x "$ARTIFACT_DIR/deploy-remote.sh"
 
-# Copy docker-compose.yml and configs to VM via SSH
-log_info "Uploading docker-compose.yml and configuration files..."
-ssh -o StrictHostKeyChecking=no root@"$VM_HOST" "mkdir -p /opt/cogni/runtime /etc/caddy /etc/promtail /etc/litellm /var/lib/promtail"
+# Deploy runtime bundle to VM via rsync
+log_info "Deploying runtime bundle to VM..."
+ssh $SSH_OPTS root@"$VM_HOST" "mkdir -p /opt/cogni-template-runtime"
 
-# Upload docker-compose.yml
-scp platform/infra/services/runtime/docker-compose.yml root@"$VM_HOST":/opt/cogni/runtime/
-
-# Upload configuration files
-scp platform/infra/services/runtime/configs/Caddyfile.tmpl root@"$VM_HOST":/etc/caddy/Caddyfile
-scp platform/infra/services/runtime/configs/promtail-config.yaml root@"$VM_HOST":/etc/promtail/config.yaml
-scp platform/infra/services/runtime/configs/litellm.config.yaml root@"$VM_HOST":/etc/litellm/config.yaml
+# Upload entire runtime bundle atomically
+rsync -av -e "ssh $SSH_OPTS" \
+  "$REPO_ROOT/platform/infra/services/runtime/" \
+  root@"$VM_HOST":/opt/cogni-template-runtime/
 
 # Upload and execute deployment script
-scp "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
-ssh -o StrictHostKeyChecking=no root@"$VM_HOST" \
+scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
+ssh $SSH_OPTS root@"$VM_HOST" \
     "DOMAIN='$DOMAIN' APP_IMAGE='$APP_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' bash /tmp/deploy-remote.sh"
 
 # Health validation
@@ -224,7 +246,6 @@ log_info "🌐 Application URLs:"
 log_info "  - Main App: https://$DOMAIN"
 log_info "  - AI API: https://ai.$DOMAIN" 
 log_info "  - Health Check: https://$DOMAIN/api/v1/meta/health"
-log_info "  - AI Health: https://ai.$DOMAIN/health/readiness"
 log_info ""
 log_info "📁 Deployment artifacts in $ARTIFACT_DIR:"
 log_info "  - deployment.json: Deployment metadata"
@@ -232,5 +253,5 @@ log_info "  - deploy-remote.sh: Remote deployment script"
 log_info ""
 log_info "🔧 Deployment management:"
 log_info "  - SSH access: ssh root@$VM_HOST"
-log_info "  - Container logs: cd /opt/cogni/runtime && docker compose logs"
-log_info "  - Container status: cd /opt/cogni/runtime && docker compose ps"
+log_info "  - Container logs: cd /opt/cogni-template-runtime && docker compose logs"
+log_info "  - Container status: cd /opt/cogni-template-runtime && docker compose ps"
