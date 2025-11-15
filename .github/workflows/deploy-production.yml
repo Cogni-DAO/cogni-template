@@ -78,7 +78,6 @@ jobs:
           LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           VM_HOST: ${{ secrets.VM_HOST }}
-          SSH_KEY_PATH: $HOME/.ssh/deploy_key
         run: platform/ci/scripts/deploy.sh
 
       - name: Upload deployment artifacts

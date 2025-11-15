@@ -12,7 +12,7 @@ on_fail() {
   code=$?
   echo "[ERROR] deploy failed (exit $code), collecting debug info from VM..."
 
-  if [[ -n "${VM_HOST:-}" && -n "${SSH_KEY_PATH:-}" && -f "$SSH_KEY_PATH" ]]; then
+  if [[ -n "${VM_HOST:-}" ]]; then
     ssh $SSH_OPTS root@"$VM_HOST" <<'EOF' || true
       echo "=== docker compose ps ==="
       cd /opt/cogni-runtime && docker compose ps || echo "docker compose ps failed"
@@ -51,29 +51,23 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# SSH configuration
-if [[ -n "${SSH_KEY_PATH:-}" ]]; then
-    # Explicit SSH key path provided (CI or manual override)
-    log_info "Using explicit SSH key: $SSH_KEY_PATH"
+# SSH configuration  
+SSH_KEY_PATH="${SSH_KEY_PATH:-$HOME/.ssh/deploy_key}"
+
+if [[ -f "$SSH_KEY_PATH" ]]; then
+    # Found deploy key (CI or explicit local override)
+    log_info "SSH key validated: $SSH_KEY_PATH"
     SSH_OPTS="-i $SSH_KEY_PATH -o StrictHostKeyChecking=yes"
-
-    # Validate SSH key exists
-    if [[ ! -f "$SSH_KEY_PATH" ]]; then
-        log_error "SSH key not found at: $SSH_KEY_PATH"
-        log_error "In CI: ensure the 'Setup SSH deploy key' step created this key"
-        exit 1
-    fi
-
-    # Validate SSH key permissions (Linux + macOS)
+    
+    # Validate permissions
     if [[ "$(stat -c %a "$SSH_KEY_PATH" 2>/dev/null || stat -f %A "$SSH_KEY_PATH" 2>/dev/null)" != "600" ]]; then
-        log_error "SSH key permissions must be 600: $SSH_KEY_PATH"
-        log_error "Run: chmod 600 \"$SSH_KEY_PATH\""
+        log_error "SSH key has incorrect permissions. Expected 600, got: $(stat -c %a "$SSH_KEY_PATH" 2>/dev/null || stat -f %A "$SSH_KEY_PATH" 2>/dev/null)"
         exit 1
     fi
 else
-    # Local development: rely on default SSH agent / ~/.ssh/config
+    # No deploy key found - use default SSH (local development)
+    log_info "No deploy key found, using default SSH configuration"
     SSH_OPTS="-o StrictHostKeyChecking=yes"
-    log_info "Using default SSH configuration (no explicit SSH_KEY_PATH)"
 fi
 
 # Validate required environment variables
