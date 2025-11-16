@@ -3,11 +3,11 @@
 
 /**
  * Module: `@app/api/v1/ai/completion`
- * Purpose: Verifies end-to-end HTTP API behavior for AI completion with live server.
- * Scope: Full request/response cycle testing. Does NOT test internal business logic.
- * Invariants: HTTP status codes; response schema compliance; error handling.
+ * Purpose: Verifies end-to-end HTTP API behavior for AI completion with fake adapter in CI.
+ * Scope: Full request/response cycle testing against deterministic fake responses. Does NOT test internal business logic.
+ * Invariants: HTTP status codes; response schema compliance; fake adapter assertions; error handling.
  * Side-effects: IO
- * Notes: Requires test:api infrastructure; currently skipped pending LiteLLM setup.
+ * Notes: Uses APP_ENV=test in CI to test with FakeLlmAdapter; asserts deterministic "[FAKE_COMPLETION]" responses.
  * Links: completion route, aiCompletionOperation contract
  * @public
  */
@@ -18,24 +18,21 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 // It assumes a running Next.js server and makes real HTTP requests
 // For now, we'll mock the dependencies to avoid requiring real LiteLLM
 
-describe.skip("API /v1/ai/completion - deferred until LiteLLM infra ready", () => {
-  // TODO: Enable once test:api infrastructure is set up
-  // These tests require a running Next.js server instance
+describe("API /v1/ai/completion", () => {
+  // These tests run against fake adapter in CI (APP_ENV=test)
 
   const API_BASE = process.env.TEST_API_BASE_URL ?? "http://localhost:3000";
   const COMPLETION_ENDPOINT = `${API_BASE}/api/v1/ai/completion`;
 
   beforeAll(async () => {
-    // TODO: Set up test server instance
-    // TODO: Mock LiteLLM dependencies at container level
-    console.warn("API tests skipped - requires test:api infrastructure setup");
+    // Server expected to be running via docker-compose in CI
   });
 
   afterAll(async () => {
-    // TODO: Cleanup test server
+    // Cleanup handled by CI workflow
   });
 
-  it("should handle valid completion request", async () => {
+  it("should handle valid completion request with Fake Adapter", async () => {
     // Arrange
     const requestBody = {
       messages: [{ role: "user", content: "Hello, AI!" }],
@@ -56,7 +53,7 @@ describe.skip("API /v1/ai/completion - deferred until LiteLLM infra ready", () =
     const responseData = await response.json();
     expect(responseData).toHaveProperty("message");
     expect(responseData.message).toHaveProperty("role", "assistant");
-    expect(responseData.message).toHaveProperty("content");
+    expect(responseData.message).toHaveProperty("content", "[FAKE_COMPLETION]");
     expect(responseData.message).toHaveProperty("timestamp");
   });
 

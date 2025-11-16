@@ -31,3 +31,44 @@ jobs:
         uses: fsfe/reuse-action@v6
       - run: pnpm check
       - run: pnpm build
+
+  test-api:
+    runs-on: ubuntu-latest
+    env:
+      NODE_ENV: test
+      APP_ENV: test
+      DATABASE_URL: postgresql://user:password@localhost:5432/cogni_template_test
+      # Critically: DO NOT expose OPENROUTER_API_KEY - CI uses fake adapter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start app + DB stack
+        run: |
+          docker compose -f platform/infra/services/runtime/docker-compose.yml up -d --build app postgres
+
+      - name: Wait for app healthcheck
+        run: |
+          for i in {1..30}; do
+            if curl -sf http://localhost:3000/api/v1/meta/health > /dev/null; then
+              echo "App is healthy"; exit 0;
+            fi
+            echo "Waiting for app...$i/30"; sleep 3;
+          done
+          echo "App failed to become healthy"; exit 1
+
+      - name: Run API tests
+        run: pnpm test:api
+
+      - name: Teardown stack
+        if: always()
+        run: |
+          docker compose -f platform/infra/services/runtime/docker-compose.yml down
