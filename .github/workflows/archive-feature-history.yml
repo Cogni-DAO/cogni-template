@@ -27,6 +27,10 @@ jobs:
 
       - name: Create archive tag for branch tip
         run: |
+          # Configure git identity for annotated tags
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
           PR_NUMBER="${{ github.event.pull_request.number }}"
           SOURCE_BRANCH="${{ github.event.pull_request.head.ref }}"
 
@@ -41,6 +45,12 @@ jobs:
           TAG="archive/pr-${PR_NUMBER}-${SAFE_BRANCH}"
 
           echo "Archiving PR #${PR_NUMBER}, branch ${SOURCE_BRANCH}, SHA ${SHA} as tag ${TAG}"
+
+          # Check if tag already exists (idempotency for re-runs)
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "Tag $TAG already exists, skipping."
+            exit 0
+          fi
 
           git tag -a "$TAG" "$SHA" -m "Archive of branch ${SOURCE_BRANCH} at merge of PR #${PR_NUMBER}"
           git push origin "$TAG"

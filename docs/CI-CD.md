@@ -87,6 +87,7 @@ push to main → build-prod.yml → manual deploy-production.yml
 
 - Enable: "Allow squash merging"
 - Enable: "Allow merge commits"
+- Enable: "Automatically delete head branches"
 - Disable: "Allow rebase merging"
 
 ### Branch Protection: staging
