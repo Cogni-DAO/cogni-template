@@ -11,6 +11,12 @@ Automated staging→release→main workflow with fork-safe CI/CD and E2E-trigger
 - **release/\*** → `main` (via PR, manual approval)
 - **main** → production (manual deploy via workflow_dispatch)
 
+```
+feat/* → staging → release/* → main
+```
+
+**Key invariant**: `main` receives code only via `release/*` branches, never direct commits or non-release PRs.
+
 ## Workflow Details
 
 ### 1. Feature Development
@@ -106,6 +112,7 @@ push to main → build-prod.yml → manual deploy-production.yml
 - Require pull request before merging
 - Require status checks to pass: `ci`
 - DO NOT require linear history (allows merge commits from release/\*)
+- DO NOT require branches to be up to date (release/\* branches are clean snapshots)
 - Optional: Restrict pushes to admins only
 
 ### Workflow Enforcement
