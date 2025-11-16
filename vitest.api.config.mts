@@ -16,8 +16,8 @@ import { defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { config } from "dotenv";
 
-// Load .env.test for API integration tests
-config({ path: ".env.test" });
+// Load .env for API integration tests
+config({ path: ".env" });
 
 export default defineConfig({
   root: ".",

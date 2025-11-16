@@ -141,7 +141,7 @@ jobs:
     environment: preview
     env:
       NEXT_TELEMETRY_DISABLED: 1
-      E2E_BASE_URL: https://${{ vars.DOMAIN }}
+      TEST_BASE_URL: https://${{ vars.DOMAIN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
