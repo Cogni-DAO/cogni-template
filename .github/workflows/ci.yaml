@@ -1,39 +1,54 @@
 name: CI
-on: pull_request
+
+on:
+  pull_request:
+
 permissions:
   contents: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: 1
+  NODE_VERSION: "20"
+
 jobs:
   ci:
     runs-on: ubuntu-latest
     env:
-      NEXT_TELEMETRY_DISABLED: 1
-      # dummy env vars for build
       NODE_ENV: test
       DATABASE_URL: sqlite://build.db
       LITELLM_MASTER_KEY: build-key
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
       - uses: pnpm/action-setup@v4
         with:
           version: 9
 
-      - name: Install
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
       - name: Repository policy check
         run: pnpm repo-check
+
       - name: REUSE SPDX compliance
         uses: fsfe/reuse-action@v6
-      - run: pnpm check
-      - run: pnpm build
+
+      - name: Full static + unit test suite
+        run: pnpm check
+        # check runs: typecheck, lint, format:check, tests, check:docs, repo-check
 
   test-api:
     runs-on: ubuntu-latest
+    needs: ci
     env:
       NODE_ENV: test
       APP_ENV: test
@@ -41,9 +56,12 @@ jobs:
       # Critically: DO NOT expose OPENROUTER_API_KEY - CI uses fake adapter
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
       - uses: pnpm/action-setup@v4
         with:
           version: 9
@@ -53,7 +71,9 @@ jobs:
 
       - name: Start app + DB stack
         run: |
-          docker compose -f platform/infra/services/runtime/docker-compose.yml up -d --build app postgres
+          # If build times take too long, consider a job step with buildx + type=gha cache
+          docker compose -f platform/infra/services/runtime/docker-compose.yml \
+            up -d --build app postgres
 
       - name: Wait for app healthcheck
         run: |
@@ -61,7 +81,7 @@ jobs:
             if curl -sf http://localhost:3000/api/v1/meta/health > /dev/null; then
               echo "App is healthy"; exit 0;
             fi
-            echo "Waiting for app...$i/30"; sleep 3;
+            echo "Waiting for app... $i/30"; sleep 3;
           done
           echo "App failed to become healthy"; exit 1
 
