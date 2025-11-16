@@ -13,7 +13,13 @@ jobs:
     if: >
       github.event.pull_request.merged == true &&
       (startsWith(github.event.pull_request.head.ref, 'feat/') ||
-       startsWith(github.event.pull_request.head.ref, 'fix/'))
+      startsWith(github.event.pull_request.head.ref, 'feature/') ||
+      startsWith(github.event.pull_request.head.ref, 'refactor/') ||
+      startsWith(github.event.pull_request.head.ref, 'build/') || 
+      startsWith(github.event.pull_request.head.ref, 'ci/') ||
+      startsWith(github.event.pull_request.head.ref, 'perf/') ||
+      startsWith(github.event.pull_request.head.ref, 'style/') ||
+      startsWith(github.event.pull_request.head.ref, 'fix/'))
     runs-on: ubuntu-latest
     permissions:
       contents: write
