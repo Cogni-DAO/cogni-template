@@ -27,12 +27,13 @@ platform/bootstrap/bootstrap  # installs Node, pnpm, OpenTofu, Docker + all proj
    git remote add upstream git@github.com:Cogni-DAO/cogni-template.git
    ```
 
-3. **Always branch from staging:**
+3. **Always branch from staging using Conventional Commit types:**
 
    ```bash
    git checkout staging
    git reset --hard upstream/staging
-   git checkout -b feature/xyz
+   git checkout -b feat/ai-preview-health-checks
+   # or: fix/litellm-config-bug, chore/ci-playwright-cache, docs/update-readme, etc.
    ```
 
 4. **Run local checks before committing:**
@@ -44,11 +45,16 @@ platform/bootstrap/bootstrap  # installs Node, pnpm, OpenTofu, Docker + all proj
 5. **Use Conventional Commits:** `feat:`, `fix:`, `docs:`, `chore:`
 
 6. **Open PRs to staging only:**
-   - Push: `git push origin feature/xyz`
-   - Open PR: `your-fork:feature/xyz → Cogni-DAO/cogni-template:staging`
+   - Push: `git push origin feat/xyz`
+   - Open PR: `your-fork:feat/xyz → Cogni-DAO/cogni-template:staging`
    - PRs to `main` are blocked by design
 
 7. All CI and AI gates must pass for auto-merge.
+
+**Branch naming convention:**
+
+- Use Conventional Commit types: `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`
+- Examples: `feat/ai-preview-health-checks`, `fix/litellm-config-bug`, `chore/ci-playwright-cache`
 
 **See [CI/CD Pipeline Flow](docs/CI-CD.md) for branch model details.**
 
