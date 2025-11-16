@@ -3,6 +3,8 @@ name: Require pinned release PRs to main
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [release/*]
 
 permissions:
   contents: read # needed for checkout
@@ -12,22 +14,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Fail PR if head is not release/*
-        if: ${{ !startsWith(github.head_ref, 'release/') }}
+        if: ${{ github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release/') }}
         run: |
           echo "Only branches matching release/* may open PRs into main."
           echo "Create a PR into staging, then a release/* branch, then PR release/* → main."
           exit 1
 
       - uses: actions/checkout@v4
-        if: startsWith(github.head_ref, 'release/')
+        if: ${{ github.event_name == 'push' || startsWith(github.head_ref, 'release/') }}
         with:
           fetch-depth: 0
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.event_name == 'pull_request' && github.head_ref || '' }}
 
       - name: Fail if release head != pinned SHA
-        if: startsWith(github.head_ref, 'release/')
+        if: ${{ github.event_name == 'push' || startsWith(github.head_ref, 'release/') }}
         run: |
-          BRANCH="${GITHUB_HEAD_REF}"
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            BRANCH="${GITHUB_HEAD_REF}"
+          else
+            BRANCH="${GITHUB_REF_NAME:-${GITHUB_REF#refs/heads/}}"
+          fi
 
           # Extract the short SHA suffix from release/YYYYMMDD-<shortsha>
           PIN=$(echo "$BRANCH" | sed -E 's/^release\/[0-9]{8}-([0-9a-f]{8})$/\1/')

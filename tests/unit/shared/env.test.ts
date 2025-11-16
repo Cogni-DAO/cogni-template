@@ -29,6 +29,7 @@ describe("env schemas", () => {
   it("parses minimal valid env", async () => {
     Object.assign(process.env, {
       NODE_ENV: "test",
+      APP_ENV: "test",
       DATABASE_URL: "postgres://u:p@h:5432/db?sslmode=require",
       // TODO: SESSION_SECRET: "x".repeat(32),
       // LITELLM_BASE_URL: auto-detects based on NODE_ENV

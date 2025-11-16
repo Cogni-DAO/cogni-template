@@ -94,6 +94,8 @@ jobs:
       IMAGE_NAME: ${{ needs.build.outputs.image_name }}
       IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
       APP_IMAGE: ${{ needs.build.outputs.image_name }}:${{ needs.build.outputs.image_tag }}
+      DEPLOY_ENVIRONMENT: preview
+      APP_ENV: production
       DOMAIN: ${{ vars.DOMAIN }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
@@ -101,7 +103,6 @@ jobs:
       VM_HOST: ${{ secrets.VM_HOST }}
       GHCR_DEPLOY_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
       GHCR_USERNAME: Cogni-1729
-      DEPLOY_ENVIRONMENT: preview
       NEXT_TELEMETRY_DISABLED: 1
     steps:
       - name: Checkout
@@ -141,7 +142,7 @@ jobs:
     environment: preview
     env:
       NEXT_TELEMETRY_DISABLED: 1
-      E2E_BASE_URL: https://${{ vars.DOMAIN }}
+      TEST_BASE_URL: https://${{ vars.DOMAIN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4

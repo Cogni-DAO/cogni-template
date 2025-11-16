@@ -14,13 +14,14 @@ git clone https://github.com/Cogni-DAO/cogni-template
 cd cogni-template
 pnpm setup local     # Automated setup TODO: lol sorry, cp .env.example .env
 pnpm dev:stack       # Start developing with full stack (DB + LiteLLM + Next.js)
+pnpm docker:stack    # Full production simulation (https://localhost - browser cert warning expected)
 ```
 
 **You'll need:** [OpenRouter API key](https://openrouter.ai/keys) for AI features
 
 ### 2. 🚀 Fork Owner: Launch Your Own DAO
 
-**Goal:** Create your own autonomous organization with custom features  
+**Goal:** Create your own autonomous organization with your unique direction  
 _We love you too, go for it! 🎯_
 
 ```bash

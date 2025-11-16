@@ -73,6 +73,7 @@ jobs:
       - name: Deploy to Cherry Servers
         env:
           DEPLOY_ENVIRONMENT: production
+          APP_ENV: production
           APP_IMAGE: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           DOMAIN: ${{ secrets.DOMAIN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
