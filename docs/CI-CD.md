@@ -68,10 +68,12 @@ push to main → build-prod.yml → manual deploy-production.yml
 ## Branch Management
 
 ### Auto-cleanup
+
 - **Setting:** "Automatically delete head branches" enabled in repo settings
 - **Result:** Feature branches deleted after PR merge to prevent accumulation
 
 ### History archival
+
 - **Trigger:** `archive-feature-history.yml` runs on merged `feat/*` and `fix/*` PRs
 - **Archive format:** `archive/pr-{number}-{safe-branch-name}` tags
 - **Purpose:** Preserve full incremental commit history for AI training and debugging
@@ -80,26 +82,33 @@ push to main → build-prod.yml → manual deploy-production.yml
 ## Branch Configuration Settings
 
 ### Repository-wide Settings
+
 **Settings → General → Pull Requests:**
+
 - Enable: "Allow squash merging"
 - Enable: "Allow merge commits"
 - Disable: "Allow rebase merging"
 
 ### Branch Protection: staging
+
 **Settings → Branches → staging:**
+
 - Require pull request before merging
 - Require status checks to pass: `ci`
 - Require linear history (enforces squash merge)
 - Optional: Restrict pushes to admins only
 
 ### Branch Protection: main
+
 **Settings → Branches → main:**
+
 - Require pull request before merging
 - Require status checks to pass: `ci`
-- DO NOT require linear history (allows merge commits from release/*)
+- DO NOT require linear history (allows merge commits from release/\*)
 - Optional: Restrict pushes to admins only
 
 ### Workflow Enforcement
+
 - `block-non-release-prs-to-main.yml` ensures only `release/*` branches can target main
 
 ---
