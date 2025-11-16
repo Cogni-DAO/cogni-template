@@ -129,3 +129,11 @@ For private GHCR images, VMs authenticate using bot account credentials:
 
 **Live**: Production VM with automated deployment pipeline
 **Available**: Preview environment ready for provisioning via GitHub Actions
+
+---
+
+## Related Documentation
+
+- [CI/CD Pipeline Flow](../../docs/CI-CD.md) - Branch model, workflows, and deployment automation
+- [Application Architecture](../../docs/ARCHITECTURE.md) - Hexagonal design and code organization
+- [DEPLOY.md](DEPLOY.md) - Step-by-step deployment guide
