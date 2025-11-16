@@ -7,13 +7,17 @@
 
 services:
   app:
-    image: ${APP_IMAGE}
+    image: ${APP_IMAGE:-cogni-template-local}
+    build:
+      context: ../../../..
+      dockerfile: ./Dockerfile
     container_name: app
     restart: always
     networks:
       - web
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=${NODE_ENV:-production}
+      - APP_ENV=${APP_ENV}
       - APP_BASE_URL=https://${DOMAIN}
       - DATABASE_URL=${DATABASE_URL}
       - LITELLM_BASE_URL=http://litellm:4000
@@ -64,6 +68,27 @@ services:
       - app
       - litellm
 
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    restart: unless-stopped
+    networks:
+      - web
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cogni_template_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user}"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 10s
+
   promtail:
     image: grafana/promtail:2.9.0
     container_name: promtail
@@ -87,3 +112,5 @@ volumes:
     name: caddy_data
   caddy_config:
     name: caddy_config
+  postgres_data:
+    name: postgres_data

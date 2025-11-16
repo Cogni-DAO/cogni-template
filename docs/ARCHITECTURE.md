@@ -52,6 +52,7 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 - **src/core/** → Pure domain. No I/O/time/RNG; inject via ports.
 - **src/adapters/** → Infra implementations of ports. No UI.
   - `server/` (drizzle, langfuse, pino, siwe, viem, litellm, rate-limit, clock, rng)
+  - `test/` (fake implementations for CI; selected via `APP_ENV=test`)
   - `worker/`, `cli/` (future)
 - **src/shared/** → Small, pure utilities: env/, schemas/ (DTOs, mappers), constants/, util/.
 - **src/components/** → Shared presentational UI.
@@ -322,6 +323,7 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 **Contract (edge):** each `src/contracts/*.contract.ts` has a contract test run against the HTTP route (and MCP later).  
 **Adapters (integration):** run contract + real-service tests in `tests/integration/<adapter-area>/**`.  
 **Routes (API e2e):** HTTP-level tests hitting Next API routes in `e2e/**`.  
+**Fake Adapters (CI):** `APP_ENV=test` triggers deterministic test adapters (`src/adapters/test/`) via `bootstrap/container` for CI testing without external dependencies.  
 **Setup:** common mocks and config in `tests/setup.ts`.
 
 ---

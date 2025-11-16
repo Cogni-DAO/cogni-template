@@ -1,8 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const isCI = !!process.env.CI;
-const BASE = process.env.E2E_BASE_URL;
-if (isCI && !BASE) throw new Error("E2E_BASE_URL is required on CI.");
+const BASE = process.env.TEST_BASE_URL;
+if (isCI && !BASE) throw new Error("TEST_BASE_URL is required on CI.");
 
 export default defineConfig({
   testDir: "e2e/tests",

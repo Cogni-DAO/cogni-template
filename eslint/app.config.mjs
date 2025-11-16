@@ -163,6 +163,7 @@ export default [
                 "types/**",
                 "components",
               ],
+              disallow: ["adapters/test/**"],
             },
             {
               from: "contracts",
@@ -181,6 +182,7 @@ export default [
                 "styles/**",
                 "bootstrap/**",
               ],
+              disallow: ["adapters/test/**"],
             },
             {
               from: "mcp",
@@ -213,6 +215,10 @@ export default [
             {
               from: "adapters/cli",
               allow: ["adapters/cli/**", "ports/**", "shared/**", "types/**"],
+            },
+            {
+              from: "adapters/test",
+              allow: ["adapters/test/**", "ports/**", "shared/**", "types/**"],
             },
             { from: "shared", allow: ["shared/**", "types/**"] },
             {
@@ -247,7 +253,13 @@ export default [
           default: "disallow",
           rules: [
             {
-              target: ["ports", "adapters/server", "shared", "components"],
+              target: [
+                "ports",
+                "adapters/server",
+                "adapters/test",
+                "shared",
+                "components",
+              ],
               allow: ["**/index.ts", "**/index.tsx"],
             },
             {
@@ -308,6 +320,7 @@ export default [
         { type: "adapters/server", pattern: "src/adapters/server/**" },
         { type: "adapters/worker", pattern: "src/adapters/worker/**" },
         { type: "adapters/cli", pattern: "src/adapters/cli/**" },
+        { type: "adapters/test", pattern: "src/adapters/test/**" },
         { type: "shared", pattern: "src/shared/**" },
         { type: "bootstrap", pattern: "src/bootstrap/**" },
         { type: "components", pattern: "src/components/**" },

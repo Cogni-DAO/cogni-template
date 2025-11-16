@@ -101,10 +101,22 @@ REQUIRED_SECRETS=(
     "VM_HOST"
 )
 
+# Check required environment variables (not secrets)
+REQUIRED_ENV_VARS=(
+    "APP_ENV"
+)
+
 MISSING_SECRETS=()
 for secret in "${REQUIRED_SECRETS[@]}"; do
     if [[ -z "${!secret:-}" ]]; then
         MISSING_SECRETS+=("$secret")
+    fi
+done
+
+MISSING_ENV_VARS=()
+for env_var in "${REQUIRED_ENV_VARS[@]}"; do
+    if [[ -z "${!env_var:-}" ]]; then
+        MISSING_ENV_VARS+=("$env_var")
     fi
 done
 
@@ -116,6 +128,16 @@ if [[ ${#MISSING_SECRETS[@]} -gt 0 ]]; then
     log_error ""
     log_error "These should come from GitHub Environment Secrets in CI,"
     log_error "or be set manually for local deployment testing."
+    exit 1
+fi
+
+if [[ ${#MISSING_ENV_VARS[@]} -gt 0 ]]; then
+    log_error "Missing required environment variables:"
+    for env_var in "${MISSING_ENV_VARS[@]}"; do
+        log_error "  - $env_var"
+    done
+    log_error ""
+    log_error "These should be set in the GitHub workflow environment."
     exit 1
 fi
 
@@ -159,6 +181,7 @@ cd /opt/cogni-template-runtime
 log_info "Creating runtime environment file..."
 cat > .env << ENV_EOF
 DOMAIN=${DOMAIN}
+APP_ENV=${APP_ENV}
 APP_IMAGE=${APP_IMAGE}
 DATABASE_URL=${DATABASE_URL}
 LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
@@ -201,7 +224,7 @@ rsync -av -e "ssh $SSH_OPTS" \
 # Upload and execute deployment script
 scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
 ssh $SSH_OPTS root@"$VM_HOST" \
-    "DOMAIN='$DOMAIN' APP_IMAGE='$APP_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' bash /tmp/deploy-remote.sh"
+    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' APP_IMAGE='$APP_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' bash /tmp/deploy-remote.sh"
 
 # Health validation
 log_info "Validating deployment health..."
