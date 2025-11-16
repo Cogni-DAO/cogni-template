@@ -12,8 +12,7 @@
  * @public
  */
 
-import https from "https";
-import fetch, { Headers, Request, Response } from "node-fetch";
+import { Agent, Dispatcher, setGlobalDispatcher } from "undici";
 import { afterEach, beforeAll } from "vitest";
 
 /**
@@ -39,41 +38,42 @@ beforeAll(() => {
     LITELLM_MASTER_KEY: "test-key",
   });
 
-  // HTTPS agent that trusts self-signed certs
-  const localHttpsAgent = new https.Agent({
-    rejectUnauthorized: false,
+  // Create two agents: strict for external, relaxed for localhost
+  const strictAgent = new Agent({
+    connect: {
+      rejectUnauthorized: true,
+    },
   });
 
-  // Wrap fetch: only relax TLS for localhost HTTPS
-  const wrappedFetch: typeof globalThis.fetch = (input, init) => {
-    const url = typeof input === "string" ? input : input.toString();
+  const localhostAgent = new Agent({
+    connect: {
+      rejectUnauthorized: false, // Accept self-signed certs for localhost only
+    },
+  });
 
-    if (
-      url.startsWith("https://localhost") ||
-      url.startsWith("https://127.0.0.1")
-    ) {
-      return fetch(url, {
-        ...init,
-        // node-fetch-specific agent option
-        agent: localHttpsAgent,
-      } as Parameters<typeof fetch>[1]) as ReturnType<typeof globalThis.fetch>;
+  // Custom dispatcher that routes based on origin
+  class CustomDispatcher extends Dispatcher {
+    override dispatch(
+      opts: Dispatcher.DispatchOptions,
+      handler: Dispatcher.DispatchHandler
+    ): boolean {
+      const origin = opts.origin;
+      const isLocalhost =
+        origin === "https://localhost" ||
+        origin === "https://127.0.0.1" ||
+        (typeof origin === "string" &&
+          (origin.startsWith("https://localhost:") ||
+            origin.startsWith("https://127.0.0.1:")));
+
+      const agent = isLocalhost ? localhostAgent : strictAgent;
+      return agent.dispatch(opts, handler);
     }
+  }
 
-    // All other requests use normal validation
-    return fetch(url, init as Parameters<typeof fetch>[1]) as ReturnType<
-      typeof globalThis.fetch
-    >;
-  };
+  const customDispatcher = new CustomDispatcher();
 
-  // Install node-fetch as the global fetch for tests
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).fetch = wrappedFetch;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).Request = Request;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).Response = Response;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (globalThis as any).Headers = Headers;
+  // Set the global dispatcher for all fetch requests
+  setGlobalDispatcher(customDispatcher);
 });
 
 afterEach(() => {
