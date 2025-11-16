@@ -46,14 +46,14 @@ describe("bootstrap container DI wiring", () => {
       expect(container.clock).toBeDefined();
     });
 
-    it("wires LiteLlmAdapter when APP_ENV unset (production mode)", async () => {
+    it("wires LiteLlmAdapter when APP_ENV=production", async () => {
       // Set up production environment
       Object.assign(process.env, {
         NODE_ENV: "production",
+        APP_ENV: "production",
         DATABASE_URL: "postgres://prod",
         LITELLM_MASTER_KEY: "prod-key",
       });
-      // APP_ENV intentionally unset
 
       // Import after env setup
       const { createContainer } = await import("@/bootstrap/container");
@@ -65,9 +65,10 @@ describe("bootstrap container DI wiring", () => {
       expect(container.clock).toBeDefined();
     });
 
-    it("wires LiteLlmAdapter in development mode without APP_ENV", async () => {
+    it("wires LiteLlmAdapter in development mode with APP_ENV=production", async () => {
       Object.assign(process.env, {
         NODE_ENV: "development",
+        APP_ENV: "production",
         DATABASE_URL: "postgres://dev",
         LITELLM_MASTER_KEY: "dev-key",
       });
@@ -86,6 +87,7 @@ describe("bootstrap container DI wiring", () => {
       // Set minimal valid env for these tests
       Object.assign(process.env, {
         NODE_ENV: "test",
+        APP_ENV: "test",
         DATABASE_URL: "postgres://test",
         LITELLM_MASTER_KEY: "test-key",
       });

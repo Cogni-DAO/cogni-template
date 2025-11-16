@@ -32,6 +32,7 @@ describe("server env edge cases", () => {
     // Set minimal valid env to get proxy working
     Object.assign(process.env, {
       NODE_ENV: "test",
+      APP_ENV: "test",
       DATABASE_URL: "postgres://test",
       LITELLM_MASTER_KEY: "test-key",
     });
