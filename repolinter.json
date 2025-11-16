@@ -180,7 +180,7 @@
             "\\.env\\.example|",
             "\\.mcp\\.json|",
             "commitlint\\.config\\.cjs|eslint\\.config\\.mjs|repolinter\\.json|",
-            "components\\.json|",
+            "components\\.json|sonar-project\\.properties|",
             "package\\.json|pnpm-lock\\.yaml|",
             "tsconfig\\.json|tsconfig\\.eslint\\.json|",
             "tailwind\\.config\\.ts|postcss\\.config\\.mjs|",
