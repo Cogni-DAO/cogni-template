@@ -16,7 +16,7 @@ import type { FullConfig } from "@playwright/test";
 
 export default async function globalSetup(cfg: FullConfig): Promise<void> {
   const isCI = !!process.env.CI;
-  const BASE_URL = process.env.E2E_BASE_URL;
+  const BASE_URL = process.env.TEST_BASE_URL;
   const ENABLE_PROD = process.env.E2E_ENABLE_PROD;
 
   console.log("🎭 Playwright Global Setup");
@@ -47,6 +47,6 @@ export default async function globalSetup(cfg: FullConfig): Promise<void> {
 
   // Validate environment in CI
   if (isCI && !BASE_URL) {
-    throw new Error("CI environment requires E2E_BASE_URL");
+    throw new Error("CI environment requires TEST_BASE_URL");
   }
 }
