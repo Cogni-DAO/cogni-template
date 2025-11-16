@@ -108,7 +108,10 @@ pnpm setup github --env production
      - `SSH_DEPLOY_KEY` (from `~/.ssh/cogni_template_<env>_deploy`)
      - `VM_HOST` (from `.env.<env>` file)
      - `DOMAIN` (prompt user for their domain)
+   - **Repository secrets:** (shared across environments)
      - `GHCR_DEPLOY_TOKEN` (prompt user to create GitHub PAT)
+     - `CHERRY_AUTH_TOKEN` (prompt user for Cherry Servers API token)
+     - `SONAR_TOKEN` (prompt user to create SonarCloud token)
 
 3. **Apply branch protection rules:**
    - `main`: 2 required reviews, required checks, enforce for admins
@@ -116,6 +119,7 @@ pnpm setup github --env production
 
 4. **Print GitHub Apps checklist:**
    - Install URLs for: `cogni-git-review`, `cogni-git-admin`, `sonarcloud`
+   - **SonarCloud setup:** Generate token at https://sonarcloud.io/account/security → Add as SONAR_TOKEN repo secret
 
 ## Key Dependencies Resolved
 

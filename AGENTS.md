@@ -30,7 +30,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 - **Framework:** Next.js (TypeScript, App Router)
 - **Infra:** Docker + OpenTofu → Spheron (managed Akash)
-- **Toolchain:** pnpm, ESLint, Prettier, Vitest, Playwright
+- **Toolchain:** pnpm, ESLint, Prettier, Vitest, Playwright, SonarQube
 - **CI entrypoint:** `pnpm check`
 
 ## Pointers
@@ -50,6 +50,7 @@ pnpm dev            # start dev server
 pnpm build          # build for production
 pnpm check          # lint + type + format validation
 pnpm test           # run unit/integration tests (no server required)
+pnpm test:ci        # run tests with coverage for CI/CD
 pnpm test:api        # API integration tests (requires server)
 pnpm format         # prettier format fixes
 pnpm check:docs     # lint AGENTS.md documentation
