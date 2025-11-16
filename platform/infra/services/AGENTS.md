@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-12
+- **Last reviewed:** 2025-11-16
 - **Status:** draft
 
 ## Purpose
@@ -14,6 +14,7 @@ Service-specific configurations for supporting infrastructure like LLM routing, 
 
 ## Pointers
 
+- [runtime/](runtime/): Production and development Docker Compose stacks
 - [loki-promtail/](loki-promtail/): Log aggregation and monitoring stack
 - [litellm/](litellm/): LLM model routing and budget configurations
 - [langfuse/](langfuse/): Observability and telemetry stack
@@ -35,7 +36,7 @@ Service-specific configurations for supporting infrastructure like LLM routing, 
 - **Routes (if any):** none
 - **CLI (if any):** docker-compose commands
 - **Env/Config keys:** Service-specific environment variables
-- **Files considered API:** `*/docker-compose.yml`, `*/config.yaml`
+- **Files considered API:** `runtime/docker-compose.yml`, `runtime/docker-compose.dev.yml`, `*/config.yaml`
 
 ## Ports (optional)
 
@@ -53,8 +54,11 @@ Service-specific configurations for supporting infrastructure like LLM routing, 
 Minimal local commands:
 
 ```bash
-# Future implementation
-docker-compose -f litellm/docker-compose.yml up
+# Development stack (DB + LiteLLM for local dev)
+docker-compose -f runtime/docker-compose.dev.yml up -d
+
+# Production stack (full application stack)
+docker-compose -f runtime/docker-compose.yml up -d
 ```
 
 ## Standards

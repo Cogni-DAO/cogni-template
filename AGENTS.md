@@ -47,6 +47,8 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 ```bash
 pnpm dev            # start dev server
+pnpm dev:stack      # start dev server + infrastructure (main dev workflow)
+pnpm docker:stack   # start full production simulation locally
 pnpm build          # build for production
 pnpm check          # lint + type + format validation
 pnpm test           # run unit/integration tests (no server required)
