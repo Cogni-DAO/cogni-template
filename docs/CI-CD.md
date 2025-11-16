@@ -61,3 +61,40 @@ push to main → build-prod.yml → manual deploy-production.yml
 - **Automated:** E2E success triggers promotion
 - **Enforced:** Workflow prevents bypass of staging gate
 - **Rollback-ready:** Any prod image can be redeployed
+
+## Branch Configuration Settings
+
+### Repository-wide Settings
+
+**Settings → General → Pull Requests:**
+
+- Enable: "Allow squash merging"
+- Enable: "Allow merge commits"
+- Disable: "Allow rebase merging"
+
+### Branch Protection: staging
+
+**Settings → Branches → staging:**
+
+- Require pull request before merging
+- Require status checks to pass: `ci`, `cogni-git-review`, many others
+- Require linear history (enforces squash merge)
+
+### Branch Protection: main
+
+**Settings → Branches → main:**
+
+- Require pull request before merging
+- Require status checks to pass: `ci`, `block-non-release`
+- DO NOT require linear history (allows merge commits from release/\*)
+
+### Workflow Enforcement
+
+- `block-non-release-prs-to-main.yml` ensures only `release/*` branches can target main
+
+---
+
+## Related Documentation
+
+- [Application Architecture](ARCHITECTURE.md) - Hexagonal design and code organization
+- [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) - Infrastructure and deployment details

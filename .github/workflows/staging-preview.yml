@@ -216,13 +216,31 @@ jobs:
           cat > /tmp/pr/body.md << 'EOF'
           ## 🚀 Automated Release Promotion
 
-          Source: `staging`
-          Target: `main`
+          Source: staging
+          Target: main
 
           ### Commits in this release
           EOF
           # Append one-line commits from main..HEAD (release branch)
           git log --oneline origin/main..HEAD >> /tmp/pr/body.md
+
+      - name: Derive release PR title
+        id: title
+        run: |
+          # Ensure we have main in this clone
+          git fetch origin main:origin/main
+
+          # Get commit subjects ahead of main (on the release branch)
+          COMMITS=$(git log --pretty=%s origin/main..HEAD || true)
+          COUNT=$(printf "%s\n" "$COMMITS" | grep -c . || true)
+
+          if [ "$COUNT" -eq 1 ]; then
+            SUBJECT=$(printf "%s\n" "$COMMITS" | head -n1 | sed 's/ (#[0-9]\+)$//')
+            echo "title=$SUBJECT" >> $GITHUB_OUTPUT
+          else
+            DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            echo "title=release: $DATE" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create PR release/* -> main
         env:
@@ -231,6 +249,6 @@ jobs:
           gh pr create \
             --base main \
             --head "${{ steps.meta.outputs.branch }}" \
-            --title "release: ${{ steps.meta.outputs.branch }}" \
+            --title "${{ steps.title.outputs.title }}" \
             --body-file /tmp/pr/body.md \
           || gh pr view --head "${{ steps.meta.outputs.branch }}" >/dev/null
