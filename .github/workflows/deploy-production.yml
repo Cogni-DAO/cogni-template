@@ -34,7 +34,8 @@ jobs:
           if [ -n "${{ github.event.inputs.image_tag }}" ]; then
             IMAGE_TAG="${{ github.event.inputs.image_tag }}"
           else
-            IMAGE_TAG="prod-${GITHUB_SHA}"
+            # Use the SHA from the triggering workflow run, not the current workflow
+            IMAGE_TAG="prod-${{ github.event.workflow_run.head_sha }}"
           fi
 
           echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
@@ -97,7 +98,7 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Image:** \`${IMAGE_NAME}:${IMAGE_TAG}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Domain:** \`${{ secrets.DOMAIN }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Commit:** \`${GITHUB_SHA}\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** \`${{ github.event.workflow_run.head_sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Services Deployed" >> $GITHUB_STEP_SUMMARY
           echo "- 🎯 **Main App:** \`${{ secrets.DOMAIN }}\`" >> $GITHUB_STEP_SUMMARY

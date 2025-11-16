@@ -352,3 +352,10 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 - **Auth is centralized.** Use one `guard()` for session/API-key scopes, rate-limit, idempotency. No per-route ad-hoc checks.
 - **Observability is mandatory.** Trace every call with `contractId`, `subject`, and cost/usage. Log denials.
 - **Adapters are pure infra.** No UI, no business rules. Implement ports only. Promote creeping helpers into ports or core.
+
+---
+
+## Related Documentation
+
+- [CI/CD Pipeline Flow](CI-CD.md) - Branch model, workflows, and deployment automation
+- [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) - Infrastructure and deployment details
