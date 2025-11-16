@@ -111,14 +111,16 @@ push to main → build-prod.yml → manual deploy-production.yml
 **Settings → Branches → main:**
 
 - Require pull request before merging
-- Require status checks to pass: `ci`
+- Require status checks to pass:
+  - `ci`
+  - `require-pinned-release-branch` (prevents modified release branches)
 - DO NOT require linear history (allows merge commits from release/\*)
 - DO NOT require branches to be up to date (release/\* branches are clean snapshots)
 - Optional: Restrict pushes to admins only
 
 ### Workflow Enforcement
 
-- `block-non-release-prs-to-main.yml` ensures only `release/*` branches can target main
+- `require-pinned-release-prs-to-main.yml` ensures only `release/*` branches can target main AND that release branches match their tested SHA suffix
 
 ---
 
