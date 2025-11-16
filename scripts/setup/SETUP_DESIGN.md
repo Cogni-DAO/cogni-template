@@ -116,6 +116,7 @@ pnpm setup github --env production
 3. **Apply branch protection rules:**
    - `main`: 2 required reviews, required checks, enforce for admins
    - `staging`: 1 required review, required checks
+   - **Note:** SonarCloud creates two separate checks: `sonar` (GitHub Action job) and `SonarCloud Code Analysis` (Quality Gate). Both should be added to required checks.
 
 4. **Print GitHub Apps checklist:**
    - Install URLs for: `cogni-git-review`, `cogni-git-admin`, `sonarcloud`

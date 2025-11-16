@@ -1,13 +1,14 @@
-name: Enforce release/* → main PRs only
+name: Require pinned release PRs to main
 
 on:
   pull_request:
     branches: [main]
 
-permissions: {} # lock GITHUB_TOKEN to no permissions
+permissions:
+  contents: read # needed for checkout
 
 jobs:
-  require-release-branch:
+  require-pinned-release-branch:
     runs-on: ubuntu-latest
     steps:
       - name: Fail PR if head is not release/*
@@ -16,3 +17,33 @@ jobs:
           echo "Only branches matching release/* may open PRs into main."
           echo "Create a PR into staging, then a release/* branch, then PR release/* → main."
           exit 1
+
+      - uses: actions/checkout@v4
+        if: startsWith(github.head_ref, 'release/')
+        with:
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+
+      - name: Fail if release head != pinned SHA
+        if: startsWith(github.head_ref, 'release/')
+        run: |
+          BRANCH="${GITHUB_HEAD_REF}"
+
+          # Extract the short SHA suffix from release/YYYYMMDD-<shortsha>
+          PIN=$(echo "$BRANCH" | sed -E 's/^release\/[0-9]{8}-([0-9a-f]{8})$/\1/')
+          if [ -z "$PIN" ]; then
+            echo "ERROR: Branch name $BRANCH does not match expected release pattern."
+            echo "Expected: release/YYYYMMDD-<8-char-sha>"
+            exit 1
+          fi
+
+          HEAD_SHORT=$(git rev-parse --short=8 HEAD)
+
+          if [ "$HEAD_SHORT" != "$PIN" ]; then
+            echo "ERROR: Release branch head $HEAD_SHORT does not match pinned SHA $PIN."
+            echo "This branch has been modified after promotion (e.g., 'Update branch' or extra commits)."
+            echo "Close this PR and re-run staging-preview to create a new release/*."
+            exit 1
+          fi
+
+          echo "OK: release head ($HEAD_SHORT) matches pinned SHA ($PIN)."
