@@ -64,7 +64,7 @@ _We're working to automate more of this! Want to help? Contribute setup automati
 - Create [GitHub PAT](https://github.com/settings/tokens/new?scopes=read:packages) for container registry CI/CD
 - Enable your git repo to contribute packages to your git org
 - Set up GitHub environments and secrets manually
-- Configure branch protection rules
+- Configure branch protection rules (see docs/CI-CD.md)
 
 **DAO Setup**
 
