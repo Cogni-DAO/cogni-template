@@ -24,7 +24,7 @@ export function Terminal(): ReactElement {
     "git clone https://github.com/Cogni-DAO/cogni-template",
     "cd cogni-template",
     "pnpm setup local",
-    "pnpm dev 🎉",
+    "pnpm dev:stack 🎉",
   ];
   const [currentStep, setCurrentStep] = useState(0);
   const [copied, setCopied] = useState(false);
