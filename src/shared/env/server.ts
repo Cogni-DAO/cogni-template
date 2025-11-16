@@ -4,10 +4,10 @@
 /**
  * Module: `@shared/env/server`
  * Purpose: Server-side environment variable validation and type-safe configuration schema using Zod.
- * Scope: Validates process.env for server runtime; provides serverEnv object. Does not handle client-side env vars.
- * Invariants: All required env vars validated on first access; provides boolean flags for NODE_ENV variants; fails fast on invalid env.
+ * Scope: Validates process.env for server runtime; provides serverEnv object with APP_ENV support. Does not handle client-side env vars.
+ * Invariants: All required env vars validated on first access; provides boolean flags for runtime and test modes; fails fast on invalid env.
  * Side-effects: process.env
- * Notes: Includes LLM config for Stage 8; validates URLs and secrets; provides default values where appropriate.
+ * Notes: Includes APP_ENV for adapter wiring; LLM config; validates URLs and secrets; production guard prevents test mode in prod.
  * Links: Environment configuration specification
  * @public
  */
@@ -34,6 +34,24 @@ const serverSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
+
+  // Application environment (controls adapter wiring)
+  APP_ENV: z
+    .enum(["test"])
+    .optional()
+    .refine(
+      (appEnv) => {
+        const nodeEnv = process.env.NODE_ENV;
+        // Hard guard: APP_ENV=test must be rejected in production deployments
+        if (appEnv === "test" && nodeEnv === "production") {
+          return false;
+        }
+        return true;
+      },
+      {
+        message: "APP_ENV=test is forbidden in production deployments",
+      }
+    ),
 
   // Required now
   DATABASE_URL: z.string().min(1),
@@ -63,6 +81,7 @@ type ParsedEnv = z.infer<typeof serverSchema> & {
   isDev: boolean;
   isTest: boolean;
   isProd: boolean;
+  isTestMode: boolean;
 };
 
 let _serverEnv: ParsedEnv | null = null;
@@ -71,11 +90,17 @@ function getServerEnv(): ParsedEnv {
   if (_serverEnv === null) {
     try {
       const parsed = serverSchema.parse(process.env);
+      const isDev = parsed.NODE_ENV === "development";
+      const isTest = parsed.NODE_ENV === "test";
+      const isProd = parsed.NODE_ENV === "production";
+      const isTestMode = parsed.APP_ENV === "test";
+
       _serverEnv = {
         ...parsed,
-        isDev: parsed.NODE_ENV === "development",
-        isTest: parsed.NODE_ENV === "test",
-        isProd: parsed.NODE_ENV === "production",
+        isDev,
+        isTest,
+        isProd,
+        isTestMode,
       };
     } catch (error) {
       if (error instanceof ZodError) {

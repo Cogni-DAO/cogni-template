@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-14
+- **Last reviewed:** 2025-11-16
 - **Status:** draft
 
 ## Purpose
 
-Single source of truth for environment variables. Validates at load time with Zod. Separates server-only and public client vars.
+Single source of truth for environment variables. Validates at load time with Zod. Separates server-only and public client vars. Includes APP_ENV for adapter selection.
 
 ## Pointers
 
@@ -73,6 +73,7 @@ LLM (Stage 8):
 Optional:
 
 - NODE_ENV (development|test|production, default development)
+- APP_ENV (test, optional; triggers fake adapters when set; production guard prevents APP_ENV=test in prod)
 - PORT (default 3000)
 - PINO_LOG_LEVEL (trace|debug|info|warn|error, default info)
 
