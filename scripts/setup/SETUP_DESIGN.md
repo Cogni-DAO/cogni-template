@@ -119,7 +119,11 @@ pnpm setup github --env production
 
 4. **Print GitHub Apps checklist:**
    - Install URLs for: `cogni-git-review`, `cogni-git-admin`, `sonarcloud`
-   - **SonarCloud setup:** Generate token at https://sonarcloud.io/account/security → Add as SONAR_TOKEN repo secret
+   - **SonarCloud setup:**
+     1. Create SonarCloud project for your repo and organization
+     2. Update `sonar-project.properties` with your organization and project key
+     3. Disable "Automatic Analysis" in Project Settings → Analysis Method
+     4. Generate token at https://sonarcloud.io/account/security → Add as SONAR_TOKEN repo secret
 
 ## Key Dependencies Resolved
 
