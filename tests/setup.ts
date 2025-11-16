@@ -12,7 +12,7 @@
  * @public
  */
 
-import { Agent, Dispatcher, setGlobalDispatcher } from "undici";
+import { Agent, type Dispatcher, setGlobalDispatcher } from "undici";
 import { afterEach, beforeAll } from "vitest";
 
 /**
@@ -51,29 +51,39 @@ beforeAll(() => {
     },
   });
 
-  // Custom dispatcher that routes based on origin
-  class CustomDispatcher extends Dispatcher {
-    override dispatch(
+  // Custom dispatcher as plain object implementing Dispatcher interface
+  const dispatcher = {
+    dispatch(
       opts: Dispatcher.DispatchOptions,
       handler: Dispatcher.DispatchHandler
-    ): boolean {
-      const origin = opts.origin;
+    ) {
+      const origin = String(opts.origin ?? "");
       const isLocalhost =
-        origin === "https://localhost" ||
-        origin === "https://127.0.0.1" ||
-        (typeof origin === "string" &&
-          (origin.startsWith("https://localhost:") ||
-            origin.startsWith("https://127.0.0.1:")));
+        origin.startsWith("https://localhost") ||
+        origin.startsWith("https://127.0.0.1");
 
       const agent = isLocalhost ? localhostAgent : strictAgent;
       return agent.dispatch(opts, handler);
-    }
-  }
-
-  const customDispatcher = new CustomDispatcher();
+    },
+    close() {
+      strictAgent.close();
+      localhostAgent.close();
+      return Promise.resolve();
+    },
+    destroy(err?: Error | null) {
+      if (err) {
+        strictAgent.destroy(err);
+        localhostAgent.destroy(err);
+      } else {
+        strictAgent.destroy();
+        localhostAgent.destroy();
+      }
+      return Promise.resolve();
+    },
+  } as Dispatcher;
 
   // Set the global dispatcher for all fetch requests
-  setGlobalDispatcher(customDispatcher);
+  setGlobalDispatcher(dispatcher);
 });
 
 afterEach(() => {
