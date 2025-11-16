@@ -65,6 +65,7 @@ _We're working to automate more of this! Want to help? Contribute setup automati
 - Enable your git repo to contribute packages to your git org
 - Set up GitHub environments and secrets manually
 - Configure branch protection rules (see docs/CI-CD.md)
+- **SonarCloud setup:** Generate token at [SonarCloud Security](https://sonarcloud.io/account/security) → Add as `SONAR_TOKEN` repository secret
 
 **DAO Setup**
 

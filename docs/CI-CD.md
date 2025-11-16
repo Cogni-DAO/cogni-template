@@ -65,7 +65,8 @@ push to main → build-prod.yml → manual deploy-production.yml
 ## Key Features
 
 - **Fork-safe:** No secrets in PR CI checks
-- **SHA-pinned:** Release branches locked to tested commits
+- **SHA-pinned:** Release branches locked to tested commits via `${GITHUB_SHA}`
+- **SHA-enforced:** CI prevents modification of release branches after promotion
 - **Automated:** E2E success triggers promotion
 - **Enforced:** Workflow prevents bypass of staging gate
 - **Rollback-ready:** Any prod image can be redeployed

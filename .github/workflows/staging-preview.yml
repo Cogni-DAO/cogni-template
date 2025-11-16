@@ -207,7 +207,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -B "${{ steps.meta.outputs.branch }}" origin/staging
+
+          git fetch origin
+          # pin to the *tested* commit
+          git checkout -B "${{ steps.meta.outputs.branch }}" "${GITHUB_SHA}"
           git push origin "${{ steps.meta.outputs.branch }}"
 
       - name: Create PR body with commit list

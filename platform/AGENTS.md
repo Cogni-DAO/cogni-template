@@ -32,7 +32,7 @@ Platform-level tooling for infrastructure, CI/CD, development environment setup,
 - **Exports:** Infrastructure configurations, CI scripts, bootstrap installers
 - **Routes (if any):** none
 - **CLI (if any):** Bootstrap scripts in `bootstrap/install/`
-- **Env/Config keys:** `CHERRY_AUTH_TOKEN`, `GHCR_PAT`, deployment vars
+- **Env/Config keys:** `CHERRY_AUTH_TOKEN`, `GHCR_DEPLOY_TOKEN`, `SONAR_TOKEN`, deployment vars
 - **Files considered API:** `infra/providers/*/variables.tf`, CI scripts
 
 ## Ports (optional)
