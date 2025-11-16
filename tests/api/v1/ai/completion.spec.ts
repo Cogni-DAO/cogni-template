@@ -21,7 +21,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 describe("API /v1/ai/completion", () => {
   // These tests run against fake adapter in CI (APP_ENV=test)
 
-  const API_BASE = process.env.TEST_API_BASE_URL ?? "http://localhost:3000";
+  const API_BASE = process.env.TEST_BASE_URL ?? "http://localhost:3000";
   const COMPLETION_ENDPOINT = `${API_BASE}/api/v1/ai/completion`;
 
   beforeAll(async () => {

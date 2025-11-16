@@ -16,7 +16,8 @@ services:
     networks:
       - web
     environment:
-      - NODE_ENV=production
+      - NODE_ENV=${NODE_ENV:-production}
+      - APP_ENV=${APP_ENV}
       - APP_BASE_URL=https://${DOMAIN}
       - DATABASE_URL=${DATABASE_URL}
       - LITELLM_BASE_URL=http://litellm:4000

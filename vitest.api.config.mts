@@ -16,8 +16,12 @@ import { defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { config } from "dotenv";
 
-// Load .env for API integration tests
-config({ path: ".env" });
+// Load .env.local for API integration tests
+config({ path: ".env.local" });
+
+// Accept self-signed certificates for local HTTPS testing
+// eslint-disable-next-line no-undef
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 
 export default defineConfig({
   root: ".",

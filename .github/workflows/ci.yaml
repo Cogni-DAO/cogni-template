@@ -63,6 +63,8 @@ jobs:
       POSTGRES_DB: cogni_template_test
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
+      TEST_BASE_URL: https://localhost/
+      NODE_TLS_REJECT_UNAUTHORIZED: 0 # Allow self-signed https certs for localhost
       # Critically: DO NOT expose real OPENROUTER_API_KEY - CI uses fake adapter
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -83,12 +85,12 @@ jobs:
         run: |
           # If build times take too long, consider a job step with buildx + type=gha cache
           docker compose -f platform/infra/services/runtime/docker-compose.yml \
-            up -d --build app postgres litellm
+            up -d --build app postgres litellm caddy
 
       - name: Wait for app healthcheck
         run: |
           for i in {1..30}; do
-            if curl -sf http://localhost:3000/api/v1/meta/health > /dev/null; then
+            if curl -sf http://localhost/api/v1/meta/health > /dev/null; then
               echo "App is healthy"; exit 0;
             fi
             echo "Waiting for app... $i/30"; sleep 3;

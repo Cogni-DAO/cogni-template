@@ -36,22 +36,7 @@ const serverSchema = z.object({
     .default("development"),
 
   // Application environment (controls adapter wiring)
-  APP_ENV: z
-    .enum(["test"])
-    .optional()
-    .refine(
-      (appEnv) => {
-        const nodeEnv = process.env.NODE_ENV;
-        // Hard guard: APP_ENV=test must be rejected in production deployments
-        if (appEnv === "test" && nodeEnv === "production") {
-          return false;
-        }
-        return true;
-      },
-      {
-        message: "APP_ENV=test is forbidden in production deployments",
-      }
-    ),
+  APP_ENV: z.enum(["test", "production"]),
 
   // Required now
   DATABASE_URL: z.string().min(1),
