@@ -60,6 +60,9 @@ describe("serverEnv APP_ENV validation", () => {
       LITELLM_MASTER_KEY: "test-key",
     });
 
+    // Ensure APP_ENV is truly missing (global setup might have set it)
+    delete process.env.APP_ENV;
+
     const { ensureServerEnv, EnvValidationError } = await import(
       "@/shared/env/server"
     );

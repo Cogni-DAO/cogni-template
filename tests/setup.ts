@@ -12,6 +12,8 @@
  * @public
  */
 
+import https from "https";
+import fetch, { Headers, Request, Response } from "node-fetch";
 import { afterEach, beforeAll } from "vitest";
 
 /**
@@ -27,14 +29,51 @@ beforeAll(() => {
   // Set test environment - minimal required for env validation
   Object.assign(process.env, {
     NODE_ENV: "test",
+    APP_ENV: "test",
     // Disable external service calls for unit tests
     DISABLE_TELEMETRY: "true",
     DISABLE_EXTERNAL_CALLS: "true",
     // Minimal env vars to prevent validation failures
     // Real integration tests will override these
     DATABASE_URL: "postgresql://test:test@localhost:5432/test",
-    NEXTAUTH_SECRET: "test-secret-for-validation-only",
+    LITELLM_MASTER_KEY: "test-key",
   });
+
+  // HTTPS agent that trusts self-signed certs
+  const localHttpsAgent = new https.Agent({
+    rejectUnauthorized: false,
+  });
+
+  // Wrap fetch: only relax TLS for localhost HTTPS
+  const wrappedFetch: typeof globalThis.fetch = (input, init) => {
+    const url = typeof input === "string" ? input : input.toString();
+
+    if (
+      url.startsWith("https://localhost") ||
+      url.startsWith("https://127.0.0.1")
+    ) {
+      return fetch(url, {
+        ...init,
+        // node-fetch-specific agent option
+        agent: localHttpsAgent,
+      } as Parameters<typeof fetch>[1]) as ReturnType<typeof globalThis.fetch>;
+    }
+
+    // All other requests use normal validation
+    return fetch(url, init as Parameters<typeof fetch>[1]) as ReturnType<
+      typeof globalThis.fetch
+    >;
+  };
+
+  // Install node-fetch as the global fetch for tests
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).fetch = wrappedFetch;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).Request = Request;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).Response = Response;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).Headers = Headers;
 });
 
 afterEach(() => {
