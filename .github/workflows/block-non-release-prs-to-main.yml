@@ -7,11 +7,11 @@ on:
 permissions: {} # lock GITHUB_TOKEN to no permissions
 
 jobs:
-  block-non-release:
+  require-release-branch:
     runs-on: ubuntu-latest
-    if: ${{ !startsWith(github.head_ref, 'release/') }}
     steps:
-      - name: Fail PR
+      - name: Fail PR if head is not release/*
+        if: ${{ !startsWith(github.head_ref, 'release/') }}
         run: |
           echo "Only branches matching release/* may open PRs into main."
           echo "Create a PR into staging, then a release/* branch, then PR release/* → main."
