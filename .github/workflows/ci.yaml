@@ -1,33 +1,105 @@
 name: CI
-on: pull_request
+
+on:
+  pull_request:
+  push:
+    branches: [staging, main]
+
 permissions:
   contents: read
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  NEXT_TELEMETRY_DISABLED: 1
+  NODE_VERSION: "20"
+
 jobs:
   ci:
     runs-on: ubuntu-latest
     env:
-      NEXT_TELEMETRY_DISABLED: 1
-      # dummy env vars for build
       NODE_ENV: test
       DATABASE_URL: sqlite://build.db
       LITELLM_MASTER_KEY: build-key
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+
+      - uses: pnpm/action-setup@c5ba7f7862a0f64c1b1a05fbac13e0b8e86ba08c # v4
         with:
           version: 9
 
-      - name: Install
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
       - name: Repository policy check
         run: pnpm repo-check
+
       - name: REUSE SPDX compliance
-        uses: fsfe/reuse-action@v6
-      - run: pnpm check
-      - run: pnpm build
+        uses: fsfe/reuse-action@772649cfa03a64a08c458c7cca9a6a473d74e7f9 # v6
+
+      - name: Full static + unit test suite
+        run: pnpm check
+        # check runs: typecheck, lint, format:check, tests, check:docs, repo-check
+
+  integration-test:
+    runs-on: ubuntu-latest
+    needs: ci
+    env:
+      NODE_ENV: test/
+      APP_ENV: test
+      DATABASE_URL: postgresql://user:password@postgres:5432/cogni_template_test
+      # Docker Compose environment variables
+      APP_IMAGE: cogni-template-ci-${{ github.sha }}
+      DOMAIN: localhost
+      LITELLM_MASTER_KEY: test-key
+      OPENROUTER_API_KEY: test-key
+      POSTGRES_DB: cogni_template_test
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      TEST_BASE_URL: https://localhost/
+      # Critically: DO NOT expose real OPENROUTER_API_KEY - CI uses fake adapter
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+
+      - uses: pnpm/action-setup@c5ba7f7862a0f64c1b1a05fbac13e0b8e86ba08c # v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Start app + DB stack
+        run: |
+          # If build times take too long, consider a job step with buildx + type=gha cache
+          docker compose -f platform/infra/services/runtime/docker-compose.yml \
+            up -d --build app postgres litellm caddy
+
+      - name: Wait for app healthcheck
+        run: |
+          for i in {1..30}; do
+            if curl -sf http://localhost/api/v1/meta/health > /dev/null; then
+              echo "App is healthy"; exit 0;
+            fi
+            echo "Waiting for app... $i/30"; sleep 3;
+          done
+          echo "App failed to become healthy"; exit 1
+
+      - name: Run API tests
+        run: pnpm test:api
+
+      - name: Teardown stack
+        if: always()
+        run: |
+          docker compose -f platform/infra/services/runtime/docker-compose.yml down -v

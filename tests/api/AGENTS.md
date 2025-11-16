@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-11
+- **Last reviewed:** 2025-11-16
 - **Status:** draft
 
 ## Purpose
 
-Test API endpoints by making HTTP requests to a running Next.js server.
+Test API endpoints by making HTTP requests to a running Next.js server. Uses fake adapters in CI via APP_ENV=test.
 
 ## Pointers
 
@@ -32,12 +32,12 @@ Test API endpoints by making HTTP requests to a running Next.js server.
 - **Exports:** none
 - **Routes:** none
 - **CLI:** `pnpm test:api`
-- **Env/Config keys:** `TEST_BASE_URL`
+- **Env/Config keys:** `TEST_BASE_URL`, `APP_ENV` (triggers fake adapters)
 - **Files considered API:** `*.spec.ts`
 
 ## Responsibilities
 
-- This directory **does:** verify API endpoints work end-to-end
+- This directory **does:** verify API endpoints work end-to-end; assert fake adapter responses in CI
 - This directory **does not:** test business logic or adapter implementations
 
 ## Usage
@@ -68,4 +68,5 @@ pnpm test:api
 
 - Requires running Next.js server
 - Uses `TEST_BASE_URL` environment variable (defaults to http://127.0.0.1:3000 if not set)
+- CI sets `APP_ENV=test` to use fake adapters for deterministic responses
 - No .env.test file needed - defaults handle local development

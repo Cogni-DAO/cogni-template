@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-13
+- **Last reviewed:** 2025-11-16
 - **Status:** draft
 
 ## Purpose
@@ -55,7 +55,7 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
 
 ## Responsibilities
 
-- This directory **does**: Environment validation, dependency injection wiring
+- This directory **does**: Environment validation, dependency injection wiring, environment-based adapter selection
 - This directory **does not**: System installation, platform configuration
 
 ## Usage

@@ -25,6 +25,7 @@ export default [
       "src/styles/**/index.ts",
       "src/ports/index.ts",
       "src/adapters/server/index.ts",
+      "src/adapters/test/index.ts",
       "tests/_fakes/index.ts",
     ],
     plugins: {

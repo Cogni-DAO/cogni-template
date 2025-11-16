@@ -32,7 +32,7 @@ End-to-end Playwright tests for API routes and UI workflows.
 - **Exports:** none
 - **Routes (if any):** Tests all routes externally
 - **CLI (if any):** pnpm e2e, pnpm e2e:smoke, pnpm e2e:prod, pnpm e2e:all, pnpm e2e:debug, pnpm e2e:report
-- **Env/Config keys:** E2E_BASE_URL
+- **Env/Config keys:** TEST_BASE_URL
 - **Files considered API:** none
 
 ## Ports (optional)
@@ -61,7 +61,7 @@ pnpm e2e:all    # both projects
 
 - Black-box testing only
 - Directory-based test organization: tests/smoke/ (prod-safe), tests/full/ (staging-only)
-- Environment-driven via E2E_BASE_URL
+- Environment-driven via TEST_BASE_URL
 
 ## Dependencies
 
