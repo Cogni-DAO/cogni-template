@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@shared/env/server edge cases`
+ * Module: `@shared/env/server/edge-cases`
  * Purpose: Minimal tests to hit stubborn uncovered branches in server env module.
  * Scope: Non-ZodError fallback and proxy trap methods only. Does NOT test business logic.
  * Invariants: Surgical coverage of defensive code paths.
