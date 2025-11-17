@@ -33,6 +33,7 @@ export default defineConfig({
       "tests/_fakes/**",
       "tests/_fixtures/**",
       "tests/integration/**",
+      "tests/stack/**",
     ],
     coverage: {
       enabled: false,
