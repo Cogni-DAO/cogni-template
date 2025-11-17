@@ -42,7 +42,8 @@ _Status: Complete - database foundation with full test coverage_
 [x] Add database dependencies (`drizzle-orm`, `postgres`) to `package.json`
 [x] Create `drizzle.config.ts` for migration management
 [x] Design accounts table schema in `src/shared/db/schema.ts`:
-```sql
+
+````sql
 accounts (
 id TEXT PRIMARY KEY, -- maps to LlmCaller.accountId
 display_name TEXT, -- optional human-readable name
@@ -72,6 +73,46 @@ balance_credits DECIMAL(10,2) NOT NULL DEFAULT '0.00' -- computed from ledger
 - `src/shared/db/schema.ts` - Account and credit ledger tables
 - `src/adapters/server/db/client.ts` - Drizzle connection
 - `drizzle.config.ts` - Migration configuration
+
+### Stage 2.5: Account Provisioning
+
+_Status: Next - implement account creation at auth boundary_
+
+[ ] Create stable accountId derivation helper: `src/shared/util/account-id.ts`
+
+```typescript
+import { createHash } from "crypto";
+
+/**
+ * Derives a collision-safe account ID from API key
+ * Uses SHA256 hash to ensure stability and prevent collisions
+ */
+export function deriveAccountIdFromApiKey(apiKey: string): string {
+  return "key:" + createHash("sha256").update(apiKey).digest("hex").slice(0, 32);
+}
+```
+
+[ ] Update auth boundary in `src/app/api/v1/ai/completion/route.ts`:
+
+```typescript
+// Replace current caller construction with:
+const accountId = deriveAccountIdFromApiKey(apiKey);
+const caller = { accountId, apiKey };
+
+// Ensure account exists before proceeding
+await accountService.ensureAccountExistsForCaller(caller);
+```
+
+[ ] Add account provisioning to AccountService interface (Stage 4)
+[ ] Implement provisioning logic in adapter (Stage 5)
+[ ] Add integration tests for "first call creates account with zero balance"
+
+**MVP Provisioning Behavior:**
+
+- If no `accounts` row exists for `caller.accountId`, create one automatically
+- New accounts start with `balance_credits = 0`, `display_name = null`
+- Account creation happens atomically at auth boundary
+- No user interaction required for account provisioning
 
 ### Stage 3: Core Domain Layer
 
@@ -114,6 +155,7 @@ balanceCredits: number; // domain uses number, adapter handles Decimal conversio
 - Keep domain types clean (use `number`, not Drizzle `Decimal`)
 - Minimal surface area focused on credit validation
 - Follow existing `core/` patterns (`public.ts` exports, not `index.ts`)
+- Account IDs derived from stable, collision-safe hash (see Stage 2.5)
 
 ### Stage 4: Ports Layer
 
@@ -122,30 +164,37 @@ _Status: Next - define atomic service contracts_
 [ ] Define AccountService interface: `src/ports/accounts.port.ts`
 ```typescript
 export interface AccountService {
-getBalance(accountId: string): Promise<number>;
+  // Account provisioning - ensures account exists for new API keys
+  ensureAccountExistsForCaller(caller: LlmCaller): Promise<void>;
 
-      // Single atomic operation - prevents race conditions
-      debitForUsage(params: {
-        accountId: string;
-        cost: number;
-        requestId: string; // for audit trail
-        metadata?: Record<string, unknown>; // usage details
-      }): Promise<void>;
+  // Cached balance read - returns accounts.balance_credits (not recomputed from ledger)
+  getBalance(accountId: string): Promise<number>;
 
-      // For funding/testing flows
-      creditAccount(params: {
-        accountId: string;
-        amount: number;
-        reason: string;
-        reference?: string;
-      }): Promise<void>;
-    }
-    ```
+  // Single atomic operation - prevents race conditions
+  debitForUsage(params: {
+    accountId: string;
+    cost: number;
+    requestId: string; // for audit trail
+    metadata?: Record<string, unknown>; // usage details
+  }): Promise<void>;
+
+  // For funding/testing flows
+  creditAccount(params: {
+    accountId: string;
+    amount: number;
+    reason: string;
+    reference?: string;
+  }): Promise<void>;
+}
+```
 
 [ ] Add to ports index: `src/ports/index.ts`
 [ ] Create port contract tests: `tests/ports/accounts.port.contract.ts` - Reusable test harness for any AccountService implementation - Validates atomic operations and error conditions
 
-**Key Design**: Single `debitForUsage` operation prevents race conditions from separate check/deduct calls.
+**Key Decisions**:
+- Single `debitForUsage` operation prevents race conditions from separate check/deduct calls
+- `getBalance()` returns cached `accounts.balance_credits`, not recomputed from ledger
+- `ensureAccountExistsForCaller()` handles automatic account provisioning at auth boundary
 
 ### Stage 5: Database Adapter
 
@@ -153,89 +202,144 @@ _Status: Next - implement AccountService with ledger-based operations_
 
 [ ] Implement database adapter: `src/adapters/server/accounts/drizzle.adapter.ts`
 ```typescript
+/**
+ * CRITICAL TRANSACTION SEMANTICS:
+ * - All credit operations MUST be wrapped in a single db.transaction()
+ * - InsufficientCreditsError MUST NOT be caught within the transaction
+ * - On error, the transaction rolls back: no ledger entry, no balance change
+ * - This prevents persisting negative balances or incomplete ledger entries
+ */
 export class DrizzleAccountService implements AccountService {
-async debitForUsage({ accountId, cost, requestId, metadata }) {
-await this.db.transaction(async (tx) => {
-// Insert ledger entry (source of truth)
-await tx.insert(creditLedger).values({
-accountId,
-delta: -cost,
-reason: "ai_usage",
-reference: requestId,
-metadata
-});
+  async ensureAccountExistsForCaller(caller: LlmCaller): Promise<void> {
+    await this.db.transaction(async (tx) => {
+      const existing = await tx.query.accounts.findFirst({
+        where: eq(accounts.id, caller.accountId)
+      });
 
-          // Update computed balance
-          await tx
-            .update(accounts)
-            .set({ balanceCredits: sql`balance_credits - ${cost}` })
-            .where(eq(accounts.id, accountId));
-
-          // Verify sufficient balance after update
-          const account = await tx.query.accounts.findFirst({
-            where: eq(accounts.id, accountId)
-          });
-
-          if (!account || toNumber(account.balanceCredits) < 0) {
-            throw new InsufficientCreditsError(accountId, cost,
-              account ? toNumber(account.balanceCredits) + cost : 0);
-          }
+      if (!existing) {
+        await tx.insert(accounts).values({
+          id: caller.accountId,
+          balanceCredits: "0.00",
+          displayName: null
         });
       }
-    }
+    });
+  }
 
-    // Helper functions hide Drizzle decimal conversions
-    function toNumber(decimal: string): number { /* ... */ }
-    function fromNumber(num: number): string { /* ... */ }
-    ```
+  async debitForUsage({ accountId, cost, requestId, metadata }) {
+    await this.db.transaction(async (tx) => {
+      // Insert ledger entry (source of truth)
+      await tx.insert(creditLedger).values({
+        accountId,
+        delta: fromNumber(-cost),
+        reason: "ai_usage",
+        reference: requestId,
+        metadata
+      });
+
+      // Update computed balance
+      await tx
+        .update(accounts)
+        .set({ balanceCredits: sql`balance_credits - ${fromNumber(cost)}` })
+        .where(eq(accounts.id, accountId));
+
+      // Verify sufficient balance after update
+      const account = await tx.query.accounts.findFirst({
+        where: eq(accounts.id, accountId)
+      });
+
+      if (!account || toNumber(account.balanceCredits) < 0) {
+        // This throw causes transaction rollback - no persistence of negative balance
+        throw new InsufficientCreditsError(accountId, cost,
+          account ? toNumber(account.balanceCredits) + cost : 0);
+      }
+    });
+  }
+}
+
+// Helper functions hide Drizzle decimal conversions
+function toNumber(decimal: string): number { /* ... */ }
+function fromNumber(num: number): string { /* ... */ }
+```
 
 [ ] Create adapter exports: `src/adapters/server/accounts/index.ts`
 [ ] Update server adapter index: `src/adapters/server/index.ts`
-[ ] Integration tests: `tests/integration/adapters/accounts/` - Test against real database using existing infrastructure - Verify transaction rollbacks and error scenarios
+[ ] Integration tests: `tests/integration/adapters/accounts/`
+    - Test against real database using existing infrastructure
+    - **Transaction rollback tests**: Simulate insufficient balance, assert no ledger row inserted and balance unchanged
+    - **Concurrent debit tests**: Multiple simultaneous debits from near-zero balance, verify one fails and balance ≥ 0
+    - **Account provisioning tests**: First call for new API key creates account with zero balance
 [ ] Run port contract tests against database adapter
 
-**Key Design**: Ledger-based accounting with computed balance for token-ready architecture.
+**Key Design**: Ledger-based accounting with computed balance and explicit transaction semantics for token-ready architecture.
 
 ### Stage 6: Feature Integration
 
 _Status: Next - integrate credits with AI completion flow_
 
 [ ] Add pricing helper: `src/core/billing/pricing.ts`
-`typescript
-    export function calculateCost(usage: { totalTokens: number }): number {
-      // Simple token-to-credit conversion for MVP
-      return usage.totalTokens * 0.001; // 1k tokens = 1 credit
-    }
-    `
+
+```typescript
+const DEFAULT_MODEL = "gpt-3.5-turbo"; // fallback for missing model info
+
+export function calculateCost(params: {
+  modelId: string;
+  totalTokens: number;
+}): number {
+  // MVP: single flat rate regardless of model (future-proof interface)
+  return params.totalTokens * 0.001; // 1k tokens = 1 credit
+
+  // Future: model-specific pricing
+  // const modelPricing = { "gpt-4": 0.002, "gpt-3.5-turbo": 0.001 };
+  // return params.totalTokens * (modelPricing[params.modelId] || 0.001);
+}
+```
 [ ] Update completion service: `src/features/ai/services/completion.ts`
 ```typescript
 export async function execute(
-messages: Message[],
-llmService: LlmService,
-accountService: AccountService, // injected
-clock: Clock,
-caller: LlmCaller
+  messages: Message[],
+  llmService: LlmService,
+  accountService: AccountService, // injected
+  clock: Clock,
+  caller: LlmCaller
 ): Promise<Message> {
-// Apply domain rules and call LLM (existing logic)
-const result = await llmService.completion({ messages, caller });
+  // Apply domain rules (existing logic)
+  // ... existing message validation ...
 
-      // Calculate cost and debit credits atomically
-      const cost = calculateCost(result.usage || { totalTokens: 0 });
-      const requestId = generateRequestId(); // simple UUID
+  // Generate stable requestId before LLM call for consistent tracking
+  const requestId = generateRequestId(); // UUID for correlation
 
-      await accountService.debitForUsage({
-        accountId: caller.accountId,
-        cost,
-        requestId,
-        metadata: { model: result.providerMeta?.model, usage: result.usage }
-      });
+  // Call LLM with requestId for traceability
+  const result = await llmService.completion({
+    messages: trimmedMessages,
+    caller,
+    requestId // pass through for LiteLLM/Langfuse correlation
+  });
 
-      // Return response with timestamp
-      return { ...result.message, timestamp: clock.now() };
+  // Calculate cost with model-aware pricing
+  const cost = calculateCost({
+    modelId: result.providerMeta?.model ?? DEFAULT_MODEL,
+    totalTokens: result.usage?.totalTokens ?? 0,
+  });
+
+  // Debit credits atomically with full audit trail
+  await accountService.debitForUsage({
+    accountId: caller.accountId,
+    cost,
+    requestId, // same ID used for LLM call
+    metadata: {
+      model: result.providerMeta?.model,
+      usage: result.usage,
+      llmRequestId: result.providerMeta?.requestId // if LiteLLM provides one
     }
-    ```
+  });
 
-[ ] Update bootstrap container: `src/bootstrap/container.ts`  
+  // Return response with timestamp
+  return { ...result.message, timestamp: clock.now() };
+}
+```
+
+[ ] Update bootstrap container: `src/bootstrap/container.ts`
  - Wire AccountService adapter to port - Provide dependency injection for completion service
 [ ] Add error handling for credit scenarios in API route
 [ ] Integration tests: Credit flow end-to-end
@@ -243,11 +347,13 @@ const result = await llmService.completion({ messages, caller });
 **Critical Flow:**
 
 1. API receives request with Bearer token
-2. Extract accountId from token → create LlmCaller
-3. CompletionService calls LLM via LlmService
-4. Calculate actual usage cost from LLM response
-5. Deduct credits atomically via AccountService (with full audit trail)
-6. Return response (accept token waste on insufficient credits for MVP)
+2. Derive stable accountId from apiKey using SHA256 hash → create LlmCaller
+3. Ensure account exists (create with zero balance if needed)
+4. Generate requestId for correlation across systems
+5. CompletionService calls LLM via LlmService with requestId
+6. Calculate model-aware cost from LLM response
+7. Deduct credits atomically via AccountService (with full audit trail)
+8. Return response (accept token waste on insufficient credits for MVP)
 
 ### Stage 7: API Enhancement
 
@@ -263,7 +369,7 @@ _Status: Future - expose credit operations via API_
 _Status: Future - connect to blockchain payments_
 
 [ ] Design wallet payment detection system - Monitor USDC/token transfers to DAO contract - Write `credit_ledger` entries with `reason="onchain_deposit"`
-[ ] Implement on-chain payment monitoring  
+[ ] Implement on-chain payment monitoring
  - Block watcher service - Automatic credit top-up workflows
 [ ] Build payment reconciliation and audit systems
 [ ] Connect to DAO multi-sig wallet for payment collection
@@ -305,6 +411,21 @@ The existing `LlmCaller { accountId, apiKey }` interface remains unchanged. Cred
 - Enables full audit trail and future token reconciliation
 - Supports both off-chain (manual) and on-chain (token) funding sources
 
+### 6. Internal vs External Cost Accounting
+
+- **Internal credits** are our product pricing (fixed rate per token for MVP)
+- **LiteLLM spend** is actual upstream provider cost we pay
+- These intentionally diverge by design - credits are user-facing pricing, not cost accounting
+- LiteLLM's spend tracking remains canonical record of upstream provider costs
+- Future reconciliation can compare internal revenue vs external costs
+
+### 7. Stable Account ID Derivation
+
+- Account IDs derived using `SHA256(apiKey).slice(0,32)` for collision safety
+- Deterministic mapping ensures same API key always gets same account
+- Cryptographically safe against collisions (2^128 space)
+- Prefixed with "key:" for human readability: `key:a1b2c3d4...`
+
 ## Current State Summary
 
 **Completed Stages 1-2:**
@@ -317,3 +438,4 @@ The existing `LlmCaller { accountId, apiKey }` interface remains unchanged. Cred
 **Next Steps:** Complete the unchecked `[ ]` items in Stage 3 (Core Domain Layer), then proceed through Stages 4-6 for the MVP credit system.
 
 The foundation is designed for seamless token transition: Postgres becomes the real-time balance cache, tokens become the funding source.
+````
