@@ -3,7 +3,7 @@
 
 /**
  * Module: `@ports/accounts`
- * Purpose: Account service port interface for credit accounting operations.
+ * Purpose: Account service port interface and port-level errors for credit accounting operations.
  * Scope: Defines contracts for account creation, validation, and credit management. Does not implement business logic.
  * Invariants: All operations are atomic, account IDs are stable, credit operations maintain ledger integrity
  * Side-effects: none (interface definition only)
@@ -11,6 +11,53 @@
  * Links: Implemented by DrizzleAccountService, used by completion feature and admin endpoints
  * @public
  */
+
+/**
+ * Port-level error thrown by adapters when account has insufficient credits
+ * Structured data for feature layer to translate into domain errors
+ */
+export class InsufficientCreditsPortError extends Error {
+  constructor(
+    public readonly accountId: string,
+    public readonly cost: number,
+    public readonly previousBalance: number
+  ) {
+    super(
+      `Insufficient credits: account ${accountId} has ${previousBalance}, needs ${cost}`
+    );
+    this.name = "InsufficientCreditsPortError";
+  }
+}
+
+/**
+ * Port-level error thrown by adapters when account is not found
+ */
+export class AccountNotFoundPortError extends Error {
+  constructor(public readonly accountId: string) {
+    super(`Account not found: ${accountId}`);
+    this.name = "AccountNotFoundPortError";
+  }
+}
+
+/**
+ * Type guard to check if error is InsufficientCreditsPortError
+ */
+export function isInsufficientCreditsPortError(
+  error: unknown
+): error is InsufficientCreditsPortError {
+  return (
+    error instanceof Error && error.name === "InsufficientCreditsPortError"
+  );
+}
+
+/**
+ * Type guard to check if error is AccountNotFoundPortError
+ */
+export function isAccountNotFoundPortError(
+  error: unknown
+): error is AccountNotFoundPortError {
+  return error instanceof Error && error.name === "AccountNotFoundPortError";
+}
 
 export interface AccountService {
   /**
@@ -51,12 +98,12 @@ export interface AccountService {
 
   /**
    * Credit account for funding/testing flows
-   * Inserts positive delta into ledger
+   * Inserts positive delta into ledger and returns new balance atomically
    */
   creditAccount(params: {
     accountId: string;
     amount: number;
     reason: string;
     reference?: string;
-  }): Promise<void>;
+  }): Promise<{ newBalance: number }>;
 }

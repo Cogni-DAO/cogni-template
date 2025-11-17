@@ -12,6 +12,13 @@
  * @public
  */
 
-export { InsufficientCreditsError, isInsufficientCreditsError } from "./errors";
+export {
+  AccountNotFoundError,
+  InsufficientCreditsError,
+  isAccountNotFoundError,
+  isInsufficientCreditsError,
+  isUnknownApiKeyError,
+  UnknownApiKeyError,
+} from "./errors";
 export type { Account } from "./model";
 export { ensureHasCredits, hasSufficientCredits } from "./model";

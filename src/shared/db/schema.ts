@@ -12,7 +12,14 @@
  * @public
  */
 
-import { decimal, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import {
+  decimal,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 /**
  * Accounts table - tracks internal credit balances for LiteLLM virtual keys
@@ -24,6 +31,26 @@ export const accounts = pgTable("accounts", {
   balanceCredits: decimal("balance_credits", { precision: 10, scale: 2 })
     .notNull()
     .default("0.00"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+/**
+ * Credit ledger table - source of truth for all credit debits/credits
+ * Maintains append-only audit log with metadata for each balance mutation
+ */
+export const creditLedger = pgTable("credit_ledger", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  accountId: text("account_id")
+    .notNull()
+    .references(() => accounts.id, { onDelete: "cascade" }),
+  delta: decimal("delta", { precision: 10, scale: 2 }).notNull(),
+  reason: text("reason").notNull(),
+  reference: text("reference"),
+  metadata: jsonb("metadata")
+    .$type<Record<string, unknown> | null>()
+    .default(null),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
