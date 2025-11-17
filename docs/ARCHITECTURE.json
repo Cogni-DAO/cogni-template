@@ -1,0 +1,138 @@
+{
+  "system_name": "Cogni Crypto-Metered AI Infra Loop",
+  "purpose": "Provide a crypto-metered AI infrastructure where many clients (chat UI, agents, DAOs, scripts) all consume a shared AI backend via LiteLLM and LangGraph, with your app as the control plane.",
+  "core_principles": [
+    "Your Next.js + hexagonal app is the control plane, not just a chat UI.",
+    "LiteLLM is the inner LLM router + API-key + token-usage engine.",
+    "LangGraph is the business-logic/orchestration layer in front of LiteLLM.",
+    "All model calls go through a single LLM port in your hex core.",
+    "You lean on LiteLLM for raw token tracking and quotas, and only later add your own billing/credits abstraction on top."
+  ],
+  "major_components": {
+    "control_plane_app": {
+      "description": "Your Next.js hexagonal application (cogni-template) acting as the central control plane.",
+      "responsibilities": [
+        "Expose HTTP APIs to clients (e.g. /api/v1/ai/completion, /api/v1/ai/graph-run).",
+        "Implement hexagonal architecture: routes → feature services → ports → adapters.",
+        "Own domain concepts: accounts, orgs, (later) credits, wallets, DAO roles.",
+        "Map each account to one or more LiteLLM API keys or teams.",
+        "Call LangGraph flows and direct LLM calls via a single LLM port."
+      ]
+    },
+    "orchestration_layer": {
+      "name": "LangGraph",
+      "description": "Graph-based orchestration and business logic for multi-step reasoning and tools.",
+      "responsibilities": [
+        "Define flows for chat, agents, code review, proposal generation, etc.",
+        "Use an OpenAI-compatible client configured with baseURL pointing to the LiteLLM proxy.",
+        "Accept caller context (accountId, etc.) from the control plane and pass it through to LLM calls.",
+        "Return structured results to the control plane for HTTP responses or other clients."
+      ]
+    },
+    "model_and_metering_layer": {
+      "name": "LiteLLM Proxy",
+      "description": "Central LLM router and metering service behind the control plane and LangGraph.",
+      "responsibilities": [
+        "Route LLM calls to providers (OpenAI, OpenRouter, etc.).",
+        "Manage API keys, per-key quotas, routing rules, and provider failover.",
+        "Track token usage per key and store raw usage logs in its own database.",
+        "Expose OpenAI-compatible APIs used by LangGraph and direct completion calls."
+      ]
+    },
+    "llm_port_and_adapter": {
+      "description": "The narrow hex port and adapter layer between your core domain and LiteLLM.",
+      "responsibilities": [
+        "Define a single ModelRouterPort / llm.port interface inside your core.",
+        "Implement that interface using a LiteLLM adapter that calls the LiteLLM HTTP API.",
+        "Translate domain-level caller info (accountId) into LiteLLM-level API keys or routing metadata.",
+        "Normalize responses and usage info for the rest of the core."
+      ]
+    }
+  },
+  "call_flows": {
+    "simple_completion": {
+      "description": "Direct single-shot completion via your API.",
+      "steps": [
+        "Client calls HTTP endpoint (e.g. /api/v1/ai/completion) with input payload.",
+        "Route handler validates payload (contracts) and resolves account context (MVP: hardcoded demo account).",
+        "Route calls a feature/core service which invokes the LLM port with { modelId, messages, caller.accountId }.",
+        "LLM port uses LiteLLM adapter to call LiteLLM with the appropriate API key/config.",
+        "LiteLLM routes to provider, computes token usage, and returns the result.",
+        "Adapter normalizes the response and returns it back through the port to the route.",
+        "Route returns the final completion JSON to the client."
+      ]
+    },
+    "graph_run": {
+      "description": "Graph-based flow using LangGraph in front of LiteLLM.",
+      "steps": [
+        "Client calls HTTP endpoint (e.g. /api/v1/ai/graph-run) with graph input.",
+        "Route resolves account context and constructs a graph-run request.",
+        "Core GraphService invokes a LangGraph flow, passing in accountId and input.",
+        "Inside the flow, LLM calls use an OpenAI-compatible client configured with baseURL = LiteLLM proxy.",
+        "LiteLLM handles routing and usage tracking as in the simple completion flow.",
+        "LangGraph executes the multi-step workflow and returns a final structured result.",
+        "Route returns the graph result JSON to the client."
+      ]
+    }
+  },
+  "responsibility_split": {
+    "liteLLM_owns": [
+      "API key storage and lifecycle (keys, teams, quotas).",
+      "Token usage counting and raw usage logs per key.",
+      "Routing between providers and models.",
+      "Low-level retry/failover and provider configuration."
+    ],
+    "control_plane_owns": [
+      "Definition of accounts/orgs and their mapping to LiteLLM keys or teams.",
+      "What flows are allowed for which accounts (business rules, roles, DAO governance).",
+      "HTTP API shape and contracts exposed to clients.",
+      "Choice of which LangGraph workflow to run for a given request.",
+      "Later: higher-level billing and credits, powered by data sourced from LiteLLM usage."
+    ]
+  },
+  "mvp_stages": [
+    {
+      "stage": 1,
+      "name": "Single LLM Port to LiteLLM",
+      "goal": "All LLM calls go through a single llm.port + LiteLLM adapter.",
+      "notes": [
+        "No custom API keys or billing yet.",
+        "Just consolidate all usage to a single path to LiteLLM."
+      ]
+    },
+    {
+      "stage": 2,
+      "name": "Accounts → LiteLLM Key Mapping",
+      "goal": "Introduce a minimal accounts table that maps each account to a LiteLLM key/team.",
+      "notes": [
+        "MVP: hardcode a demo account.",
+        "Adapter chooses which LiteLLM key to use based on accountId."
+      ]
+    },
+    {
+      "stage": 3,
+      "name": "LangGraph Flows in Front of LiteLLM",
+      "goal": "Add LangGraph as the orchestration layer for more complex flows.",
+      "notes": [
+        "Configure LangGraph LLM client with baseURL pointing at LiteLLM.",
+        "Have both simple completion and graph-run endpoints live side-by-side."
+      ]
+    },
+    {
+      "stage": 4,
+      "name": "Billing and Credits on Top of LiteLLM Usage",
+      "goal": "Build higher-level billing/credits/crypto on top of LiteLLM’s usage data.",
+      "notes": [
+        "Aggregate LiteLLM usage logs into your domain tables (e.g. per account/month).",
+        "Implement soft/hard limits at the account level using your domain logic.",
+        "Only then add wallets/USDC/DAO rules as sources of funding for credits."
+      ]
+    }
+  ],
+  "future_directions": [
+    "Introduce a proper account model with multiple LiteLLM keys per account (e.g. environments, projects).",
+    "Expose admin/console views that show per-account usage by querying LiteLLM’s usage data (or your aggregated mirror).",
+    "Make chat UI just one client of this infra (could be Lobe/Libre as a front-end to your APIs).",
+    "Integrate wallet-based funding and DAO governance once account-level limits and usage aggregation are stable."
+  ]
+}

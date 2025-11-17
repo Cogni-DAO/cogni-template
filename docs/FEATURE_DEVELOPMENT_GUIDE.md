@@ -30,7 +30,7 @@ See [ARCHITECTURE.md Enforcement Rules](ARCHITECTURE.md#enforcement-rules) for c
 
 For any new UI components, follow the [UI Implementation Guide](UI_IMPLEMENTATION_GUIDE.md): vendor → styles/ui.ts (CVA) → components/kit → features/components.
 
-## Checklists to Unblock CI (Copy into PR)
+## Checklists to Unblock CI (Copy into PR)/
 
 - [ ] Contract exists and is referenced by the delivery entry.
 - [ ] Feature service has no direct DB, fetch, or SDK calls; only uses ports.

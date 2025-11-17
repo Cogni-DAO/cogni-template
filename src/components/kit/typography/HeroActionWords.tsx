@@ -14,9 +14,11 @@
 
 "use client";
 
+import { AnimatePresence, motion } from "motion/react";
 import type { ReactElement } from "react";
+import { useCallback, useEffect, useState } from "react";
 
-import { FlipWords } from "@/components/vendor/ui-primitives/shadcn";
+import { cn } from "@/shared/util";
 import { codeToken } from "@/styles/ui";
 
 interface HeroActionWordsProps {
@@ -47,11 +49,82 @@ export function HeroActionWords({
   durationMs = 1000,
   kind = "variable",
 }: HeroActionWordsProps): ReactElement {
+  const [currentWord, setCurrentWord] = useState(actions[0] ?? "");
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  const rotateWord = useCallback(() => {
+    const index = actions.indexOf(currentWord);
+    const nextWord = actions[index + 1] ?? actions[0] ?? "";
+    setCurrentWord(nextWord);
+    setIsAnimating(true);
+  }, [actions, currentWord]);
+
+  useEffect(() => {
+    if (actions.length <= 1) return;
+    if (!isAnimating) {
+      const timeout = setTimeout(() => rotateWord(), durationMs);
+      return () => clearTimeout(timeout);
+    }
+    return undefined;
+  }, [actions.length, durationMs, isAnimating, rotateWord]);
+
   return (
-    <FlipWords
-      words={actions}
-      duration={durationMs}
-      className={codeToken({ kind, spacingRight: "none" })}
-    />
+    <AnimatePresence
+      onExitComplete={() => {
+        setIsAnimating(false);
+      }}
+    >
+      <motion.div
+        key={currentWord}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{
+          opacity: 0,
+          y: -40,
+          x: 40,
+          filter: "blur(8px)",
+          scale: 2,
+          position: "absolute",
+        }}
+        transition={{
+          type: "spring",
+          stiffness: 120,
+          damping: 14,
+        }}
+        className={cn(
+          "relative inline-flex px-[var(--spacing-sm)]",
+          codeToken({ kind, spacingRight: "none" })
+        )}
+      >
+        {(currentWord ?? "").split(" ").map((word, wordIndex) => (
+          <motion.span
+            key={`${word}-${wordIndex}`}
+            initial={{ opacity: 0, y: 10, filter: "blur(8px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            transition={{
+              delay: wordIndex * 0.3,
+              duration: 0.3,
+            }}
+            className="inline-block whitespace-nowrap"
+          >
+            {word.split("").map((letter, letterIndex) => (
+              <motion.span
+                key={`${word}-${letterIndex}`}
+                initial={{ opacity: 0, y: 10, filter: "blur(8px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                transition={{
+                  delay: wordIndex * 0.3 + letterIndex * 0.05,
+                  duration: 0.2,
+                }}
+                className="inline-block"
+              >
+                {letter}
+              </motion.span>
+            ))}
+            <span className="inline-block">&nbsp;</span>
+          </motion.span>
+        ))}
+      </motion.div>
+    </AnimatePresence>
   );
 }

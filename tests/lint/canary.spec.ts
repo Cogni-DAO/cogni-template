@@ -16,51 +16,51 @@ import { ESLint } from "eslint";
 import { describe, expect, it } from "vitest";
 
 describe("ESLint Config Canary", () => {
-  it("core policy stays enforced for features files", async () => {
+  const severity = (value: unknown): unknown =>
+    Array.isArray(value) ? value[0] : value;
+  const expectError = (rule: unknown): void =>
+    expect(["error", 2]).toContain(severity(rule));
+  const expectOff = (rule: unknown): void =>
+    expect(["off", 0]).toContain(severity(rule));
+
+  it("core policy + UI governance stay enforced for features files", async (): Promise<void> => {
     const eslint = new ESLint({ cwd: process.cwd() });
     const cfg = await eslint.calculateConfigForFile(
       "src/features/home/components/X.tsx"
     );
     const rules = cfg.rules ?? {};
 
-    expect(
-      rules["no-restricted-syntax"]?.[0] ?? rules["no-restricted-syntax"]
-    ).toBe(2); // error
-    expect(
-      rules["import/no-internal-modules"]?.[0] ??
-        rules["import/no-internal-modules"]
-    ).toBe(2); // error
-    expect(
-      rules["boundaries/element-types"]?.[0] ??
-        rules["boundaries/element-types"]
-    ).toBe(2); // error
+    expectError(rules["ui-governance/no-raw-colors"]);
+    expectError(rules["ui-governance/no-arbitrary-non-token-values"]);
+    expectError(rules["ui-governance/token-classname-patterns"]);
+    expectError(rules["ui-governance/no-vendor-imports-outside-kit"]);
+    expect(severity(rules["import/no-internal-modules"])).toBe(2);
+    expect(severity(rules["boundaries/element-types"])).toBe(2);
   });
 
-  it("className rules enforced in kit components", async () => {
+  it("kit layer inherits UI governance rules", async (): Promise<void> => {
     const eslint = new ESLint({ cwd: process.cwd() });
     const cfg = await eslint.calculateConfigForFile(
-      "src/components/kit/Button.tsx"
+      "src/components/kit/inputs/Button.tsx"
     );
     const rules = cfg.rules ?? {};
 
-    expect(
-      rules["no-literal-classnames/no-literal-classnames"]?.[0] ??
-        rules["no-literal-classnames/no-literal-classnames"]
-    ).toBe(2); // error
-    expect(
-      rules["no-restricted-syntax"]?.[0] ?? rules["no-restricted-syntax"]
-    ).toBe(2); // error
+    expectError(rules["ui-governance/no-raw-colors"]);
+    expectError(rules["ui-governance/no-arbitrary-non-token-values"]);
+    expectError(rules["ui-governance/token-classname-patterns"]);
+    expectError(rules["ui-governance/no-vendor-imports-outside-kit"]);
   });
 
-  it("styles layer allows literals and enforces CVA variant extraction", async () => {
+  it("styles layer exempts UI governance but keeps CVA guard", async (): Promise<void> => {
     const eslint = new ESLint({ cwd: process.cwd() });
     const cfg = await eslint.calculateConfigForFile("src/styles/ui.ts");
     const rules = cfg.rules ?? {};
 
-    // literals allowed in styles
-    expect(rules["no-literal-classnames/no-literal-classnames"]?.[0]).toBe(0);
+    expectOff(rules["ui-governance/no-raw-colors"]);
+    expectOff(rules["ui-governance/no-arbitrary-non-token-values"]);
+    expectOff(rules["ui-governance/token-classname-patterns"]);
+    expectOff(rules["ui-governance/no-vendor-imports-outside-kit"]);
 
-    // CVA inline variant maps forbidden
     const nrs = rules["no-restricted-syntax"];
     const sev = Array.isArray(nrs) ? nrs[0] : nrs;
     expect(sev).toBe(2);
@@ -71,22 +71,18 @@ describe("ESLint Config Canary", () => {
     expect(opt?.message).toContain("Define variant maps");
   });
 
-  it("theme.ts uses styles policy", async () => {
+  it("theme.ts follows styles exemptions + CVA guard", async (): Promise<void> => {
     const eslint = new ESLint({ cwd: process.cwd() });
     const cfg = await eslint.calculateConfigForFile("src/styles/theme.ts");
     const rules = cfg.rules ?? {};
-    expect(rules["no-literal-classnames/no-literal-classnames"]?.[0]).toBe(0);
+
+    expectOff(rules["ui-governance/no-raw-colors"]);
+    expectOff(rules["ui-governance/no-arbitrary-non-token-values"]);
+    expectOff(rules["ui-governance/token-classname-patterns"]);
+    expectOff(rules["ui-governance/no-vendor-imports-outside-kit"]);
+
     const nrs = rules["no-restricted-syntax"];
     expect(Array.isArray(nrs) ? nrs[0] : nrs).toBe(2);
-  });
-
-  it("kit layer blocks literals", async () => {
-    const eslint = new ESLint({ cwd: process.cwd() });
-    const cfg = await eslint.calculateConfigForFile(
-      "src/components/kit/Button.tsx"
-    );
-    const rules = cfg.rules ?? {};
-    expect(rules["no-literal-classnames/no-literal-classnames"]?.[0]).toBe(2);
   });
 
   it.skip("no-raw-tailwind rule enforced in source files", async () => {

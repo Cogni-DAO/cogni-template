@@ -72,7 +72,6 @@ export function CodeTokenLine({
   return createElement(
     level,
     {
-      // eslint-disable-next-line no-restricted-syntax
       className: heading({
         level: level === "p" ? "h1" : (level as "h1" | "h2" | "h3" | "h4"),
         tone,
