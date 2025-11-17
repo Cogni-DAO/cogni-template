@@ -12,8 +12,11 @@
  * @public
  */
 
+import { randomUUID } from "node:crypto";
+
 import {
   assertMessageLength,
+  calculateCost,
   filterSystemMessages,
   MAX_MESSAGE_CHARS,
   type Message,
@@ -40,10 +43,41 @@ export async function execute(
     MAX_MESSAGE_CHARS
   );
 
+  const requestId = randomUUID();
+
   // Delegate to port - caller constructed at auth boundary
   const result = await llmService.completion({
     messages: trimmedMessages,
     caller,
+  });
+
+  const totalTokens = result.usage?.totalTokens ?? 0;
+  const providerMeta = (result.providerMeta ?? {}) as Record<string, unknown>;
+  const modelId =
+    typeof providerMeta.model === "string" ? providerMeta.model : undefined;
+  const provider =
+    typeof providerMeta.provider === "string"
+      ? providerMeta.provider
+      : undefined;
+  const llmRequestId =
+    typeof providerMeta.requestId === "string"
+      ? providerMeta.requestId
+      : undefined;
+  const cost = calculateCost(
+    modelId !== undefined ? { modelId, totalTokens } : { totalTokens }
+  );
+
+  const debitMetadata: Record<string, unknown> = {};
+  if (result.usage) debitMetadata.usage = result.usage;
+  if (modelId) debitMetadata.model = modelId;
+  if (provider) debitMetadata.provider = provider;
+  if (llmRequestId) debitMetadata.llmRequestId = llmRequestId;
+
+  await accountService.debitForUsage({
+    accountId: caller.accountId,
+    cost,
+    requestId,
+    metadata: debitMetadata,
   });
 
   // Feature sets timestamp after completion using injected clock

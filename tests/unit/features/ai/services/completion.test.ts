@@ -12,7 +12,7 @@
  * @public
  */
 
-import { FakeClock } from "@tests/_fakes";
+import { createMockAccountServiceWithDefaults, FakeClock } from "@tests/_fakes";
 import { FakeLlmService } from "@tests/_fakes/ai/fakes";
 import {
   createConversation,
@@ -22,7 +22,6 @@ import {
 } from "@tests/_fakes/ai/fakes";
 import { describe, expect, it } from "vitest";
 
-import { FakeAccountService } from "@/adapters/test";
 import { ChatValidationError, MAX_MESSAGE_CHARS } from "@/core";
 import { execute } from "@/features/ai/services/completion";
 import type { LlmCaller } from "@/ports";
@@ -43,7 +42,7 @@ describe("features/ai/services/completion", () => {
       const caller = createTestCaller();
 
       // Act
-      const accountService = new FakeAccountService();
+      const accountService = createMockAccountServiceWithDefaults();
       const result = await execute(
         messages,
         llmService,
@@ -70,7 +69,7 @@ describe("features/ai/services/completion", () => {
       const caller = createTestCaller();
 
       // Act
-      const accountService = new FakeAccountService();
+      const accountService = createMockAccountServiceWithDefaults();
       await execute(messages, llmService, accountService, clock, caller);
 
       // Assert
@@ -87,7 +86,7 @@ describe("features/ai/services/completion", () => {
       const caller = createTestCaller();
 
       // Act & Assert
-      const accountService = new FakeAccountService();
+      const accountService = createMockAccountServiceWithDefaults();
       await expect(
         execute(messages, llmService, accountService, clock, caller)
       ).rejects.toThrow(ChatValidationError);
@@ -107,7 +106,7 @@ describe("features/ai/services/completion", () => {
       const caller = createTestCaller();
 
       // Act
-      const accountService = new FakeAccountService();
+      const accountService = createMockAccountServiceWithDefaults();
       await execute(messages, llmService, accountService, clock, caller);
 
       // Assert - should trim to fit MAX_MESSAGE_CHARS (4000)
@@ -131,7 +130,7 @@ describe("features/ai/services/completion", () => {
       const caller = createTestCaller();
 
       // Act
-      const accountService = new FakeAccountService();
+      const accountService = createMockAccountServiceWithDefaults();
       await execute(
         originalMessages,
         llmService,
@@ -153,7 +152,7 @@ describe("features/ai/services/completion", () => {
       const caller = createTestCaller();
 
       // Act
-      const accountService = new FakeAccountService();
+      const accountService = createMockAccountServiceWithDefaults();
       const result = await execute(
         messages,
         llmService,
@@ -177,7 +176,7 @@ describe("features/ai/services/completion", () => {
       const caller = createTestCaller();
 
       // Act & Assert
-      const accountService = new FakeAccountService();
+      const accountService = createMockAccountServiceWithDefaults();
       await expect(
         execute(messages, llmService, accountService, clock, caller)
       ).rejects.toThrow("LLM service unavailable");

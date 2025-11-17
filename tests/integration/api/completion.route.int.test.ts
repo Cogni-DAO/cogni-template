@@ -26,6 +26,51 @@ describe("API /v1/ai/completion", () => {
 
   beforeAll(async () => {
     // Server expected to be running via docker-compose in CI
+    // Register the test API key for completion tests
+    const registerResponse = await fetch(
+      `${API_BASE}/api/admin/accounts/register-litellm-key`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer admin-test-key",
+        },
+        body: JSON.stringify({
+          apiKey: "test-api-key",
+          displayName: "Test Account for Completion API",
+        }),
+      }
+    );
+
+    if (!registerResponse.ok) {
+      throw new Error(
+        `Failed to register test API key: ${registerResponse.status} ${await registerResponse.text()}`
+      );
+    }
+
+    // Add credits to the test account for completion tests
+    const registerData = await registerResponse.json();
+    const topupResponse = await fetch(
+      `${API_BASE}/api/admin/accounts/${registerData.accountId}/credits/topup`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer admin-test-key",
+        },
+        body: JSON.stringify({
+          amount: 10.0,
+          reason: "test_setup",
+          reference: "completion-test-setup",
+        }),
+      }
+    );
+
+    if (!topupResponse.ok) {
+      throw new Error(
+        `Failed to topup test account: ${topupResponse.status} ${await topupResponse.text()}`
+      );
+    }
   });
 
   afterAll(async () => {
@@ -47,6 +92,12 @@ describe("API /v1/ai/completion", () => {
       },
       body: JSON.stringify(requestBody),
     });
+
+    // Debug if the response fails
+    if (response.status !== 200) {
+      const errorText = await response.text();
+      console.log(`❌ Completion failed with ${response.status}:`, errorText);
+    }
 
     // Assert
     expect(response.status).toBe(200);

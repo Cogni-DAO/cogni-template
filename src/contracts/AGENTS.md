@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-11-13
+- **Last reviewed:** 2025-11-17
 - **Status:** draft
 
 ## Purpose
@@ -37,7 +37,7 @@ Single source of truth for externally callable operations. Each file defines an 
 
 ## Public Surface
 
-- **Exports:** \*.contract.ts with { id, summary, input, output }; http/router.v1.ts (ts-rest contracts); http/openapi.v1.ts (OpenAPI generation)
+- **Exports:** ai.completion.v1, admin.accounts.register.v1, admin.accounts.topup.v1, meta.health.read.v1, meta.route-manifest.read.v1; http/router.v1.ts (ts-rest contracts); http/openapi.v1.ts (OpenAPI generation)
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none
@@ -64,7 +64,7 @@ pnpm -w typecheck
 ## Standards
 
 - Zod schemas only; export Input/Output TS types via z.infer.
-- Contract IDs are namespaced and versioned, e.g. `apikey.create.v1`.
+- Contract IDs are namespaced and versioned, e.g. `ai.completion.v1`, `admin.accounts.register.v1`.
 - Breaking changes require new version suffix.
 
 ## Dependencies

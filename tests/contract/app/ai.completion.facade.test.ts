@@ -12,11 +12,10 @@
  * @public
  */
 
-import { FakeClock } from "@tests/_fakes";
+import { createMockAccountServiceWithDefaults, FakeClock } from "@tests/_fakes";
 import { FakeLlmService } from "@tests/_fakes/ai/fakes";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { FakeAccountService } from "@/adapters/test";
 import { completion } from "@/app/_facades/ai/completion.server";
 import { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
 import { ChatErrorCode, ChatValidationError } from "@/core";
@@ -62,17 +61,17 @@ describe("app/_facades/ai/completion.server", () => {
 
       const fakeLlm = new FakeLlmService({ responseContent: "AI response" });
       const fakeClock = new FakeClock("2025-01-01T12:00:00.000Z");
-      const fakeAccountService = new FakeAccountService();
+      const mockAccountService = createMockAccountServiceWithDefaults();
 
       // Set up test account for the API key
-      await fakeAccountService.createAccountForApiKey({
+      await mockAccountService.createAccountForApiKey({
         apiKey: "test-key-12345678",
         displayName: "Test User",
       });
 
       mockResolveAiDeps.mockReturnValue({
         llmService: fakeLlm,
-        accountService: fakeAccountService,
+        accountService: mockAccountService,
         clock: fakeClock,
       });
 
@@ -115,7 +114,7 @@ describe("app/_facades/ai/completion.server", () => {
         timestamp: "2025-01-01T12:00:00.000Z",
       });
       expect(executeCall?.[1]).toBe(fakeLlm);
-      expect(executeCall?.[2]).toBe(fakeAccountService);
+      expect(executeCall?.[2]).toBe(mockAccountService);
       expect(executeCall?.[3]).toBe(fakeClock);
     });
 
@@ -126,16 +125,16 @@ describe("app/_facades/ai/completion.server", () => {
         caller: createTestCaller(),
       };
 
-      const fakeAccountService = new FakeAccountService();
+      const mockAccountService = createMockAccountServiceWithDefaults();
       // Set up test account for the API key
-      await fakeAccountService.createAccountForApiKey({
+      await mockAccountService.createAccountForApiKey({
         apiKey: "test-key-12345678",
         displayName: "Test User",
       });
 
       mockResolveAiDeps.mockReturnValue({
         llmService: new FakeLlmService(),
-        accountService: fakeAccountService,
+        accountService: mockAccountService,
         clock: new FakeClock(),
       });
 
@@ -157,16 +156,16 @@ describe("app/_facades/ai/completion.server", () => {
         caller: createTestCaller(),
       };
 
-      const fakeAccountService = new FakeAccountService();
+      const mockAccountService = createMockAccountServiceWithDefaults();
       // Set up test account for the API key
-      await fakeAccountService.createAccountForApiKey({
+      await mockAccountService.createAccountForApiKey({
         apiKey: "test-key-12345678",
         displayName: "Test User",
       });
 
       mockResolveAiDeps.mockReturnValue({
         llmService: new FakeLlmService(),
-        accountService: fakeAccountService,
+        accountService: mockAccountService,
         clock: new FakeClock(),
       });
 
@@ -191,17 +190,17 @@ describe("app/_facades/ai/completion.server", () => {
 
       const fixedTime = "2025-01-01T15:30:00.000Z";
       const fakeClock = new FakeClock(fixedTime);
-      const fakeAccountService = new FakeAccountService();
+      const mockAccountService = createMockAccountServiceWithDefaults();
 
       // Set up test account for the API key
-      await fakeAccountService.createAccountForApiKey({
+      await mockAccountService.createAccountForApiKey({
         apiKey: "test-key-12345678",
         displayName: "Test User",
       });
 
       mockResolveAiDeps.mockReturnValue({
         llmService: new FakeLlmService(),
-        accountService: fakeAccountService,
+        accountService: mockAccountService,
         clock: fakeClock,
       });
 
@@ -236,16 +235,16 @@ describe("app/_facades/ai/completion.server", () => {
         caller: createTestCaller(),
       };
 
-      const fakeAccountService = new FakeAccountService();
+      const mockAccountService = createMockAccountServiceWithDefaults();
       // Set up test account for the API key
-      await fakeAccountService.createAccountForApiKey({
+      await mockAccountService.createAccountForApiKey({
         apiKey: "test-key-12345678",
         displayName: "Test User",
       });
 
       mockResolveAiDeps.mockReturnValue({
         llmService: new FakeLlmService(),
-        accountService: fakeAccountService,
+        accountService: mockAccountService,
         clock: new FakeClock(),
       });
 

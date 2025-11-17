@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-16
+- **Last reviewed:** 2025-11-17
 - **Status:** draft
 
 ## Purpose
@@ -71,3 +71,4 @@ APP_ENV=test pnpm test:int
 
 - Only accessible from bootstrap layer (features/app cannot import test adapters)
 - Responses never vary - keeps CI predictable
+- Account testing uses mock fixtures in tests/\_fakes instead of adapter implementations
