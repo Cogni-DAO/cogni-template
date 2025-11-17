@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
 import { execSync } from "node:child_process";
 
 import { PostgreSqlContainer } from "@testcontainers/postgresql";

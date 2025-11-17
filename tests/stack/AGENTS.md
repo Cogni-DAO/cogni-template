@@ -22,7 +22,7 @@ Full-stack HTTP API integration tests requiring running Docker Compose infrastru
 
 ```json
 {
-  "layer": "tests/stack",
+  "layer": "tests",
   "may_import": ["shared", "types"],
   "must_not_import": ["app", "features", "core", "adapters", "ports"]
 }
