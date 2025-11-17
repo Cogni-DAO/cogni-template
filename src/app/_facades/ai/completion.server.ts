@@ -4,10 +4,10 @@
 /**
  * Module: `@app/_facades/ai/completion.server`
  * Purpose: App-layer facade for AI completion - bridges DTOs to features.
- * Scope: Coordinates DI resolution, DTO mapping, and feature execution. Does not handle authentication or validation.
- * Invariants: Only app layer imports this; handles all coordination concerns
+ * Scope: Coordinates DI resolution, DTO mapping, account validation, and feature execution. Does not handle authentication.
+ * Invariants: Only app layer imports this; validates accounts before feature execution; handles all coordination concerns
  * Side-effects: IO (via resolved dependencies)
- * Notes: Lives in app layer where it can see both bootstrap and features
+ * Notes: Validates account existence for API keys; throws on unknown keys; lives in app layer where it can see both bootstrap and features
  * Links: Called by API routes, uses bootstrap for DI and features for logic
  * @public
  */

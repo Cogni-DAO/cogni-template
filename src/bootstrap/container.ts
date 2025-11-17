@@ -7,7 +7,7 @@
  * Scope: Wire adapters to ports for runtime dependency injection; single source of truth for real vs fake adapter wiring. Does not handle singleton management or lifecycle.
  * Invariants: All ports wired; stateless containers; only adapter instantiation point.
  * Side-effects: none
- * Notes: Uses serverEnv.isTestMode (APP_ENV=test) to wire FakeLlmAdapter in CI, LiteLlmAdapter otherwise.
+ * Notes: Uses serverEnv.isTestMode (APP_ENV=test) to wire fake adapters (FakeAccountService, FakeLlmAdapter) in CI, real adapters otherwise.
  * Links: Used by API routes and other entry points
  * @public
  */
