@@ -12,13 +12,19 @@
  * @public
  */
 
-import { LiteLlmAdapter, SystemClock } from "@/adapters/server";
-import { FakeLlmAdapter } from "@/adapters/test";
-import type { Clock, LlmService } from "@/ports";
+import {
+  db,
+  DrizzleAccountService,
+  LiteLlmAdapter,
+  SystemClock,
+} from "@/adapters/server";
+import { FakeAccountService, FakeLlmAdapter } from "@/adapters/test";
+import type { AccountService, Clock, LlmService } from "@/ports";
 import { serverEnv } from "@/shared/env";
 
 export interface Container {
   llmService: LlmService;
+  accountService: AccountService;
   clock: Clock;
 }
 
@@ -28,8 +34,13 @@ export function createContainer(): Container {
     ? new FakeLlmAdapter()
     : new LiteLlmAdapter();
 
+  const accountService = serverEnv.isTestMode
+    ? new FakeAccountService()
+    : new DrizzleAccountService(db);
+
   return {
     llmService,
+    accountService,
     clock: new SystemClock(),
   };
 }

@@ -12,5 +12,6 @@
  * @public
  */
 
+export type { AccountService } from "./accounts.port";
 export type { Clock } from "./clock.port";
 export type { LlmCaller, LlmService } from "./llm.port";

@@ -12,4 +12,5 @@
  * @public
  */
 
+export { FakeAccountService } from "./accounts/fake-account.adapter";
 export { FakeLlmAdapter } from "./ai/fake-llm.adapter";

@@ -22,6 +22,7 @@ import {
 } from "@tests/_fakes/ai/fakes";
 import { describe, expect, it } from "vitest";
 
+import { FakeAccountService } from "@/adapters/test";
 import { ChatValidationError, MAX_MESSAGE_CHARS } from "@/core";
 import { execute } from "@/features/ai/services/completion";
 import type { LlmCaller } from "@/ports";
@@ -42,7 +43,14 @@ describe("features/ai/services/completion", () => {
       const caller = createTestCaller();
 
       // Act
-      const result = await execute(messages, llmService, clock, caller);
+      const accountService = new FakeAccountService();
+      const result = await execute(
+        messages,
+        llmService,
+        accountService,
+        clock,
+        caller
+      );
 
       // Assert
       expect(result).toEqual({
@@ -62,7 +70,8 @@ describe("features/ai/services/completion", () => {
       const caller = createTestCaller();
 
       // Act
-      await execute(messages, llmService, clock, caller);
+      const accountService = new FakeAccountService();
+      await execute(messages, llmService, accountService, clock, caller);
 
       // Assert
       const lastCall = llmService.getLastCall();
@@ -78,8 +87,9 @@ describe("features/ai/services/completion", () => {
       const caller = createTestCaller();
 
       // Act & Assert
+      const accountService = new FakeAccountService();
       await expect(
-        execute(messages, llmService, clock, caller)
+        execute(messages, llmService, accountService, clock, caller)
       ).rejects.toThrow(ChatValidationError);
       expect(llmService.wasCalled()).toBe(false); // Should not call LLM
     });
@@ -97,7 +107,8 @@ describe("features/ai/services/completion", () => {
       const caller = createTestCaller();
 
       // Act
-      await execute(messages, llmService, clock, caller);
+      const accountService = new FakeAccountService();
+      await execute(messages, llmService, accountService, clock, caller);
 
       // Assert - should trim to fit MAX_MESSAGE_CHARS (4000)
       const lastCall = llmService.getLastCall();
@@ -120,7 +131,14 @@ describe("features/ai/services/completion", () => {
       const caller = createTestCaller();
 
       // Act
-      await execute(originalMessages, llmService, clock, caller);
+      const accountService = new FakeAccountService();
+      await execute(
+        originalMessages,
+        llmService,
+        accountService,
+        clock,
+        caller
+      );
 
       // Assert
       expect(originalMessages).toEqual(messagesCopy);
@@ -135,7 +153,14 @@ describe("features/ai/services/completion", () => {
       const caller = createTestCaller();
 
       // Act
-      const result = await execute(messages, llmService, clock, caller);
+      const accountService = new FakeAccountService();
+      const result = await execute(
+        messages,
+        llmService,
+        accountService,
+        clock,
+        caller
+      );
 
       // Assert
       expect(result.timestamp).toBe(fixedTime);
@@ -152,8 +177,9 @@ describe("features/ai/services/completion", () => {
       const caller = createTestCaller();
 
       // Act & Assert
+      const accountService = new FakeAccountService();
       await expect(
-        execute(messages, llmService, clock, caller)
+        execute(messages, llmService, accountService, clock, caller)
       ).rejects.toThrow("LLM service unavailable");
     });
   });

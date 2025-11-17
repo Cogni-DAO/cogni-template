@@ -195,15 +195,15 @@ For the barebones system to function end-to-end:
 **Control Plane (admin-only):**
 
 - [ ] `POST /admin/accounts/register-litellm-key`  
-      Explicitly creates/binds accounts to LiteLLM virtual keys.
+       Explicitly creates/binds accounts to LiteLLM virtual keys.
 
 - [ ] `POST /admin/accounts/:accountId/credits/topup`  
-      Manually adds credits via the ledger.
+       Manually adds credits via the ledger.
 
 **Data Plane (public API):**
 
 - [ ] `POST /api/v1/ai/completion`  
-      Uses `Authorization: Bearer <apiKey>`, validates existing account, calls LiteLLM, and debits credits.
+       Uses `Authorization: Bearer <apiKey>`, validates existing account, calls LiteLLM, and debits credits.
 
 That's it for MVP. Everything else is "later".
 

@@ -38,14 +38,26 @@ export async function completion(
   input: CompletionInput
 ): Promise<CompletionOutput> {
   // Resolve dependencies from bootstrap (pure composition root)
-  const { llmService, clock } = resolveAiDeps();
+  const { llmService, accountService, clock } = resolveAiDeps();
+
+  // Validate account exists for the API key
+  const account = await accountService.getAccountByApiKey(input.caller.apiKey);
+  if (!account) {
+    throw new Error(`Unknown API key: ${input.caller.apiKey}`);
+  }
 
   // Map DTOs to core types using feature mappers (no core imports here)
   const timestamp = clock.now();
   const coreMessages = toCoreMessages(input.messages, timestamp);
 
   // Execute pure feature with injected dependencies
-  const result = await execute(coreMessages, llmService, clock, input.caller);
+  const result = await execute(
+    coreMessages,
+    llmService,
+    accountService,
+    clock,
+    input.caller
+  );
 
   // Map core result back to DTO
   const message = fromCoreMessage(result);

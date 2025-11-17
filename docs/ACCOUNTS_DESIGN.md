@@ -139,9 +139,9 @@ if (!account) {
 
 ### Stage 3: Core Domain Layer
 
-_Status: Next - implement minimal account domain_
+_Status: Complete - clean domain implementation with test coverage_
 
-[ ] Create minimal account domain: `src/core/accounts/`
+[x] Create minimal account domain: `src/core/accounts/`
 ```typescript
 // model.ts - clean domain types (no infrastructure)
 export interface Account {
@@ -171,7 +171,7 @@ balanceCredits: number; // domain uses number, adapter handles Decimal conversio
     export * from "./errors.ts";
     ```
 
-[ ] Add unit tests: `tests/unit/core/accounts/` - Account domain behavior tests - Credit validation edge cases (zero balance, negative amounts)
+[x] Add unit tests: `tests/unit/core/accounts/model.test.ts` - Account domain behavior tests (12 tests) - Credit validation edge cases (zero balance, negative amounts)
 
 **Design Principles:**
 
@@ -182,9 +182,9 @@ balanceCredits: number; // domain uses number, adapter handles Decimal conversio
 
 ### Stage 4: Ports Layer
 
-_Status: Next - define atomic service contracts_
+_Status: Complete - comprehensive service interface defined_
 
-[ ] Define AccountService interface: `src/ports/accounts.port.ts`
+[x] Define AccountService interface: `src/ports/accounts.port.ts`
 ```typescript
 export interface AccountService {
   // Explicit account creation (admin endpoints only)
@@ -217,7 +217,7 @@ export interface AccountService {
 }
 ```
 
-[ ] Add to ports index: `src/ports/index.ts`
+[x] Add to ports index: `src/ports/index.ts`
 [ ] Create port contract tests: `tests/ports/accounts.port.contract.ts` - Reusable test harness for any AccountService implementation - Validates atomic operations and error conditions
 
 **Key Decisions**:
@@ -228,9 +228,9 @@ export interface AccountService {
 
 ### Stage 5: Database Adapter
 
-_Status: Next - implement AccountService with ledger-based operations_
+_Status: Partially complete - adapters implemented, transactions working_
 
-[ ] Implement database adapter: `src/adapters/server/accounts/drizzle.adapter.ts`
+[x] Implement database adapter: `src/adapters/server/accounts/drizzle.adapter.ts`
 ```typescript
 /**
  * CRITICAL TRANSACTION SEMANTICS:
@@ -315,8 +315,8 @@ function toNumber(decimal: string): number { /* ... */ }
 function fromNumber(num: number): string { /* ... */ }
 ```
 
-[ ] Create adapter exports: `src/adapters/server/accounts/index.ts`
-[ ] Update server adapter index: `src/adapters/server/index.ts`
+[x] Create test adapter: `src/adapters/test/accounts/fake-account.adapter.ts`
+[x] Update server adapter index: `src/adapters/server/index.ts`
 [ ] Integration tests: `tests/integration/adapters/accounts/`
     - Test against real database using existing infrastructure
     - **Transaction rollback tests**: Simulate insufficient balance, assert no ledger row inserted and balance unchanged
@@ -328,7 +328,7 @@ function fromNumber(num: number): string { /* ... */ }
 
 ### Stage 6: Feature Integration
 
-_Status: Next - integrate credits with AI completion flow_
+_Status: Partially complete - basic service wiring completed, pricing helpers pending_
 
 [ ] Add pricing helper: `src/core/billing/pricing.ts`
 
@@ -395,7 +395,7 @@ export async function execute(
 [ ] Update LlmService port: `src/ports/llm.port.ts`
     - Add optional `requestId?: string` parameter to completion method
     - Update litellm.adapter.ts to propagate requestId to LiteLLM/Langfuse
-[ ] Update bootstrap container: `src/bootstrap/container.ts`
+[x] Update bootstrap container: `src/bootstrap/container.ts`
     - Wire AccountService adapter to port
     - Provide dependency injection for completion service
 [ ] Add error handling for credit scenarios in API route
