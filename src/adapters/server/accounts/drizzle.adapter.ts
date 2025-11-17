@@ -16,8 +16,14 @@ import { eq, sql } from "drizzle-orm";
 
 import type { Database } from "@/adapters/server/db/client";
 import type { AccountService } from "@/ports";
-import { accounts } from "@/shared/db";
+import {
+  AccountNotFoundPortError,
+  InsufficientCreditsPortError,
+} from "@/ports";
+import { accounts, creditLedger } from "@/shared/db";
 import { deriveAccountIdFromApiKey } from "@/shared/util";
+
+type QueryableDb = Pick<Database, "query">;
 
 /**
  * PostgreSQL implementation of AccountService using Drizzle ORM
@@ -82,7 +88,7 @@ export class DrizzleAccountService implements AccountService {
     });
 
     if (!account) {
-      throw new Error(`Account not found: ${accountId}`);
+      throw new AccountNotFoundPortError(accountId);
     }
 
     return this.toNumber(account.balanceCredits);
@@ -100,30 +106,38 @@ export class DrizzleAccountService implements AccountService {
     metadata?: Record<string, unknown>;
   }): Promise<void> {
     await this.db.transaction(async (tx) => {
-      // TODO: Insert ledger entry (source of truth)
-      // This will be implemented when we add the credit_ledger table
-      console.log("requestId: %s", requestId);
-      console.log("cost: %s", cost);
-      console.log("accountId: %s\n", accountId);
-      console.log("metadata: %s\n\n", JSON.stringify(metadata));
+      await this.ensureAccountExists(tx, accountId);
 
-      // Update computed balance
-      await tx
+      // Insert ledger entry (source of truth)
+      await tx.insert(creditLedger).values({
+        accountId,
+        delta: this.fromNumber(-cost),
+        reason: "ai_usage",
+        reference: requestId,
+        metadata: metadata ?? null,
+      });
+
+      // Update computed balance atomically
+      const [updatedAccount] = await tx
         .update(accounts)
         .set({
           balanceCredits: sql`balance_credits - ${this.fromNumber(cost)}`,
         })
-        .where(eq(accounts.id, accountId));
+        .where(eq(accounts.id, accountId))
+        .returning({ balanceCredits: accounts.balanceCredits });
 
-      // Verify sufficient balance after update
-      const account = await tx.query.accounts.findFirst({
-        where: eq(accounts.id, accountId),
-      });
+      if (!updatedAccount) {
+        throw new AccountNotFoundPortError(accountId);
+      }
 
-      if (!account || this.toNumber(account.balanceCredits) < 0) {
-        // Transaction will rollback - no persistence of negative balance
-        throw new Error(
-          `Insufficient credits for account ${accountId}: required ${cost}, available ${account ? this.toNumber(account.balanceCredits) + cost : 0}`
+      const newBalance = this.toNumber(updatedAccount.balanceCredits);
+
+      if (newBalance < 0) {
+        const previousBalance = Number((newBalance + cost).toFixed(2));
+        throw new InsufficientCreditsPortError(
+          accountId,
+          cost,
+          previousBalance < 0 ? 0 : previousBalance
         );
       }
     });
@@ -139,23 +153,31 @@ export class DrizzleAccountService implements AccountService {
     amount: number;
     reason: string;
     reference?: string;
-  }): Promise<void> {
-    await this.db.transaction(async (tx) => {
-      // TODO: Insert ledger entry (source of truth)
-      // This will be implemented when we add the credit_ledger table
-      console.log(
-        "creditAccount - reason: %s, reference: %s",
-        reason,
-        reference
-      );
+  }): Promise<{ newBalance: number }> {
+    return await this.db.transaction(async (tx) => {
+      await this.ensureAccountExists(tx, accountId);
 
-      // Update computed balance
-      await tx
+      await tx.insert(creditLedger).values({
+        accountId,
+        delta: this.fromNumber(amount),
+        reason,
+        reference: reference ?? null,
+        metadata: null,
+      });
+
+      const [updatedAccount] = await tx
         .update(accounts)
         .set({
           balanceCredits: sql`balance_credits + ${this.fromNumber(amount)}`,
         })
-        .where(eq(accounts.id, accountId));
+        .where(eq(accounts.id, accountId))
+        .returning({ balanceCredits: accounts.balanceCredits });
+
+      if (!updatedAccount) {
+        throw new AccountNotFoundPortError(accountId);
+      }
+
+      return { newBalance: this.toNumber(updatedAccount.balanceCredits) };
     });
   }
 
@@ -173,5 +195,18 @@ export class DrizzleAccountService implements AccountService {
    */
   private fromNumber(num: number): string {
     return num.toFixed(2);
+  }
+
+  private async ensureAccountExists(
+    tx: QueryableDb,
+    accountId: string
+  ): Promise<void> {
+    const account = await tx.query.accounts.findFirst({
+      where: eq(accounts.id, accountId),
+    });
+
+    if (!account) {
+      throw new AccountNotFoundPortError(accountId);
+    }
   }
 }

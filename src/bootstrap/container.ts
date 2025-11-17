@@ -7,7 +7,7 @@
  * Scope: Wire adapters to ports for runtime dependency injection; single source of truth for real vs fake adapter wiring. Does not handle singleton management or lifecycle.
  * Invariants: All ports wired; stateless containers; only adapter instantiation point.
  * Side-effects: none
- * Notes: Uses serverEnv.isTestMode (APP_ENV=test) to wire fake adapters (FakeAccountService, FakeLlmAdapter) in CI, real adapters otherwise.
+ * Notes: Uses serverEnv.isTestMode (APP_ENV=test) to wire FakeLlmAdapter in CI, DrizzleAccountService always used for accounts.
  * Links: Used by API routes and other entry points
  * @public
  */
@@ -18,7 +18,7 @@ import {
   LiteLlmAdapter,
   SystemClock,
 } from "@/adapters/server";
-import { FakeAccountService, FakeLlmAdapter } from "@/adapters/test";
+import { FakeLlmAdapter } from "@/adapters/test";
 import type { AccountService, Clock, LlmService } from "@/ports";
 import { serverEnv } from "@/shared/env";
 
@@ -34,9 +34,10 @@ export function createContainer(): Container {
     ? new FakeLlmAdapter()
     : new LiteLlmAdapter();
 
-  const accountService = serverEnv.isTestMode
-    ? new FakeAccountService()
-    : new DrizzleAccountService(db);
+  // Always use real database adapter for accounts
+  // Testing strategy: unit tests mock the port, integration tests use real DB
+  // This eliminates env complexity while maintaining proper test boundaries
+  const accountService = new DrizzleAccountService(db);
 
   return {
     llmService,
