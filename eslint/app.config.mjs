@@ -272,6 +272,7 @@ export default [
         "tailwind.config.ts",
         "playwright.config.ts",
         "commitlint.config.cjs",
+        "drizzle.config.ts",
       ],
       tailwindcss: {
         config: "tailwind.config.ts",

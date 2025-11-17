@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-16
+- **Last reviewed:** 2025-11-17
 - **Status:** draft
 
 ## Purpose
@@ -29,11 +29,11 @@ Infrastructure implementations of ports including server/, worker/, cli/, and te
 
 ## Public Surface
 
-- **Exports:** Port implementations for bootstrap injection
+- **Exports:** Port implementations for bootstrap injection, database client (db, Database)
 - **Routes (if any):** none
 - **CLI (if any):** cli/ adapter implementations
-- **Env/Config keys:** Infrastructure-specific config
-- **Files considered API:** Port implementation exports
+- **Env/Config keys:** DATABASE_URL, LITELLM_BASE_URL, LITELLM_MASTER_KEY
+- **Files considered API:** Port implementation exports, database client
 
 ## Ports (optional)
 
@@ -63,7 +63,7 @@ pnpm test tests/contract/
 ## Dependencies
 
 - **Internal:** ports/, shared/
-- **External:** drizzle, langfuse, pino, siwe, viem, litellm
+- **External:** drizzle-orm, postgres, langfuse, pino, siwe, viem, litellm
 
 ## Change Protocol
 

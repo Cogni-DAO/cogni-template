@@ -13,4 +13,5 @@
  */
 
 export { LiteLlmAdapter } from "./ai/litellm.adapter";
+export { type Database, db } from "./db/client";
 export { SystemClock } from "./time/system.adapter";
