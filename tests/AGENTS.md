@@ -31,7 +31,7 @@ Provide fast, reliable verification per layer. Enforce port contracts so any ada
 
 - **Exports:** none
 - **Routes:** none
-- **CLI:** pnpm test, pnpm test:api
+- **CLI:** pnpm test, pnpm test:int
 - **Env/Config keys:** none
 - **Files considered API:** contract/ports/\*_/_.contract.ts (test-only API for adapters)
 
@@ -49,8 +49,8 @@ Provide fast, reliable verification per layer. Enforce port contracts so any ada
 ## Usage
 
 ```bash
-pnpm test       # unit + ports + integration (no server required)
-pnpm test:api   # HTTP API tests (requires running Next.js server)
+pnpm test       # unit + ports tests (no server required)
+pnpm test:int   # Integration tests (requires running Next.js server + DB)
 ```
 
 ## Standards

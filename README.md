@@ -14,7 +14,7 @@ git clone https://github.com/Cogni-DAO/cogni-template
 cd cogni-template
 pnpm setup local     # Automated setup TODO: lol sorry, cp .env.example .env
 pnpm dev:stack       # Start developing with full stack (DB + LiteLLM + Next.js)
-pnpm
+pnpm db:setup        # Migrate and Seed database, once dev stack is running
 pnpm docker:stack    # Full production simulation (https://localhost - browser cert warning expected)
 ```
 

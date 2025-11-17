@@ -2,13 +2,13 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `vitest.api.config.mts`
- * Purpose: Vitest configuration for API integration tests with simplified TypeScript path resolution.
- * Scope: Configures API test environment and module resolution. Does not handle unit tests.
- * Invariants: Uses tsconfigPaths plugin for clean @/core resolution; loads .env.test for isolation; anchored at repo root.
- * Side-effects: process.env (.env.test injection)
+ * Module: `vitest.integration.config.mts`
+ * Purpose: Vitest configuration for integration tests (API + DB) requiring running infrastructure.
+ * Scope: Configures integration test environment for tests that need real DB/HTTP server. Does not handle unit tests.
+ * Invariants: Uses tsconfigPaths plugin for clean @/core resolution; loads .env.local for DB connection; anchored at repo root.
+ * Side-effects: process.env (.env.local injection), database connections, HTTP requests
  * Notes: Plugin-only approach eliminates manual alias conflicts; explicit tsconfig.json reference ensures path accuracy.
- * Links: tsconfig.json paths, API test files
+ * Links: tsconfig.json paths, integration test files
  * @public
  */
 
@@ -30,7 +30,10 @@ export default defineConfig({
     globals: true,
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
-    include: ["tests/api/**/*.{test,spec}.ts"],
+    include: [
+      "tests/integration/**/*.int.test.ts",
+      "tests/integration/**/*.spec.ts"
+    ],
     exclude: [
       "node_modules",
       "dist",

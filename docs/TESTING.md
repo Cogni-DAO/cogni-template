@@ -58,6 +58,6 @@ The `test-api` workflow job:
 - Sets `APP_ENV=test` (triggers fake adapters)
 - Does NOT provide external API keys (forces fake usage)
 - Starts app stack with Docker
-- Runs `pnpm test:api` against fake responses
+- Runs `pnpm test:int` against fake responses
 
 This ensures CI never makes external API calls while still testing the full HTTP request/response flow.

@@ -14,7 +14,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-// Note: This test file is designed for the test:api suite
+// Note: This test file is designed for the test:int suite
 // It assumes a running Next.js server and makes real HTTP requests
 // For now, we'll mock the dependencies to avoid requiring real LiteLLM
 

@@ -47,7 +47,7 @@ Used automatically when `APP_ENV=test` via bootstrap container.
 
 ```bash
 # CI automatically uses fake adapters
-APP_ENV=test pnpm test:api
+APP_ENV=test pnpm test:int
 ```
 
 ## Standards

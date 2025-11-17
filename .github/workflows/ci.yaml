@@ -97,7 +97,7 @@ jobs:
           echo "App failed to become healthy"; exit 1
 
       - name: Run API tests
-        run: pnpm test:api
+        run: pnpm test:int
 
       - name: Teardown stack
         if: always()

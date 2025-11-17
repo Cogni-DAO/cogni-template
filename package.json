@@ -29,7 +29,7 @@
     "check:docs:headers": "tsx scripts/validate-doc-headers.ts",
     "test": "vitest run",
     "test:ci": "vitest run --coverage.enabled=true --coverage.reporter=lcov --coverage.reporter=json-summary --coverage.reporter=text",
-    "test:api": "vitest run --config vitest.api.config.mts",
+    "test:int": "vitest run --config vitest.integration.config.mts",
     "e2e": "dotenv -e .env -- playwright test --project=staging-full",
     "e2e:smoke": "dotenv -e .env -- playwright test --project=smoke",
     "e2e:prod": "pnpm e2e:smoke",
