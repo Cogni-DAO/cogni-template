@@ -14,6 +14,7 @@
 
 export { Reveal } from "./kit/animation/Reveal";
 export { Avatar, AvatarFallback, AvatarImage } from "./kit/data-display/Avatar";
+export { Badge } from "./kit/data-display/Badge";
 export { GithubButton } from "./kit/data-display/GithubButton";
 export { TerminalFrame } from "./kit/data-display/TerminalFrame";
 export { Button } from "./kit/inputs/Button";
@@ -22,12 +23,7 @@ export { Container } from "./kit/layout/Container";
 export { Header } from "./kit/layout/Header";
 export { NavigationLink } from "./kit/navigation/NavigationLink";
 export { SkipLink } from "./kit/navigation/SkipLink";
-export {
-  Hero,
-  heroButtonContainer,
-  heroTextWrapper,
-  heroVisualContainer,
-} from "./kit/sections";
+export { Hero } from "./kit/sections";
 export {
   type CodeToken,
   CodeTokenLine,

@@ -3,12 +3,12 @@
 
 /**
  * Module: `@tests/lint/eslint/styling`
- * Purpose: Verifies CVA-only styling policy blocks literal className usage.
- * Scope: Covers direct literals, cn() calls, template literals. Does NOT test boundaries.
- * Invariants: All literal className usage must be blocked; CVA usage allowed.
+ * Purpose: Verifies token-driven styling rules (UI governance) behave as expected for literals + CVA.
+ * Scope: Covers literal className usage with semantic tokens, raw palettes, arbitrary values, plus CVA + styles exemptions; Does not test boundaries or vendor import rules (handled in other specs).
+ * Invariants: Token-prefixed utilities pass; raw palettes + arbitrary non-token values fail; CVA + styles literals remain allowed.
  * Side-effects: IO (via runEslint temp file creation)
- * Notes: Tests no-restricted-syntax and no-literal-classnames plugin rules.
- * Links: eslint.config.mjs styling rules, src/styles/ui/
+ * Notes: Complements ui-governance.spec with quick smoke tests on literal usage.
+ * Links: eslint/ui-governance.config.mjs, docs/ui-style-spec.json
  * @public
  */
 
@@ -16,19 +16,27 @@ import { describe, expect, it } from "vitest";
 
 import { lintFixture } from "./runEslint";
 
-describe("CVA-Only Styling Policy", () => {
-  it("blocks direct literal className", async () => {
+describe("Token-Driven Styling Policy", () => {
+  it("allows literal className with token-prefixed utilities", async () => {
     const { errors } = await lintFixture(
       "src/app/page.tsx",
-      `export default () => <div className="flex gap-2" />;`
+      `export default () => <div className="bg-background text-foreground border-border ring-offset-background flex gap-4 px-[var(--spacing-lg)]" />;`
+    );
+    expect(errors).toBe(0);
+  });
+
+  it("blocks raw palette literals", async () => {
+    const { errors } = await lintFixture(
+      "src/app/page.tsx",
+      `export default () => <div className="bg-red-500 text-gray-600" />;`
     );
     expect(errors).toBeGreaterThan(0);
   });
 
-  it("blocks cn() with literals", async () => {
+  it("blocks arbitrary values that are not tokenized", async () => {
     const { errors } = await lintFixture(
       "src/app/page.tsx",
-      `import { cn } from "clsx"; export default () => <div className={cn("flex","gap-2")} />;`
+      `export default () => <div className="gap-[12px] px-[1.25rem]" />;`
     );
     expect(errors).toBeGreaterThan(0);
   });

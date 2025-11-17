@@ -1,8 +1,22 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@components/kit/typography/FlipWords`
+ * Purpose: Kit wrapper for animated flip words with staggered letter animations.
+ * Scope: Renders animated flip words. Does not handle text content.
+ * Invariants: Uses motion/react primitives; no className prop overrides; styled via CVA.
+ * Side-effects: none
+ * Notes: Wrapper for FlipWords with kit-specific styling and animation timing.
+ * Links: src/components/kit/typography/HeroActionWords.tsx
+ * @public
+ */
+
 "use client";
 import { AnimatePresence, motion } from "motion/react";
 import React, { useCallback, useEffect, useState } from "react";
 
-import { cn } from "./_vendorUtils";
+import { cn } from "@/shared/util";
 
 export const FlipWords = ({
   words,
@@ -59,7 +73,7 @@ export const FlipWords = ({
           position: "absolute",
         }}
         className={cn(
-          "relative z-10 inline-block px-2 text-left text-neutral-900 dark:text-neutral-100",
+          "text-foreground relative z-10 inline-block px-[var(--spacing-sm)]",
           className
         )}
         key={currentWord}

@@ -14,19 +14,26 @@
 
 import type { ReactElement, ReactNode } from "react";
 
+import { cn } from "@/shared/util";
 import { skipLink } from "@/styles/ui";
 
 interface SkipLinkProps {
   readonly target?: string;
   readonly children?: ReactNode;
+  /**
+   * Optional className for layout adjustments when embedding skip link in custom containers.
+   * Core styling (visually hidden until focus) remains managed by CVA.
+   */
+  readonly className?: string;
 }
 
 export function SkipLink({
   target = "#main",
   children = "Skip to main content",
+  className,
 }: SkipLinkProps): ReactElement {
   return (
-    <a href={target} className={skipLink()}>
+    <a href={target} className={cn(skipLink(), className)}>
       {children}
     </a>
   );

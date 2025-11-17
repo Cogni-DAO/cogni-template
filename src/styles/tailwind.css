@@ -149,6 +149,17 @@
   --size-dropdown-lg: 10rem;
   --size-dropdown-xl: 12rem;
 
+  /* GitHub button palette */
+  --github-button-bg: #09090b;
+  --github-button-bg-hover: #18181b;
+  --github-button-border: #27272a;
+  --github-button-text: #fafafa;
+  --github-button-bg-dark: #fafafa;
+  --github-button-bg-dark-hover: #f4f4f5;
+  --github-button-border-dark: #d4d4d8;
+  --github-button-text-dark: #0a0a0a;
+  --github-button-yellow: #fbbf24;
+
   /* Terminal dots */
   --size-dot: 0.75rem;
 

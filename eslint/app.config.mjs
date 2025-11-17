@@ -4,7 +4,6 @@ import boundaries from "eslint-plugin-boundaries";
 import importPlugin from "eslint-plugin-import";
 import jsxA11y from "eslint-plugin-jsx-a11y";
 import noInlineStyles from "eslint-plugin-no-inline-styles";
-import noLiteralClassnames from "eslint-plugin-no-literal-classnames";
 import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
 
@@ -17,7 +16,6 @@ export default [
       "@next/next": nextPlugin,
       tailwindcss: communityTailwind,
       "no-inline-styles": noInlineStyles,
-      "no-literal-classnames": noLiteralClassnames,
       import: importPlugin,
       boundaries: boundaries,
       "jsx-a11y": jsxA11y,
@@ -50,44 +48,11 @@ export default [
           ],
           paths: [
             {
-              name: "clsx",
-              message:
-                "Only allowed in src/styles/** and src/components/vendor/** - use styling API from @/styles/ui instead",
-            },
-            {
               name: "tailwind-merge",
               message:
                 "Only allowed in src/styles/** and src/components/vendor/** - use styling API from @/styles/ui instead",
             },
           ],
-        },
-      ],
-
-      // Block literal className usage - force styling API
-      "no-literal-classnames/no-literal-classnames": "error",
-
-      // Block specific className patterns
-      "no-restricted-syntax": [
-        "error",
-        // 1) Direct string literal as the attribute value
-        {
-          selector: "JSXAttribute[name.name='className'] > Literal",
-          message:
-            "Use CVA from @/styles/ui. Direct string className forbidden.",
-        },
-        // 2) Template literal directly used as the attribute value
-        {
-          selector:
-            "JSXAttribute[name.name='className'] > JSXExpressionContainer > TemplateLiteral",
-          message:
-            "Use CVA from @/styles/ui. Template literal className forbidden.",
-        },
-        // 3) cn(...) with any literal arg anywhere under className
-        {
-          selector:
-            "JSXAttribute[name.name='className'] > JSXExpressionContainer CallExpression[callee.name='cn'] Literal",
-          message:
-            "Use CVA from @/styles/ui. cn(...) with literal strings forbidden.",
         },
       ],
 
@@ -407,7 +372,6 @@ export default [
         },
       ],
       // Allow literal classes inside styling API factories
-      "no-literal-classnames/no-literal-classnames": "off",
       // Ban inline variant maps inside cva(...) so authors must use typed `*Variants` consts
       "no-restricted-syntax": [
         "error",
@@ -426,7 +390,6 @@ export default [
     files: ["src/components/vendor/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": "off",
-      "no-literal-classnames/no-literal-classnames": "off",
       "no-restricted-syntax": "off",
     },
   },
@@ -446,11 +409,6 @@ export default [
           ],
           paths: [
             {
-              name: "clsx",
-              message:
-                "Only allowed in src/styles/** and src/components/vendor/** - use styling API from @/styles/ui instead",
-            },
-            {
               name: "tailwind-merge",
               message:
                 "Only allowed in src/styles/** and src/components/vendor/** - use styling API from @/styles/ui instead",
@@ -458,15 +416,14 @@ export default [
           ],
         },
       ],
-      // Kit components must not use className at all - expose CVA variants instead
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector: "Identifier[name='className']",
-          message:
-            "Kit components must not use `className`; expose CVA variants instead.",
-        },
-      ],
+    },
+  },
+
+  // Shared cn utility may import tailwind-merge for reuse
+  {
+    files: ["src/shared/util/cn.ts"],
+    rules: {
+      "no-restricted-imports": "off",
     },
   },
 
@@ -514,11 +471,6 @@ export default [
             // note: NO "@/styles/tailwind.css" pattern here
           ],
           paths: [
-            {
-              name: "clsx",
-              message:
-                "Only allowed in src/styles/** and src/components/vendor/** - use styling API from @/styles/ui instead",
-            },
             {
               name: "tailwind-merge",
               message:
