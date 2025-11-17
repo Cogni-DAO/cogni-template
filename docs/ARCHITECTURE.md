@@ -1,7 +1,9 @@
 # Cogni-Template Architecture
 
+**Core Mission**: A crypto-metered AI infrastructure loop where chat is just one client. DAO multi-sig → pays for GPU + OpenRouter/LiteLLM → users interact (chat/API) → users pay back in crypto → DAO multi-sig.
+
 Strict **Hexagonal (Ports & Adapters)** for a full-stack TypeScript app on **Next.js App Router**.  
-Purpose: a **fully open-source, crypto-only AI Application** with clean domain boundaries.  
+Purpose: a **metered AI backend** with per-request logging, credit accounting, and crypto billing.  
 **Web3 Enclosure** — all resources authenticated by connected wallets.  
 **Crypto-only Accounting** — infrastructure, LLM usage, and deployments funded by DAO-controlled wallets.  
 Every dependency points inward.
@@ -82,7 +84,7 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 ## Directory & Boundary Specification
 
 [x] .env.example # sample env vars for all services
-[x] .env.local.example # local-only env template (never committed)
+[ ] .env.local.example # local-only env template (never committed)
 [x] .gitignore # standard git ignore list
 [x] .nvmrc # node version pin (e.g., v20)
 [x] .editorconfig # IDE whitespace/newline rules
@@ -93,7 +95,8 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] tailwind.config.ts # Tailwind theme + presets
 [x] tsconfig.json # typescript + alias paths
 [x] tsconfig.eslint.json # eslint typescript config
-[x] package.json # deps, scripts, engines
+[x] package.json # deps, scripts, engines (db scripts added)
+[x] drizzle.config.ts # database migrations config
 [x] Dockerfile # reproducible build
 [ ] .dockerignore # ignore node_modules, artifacts, .env.\*
 [x] LICENSE # OSS license
@@ -104,6 +107,7 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] CHANGELOG.md # releases
 [ ] middleware.ts # headers, session/API-key guard, basic rate-limit
 [x] vitest.config.mts # unit/integration
+[x] vitest.api.config.mts # API integration tests
 [x] playwright.config.ts # UI/e2e
 
 [x] docs/
@@ -113,26 +117,21 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] platform/ # platform tooling and infrastructure
 [x] ├── infra/ # Infrastructure as Code and deployment configs
 [x] │ ├── providers/
-[ ] │ │ ├── cherry/
-[ ] │ │ │ ├── base/ # VM + static bootstrap (immutable)
+[x] │ │ ├── cherry/ # Cherry Servers provider
+[x] │ │ │ ├── base/ # VM + static bootstrap (immutable)
 [ ] │ │ │ └── app/ # SSH deploy + health gate (mutable)
-[ ] │ │ └── akash/ # FUTURE provider
-[ ] │ ├── services/
-[ ] │ │ ├── litellm/ # LLM model routing + budgets
-[ ] │ │ ├── langfuse/ # Observability stack
-[ ] │ │ └── postgres/ # Database configs
+[x] │ │ └── akash/ # Akash provider configs
+[x] │ ├── services/
+[x] │ │ ├── runtime/ # Docker Compose for local dev (postgres, litellm)
+[x] │ │ └── loki-promtail/ # Log aggregation stack
 [ ] │ ├── stacks/
 [ ] │ │ └── local-compose/ # Local development stack
-[ ] │ ├── files/ # Shared templates and utility scripts
-[ ] │ └── modules/ # Reusable Terraform modules
-[ ] ├── ci/
-[ ] │ ├── github/ # README, env mapping, badges (no YAML workflows)
-[ ] │ ├── jenkins/ # Jenkinsfile, controller notes  
-[ ] │ └── scripts/ # Provider-agnostic build/push/deploy shims
-[ ] ├── bootstrap/ # One-time dev machine setup installers
+[x] │ └── files/ # Shared templates and utility scripts
+[x] ├── ci/ # CI/CD automation
+[x] ├── bootstrap/ # One-time dev machine setup installers
 [ ] │ ├── install/ # Focused installer scripts (tofu, pnpm, docker, reuse)
 [ ] │ └── README.md # Installation instructions
-[ ] └── runbooks/ # Deploy, rollback, incident docs
+[x] └── runbooks/ # Deploy, rollback, incident docs
 
 [ ] public/
 [ ] ├── robots.txt
@@ -143,33 +142,38 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 
 [x] src/
 [x] ├── bootstrap/ # composition root (DI)
-[ ] │ ├── container.ts # wires adapters → ports
+[x] │ ├── container.ts # wires adapters → ports
 [ ] │ └── config.ts # Zod-validated env
 [ ] │
 [x] ├── contracts/ # operation contracts (edge IO)
-[ ] │ ├── AGENTS.md
-[ ] │ └── \*.contract.ts
+[x] │ ├── AGENTS.md
+[x] │ ├── http/ # HTTP route contracts
+[x] │ └── \*.contract.ts # individual operation contracts
 [ ] │
 [x] ├── mcp/ # MCP host (future)
-[ ] │ ├── AGENTS.md
-[ ] │ └── server.stub.ts
+[x] │ ├── AGENTS.md
+[x] │ └── server.stub.ts
 [ ] │
 [x] ├── app/ # delivery (Next UI + routes)
 [x] │ ├── layout.tsx
 [x] │ ├── page.tsx
+[x] │ ├── \_facades/ # server-side facades for UI
 [ ] │ ├── providers.tsx # QueryClient, Wagmi, RainbowKit
-[ ] │ ├── globals.css
 [ ] │ ├── (public)/
 [ ] │ ├── (protected)/
-[ ] │ └── api/
-[ ] │ ├── health/route.ts
-[ ] │ ├── ai/chat/route.ts # uses ports.AIService only
+[x] │ └── api/
+[x] │ ├── v1/meta/ # health, route-manifest, openapi
+[x] │ ├── v1/ai/completion/ # AI completion endpoint
 [ ] │ ├── balance/route.ts # exposes credits
 [ ] │ ├── keys/create/route.ts # API-key issuance
 [ ] │ └── web3/verify/route.ts # calls wallet verification port
 [ ] │
 [x] ├── features/ # application services
-[x] │ ├── home/
+[x] │ ├── home/ # home page data
+[x] │ ├── ai/ # AI completion services
+[x] │ │ └── services/
+[x] │ └── site-meta/ # meta services (health, routes)
+[x] │ ├── services/
 [ ] │ ├── auth/
 [ ] │ │ ├── actions.ts
 [ ] │ │ └── services/
@@ -183,6 +187,11 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] │ └── index.ts
 [ ] │
 [x] ├── core/ # domain: entities, rules, invariants
+[x] │ ├── chat/ # chat domain model
+[x] │ │ ├── model.ts
+[x] │ │ ├── rules.ts
+[x] │ │ └── public.ts
+[x] │ └── public.ts # core exports
 [ ] │ ├── auth/
 [ ] │ │ ├── session.ts
 [ ] │ │ └── rules.ts
@@ -194,30 +203,37 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] │ └── rules.ts
 [ ] │
 [x] ├── ports/ # contracts (minimal interfaces)
-[ ] │ ├── ai.port.ts # AIService { complete(): Promise<…> }
+[x] │ ├── llm.port.ts # LLM service interface (LlmCaller)
+[x] │ ├── clock.port.ts # Clock { now(): Date }
+[x] │ └── index.ts # port exports
 [ ] │ ├── wallet.port.ts # WalletService { verifySignature(...) }
 [ ] │ ├── auth.port.ts # AuthService { issueNonce, verifySiwe, session }
 [ ] │ ├── apikey.port.ts # ApiKeyRepo { create, revoke, findByHash }
-[ ] │ ├── credits.port.ts # CreditsRepo { balance, credit, debit }
+[ ] │ ├── accounts.port.ts # AccountService { checkCredits, deductCredits }
 [ ] │ ├── usage.port.ts # UsageRepo { recordUsage, findByApiKey }
 [ ] │ ├── telemetry.port.ts # Telemetry { trace, event, span }
 [ ] │ ├── ratelimit.port.ts # RateLimiter { take(key, points) }
-[ ] │ ├── clock.port.ts # Clock { now(): Date }
 [ ] │ └── rng.port.ts # Rng { uuid(): string }
 [ ] │
 [x] ├── adapters/ # infrastructure implementations (no UI)
-[ ] │ ├── server/
-[ ] │ │ ├── ai/litellm.adapter.ts # AIService impl
-[ ] │ │ ├── auth/siwe.adapter.ts # nonce + session store
-[ ] │ │ ├── wallet/verify.adapter.ts # viem-based signature checks
-[ ] │ │ ├── apikey/drizzle.repo.ts # API keys persistence
-[ ] │ │ ├── credits/drizzle.repo.ts # atomic credit/usage accounting
-[ ] │ │ ├── db/drizzle.client.ts # drizzle instance
-[ ] │ │ ├── telemetry/langfuse.adapter.ts # traces + spans
-[ ] │ │ ├── logging/pino.adapter.ts # log transport
-[ ] │ │ ├── ratelimit/db-bucket.adapter.ts # simple token-bucket
-[ ] │ │ ├── clock/system.adapter.ts # system clock
-[ ] │ │ └── rng/uuid.adapter.ts # uuid generator
+[x] │ ├── server/
+[x] │ │ ├── ai/litellm.adapter.ts # LLM service impl
+[x] │ │ ├── db/ # database client and connection
+[x] │ │ │ ├── drizzle.client.ts # drizzle instance
+[x] │ │ │ └── index.ts # db exports
+[x] │ │ ├── time/system.adapter.ts # system clock
+[x] │ │ └── index.ts # server adapter exports
+[x] │ └── test/ # fake implementations for CI
+[x] │ ├── ai/fake-llm.adapter.ts # test LLM adapter
+[x] │ └── index.ts # test adapter exports
+[ ] │ ├── auth/siwe.adapter.ts # nonce + session store
+[ ] │ ├── wallet/verify.adapter.ts # viem-based signature checks
+[ ] │ ├── apikey/drizzle.repo.ts # API keys persistence
+[ ] │ ├── accounts/drizzle.adapter.ts # account/credit operations
+[ ] │ ├── telemetry/langfuse.adapter.ts # traces + spans
+[ ] │ ├── logging/pino.adapter.ts # log transport
+[ ] │ ├── ratelimit/db-bucket.adapter.ts # simple token-bucket
+[ ] │ └── rng/uuid.adapter.ts # uuid generator
 [ ] │ ├── worker/ # background jobs (future)
 [ ] │ └── cli/ # command-line adapters (future)
 [ ] │
@@ -225,17 +241,23 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] │ ├── env/
 [x] │ │ ├── server.ts # Zod-validated private vars
 [x] │ │ ├── client.ts # validated public vars
+[x] │ │ ├── build.ts # build-time env
 [x] │ │ └── index.ts
+[x] │ ├── db/ # database schema
+[x] │ │ ├── schema.ts # Drizzle schema definitions
+[x] │ │ └── index.ts
+[x] │ ├── constants/
+[x] │ │ └── index.ts
+[x] │ ├── errors/
+[x] │ │ └── index.ts
+[x] │ ├── util/
+[x] │ │ ├── cn.ts # className utility
+[x] │ │ └── index.ts
+[x] │ └── index.ts
 [ ] │ ├── schemas/
 [ ] │ │ ├── api.ts # request/response DTOs
 [ ] │ │ ├── usage.ts # usage schema
 [ ] │ │ └── mappers.ts # DTO ↔ domain translators
-[ ] │ ├── constants/
-[ ] │ │ ├── routes.ts
-[ ] │ │ └── models.ts
-[ ] │ └── util/
-[ ] │ ├── strings.ts
-[ ] │ ├── dates.ts
 [ ] │ └── crypto.ts
 [ ] │
 [x] ├── components/ # shared presentational UI
@@ -276,10 +298,15 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] └── ai.spec.ts
 
 [x] scripts/
-[ ] ├── generate-types.ts
-[ ] ├── validate-agents-md.mjs
-[ ] ├── seed-db.ts
-[ ] └── migrate.ts
+[x] ├── validate-agents-md.mjs # validates AGENTS.md files
+[x] ├── validate-doc-headers.ts # validates doc headers
+[x] ├── setup/ # setup scripts
+[x] └── eslint/ # custom ESLint plugins
+[x] ├── plugins/ui-governance.cjs
+[ ] ├── db/ # database scripts
+[ ] │ ├── seed.ts
+[ ] │ └── migrate.ts
+[ ] └── generate-types.ts
 
 ---
 
