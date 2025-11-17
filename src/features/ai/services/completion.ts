@@ -39,7 +39,10 @@ export async function execute(
   );
 
   // Delegate to port - adapter handles defaults from env
-  const result = await llmService.completion({ messages: trimmedMessages });
+  const result = await llmService.completion({
+    messages: trimmedMessages,
+    caller: { accountId: "demo" },
+  });
 
   // Feature sets timestamp after completion using injected clock
   return {

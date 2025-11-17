@@ -23,6 +23,9 @@ export interface LlmService {
     model?: string;
     temperature?: number;
     maxTokens?: number;
+    caller?: {
+      accountId?: string;
+    };
   }): Promise<{
     message: Message;
     usage?: {

@@ -23,6 +23,7 @@ export class LiteLlmAdapter implements LlmService {
     const model = params.model ?? serverEnv.DEFAULT_MODEL;
     const temperature = params.temperature ?? 0.7;
     const maxTokens = params.maxTokens ?? 2048;
+    const user = params.caller?.accountId ?? "unknown";
 
     // Convert core Messages to LiteLLM format
     const liteLlmMessages = params.messages.map((msg) => ({
@@ -35,6 +36,7 @@ export class LiteLlmAdapter implements LlmService {
       messages: liteLlmMessages,
       temperature,
       max_tokens: maxTokens,
+      user,
     };
 
     try {
