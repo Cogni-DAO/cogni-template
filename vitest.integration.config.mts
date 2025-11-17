@@ -17,33 +17,18 @@ import tsconfigPaths from "vite-tsconfig-paths";
 import { config } from "dotenv";
 import { expand } from "dotenv-expand";
 
-// Load .env.local for API integration tests with variable expansion
+// Load .env.local for integration tests with variable expansion
 const env = config({ path: ".env.local" });
 expand(env);
 
 export default defineConfig({
-  root: ".",
-  plugins: [
-    tsconfigPaths({
-      projects: ["./tsconfig.json"],
-    }),
-  ],
+  plugins: [tsconfigPaths()],
   test: {
-    globals: true,
+    include: ["tests/integration/**/*.int.test.ts"],
     environment: "node",
-    setupFiles: ["./tests/setup.ts"],
-    include: [
-      "tests/integration/**/*.int.test.ts",
-      "tests/integration/**/*.spec.ts",
+    globalSetup: [
+      "./tests/integration/setup/testcontainers-postgres.global.ts",
     ],
-    exclude: [
-      "node_modules",
-      "dist",
-      ".next",
-      "tests/_fakes/**",
-      "tests/_fixtures/**",
-    ],
-    testTimeout: 10_000,
-    hookTimeout: 10_000,
+    sequence: { concurrent: false },
   },
 });

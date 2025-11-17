@@ -53,7 +53,8 @@ pnpm build          # build for production
 pnpm check          # lint + type + format validation
 pnpm test           # run unit/integration tests (no server required)
 pnpm test:ci        # run tests with coverage for CI/CD
-pnpm test:int        # Integration tests (requires server + DB)
+pnpm test:int        # Integration tests (testcontainers, no server)
+pnpm test:stack      # Stack tests (requires server + DB)
 pnpm format         # prettier format fixes
 pnpm check:docs     # lint AGENTS.md documentation
 pnpm e2e            # end-to-end tests

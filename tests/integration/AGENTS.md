@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-07
+- **Last reviewed:** 2025-11-17
 - **Status:** draft
 
 ## Purpose
 
-Verify concrete adapter implementations against real-ish dependencies with minimal mocking. Prefer local containers or official sandbox endpoints. Never production.
+Pure adapter integration tests using testcontainers. Tests adapter implementations directly against real databases without HTTP server dependencies.
 
 ## Pointers
 
@@ -57,7 +57,7 @@ pnpm test tests/integration/adapters/ai
 ## Standards
 
 - Adapters must pass their port tests: import tests/ports/\*.port.spec.ts and run the suite
-- Dependencies: prefer dockerized locals (postgres, litellm, langfuse). If using third-party, restrict to official sandboxes; forbid production hosts
+- Dependencies: uses testcontainers for database isolation; no external service dependencies
 - Setup/teardown: create and migrate schema per run; isolate data; clean shutdown
 - Timing: avoid real time sensitivity; use deterministic inputs; allow retries only for transient network on localhost
 

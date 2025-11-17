@@ -13,31 +13,25 @@
  */
 
 import { eq } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { db } from "@/adapters/server/db/client";
 import { accounts } from "@/shared/db";
 import { deriveAccountIdFromApiKey } from "@/shared/util";
+
+const API_BASE = process.env.TEST_BASE_URL ?? "http://localhost:3000";
 
 describe("Account ID Invariant", () => {
   // Use unique API key for invariant test
   const apiKey = "test-litellm-key-invariant-12345";
   const expectedAccountId = deriveAccountIdFromApiKey(apiKey);
 
-  beforeAll(async () => {
-    // Clean up any existing test data
-    await db.delete(accounts).where(eq(accounts.id, expectedAccountId));
-  });
-
-  afterAll(async () => {
-    // Clean up test data
-    await db.delete(accounts).where(eq(accounts.id, expectedAccountId));
-  });
+  // No cleanup needed - each test run gets fresh Testcontainers database
 
   it("register endpoint MUST create account with deriveAccountIdFromApiKey(apiKey)", async () => {
     // Act: Call the register endpoint with the exact API key
     const registerResponse = await fetch(
-      "http://localhost:3000/api/admin/accounts/register-litellm-key",
+      `${API_BASE}/api/admin/accounts/register-litellm-key`,
       {
         method: "POST",
         headers: {

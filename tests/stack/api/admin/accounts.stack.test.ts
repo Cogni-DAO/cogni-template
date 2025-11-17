@@ -13,7 +13,7 @@
  */
 
 import { eq } from "drizzle-orm";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { db } from "@/adapters/server/db/drizzle.client";
 import { accounts } from "@/shared/db";
@@ -22,22 +22,16 @@ import { deriveAccountIdFromApiKey } from "@/shared/util";
 const ADMIN_TOKEN = "Bearer admin-test-key";
 const TEST_API_KEY = "test-litellm-key-admin-workflow-12345";
 const TEST_ACCOUNT_ID = deriveAccountIdFromApiKey(TEST_API_KEY);
+const API_BASE = process.env.TEST_BASE_URL ?? "http://localhost:3000";
 
 describe("Admin Accounts Integration", () => {
-  // Clean up test account before and after each test
-  beforeEach(async () => {
-    await db.delete(accounts).where(eq(accounts.id, TEST_ACCOUNT_ID));
-  });
-
-  afterEach(async () => {
-    await db.delete(accounts).where(eq(accounts.id, TEST_ACCOUNT_ID));
-  });
+  // No cleanup needed - each test run gets fresh Testcontainers database
 
   describe("Complete Admin Workflow", () => {
     it("should complete full cycle: register → topup → use credits", async () => {
       // Step 1: Register API key (creates account)
       const registerResponse = await fetch(
-        "http://localhost:3000/api/admin/accounts/register-litellm-key",
+        `${API_BASE}/api/admin/accounts/register-litellm-key`,
         {
           method: "POST",
           headers: {
@@ -70,7 +64,7 @@ describe("Admin Accounts Integration", () => {
 
       // Step 2: Top up credits
       const topupResponse = await fetch(
-        `http://localhost:3000/api/admin/accounts/${TEST_ACCOUNT_ID}/credits/topup`,
+        `${API_BASE}/api/admin/accounts/${TEST_ACCOUNT_ID}/credits/topup`,
         {
           method: "POST",
           headers: {
@@ -102,7 +96,7 @@ describe("Admin Accounts Integration", () => {
 
       // Step 3: Use credits via completion endpoint
       const completionResponse = await fetch(
-        "http://localhost:3000/api/v1/ai/completion",
+        `${API_BASE}/api/v1/ai/completion`,
         {
           method: "POST",
           headers: {
@@ -125,7 +119,7 @@ describe("Admin Accounts Integration", () => {
     it("should handle account registration idempotency", async () => {
       // Register account first time
       const firstResponse = await fetch(
-        "http://localhost:3000/api/admin/accounts/register-litellm-key",
+        `${API_BASE}/api/admin/accounts/register-litellm-key`,
         {
           method: "POST",
           headers: {
@@ -142,7 +136,7 @@ describe("Admin Accounts Integration", () => {
 
       // Register same account second time (should be idempotent)
       const secondResponse = await fetch(
-        "http://localhost:3000/api/admin/accounts/register-litellm-key",
+        `${API_BASE}/api/admin/accounts/register-litellm-key`,
         {
           method: "POST",
           headers: {
@@ -171,7 +165,7 @@ describe("Admin Accounts Integration", () => {
   describe("Error Scenarios", () => {
     it("should reject requests without admin auth", async () => {
       const response = await fetch(
-        "http://localhost:3000/api/admin/accounts/register-litellm-key",
+        `${API_BASE}/api/admin/accounts/register-litellm-key`,
         {
           method: "POST",
           headers: {
@@ -191,19 +185,16 @@ describe("Admin Accounts Integration", () => {
     it("should reject completion calls for unregistered API keys", async () => {
       const unregisteredKey = "unregistered-key-999";
 
-      const response = await fetch(
-        "http://localhost:3000/api/v1/ai/completion",
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${unregisteredKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            messages: [{ role: "user", content: "Hello" }],
-          }),
-        }
-      );
+      const response = await fetch(`${API_BASE}/api/v1/ai/completion`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${unregisteredKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: "Hello" }],
+        }),
+      });
 
       expect(response.status).toBe(403);
       const data = await response.json();
@@ -214,7 +205,7 @@ describe("Admin Accounts Integration", () => {
       const nonExistentAccountId = "key:nonexistent123";
 
       const response = await fetch(
-        `http://localhost:3000/api/admin/accounts/${nonExistentAccountId}/credits/topup`,
+        `${API_BASE}/api/admin/accounts/${nonExistentAccountId}/credits/topup`,
         {
           method: "POST",
           headers: {
@@ -236,7 +227,7 @@ describe("Admin Accounts Integration", () => {
     it("should validate request schemas", async () => {
       // Invalid topup amount (negative)
       const response = await fetch(
-        `http://localhost:3000/api/admin/accounts/${TEST_ACCOUNT_ID}/credits/topup`,
+        `${API_BASE}/api/admin/accounts/${TEST_ACCOUNT_ID}/credits/topup`,
         {
           method: "POST",
           headers: {
@@ -261,7 +252,7 @@ describe("Admin Accounts Integration", () => {
     it("should reject empty/missing required fields", async () => {
       // Missing apiKey in registration
       const missingApiKeyResponse = await fetch(
-        "http://localhost:3000/api/admin/accounts/register-litellm-key",
+        `${API_BASE}/api/admin/accounts/register-litellm-key`,
         {
           method: "POST",
           headers: {
@@ -278,7 +269,7 @@ describe("Admin Accounts Integration", () => {
 
       // Empty apiKey in registration
       const emptyApiKeyResponse = await fetch(
-        "http://localhost:3000/api/admin/accounts/register-litellm-key",
+        `${API_BASE}/api/admin/accounts/register-litellm-key`,
         {
           method: "POST",
           headers: {
@@ -296,7 +287,7 @@ describe("Admin Accounts Integration", () => {
 
       // Missing reason in topup
       const missingReasonResponse = await fetch(
-        `http://localhost:3000/api/admin/accounts/${TEST_ACCOUNT_ID}/credits/topup`,
+        `${API_BASE}/api/admin/accounts/${TEST_ACCOUNT_ID}/credits/topup`,
         {
           method: "POST",
           headers: {
@@ -313,7 +304,7 @@ describe("Admin Accounts Integration", () => {
 
       // Empty reason in topup
       const emptyReasonResponse = await fetch(
-        `http://localhost:3000/api/admin/accounts/${TEST_ACCOUNT_ID}/credits/topup`,
+        `${API_BASE}/api/admin/accounts/${TEST_ACCOUNT_ID}/credits/topup`,
         {
           method: "POST",
           headers: {
@@ -345,7 +336,7 @@ describe("Admin Accounts Integration", () => {
 
         try {
           const response = await fetch(
-            "http://localhost:3000/api/admin/accounts/register-litellm-key",
+            `${API_BASE}/api/admin/accounts/register-litellm-key`,
             {
               method: "POST",
               headers: {
@@ -380,19 +371,16 @@ describe("Admin Accounts Integration", () => {
       const largeTestApiKey = "large-test-key-12345";
       const largeTestAccountId = deriveAccountIdFromApiKey(largeTestApiKey);
 
-      await fetch(
-        "http://localhost:3000/api/admin/accounts/register-litellm-key",
-        {
-          method: "POST",
-          headers: {
-            Authorization: ADMIN_TOKEN,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            apiKey: largeTestApiKey,
-          }),
-        }
-      );
+      await fetch(`${API_BASE}/api/admin/accounts/register-litellm-key`, {
+        method: "POST",
+        headers: {
+          Authorization: ADMIN_TOKEN,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          apiKey: largeTestApiKey,
+        }),
+      });
 
       try {
         const largeAmounts = [
@@ -404,7 +392,7 @@ describe("Admin Accounts Integration", () => {
 
         for (const amount of largeAmounts) {
           const response = await fetch(
-            `http://localhost:3000/api/admin/accounts/${largeTestAccountId}/credits/topup`,
+            `${API_BASE}/api/admin/accounts/${largeTestAccountId}/credits/topup`,
             {
               method: "POST",
               headers: {
@@ -444,22 +432,19 @@ describe("Admin Accounts Integration", () => {
       const creditTestApiKey = "credit-deduction-test-key";
       const creditTestAccountId = deriveAccountIdFromApiKey(creditTestApiKey);
 
-      await fetch(
-        "http://localhost:3000/api/admin/accounts/register-litellm-key",
-        {
-          method: "POST",
-          headers: {
-            Authorization: ADMIN_TOKEN,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            apiKey: creditTestApiKey,
-          }),
-        }
-      );
+      await fetch(`${API_BASE}/api/admin/accounts/register-litellm-key`, {
+        method: "POST",
+        headers: {
+          Authorization: ADMIN_TOKEN,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          apiKey: creditTestApiKey,
+        }),
+      });
 
       await fetch(
-        `http://localhost:3000/api/admin/accounts/${creditTestAccountId}/credits/topup`,
+        `${API_BASE}/api/admin/accounts/${creditTestAccountId}/credits/topup`,
         {
           method: "POST",
           headers: {
@@ -486,7 +471,7 @@ describe("Admin Accounts Integration", () => {
 
         // Make completion call (should deduct credits)
         const completionResponse = await fetch(
-          "http://localhost:3000/api/v1/ai/completion",
+          `${API_BASE}/api/v1/ai/completion`,
           {
             method: "POST",
             headers: {
@@ -522,7 +507,7 @@ describe("Admin Accounts Integration", () => {
       // Unclear if this is correct behavior or if we should add explicit validation.
       // Malformed JSON
       const malformedJsonResponse = await fetch(
-        "http://localhost:3000/api/admin/accounts/register-litellm-key",
+        `${API_BASE}/api/admin/accounts/register-litellm-key`,
         {
           method: "POST",
           headers: {
@@ -537,7 +522,7 @@ describe("Admin Accounts Integration", () => {
 
       // Wrong content type
       const wrongContentTypeResponse = await fetch(
-        "http://localhost:3000/api/admin/accounts/register-litellm-key",
+        `${API_BASE}/api/admin/accounts/register-litellm-key`,
         {
           method: "POST",
           headers: {

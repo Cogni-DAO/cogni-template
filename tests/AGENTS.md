@@ -50,7 +50,8 @@ Provide fast, reliable verification per layer. Enforce port contracts so any ada
 
 ```bash
 pnpm test       # unit + ports tests (no server required)
-pnpm test:int   # Integration tests (requires running Next.js server + DB)
+pnpm test:int   # Integration tests (testcontainers, no server)
+pnpm test:stack # Stack tests (requires running Next.js server + DB)
 ```
 
 ## Standards
