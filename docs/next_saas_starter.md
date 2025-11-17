@@ -63,8 +63,63 @@
 - [x] **Status:** ✅ Already exists - but may need feature updates
 - **Note:** Saas-starter version has clipboard functionality, step-by-step animation, uses hardcoded classes instead of design tokens
 
-## Summary
+## Priority 4: Auth & Account Infrastructure (When + What to Copy)
 
-- **✅ Already have:** Card, Button, Avatar, Terminal (4/8)
-- **❌ Missing:** Input, Label, DropdownMenu, Radio Group (4/8)
-- **🔄 Need updates:** Terminal (clipboard), Button/Avatar (compare implementations)
+Auth is **not** part of the current MVP core loop (LiteLLM-key–based infra). We only start pulling Auth from SaaS-Starter once the LLM infra path is stable.
+
+### When to copy auth infra
+
+- **Trigger point:**  
+  After we have:
+  - `POST /api/v1/ai/completion` and at least one LangGraph-based route working end-to-end via LiteLLM virtual keys, and
+  - a minimal way to inspect usage per key (either via LiteLLM or logs).
+
+At that moment we’ll need a human console with real accounts/teams and non-crypto billing abstractions ready for later crypto integration.
+
+### What to copy (and adapt) from SaaS-Starter
+
+When we do pull from the starter, we copy **patterns and modules**, not the whole app:
+
+1. **Auth & Session Handling**
+   - **Source (conceptual):** Auth/session setup (JWT cookies, middleware, session retrieval helpers).
+   - **Target:** New `src/core/auth` + `src/ports/auth.port.ts` + Next middleware.
+   - **Usage:**
+     - Web console login only.
+     - API identity remains LiteLLM-key–based until we intentionally map users → accounts → keys.
+
+2. **User & Team Models**
+   - **Source:** User, Team, Membership tables (Drizzle models).
+   - **Target:** `src/core/accounts` (or similar), integrated into our existing Drizzle schema.
+   - **Usage:**
+     - Represent human users and organizations.
+     - Attach roles (Owner/Member) and later map them to “who can see/manage which LiteLLM keys and graphs.”
+
+3. **RBAC Pattern**
+   - **Source:** Role checks (Owner/Member) in SaaS-Starter’s dashboard routes/components.
+   - **Target:** A small authorization helper layer (`canManageProject`, `canViewUsage`) in `src/core/authz`.
+   - **Usage:**
+     - Gate access to dashboards, admin tools, and future “agent management” UIs.
+     - Does **not** replace LiteLLM usage limits; it only controls UI/API permissions in our app.
+
+4. **Billing Shell (Without Stripe as Source of Truth)**
+   - **Source:** Stripe subscription + “plan” abstractions (but not the Stripe integration itself).
+   - **Target:** `src/core/billing` models and services that describe “plans/tiers/limits” in a Stripe-agnostic way.
+   - **Usage:**
+     - Define pricing tiers and usage limits in our DB.
+     - Later, wire those to **crypto payments and/or DAO rules** instead of Stripe, while still keeping the “plan → limits” pattern.
+
+### What we explicitly do NOT copy
+
+- Any assumption that **Stripe** is the canonical source of truth for:
+  - Whether an account can make AI calls.
+  - How much usage they’re allowed.
+- Any tight coupling between “Stripe subscription status” and “LLM access”:
+  - In our design, LiteLLM keys + our own plans/credits (eventually crypto-funded) control access, not Stripe.
+
+### Summary for future devs
+
+- **Now:** Identity for AI calls = LiteLLM virtual keys (`LlmCaller { accountId, apiKey }`). No user DB, no Auth.js.
+- **Later:** When we need a proper web console with users/teams:
+  - Copy **auth/session, user/team models, and RBAC patterns** from SaaS-Starter into our hex structure.
+  - Keep Stripe-specific pieces as reference only; replace with crypto/credits integration.
+- **Always:** The core infra loop (route → facade → feature → LLM port → LiteLLM) remains the center of the system. Auth and billing are adapters around it, not the core itself.

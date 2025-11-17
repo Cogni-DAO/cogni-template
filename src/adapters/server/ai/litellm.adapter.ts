@@ -23,7 +23,9 @@ export class LiteLlmAdapter implements LlmService {
     const model = params.model ?? serverEnv.DEFAULT_MODEL;
     const temperature = params.temperature ?? 0.7;
     const maxTokens = params.maxTokens ?? 2048;
-    const user = params.caller?.accountId ?? "unknown";
+
+    // Extract caller data - caller required by route enforcement
+    const { accountId: user, apiKey } = params.caller;
 
     // Convert core Messages to LiteLLM format
     const liteLlmMessages = params.messages.map((msg) => ({
@@ -47,7 +49,7 @@ export class LiteLlmAdapter implements LlmService {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${serverEnv.LITELLM_MASTER_KEY}`,
+            Authorization: `Bearer ${apiKey}`,
           },
           body: JSON.stringify(requestBody),
           /** 30 second timeout */

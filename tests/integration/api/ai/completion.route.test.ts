@@ -33,10 +33,18 @@ describe("app/api/v1/ai/completion/route", () => {
   afterEach(() => {
     vi.resetModules();
   });
-  const createRequest = (body: unknown): NextRequest => {
+  const createRequest = (body: unknown, includeAuth = true): NextRequest => {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+
+    if (includeAuth) {
+      headers.Authorization = "Bearer test-api-key";
+    }
+
     return new NextRequest("http://localhost:3000/api/v1/ai/completion", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(body),
     });
   };
@@ -75,6 +83,21 @@ describe("app/api/v1/ai/completion/route", () => {
       expect(() =>
         aiCompletionOperation.output.parse(responseData)
       ).not.toThrow();
+    });
+
+    it("should return 401 for missing Authorization header", async () => {
+      // Arrange
+      const request = createRequest({ messages: [] }, false);
+
+      // Act
+      const response = await POST(request);
+      const responseData = await response.json();
+
+      // Assert
+      expect(response.status).toBe(401);
+      expect(responseData).toEqual({
+        error: "API key required",
+      });
     });
 
     it("should return 400 for missing messages field", async () => {

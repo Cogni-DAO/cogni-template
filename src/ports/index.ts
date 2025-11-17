@@ -13,4 +13,4 @@
  */
 
 export type { Clock } from "./clock.port";
-export type { LlmService } from "./llm.port";
+export type { LlmCaller, LlmService } from "./llm.port";

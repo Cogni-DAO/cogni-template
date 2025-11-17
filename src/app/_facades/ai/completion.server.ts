@@ -19,9 +19,11 @@ import {
   type MessageDto,
   toCoreMessages,
 } from "@/features/ai/services/mappers";
+import type { LlmCaller } from "@/ports";
 
 interface CompletionInput {
   messages: MessageDto[];
+  caller: LlmCaller;
 }
 
 interface CompletionOutput {
@@ -43,7 +45,7 @@ export async function completion(
   const coreMessages = toCoreMessages(input.messages, timestamp);
 
   // Execute pure feature with injected dependencies
-  const result = await execute(coreMessages, llmService, clock);
+  const result = await execute(coreMessages, llmService, clock, input.caller);
 
   // Map core result back to DTO
   const message = fromCoreMessage(result);
