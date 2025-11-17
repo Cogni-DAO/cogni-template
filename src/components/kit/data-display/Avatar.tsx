@@ -14,38 +14,67 @@
 
 "use client";
 
+import * as AvatarPrimitive from "@radix-ui/react-avatar";
 import type { VariantProps } from "class-variance-authority";
 import * as React from "react";
 
-import {
-  Avatar as AvatarRoot,
-  AvatarFallback as AvatarFb,
-  AvatarImage as AvatarImg,
-} from "@/components/vendor/ui-primitives/shadcn/avatar";
+import { cn } from "@/shared/util";
 import { avatar, avatarFallback, avatarImage } from "@/styles/ui";
 
 export interface AvatarProps
-  extends React.ComponentPropsWithoutRef<typeof AvatarRoot>,
-    VariantProps<typeof avatar> {}
+  extends Omit<
+      React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>,
+      "className"
+    >,
+    VariantProps<typeof avatar> {
+  /**
+   * Optional className for layout adjustments (e.g., margin). Core styling stays controlled by CVA.
+   */
+  className?: string;
+}
 
 export const Avatar = React.forwardRef<
-  React.ElementRef<typeof AvatarRoot>,
+  React.ElementRef<typeof AvatarPrimitive.Root>,
   AvatarProps
->(({ size, ...props }, ref) => (
-  <AvatarRoot ref={ref} className={avatar({ size })} {...props} />
+>(({ size, className, ...props }, ref) => (
+  <AvatarPrimitive.Root
+    ref={ref}
+    className={cn(avatar({ size }), className)}
+    {...props}
+  />
 ));
 Avatar.displayName = "Avatar";
 
 export const AvatarImage = React.forwardRef<
-  React.ElementRef<typeof AvatarImg>,
-  React.ComponentPropsWithoutRef<typeof AvatarImg>
->((props, ref) => <AvatarImg ref={ref} className={avatarImage()} {...props} />);
+  React.ElementRef<typeof AvatarPrimitive.Image>,
+  Omit<
+    React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>,
+    "className"
+  > & {
+    className?: string;
+  }
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Image
+    ref={ref}
+    className={cn(avatarImage(), className)}
+    {...props}
+  />
+));
 AvatarImage.displayName = "AvatarImage";
 
 export const AvatarFallback = React.forwardRef<
-  React.ElementRef<typeof AvatarFb>,
-  React.ComponentPropsWithoutRef<typeof AvatarFb>
->((props, ref) => (
-  <AvatarFb ref={ref} className={avatarFallback()} {...props} />
+  React.ElementRef<typeof AvatarPrimitive.Fallback>,
+  Omit<
+    React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback>,
+    "className"
+  > & {
+    className?: string;
+  }
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Fallback
+    ref={ref}
+    className={cn(avatarFallback(), className)}
+    {...props}
+  />
 ));
 AvatarFallback.displayName = "AvatarFallback";

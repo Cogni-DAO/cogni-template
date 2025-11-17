@@ -13,8 +13,8 @@
   "iconLibrary": "lucide",
   "aliases": {
     "components": "@/components",
-    "utils": "@/shared/util",
-    "ui": "@/components/vendor/ui-primitives/shadcn/_vendorUtils"
+    "utils": "_vendorUtils.ts",
+    "ui": "@/components/vendor/ui-primitives/shadcn/"
   },
   "registries": {
     "@aceternity": "https://ui.aceternity.com/registry/{name}.json",

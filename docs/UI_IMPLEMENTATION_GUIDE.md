@@ -9,20 +9,19 @@ See [ARCHITECTURE.md Enforcement Rules](ARCHITECTURE.md#enforcement-rules) for c
 **UI-specific rules**:
 
 - `components/kit` → `@/styles/ui`, vendor/ui-primitives
-- `features` → `@/components` only (never `@/styles/ui` directly)
+- `features` → `@/components` for UI components (never `@/styles/ui` directly). Other standard imports (`@/core`, `@/ports`, `@/shared`) still allowed.
 - `app` → `@/components`, `@/features/*/components/*`
 
 ## Directory Structure & Component Placement
 
-- **`src/components/kit/`** - Reusable components across features. Styled wrappers using CVA. No className prop.
+- **`src/components/kit/`** - Reusable components across features. Styled with CVA + token utilities. Expose `className?: string` for layout-only overrides (flex/grid/gap/margin), not for recoloring or typography changes.
 - **`src/components/app/shell/`** - Global layout components (AppShell, MainHeader, Footer)
 - **`src/components/app/common/`** - Cross-feature app components (UserMenu, DaoStatusBadge)
 - **`src/features/*/components/`** - Feature-specific components (used only once). Use kit components.
-- **`src/features/*/experimental/components/`** - Rapid experimentation. Raw Tailwind allowed by linter. Code will not pass review until converted to project standards.
-- **`src/styles/ui/`** - CVA factories using design tokens. Only place with className literals.
+- **`src/styles/ui/`** - CVA factories using design tokens (literal classes allowed here).
 - **`src/components/vendor/ui-primitives/`** - Vendored code (shadcn). Read-only, no @/\* imports.
 
-**Placement Decision**: Building for reuse? → `components/kit/`. Feature-specific? → `features/*/components/`. Need to experiment quickly? → `features/*/experimental/components/`.
+**Placement Decision**: Building for reuse? → `components/kit/`. Feature-specific or still exploring? → `features/*/components/` (use short-lived branches for spikes; no special experimental folder needed).
 
 **Promotion Rules**: feature → app/common (2+ features, Cogni-specific) → kit (generic, domain-neutral)
 
@@ -30,46 +29,48 @@ See [ARCHITECTURE.md Enforcement Rules](ARCHITECTURE.md#enforcement-rules) for c
 
 ### 1. Before Building Anything
 
-**Avoid implementing new primitives at all costs!** Scan `/src/components/kit/` first and prioritize reuse. If not found, check shadcn or Radix for appropriate primitives.
+**Avoid implementing new primitives at all costs!** Scan `/src/components/kit/` first and prioritize reuse. If nothing fits, check shadcn/Radix for a primitive to wrap through kit.
 
 ### 2. Need New Styling?
 
-1. **Maximize reuse of existing tokens** - Only create new ones with user approval for truly novel work
-2. **Extend existing components** rather than creating new ones
-3. **Add CVA factory** in `src/styles/ui/` if absolutely needed
-4. **Export from barrel** at `src/components/index.ts`
+1. **Reuse existing tokens** — add tokens only in `tailwind.css` + `theme.ts` when semantics are missing.
+2. **Extend kit components** before creating new ones; add variants/props when reasonable.
+3. **Add/extend CVA helpers** in `src/styles/ui/` when a styling pattern becomes shared.
+4. **Export from the barrel** at `src/components/index.ts` once the primitive is ready.
 
 ### 3. Extending vs Creating
 
-**❌ Wrong**: Create new component (IconButton, TextWithSpacing)  
-**✅ Right**: Extend existing component with new props (Button.rightIcon)
+**❌ Wrong**: Invent a bespoke primitive (IconButton, TextWithSpacing) without checking kit.  
+**✅ Right**: Extend kit via variants/props (e.g., `Button` adding `rightIcon`, `Card` adding `accent`).
 
-**Naming**: Kit stays canonical (`CtaSection`), features get domain prefix (`HomeCtaSection`). See `/home` components for examples.
+**Naming**: Kit stays canonical (`CtaSection`); feature components use a domain prefix (`HomeHeroSection`). Promote to kit after a second consumer.
 
 ## Using Vendor Components (shadcn/Radix)
 
 ### shadcn Integration
 
-1. **Use shadcn CLI** to generate component OR copy from docs
-2. **Place files under** `src/components/vendor/ui-primitives/shadcn/`
-3. **Replace imports** (e.g., cn) with local `./vendorUtils`
-4. **Never re-export vendor** - always wrap via kit
-5. **Examples**: See existing files in `/src/components/vendor/ui-primitives/shadcn/`
+1. Generate (or copy) components into `src/components/vendor/ui-primitives/shadcn/`.
+2. Keep vendor files isolated; only adjust imports via `./_vendorUtils`.
+3. Wrap the primitive inside `src/components/kit/*` (required by `no-vendor-imports-outside-kit`).
+4. Examples: `GithubButton`, `ModeToggle`, and dropdown menus in kit.
 
 ### Radix Integration
 
-1. **Import @radix-ui/react-\*** directly in kit wrappers
-2. **Style via CVA** - no className prop
-3. **Examples**: See `/src/components/kit/` for Radix usage patterns
+1. Import `@radix-ui/react-*` primitives directly in kit wrappers.
+2. Compose CVA classes from `@/styles/ui` for the base look; `className` is available for layout tweaks only.
+3. Examples: `ModeToggle`, navigation menus, and inputs under `/src/components/kit`.
 
 ## Styling Rules
 
-- **No className literals** anywhere except `src/styles/ui/`
-- **Kit components** call `className={factory({ size, variant })}`
-- **Features** only use kit component props, never direct styling
-- **CVA parameters** allowed, direct className literals blocked by ESLint
+- **Tokens = SoT:** define/extend tokens only in `src/styles/tailwind.css` (values) + `src/styles/theme.ts` (keys). Tailwind’s palette is trimmed to these semantics.
+- **Color/typography utilities:** `bg-*/text-*/border-*/ring-*/shadow-*` classes must use semantic prefixes (e.g., `bg-surface-2`, `text-fg-muted`) or `prefix-[var(--token)]`. Raw hex/rgb/hsl values are blocked by `no-raw-colors`.
+- **Arbitrary values:** Tailwind arbitrary utilities are only allowed when wrapping `var(--token)` (e.g., `gap-[var(--spacing-lg)]`), enforced by `no-arbitrary-non-token-values`.
+- **Kit components:** use CVA factories for base styling but may expose `className?: string` for layout/composition overrides (flex/grid/gap/m/p/size). Do not introduce new colors/typography via `className`.
+- **Feature components:** can combine kit primitives with Tailwind layout utilities directly, as long as they honor the token rules. If a layout repeats across features, promote it into kit.
+- **Vendor isolation:** only kit wrappers may import from `src/components/vendor/ui-primitives/shadcn/**`, enforced by `no-vendor-imports-outside-kit`.
+- **Machine-readable spec:** see `docs/ui-style-spec.json` for the canonical list of allowed prefixes/patterns used by automated audits.
 
-**CVA Pattern**: Declare `const *Variants = { ... } satisfies Record<TokenKey,string>` and pass into cva. No inline variant objects.
+**CVA Pattern**: declare `const *Variants = { ... } satisfies Record<TokenKey,string>` and pass that identifier to `cva`. Keep literal class strings inside `src/styles/ui/**`.
 
 ## Token Architecture
 
@@ -88,10 +89,9 @@ Always update `src/components/index.ts` when adding kit components.
 
 ## Validation Checklist
 
-- [ ] Scanned existing components for reuse opportunities
-- [ ] Features import only from `@/components`
-- [ ] Kit components don't forward className prop
-- [ ] All styling goes through CVA factories
-- [ ] Used existing tokens (new tokens need user approval)
-- [ ] Barrel exports updated for new components
-- [ ] `pnpm check` passes
+- [ ] Checked kit + vendor wrappers before adding new UI.
+- [ ] Colors/typography utilities use semantic prefixes or token vars.
+- [ ] Arbitrary Tailwind values wrap `var(--token)` when used.
+- [ ] Kit component overrides stay layout-only; CVA handles core styling.
+- [ ] Vendor primitives only referenced from kit.
+- [ ] Barrels updated and `pnpm check` (lint+type+tests) passes.

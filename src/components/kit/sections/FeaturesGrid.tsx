@@ -8,17 +8,13 @@
  * Invariants: Uses layout primitives; responsive grid; consistent spacing.
  * Side-effects: none
  * Notes: Encapsulates section/container/grid styling for feature showcase patterns.
- * Links: src/styles/ui/layout.ts, src/components/kit/sections/hero.styles.ts
+ * Links: src/styles/ui/layout.ts
  * @public
  */
 
+import { cva } from "class-variance-authority";
 import type { ReactElement, ReactNode } from "react";
 
-import {
-  featureContent,
-  featureItem,
-  smallIcon,
-} from "@/components/kit/sections/hero.styles";
 import {
   container,
   grid,
@@ -27,6 +23,11 @@ import {
   paragraph,
   section,
 } from "@/styles/ui";
+
+// Feature-specific layout styles (localized to this component)
+const featureContent = cva("mt-[var(--spacing-lg)]");
+const featureItem = cva("mt-[var(--spacing-2xl)] lg:mt-0");
+const smallIcon = cva("h-[var(--size-icon-lg)] w-[var(--size-icon-lg)]");
 
 interface FeatureItemProps {
   /**

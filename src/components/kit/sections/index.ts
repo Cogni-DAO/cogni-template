@@ -8,18 +8,10 @@
  * Invariants: Explicit exports only (no export *); maintains clean import paths.
  * Side-effects: none
  * Notes: Section components compose layout primitives for reusable page patterns.
- * Links: src/components/kit/sections/Hero.tsx, src/components/kit/sections/hero.styles.ts
+ * Links: src/components/kit/sections/Hero.tsx
  * @public
  */
 
 export { CtaSection } from "./CtaSection";
 export { FeaturesGrid } from "./FeaturesGrid";
 export { Hero } from "./Hero";
-export {
-  featureContent,
-  featureItem,
-  heroButtonContainer,
-  heroTextWrapper,
-  heroVisualContainer,
-  smallIcon,
-} from "./hero.styles";

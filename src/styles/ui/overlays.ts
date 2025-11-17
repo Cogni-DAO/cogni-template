@@ -202,22 +202,25 @@ const dropdownContentSizeVariants = {
 } satisfies Record<SizeKey, string>;
 
 /**
- * Dropdown menu content sizing for consistent dropdown widths
+ * Dropdown menu content styling for consistent surface + sizing
  */
-export const dropdownContent = cva("", {
-  variants: {
-    size: dropdownContentSizeVariants,
-  } as const,
-  defaultVariants: {
-    size: "md",
-  },
-});
+export const dropdownContent = cva(
+  "bg-popover text-popover-foreground z-[var(--z-overlay)] overflow-hidden rounded-[var(--radius-md)] border border-border p-[var(--spacing-xs)] shadow-[var(--shadow-md)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[var(--radix-dropdown-menu-content-transform-origin)]",
+  {
+    variants: {
+      size: dropdownContentSizeVariants,
+    } as const,
+    defaultVariants: {
+      size: "md",
+    },
+  }
+);
 
 /**
  * Dropdown menu item styling with icon and text layout
  */
 export const dropdownMenuItem = cva(
-  "flex items-center gap-[var(--spacing-sm)]"
+  "relative flex cursor-default select-none items-center gap-[var(--spacing-sm)] rounded-[var(--radius-sm)] px-[var(--spacing-sm)] py-[var(--spacing-md-plus)] text-[var(--text-sm)] outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
 );
 
 const dropdownMenuCheckSizeVariants = {

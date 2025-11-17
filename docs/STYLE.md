@@ -63,6 +63,7 @@ Use these templates for different file types:
 - [google/gts](https://github.com/google/gts)
 - [TSDoc](https://tsdoc.org/)
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Layer boundaries
+- Component tracking managed via code analysis tools
 - `eslint.config.mjs` - Linting rules
 - `tsconfig.json` - TypeScript config
 
