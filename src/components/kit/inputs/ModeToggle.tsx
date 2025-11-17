@@ -5,7 +5,7 @@
  * Module: `@components/kit/inputs/ModeToggle`
  * Purpose: Theme toggle dropdown component using shadcn DropdownMenu primitives with next-themes integration.
  * Scope: Provides ModeToggle dropdown with current theme display and selection options. Does not handle theme persistence (next-themes handles this).
- * Invariants: Uses next-themes hook; blocks className prop; forwards ref; shows current theme in trigger with icon + label.
+ * Invariants: Uses next-themes hook; className overrides limited to layout; forwards ref; shows current theme in trigger with icon + label.
  * Side-effects: global (theme state changes via setTheme; localStorage updates via next-themes)
  * Notes: Uses CVA factory from `@/styles/ui` for trigger styling; dropdown items show Light/Dark/System with active indicators.
  * Links: docs/UI_IMPLEMENTATION_GUIDE.md, next-themes documentation
@@ -26,6 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/vendor/ui-primitives/shadcn";
+import { cn } from "@/shared/util";
 import {
   dropdownContent,
   dropdownMenuCheck,
@@ -35,14 +36,19 @@ import {
   themeIcon,
 } from "@/styles/ui";
 
-type ModeToggleNoClass = Omit<ComponentProps<"button">, "className">;
+type ModeToggleBaseProps = ComponentProps<"button">;
 
 export interface ModeToggleProps
-  extends ModeToggleNoClass,
-    VariantProps<typeof modeToggle> {}
+  extends Omit<ModeToggleBaseProps, "className">,
+    VariantProps<typeof modeToggle> {
+  /**
+   * Optional className for layout/composition tweaks. Colors/typography remain CVA-driven.
+   */
+  className?: string;
+}
 
 export const ModeToggle = forwardRef<HTMLButtonElement, ModeToggleProps>(
-  ({ variant, size, ...props }, ref) => {
+  ({ variant, size, className, ...props }, ref) => {
     const { theme, setTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
 
@@ -82,7 +88,7 @@ export const ModeToggle = forwardRef<HTMLButtonElement, ModeToggleProps>(
           <button
             ref={ref}
             type="button"
-            className={modeToggle({ variant, size })}
+            className={cn(modeToggle({ variant, size }), className)}
             aria-label="Select theme"
             {...props}
           >

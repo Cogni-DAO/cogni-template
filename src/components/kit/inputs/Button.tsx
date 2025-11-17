@@ -5,7 +5,7 @@
  * Module: `@components/kit/inputs/Button`
  * Purpose: Button component wrapper using CVA styling with Radix Slot composition for interactive actions.
  * Scope: Provides Button component with variant props. Does not handle form submission or navigation routing.
- * Invariants: Forwards ref; blocks className prop; accepts aria-* and data-* unchanged; always renders valid button or slot.
+ * Invariants: Forwards ref; accepts aria-* and data-* unchanged; always renders valid button or slot.
  * Side-effects: none
  * Notes: Uses CVA factory from \@/styles/ui - no literal classes allowed; supports asChild pattern.
  * Links: docs/UI_IMPLEMENTATION_GUIDE.md
@@ -17,13 +17,19 @@ import type { VariantProps } from "class-variance-authority";
 import type { ComponentProps, ReactNode } from "react";
 import { forwardRef } from "react";
 
+import { cn } from "@/shared/util";
 import { button, icon } from "@/styles/ui";
 
-type ButtonNoClass = Omit<ComponentProps<"button">, "className">;
+type ButtonBaseProps = ComponentProps<"button">;
 
 export interface ButtonProps
-  extends ButtonNoClass,
+  extends Omit<ButtonBaseProps, "className">,
     VariantProps<typeof button> {
+  /**
+   * Optional className for layout/composition overrides only (flex/gap/margins).
+   * Colors/typography remain controlled by CVA variants.
+   */
+  className?: string;
   asChild?: boolean;
   /**
    * Right icon component (Lucide icon)
@@ -44,6 +50,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       rightIcon,
       iconSize = "md",
       children,
+      className,
       ...props
     },
     ref
@@ -52,7 +59,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     return (
       <Comp
         data-slot="button"
-        className={button({ variant, size })}
+        className={cn(button({ variant, size }), className)}
         ref={ref}
         {...props}
       >

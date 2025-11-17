@@ -18,15 +18,25 @@ import type { VariantProps } from "class-variance-authority";
 import type { HTMLAttributes } from "react";
 import { forwardRef } from "react";
 
+import { cn } from "@/shared/util";
 import { reveal } from "@/styles/ui";
 
 type DivNoClass = Omit<HTMLAttributes<HTMLDivElement>, "className">;
 
-export interface RevealProps extends DivNoClass, VariantProps<typeof reveal> {}
+export interface RevealProps extends DivNoClass, VariantProps<typeof reveal> {
+  /**
+   * Optional className for layout/composition overrides. Animation styling remains CVA-driven.
+   */
+  className?: string;
+}
 
 export const Reveal = forwardRef<HTMLDivElement, RevealProps>(
-  ({ state, duration, delay, ...props }, ref) => (
-    <div ref={ref} className={reveal({ state, duration, delay })} {...props} />
+  ({ state, duration, delay, className, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn(reveal({ state, duration, delay }), className)}
+      {...props}
+    />
   )
 );
 Reveal.displayName = "Reveal";

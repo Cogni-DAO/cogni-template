@@ -5,7 +5,7 @@
  * Module: `@components/kit/layout/Container`
  * Purpose: Container component wrapper with CVA sizing and spacing variants.
  * Scope: Provides typed container variants using CVA factories. Does not handle responsive logic beyond CSS.
- * Invariants: Forwards all props except className to div element; maintains ref forwarding; blocks className prop.
+ * Invariants: Forwards props to div element; className overrides are layout-only; maintains ref forwarding.
  * Side-effects: none
  * Notes: Uses CVA factory from \@/styles/ui - no literal classes allowed.
  * Links: src/styles/ui.ts, docs/UI_IMPLEMENTATION_GUIDE.md
@@ -15,17 +15,27 @@
 import type { VariantProps } from "class-variance-authority";
 import * as React from "react";
 
+import { cn } from "@/shared/util";
 import { container } from "@/styles/ui";
 
 type DivNoClass = Omit<React.HTMLAttributes<HTMLDivElement>, "className">;
 
 export interface ContainerProps
   extends DivNoClass,
-    VariantProps<typeof container> {}
+    VariantProps<typeof container> {
+  /**
+   * Optional className for layout/composition overrides. Core styling remains CVA-driven.
+   */
+  className?: string;
+}
 
 export const Container = React.forwardRef<HTMLDivElement, ContainerProps>(
-  ({ size, spacing, ...props }, ref) => (
-    <div ref={ref} className={container({ size, spacing })} {...props} />
+  ({ size, spacing, className, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn(container({ size, spacing }), className)}
+      {...props}
+    />
   )
 );
 Container.displayName = "Container";

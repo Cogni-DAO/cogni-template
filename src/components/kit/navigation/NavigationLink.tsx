@@ -16,19 +16,28 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import type { ReactElement, ReactNode } from "react";
+import type { ComponentPropsWithoutRef, ReactElement, ReactNode } from "react";
 
+import { cn } from "@/shared/util";
 import type { VariantProps } from "@/styles/ui";
 import { navLink } from "@/styles/ui";
 
 type MatchMode = "exact" | "prefix";
 
-interface NavigationLinkProps extends VariantProps<typeof navLink> {
+type NextLinkProps = ComponentPropsWithoutRef<typeof Link>;
+
+interface NavigationLinkProps
+  extends VariantProps<typeof navLink>,
+    Omit<NextLinkProps, "href" | "className"> {
   readonly href: string;
   readonly children: ReactNode;
   readonly match?: MatchMode;
   readonly localePrefix?: string;
   readonly basePath?: string;
+  /**
+   * Optional className for layout adjustments only (flex/gap/margin). Colors/typography remain CVA-controlled.
+   */
+  readonly className?: string;
 }
 
 function norm(path: string): string {
@@ -49,6 +58,8 @@ export function NavigationLink({
   match = "exact",
   localePrefix,
   basePath,
+  className,
+  ...linkProps
 }: NavigationLinkProps): ReactElement {
   const pathname = usePathname() || "/";
   // Normalize current and target
@@ -65,7 +76,11 @@ export function NavigationLink({
   return (
     <Link
       href={href}
-      className={navLink({ size, state: isActive ? "active" : "default" })}
+      className={cn(
+        navLink({ size, state: isActive ? "active" : "default" }),
+        className
+      )}
+      {...linkProps}
       aria-current={isActive ? "page" : undefined}
     >
       {children}
