@@ -3,16 +3,18 @@
 
 /**
  * Module: `@app/_facades/ai/completion.server`
- * Purpose: App-layer facade for AI completion - bridges DTOs to features.
- * Scope: Coordinates DI resolution, DTO mapping, account validation, and feature execution. Does not handle authentication.
- * Invariants: Only app layer imports this; validates accounts before feature execution; handles all coordination concerns
+ * Purpose: App-layer facade for AI completion - coordinates accounts validation and AI features.
+ * Scope: Validates API keys via accounts feature, delegates to AI completion feature. Does not handle authentication.
+ * Invariants: Only app layer imports this; validates accounts before completion execution; propagates feature errors
  * Side-effects: IO (via resolved dependencies)
- * Notes: Validates account existence for API keys; throws on unknown keys; lives in app layer where it can see both bootstrap and features
- * Links: Called by API routes, uses bootstrap for DI and features for logic
+ * Notes: Uses accounts feature for validation via Result pattern; propagates AccountsFeatureError to routes
+ * Links: Called by API routes, uses accounts and AI features
  * @public
  */
 
 import { resolveAiDeps } from "@/bootstrap/container";
+import type { AccountsFeatureError } from "@/features/accounts/public";
+import { getAccountForApiKey } from "@/features/accounts/public";
 import { execute } from "@/features/ai/services/completion";
 import {
   fromCoreMessage,
@@ -20,6 +22,7 @@ import {
   toCoreMessages,
 } from "@/features/ai/services/mappers";
 import type { LlmCaller } from "@/ports";
+import { isInsufficientCreditsPortError } from "@/ports";
 
 interface CompletionInput {
   messages: MessageDto[];
@@ -40,27 +43,46 @@ export async function completion(
   // Resolve dependencies from bootstrap (pure composition root)
   const { llmService, accountService, clock } = resolveAiDeps();
 
-  // Validate account exists for the API key
-  const account = await accountService.getAccountByApiKey(input.caller.apiKey);
-  if (!account) {
-    throw new Error(`Unknown API key: ${input.caller.apiKey}`);
+  // Validate account exists for the API key using accounts feature
+  const accountResult = await getAccountForApiKey(
+    accountService,
+    input.caller.apiKey
+  );
+  if (!accountResult.ok) {
+    // Propagate feature error to app layer
+    const featureError: AccountsFeatureError = accountResult.error;
+    throw featureError;
   }
 
   // Map DTOs to core types using feature mappers (no core imports here)
   const timestamp = clock.now();
   const coreMessages = toCoreMessages(input.messages, timestamp);
 
-  // Execute pure feature with injected dependencies
-  const result = await execute(
-    coreMessages,
-    llmService,
-    accountService,
-    clock,
-    input.caller
-  );
+  try {
+    // Execute pure feature with injected dependencies
+    const result = await execute(
+      coreMessages,
+      llmService,
+      accountService,
+      clock,
+      input.caller
+    );
 
-  // Map core result back to DTO
-  const message = fromCoreMessage(result);
+    // Map core result back to DTO
+    const message = fromCoreMessage(result);
 
-  return { message };
+    return { message };
+  } catch (error) {
+    if (isInsufficientCreditsPortError(error)) {
+      const featureError: AccountsFeatureError = {
+        kind: "INSUFFICIENT_CREDITS",
+        accountId: error.accountId,
+        required: error.cost,
+        available: error.previousBalance,
+      };
+      throw featureError;
+    }
+
+    throw error;
+  }
 }
