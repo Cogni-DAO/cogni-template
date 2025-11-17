@@ -45,6 +45,38 @@ export class InsufficientCreditsError extends Error {
 }
 
 /**
+ * Domain error thrown when API key is not registered in the system
+ */
+export class UnknownApiKeyError extends Error {
+  /** Error code for programmatic handling */
+  public readonly code = "UNKNOWN_API_KEY" as const;
+
+  constructor(
+    /** The API key that was not found */
+    public readonly apiKey: string
+  ) {
+    super(`Unknown API key: ${apiKey}`);
+    this.name = "UnknownApiKeyError";
+  }
+}
+
+/**
+ * Domain error thrown when account is not found by ID
+ */
+export class AccountNotFoundError extends Error {
+  /** Error code for programmatic handling */
+  public readonly code = "ACCOUNT_NOT_FOUND" as const;
+
+  constructor(
+    /** The account ID that was not found */
+    public readonly accountId: string
+  ) {
+    super(`Account not found: ${accountId}`);
+    this.name = "AccountNotFoundError";
+  }
+}
+
+/**
  * Type guard to check if error is InsufficientCreditsError
  * @param error - Error to check
  * @returns true if error is InsufficientCreditsError
@@ -57,5 +89,37 @@ export function isInsufficientCreditsError(
     error.name === "InsufficientCreditsError" &&
     "code" in error &&
     (error as InsufficientCreditsError).code === "INSUFFICIENT_CREDITS"
+  );
+}
+
+/**
+ * Type guard to check if error is UnknownApiKeyError
+ * @param error - Error to check
+ * @returns true if error is UnknownApiKeyError
+ */
+export function isUnknownApiKeyError(
+  error: unknown
+): error is UnknownApiKeyError {
+  return (
+    error instanceof Error &&
+    error.name === "UnknownApiKeyError" &&
+    "code" in error &&
+    (error as UnknownApiKeyError).code === "UNKNOWN_API_KEY"
+  );
+}
+
+/**
+ * Type guard to check if error is AccountNotFoundError
+ * @param error - Error to check
+ * @returns true if error is AccountNotFoundError
+ */
+export function isAccountNotFoundError(
+  error: unknown
+): error is AccountNotFoundError {
+  return (
+    error instanceof Error &&
+    error.name === "AccountNotFoundError" &&
+    "code" in error &&
+    (error as AccountNotFoundError).code === "ACCOUNT_NOT_FOUND"
   );
 }
