@@ -302,13 +302,9 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 
 ### Styling Invariants
 
-- **Single source of truth:** All visual tokens (color, typography, spacing, radii, shadows) live in `src/styles/tailwind.css` + `src/styles/theme.ts`. Tailwind’s palette is trimmed to those semantics.
-- **Token-safe utilities:** `bg-*/text-*/border-*/ring-*/shadow-*` classes MUST use token prefixes (`bg-surface-*`, `text-fg-*`, `border-border-*`, etc.) or bracketed `var(--token)` forms. Raw hex/rgb/hsl values are blocked by `no-raw-colors`.
-- **Arbitrary values:** Tailwind arbitrary utilities are only allowed when they wrap `var(--token)` (`gap-[var(--spacing-lg)]`). `no-arbitrary-non-token-values` enforces this.
-- **Kit responsibilities:** `src/components/kit/*` components use CVA + tokens for core styling but can expose `className?: string` for layout/composition overrides only (flex/grid/gap/margin). Color/typography overrides via `className` remain disallowed.
-- **Feature ergonomics:** `src/features/*/components` may use standard Tailwind layout utilities so long as they pass the token rules above. Reusable UI should be promoted into kit.
+- **Component architecture:** `src/components/kit/*` provides reusable UI components. `src/features/*/components` contains feature-specific components.
 - **Vendor isolation:** Only kit wrappers may import from `src/components/vendor/ui-primitives/shadcn/**`. `no-vendor-imports-outside-kit` enforces this boundary.
-- **Machine-readable spec:** `docs/ui-style-spec.json` describes the allowed prefixes/patterns so AI tooling and scripts can audit styling automatically.
+- **Layout flexibility:** Kit components can expose `className?: string` for layout/composition overrides (flex/grid/gap/margin). Feature components may use standard Tailwind utilities.
 
 ---
 

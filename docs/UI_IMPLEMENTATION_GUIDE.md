@@ -9,7 +9,7 @@ See [ARCHITECTURE.md Enforcement Rules](ARCHITECTURE.md#enforcement-rules) for c
 **UI-specific rules**:
 
 - `components/kit` → `@/styles/ui`, vendor/ui-primitives
-- `features` → `@/components` only (never `@/styles/ui` directly)
+- `features` → `@/components` for UI components (never `@/styles/ui` directly). Other standard imports (`@/core`, `@/ports`, `@/shared`) still allowed.
 - `app` → `@/components`, `@/features/*/components/*`
 
 ## Directory Structure & Component Placement

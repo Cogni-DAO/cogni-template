@@ -14,8 +14,8 @@
 
 import { Slot } from "@radix-ui/react-slot";
 import type { VariantProps } from "class-variance-authority";
-import type { ComponentProps, ReactNode } from "react";
-import { forwardRef } from "react";
+import type { ComponentProps, ReactElement, ReactNode } from "react";
+import { cloneElement, forwardRef, isValidElement } from "react";
 
 import { cn } from "@/shared/util";
 import { button, icon } from "@/styles/ui";
@@ -55,21 +55,56 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
     },
     ref
   ) => {
-    const Comp = asChild ? Slot : "button";
+    const iconElement = rightIcon ? (
+      <span className={icon({ size: iconSize })} aria-hidden="true">
+        {rightIcon}
+      </span>
+    ) : null;
+
+    if (asChild) {
+      if (!isValidElement(children)) {
+        throw new Error(
+          "Button with `asChild` expects a single React element child."
+        );
+      }
+
+      const childElement = children as ReactElement<{ children?: ReactNode }>;
+
+      const childWithIcon =
+        iconElement && childElement.props
+          ? cloneElement(childElement, {
+              ...childElement.props,
+              children: (
+                <>
+                  {childElement.props.children}
+                  {iconElement}
+                </>
+              ),
+            })
+          : childElement;
+
+      return (
+        <Slot
+          data-slot="button"
+          className={cn(button({ variant, size }), className)}
+          ref={ref}
+          {...props}
+        >
+          {childWithIcon}
+        </Slot>
+      );
+    }
+
     return (
-      <Comp
+      <button
         data-slot="button"
         className={cn(button({ variant, size }), className)}
         ref={ref}
         {...props}
       >
         {children}
-        {rightIcon && (
-          <span className={icon({ size: iconSize })} aria-hidden="true">
-            {rightIcon}
-          </span>
-        )}
-      </Comp>
+        {iconElement}
+      </button>
     );
   }
 );

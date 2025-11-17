@@ -14,18 +14,13 @@
 
 "use client";
 
+import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import type { VariantProps } from "class-variance-authority";
 import { Check, Monitor, Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import type { ComponentProps } from "react";
 import React, { forwardRef, useEffect, useState } from "react";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/vendor/ui-primitives/shadcn";
 import { cn } from "@/shared/util";
 import {
   dropdownContent,
@@ -35,6 +30,41 @@ import {
   modeToggle,
   themeIcon,
 } from "@/styles/ui";
+
+const DropdownMenu = DropdownMenuPrimitive.Root;
+const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
+
+type DropdownMenuContentProps = React.ComponentPropsWithoutRef<
+  typeof DropdownMenuPrimitive.Content
+> &
+  VariantProps<typeof dropdownContent>;
+
+const DropdownMenuContent = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Content>,
+  DropdownMenuContentProps
+>(({ className, sideOffset = 4, size = "md", ...props }, ref) => (
+  <DropdownMenuPrimitive.Portal>
+    <DropdownMenuPrimitive.Content
+      ref={ref}
+      sideOffset={sideOffset}
+      className={cn(dropdownContent({ size }), className)}
+      {...props}
+    />
+  </DropdownMenuPrimitive.Portal>
+));
+DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
+
+const DropdownMenuItem = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Item>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item>
+>(({ className, ...props }, ref) => (
+  <DropdownMenuPrimitive.Item
+    ref={ref}
+    className={cn(dropdownMenuItem(), className)}
+    {...props}
+  />
+));
+DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
 
 type ModeToggleBaseProps = ComponentProps<"button">;
 
@@ -95,10 +125,7 @@ export const ModeToggle = forwardRef<HTMLButtonElement, ModeToggleProps>(
             <CurrentIcon className={themeIcon({ state: "visible" })} />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          className={dropdownContent({ size: "md" })}
-        >
+        <DropdownMenuContent align="end" size="md">
           <DropdownMenuItem
             onClick={() => setTheme("light")}
             className={dropdownMenuItem()}
