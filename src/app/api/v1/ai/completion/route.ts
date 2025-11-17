@@ -16,6 +16,7 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { completion } from "@/app/_facades/ai/completion.server";
 import { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
+import { deriveAccountIdFromApiKey } from "@/shared/util";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Construct LlmCaller at auth boundary - only place this happens
     const caller = {
-      accountId: `key:${apiKey.slice(0, 8)}`,
+      accountId: deriveAccountIdFromApiKey(apiKey),
       apiKey,
     };
 

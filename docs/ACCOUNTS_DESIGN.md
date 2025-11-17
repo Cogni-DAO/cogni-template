@@ -22,6 +22,18 @@ Implements internal credit accounting on top of existing LiteLLM virtual key aut
 
 **Critical Constraint**: No changes to existing auth flow or `LlmCaller` interface.
 
+## MVP Barebones Workflow
+
+**Control Plane (admin-only):**
+
+1. Admin calls `POST /admin/accounts/register-litellm-key`
+2. Admin calls `POST /admin/accounts/:accountId/credits/topup`
+
+**Data Plane (public):**  
+3. Client calls `POST /api/v1/ai/completion` with registered key
+
+**Invariant:** Data-plane endpoints never create accounts or keys. Accounts + keys are created only through explicit, privileged control-plane workflows.
+
 ## Implementation Stages
 
 ### Stage 1: LiteLLM Integration Foundation
@@ -74,11 +86,11 @@ balance_credits DECIMAL(10,2) NOT NULL DEFAULT '0.00' -- computed from ledger
 - `src/adapters/server/db/client.ts` - Drizzle connection
 - `drizzle.config.ts` - Migration configuration
 
-### Stage 2.5: Account Provisioning
+### Stage 2.5: Control Plane - Account Registration
 
-_Status: Next - implement account creation at auth boundary_
+_Status: Next - implement explicit admin endpoints_
 
-[ ] Create stable accountId derivation helper: `src/shared/util/account-id.ts`
+[x] Create stable accountId derivation helper: `src/shared/util/accountId.ts`
 
 ```typescript
 import { createHash } from "crypto";
@@ -92,27 +104,38 @@ export function deriveAccountIdFromApiKey(apiKey: string): string {
 }
 ```
 
-[ ] Update auth boundary in `src/app/api/v1/ai/completion/route.ts`:
+[x] Update auth boundary in `src/app/api/v1/ai/completion/route.ts`:
 
 ```typescript
-// Replace current caller construction with:
-const accountId = deriveAccountIdFromApiKey(apiKey);
-const caller = { accountId, apiKey };
+// Current caller construction (already implemented):
+const caller = {
+  accountId: deriveAccountIdFromApiKey(apiKey),
+  apiKey,
+};
 
-// Ensure account exists before proceeding
-await accountService.ensureAccountExistsForCaller(caller);
+// TODO: Validate account exists, reject unknown keys
+const account = await accountService.getAccountByApiKey(apiKey);
+if (!account) {
+  return NextResponse.json({ error: "Unknown API key" }, { status: 403 });
+}
 ```
 
-[ ] Add account provisioning to AccountService interface (Stage 4)
-[ ] Implement provisioning logic in adapter (Stage 5)
-[ ] Add integration tests for "first call creates account with zero balance"
+**New Admin Routes (MVP):**
 
-**MVP Provisioning Behavior:**
+[ ] `POST /admin/accounts/register-litellm-key`
+  - Explicitly creates/binds accounts to LiteLLM virtual keys
+  - Only way accounts are created in the system
+  - Admin auth required
 
-- If no `accounts` row exists for `caller.accountId`, create one automatically
-- New accounts start with `balance_credits = 0`, `display_name = null`
-- Account creation happens atomically at auth boundary
-- No user interaction required for account provisioning
+[ ] `POST /admin/accounts/:accountId/credits/topup`
+  - Manually adds credits via ledger
+  - Required for testing before wallet integration
+  - Admin auth required
+
+**Updated Completion Route:**
+- `/api/v1/ai/completion` validates existing accounts only
+- Returns 403 for unknown API keys (never creates accounts)
+- Pure data plane - no account creation side-effects
 
 ### Stage 3: Core Domain Layer
 
@@ -164,8 +187,14 @@ _Status: Next - define atomic service contracts_
 [ ] Define AccountService interface: `src/ports/accounts.port.ts`
 ```typescript
 export interface AccountService {
-  // Account provisioning - ensures account exists for new API keys
-  ensureAccountExistsForCaller(caller: LlmCaller): Promise<void>;
+  // Explicit account creation (admin endpoints only)
+  createAccountForApiKey(params: {
+    apiKey: string;
+    displayName?: string;
+  }): Promise<{ accountId: string; balanceCredits: number }>;
+
+  // Account validation (completion route)
+  getAccountByApiKey(apiKey: string): Promise<{ accountId: string; balanceCredits: number } | null>;
 
   // Cached balance read - returns accounts.balance_credits (not recomputed from ledger)
   getBalance(accountId: string): Promise<number>;
@@ -192,9 +221,10 @@ export interface AccountService {
 [ ] Create port contract tests: `tests/ports/accounts.port.contract.ts` - Reusable test harness for any AccountService implementation - Validates atomic operations and error conditions
 
 **Key Decisions**:
+- `createAccountForApiKey()` for explicit provisioning (admin routes only)
+- `getAccountByApiKey()` for validation (completion route) - returns null for unknown keys
 - Single `debitForUsage` operation prevents race conditions from separate check/deduct calls
 - `getBalance()` returns cached `accounts.balance_credits`, not recomputed from ledger
-- `ensureAccountExistsForCaller()` handles automatic account provisioning at auth boundary
 
 ### Stage 5: Database Adapter
 
@@ -210,20 +240,43 @@ _Status: Next - implement AccountService with ledger-based operations_
  * - This prevents persisting negative balances or incomplete ledger entries
  */
 export class DrizzleAccountService implements AccountService {
-  async ensureAccountExistsForCaller(caller: LlmCaller): Promise<void> {
+  async createAccountForApiKey({ apiKey, displayName }: {
+    apiKey: string;
+    displayName?: string;
+  }): Promise<{ accountId: string; balanceCredits: number }> {
+    const accountId = deriveAccountIdFromApiKey(apiKey);
+
     await this.db.transaction(async (tx) => {
+      // Only create if doesn't exist (idempotent)
       const existing = await tx.query.accounts.findFirst({
-        where: eq(accounts.id, caller.accountId)
+        where: eq(accounts.id, accountId)
       });
 
       if (!existing) {
         await tx.insert(accounts).values({
-          id: caller.accountId,
+          id: accountId,
           balanceCredits: "0.00",
-          displayName: null
+          displayName: displayName || null
         });
       }
     });
+
+    return { accountId, balanceCredits: 0 };
+  }
+
+  async getAccountByApiKey(apiKey: string): Promise<{ accountId: string; balanceCredits: number } | null> {
+    const accountId = deriveAccountIdFromApiKey(apiKey);
+
+    const account = await this.db.query.accounts.findFirst({
+      where: eq(accounts.id, accountId)
+    });
+
+    if (!account) return null;
+
+    return {
+      accountId: account.id,
+      balanceCredits: toNumber(account.balanceCredits)
+    };
   }
 
   async debitForUsage({ accountId, cost, requestId, metadata }) {
@@ -339,8 +392,12 @@ export async function execute(
 }
 ```
 
+[ ] Update LlmService port: `src/ports/llm.port.ts`
+    - Add optional `requestId?: string` parameter to completion method
+    - Update litellm.adapter.ts to propagate requestId to LiteLLM/Langfuse
 [ ] Update bootstrap container: `src/bootstrap/container.ts`
- - Wire AccountService adapter to port - Provide dependency injection for completion service
+    - Wire AccountService adapter to port
+    - Provide dependency injection for completion service
 [ ] Add error handling for credit scenarios in API route
 [ ] Integration tests: Credit flow end-to-end
 
@@ -355,14 +412,30 @@ export async function execute(
 7. Deduct credits atomically via AccountService (with full audit trail)
 8. Return response (accept token waste on insufficient credits for MVP)
 
-### Stage 7: API Enhancement
+### Stage 7: MVP Admin Endpoints
 
-_Status: Future - expose credit operations via API_
+_Status: Next - implement 3 MVP endpoints for barebones workflow_
 
-[ ] Create balance inquiry endpoint: `src/app/api/v1/accounts/balance/route.ts`
-[ ] Create credit management endpoints: `src/app/api/v1/accounts/credits/route.ts` - Top-up credits (manual management) - Credit history from ledger
-[ ] Add credit info to completion response headers
-[ ] API contract tests for new endpoints
+**Control Plane (admin-only):**
+
+[ ] `POST /admin/accounts/register-litellm-key`
+  - Uses `AccountService.createAccountForApiKey()`
+  - Admin auth required
+  - Only way to create accounts
+
+[ ] `POST /admin/accounts/:accountId/credits/topup`
+  - Uses `AccountService.creditAccount()`
+  - Admin auth required
+  - Manual credit funding for testing
+
+**Data Plane (updated):**
+
+[ ] Update `POST /api/v1/ai/completion`
+  - Add account validation: `AccountService.getAccountByApiKey()`
+  - Return 403 for unknown keys (no auto-creation)
+  - Existing credit debit logic unchanged
+
+**That's it for MVP.** These 3 endpoints enable the complete workflow.
 
 ### Stage 8: Token Integration Hooks
 
