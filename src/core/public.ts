@@ -12,6 +12,13 @@
  * @public
  */
 
+export type { Account } from "./accounts/model";
+export {
+  ensureHasCredits,
+  hasSufficientCredits,
+  InsufficientCreditsError,
+  isInsufficientCreditsError,
+} from "./accounts/public";
 export type { Conversation, Message, MessageRole } from "./chat/model";
 export {
   assertMessageLength,

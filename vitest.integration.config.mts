@@ -34,7 +34,7 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     include: [
       "tests/integration/**/*.int.test.ts",
-      "tests/integration/**/*.spec.ts"
+      "tests/integration/**/*.spec.ts",
     ],
     exclude: [
       "node_modules",
