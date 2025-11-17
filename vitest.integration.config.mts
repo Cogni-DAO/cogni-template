@@ -15,9 +15,11 @@
 import { defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { config } from "dotenv";
+import { expand } from "dotenv-expand";
 
-// Load .env.local for API integration tests
-config({ path: ".env.local" });
+// Load .env.local for API integration tests with variable expansion
+const env = config({ path: ".env.local" });
+expand(env);
 
 export default defineConfig({
   root: ".",
