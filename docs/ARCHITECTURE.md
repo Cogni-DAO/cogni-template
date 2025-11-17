@@ -81,9 +81,9 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 
 ## Directory & Boundary Specification
 
-[ ] .env.example # sample env vars for all services
-[ ] .env.local.example # local-only env template (never committed)
-[ ] .gitignore # standard git ignore list
+[x] .env.example # sample env vars for all services
+[x] .env.local.example # local-only env template (never committed)
+[x] .gitignore # standard git ignore list
 [x] .nvmrc # node version pin (e.g., v20)
 [x] .editorconfig # IDE whitespace/newline rules
 [x] .prettierrc # code formatting config
@@ -93,8 +93,8 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] tailwind.config.ts # Tailwind theme + presets
 [x] tsconfig.json # typescript + alias paths
 [x] tsconfig.eslint.json # eslint typescript config
-[ ] package.json # deps, scripts, engines
-[ ] Dockerfile # reproducible build
+[x] package.json # deps, scripts, engines
+[x] Dockerfile # reproducible build
 [ ] .dockerignore # ignore node_modules, artifacts, .env.\*
 [x] LICENSE # OSS license
 [x] CODEOWNERS # review ownership
@@ -110,9 +110,9 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] ├── ARCHITECTURE.md # narrative + diagrams (longform)
 [x] └── UI_IMPLEMENTATION_GUIDE.md # practical UI development workflows
 
-[ ] platform/ # platform tooling and infrastructure
-[ ] ├── infra/ # Infrastructure as Code and deployment configs
-[ ] │ ├── providers/
+[x] platform/ # platform tooling and infrastructure
+[x] ├── infra/ # Infrastructure as Code and deployment configs
+[x] │ ├── providers/
 [ ] │ │ ├── cherry/
 [ ] │ │ │ ├── base/ # VM + static bootstrap (immutable)
 [ ] │ │ │ └── app/ # SSH deploy + health gate (mutable)
@@ -299,6 +299,12 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 - **Contracts**: `tests/contract` must pass for any adapter.
 - **Env**: Zod-validated; build fails on invalid/missing.
 - **Security**: middleware sets headers, verifies session or API key, rate-limits.
+
+### Styling Invariants
+
+- **Component architecture:** `src/components/kit/*` provides reusable UI components. `src/features/*/components` contains feature-specific components.
+- **Vendor isolation:** Only kit wrappers may import from `src/components/vendor/ui-primitives/shadcn/**`. `no-vendor-imports-outside-kit` enforces this boundary.
+- **Layout flexibility:** Kit components can expose `className?: string` for layout/composition overrides (flex/grid/gap/margin). Feature components may use standard Tailwind utilities.
 
 ---
 

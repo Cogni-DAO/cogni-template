@@ -12,6 +12,4 @@
  * @public
  */
 
-// Currently no exports - utilities added as needed
-// Export empty object to make this a proper ES module
-export {};
+export { cn } from "./cn";

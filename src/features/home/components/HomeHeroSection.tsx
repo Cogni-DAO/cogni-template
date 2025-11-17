@@ -12,16 +12,34 @@
  * @public
  */
 
+import { cva } from "class-variance-authority";
 import type { ReactElement, ReactNode } from "react";
 
-import {
-  container,
-  grid,
-  heroButtonContainer,
-  heroTextWrapper,
-  heroVisualContainer,
-  section,
-} from "@/components";
+import { container, grid, section } from "@/components";
+
+// Hero-specific layout styles (localized to this component)
+const heroTextWrapper = cva(
+  "sm:text-center md:mx-auto md:max-w-[var(--size-container-lg)] lg:col-span-12 lg:text-left lg:mb-[var(--spacing-xl)]",
+  {
+    variants: {
+      width: {
+        auto: "",
+        fixed: "[&>h1]:min-w-measure",
+      },
+    },
+    defaultVariants: {
+      width: "auto",
+    },
+  }
+);
+
+const heroButtonContainer = cva(
+  "mt-[var(--spacing-xl)] text-center -mx-[var(--spacing-xl)] sm:-mx-[var(--spacing-4xl)] md:-mx-[var(--spacing-5xl)]"
+);
+
+const heroVisualContainer = cva(
+  "relative mt-[var(--spacing-md-plus)] sm:mx-auto lg:col-span-12 lg:mx-auto lg:mt-0 lg:max-w-none"
+);
 
 interface HomeHeroSectionProps {
   /**
