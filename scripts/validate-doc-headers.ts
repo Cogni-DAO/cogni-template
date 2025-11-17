@@ -5,9 +5,9 @@
  * Module: `@scripts/validate-doc-headers`
  * Purpose: Validates SPDX headers and TSDoc headers in TypeScript files for required documentation fields and format compliance.
  * Scope: Scans e2e, infra, scripts, src, tests directories for .ts/.tsx files; does not validate runtime behavior or generated files.
- * Invariants: Required fields non-empty; Module matches `@layer/path`; SPDX headers exact match.
+ * Invariants: Required fields non-empty; Module matches `@layer/path` pattern; SPDX headers exact match.
  * Side-effects: IO
- * Notes: Supports parenthetical descriptions in side-effects; enforces unified header format across source and test files.
+ * Notes: Supports parenthetical descriptions in side-effects; supports Next.js dynamic route brackets; enforces unified header format.
  * Links: docs/STYLE.md, scripts/validate-agents-md.mjs
  * @internal
  */
@@ -53,7 +53,7 @@ const ALLOWED_SIDE_EFFECTS = [
   "process.env",
   "global",
 ];
-const MODULE_PATTERN = /^`@[A-Za-z0-9_/.-]+`$/;
+const MODULE_PATTERN = /^`@[A-Za-z0-9_/.[\]-]+`$/;
 
 // REUSE-IgnoreStart
 const SPDX_LICENSE =
@@ -227,8 +227,10 @@ function validateHeader(file: string, header: string): Violation[] {
 
   // Side-effects: comma-separated allowed tokens (with optional parenthetical descriptions)
   if (sideEffects) {
+    // First extract the base tokens, handling parenthetical descriptions properly
+    // Split on commas not inside parentheses
     const tokens = sideEffects
-      .split(",")
+      .split(/,(?![^()]*\))/)
       .map((t) => t.trim().split(/\s*\(/)[0])
       .filter((t): t is string => Boolean(t));
     const invalid = tokens.filter((t) => !ALLOWED_SIDE_EFFECTS.includes(t));
