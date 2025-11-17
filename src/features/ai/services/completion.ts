@@ -19,11 +19,12 @@ import {
   type Message,
   trimConversationHistory,
 } from "@/core";
-import type { Clock, LlmCaller, LlmService } from "@/ports";
+import type { AccountService, Clock, LlmCaller, LlmService } from "@/ports";
 
 export async function execute(
   messages: Message[],
   llmService: LlmService,
+  accountService: AccountService,
   clock: Clock,
   caller: LlmCaller
 ): Promise<Message> {
