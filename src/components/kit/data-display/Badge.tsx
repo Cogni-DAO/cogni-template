@@ -15,6 +15,7 @@
 import { Slot } from "@radix-ui/react-slot";
 import type { ReactElement, ReactNode } from "react";
 
+import { cn } from "@/shared/util";
 import { badge } from "@/styles/ui";
 
 export interface BadgeProps {
@@ -26,6 +27,8 @@ export interface BadgeProps {
   children: ReactNode;
   /** Render as child element (for links/buttons) */
   asChild?: boolean;
+  /** Optional layout-only overrides (e.g., margin). */
+  className?: string;
 }
 
 export function Badge({
@@ -33,8 +36,13 @@ export function Badge({
   size = "md",
   children,
   asChild = false,
+  className,
 }: BadgeProps): ReactElement {
   const Component = asChild ? Slot : "span";
 
-  return <Component className={badge({ intent, size })}>{children}</Component>;
+  return (
+    <Component className={cn(badge({ intent, size }), className)}>
+      {children}
+    </Component>
+  );
 }
