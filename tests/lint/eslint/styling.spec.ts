@@ -20,7 +20,7 @@ describe("Token-Driven Styling Policy", () => {
   it("allows literal className with token-prefixed utilities", async () => {
     const { errors } = await lintFixture(
       "src/app/page.tsx",
-      `export default () => <div className="bg-surface-2 text-fg-muted flex gap-4 px-[var(--spacing-lg)]" />;`
+      `export default () => <div className="bg-background text-foreground border-border ring-offset-background flex gap-4 px-[var(--spacing-lg)]" />;`
     );
     expect(errors).toBe(0);
   });

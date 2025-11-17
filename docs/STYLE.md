@@ -78,7 +78,7 @@ NEW changes to relax policy
 - [x] Revise `docs/UI_IMPLEMENTATION_GUIDE.md` to document token-safe Tailwind usage, kit `className` guidance, and removal of experimental-folder carve-outs.
 - [x] Remove legacy strict UI lint rules (no-className-outside-styles, CVA-only, experimental-folder exceptions) from `eslint.config.mjs` before adding the new rule set.
 - [x] Implement ESLint rules `no-raw-colors`, `no-arbitrary-non-token-values`, `token-classname-patterns`, and `no-vendor-imports-outside-kit` inside `eslint.config.mjs`.
-- [ ] Verify the Tailwind theme exposes only the semantic token palette expected by the new lint rules (remove default `blue-500`/`gray-700` palettes, ensure colors/fonts map to tokens).
+- [x] Verify the Tailwind theme exposes only the semantic token palette expected by the new lint rules (remove default `blue-500`/`gray-700` palettes, ensure colors/fonts map to tokens).
 - [x] Create and reference a machine-readable token spec (e.g., `docs/ui-style-spec.json`) for AI governance tooling and style audits.
 - [ ] Update kit components under `src/components/kit/*` to expose layout-only `className` overrides while keeping CVA/tokens as the source of core styling.
 

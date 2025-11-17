@@ -22,7 +22,7 @@ const COLOR_PREFIXES = new Set([
 
 const COLOR_KEYWORD_ALLOW = new Set(["transparent", "current", "inherit"]);
 
-const COLOR_SUFFIX_ALLOWLIST = [
+const SEMANTIC_COLOR_SUFFIXES = [
   "background",
   "foreground",
   "card",
@@ -40,30 +40,21 @@ const COLOR_SUFFIX_ALLOWLIST = [
   "destructive",
   "destructive-foreground",
   "border",
-  "border-subtle",
-  "border-strong",
   "input",
   "ring",
-  "ring-offset",
-  "surface",
-  "surface-1",
-  "surface-2",
-  "surface-muted",
-  "fg",
-  "fg-default",
-  "fg-muted",
   "danger",
   "warning",
   "success",
-  "info",
-  "card-muted",
   "chart-1",
   "chart-2",
   "chart-3",
   "chart-4",
   "chart-5",
   "chart-6",
+  "offset-background",
 ];
+
+const COLOR_SUFFIX_ALLOWLIST = SEMANTIC_COLOR_SUFFIXES;
 
 const RAW_COLOR_SUFFIX =
   /(black|white|(amber|blue|cyan|emerald|fuchsia|gray|green|indigo|lime|neutral|orange|pink|purple|red|rose|sky|slate|stone|teal|violet|yellow|zinc)(-[0-9]{2,3})?)$/i;
@@ -130,7 +121,7 @@ function analyzeColorToken(prefix, suffix, raw) {
   if (RAW_COLOR_SUFFIX.test(baseSuffix)) {
     issues.push({
       type: "RAW_COLOR",
-      message: `Raw Tailwind color "${raw}" is not allowed. Use token-prefixed colors (bg-surface-*, text-fg-*, etc.)`,
+      message: `Raw Tailwind color "${raw}" is not allowed. Use token-prefixed colors (bg-background, text-foreground, border-border, ring-offset-background).`,
     });
     return issues;
   }
@@ -142,7 +133,7 @@ function analyzeColorToken(prefix, suffix, raw) {
   if (!allowed) {
     issues.push({
       type: "TOKEN_PATTERN",
-      message: `${prefix}- classes must use semantic tokens (bg-surface-*, text-fg-*, border-border-*). Received "${raw}".`,
+      message: `${prefix}- classes must use semantic tokens (bg-background, text-foreground, border-border, ring-offset-background). Received "${raw}".`,
     });
   }
 

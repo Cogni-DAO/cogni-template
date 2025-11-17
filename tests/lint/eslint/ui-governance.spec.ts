@@ -60,7 +60,7 @@ describe("UI Governance Rules", () => {
     it("allows semantic token-prefixed utilities", async () => {
       const { errors } = await lintFixture(
         "src/features/home/components/Test.tsx",
-        `export const Component = () => <div className="bg-surface-2 text-fg-muted border-border-strong ring-primary flex gap-4" />;`,
+        `export const Component = () => <div className="bg-background text-foreground border-border ring-primary ring-offset-background flex gap-4" />;`,
         focus
       );
 

@@ -2,17 +2,36 @@
   "version": 1,
   "tokens": {
     "sourceFiles": ["src/styles/tailwind.css", "src/styles/theme.ts"],
-    "colorPrefixes": [
-      "bg-surface",
-      "bg-accent",
-      "bg-border",
-      "bg-fg",
-      "text-fg",
-      "text-accent",
-      "text-surface",
-      "border-border",
-      "ring-border",
-      "shadow-surface"
+    "colorSuffixes": [
+      "background",
+      "foreground",
+      "card",
+      "card-foreground",
+      "popover",
+      "popover-foreground",
+      "primary",
+      "primary-foreground",
+      "secondary",
+      "secondary-foreground",
+      "muted",
+      "muted-foreground",
+      "accent",
+      "accent-foreground",
+      "destructive",
+      "destructive-foreground",
+      "border",
+      "input",
+      "ring",
+      "danger",
+      "warning",
+      "success",
+      "chart-1",
+      "chart-2",
+      "chart-3",
+      "chart-4",
+      "chart-5",
+      "chart-6",
+      "offset-background"
     ],
     "allowedBracketPattern": "\\\\[var\\\\(--[a-z0-9-]+\\\\)\\\\]",
     "arbitraryValueRule": "Any Tailwind arbitrary value must wrap var(--token)"
@@ -30,7 +49,7 @@
     },
     "tokenClassnamePatterns": {
       "id": "token-classname-patterns",
-      "description": "Require token-prefixed color/typography utilities (bg-surface-*, text-fg-*, border-border-*).",
+      "description": "Require token-prefixed color/typography utilities (bg-background, text-foreground, border-border, ring-offset-background).",
       "enforcedIn": "eslint.config.mjs"
     },
     "noVendorImportsOutsideKit": {
