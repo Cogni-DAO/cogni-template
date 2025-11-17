@@ -17,15 +17,18 @@ import type { Message } from "@/core";
 // Re-export Message for adapters
 export type { Message } from "@/core";
 
+export interface LlmCaller {
+  accountId: string;
+  apiKey: string;
+}
+
 export interface LlmService {
   completion(params: {
     messages: Message[];
     model?: string;
     temperature?: number;
     maxTokens?: number;
-    caller?: {
-      accountId?: string;
-    };
+    caller: LlmCaller;
   }): Promise<{
     message: Message;
     usage?: {

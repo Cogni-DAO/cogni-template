@@ -43,6 +43,7 @@ describe("API /v1/ai/completion", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: "Bearer test-api-key",
       },
       body: JSON.stringify(requestBody),
     });
@@ -57,6 +58,71 @@ describe("API /v1/ai/completion", () => {
     expect(responseData.message).toHaveProperty("timestamp");
   });
 
+  it("should return 401 when Authorization header is missing", async () => {
+    // Arrange
+    const requestBody = {
+      messages: [{ role: "user", content: "Hello" }],
+    };
+
+    // Act
+    const response = await fetch(COMPLETION_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    // Assert
+    expect(response.status).toBe(401);
+    const responseData = await response.json();
+    expect(responseData).toHaveProperty("error", "API key required");
+  });
+
+  it("should return 401 when Authorization header is malformed", async () => {
+    // Arrange
+    const requestBody = {
+      messages: [{ role: "user", content: "Hello" }],
+    };
+
+    // Act
+    const response = await fetch(COMPLETION_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Basic invalid-format",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    // Assert
+    expect(response.status).toBe(401);
+    const responseData = await response.json();
+    expect(responseData).toHaveProperty("error", "API key required");
+  });
+
+  it("should return 401 when Bearer token is empty", async () => {
+    // Arrange
+    const requestBody = {
+      messages: [{ role: "user", content: "Hello" }],
+    };
+
+    // Act
+    const response = await fetch(COMPLETION_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer ",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    // Assert
+    expect(response.status).toBe(401);
+    const responseData = await response.json();
+    expect(responseData).toHaveProperty("error", "API key required");
+  });
+
   it("should return 400 for invalid input", async () => {
     // Arrange
     const requestBody = {
@@ -68,6 +134,7 @@ describe("API /v1/ai/completion", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: "Bearer test-api-key",
       },
       body: JSON.stringify(requestBody),
     });
@@ -88,6 +155,7 @@ describe("API /v1/ai/completion", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: "Bearer test-api-key",
       },
       body: JSON.stringify({
         messages: [{ role: "user", content: "Test" }],

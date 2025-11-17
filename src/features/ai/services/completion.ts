@@ -19,12 +19,13 @@ import {
   type Message,
   trimConversationHistory,
 } from "@/core";
-import type { Clock, LlmService } from "@/ports";
+import type { Clock, LlmCaller, LlmService } from "@/ports";
 
 export async function execute(
   messages: Message[],
   llmService: LlmService,
-  clock: Clock
+  clock: Clock,
+  caller: LlmCaller
 ): Promise<Message> {
   // Apply core business rules first
   const userMessages = filterSystemMessages(messages);
@@ -38,10 +39,10 @@ export async function execute(
     MAX_MESSAGE_CHARS
   );
 
-  // Delegate to port - adapter handles defaults from env
+  // Delegate to port - caller constructed at auth boundary
   const result = await llmService.completion({
     messages: trimmedMessages,
-    caller: { accountId: "demo" },
+    caller,
   });
 
   // Feature sets timestamp after completion using injected clock

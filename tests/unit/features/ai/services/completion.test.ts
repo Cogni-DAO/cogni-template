@@ -24,17 +24,25 @@ import { describe, expect, it } from "vitest";
 
 import { ChatValidationError, MAX_MESSAGE_CHARS } from "@/core";
 import { execute } from "@/features/ai/services/completion";
+import type { LlmCaller } from "@/ports";
 
 describe("features/ai/services/completion", () => {
+  // Helper to create test caller
+  const createTestCaller = (): LlmCaller => ({
+    accountId: "test-user",
+    apiKey: "test-key-12345678",
+  });
+
   describe("execute", () => {
     it("should orchestrate completion flow for valid messages", async () => {
       // Arrange
       const messages = createConversation("Hello", "Hi");
       const llmService = new FakeLlmService({ responseContent: "AI response" });
       const clock = new FakeClock("2025-01-01T12:00:00.000Z");
+      const caller = createTestCaller();
 
       // Act
-      const result = await execute(messages, llmService, clock);
+      const result = await execute(messages, llmService, clock, caller);
 
       // Assert
       expect(result).toEqual({
@@ -51,9 +59,10 @@ describe("features/ai/services/completion", () => {
       const messages = createMixedRoleConversation(); // includes system messages
       const llmService = new FakeLlmService();
       const clock = new FakeClock();
+      const caller = createTestCaller();
 
       // Act
-      await execute(messages, llmService, clock);
+      await execute(messages, llmService, clock, caller);
 
       // Assert
       const lastCall = llmService.getLastCall();
@@ -66,11 +75,12 @@ describe("features/ai/services/completion", () => {
       const messages = [createLongMessage(MAX_MESSAGE_CHARS + 1)];
       const llmService = new FakeLlmService();
       const clock = new FakeClock();
+      const caller = createTestCaller();
 
       // Act & Assert
-      await expect(execute(messages, llmService, clock)).rejects.toThrow(
-        ChatValidationError
-      );
+      await expect(
+        execute(messages, llmService, clock, caller)
+      ).rejects.toThrow(ChatValidationError);
       expect(llmService.wasCalled()).toBe(false); // Should not call LLM
     });
 
@@ -84,9 +94,10 @@ describe("features/ai/services/completion", () => {
       ];
       const llmService = new FakeLlmService();
       const clock = new FakeClock();
+      const caller = createTestCaller();
 
       // Act
-      await execute(messages, llmService, clock);
+      await execute(messages, llmService, clock, caller);
 
       // Assert - should trim to fit MAX_MESSAGE_CHARS (4000)
       const lastCall = llmService.getLastCall();
@@ -106,9 +117,10 @@ describe("features/ai/services/completion", () => {
       const messagesCopy = JSON.parse(JSON.stringify(originalMessages));
       const llmService = new FakeLlmService();
       const clock = new FakeClock();
+      const caller = createTestCaller();
 
       // Act
-      await execute(originalMessages, llmService, clock);
+      await execute(originalMessages, llmService, clock, caller);
 
       // Assert
       expect(originalMessages).toEqual(messagesCopy);
@@ -120,9 +132,10 @@ describe("features/ai/services/completion", () => {
       const llmService = new FakeLlmService({ responseContent: "Hi there" });
       const fixedTime = "2025-12-25T10:30:00.000Z";
       const clock = new FakeClock(fixedTime);
+      const caller = createTestCaller();
 
       // Act
-      const result = await execute(messages, llmService, clock);
+      const result = await execute(messages, llmService, clock, caller);
 
       // Assert
       expect(result.timestamp).toBe(fixedTime);
@@ -136,11 +149,12 @@ describe("features/ai/services/completion", () => {
         errorMessage: "LLM service unavailable",
       });
       const clock = new FakeClock();
+      const caller = createTestCaller();
 
       // Act & Assert
-      await expect(execute(messages, llmService, clock)).rejects.toThrow(
-        "LLM service unavailable"
-      );
+      await expect(
+        execute(messages, llmService, clock, caller)
+      ).rejects.toThrow("LLM service unavailable");
     });
   });
 });

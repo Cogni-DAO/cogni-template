@@ -21,12 +21,30 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    // Enforce API key at boundary - 401 before facade call
+    const authHeader = request.headers.get("authorization");
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "API key required" }, { status: 401 });
+    }
+
+    const apiKey = authHeader.slice("Bearer ".length).trim();
+    if (!apiKey) {
+      return NextResponse.json({ error: "API key required" }, { status: 401 });
+    }
+
     // Validate input with contract
     const body = await request.json();
     const input = aiCompletionOperation.input.parse(body);
 
+    // Construct LlmCaller at auth boundary - only place this happens
+    const caller = {
+      accountId: `key:${apiKey.slice(0, 8)}`,
+      apiKey,
+    };
+
     // Delegate to bootstrap facade
-    const { message } = await completion(input);
+    const { message } = await completion({ ...input, caller });
 
     // Validate and return output
     return NextResponse.json(aiCompletionOperation.output.parse({ message }));

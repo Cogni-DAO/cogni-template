@@ -19,6 +19,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { completion } from "@/app/_facades/ai/completion.server";
 import { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
 import { ChatErrorCode, ChatValidationError } from "@/core";
+import type { LlmCaller } from "@/ports";
 
 // Mock the bootstrap container
 vi.mock("@/bootstrap/container", () => ({
@@ -37,6 +38,12 @@ const mockResolveAiDeps = vi.mocked(resolveAiDeps);
 const mockExecute = vi.mocked(execute);
 
 describe("app/_facades/ai/completion.server", () => {
+  // Helper to create test caller
+  const createTestCaller = (): LlmCaller => ({
+    accountId: "test-user",
+    apiKey: "test-key-12345678",
+  });
+
   beforeEach(() => {
     vi.resetAllMocks();
   });
@@ -49,6 +56,7 @@ describe("app/_facades/ai/completion.server", () => {
           { role: "user" as const, content: "Hello" },
           { role: "assistant" as const, content: "Hi there" },
         ],
+        caller: createTestCaller(),
       };
 
       const fakeLlm = new FakeLlmService({ responseContent: "AI response" });
@@ -105,6 +113,7 @@ describe("app/_facades/ai/completion.server", () => {
       // Arrange
       const input = {
         messages: [{ role: "user" as const, content: "A".repeat(5000) }],
+        caller: createTestCaller(),
       };
 
       mockResolveAiDeps.mockReturnValue({
@@ -127,6 +136,7 @@ describe("app/_facades/ai/completion.server", () => {
       // Arrange
       const input = {
         messages: [{ role: "user" as const, content: "Hello" }],
+        caller: createTestCaller(),
       };
 
       mockResolveAiDeps.mockReturnValue({
@@ -150,6 +160,7 @@ describe("app/_facades/ai/completion.server", () => {
           { role: "user" as const, content: "First" },
           { role: "assistant" as const, content: "Second" },
         ],
+        caller: createTestCaller(),
       };
 
       const fixedTime = "2025-01-01T15:30:00.000Z";
@@ -188,6 +199,7 @@ describe("app/_facades/ai/completion.server", () => {
           { role: "user" as const, content: "Hello" },
           // Note: TypeScript prevents system role in DTO, but test runtime behavior
         ],
+        caller: createTestCaller(),
       };
 
       mockResolveAiDeps.mockReturnValue({
