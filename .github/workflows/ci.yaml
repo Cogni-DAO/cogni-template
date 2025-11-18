@@ -92,7 +92,7 @@ jobs:
       - name: Wait for app healthcheck
         run: |
           for i in {1..30}; do
-            if curl -sf http://localhost/api/v1/meta/health > /dev/null; then
+            if curl -sf -k https://localhost/api/v1/meta/health > /dev/null; then
               echo "App is healthy"; exit 0;
             fi
             echo "Waiting for app... $i/30"; sleep 3;

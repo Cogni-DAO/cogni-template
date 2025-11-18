@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-17
+- **Last reviewed:** 2025-11-18
 - **Status:** draft
 
 ## Purpose
@@ -32,8 +32,8 @@ Full-stack HTTP API integration tests requiring running Docker Compose infrastru
 
 - **Exports:** none (test-only directory)
 - **Routes (if any):** none
-- **CLI (if any):** pnpm test:stack
-- **Env/Config keys:** TEST_BASE_URL
+- **CLI (if any):** pnpm test:stack, pnpm test:stack:setup, pnpm test:stack:db:create, pnpm test:stack:db:migrate, pnpm docker:stack:test
+- **Env/Config keys:** TEST_BASE_URL, DATABASE_URL, POSTGRES_DB, APP_ENV
 - **Files considered API:** \*.stack.test.ts files
 
 ## Responsibilities
@@ -46,10 +46,13 @@ Full-stack HTTP API integration tests requiring running Docker Compose infrastru
 Requires running Docker Compose stack with app+postgres services.
 
 ```bash
-# Start stack first
-docker compose -f platform/infra/services/runtime/docker-compose.yml up -d app postgres
+# One-time setup (creates test database and runs migrations)
+pnpm test:stack:setup
 
-# Run stack tests
+# Start stack first
+pnpm dev:stack  # or docker:stack
+
+# Run stack tests (automatically resets test database)
 pnpm test:stack
 ```
 

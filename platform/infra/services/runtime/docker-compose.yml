@@ -23,6 +23,8 @@ services:
       - LITELLM_BASE_URL=http://litellm:4000
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
     depends_on:
+      postgres:
+        condition: service_healthy
       litellm:
         condition: service_healthy
 
