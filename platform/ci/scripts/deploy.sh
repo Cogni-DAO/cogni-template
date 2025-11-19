@@ -197,6 +197,9 @@ docker compose pull
 log_info "Stopping existing containers..."
 docker compose down || true
 
+log_info "Running database migrations..."
+docker compose run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'
+
 log_info "Starting runtime stack..."
 docker compose up -d --remove-orphans
 

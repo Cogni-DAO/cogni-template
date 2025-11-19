@@ -57,15 +57,17 @@ jobs:
     env:
       NODE_ENV: test
       APP_ENV: test
-      DATABASE_URL: postgresql://user:password@postgres:5432/cogni_template_test
+      # Database config for containers (app connects to postgres:5432)
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: cogni_template_test
+      DB_HOST: postgres
+      DB_PORT: 5432
       # Docker Compose environment variables
       APP_IMAGE: cogni-template-ci-${{ github.sha }}
       DOMAIN: localhost
       LITELLM_MASTER_KEY: test-key
       OPENROUTER_API_KEY: test-key
-      POSTGRES_DB: cogni_template_test
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
       TEST_BASE_URL: https://localhost/
       # Critically: DO NOT expose real OPENROUTER_API_KEY - CI uses fake adapter
     steps:
@@ -86,12 +88,12 @@ jobs:
       - name: Start app + DB stack
         run: |
           # If build times take too long, consider a job step with buildx + type=gha cache
-          docker compose -f platform/infra/services/runtime/docker-compose.yml \
+          docker compose -f platform/infra/services/runtime/docker-compose.dev.yml \
             up -d --build app postgres litellm caddy
 
       - name: Run migrations
         run: |
-          docker compose -f platform/infra/services/runtime/docker-compose.yml \
+          docker compose -f platform/infra/services/runtime/docker-compose.dev.yml \
             run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'
 
       - name: Wait for app healthcheck
@@ -105,9 +107,18 @@ jobs:
           echo "App failed to become healthy"; exit 1
 
       - name: Run stack tests
-        run: pnpm test:stack
+        run: vitest run --config vitest.stack.config.mts
+        env:
+          # Override DB connection for Vitest (connects via port mapping)
+          DB_HOST: localhost
+          DB_PORT: 55432
+          # Keep these explicit for clarity
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: cogni_template_test
+          TEST_BASE_URL: https://localhost/
 
       - name: Teardown stack
         if: always()
         run: |
-          docker compose -f platform/infra/services/runtime/docker-compose.yml down -v
+          docker compose -f platform/infra/services/runtime/docker-compose.dev.yml down -v

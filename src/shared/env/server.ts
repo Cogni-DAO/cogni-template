@@ -7,7 +7,7 @@
  * Scope: Validates process.env for server runtime; provides serverEnv object with APP_ENV support. Does not handle client-side env vars.
  * Invariants: All required env vars validated on first access; provides boolean flags for runtime and test modes; fails fast on invalid env.
  * Side-effects: process.env
- * Notes: Includes APP_ENV for adapter wiring; LLM config; validates URLs and secrets; production guard prevents test mode in prod.
+ * Notes: Includes APP_ENV for adapter wiring; LLM config; constructs DATABASE_URL from pieces; production guard prevents test mode in prod.
  * Links: Environment configuration specification
  * @public
  */

@@ -7,7 +7,7 @@
  * Scope: Database migration configuration and schema paths. Does not handle runtime database connections.
  * Invariants: Schema path matches actual database schema location; migration output directory exists
  * Side-effects: IO (file system operations during migration generation)
- * Notes: Uses serverEnv for DATABASE_URL; strict mode enabled for schema validation
+ * Notes: Uses buildDatabaseUrl helper for DATABASE_URL; strict mode enabled for schema validation
  * Links: Used by pnpm db:generate and pnpm db:migrate scripts
  * @public
  */

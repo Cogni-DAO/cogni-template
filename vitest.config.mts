@@ -12,10 +12,11 @@
  * @public
  */
 
-import { defineConfig } from "vitest/config";
-import tsconfigPaths from "vite-tsconfig-paths";
-import path from "path";
 import { fileURLToPath } from "node:url";
+
+import path from "path";
+import tsconfigPaths from "vite-tsconfig-paths";
+import { defineConfig } from "vitest/config";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

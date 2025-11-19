@@ -1,46 +1,35 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
-/* eslint-env node */
-
 /**
  * Module: `vitest.stack.config.mts`
  * Purpose: Vitest configuration for stack tests (HTTP API) requiring running Docker Compose infrastructure.
  * Scope: Configures stack test environment for tests that need full app+postgres+litellm stack. Does not handle unit or pure adapter tests.
- * Invariants: Uses tsconfigPaths plugin for clean @/core resolution; loads env vars for stack test DB; expects running HTTP server.
- * Side-effects: process.env (.env.local + .env.test loading), HTTP requests to running server, database connections
- * Notes: Loads SSL setup for https://localhost connections; runs reset-db.ts globalSetup; sequential test execution.
+ * Invariants: Uses tsconfigPaths plugin for clean `@/core` resolution; expects env vars loaded externally; expects running HTTP server.
+ * Side-effects: HTTP requests to running server, database connections
+ * Notes: Environment variables loaded by package.json dotenv commands or CI; runs reset-db.ts globalSetup; sequential test execution.
  * Links: tsconfig.json paths, stack test files, tests/setup.ts
  * @public
  */
 
-import { defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
-import { config } from "dotenv";
-import { expand } from "dotenv-expand";
+import { defineConfig } from "vitest/config";
 
-// Load base env and expand variables
-const baseEnv = config({ path: ".env.local" });
-expand(baseEnv);
-
-// Then override with test settings
-const testEnv = config({ path: ".env.test", override: true });
-expand(testEnv);
-
-// Create combined environment (base values with test overrides)
-const combinedEnv = { ...baseEnv.parsed, ...testEnv.parsed };
-
-// Fail fast if required env vars missing
-if (!combinedEnv.DB_HOST) {
-  throw new Error(
-    "DB_HOST environment variable is required for stack tests (localhost?)"
-  );
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Stack tests require ${name} to be set`);
+  }
+  return value;
 }
-if (!combinedEnv.DB_PORT) {
-  throw new Error(
-    "DB_PORT environment variable is required for stack tests (55432?)"
-  );
-}
+
+// Fail fast if CI / local scripts didn't wire env correctly
+requireEnv("DB_HOST");
+requireEnv("DB_PORT");
+requireEnv("POSTGRES_USER");
+requireEnv("POSTGRES_PASSWORD");
+requireEnv("POSTGRES_DB");
+requireEnv("TEST_BASE_URL");
 
 export default defineConfig({
   plugins: [tsconfigPaths()],
