@@ -1,12 +1,14 @@
 # Testing Strategy
 
+**For developer setup and daily testing workflows, see [SETUP.md](SETUP.md).**
+
 **For stack testing modes and commands, see [ENVIRONMENTS.md](ENVIRONMENTS.md).**
 
 **Stack Testing Commands:**
 
 - `pnpm dev:stack:test` + `pnpm test:stack:dev` - Host app with fake adapters
 - `pnpm docker:test:stack` + `pnpm test:stack:docker` - Containerized app with fake adapters
-- `dotenv -e .env.local -- pnpm docker:stack` + `pnpm e2e` - Production deployment for black box e2e testing
+- `pnpm docker:stack` + `pnpm e2e` - Production deployment for black box e2e testing
 
 ## Environment-Based Test Adapters
 

@@ -36,7 +36,7 @@ This document describes the 6 deployment modes (from app-only to full production
 3. **Host Stack Test**: `pnpm dev:stack:test` + `pnpm test:stack:dev` - Test app + host postgres on :5432
 4. **Docker Dev Stack**: `pnpm docker:dev:stack` - All services containerized, postgres exposed on :55432
 5. **Docker Dev Stack Test**: `pnpm docker:test:stack` + `pnpm test:stack:docker` - All services containerized in test mode
-6. **Docker Stack**: `pnpm docker:stack` - Full production deployment (local: `dotenv -e .env.local -- pnpm docker:stack`)
+6. **Docker Stack**: `pnpm docker:stack` - Full production deployment with local environment
 
 ## Environment Variable System
 
@@ -188,23 +188,14 @@ DB_HOST=localhost DB_PORT=55432 TEST_BASE_URL=https://localhost/
 - No debug ports exposed
 - Production security configuration
 
-**Environment:** Uses environment variables from system/CI (no env files)
-
-- Production deployments get secrets from CI/CD environment
-- Local testing: prefix commands with `dotenv -e .env.local --`
+**Environment:** Automatically loads `.env.local` for local development, uses CI environment variables in production
 
 **Commands:**
 
 ```bash
-# Production (uses CI environment variables):
-pnpm docker:stack         # Start production stack
-pnpm docker:stack:build   # Build and start production
-pnpm docker:stack:migrate # Run migrations in production container
-
-# Local testing (loads .env.local):
-dotenv -e .env.local -- pnpm docker:stack         # Local production simulation
-dotenv -e .env.local -- pnpm docker:stack:build   # Build and start locally
-dotenv -e .env.local -- pnpm docker:stack:migrate # Run migrations locally
+pnpm docker:stack         # Local production simulation
+pnpm docker:stack:build   # Build and start locally
+pnpm docker:stack:migrate # Run migrations locally
 ```
 
 **Use Cases:**
