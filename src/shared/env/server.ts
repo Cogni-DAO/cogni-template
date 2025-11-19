@@ -105,7 +105,13 @@ function getServerEnv(): ParsedEnv {
             "Either DATABASE_URL or all component variables (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB) must be provided"
           );
         }
-        DATABASE_URL = buildDatabaseUrl(parsed);
+        DATABASE_URL = buildDatabaseUrl({
+          POSTGRES_USER: parsed.POSTGRES_USER,
+          POSTGRES_PASSWORD: parsed.POSTGRES_PASSWORD,
+          POSTGRES_DB: parsed.POSTGRES_DB,
+          DB_HOST: parsed.DB_HOST,
+          DB_PORT: parsed.DB_PORT,
+        });
       }
 
       _serverEnv = {
