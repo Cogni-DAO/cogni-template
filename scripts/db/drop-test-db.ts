@@ -3,15 +3,14 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * DROP TEST DATABASE SCRIPT
- *
- * SAFETY-FIRST: This script ONLY operates on the hardcoded test database.
- * Multiple safety layers prevent accidental production database deletion.
- *
- * Guards:
- * 1. PRIMARY: Hard-coded database name + host whitelist (cannot be bypassed)
- * 2. SECONDARY: APP_ENV=test requirement (belt-and-suspenders)
- * 3. Environment loading with explicit test config override
+ * Module: `@scripts/db/drop-test-db`
+ * Purpose: Safe test database drop utility with multiple hardcoded safety guards to prevent accidental production database deletion.
+ * Scope: Operates only on hardcoded test database "cogni_template_stack_test" on localhost. Does not support remote or production databases.
+ * Invariants: Hard-coded database name check; localhost-only operation; APP_ENV=test requirement prevents prod execution.
+ * Side-effects: IO (database operations, console output), process.env
+ * Notes: Multiple safety layers including whitelist validation and environment checks; integrates with test:stack:reset workflow.
+ * Links: Used by package.json test:stack:db:drop command
+ * @public
  */
 
 import { config } from "dotenv";
