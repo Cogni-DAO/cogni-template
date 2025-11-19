@@ -107,16 +107,7 @@ jobs:
           echo "App failed to become healthy"; exit 1
 
       - name: Run stack tests
-        run: vitest run --config vitest.stack.config.mts
-        env:
-          # Override DB connection for Vitest (connects via port mapping)
-          DB_HOST: localhost
-          DB_PORT: 55432
-          # Keep these explicit for clarity
-          POSTGRES_USER: user
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: cogni_template_test
-          TEST_BASE_URL: https://localhost/
+        run: pnpm test:stack:docker
 
       - name: Teardown stack
         if: always()
