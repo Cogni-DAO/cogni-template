@@ -35,6 +35,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 ## Pointers
 
+- [Developer Setup](docs/SETUP.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Environment & Stack Deployment Modes](docs/ENVIRONMENTS.md)
 - [Database & Migration Architecture](docs/DATABASES.md)
