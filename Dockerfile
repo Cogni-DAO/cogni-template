@@ -31,7 +31,7 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
 
 RUN pnpm build
 
-# 3) Runtime – minimal, uses Next.js standalone output
+# 3) Runtime – includes app and migration capabilities
 FROM node:20-alpine AS runner
 WORKDIR /app
 
@@ -40,6 +40,11 @@ RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs \
   && apk add --no-cache curl
 
+# Enable pnpm for migrations
+RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
+
+# Ensure PATH includes /usr/local/bin for pnpm shims
+ENV PATH="/usr/local/bin:${PATH}"
 ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
@@ -47,12 +52,19 @@ ENV LOG_FORMAT=json
 
 LABEL org.opencontainers.image.title="cogni-template"
 
-# Copy only what we actually need to run
-COPY --from=builder /app/public ./public
+# Copy runtime bundle AND migration tools
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=builder --chown=nextjs:nodejs /app/src/adapters/server/db/migrations ./src/adapters/server/db/migrations
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
 USER nextjs
+
+# Sanity check that pnpm works for migrations
+RUN pnpm --version
 
 EXPOSE 3000
 

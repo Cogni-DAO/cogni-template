@@ -89,6 +89,11 @@ jobs:
           docker compose -f platform/infra/services/runtime/docker-compose.yml \
             up -d --build app postgres litellm caddy
 
+      - name: Run migrations
+        run: |
+          docker compose -f platform/infra/services/runtime/docker-compose.yml \
+            run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'
+
       - name: Wait for app healthcheck
         run: |
           for i in {1..30}; do

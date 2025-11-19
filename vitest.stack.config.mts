@@ -31,7 +31,7 @@ export default defineConfig({
     include: ["tests/stack/**/*.stack.test.ts"],
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
-    globalSetup: ['./tests/stack/setup/reset-db.ts'],
+    globalSetup: ["./tests/stack/setup/reset-db.ts"],
     sequence: { concurrent: false },
   },
 });

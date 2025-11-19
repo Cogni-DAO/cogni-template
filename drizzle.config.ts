@@ -14,14 +14,17 @@
 
 import { defineConfig } from "drizzle-kit";
 
-import { serverEnv } from "@/shared/env";
-
 export default defineConfig({
   schema: "./src/shared/db/schema.ts",
   out: "./src/adapters/server/db/migrations",
   dialect: "postgresql",
   dbCredentials: {
-    url: serverEnv.DATABASE_URL,
+    url:
+      // eslint-disable-next-line n/no-process-env
+      process.env.DATABASE_URL ??
+      (() => {
+        throw new Error("DATABASE_URL environment variable is required");
+      })(),
   },
   verbose: true,
   strict: true,
