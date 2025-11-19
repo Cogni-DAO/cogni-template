@@ -40,15 +40,13 @@ const serverSchema = z.object({
   // Application environment (controls adapter wiring)
   APP_ENV: z.enum(["test", "production"]),
 
-  // Database connection pieces (required for buildDatabaseUrl)
-  POSTGRES_USER: z.string().min(1),
-  POSTGRES_PASSWORD: z.string().min(1),
-  POSTGRES_DB: z.string().min(1),
+  // Database connection: either provide DATABASE_URL directly OR component pieces
+  DATABASE_URL: z.string().url().optional(),
+  POSTGRES_USER: z.string().min(1).optional(),
+  POSTGRES_PASSWORD: z.string().min(1).optional(),
+  POSTGRES_DB: z.string().min(1).optional(),
   DB_HOST: z.string().default("localhost"),
   DB_PORT: z.coerce.number().default(5432),
-
-  // DATABASE_URL can be provided directly, but we construct it from pieces
-  DATABASE_URL: z.string().url().optional(),
 
   // TODO: Enable when session management is implemented
   // SESSION_SECRET: z.string().min(32),
@@ -91,8 +89,24 @@ function getServerEnv(): ParsedEnv {
       const isProd = parsed.NODE_ENV === "production";
       const isTestMode = parsed.APP_ENV === "test";
 
-      // Construct DATABASE_URL from pieces using shared helper
-      const DATABASE_URL = buildDatabaseUrl(parsed);
+      // Handle DATABASE_URL: use provided URL or construct from component pieces
+      let DATABASE_URL: string;
+      if (parsed.DATABASE_URL) {
+        // Direct DATABASE_URL provided (e.g., CI with sqlite://build.db)
+        DATABASE_URL = parsed.DATABASE_URL;
+      } else {
+        // Construct from component pieces (e.g., local development)
+        if (
+          !parsed.POSTGRES_USER ||
+          !parsed.POSTGRES_PASSWORD ||
+          !parsed.POSTGRES_DB
+        ) {
+          throw new Error(
+            "Either DATABASE_URL or all component variables (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB) must be provided"
+          );
+        }
+        DATABASE_URL = buildDatabaseUrl(parsed);
+      }
 
       _serverEnv = {
         ...parsed,
