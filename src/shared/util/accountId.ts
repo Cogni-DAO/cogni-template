@@ -15,8 +15,17 @@
 import { createHash } from "crypto";
 
 /**
- * Derives a collision-safe account ID from API key
- * Uses SHA256 hash to ensure stability and prevent collisions
+ * Derives a collision-safe account ID from an API key.
+ *
+ * SECURITY NOTE:
+ * - This function is not a password hasher.
+ * - Input apiKey MUST be a high-entropy, machine-generated secret. LiteLLM virtual keys follow
+ *   format "sk-" + 22+ random base64-like chars, generated via cryptographically secure methods.
+ * - We use fast SHA-256 solely to derive a stable, opaque public account ID from that key.
+ * - For user passwords or low-entropy secrets, use a dedicated password hashing/KDF algorithm
+ *   (e.g. argon2/bcrypt/scrypt/PBKDF2) and never reuse this utility.
+ *
+ * @see https://docs.litellm.ai/docs/proxy/virtual_keys - LiteLLM Virtual Key Documentation
  *
  * @param apiKey - The LiteLLM API key to derive account ID from
  * @returns Stable account ID in format "key:\{hash32chars\}"
