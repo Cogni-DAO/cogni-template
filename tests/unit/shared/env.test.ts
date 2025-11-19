@@ -30,7 +30,11 @@ describe("env schemas", () => {
     Object.assign(process.env, {
       NODE_ENV: "test",
       APP_ENV: "test",
-      DATABASE_URL: "postgres://u:p@h:5432/db?sslmode=require",
+      POSTGRES_USER: "u",
+      POSTGRES_PASSWORD: "p",
+      POSTGRES_DB: "db",
+      DB_HOST: "h",
+      DB_PORT: "5432",
       // TODO: SESSION_SECRET: "x".repeat(32),
       // LITELLM_BASE_URL: auto-detects based on NODE_ENV
       LITELLM_MASTER_KEY: "adminkey",
@@ -42,9 +46,7 @@ describe("env schemas", () => {
     const { serverEnv } = await import("../../../src/shared/env/server");
     const { clientEnv } = await import("../../../src/shared/env/client");
 
-    expect(serverEnv.DATABASE_URL).toBe(
-      "postgres://u:p@h:5432/db?sslmode=require"
-    );
+    expect(serverEnv.DATABASE_URL).toBe("postgresql://u:p@h:5432/db");
     expect(clientEnv.NEXT_PUBLIC_CHAIN_ID).toBe(1);
   });
 

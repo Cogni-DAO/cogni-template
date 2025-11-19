@@ -14,6 +14,8 @@
 
 import { z, ZodError } from "zod";
 
+import { buildDatabaseUrl } from "./db-url";
+
 export interface EnvValidationMeta {
   code: "INVALID_ENV";
   missing: string[];
@@ -38,8 +40,16 @@ const serverSchema = z.object({
   // Application environment (controls adapter wiring)
   APP_ENV: z.enum(["test", "production"]),
 
-  // Required now
-  DATABASE_URL: z.string().min(1),
+  // Database connection pieces (required for buildDatabaseUrl)
+  POSTGRES_USER: z.string().min(1),
+  POSTGRES_PASSWORD: z.string().min(1),
+  POSTGRES_DB: z.string().min(1),
+  DB_HOST: z.string().default("localhost"),
+  DB_PORT: z.coerce.number().default(5432),
+
+  // DATABASE_URL can be provided directly, but we construct it from pieces
+  DATABASE_URL: z.string().url().optional(),
+
   // TODO: Enable when session management is implemented
   // SESSION_SECRET: z.string().min(32),
 
@@ -63,6 +73,7 @@ const serverSchema = z.object({
 });
 
 type ParsedEnv = z.infer<typeof serverSchema> & {
+  DATABASE_URL: string;
   isDev: boolean;
   isTest: boolean;
   isProd: boolean;
@@ -80,8 +91,12 @@ function getServerEnv(): ParsedEnv {
       const isProd = parsed.NODE_ENV === "production";
       const isTestMode = parsed.APP_ENV === "test";
 
+      // Construct DATABASE_URL from pieces using shared helper
+      const DATABASE_URL = buildDatabaseUrl(parsed);
+
       _serverEnv = {
         ...parsed,
+        DATABASE_URL,
         isDev,
         isTest,
         isProd,

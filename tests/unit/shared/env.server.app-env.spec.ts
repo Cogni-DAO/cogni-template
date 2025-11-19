@@ -30,7 +30,9 @@ describe("serverEnv APP_ENV validation", () => {
     Object.assign(process.env, {
       NODE_ENV: "development",
       APP_ENV: "test",
-      DATABASE_URL: "postgres://test",
+      POSTGRES_USER: "postgres",
+      POSTGRES_PASSWORD: "postgres",
+      POSTGRES_DB: "test_db",
       LITELLM_MASTER_KEY: "test-key",
     });
 
@@ -43,7 +45,9 @@ describe("serverEnv APP_ENV validation", () => {
     Object.assign(process.env, {
       NODE_ENV: "production",
       APP_ENV: "production",
-      DATABASE_URL: "postgres://test",
+      POSTGRES_USER: "postgres",
+      POSTGRES_PASSWORD: "postgres",
+      POSTGRES_DB: "test_db",
       LITELLM_MASTER_KEY: "test-key",
     });
 

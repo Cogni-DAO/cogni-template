@@ -19,7 +19,11 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - APP_ENV=${APP_ENV}
       - APP_BASE_URL=${APP_BASE_URL:-https://localhost}
-      - DATABASE_URL=${DATABASE_URL}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-cogni_template_dev}
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
       - LITELLM_BASE_URL=http://litellm:4000
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}

@@ -1,5 +1,13 @@
 # Testing Strategy
 
+**For stack testing modes and commands, see [ENVIRONMENTS.md](ENVIRONMENTS.md).**
+
+**Stack Testing Commands:**
+
+- `pnpm dev:stack:test` + `pnpm test:stack:dev` - Host app with fake adapters
+- `pnpm docker:test:stack` + `pnpm test:stack:docker` - Containerized app with fake adapters
+- `dotenv -e .env.local -- pnpm docker:stack` + `pnpm e2e` - Production deployment for black box e2e testing
+
 ## Environment-Based Test Adapters
 
 When implementing adapters that hit external dependencies (APIs, services, etc.), you must provide both real and fake implementations to enable testing without external calls.

@@ -177,7 +177,7 @@
             "AGENTS\\.md|AGENTS_template\\.md|CLAUDE\\.md|",
             "Dockerfile|\\.dockerignore|",
             "\\.editorconfig|\\.gitignore|\\.nvmrc|\\.prettierignore|\\.prettierrc(\\..*)?|",
-            "\\.env\\.example|",
+            "\\.env\\.(example|local\\.example|test\\.example|docker\\.example|stack\\.local\\.example)|",
             "\\.mcp\\.json|",
             "commitlint\\.config\\.cjs|eslint\\.config\\.mjs|repolinter\\.json|",
             "components\\.json|sonar-project\\.properties|",

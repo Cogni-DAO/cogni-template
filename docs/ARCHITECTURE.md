@@ -418,6 +418,9 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 
 ## Related Documentation
 
+- [Environment & Stack Deployment Modes](ENVIRONMENTS.md) - All 6 deployment modes, environment variables, and when to use each
+- [Database & Migration Architecture](DATABASES.md) - Database organization, migration strategies, and URL construction
+- [Testing Strategy](TESTING.md) - Environment-based test adapters and stack testing approaches
 - [Error Handling Architecture](ERROR_HANDLING_ARCHITECTURE.md) - Layered error translation patterns and implementation guidelines
 - [CI/CD Pipeline Flow](CI-CD.md) - Branch model, workflows, and deployment automation
 - [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) - Infrastructure and deployment details

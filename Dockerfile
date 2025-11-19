@@ -18,16 +18,25 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build-time env defaults – NOT secrets
-ARG DATABASE_URL=sqlite://build.db
+# Build-time env defaults – NOT secrets (matches serverSchema keys)
+ARG POSTGRES_USER=postgres
+ARG POSTGRES_PASSWORD=postgres
+ARG POSTGRES_DB=cogni_template_dev
+ARG DB_HOST=localhost
+ARG DB_PORT=5432
+
 ARG LITELLM_MASTER_KEY=build-key
 ARG APP_ENV=production
 
 ENV NEXT_TELEMETRY_DISABLED=1 \
     NODE_ENV=production \
-    DATABASE_URL=$DATABASE_URL \
-    LITELLM_MASTER_KEY=$LITELLM_MASTER_KEY \
-    APP_ENV=$APP_ENV
+    POSTGRES_USER=${POSTGRES_USER} \
+    POSTGRES_PASSWORD=${POSTGRES_PASSWORD} \
+    POSTGRES_DB=${POSTGRES_DB} \
+    DB_HOST=${DB_HOST} \
+    DB_PORT=${DB_PORT} \
+    LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY} \
+    APP_ENV=${APP_ENV}
 
 RUN pnpm build
 
@@ -56,6 +65,7 @@ LABEL org.opencontainers.image.title="cogni-template"
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.config.ts
+COPY --from=builder --chown=nextjs:nodejs /app/src/shared/env ./src/shared/env
 COPY --from=builder --chown=nextjs:nodejs /app/src/adapters/server/db/migrations ./src/adapters/server/db/migrations
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./

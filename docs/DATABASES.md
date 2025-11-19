@@ -1,58 +1,42 @@
 # Database & Migration Architecture
 
-This document describes how databases are organized, how migrations run, and how that behavior maps to local development, stack tests, and Docker-based deployments. It also captures the current in-container migration strategy, trade-offs, and possible future improvements.
+This document describes database organization, migration strategies, and database-specific configuration patterns.
 
-## Overview: Environment Separation
+**For stack deployment modes and environment details, see [ENVIRONMENTS.md](ENVIRONMENTS.md).**
 
-We deliberately separate **host Postgres** (for local dev + fast tests) from **container Postgres** (for prod-like stacks). Each environment has its own `DATABASE_URL` and migration strategy, but all use the same migration tooling.
+## Database Separation
 
-## 1. Environment Details
+**Development Database:** `cogni_template_dev`  
+**Test Database:** `cogni_template_stack_test`
 
-### 1.1 Host Postgres (Local Machine)
+All stack deployment modes use the same migration tooling but connect to appropriate database instances. Test environments always use the test database and reset it between test runs.
 
-**Used for:** `dev:stack`, `test:stack`, `test:int`
+## Database URL Construction
 
-**Databases:**
+All environments construct PostgreSQL URLs from individual pieces using the `buildDatabaseUrl()` helper:
 
-- `cogni_template_dev` - Local development
-  ```
-  postgresql://postgres:postgres@localhost:5432/cogni_template_dev
-  ```
-- `cogni_template_stack_test` - Host stack tests
-  ```
-  postgresql://postgres:postgres@localhost:5432/cogni_template_stack_test
-  ```
+```typescript
+// src/shared/env/db-url.ts
+export function buildDatabaseUrl(env: DbEnvInput): string {
+  const user = env.POSTGRES_USER;
+  const password = env.POSTGRES_PASSWORD;
+  const db = env.POSTGRES_DB;
+  const host = env.DB_HOST ?? "localhost";
+  const port =
+    typeof env.DB_PORT === "number"
+      ? env.DB_PORT
+      : Number(env.DB_PORT ?? "5432");
 
-**Environment Files:**
+  return `postgresql://${user}:${password}@${host}:${port}/${db}`;
+}
+```
 
-- `.env.local` - Base local environment (dev DB, secrets, etc.)
-- `.env.stack.local` - Stack test overrides (points to `cogni_template_stack_test`)
+**Environment Examples:**
 
-**Vitest Configuration:**
-
-- `vitest.stack.config.mts` loads `.env.local` → `.env.stack.local` (override)
-- Stack tests connect to **host** `cogni_template_stack_test`
-
-### 1.2 Container Postgres (Docker Stack)
-
-**Used for:** `docker:stack`, staging, production
-
-**Database:**
-
-- `cogni_template_stack_test` (same name, **different Postgres instance**)
-
-  ```
-  postgresql://postgres:postgres@postgres:5432/cogni_template_stack_test
-  ```
-
-  - Note: `postgres` is the Docker service name, **never** `localhost`
-
-**Environment Files:**
-
-- `.env.docker` - Container-only environment
-  - Used by `docker compose --env-file .env.docker`
-  - Contains container-correct `DATABASE_URL`, `APP_ENV`, etc.
-  - **Not** loaded by host Vitest
+- **Host development:** `postgresql://postgres:postgres@localhost:5432/cogni_template_dev`
+- **Host testing:** `postgresql://postgres:postgres@localhost:5432/cogni_template_stack_test`
+- **Container (internal):** `postgresql://postgres:postgres@postgres:5432/cogni_template_stack_test`
+- **Host tests → container:** `postgresql://postgres:postgres@localhost:55432/cogni_template_stack_test`
 
 ## 2. Migration Strategy
 
@@ -80,57 +64,56 @@ pnpm dev:stack     # Start app using same database
 
 **Database:** `cogni_template_stack_test` (host Postgres)
 
-**Environment:** `.env.local` + `.env.stack.local` (override)
+**Environment:** `.env.local` + `.env.test` (override)
 
 **Commands:**
 
 ```bash
 pnpm test:stack:setup    # Create database + run migrations
-pnpm test:stack          # Run vitest stack tests
+pnpm test:stack:dev      # Run vitest stack tests against host app
 ```
 
 **Details:**
 
-- `test:stack:setup` creates `cogni_template_stack_test` and runs migrations
-- `test:stack` uses `vitest.stack.config.mts` (loads both env files)
+- `test:stack:setup` creates `cogni_template_stack_test` and runs migrations using test environment
+- `test:stack:dev` uses `vitest.stack.config.mts` (loads `.env.local` then `.env.test`)
 - `reset-db.ts` truncates tables in the **host** stack DB between tests
 
-### 2.3 Docker Stack (Production-like)
+### 2.3 Docker Stack Testing
 
 **Database:** `cogni_template_stack_test` (container Postgres)
 
-**Environment:** `.env.docker` (container-only)
+**Environment:** `dotenv -e .env.test -e .env.local` (test overrides base)
 
 **Commands:**
 
 ```bash
-# 1. Start Docker stack with container environment
-pnpm docker:stack:build    # Build and start containers
+# 1. Start Docker stack in test mode
+pnpm docker:test:stack:build    # Build and start containers with test env
 
 # 2. Run migrations INSIDE app container (same image + env as app)
-pnpm docker:stack:migrate
+pnpm docker:test:stack:migrate
 
-# 3. (Optional) Run host tests against container app
-pnpm test:stack
+# 3. Run host tests against containerized app
+pnpm test:stack:docker
 ```
 
 **Package.json Configuration:**
 
 ```json
 {
-  "docker:stack": "docker compose --env-file .env.docker up -d",
-  "docker:stack:build": "docker compose --env-file .env.docker up -d --build",
-  "docker:stack:migrate": "docker compose --env-file .env.docker run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'",
-  "docker:stack:test": "pnpm docker:stack && pnpm docker:stack:migrate && pnpm test:stack"
+  "docker:test:stack:build": "dotenv -e .env.test -e .env.local -- docker compose -f platform/infra/services/runtime/docker-compose.dev.yml up -d --build",
+  "docker:test:stack:migrate": "dotenv -e .env.test -e .env.local -- docker compose -f platform/infra/services/runtime/docker-compose.dev.yml run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'",
+  "test:stack:docker": "DB_HOST=localhost DB_PORT=55432 TEST_BASE_URL=https://localhost/ dotenv -e .env.test -e .env.local -- vitest run --config vitest.stack.config.mts"
 }
 ```
 
 **Key Properties:**
 
 - Uses same Docker image for both app and migrations
-- Uses same `.env.docker` environment
-- Migrations run **inside** the container against container Postgres
-- No environment file conflicts with host tools
+- Environment variables passed via dotenv to Docker Compose
+- Migrations run **inside** the container with same environment as app
+- Tests run from host, connect to exposed postgres port (55432) and app via HTTPS
 
 ## 3. Production Deployments
 

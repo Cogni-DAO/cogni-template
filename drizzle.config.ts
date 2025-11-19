@@ -14,17 +14,16 @@
 
 import { defineConfig } from "drizzle-kit";
 
+import { buildDatabaseUrl, type DbEnvInput } from "./src/shared/env/db-url";
+
+const dbUrl = buildDatabaseUrl(process.env as DbEnvInput);
+
 export default defineConfig({
   schema: "./src/shared/db/schema.ts",
   out: "./src/adapters/server/db/migrations",
   dialect: "postgresql",
   dbCredentials: {
-    url:
-      // eslint-disable-next-line n/no-process-env
-      process.env.DATABASE_URL ??
-      (() => {
-        throw new Error("DATABASE_URL environment variable is required");
-      })(),
+    url: dbUrl,
   },
   verbose: true,
   strict: true,

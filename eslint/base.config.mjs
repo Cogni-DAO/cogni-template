@@ -134,6 +134,8 @@ export default [
       "tests/**/*.ts",
       "scripts/**/*.ts",
       "docs/templates/**/*.ts",
+      "*.config.{ts,mts}",
+      "drizzle.config.ts",
     ],
     rules: { "n/no-process-env": "off" },
   },
