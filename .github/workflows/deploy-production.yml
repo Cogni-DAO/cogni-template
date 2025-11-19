@@ -79,6 +79,7 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           VM_HOST: ${{ secrets.VM_HOST }}
           GHCR_DEPLOY_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
           GHCR_USERNAME: Cogni-1729
