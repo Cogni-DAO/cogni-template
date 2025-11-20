@@ -7,8 +7,8 @@
  * Purpose: Runtime environment validation script for container startup and CI runtime checks.
  * Scope: Validates required runtime environment variables including DB configuration. Does not handle builds or build-time vars.
  * Invariants: Exits with code 1 on validation failure; exits with code 0 on success; provides clear error messages.
- * Side-effects: process.exit, console output
- * Notes: Uses getRuntimeEnv() to enforce DB requirements; called from Docker CMD or CI deploy scripts.
+ * Side-effects: IO
+ * Notes: Uses serverEnv() to validate all runtime requirements; exits with status code on failure; called from Docker CMD or CI deploy scripts.
  * Links: Used by container startup, CI deployment validation
  * @internal
  */
