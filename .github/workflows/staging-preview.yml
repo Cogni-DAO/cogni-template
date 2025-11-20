@@ -98,6 +98,11 @@ jobs:
       APP_ENV: production
       DOMAIN: ${{ vars.DOMAIN }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      POSTGRES_ROOT_USER: ${{ secrets.POSTGRES_ROOT_USER }}
+      POSTGRES_ROOT_PASSWORD: ${{ secrets.POSTGRES_ROOT_PASSWORD }}
+      APP_DB_USER: ${{ secrets.APP_DB_USER }}
+      APP_DB_PASSWORD: ${{ secrets.APP_DB_PASSWORD }}
+      APP_DB_NAME: ${{ secrets.APP_DB_NAME }}
       LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
