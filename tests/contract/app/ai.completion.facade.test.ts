@@ -12,13 +12,14 @@
  * @public
  */
 
-import { FakeClock } from "@tests/_fakes";
+import { createMockAccountServiceWithDefaults, FakeClock } from "@tests/_fakes";
 import { FakeLlmService } from "@tests/_fakes/ai/fakes";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { completion } from "@/app/_facades/ai/completion.server";
 import { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
 import { ChatErrorCode, ChatValidationError } from "@/core";
+import type { LlmCaller } from "@/ports";
 
 // Mock the bootstrap container
 vi.mock("@/bootstrap/container", () => ({
@@ -37,6 +38,12 @@ const mockResolveAiDeps = vi.mocked(resolveAiDeps);
 const mockExecute = vi.mocked(execute);
 
 describe("app/_facades/ai/completion.server", () => {
+  // Helper to create test caller
+  const createTestCaller = (): LlmCaller => ({
+    accountId: "test-user",
+    apiKey: "test-key-12345678",
+  });
+
   beforeEach(() => {
     vi.resetAllMocks();
   });
@@ -49,13 +56,22 @@ describe("app/_facades/ai/completion.server", () => {
           { role: "user" as const, content: "Hello" },
           { role: "assistant" as const, content: "Hi there" },
         ],
+        caller: createTestCaller(),
       };
 
       const fakeLlm = new FakeLlmService({ responseContent: "AI response" });
       const fakeClock = new FakeClock("2025-01-01T12:00:00.000Z");
+      const mockAccountService = createMockAccountServiceWithDefaults();
+
+      // Set up test account for the API key
+      await mockAccountService.createAccountForApiKey({
+        apiKey: "test-key-12345678",
+        displayName: "Test User",
+      });
 
       mockResolveAiDeps.mockReturnValue({
         llmService: fakeLlm,
+        accountService: mockAccountService,
         clock: fakeClock,
       });
 
@@ -98,17 +114,27 @@ describe("app/_facades/ai/completion.server", () => {
         timestamp: "2025-01-01T12:00:00.000Z",
       });
       expect(executeCall?.[1]).toBe(fakeLlm);
-      expect(executeCall?.[2]).toBe(fakeClock);
+      expect(executeCall?.[2]).toBe(mockAccountService);
+      expect(executeCall?.[3]).toBe(fakeClock);
     });
 
     it("should map ChatValidationError to structured error response", async () => {
       // Arrange
       const input = {
         messages: [{ role: "user" as const, content: "A".repeat(5000) }],
+        caller: createTestCaller(),
       };
+
+      const mockAccountService = createMockAccountServiceWithDefaults();
+      // Set up test account for the API key
+      await mockAccountService.createAccountForApiKey({
+        apiKey: "test-key-12345678",
+        displayName: "Test User",
+      });
 
       mockResolveAiDeps.mockReturnValue({
         llmService: new FakeLlmService(),
+        accountService: mockAccountService,
         clock: new FakeClock(),
       });
 
@@ -127,10 +153,19 @@ describe("app/_facades/ai/completion.server", () => {
       // Arrange
       const input = {
         messages: [{ role: "user" as const, content: "Hello" }],
+        caller: createTestCaller(),
       };
+
+      const mockAccountService = createMockAccountServiceWithDefaults();
+      // Set up test account for the API key
+      await mockAccountService.createAccountForApiKey({
+        apiKey: "test-key-12345678",
+        displayName: "Test User",
+      });
 
       mockResolveAiDeps.mockReturnValue({
         llmService: new FakeLlmService(),
+        accountService: mockAccountService,
         clock: new FakeClock(),
       });
 
@@ -150,13 +185,22 @@ describe("app/_facades/ai/completion.server", () => {
           { role: "user" as const, content: "First" },
           { role: "assistant" as const, content: "Second" },
         ],
+        caller: createTestCaller(),
       };
 
       const fixedTime = "2025-01-01T15:30:00.000Z";
       const fakeClock = new FakeClock(fixedTime);
+      const mockAccountService = createMockAccountServiceWithDefaults();
+
+      // Set up test account for the API key
+      await mockAccountService.createAccountForApiKey({
+        apiKey: "test-key-12345678",
+        displayName: "Test User",
+      });
 
       mockResolveAiDeps.mockReturnValue({
         llmService: new FakeLlmService(),
+        accountService: mockAccountService,
         clock: fakeClock,
       });
 
@@ -188,10 +232,19 @@ describe("app/_facades/ai/completion.server", () => {
           { role: "user" as const, content: "Hello" },
           // Note: TypeScript prevents system role in DTO, but test runtime behavior
         ],
+        caller: createTestCaller(),
       };
+
+      const mockAccountService = createMockAccountServiceWithDefaults();
+      // Set up test account for the API key
+      await mockAccountService.createAccountForApiKey({
+        apiKey: "test-key-12345678",
+        displayName: "Test User",
+      });
 
       mockResolveAiDeps.mockReturnValue({
         llmService: new FakeLlmService(),
+        accountService: mockAccountService,
         clock: new FakeClock(),
       });
 

@@ -35,7 +35,11 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 ## Pointers
 
+- [Developer Setup](docs/SETUP.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Environment & Stack Deployment Modes](docs/ENVIRONMENTS.md)
+- [Database & Migration Architecture](docs/DATABASES.md)
+- [Testing Strategy](docs/TESTING.md)
 - [Implementation Plan](docs/IMPLEMENTATION_PLAN.md)
 - [Feature Development Guide](docs/FEATURE_DEVELOPMENT_GUIDE.md)
 - [UI Implementation Guide](docs/UI_IMPLEMENTATION_GUIDE.md)
@@ -46,15 +50,19 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 ## Usage
 
 ```bash
-pnpm dev            # start dev server
-pnpm dev:stack      # start dev server + infrastructure (main dev workflow)
-pnpm docker:stack   # start full production simulation locally (https://localhost - browser will warn about cert)
-pnpm build          # build for production
-pnpm check          # lint + type + format validation
-pnpm test           # run unit/integration tests (no server required)
-pnpm test:ci        # run tests with coverage for CI/CD
-pnpm test:api        # API integration tests (requires server)
-pnpm format         # prettier format fixes
-pnpm check:docs     # lint AGENTS.md documentation
-pnpm e2e            # end-to-end tests
+pnpm dev                # start dev server
+pnpm dev:stack          # start dev server + infrastructure (main dev workflow)
+pnpm dev:stack:test     # start dev server + infrastructure for testing
+pnpm docker:stack       # start full production simulation locally (https://localhost - browser will warn about cert)
+pnpm docker:stack:test  # start full stack for testing with Docker
+pnpm build              # build for production
+pnpm check              # lint + type + format validation
+pnpm test               # run unit/integration tests (no server required)
+pnpm test:ci            # run tests with test coverage statistics
+pnpm test:int           # Integration tests (testcontainers, no server)
+pnpm test:stack:dev     # Full Stack tests (requires dev:stack:test running)
+pnpm test:stack:docker  # Full Stack tests (requires docker:stack:test running)
+pnpm format             # prettier format fixes
+pnpm check:docs         # lint AGENTS.md documentation
+pnpm e2e                # Black box end-to-end tests (run on pnpm docker:stack)
 ```

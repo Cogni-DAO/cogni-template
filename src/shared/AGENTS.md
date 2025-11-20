@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-13
+- **Last reviewed:** 2025-11-19
 - **Status:** draft
 
 ## Purpose
 
-Low-level building blocks used across the repo. Primitives and reusable shapes (e.g., walletAddressZ, isoDateZ, paginationZ), DTO mappers, pure utilities. No auth scopes. No rate limits. No operation IDs.
+Low-level building blocks used across the repo. Primitives and reusable shapes (e.g., walletAddressZ, isoDateZ, paginationZ), DTO mappers, pure utilities, database schema definitions. No auth scopes. No rate limits. No operation IDs.
 
 ## Pointers
 
@@ -37,11 +37,11 @@ Low-level building blocks used across the repo. Primitives and reusable shapes (
 
 ## Public Surface
 
-- **Exports:** DTOs, mappers, constants, utilities, cn function
+- **Exports:** DTOs, mappers, constants, utilities, cn function, database schemas (accounts)
 - **Routes (if any):** none
 - **CLI (if any):** none
-- **Env/Config keys:** Environment schema definitions
-- **Files considered API:** env/index.ts, util/index.ts
+- **Env/Config keys:** Environment schema definitions (DATABASE*URL, LITELLM*\*, APP_ENV)
+- **Files considered API:** env/index.ts, util/index.ts, db/index.ts
 
 ## Ports (optional)
 
@@ -51,7 +51,7 @@ Low-level building blocks used across the repo. Primitives and reusable shapes (
 
 ## Responsibilities
 
-- This directory **does**: Provide pure utilities, DTOs, constants, environment schemas
+- This directory **does**: Provide pure utilities, DTOs, constants, environment schemas, database table definitions
 - This directory **does not**: Contain business logic, side effects, or framework dependencies
 
 ## Usage
@@ -73,7 +73,7 @@ pnpm typecheck
 ## Dependencies
 
 - **Internal:** shared/ only
-- **External:** zod, clsx, tailwind-merge, utility libraries
+- **External:** zod, clsx, tailwind-merge, drizzle-orm (pg-core), utility libraries
 
 ## Change Protocol
 

@@ -14,7 +14,7 @@
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-// Note: This test file is designed for the test:api suite
+// Note: This test file is designed for the test:int suite
 // It assumes a running Next.js server and makes real HTTP requests
 // For now, we'll mock the dependencies to avoid requiring real LiteLLM
 
@@ -26,6 +26,51 @@ describe("API /v1/ai/completion", () => {
 
   beforeAll(async () => {
     // Server expected to be running via docker-compose in CI
+    // Register the test API key for completion tests
+    const registerResponse = await fetch(
+      `${API_BASE}/api/admin/accounts/register-litellm-key`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer admin-test-key",
+        },
+        body: JSON.stringify({
+          apiKey: "test-api-key",
+          displayName: "Test Account for Completion API",
+        }),
+      }
+    );
+
+    if (!registerResponse.ok) {
+      throw new Error(
+        `Failed to register test API key: ${registerResponse.status} ${await registerResponse.text()}`
+      );
+    }
+
+    // Add credits to the test account for completion tests
+    const registerData = await registerResponse.json();
+    const topupResponse = await fetch(
+      `${API_BASE}/api/admin/accounts/${registerData.accountId}/credits/topup`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer admin-test-key",
+        },
+        body: JSON.stringify({
+          amount: 10.0,
+          reason: "test_setup",
+          reference: "completion-test-setup",
+        }),
+      }
+    );
+
+    if (!topupResponse.ok) {
+      throw new Error(
+        `Failed to topup test account: ${topupResponse.status} ${await topupResponse.text()}`
+      );
+    }
   });
 
   afterAll(async () => {
@@ -43,9 +88,16 @@ describe("API /v1/ai/completion", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: "Bearer test-api-key",
       },
       body: JSON.stringify(requestBody),
     });
+
+    // Debug if the response fails
+    if (response.status !== 200) {
+      const errorText = await response.text();
+      console.log(`❌ Completion failed with ${response.status}:`, errorText);
+    }
 
     // Assert
     expect(response.status).toBe(200);
@@ -55,6 +107,71 @@ describe("API /v1/ai/completion", () => {
     expect(responseData.message).toHaveProperty("role", "assistant");
     expect(responseData.message).toHaveProperty("content", "[FAKE_COMPLETION]");
     expect(responseData.message).toHaveProperty("timestamp");
+  });
+
+  it("should return 401 when Authorization header is missing", async () => {
+    // Arrange
+    const requestBody = {
+      messages: [{ role: "user", content: "Hello" }],
+    };
+
+    // Act
+    const response = await fetch(COMPLETION_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    // Assert
+    expect(response.status).toBe(401);
+    const responseData = await response.json();
+    expect(responseData).toHaveProperty("error", "API key required");
+  });
+
+  it("should return 401 when Authorization header is malformed", async () => {
+    // Arrange
+    const requestBody = {
+      messages: [{ role: "user", content: "Hello" }],
+    };
+
+    // Act
+    const response = await fetch(COMPLETION_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Basic invalid-format",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    // Assert
+    expect(response.status).toBe(401);
+    const responseData = await response.json();
+    expect(responseData).toHaveProperty("error", "API key required");
+  });
+
+  it("should return 401 when Bearer token is empty", async () => {
+    // Arrange
+    const requestBody = {
+      messages: [{ role: "user", content: "Hello" }],
+    };
+
+    // Act
+    const response = await fetch(COMPLETION_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer ",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    // Assert
+    expect(response.status).toBe(401);
+    const responseData = await response.json();
+    expect(responseData).toHaveProperty("error", "API key required");
   });
 
   it("should return 400 for invalid input", async () => {
@@ -68,6 +185,7 @@ describe("API /v1/ai/completion", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: "Bearer test-api-key",
       },
       body: JSON.stringify(requestBody),
     });
@@ -88,6 +206,7 @@ describe("API /v1/ai/completion", () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: "Bearer test-api-key",
       },
       body: JSON.stringify({
         messages: [{ role: "user", content: "Test" }],

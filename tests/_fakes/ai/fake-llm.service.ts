@@ -13,7 +13,7 @@
  */
 
 import type { Message } from "@/core";
-import type { LlmService } from "@/ports";
+import type { LlmCaller, LlmService } from "@/ports";
 
 export interface FakeLlmOptions {
   shouldThrow?: boolean;
@@ -35,6 +35,7 @@ export class FakeLlmService implements LlmService {
     model?: string;
     temperature?: number;
     maxTokens?: number;
+    caller: LlmCaller;
   }[] = [];
 
   constructor(options: FakeLlmOptions = {}) {
@@ -50,6 +51,7 @@ export class FakeLlmService implements LlmService {
     model?: string;
     temperature?: number;
     maxTokens?: number;
+    caller: LlmCaller;
   }): Promise<{
     message: Message;
     usage?: {

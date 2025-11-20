@@ -241,7 +241,11 @@ export default [
             },
             {
               target: ["features"],
-              allow: ["**/services/*.{ts,tsx}", "**/components/*.{ts,tsx}"],
+              allow: [
+                "**/services/*.{ts,tsx}",
+                "**/components/*.{ts,tsx}",
+                "**/public.ts",
+              ],
             },
             {
               target: ["core"],
@@ -272,6 +276,7 @@ export default [
         "tailwind.config.ts",
         "playwright.config.ts",
         "commitlint.config.cjs",
+        "drizzle.config.ts",
       ],
       tailwindcss: {
         config: "tailwind.config.ts",
@@ -315,6 +320,8 @@ export default [
             "@/core", // alias -> src/core/public.ts
             "@/ports", // alias -> src/ports/index.ts
             "@/shared",
+            "services/*", // allow internal service imports within a feature
+            "errors", // allow internal error imports within a feature
           ],
         },
       ],

@@ -15,10 +15,16 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { FakeLlmAdapter } from "@/adapters/test/ai/fake-llm.adapter";
-import type { LlmService } from "@/ports";
+import type { LlmCaller, LlmService } from "@/ports";
 
 describe("FakeLlmAdapter deterministic behavior", () => {
   let adapter: LlmService;
+
+  // Helper to create test caller
+  const createTestCaller = (): LlmCaller => ({
+    accountId: "test-user",
+    apiKey: "test-key-12345678",
+  });
 
   beforeEach(() => {
     adapter = new FakeLlmAdapter();
@@ -29,6 +35,7 @@ describe("FakeLlmAdapter deterministic behavior", () => {
       const params = {
         model: "test-model",
         messages: [{ role: "user" as const, content: "Test prompt" }],
+        caller: createTestCaller(),
       };
 
       const result = await adapter.completion(params);
@@ -41,6 +48,7 @@ describe("FakeLlmAdapter deterministic behavior", () => {
       const params = {
         model: "any-model",
         messages: [{ role: "user" as const, content: "Any prompt" }],
+        caller: createTestCaller(),
       };
 
       const result = await adapter.completion(params);
@@ -57,6 +65,7 @@ describe("FakeLlmAdapter deterministic behavior", () => {
       const params = {
         model: customModel,
         messages: [{ role: "user" as const, content: "Test" }],
+        caller: createTestCaller(),
       };
 
       const result = await adapter.completion(params);
@@ -69,6 +78,7 @@ describe("FakeLlmAdapter deterministic behavior", () => {
     it("uses default model when none provided", async () => {
       const params = {
         messages: [{ role: "user" as const, content: "Test" }],
+        caller: createTestCaller(),
       };
 
       const result = await adapter.completion(params);
@@ -80,6 +90,7 @@ describe("FakeLlmAdapter deterministic behavior", () => {
       const params = {
         model: "test",
         messages: [{ role: "user" as const, content: "Test" }],
+        caller: createTestCaller(),
       };
 
       const result = await adapter.completion(params);
@@ -91,6 +102,7 @@ describe("FakeLlmAdapter deterministic behavior", () => {
       const params = {
         model: "consistent-model",
         messages: [{ role: "user" as const, content: "Consistent prompt" }],
+        caller: createTestCaller(),
       };
 
       const result1 = await adapter.completion(params);
@@ -106,11 +118,13 @@ describe("FakeLlmAdapter deterministic behavior", () => {
           { role: "system" as const, content: "You are helpful" },
           { role: "user" as const, content: "Question 1" },
         ],
+        caller: createTestCaller(),
       };
 
       const params2 = {
         model: "model-2",
         messages: [{ role: "user" as const, content: "Completely different" }],
+        caller: createTestCaller(),
       };
 
       const result1 = await adapter.completion(params1);
@@ -137,6 +151,7 @@ describe("FakeLlmAdapter deterministic behavior", () => {
     it("completion method has correct async signature", () => {
       const params = {
         messages: [{ role: "user" as const, content: "Test" }],
+        caller: createTestCaller(),
       };
 
       const result = adapter.completion(params);

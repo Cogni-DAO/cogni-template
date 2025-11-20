@@ -12,6 +12,10 @@
  * @public
  */
 
+export {
+  createMockAccountService,
+  createMockAccountServiceWithDefaults,
+} from "./accounts/mock-account.service";
 export { FakeClock } from "./fake-clock";
 export { FakeRng } from "./fake-rng";
 export { FakeTelemetry } from "./fake-telemetry";

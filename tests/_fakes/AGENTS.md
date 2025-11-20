@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-07
+- **Last reviewed:** 2025-11-17
 - **Status:** draft
 
 ## Purpose
@@ -35,7 +35,7 @@ Deterministic test doubles for unit tests with no I/O dependencies.
 
 ## Public Surface
 
-- **Exports:** fake implementations of ports
+- **Exports:** fake implementations and mock fixtures of ports including accounts, AI, telemetry
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none
@@ -51,6 +51,7 @@ Deterministic test doubles for unit tests with no I/O dependencies.
 ```bash
 # Import in unit tests
 import { FakeClock, FakeRng, FakeTelemetry } from "@tests/_fakes"
+import { createMockAccountServiceWithDefaults } from "@tests/_fakes"
 ```
 
 ## Standards

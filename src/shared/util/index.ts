@@ -12,4 +12,5 @@
  * @public
  */
 
+export { deriveAccountIdFromApiKey } from "./accountId";
 export { cn } from "./cn";

@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-13
+- **Last reviewed:** 2025-11-17
 - **Status:** draft
 
 ## Purpose
 
-Vertical slices containing use cases like auth/ and proposals/. Orchestrates core domain via ports.
+Vertical slices containing use cases like accounts/, ai/, and home/. Orchestrates core domain via ports.
 
 ## Pointers
 
@@ -38,7 +38,7 @@ Vertical slices containing use cases like auth/ and proposals/. Orchestrates cor
 
 ## Public Surface
 
-- **Exports:** Feature actions, services, components, hooks
+- **Exports:** accounts/services (admin ops), ai/services (completion), home/components (landing page), site-meta/services (route manifest)
 - **Routes (if any):** Feature-specific routes via app/
 - **CLI (if any):** none
 - **Env/Config keys:** Feature-specific environment variables

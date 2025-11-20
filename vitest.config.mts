@@ -3,19 +3,20 @@
 
 /**
  * Module: `vitest.config`
- * Purpose: Vitest test runner configuration with coverage reporting for unit and integration tests.
- * Scope: Configures test environment, file patterns, coverage providers, and reporting formats. Excludes e2e tests.
- * Invariants: Coverage enabled by default; lcov and json-summary formats for SonarCloud integration; v8 provider for Node.js compatibility.
+ * Purpose: Vitest test runner configuration for unit tests, contract tests, and lint tests (no infrastructure required).
+ * Scope: Configures test environment for fast tests only. Excludes integration tests requiring DB/HTTP server.
+ * Invariants: Coverage disabled by default; fast execution; v8 provider for Node.js compatibility.
  * Side-effects: file system (coverage reports written to ./coverage/)
- * Notes: Uses vite-tsconfig-paths for module resolution; excludes API tests from main test run.
+ * Notes: Uses vite-tsconfig-paths for module resolution; excludes tests/integration/** from main test run.
  * Links: SonarCloud integration workflow
  * @public
  */
 
-import { defineConfig } from "vitest/config";
-import tsconfigPaths from "vite-tsconfig-paths";
-import path from "path";
 import { fileURLToPath } from "node:url";
+
+import path from "path";
+import tsconfigPaths from "vite-tsconfig-paths";
+import { defineConfig } from "vitest/config";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -32,7 +33,8 @@ export default defineConfig({
       "e2e",
       "tests/_fakes/**",
       "tests/_fixtures/**",
-      "tests/api/**",
+      "tests/integration/**",
+      "tests/stack/**",
     ],
     coverage: {
       enabled: false,

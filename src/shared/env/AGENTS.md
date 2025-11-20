@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-16
+- **Last reviewed:** 2025-11-19
 - **Status:** draft
 
 ## Purpose
@@ -60,8 +60,16 @@ Single source of truth for environment variables. Validates at load time with Zo
 
 Required now:
 
-- DATABASE_URL
+- POSTGRES_USER
+- POSTGRES_PASSWORD
+- POSTGRES_DB
+- DB_HOST (default: localhost)
+- DB_PORT (default: 5432)
 - TODO: SESSION_SECRET (≥32 chars) - commented out until session management is implemented
+
+Constructed:
+
+- DATABASE*URL (built from POSTGRES*\_ and DB\_\_ components)
 
 LLM (Stage 8):
 
@@ -125,6 +133,7 @@ import { getEnv, requireEnv } from "@shared/env";
 When adding/removing keys, update:
 
 - schema in server.ts or client.ts,
+- buildDatabaseUrl function in @shared/db if DB-related,
 - Vars by layer list above,
 - .env.example,
 - tests touching env.

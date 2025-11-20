@@ -12,6 +12,18 @@
  * @public
  */
 
+export type { Account } from "./accounts/model";
+export {
+  AccountNotFoundError,
+  ensureHasCredits,
+  hasSufficientCredits,
+  InsufficientCreditsError,
+  isAccountNotFoundError,
+  isInsufficientCreditsError,
+  isUnknownApiKeyError,
+  UnknownApiKeyError,
+} from "./accounts/public";
+export { calculateCost } from "./billing/pricing";
 export type { Conversation, Message, MessageRole } from "./chat/model";
 export {
   assertMessageLength,

@@ -1,7 +1,11 @@
 # Cogni-Template Architecture
 
+**Core Mission**: A crypto-metered AI infrastructure loop where chat is just one client. DAO multi-sig → pays for GPU + OpenRouter/LiteLLM → users interact (chat/API) → users pay back in crypto → DAO multi-sig.
+
+This codebase uses a Clean Architecture, hex-inspired layering model with strict, enforced boundaries: `app → features → ports → core`, and `adapters` implementing `ports` from the outside. Domain logic and errors live in `core`, feature services expose stable, per-feature contracts (including error algebras), and the `app` layer only talks to features, never directly to core. ESLint boundaries codify these rules (e.g. no `app → core`, no `adapters → core`, `shared/types` remain domain-agnostic).
+
 Strict **Hexagonal (Ports & Adapters)** for a full-stack TypeScript app on **Next.js App Router**.  
-Purpose: a **fully open-source, crypto-only AI Application** with clean domain boundaries.  
+Purpose: a **metered AI backend** with per-request logging, credit accounting, and crypto billing.  
 **Web3 Enclosure** — all resources authenticated by connected wallets.  
 **Crypto-only Accounting** — infrastructure, LLM usage, and deployments funded by DAO-controlled wallets.  
 Every dependency points inward.
@@ -82,7 +86,7 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 ## Directory & Boundary Specification
 
 [x] .env.example # sample env vars for all services
-[x] .env.local.example # local-only env template (never committed)
+[ ] .env.local.example # local-only env template (never committed)
 [x] .gitignore # standard git ignore list
 [x] .nvmrc # node version pin (e.g., v20)
 [x] .editorconfig # IDE whitespace/newline rules
@@ -93,7 +97,8 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] tailwind.config.ts # Tailwind theme + presets
 [x] tsconfig.json # typescript + alias paths
 [x] tsconfig.eslint.json # eslint typescript config
-[x] package.json # deps, scripts, engines
+[x] package.json # deps, scripts, engines (db scripts added)
+[x] drizzle.config.ts # database migrations config
 [x] Dockerfile # reproducible build
 [ ] .dockerignore # ignore node_modules, artifacts, .env.\*
 [x] LICENSE # OSS license
@@ -104,6 +109,7 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] CHANGELOG.md # releases
 [ ] middleware.ts # headers, session/API-key guard, basic rate-limit
 [x] vitest.config.mts # unit/integration
+[x] vitest.api.config.mts # API integration tests
 [x] playwright.config.ts # UI/e2e
 
 [x] docs/
@@ -113,26 +119,21 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] platform/ # platform tooling and infrastructure
 [x] ├── infra/ # Infrastructure as Code and deployment configs
 [x] │ ├── providers/
-[ ] │ │ ├── cherry/
-[ ] │ │ │ ├── base/ # VM + static bootstrap (immutable)
+[x] │ │ ├── cherry/ # Cherry Servers provider
+[x] │ │ │ ├── base/ # VM + static bootstrap (immutable)
 [ ] │ │ │ └── app/ # SSH deploy + health gate (mutable)
-[ ] │ │ └── akash/ # FUTURE provider
-[ ] │ ├── services/
-[ ] │ │ ├── litellm/ # LLM model routing + budgets
-[ ] │ │ ├── langfuse/ # Observability stack
-[ ] │ │ └── postgres/ # Database configs
+[x] │ │ └── akash/ # Akash provider configs
+[x] │ ├── services/
+[x] │ │ ├── runtime/ # Docker Compose for local dev (postgres, litellm)
+[x] │ │ └── loki-promtail/ # Log aggregation stack
 [ ] │ ├── stacks/
 [ ] │ │ └── local-compose/ # Local development stack
-[ ] │ ├── files/ # Shared templates and utility scripts
-[ ] │ └── modules/ # Reusable Terraform modules
-[ ] ├── ci/
-[ ] │ ├── github/ # README, env mapping, badges (no YAML workflows)
-[ ] │ ├── jenkins/ # Jenkinsfile, controller notes  
-[ ] │ └── scripts/ # Provider-agnostic build/push/deploy shims
-[ ] ├── bootstrap/ # One-time dev machine setup installers
+[x] │ └── files/ # Shared templates and utility scripts
+[x] ├── ci/ # CI/CD automation
+[x] ├── bootstrap/ # One-time dev machine setup installers
 [ ] │ ├── install/ # Focused installer scripts (tofu, pnpm, docker, reuse)
 [ ] │ └── README.md # Installation instructions
-[ ] └── runbooks/ # Deploy, rollback, incident docs
+[x] └── runbooks/ # Deploy, rollback, incident docs
 
 [ ] public/
 [ ] ├── robots.txt
@@ -143,33 +144,52 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 
 [x] src/
 [x] ├── bootstrap/ # composition root (DI)
-[ ] │ ├── container.ts # wires adapters → ports
+[x] │ ├── container.ts # wires adapters → ports
 [ ] │ └── config.ts # Zod-validated env
 [ ] │
 [x] ├── contracts/ # operation contracts (edge IO)
-[ ] │ ├── AGENTS.md
-[ ] │ └── \*.contract.ts
+[x] │ ├── AGENTS.md
+[x] │ ├── http/ # HTTP route contracts
+[x] │ ├── admin.accounts.register.v1.contract.ts # account registration
+[x] │ ├── admin.accounts.topup.v1.contract.ts # credit top-up
+[x] │ └── \*.contract.ts # individual operation contracts
 [ ] │
 [x] ├── mcp/ # MCP host (future)
-[ ] │ ├── AGENTS.md
-[ ] │ └── server.stub.ts
+[x] │ ├── AGENTS.md
+[x] │ └── server.stub.ts
 [ ] │
 [x] ├── app/ # delivery (Next UI + routes)
 [x] │ ├── layout.tsx
 [x] │ ├── page.tsx
+[x] │ ├── \_facades/ # server-side facades for UI
+[x] │ │ └── accounts/ # account management facades
 [ ] │ ├── providers.tsx # QueryClient, Wagmi, RainbowKit
-[ ] │ ├── globals.css
 [ ] │ ├── (public)/
 [ ] │ ├── (protected)/
-[ ] │ └── api/
-[ ] │ ├── health/route.ts
-[ ] │ ├── ai/chat/route.ts # uses ports.AIService only
+[x] │ └── api/
+[x] │ ├── v1/meta/ # health, route-manifest, openapi
+[x] │ ├── v1/ai/completion/ # AI completion endpoint  
+[x] │ └── admin/ # admin control plane endpoints
+[x] │ ├── accounts/
+[x] │ │ ├── register-litellm-key/ # POST - create account for API key
+[x] │ │ └── [accountId]/
+[x] │ │ └── credits/
+[x] │ │ └── topup/ # POST - manual credit funding
 [ ] │ ├── balance/route.ts # exposes credits
 [ ] │ ├── keys/create/route.ts # API-key issuance
 [ ] │ └── web3/verify/route.ts # calls wallet verification port
 [ ] │
 [x] ├── features/ # application services
-[x] │ ├── home/
+[x] │ ├── home/ # home page data
+[x] │ ├── ai/ # AI completion services
+[x] │ │ └── services/
+[x] │ ├── accounts/ # account management feature
+[x] │ │ ├── public.ts # feature public API (single entrypoint)
+[x] │ │ ├── errors.ts # feature error types and guards
+[x] │ │ └── services/
+[x] │ │ └── adminAccounts.ts # admin account operations
+[x] │ └── site-meta/ # meta services (health, routes)
+[x] │ └── services/
 [ ] │ ├── auth/
 [ ] │ │ ├── actions.ts
 [ ] │ │ └── services/
@@ -183,6 +203,17 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] │ └── index.ts
 [ ] │
 [x] ├── core/ # domain: entities, rules, invariants
+[x] │ ├── chat/ # chat domain model
+[x] │ │ ├── model.ts
+[x] │ │ ├── rules.ts
+[x] │ │ └── public.ts
+[x] │ ├── accounts/ # account domain model
+[x] │ │ ├── model.ts # account entities and business rules
+[x] │ │ ├── errors.ts # domain errors (InsufficientCreditsError)
+[x] │ │ └── public.ts # domain exports
+[x] │ ├── billing/ # billing domain logic
+[x] │ │ └── pricing.ts # credit cost calculations
+[x] │ └── public.ts # core exports
 [ ] │ ├── auth/
 [ ] │ │ ├── session.ts
 [ ] │ │ └── rules.ts
@@ -194,30 +225,40 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] │ └── rules.ts
 [ ] │
 [x] ├── ports/ # contracts (minimal interfaces)
-[ ] │ ├── ai.port.ts # AIService { complete(): Promise<…> }
+[x] │ ├── llm.port.ts # LLM service interface (LlmCaller)
+[x] │ ├── clock.port.ts # Clock { now(): Date }
+[x] │ ├── accounts.port.ts # AccountService interface (create, debit, credit)
+[x] │ └── index.ts # port exports
 [ ] │ ├── wallet.port.ts # WalletService { verifySignature(...) }
 [ ] │ ├── auth.port.ts # AuthService { issueNonce, verifySiwe, session }
 [ ] │ ├── apikey.port.ts # ApiKeyRepo { create, revoke, findByHash }
-[ ] │ ├── credits.port.ts # CreditsRepo { balance, credit, debit }
 [ ] │ ├── usage.port.ts # UsageRepo { recordUsage, findByApiKey }
 [ ] │ ├── telemetry.port.ts # Telemetry { trace, event, span }
 [ ] │ ├── ratelimit.port.ts # RateLimiter { take(key, points) }
-[ ] │ ├── clock.port.ts # Clock { now(): Date }
 [ ] │ └── rng.port.ts # Rng { uuid(): string }
 [ ] │
 [x] ├── adapters/ # infrastructure implementations (no UI)
-[ ] │ ├── server/
-[ ] │ │ ├── ai/litellm.adapter.ts # AIService impl
-[ ] │ │ ├── auth/siwe.adapter.ts # nonce + session store
-[ ] │ │ ├── wallet/verify.adapter.ts # viem-based signature checks
-[ ] │ │ ├── apikey/drizzle.repo.ts # API keys persistence
-[ ] │ │ ├── credits/drizzle.repo.ts # atomic credit/usage accounting
-[ ] │ │ ├── db/drizzle.client.ts # drizzle instance
-[ ] │ │ ├── telemetry/langfuse.adapter.ts # traces + spans
-[ ] │ │ ├── logging/pino.adapter.ts # log transport
-[ ] │ │ ├── ratelimit/db-bucket.adapter.ts # simple token-bucket
-[ ] │ │ ├── clock/system.adapter.ts # system clock
-[ ] │ │ └── rng/uuid.adapter.ts # uuid generator
+[x] │ ├── server/
+[x] │ │ ├── ai/litellm.adapter.ts # LLM service impl
+[x] │ │ ├── accounts/ # account service implementation
+[x] │ │ │ └── drizzle.adapter.ts # database-backed AccountService
+[x] │ │ ├── db/ # database client and connection
+[x] │ │ │ ├── drizzle.client.ts # drizzle instance
+[x] │ │ │ ├── client.ts # main database client export
+[x] │ │ │ └── index.ts # db exports
+[x] │ │ ├── time/system.adapter.ts # system clock
+[x] │ │ └── index.ts # server adapter exports
+[x] │ └── test/ # fake implementations for CI
+[x] │ ├── AGENTS.md # test adapter documentation
+[x] │ ├── ai/fake-llm.adapter.ts # test LLM adapter
+[x] │ └── index.ts # test adapter exports
+[ ] │ ├── auth/siwe.adapter.ts # nonce + session store
+[ ] │ ├── wallet/verify.adapter.ts # viem-based signature checks
+[ ] │ ├── apikey/drizzle.repo.ts # API keys persistence
+[ ] │ ├── telemetry/langfuse.adapter.ts # traces + spans
+[ ] │ ├── logging/pino.adapter.ts # log transport
+[ ] │ ├── ratelimit/db-bucket.adapter.ts # simple token-bucket
+[ ] │ └── rng/uuid.adapter.ts # uuid generator
 [ ] │ ├── worker/ # background jobs (future)
 [ ] │ └── cli/ # command-line adapters (future)
 [ ] │
@@ -225,17 +266,24 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] │ ├── env/
 [x] │ │ ├── server.ts # Zod-validated private vars
 [x] │ │ ├── client.ts # validated public vars
+[x] │ │ ├── build.ts # build-time env
 [x] │ │ └── index.ts
+[x] │ ├── db/ # database schema
+[x] │ │ ├── schema.ts # Drizzle schema definitions
+[x] │ │ └── index.ts
+[x] │ ├── constants/
+[x] │ │ └── index.ts
+[x] │ ├── errors/
+[x] │ │ └── index.ts
+[x] │ ├── util/
+[x] │ │ ├── cn.ts # className utility
+[x] │ │ ├── accountId.ts # stable account ID derivation from API key
+[x] │ │ └── index.ts
+[x] │ └── index.ts
 [ ] │ ├── schemas/
 [ ] │ │ ├── api.ts # request/response DTOs
 [ ] │ │ ├── usage.ts # usage schema
 [ ] │ │ └── mappers.ts # DTO ↔ domain translators
-[ ] │ ├── constants/
-[ ] │ │ ├── routes.ts
-[ ] │ │ └── models.ts
-[ ] │ └── util/
-[ ] │ ├── strings.ts
-[ ] │ ├── dates.ts
 [ ] │ └── crypto.ts
 [ ] │
 [x] ├── components/ # shared presentational UI
@@ -276,10 +324,15 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [ ] └── ai.spec.ts
 
 [x] scripts/
-[ ] ├── generate-types.ts
-[ ] ├── validate-agents-md.mjs
-[ ] ├── seed-db.ts
-[ ] └── migrate.ts
+[x] ├── validate-agents-md.mjs # validates AGENTS.md files
+[x] ├── validate-doc-headers.ts # validates doc headers
+[x] ├── setup/ # setup scripts
+[x] └── eslint/ # custom ESLint plugins
+[x] ├── plugins/ui-governance.cjs
+[ ] ├── db/ # database scripts
+[ ] │ ├── seed.ts
+[ ] │ └── migrate.ts
+[ ] └── generate-types.ts
 
 ---
 
@@ -365,5 +418,9 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 
 ## Related Documentation
 
+- [Environment & Stack Deployment Modes](ENVIRONMENTS.md) - All 6 deployment modes, environment variables, and when to use each
+- [Database & Migration Architecture](DATABASES.md) - Database organization, migration strategies, and URL construction
+- [Testing Strategy](TESTING.md) - Environment-based test adapters and stack testing approaches
+- [Error Handling Architecture](ERROR_HANDLING_ARCHITECTURE.md) - Layered error translation patterns and implementation guidelines
 - [CI/CD Pipeline Flow](CI-CD.md) - Branch model, workflows, and deployment automation
 - [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) - Infrastructure and deployment details

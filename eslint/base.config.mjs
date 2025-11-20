@@ -4,7 +4,7 @@
 /**
  * Module: `@eslint/base.config.mjs`
  * Purpose: Core ESLint rules for TypeScript, imports, and Node.js best practices.
- * Scope: Covers TypeScript files, import sorting/resolution, code quality rules, process.env restrictions. Does not handle React/Next.js rules.
+ * Scope: Covers TypeScript files (.ts/.tsx/.mts), import sorting/resolution, code quality rules, process.env restrictions. Does not handle React/Next.js rules.
  * Invariants: All TypeScript files validated; imports sorted; process.env restricted to allowed files.
  * Side-effects: none
  * Notes: Includes n/no-process-env rule with allowlist for env files and infrastructure.
@@ -42,7 +42,7 @@ export default [
 
   // TypeScript files only
   {
-    files: ["**/*.ts", "**/*.tsx"],
+    files: ["**/*.ts", "**/*.tsx", "**/*.mts"],
     languageOptions: {
       parser: tsParser,
       globals: {
@@ -134,6 +134,8 @@ export default [
       "tests/**/*.ts",
       "scripts/**/*.ts",
       "docs/templates/**/*.ts",
+      "*.config.{ts,mts}",
+      "drizzle.config.ts",
     ],
     rules: { "n/no-process-env": "off" },
   },

@@ -26,7 +26,7 @@ feat/xyz → staging (PR with full CI checks)
 fix/abc → staging (PR with full CI checks)
 ```
 
-- Triggers: `ci.yaml` (lint, test, build)
+- Triggers: `ci.yaml` (contains `pnpm check`, `docker-compose.dev build`, `test:stack:docker`)
 - Branch types: `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`
 - Merge requires: approval + green CI
 

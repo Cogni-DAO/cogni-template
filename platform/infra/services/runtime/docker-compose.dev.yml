@@ -1,0 +1,126 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+# Cogni Runtime Stack
+# Environment-agnostic container stack for app + litellm + caddy + promtail
+# Secrets and config come from environment variables set by CI
+
+services:
+  app:
+    image: ${APP_IMAGE:-cogni-template-local}
+    build:
+      context: ../../../..
+      dockerfile: ./Dockerfile
+    container_name: app
+    restart: always
+    networks:
+      - web
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - APP_ENV=${APP_ENV}
+      - APP_BASE_URL=${APP_BASE_URL:-https://localhost}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-cogni_template_dev}
+      - DB_HOST=postgres
+      - DB_PORT=${DB_PORT:-5432}
+      - LITELLM_BASE_URL=http://litellm:4000
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - SESSION_SECRET=${SESSION_SECRET}
+      - PORT=${PORT:-3000}
+      - PINO_LOG_LEVEL=${PINO_LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      litellm:
+        condition: service_healthy
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm
+    restart: unless-stopped
+    networks:
+      - web
+    environment:
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+    volumes:
+      - ./configs/litellm.config.yaml:/app/config.yaml:ro
+    command: --config /app/config.yaml --host 0.0.0.0 --port 4000
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:4000/health/readiness || exit 1",
+        ]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 30s
+
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: always
+    networks:
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - ./configs/Caddyfile.tmpl:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+      - litellm
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    restart: unless-stopped
+    networks:
+      - web
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cogni_template_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    ports:
+      - "55432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user}"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 10s
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: promtail
+    restart: always
+    networks:
+      - web
+    volumes:
+      - ./configs/promtail-config.yaml:/etc/promtail/config.yaml:ro
+      - /var/lib/promtail:/var/lib/promtail
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yaml
+
+networks:
+  web:
+    name: web
+    external: false
+
+volumes:
+  caddy_data:
+    name: caddy_data
+  caddy_config:
+    name: caddy_config
+  postgres_data:
+    name: postgres_data

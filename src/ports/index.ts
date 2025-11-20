@@ -3,14 +3,21 @@
 
 /**
  * Module: `@ports`
- * Purpose: Hex entry file for port interfaces - canonical import surface.
- * Scope: Re-exports only public port interfaces with named type exports. Does not export implementations or runtime objects.
- * Invariants: Type-only exports, no runtime coupling, no export *
+ * Purpose: Hex entry file for port interfaces and port-level errors - canonical import surface.
+ * Scope: Re-exports public port interfaces and error classes. Does not export implementations or runtime objects.
+ * Invariants: Named exports only, no runtime coupling except error classes, no export *
  * Side-effects: none
  * Notes: Enforces architectural boundaries via ESLint entry-point rules
- * Links: Used by features with type-only imports
+ * Links: Used by features and adapters for port contracts
  * @public
  */
 
+export type { AccountService } from "./accounts.port";
+export {
+  AccountNotFoundPortError,
+  InsufficientCreditsPortError,
+  isAccountNotFoundPortError,
+  isInsufficientCreditsPortError,
+} from "./accounts.port";
 export type { Clock } from "./clock.port";
-export type { LlmService } from "./llm.port";
+export type { LlmCaller, LlmService } from "./llm.port";

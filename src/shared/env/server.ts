@@ -7,12 +7,14 @@
  * Scope: Validates process.env for server runtime; provides serverEnv object with APP_ENV support. Does not handle client-side env vars.
  * Invariants: All required env vars validated on first access; provides boolean flags for runtime and test modes; fails fast on invalid env.
  * Side-effects: process.env
- * Notes: Includes APP_ENV for adapter wiring; LLM config; validates URLs and secrets; production guard prevents test mode in prod.
+ * Notes: Includes APP_ENV for adapter wiring; LLM config; constructs DATABASE_URL from pieces; production guard prevents test mode in prod.
  * Links: Environment configuration specification
  * @public
  */
 
 import { z, ZodError } from "zod";
+
+import { buildDatabaseUrl } from "@/shared/db";
 
 export interface EnvValidationMeta {
   code: "INVALID_ENV";
@@ -38,8 +40,14 @@ const serverSchema = z.object({
   // Application environment (controls adapter wiring)
   APP_ENV: z.enum(["test", "production"]),
 
-  // Required now
-  DATABASE_URL: z.string().min(1),
+  // Database connection: either provide DATABASE_URL directly OR component pieces
+  DATABASE_URL: z.string().url().optional(),
+  POSTGRES_USER: z.string().min(1).optional(),
+  POSTGRES_PASSWORD: z.string().min(1).optional(),
+  POSTGRES_DB: z.string().min(1).optional(),
+  DB_HOST: z.string().default("localhost"),
+  DB_PORT: z.coerce.number().default(5432),
+
   // TODO: Enable when session management is implemented
   // SESSION_SECRET: z.string().min(32),
 
@@ -63,6 +71,7 @@ const serverSchema = z.object({
 });
 
 type ParsedEnv = z.infer<typeof serverSchema> & {
+  DATABASE_URL: string;
   isDev: boolean;
   isTest: boolean;
   isProd: boolean;
@@ -80,8 +89,34 @@ function getServerEnv(): ParsedEnv {
       const isProd = parsed.NODE_ENV === "production";
       const isTestMode = parsed.APP_ENV === "test";
 
+      // Handle DATABASE_URL: use provided URL or construct from component pieces
+      let DATABASE_URL: string;
+      if (parsed.DATABASE_URL) {
+        // Direct DATABASE_URL provided (e.g., CI with sqlite://build.db)
+        DATABASE_URL = parsed.DATABASE_URL;
+      } else {
+        // Construct from component pieces (e.g., local development)
+        if (
+          !parsed.POSTGRES_USER ||
+          !parsed.POSTGRES_PASSWORD ||
+          !parsed.POSTGRES_DB
+        ) {
+          throw new Error(
+            "Either DATABASE_URL or all component variables (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB) must be provided"
+          );
+        }
+        DATABASE_URL = buildDatabaseUrl({
+          POSTGRES_USER: parsed.POSTGRES_USER,
+          POSTGRES_PASSWORD: parsed.POSTGRES_PASSWORD,
+          POSTGRES_DB: parsed.POSTGRES_DB,
+          DB_HOST: parsed.DB_HOST,
+          DB_PORT: parsed.DB_PORT,
+        });
+      }
+
       _serverEnv = {
         ...parsed,
+        DATABASE_URL,
         isDev,
         isTest,
         isProd,

@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-16
+- **Last reviewed:** 2025-11-20
 - **Status:** draft
 
 ## Purpose
@@ -14,7 +14,7 @@ Service-specific configurations for supporting infrastructure like LLM routing, 
 
 ## Pointers
 
-- [runtime/](runtime/): Production and development Docker Compose stacks
+- [runtime/](runtime/): **PROTECTED** Production runtime configuration (copied to VMs)
 - [loki-promtail/](loki-promtail/): Log aggregation and monitoring stack
 - [litellm/](litellm/): LLM model routing and budget configurations
 - [langfuse/](langfuse/): Observability and telemetry stack
@@ -35,7 +35,7 @@ Service-specific configurations for supporting infrastructure like LLM routing, 
 - **Exports:** none
 - **Routes (if any):** none
 - **CLI (if any):** docker-compose commands
-- **Env/Config keys:** Service-specific environment variables
+- **Env/Config keys:** `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, service-specific environment variables
 - **Files considered API:** `runtime/docker-compose.yml`, `runtime/docker-compose.dev.yml`, `*/config.yaml`
 
 ## Ports (optional)
@@ -46,8 +46,10 @@ Service-specific configurations for supporting infrastructure like LLM routing, 
 
 ## Responsibilities
 
-- This directory **does**: Define supporting service configurations and compose files
+- This directory **does**: Define supporting service configurations, compose files, and database initialization scripts
 - This directory **does not**: Handle application deployment or business logic
+
+**SECURITY NOTE**: The `runtime/` subdirectory is copied to production VMs and contains deployment-critical configuration.
 
 ## Usage
 

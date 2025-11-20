@@ -33,7 +33,9 @@ describe("server env edge cases", () => {
     Object.assign(process.env, {
       NODE_ENV: "test",
       APP_ENV: "test",
-      DATABASE_URL: "postgres://test",
+      POSTGRES_USER: "postgres",
+      POSTGRES_PASSWORD: "postgres",
+      POSTGRES_DB: "test_db",
       LITELLM_MASTER_KEY: "test-key",
     });
 

@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-07
+- **Last reviewed:** 2025-11-19
 - **Status:** draft
 
 ## Purpose
 
-Build-time scripts for migrations, seeds, type generation, development utilities, and documentation validation.
+Build-time scripts for migrations, seeds, type generation, development utilities, database management, and documentation validation.
 
 ## Pointers
 
@@ -38,9 +38,9 @@ Build-time scripts for migrations, seeds, type generation, development utilities
 
 - **Exports:** none
 - **Routes (if any):** none
-- **CLI (if any):** Migration, seed, and validation commands
+- **CLI (if any):** Migration, seed, database drop, and validation commands
 - **Env/Config keys:** Database connection, development flags
-- **Files considered API:** validate-agents-md.mjs (validation script)
+- **Files considered API:** validate-agents-md.mjs (validation script), db/drop-test-db.ts (test database utility)
 
 ## Ports (optional)
 
@@ -50,7 +50,7 @@ Build-time scripts for migrations, seeds, type generation, development utilities
 
 ## Responsibilities
 
-- This directory **does**: Run migrations, seed data, generate types, development automation, validate AGENTS.md files
+- This directory **does**: Run migrations, seed data, generate types, development automation, validate AGENTS.md files, manage test databases
 - This directory **does not**: Contain runtime code, business logic, UI components
 
 ## Usage
@@ -60,7 +60,8 @@ Minimal local commands:
 ```bash
 node scripts/migrate.ts
 node scripts/seed-db.ts
-pnpm check:agentsmd  # Validate all AGENTS.md files
+tsx scripts/db/drop-test-db.ts  # Drop test database (safety-guarded)
+pnpm check:agentsmd             # Validate all AGENTS.md files
 ```
 
 ## Standards

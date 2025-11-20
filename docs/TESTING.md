@@ -1,5 +1,15 @@
 # Testing Strategy
 
+**For developer setup and daily testing workflows, see [SETUP.md](SETUP.md).**
+
+**For stack testing modes and commands, see [ENVIRONMENTS.md](ENVIRONMENTS.md).**
+
+**Stack Testing Commands:**
+
+- `pnpm dev:stack:test` + `pnpm test:stack:dev` - Host app with fake adapters
+- `pnpm docker:test:stack` + `pnpm test:stack:docker` - Containerized app with fake adapters
+- `pnpm docker:stack` + `pnpm e2e` - Production deployment for black box e2e testing
+
 ## Environment-Based Test Adapters
 
 When implementing adapters that hit external dependencies (APIs, services, etc.), you must provide both real and fake implementations to enable testing without external calls.
@@ -58,6 +68,6 @@ The `test-api` workflow job:
 - Sets `APP_ENV=test` (triggers fake adapters)
 - Does NOT provide external API keys (forces fake usage)
 - Starts app stack with Docker
-- Runs `pnpm test:api` against fake responses
+- Runs `pnpm test:int` against fake responses
 
 This ensures CI never makes external API calls while still testing the full HTTP request/response flow.
