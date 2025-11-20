@@ -35,12 +35,6 @@ export default async function resetStackTestDatabase() {
 
   const databaseUrl = process.env.DATABASE_URL ?? buildDatabaseUrl(filteredEnv);
 
-  console.log("🔍 DEBUG reset-db.ts env:");
-  console.log("  POSTGRES_USER:", process.env.POSTGRES_USER);
-  console.log("  POSTGRES_PASSWORD:", process.env.POSTGRES_PASSWORD);
-  console.log("  POSTGRES_DB:", process.env.POSTGRES_DB);
-  console.log("  DATABASE_URL:", databaseUrl);
-
   const sql = postgres(databaseUrl, {
     max: 1, // Use only one connection for setup
     connection: {
