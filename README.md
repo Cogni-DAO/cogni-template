@@ -63,7 +63,7 @@ _We're working to automate more of this! Want to help? Contribute setup automati
 
 **GitHub Environment Setup**
 
-- Create [GitHub PAT](https://github.com/settings/tokens/new?scopes=read:packages) for container registry CI/CD
+- Create [GitHub PAT](https://github.com/settings/personal-access-tokens/new) for bot account automation (needs Contents:Write, Pull requests:Write, Actions:Read, Metadata:Read), add it as a repo environment secret named `ACTIONS_AUTOMATION_BOT_PAT`
 - Enable your git repo to contribute packages to your git org
 - Set up GitHub environments and secrets manually
 - Configure branch protection rules (see docs/CI-CD.md)
