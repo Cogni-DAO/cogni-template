@@ -17,8 +17,13 @@ git add platform/infra/providers/cherry/base/keys/cogni_template_preview_deploy.
 ```bash
 cd platform/infra/providers/cherry/base
 export CHERRY_AUTH_TOKEN=your-cherry-token
-tofu init && tofu apply -var-file=env.preview.tfvars
+tofu init
+# IMPORTANT: Use workspaces to separate environments
+tofu workspace select preview  # or 'tofu workspace new preview' first time
+tofu apply -var-file=env.preview.tfvars
 ```
+
+**OpenTofu Workspace Safety**: Always check `tofu workspace show` before apply. Each workspace manages separate VMs - preview, production, test, etc.
 
 ## 3. Database Configuration
 

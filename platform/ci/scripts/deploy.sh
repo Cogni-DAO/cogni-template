@@ -204,6 +204,9 @@ ENV_EOF
 log_info "Logging into GHCR for private image pulls..."
 echo "${GHCR_DEPLOY_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
 
+log_info "Running Docker cleanup to free space..."
+docker system prune -af --volumes || echo "Docker cleanup failed, continuing..."
+
 log_info "Pulling latest images..."
 docker compose pull
 
