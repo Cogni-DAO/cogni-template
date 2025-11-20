@@ -1,5 +1,10 @@
 name: Auto-merge release PRs
 
+# Behavior:
+# - Not on main: job skipped
+# - On main but not ready: job fails (red), no merge
+# - On main and ready: job succeeds and merges
+
 on:
   pull_request_review:
     types: [submitted]
@@ -37,8 +42,23 @@ jobs:
           ALL_PASSED=true
 
           for check in "${REQUIRED_CHECKS[@]}"; do
-            STATUS=$(echo "$PR_DATA" | jq -r --arg check "$check" '.statusCheckRollup[] | select(.context == $check or .checkRun.name == $check) | .conclusion')
-            if [[ "$STATUS" != "SUCCESS" ]] && [[ "$STATUS" != "NEUTRAL" ]]; then
+            STATUS=$(echo "$PR_DATA" | jq -r --arg check "$check" '
+              [
+                (.statusCheckRollup // [])
+                | .[]
+                | select(.name == $check)
+                | .conclusion
+              ]
+              | if length == 0 then
+                  "MISSING"
+                elif any(. != "SUCCESS" and . != "NEUTRAL") then
+                  "FAIL"
+                else
+                  "SUCCESS"
+                end
+            ')
+            
+            if [[ "$STATUS" != "SUCCESS" ]]; then
               ALL_PASSED=false
             fi
           done
@@ -48,10 +68,12 @@ jobs:
              [[ "$IS_DRAFT" == "false" ]] && \
              [[ "$REVIEW_DECISION" == "APPROVED" ]] && \
              [[ "$ALL_PASSED" == "true" ]]; then
-            echo "ready=true" >> $GITHUB_OUTPUT
+            echo "ready=true" >> "$GITHUB_OUTPUT"
             echo "🟢 PR #${{ github.event.pull_request.number }} is ready to auto-merge"
           else
-            echo "ready=false" >> $GITHUB_OUTPUT
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "❌ PR #${{ github.event.pull_request.number }} is NOT ready to auto-merge"
+            exit 1
           fi
 
       - name: Auto-merge release PR
