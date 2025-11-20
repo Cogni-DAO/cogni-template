@@ -15,7 +15,7 @@ terraform {
     # }
 }
 # Set the variable value in variables.tf file.
-# Ensure the CHERRY_AUTH_KEY or CHERRY_AUTH_TOKEN environment variable is set and Exported: https://portal.cherryservers.com/settings/api-keys
+# Ensure the CHERRY_AUTH_TOKEN or CHERRY_AUTH_TOKEN environment variable is set and Exported: https://portal.cherryservers.com/settings/api-keys
 # 
 
 #Create a new server:
@@ -41,6 +41,6 @@ resource "cherryservers_ssh_key" "key" {
 
 output "vm_host" {
   description = "Public IP address of the provisioned VM"
-  value       = cherryservers_server.server.primary_ip
+  value       = [for ip in cherryservers_server.server.ip_addresses : ip.address if ip.type == "primary-ip"][0]
   sensitive   = false
 }

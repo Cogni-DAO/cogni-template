@@ -18,6 +18,7 @@ Production runtime configuration directory copied to VM hosts for container orch
 - [docker-compose.dev.yml](docker-compose.dev.yml): Development container stack
 - [postgres-init/](postgres-init/): Database initialization scripts
 - [configs/](configs/): Service configuration templates
+- [docker-daemon.json](docker-daemon.json): Docker daemon log limits (reference only, applied via bootstrap.yaml)
 
 ## Boundaries
 
