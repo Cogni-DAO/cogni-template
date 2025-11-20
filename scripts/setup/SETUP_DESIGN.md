@@ -119,6 +119,7 @@ pnpm setup github --env production
      - `GHCR_DEPLOY_TOKEN` (prompt user to create GitHub PAT)
      - `CHERRY_AUTH_TOKEN` (prompt user for Cherry Servers API token)
      - `SONAR_TOKEN` (prompt user to create SonarCloud token)
+     - `ACTIONS_AUTOMATION_BOT_PAT` (bot automation PAT, needs Contents:Write, Pull requests:Write, Actions:Read, Metadata:Read)
 
 For current manual process, see [DEPLOY.md](../../platform/runbooks/DEPLOY.md).
 
