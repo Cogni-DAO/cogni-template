@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-12
+- **Last reviewed:** 2025-11-20
 - **Status:** draft
 
 ## Purpose
@@ -32,7 +32,7 @@ CI/CD automation scripts and configuration documentation for multiple pipeline s
 - **Exports:** none
 - **Routes (if any):** none
 - **CLI (if any):** `scripts/*.sh`
-- **Env/Config keys:** `GHCR_PAT`, `CHERRY_AUTH_TOKEN`, `TF_VAR_*`
+- **Env/Config keys:** `GHCR_PAT`, `CHERRY_AUTH_TOKEN`, `TF_VAR_*`, `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`
 - **Files considered API:** `scripts/*.sh`
 
 ## Ports (optional)
