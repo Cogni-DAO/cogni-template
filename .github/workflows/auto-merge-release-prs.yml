@@ -55,14 +55,17 @@ jobs:
         if: steps.ready.outputs.ready == 'true'
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
           echo "🚀 Auto-merging release PR #${{ github.event.pull_request.number }}"
 
           # Merge will be authored by the owner of ACTIONS_AUTOMATION_BOT_PAT (Cogni-1729)
-          # Merge the PR using GitHub CLI (creates merge commit, no-ff)
+          # Use env var to prevent shell injection via malicious branch names
+          SUBJECT="Merge ${HEAD_REF} into main"
+
           gh pr merge ${{ github.event.pull_request.number }} \
             --merge \
-            --subject "Merge ${{ github.event.pull_request.head.ref }} into main" \
+            --subject "$SUBJECT" \
             --body "Automated merge by Cogni-1729 automation after required checks passed."
 
           echo "✅ Successfully merged release PR"
