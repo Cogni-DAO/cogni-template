@@ -20,11 +20,6 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: 1
 
-      # Build-time dummy env vars (schema-valid, non-secret)
-      NODE_ENV: test
-      DATABASE_URL: sqlite://build.db
-      LITELLM_MASTER_KEY: build-key
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -50,13 +45,10 @@ jobs:
         run: |
           echo "Testing container startup and health check..."
 
-          # Start container in background with test env vars
+          # Start container in background 
           docker run -d --name test-container \
             -p 3000:3000 \
             -e NODE_ENV=production \
-            -e DATABASE_URL=sqlite://test.db \
-            -e LITELLM_MASTER_KEY=test-key \
-            -e OPENROUTER_API_KEY=test-key \
             ${IMAGE_NAME}:${IMAGE_TAG}
 
           # Wait for startup (with timeout)

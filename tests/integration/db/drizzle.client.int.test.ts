@@ -15,7 +15,7 @@
 import { eq } from "drizzle-orm";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { db } from "@/adapters/server/db/drizzle.client";
+import { getDb } from "@/adapters/server/db/drizzle.client";
 import { accounts } from "@/shared/db";
 
 /**
@@ -28,6 +28,7 @@ import { accounts } from "@/shared/db";
 describe("Drizzle Client Integration", () => {
   // Clean up test data after each test
   afterEach(async () => {
+    const db = getDb();
     await db.delete(accounts).where(eq(accounts.id, "test-account-123"));
     await db.delete(accounts).where(eq(accounts.id, "test-account-456"));
   });
@@ -35,6 +36,7 @@ describe("Drizzle Client Integration", () => {
   describe("Database Connection", () => {
     it("should connect to database successfully", async () => {
       // Simple query to verify connection - select from accounts table
+      const db = getDb();
       const result = await db.select().from(accounts).limit(0);
       expect(result).toBeInstanceOf(Array);
       expect(result).toHaveLength(0);
@@ -48,6 +50,7 @@ describe("Drizzle Client Integration", () => {
         displayName: "Test Account",
       };
 
+      const db = getDb();
       const inserted = await db
         .insert(accounts)
         .values(testAccount)
@@ -67,6 +70,7 @@ describe("Drizzle Client Integration", () => {
         balanceCredits: "100.50",
       };
 
+      const db = getDb();
       const inserted = await db
         .insert(accounts)
         .values(testAccount)
@@ -77,6 +81,7 @@ describe("Drizzle Client Integration", () => {
 
     it("should select account by id", async () => {
       // Insert test data
+      const db = getDb();
       await db.insert(accounts).values({
         id: "test-account-123",
         displayName: "Test Account",
@@ -96,6 +101,7 @@ describe("Drizzle Client Integration", () => {
 
     it("should update account balance", async () => {
       // Insert test data
+      const db = getDb();
       await db.insert(accounts).values({
         id: "test-account-123",
         displayName: "Test Account",
@@ -114,6 +120,7 @@ describe("Drizzle Client Integration", () => {
 
     it("should delete account", async () => {
       // Insert test data
+      const db = getDb();
       await db.insert(accounts).values({
         id: "test-account-123",
         displayName: "Test Account",
@@ -144,6 +151,7 @@ describe("Drizzle Client Integration", () => {
         balanceCredits: "999999.99", // Max precision test
       };
 
+      const db = getDb();
       const inserted = await db
         .insert(accounts)
         .values(testAccount)
@@ -153,6 +161,7 @@ describe("Drizzle Client Integration", () => {
 
     it("should prevent duplicate primary keys", async () => {
       // Insert first account
+      const db = getDb();
       await db.insert(accounts).values({
         id: "test-account-123",
         displayName: "First Account",
@@ -168,6 +177,7 @@ describe("Drizzle Client Integration", () => {
     });
 
     it("should enforce not null constraint on balance", async () => {
+      const db = getDb();
       await expect(
         // @ts-expect-error Testing invalid null value for required field
         db.insert(accounts).values({

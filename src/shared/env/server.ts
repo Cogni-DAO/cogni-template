@@ -4,10 +4,10 @@
 /**
  * Module: `@shared/env/server`
  * Purpose: Server-side environment variable validation and type-safe configuration schema using Zod.
- * Scope: Validates process.env for server runtime; provides serverEnv object with APP_ENV support. Does not handle client-side env vars.
+ * Scope: Validates process.env for server runtime; provides lazy server environment access. Does not handle client-side env vars.
  * Invariants: All required env vars validated on first access; provides boolean flags for runtime and test modes; fails fast on invalid env.
  * Side-effects: process.env
- * Notes: Includes APP_ENV for adapter wiring; LLM config; constructs DATABASE_URL from pieces; production guard prevents test mode in prod.
+ * Notes: Includes APP_ENV for adapter wiring; LLM config; constructs DATABASE_URL from pieces; lazy initialization prevents build-time access.
  * Links: Environment configuration specification
  * @public
  */
@@ -32,6 +32,7 @@ export class EnvValidationError extends Error {
   }
 }
 
+// Server schema with all environment variables
 const serverSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
@@ -39,17 +40,6 @@ const serverSchema = z.object({
 
   // Application environment (controls adapter wiring)
   APP_ENV: z.enum(["test", "production"]),
-
-  // Database connection: either provide DATABASE_URL directly OR component pieces
-  DATABASE_URL: z.string().url().optional(),
-  POSTGRES_USER: z.string().min(1).optional(),
-  POSTGRES_PASSWORD: z.string().min(1).optional(),
-  POSTGRES_DB: z.string().min(1).optional(),
-  DB_HOST: z.string().default("localhost"),
-  DB_PORT: z.coerce.number().default(5432),
-
-  // TODO: Enable when session management is implemented
-  // SESSION_SECRET: z.string().min(32),
 
   // LLM (Stage 8) - App only needs proxy access, not provider keys
   LITELLM_BASE_URL: z
@@ -63,6 +53,17 @@ const serverSchema = z.object({
   LITELLM_MASTER_KEY: z.string().min(1),
   DEFAULT_MODEL: z.string().default("openrouter/auto"),
 
+  // Database connection: either provide DATABASE_URL directly OR component pieces
+  DATABASE_URL: z.string().url().optional(),
+  POSTGRES_USER: z.string().min(1).optional(),
+  POSTGRES_PASSWORD: z.string().min(1).optional(),
+  POSTGRES_DB: z.string().min(1).optional(),
+  DB_HOST: z.string().default("localhost"),
+  DB_PORT: z.coerce.number().default(5432),
+
+  // TODO: Enable when session management is implemented
+  // SESSION_SECRET: z.string().min(32),
+
   // Optional
   PORT: z.coerce.number().default(3000),
   PINO_LOG_LEVEL: z
@@ -70,7 +71,7 @@ const serverSchema = z.object({
     .default("info"),
 });
 
-type ParsedEnv = z.infer<typeof serverSchema> & {
+type ServerEnv = z.infer<typeof serverSchema> & {
   DATABASE_URL: string;
   isDev: boolean;
   isTest: boolean;
@@ -78,10 +79,10 @@ type ParsedEnv = z.infer<typeof serverSchema> & {
   isTestMode: boolean;
 };
 
-let _serverEnv: ParsedEnv | null = null;
+let _env: ServerEnv | null = null;
 
-function getServerEnv(): ParsedEnv {
-  if (_serverEnv === null) {
+export function serverEnv(): ServerEnv {
+  if (_env === null) {
     try {
       const parsed = serverSchema.parse(process.env);
       const isDev = parsed.NODE_ENV === "development";
@@ -114,7 +115,7 @@ function getServerEnv(): ParsedEnv {
         });
       }
 
-      _serverEnv = {
+      _env = {
         ...parsed,
         DATABASE_URL,
         isDev,
@@ -153,26 +154,7 @@ function getServerEnv(): ParsedEnv {
       throw error;
     }
   }
-  return _serverEnv;
+  return _env;
 }
 
-export const serverEnv = new Proxy({} as ParsedEnv, {
-  get(_, prop) {
-    return getServerEnv()[prop as keyof ParsedEnv];
-  },
-  ownKeys() {
-    return Reflect.ownKeys(getServerEnv());
-  },
-  getOwnPropertyDescriptor(_, prop) {
-    return Reflect.getOwnPropertyDescriptor(getServerEnv(), prop);
-  },
-  has(_, prop) {
-    return prop in getServerEnv();
-  },
-}) as ParsedEnv;
-
-export type ServerEnv = ParsedEnv;
-
-export function ensureServerEnv(): ServerEnv {
-  return getServerEnv();
-}
+export type { ServerEnv };

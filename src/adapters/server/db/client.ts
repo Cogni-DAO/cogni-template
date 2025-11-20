@@ -12,4 +12,4 @@
  * @public
  */
 
-export { type Database, db } from "./drizzle.client";
+export { type Database, getDb } from "./drizzle.client";

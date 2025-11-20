@@ -36,9 +36,9 @@ describe("serverEnv APP_ENV validation", () => {
       LITELLM_MASTER_KEY: "test-key",
     });
 
-    const { ensureServerEnv } = await import("@/shared/env/server");
+    const { serverEnv } = await import("@/shared/env/server");
 
-    expect(() => ensureServerEnv()).not.toThrow();
+    expect(() => serverEnv()).not.toThrow();
   });
 
   it("allows APP_ENV=production", async () => {
@@ -51,9 +51,9 @@ describe("serverEnv APP_ENV validation", () => {
       LITELLM_MASTER_KEY: "test-key",
     });
 
-    const { ensureServerEnv } = await import("@/shared/env/server");
+    const { serverEnv } = await import("@/shared/env/server");
 
-    expect(() => ensureServerEnv()).not.toThrow();
+    expect(() => serverEnv()).not.toThrow();
   });
 
   it("throws EnvValidationError when APP_ENV is missing", async () => {
@@ -67,15 +67,15 @@ describe("serverEnv APP_ENV validation", () => {
     // Ensure APP_ENV is truly missing (global setup might have set it)
     delete process.env.APP_ENV;
 
-    const { ensureServerEnv, EnvValidationError } = await import(
+    const { serverEnv, EnvValidationError } = await import(
       "@/shared/env/server"
     );
 
-    expect(() => ensureServerEnv()).toThrow(EnvValidationError);
+    expect(() => serverEnv()).toThrow(EnvValidationError);
 
     try {
-      ensureServerEnv();
-      expect.fail("Expected ensureServerEnv to throw");
+      serverEnv();
+      expect.fail("Expected serverEnv to throw");
     } catch (error) {
       expect(error).toBeInstanceOf(EnvValidationError);
       const envError = error as InstanceType<typeof EnvValidationError>;
