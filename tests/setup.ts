@@ -4,8 +4,8 @@
 /**
  * Module: `@tests/setup`
  * Purpose: Global test environment setup with HTTP dispatcher configuration for SSL certificate handling and test isolation.
- * Scope: Configures test environment, env vars, and undici HTTP agents. Does NOT mock specific services or ports.
- * Invariants: Tests run in isolation; env vars reset between suites; HTTP agents handle localhost SSL correctly.
+ * Scope: Configures minimal test environment and undici HTTP agents. Does not set DATABASE_URL, allowing individual tests to control DB config.
+ * Invariants: Tests run in isolation; HTTP agents handle localhost SSL correctly; minimal env pollution.
  * Side-effects: process.env, global (HTTP dispatcher)
  * Notes: Creates dual HTTP agents (strict external, relaxed localhost); no explicit agent cleanup to prevent suite failures.
  * Links: vitest.config.mts, stack test setup
@@ -37,10 +37,6 @@ beforeAll(() => {
     // Disable external service calls for unit tests
     DISABLE_TELEMETRY: "true",
     DISABLE_EXTERNAL_CALLS: "true",
-    // Minimal env vars to prevent validation failures
-    // Real integration tests will override these
-    DATABASE_URL: "postgresql://test:test@localhost:5432/test",
-    LITELLM_MASTER_KEY: "test-key",
   });
 
   // Create two agents: strict for external, relaxed for localhost

@@ -40,7 +40,7 @@ Single source of truth for environment variables. Validates at load time with Zo
 
 **Exports:**
 
-- `server.ts`: serverEnv (typed)
+- `server.ts`: serverEnv (build-safe), runtimeEnv (DB-required)
 - `client.ts`: clientEnv (typed)
 - `index.ts`: re-exports + getEnv, requireEnv
 
@@ -50,7 +50,7 @@ Single source of truth for environment variables. Validates at load time with Zo
 
 ## File Map
 
-- `server.ts` → server-only, private vars. Never import from client code.
+- `server.ts` → server-only vars with build/runtime split. Never import from client code.
 - `client.ts` → public, browser-safe vars (NEXT*PUBLIC*\* only).
 - `index.ts` → re-exports and tiny helpers.
 
@@ -58,7 +58,17 @@ Single source of truth for environment variables. Validates at load time with Zo
 
 **Server-only (server.ts)**
 
-Required now:
+Build-safe (serverEnv):
+
+- NODE_ENV (development|test|production, default development)
+- APP_ENV (test|production)
+- LITELLM_BASE_URL (url, auto-detects: localhost:4000 for dev, litellm:4000 for production)
+- LITELLM_MASTER_KEY
+- DEFAULT_MODEL (default: openrouter/auto)
+- PORT (default 3000)
+- PINO_LOG_LEVEL (trace|debug|info|warn|error, default info)
+
+Runtime-required (runtimeEnv):
 
 - POSTGRES_USER
 - POSTGRES_PASSWORD

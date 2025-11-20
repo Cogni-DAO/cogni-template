@@ -15,13 +15,13 @@
 import { NextResponse } from "next/server";
 
 import { metaHealthOperation } from "@/contracts/meta.health.read.v1.contract";
-import { ensureServerEnv, EnvValidationError } from "@/shared/env";
+import { EnvValidationError, serverEnv } from "@/shared/env";
 
 export const dynamic = "force-static";
 
 export function GET(): NextResponse {
   try {
-    ensureServerEnv();
+    serverEnv();
 
     const payload = {
       status: "healthy" as const,

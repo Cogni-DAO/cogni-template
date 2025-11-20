@@ -13,8 +13,8 @@
  */
 
 import {
-  db,
   DrizzleAccountService,
+  getDb,
   LiteLlmAdapter,
   SystemClock,
 } from "@/adapters/server";
@@ -30,13 +30,14 @@ export interface Container {
 
 export function createContainer(): Container {
   // Environment-based adapter wiring - single source of truth
-  const llmService = serverEnv.isTestMode
+  const llmService = serverEnv().isTestMode
     ? new FakeLlmAdapter()
     : new LiteLlmAdapter();
 
   // Always use real database adapter for accounts
   // Testing strategy: unit tests mock the port, integration tests use real DB
   // This eliminates env complexity while maintaining proper test boundaries
+  const db = getDb();
   const accountService = new DrizzleAccountService(db);
 
   return {

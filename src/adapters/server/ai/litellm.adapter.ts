@@ -20,7 +20,7 @@ export class LiteLlmAdapter implements LlmService {
     params: Parameters<LlmService["completion"]>[0]
   ): ReturnType<LlmService["completion"]> {
     // Adapter provides defaults from serverEnv
-    const model = params.model ?? serverEnv.DEFAULT_MODEL;
+    const model = params.model ?? serverEnv().DEFAULT_MODEL;
     const temperature = params.temperature ?? 0.7;
     const maxTokens = params.maxTokens ?? 2048;
 
@@ -44,7 +44,7 @@ export class LiteLlmAdapter implements LlmService {
     try {
       // HTTP call to LiteLLM with timeout enforcement
       const response = await fetch(
-        `${serverEnv.LITELLM_BASE_URL}/v1/chat/completions`,
+        `${serverEnv().LITELLM_BASE_URL}/v1/chat/completions`,
         {
           method: "POST",
           headers: {

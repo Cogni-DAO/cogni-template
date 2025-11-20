@@ -17,7 +17,7 @@ export { buildEnv } from "./build";
 export type { ClientEnv } from "./client";
 export { clientEnv } from "./client";
 export type { ServerEnv } from "./server";
-export { ensureServerEnv, EnvValidationError, serverEnv } from "./server";
+export { EnvValidationError, serverEnv } from "./server";
 
 // Tiny helpers when needed
 export const getEnv = (k: string): string | undefined => process.env[k];
