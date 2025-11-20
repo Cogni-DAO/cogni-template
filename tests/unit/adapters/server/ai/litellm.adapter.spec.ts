@@ -19,10 +19,10 @@ import type { LlmCaller, LlmService } from "@/ports";
 
 // Mock the serverEnv module
 vi.mock("@/shared/env", () => ({
-  serverEnv: {
+  serverEnv: () => ({
     DEFAULT_MODEL: "gpt-3.5-turbo",
     LITELLM_BASE_URL: "https://api.test-litellm.com",
-  },
+  }),
 }));
 
 describe("LiteLlmAdapter", () => {

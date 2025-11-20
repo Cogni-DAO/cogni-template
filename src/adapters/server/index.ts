@@ -14,5 +14,5 @@
 
 export { DrizzleAccountService } from "./accounts/drizzle.adapter";
 export { LiteLlmAdapter } from "./ai/litellm.adapter";
-export { type Database, db } from "./db/client";
+export { type Database, getDb } from "./db/client";
 export { SystemClock } from "./time/system.adapter";

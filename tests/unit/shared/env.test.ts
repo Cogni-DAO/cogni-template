@@ -45,10 +45,11 @@ describe("env schemas", () => {
       NEXT_PUBLIC_CHAIN_ID: "1",
     });
 
-    const { serverEnv } = await import("../../../src/shared/env/server");
-    const { clientEnv } = await import("../../../src/shared/env/client");
+    const { serverEnv } = await import("@/shared/env/server");
+    const { clientEnv } = await import("@/shared/env/client");
 
-    expect(serverEnv.DATABASE_URL).toBe("postgresql://u:p@h:5432/db");
+    const env = serverEnv();
+    expect(env.DATABASE_URL).toBe("postgresql://u:p@h:5432/db");
     expect(clientEnv.NEXT_PUBLIC_CHAIN_ID).toBe(1);
   });
 
@@ -61,9 +62,10 @@ describe("env schemas", () => {
       NEXT_PUBLIC_CHAIN_ID: "1",
     });
 
-    const { serverEnv } = await import("../../../src/shared/env/server");
+    const { serverEnv } = await import("@/shared/env/server");
 
-    expect(serverEnv.DATABASE_URL).toBe("sqlite://build.db");
+    const env = serverEnv();
+    expect(env.DATABASE_URL).toBe("sqlite://build.db");
   });
 
   // TODO: this fail-fast test being flaky
@@ -74,10 +76,8 @@ describe("env schemas", () => {
     });
 
     await expect(async () => {
-      const { ensureServerEnv } = await import(
-        "../../../src/shared/env/server"
-      );
-      ensureServerEnv(); // should throw ZodError
+      const { serverEnv } = await import("../../../src/shared/env/server");
+      serverEnv(); // should throw ZodError
     }).rejects.toThrow();
   });
 });

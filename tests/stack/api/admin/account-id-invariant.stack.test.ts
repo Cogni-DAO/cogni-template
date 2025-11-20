@@ -15,7 +15,7 @@
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
-import { db } from "@/adapters/server/db/client";
+import { getDb } from "@/adapters/server/db/client";
 import { accounts } from "@/shared/db";
 import { deriveAccountIdFromApiKey } from "@/shared/util";
 
@@ -62,6 +62,12 @@ describe("Account ID Invariant", () => {
     expect(registerData.accountId).toBe(expectedAccountId);
 
     // CRITICAL INVARIANT: Query DB directly to verify exactly one row exists
+    console.log("🔍 DEBUG test env:");
+    console.log("  POSTGRES_USER:", process.env.POSTGRES_USER);
+    console.log("  POSTGRES_PASSWORD:", process.env.POSTGRES_PASSWORD);
+    console.log("  POSTGRES_DB:", process.env.POSTGRES_DB);
+
+    const db = getDb();
     const accountsInDb = await db
       .select()
       .from(accounts)

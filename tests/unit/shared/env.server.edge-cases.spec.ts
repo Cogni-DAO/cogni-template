@@ -28,8 +28,8 @@ describe("server env edge cases", () => {
     // since Zod always throws ZodError for schema validation failures.
   });
 
-  it("supports proxy trap methods", async () => {
-    // Set minimal valid env to get proxy working
+  it("returns cached instance and populates expected fields", async () => {
+    // Set minimal valid env
     Object.assign(process.env, {
       NODE_ENV: "test",
       APP_ENV: "test",
@@ -41,15 +41,22 @@ describe("server env edge cases", () => {
 
     const { serverEnv } = await import("@/shared/env/server");
 
-    // Hit ownKeys trap (line 144-145)
-    const keys = Object.keys(serverEnv);
-    expect(keys.length).toBeGreaterThan(0);
+    // Call serverEnv() twice
+    const env1 = serverEnv();
+    const env2 = serverEnv();
 
-    // Hit has trap (line 149-151)
-    expect("NODE_ENV" in serverEnv).toBe(true);
+    // Should return the same reference (cached)
+    expect(env1).toBe(env2);
 
-    // Hit getOwnPropertyDescriptor trap (line 146-148)
-    const desc = Object.getOwnPropertyDescriptor(serverEnv, "NODE_ENV");
-    expect(desc).toBeDefined();
+    // Should have DATABASE_URL populated
+    expect(env1.DATABASE_URL).toBe(
+      "postgresql://postgres:postgres@localhost:5432/test_db"
+    );
+
+    // Should have computed flags
+    expect(env1.isDev).toBe(false);
+    expect(env1.isTest).toBe(true);
+    expect(env1.isProd).toBe(false);
+    expect(env1.isTestMode).toBe(true);
   });
 });

@@ -21,8 +21,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NODE_ENV: test
-      DATABASE_URL: sqlite://build.db
       LITELLM_MASTER_KEY: build-key
+
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
 
@@ -69,7 +69,7 @@ jobs:
       LITELLM_MASTER_KEY: test-key
       OPENROUTER_API_KEY: test-key
       TEST_BASE_URL: https://localhost/
-      # Critically: DO NOT expose real OPENROUTER_API_KEY - CI uses fake adapter
+      # All fake keys: DO NOT expose any real keys here
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
 

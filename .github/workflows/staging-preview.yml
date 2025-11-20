@@ -21,9 +21,6 @@ jobs:
       image_tag: ${{ steps.meta.outputs.image_tag }}
     env:
       NEXT_TELEMETRY_DISABLED: 1
-      NODE_ENV: test
-      DATABASE_URL: sqlite://build.db
-      LITELLM_MASTER_KEY: build-key
     steps:
       - uses: actions/checkout@v4
         with:
