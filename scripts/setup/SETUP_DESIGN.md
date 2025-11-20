@@ -41,7 +41,7 @@ pnpm dev  # You're ready!
 1. Copy `.env.example` → `.env.local`
 2. Generate secure random values:
    - `LITELLM_MASTER_KEY` (sk-xxx format)
-   - `DATABASE_URL` (sqlite://local.db)
+   - `DATABASE_URL` (postgresql://postgres:postgres@localhost:5432/cogni_template_dev)
 3. Prompt for manual `OPENROUTER_API_KEY`
 4. Run `platform/bootstrap/install/install-pnpm.sh`
 5. `pnpm install` and setup git hooks
@@ -100,9 +100,16 @@ pnpm setup github --env production
 1. **Create GitHub environment** (`preview` or `production`)
 
 2. **Set all required secrets:**
-   - **Runtime secrets:** Fresh generation per environment
-     - `DATABASE_URL` (postgres connection to VM)
+   - **Database secrets:** Two-user security model per environment
+     - `POSTGRES_ROOT_USER` (postgres)
+     - `POSTGRES_ROOT_PASSWORD` (generated hex password)
+     - `APP_DB_USER` (cogni_app_preview/cogni_app_production)
+     - `APP_DB_PASSWORD` (generated hex password)
+     - `APP_DB_NAME` (cogni_template_preview/cogni_template_production)
+     - `DATABASE_URL` (postgresql://APP_DB_USER:APP_DB_PASSWORD@postgres:5432/APP_DB_NAME)
+   - **Service secrets:** Fresh generation per environment
      - `LITELLM_MASTER_KEY` (new random sk-xxx key)
+     - `SESSION_SECRET` (generated random string)
      - `OPENROUTER_API_KEY` (prompt if not in local env)
    - **Deployment secrets:** From previous steps
      - `SSH_DEPLOY_KEY` (from `~/.ssh/cogni_template_<env>_deploy`)
@@ -112,6 +119,8 @@ pnpm setup github --env production
      - `GHCR_DEPLOY_TOKEN` (prompt user to create GitHub PAT)
      - `CHERRY_AUTH_TOKEN` (prompt user for Cherry Servers API token)
      - `SONAR_TOKEN` (prompt user to create SonarCloud token)
+
+For current manual process, see [DEPLOY.md](../../platform/runbooks/DEPLOY.md).
 
 3. **Apply branch protection rules:**
    - `main`: 2 required reviews, required checks, enforce for admins

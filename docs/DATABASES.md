@@ -6,8 +6,11 @@ This document describes database organization, migration strategies, and databas
 
 ## Database Separation
 
-**Development Database:** `cogni_template_dev`  
-**Test Database:** `cogni_template_stack_test`
+**Database Security Model**: Two-user PostgreSQL architecture separating administrative and application access.
+
+**Development Database:** `${APP_DB_NAME}` (typically `cogni_template_dev`)  
+**Test Database:** `${APP_DB_NAME}` (typically `cogni_template_stack_test`)
+**Production Database:** `${APP_DB_NAME}` (typically `cogni_template_preview` or `cogni_template_production`)
 
 All stack deployment modes use the same migration tooling but connect to appropriate database instances. Test environments always use the test database and reset it between test runs.
 
@@ -18,9 +21,10 @@ All environments construct PostgreSQL URLs from individual pieces using the `bui
 ```typescript
 // src/shared/env/db-url.ts
 export function buildDatabaseUrl(env: DbEnvInput): string {
-  const user = env.POSTGRES_USER;
-  const password = env.POSTGRES_PASSWORD;
-  const db = env.POSTGRES_DB;
+  // Uses application database credentials (not root)
+  const user = env.POSTGRES_USER; // Maps to APP_DB_USER in containers
+  const password = env.POSTGRES_PASSWORD; // Maps to APP_DB_PASSWORD in containers
+  const db = env.POSTGRES_DB; // Maps to APP_DB_NAME in containers
   const host = env.DB_HOST ?? "localhost";
   const port =
     typeof env.DB_PORT === "number"
@@ -35,8 +39,35 @@ export function buildDatabaseUrl(env: DbEnvInput): string {
 
 - **Host development:** `postgresql://postgres:postgres@localhost:5432/cogni_template_dev`
 - **Host testing:** `postgresql://postgres:postgres@localhost:5432/cogni_template_stack_test`
-- **Container (internal):** `postgresql://postgres:postgres@postgres:5432/cogni_template_stack_test`
+- **Container (internal):** `postgresql://cogni_app_preview:password@postgres:5432/cogni_template_preview`
 - **Host tests → container:** `postgresql://postgres:postgres@localhost:55432/cogni_template_stack_test`
+
+## Database Security Architecture
+
+**Two-User Model**: Production deployments use separate PostgreSQL users for administration and application access:
+
+- **Root User** (`POSTGRES_ROOT_USER`): Database server administration, user/database creation
+- **Application User** (`APP_DB_USER`): Runtime application connections, limited to application database
+
+**Container Configuration**: The postgres container runs initialization scripts on first startup:
+
+- Creates application database (`APP_DB_NAME`)
+- Creates application user (`APP_DB_USER`) with database-specific permissions
+- Application connects via `DATABASE_URL` using app user credentials
+
+**Environment Variable Mapping**:
+
+```bash
+# Container postgres service
+POSTGRES_USER=${POSTGRES_ROOT_USER}      # Container's POSTGRES_USER
+POSTGRES_PASSWORD=${POSTGRES_ROOT_PASSWORD}
+POSTGRES_DB=postgres                      # Default database for user creation
+
+# Application service
+POSTGRES_USER=${APP_DB_USER}             # App's POSTGRES_USER
+POSTGRES_PASSWORD=${APP_DB_PASSWORD}
+POSTGRES_DB=${APP_DB_NAME}
+```
 
 ## 2. Migration Strategy
 
@@ -127,9 +158,16 @@ In staging and production, environment variables come from GitHub Environments/s
 env:
   APP_ENV: production
   NODE_ENV: production
-  DATABASE_URL: ${{ secrets.DATABASE_URL }} # Container-correct hostname
+  # Database configuration (two-user security model)
+  POSTGRES_ROOT_USER: ${{ secrets.POSTGRES_ROOT_USER }}
+  POSTGRES_ROOT_PASSWORD: ${{ secrets.POSTGRES_ROOT_PASSWORD }}
+  APP_DB_USER: ${{ secrets.APP_DB_USER }}
+  APP_DB_PASSWORD: ${{ secrets.APP_DB_PASSWORD }}
+  APP_DB_NAME: ${{ secrets.APP_DB_NAME }}
+  DATABASE_URL: ${{ secrets.DATABASE_URL }} # Uses APP_DB_* credentials
   LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
   OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+  SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
 ```
 
 **Deployment Steps:**
