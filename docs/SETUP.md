@@ -40,8 +40,9 @@ pnpm test:stack:reset   # Nuclear reset when test DB is corrupted
 
 ```bash
 pnpm docker:test:stack          # Start containerized test stack
-pnpm docker:test:stack:migrate  # Run migrations in containers
+pnpm docker:test:stack:setup    # Create test database + migrations (requires stack running)
 pnpm test:stack:docker          # Run tests against containerized app
+pnpm docker:test:stack:reset    # Nuclear reset for containerized test database
 ```
 
 ## Available Modes
