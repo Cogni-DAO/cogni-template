@@ -29,13 +29,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ github.token }}
+          token: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
+          # Actions to be completed by PAT owner
 
       - name: Create archive tag for branch tip
         run: |
-          # Configure git identity for annotated tags
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           PR_NUMBER="${{ github.event.pull_request.number }}"
           SOURCE_BRANCH="${{ github.event.pull_request.head.ref }}"

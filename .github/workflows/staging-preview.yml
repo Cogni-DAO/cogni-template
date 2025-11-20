@@ -201,7 +201,8 @@ jobs:
         with:
           fetch-depth: 0
           ref: staging
-          token: ${{ github.token }}
+          token: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
+          # Commits to be authored by PAT owner
 
       - name: Compute release branch name
         id: meta
@@ -212,8 +213,6 @@ jobs:
 
       - name: Create and push release branch from staging
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git fetch origin
           # pin to the *tested* commit
@@ -225,9 +224,6 @@ jobs:
           mkdir -p /tmp/pr
           cat > /tmp/pr/body.md << 'EOF'
           ## 🚀 Automated Release Promotion
-
-          Source: staging
-          Target: main
 
           ### Commits in this release
           EOF
@@ -254,7 +250,8 @@ jobs:
 
       - name: Create PR release/* -> main
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
+          # PR to be Authored by PAT owner
         run: |
           gh pr create \
             --base main \
