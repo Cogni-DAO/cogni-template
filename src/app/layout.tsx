@@ -13,6 +13,7 @@
  */
 
 import "@/styles/tailwind.css";
+import "@rainbow-me/rainbowkit/styles.css";
 
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
@@ -22,6 +23,8 @@ import type { ReactNode } from "react";
 
 import { Header, SkipLink } from "@/components";
 import { pageShell } from "@/styles/ui";
+
+import { AppProviders } from "./providers/app-providers.client";
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -50,8 +53,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Header />
-          <main id="main">{children}</main>
+          <AppProviders>
+            <Header />
+            <main id="main">{children}</main>
+          </AppProviders>
         </ThemeProvider>
       </body>
     </html>

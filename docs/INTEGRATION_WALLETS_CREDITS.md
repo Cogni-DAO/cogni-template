@@ -51,14 +51,43 @@ Directly implementing the frontend for [docs/ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN
 - Added `LITELLM_MVP_API_KEY` to `.env.example`, `.env.test`, `src/shared/env/server.ts`
 - Wallet display format: `0x12345...defAB` (first 5 + last 5 hex digits)
 
-### Step 3: Install wallet libraries and add global providers ⏸️ PENDING
+### Step 3: Install wallet libraries and add global providers ✅ COMPLETE
 
-- [ ] Add dependencies: wagmi, viem, @rainbow-me/rainbowkit, @tanstack/react-query
-- [ ] Create Providers component configuring wagmi, React Query, and RainbowKit
-- [ ] Wrap root app layout with Providers component
-- [ ] Configure target EVM chain (Base network)
-- [ ] Verify development build runs with all providers configured
-- [ ] Test component can read connected wallet address via useAccount
+- [x] Add dependencies: wagmi@2.19.5, viem@2.39.3, @rainbow-me/rainbowkit@2.2.9, @tanstack/react-query@5.90.10 (pinned)
+- [x] Create src/app/providers/ subdomain for client-side provider composition
+- [x] Create WalletProvider with dynamic connector imports (wagmi config created in useEffect)
+- [x] Create QueryProvider, WalletProvider, and AppProviders composition
+- [x] Wrap root app layout with AppProviders (inside ThemeProvider)
+- [x] Configure client env schema with NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID (optional) and NEXT_PUBLIC_CHAIN_ID
+- [x] Import RainbowKit CSS in layout.tsx (global CSS pattern)
+- [x] Create src/app/wallet-test/page.tsx dev test page with useAccount hook
+- [x] Implement dynamic import pattern for SSR-safe WalletConnect (browser-only IndexedDB)
+- [x] Set ssr: false in wagmi config
+- [x] Verify structure ready for mainnet expansion (base, optimism, etc.)
+- [x] All 236 tests passing, pnpm check green, build succeeds without SSR errors
+
+**Files Created:**
+
+- `src/app/providers/wallet.client.tsx` - WalletProvider with dynamic imports in useEffect
+- `src/app/providers/query.client.tsx` - React Query provider
+- `src/app/providers/app-providers.client.tsx` - Provider composition
+- `src/app/providers/AGENTS.md` - Subdomain documentation
+- `src/app/wallet-test/page.tsx` - Dev test harness (marked for deletion)
+- `src/shared/env/client.ts` - Client env validation
+
+**Critical Implementation Detail:**
+WalletConnect uses IndexedDB and is not SSR-safe. Using dynamic import pattern:
+
+```typescript
+useEffect(() => {
+  async function initWagmiConfig() {
+    const { injected, walletConnect } = await import("wagmi/connectors");
+    // ... create config with ssr: false
+  }
+}, []);
+```
+
+This ensures connectors only load in browser, avoiding `indexedDB is not defined` errors during Next.js build/SSR.
 
 ### Step 4: Wire wallet link into chat flow ⏸️ PENDING
 
@@ -107,20 +136,21 @@ LiteLLM does upstream usage/cost tracking; our Postgres ledger tracks internal c
 
 ### Setup
 
-#### 1. Providers
+#### 1. Providers ✅ IMPLEMENTED
 
-In `src/app/layout.tsx` (or a dedicated `Providers.tsx`):
+In `src/app/layout.tsx`:
 
-[ ] Wrap the app with:
+- [x] Wrap the app with `<AppProviders>` client component
+- [x] AppProviders composes: QueryProvider → WalletProvider
+- [x] WalletProvider wraps children with WagmiProvider + RainbowKitProvider
+- [x] Configured for Ethereum Sepolia (11155111) primary, Base Sepolia (84532) secondary
+- [x] Uses dynamic imports for connectors (SSR-safe pattern)
 
-- [ ] `WagmiConfig`
-- [ ] `RainbowKitProvider`
+#### 2. Connect Button ✅ AVAILABLE
 
-[ ] Configure for the Base network (or whichever chain we use).
-
-#### 2. Connect Button
-
-[ ] Use RainbowKit's `<ConnectButton />` in the header or home page.
+- [x] RainbowKit's `<ConnectButton />` component available
+- [x] Test implementation in `src/app/wallet-test/page.tsx`
+- [ ] TODO Step 4: Add to header or home page
 
 #### 3. Wallet Link Flow
 

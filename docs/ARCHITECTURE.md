@@ -40,7 +40,11 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 
 - Each feature is a slice under **features/** with its own `actions/`, `services/`, `components/`, `hooks/`, `types/`, `constants/`.
 - Slices may depend on **core** and **ports** only. Never on other slices or **adapters**.
-- Public surface changes in a slice must update that slice’s `AGENTS.md` and pass contract tests.
+- Public surface changes in a slice must update that slice's `AGENTS.md` and pass contract tests.
+
+### SSR-unsafe libraries
+
+Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause `ReferenceError` during Next.js SSR/build. Solution: dynamic import inside client-side `useEffect`, cache config in React state. See `src/app/providers/wallet.client.tsx` for WalletConnect example.
 
 ---
 
@@ -50,7 +54,7 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 - **platform/** → Infrastructure tooling, CI/CD scripts, deployment automation, dev setup.
 - **src/contracts/** → Operation contracts (id, Zod in/out, scopes, version). No logic.
 - **src/mcp/** → MCP host bootstrap. Registers tools mapped 1:1 to contracts.
-- **src/app/** → Delivery/UI + Next.js API routes. See import rules below.
+- **src/app/** → Delivery/UI + Next.js API routes. Includes `providers/` for client-side context composition (wagmi, RainbowKit, React Query).
 - **src/features/** → Vertical slices (use cases): `proposals/`, `auth/`… See import rules below.
 - **src/ports/** → Contracts/interfaces only.
 - **src/core/** → Pure domain. No I/O/time/RNG; inject via ports.
@@ -163,12 +167,13 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] │ ├── page.tsx
 [x] │ ├── \_facades/ # server-side facades for UI
 [x] │ │ └── accounts/ # account management facades
-[ ] │ ├── providers.tsx # QueryClient, Wagmi, RainbowKit
+[x] │ ├── providers/ # Client-side provider composition
 [ ] │ ├── (public)/
 [ ] │ ├── (protected)/
 [x] │ └── api/
 [x] │ ├── v1/meta/ # health, route-manifest, openapi
-[x] │ ├── v1/ai/completion/ # AI completion endpoint  
+[x] │ ├── v1/ai/completion/ # AI completion endpoint
+[x] │ ├── v1/wallet/link/ # POST - wallet-to-account linking
 [x] │ └── admin/ # admin control plane endpoints
 [x] │ ├── accounts/
 [x] │ │ ├── register-litellm-key/ # POST - create account for API key

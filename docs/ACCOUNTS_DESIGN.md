@@ -34,6 +34,25 @@ Implements internal credit accounting on top of existing LiteLLM virtual key aut
 
 **Invariant:** Data-plane endpoints never create accounts or keys. Accounts + keys are created only through explicit, privileged control-plane workflows.
 
+## Frontend Wallet Integration (MVP Overview)
+
+**Location:** `src/app/providers/` (app delivery layer) + `src/app/wallet-test/` (dev harness)
+
+**Chain Configuration:**
+
+- Primary: Ethereum Sepolia (11155111) - Aragon constraint
+- Secondary: Base Sepolia (84532)
+- Ready for mainnet expansion (Base, Optimism, etc.)
+
+**Wallet Flow:**
+
+1. User connects wallet via RainbowKit ConnectButton
+2. Frontend calls `POST /api/v1/wallet/link` with address
+3. Backend returns `{ accountId, apiKey }` (MVP: single `LITELLM_MVP_API_KEY` for all wallets)
+4. Frontend stores apiKey for `Authorization: Bearer` header in `/api/v1/ai/completion` calls
+
+**Implementation:** See `src/app/providers/AGENTS.md` for SSR-safe dynamic import pattern (WalletConnect requires browser-only IndexedDB).
+
 ## Implementation Stages
 
 ### Stage 1: LiteLLM Integration Foundation
