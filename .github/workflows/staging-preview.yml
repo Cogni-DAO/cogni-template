@@ -102,7 +102,6 @@ jobs:
       APP_DB_PASSWORD: ${{ secrets.APP_DB_PASSWORD }}
       APP_DB_NAME: ${{ secrets.APP_DB_NAME }}
       LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
-      LITELLM_MVP_API_KEY: test-mvp-key
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
       VM_HOST: ${{ secrets.VM_HOST }}

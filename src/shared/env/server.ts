@@ -55,7 +55,7 @@ const serverSchema = z.object({
 
   // TODO: Remove when proper wallet→key registry exists (MVP crutch)
   // Wallet link MVP - single API key for all wallets (temporary)
-  LITELLM_MVP_API_KEY: z.string().min(1).optional(),
+  LITELLM_MVP_API_KEY: z.string().default("test-mvp-api-key"),
 
   // Database connection: either provide DATABASE_URL directly OR component pieces
   DATABASE_URL: z.string().url().optional(),
