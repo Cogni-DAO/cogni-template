@@ -26,16 +26,30 @@ Directly implementing the frontend for [docs/ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN
 - `src/contracts/wallet.link.v1.contract.ts` - Contract with Zod schemas and TypeScript types
 - `tests/unit/contracts/wallet.link.v1.contract.test.ts` - 12 unit tests validating contract
 
-### Step 2: Implement /api/v1/wallet/link backend route ⏸️ PENDING
+### Step 2: Implement /api/v1/wallet/link backend route ✅ COMPLETE
 
-- [ ] Create API route for POST /api/v1/wallet/link
-- [ ] Parse and validate JSON as WalletLinkRequest
-- [ ] Implement MVP strategy for apiKey resolution (single configured key or minimal DB mapping)
-- [ ] Derive accountId from apiKey using deriveAccountIdFromApiKey helper
-- [ ] Ensure account exists using AccountService (create-if-missing with zero balance)
-- [ ] Return WalletLinkResponse: { accountId, apiKey }
-- [ ] Handle errors: 400 for malformed requests, 5xx for internal failures
-- [ ] Add tests covering happy-path, invalid body, and failure scenarios
+- [x] Create API route for POST /api/v1/wallet/link
+- [x] Parse and validate JSON as WalletLinkRequest
+- [x] Implement MVP strategy for apiKey resolution (single configured `LITELLM_MVP_API_KEY`)
+- [x] Derive accountId from apiKey using deriveAccountIdFromApiKey helper
+- [x] Ensure account exists using AccountService (create-if-missing with zero balance)
+- [x] Return WalletLinkResponse: { accountId, apiKey }
+- [x] Handle errors: 400 for malformed requests, 503 for misconfiguration, 500 for internal failures
+- [x] Add tests covering happy-path, invalid body, and failure scenarios (11 tests total)
+
+**Files Created:**
+
+- `src/app/api/v1/wallet/link/route.ts` - POST endpoint with validation
+- `src/app/_facades/wallet/link.server.ts` - Facade coordinating AccountService
+- `tests/unit/app/_facades/wallet/link.test.ts` - 4 unit tests passing
+- `tests/stack/api/wallet/link.stack.test.ts` - 7 stack tests passing
+- `tests/_fixtures/wallet/test-data.ts` - Shared test constants (DRY)
+- `tests/_fixtures/wallet/api-helpers.ts` - Shared HTTP helpers (DRY)
+
+**Environment:**
+
+- Added `LITELLM_MVP_API_KEY` to `.env.example`, `.env.test`, `src/shared/env/server.ts`
+- Wallet display format: `0x12345...defAB` (first 5 + last 5 hex digits)
 
 ### Step 3: Install wallet libraries and add global providers ⏸️ PENDING
 

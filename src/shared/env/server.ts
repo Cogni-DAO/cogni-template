@@ -53,6 +53,10 @@ const serverSchema = z.object({
   LITELLM_MASTER_KEY: z.string().min(1),
   DEFAULT_MODEL: z.string().default("openrouter/auto"),
 
+  // TODO: Remove when proper wallet→key registry exists (MVP crutch)
+  // Wallet link MVP - single API key for all wallets (temporary)
+  LITELLM_MVP_API_KEY: z.string().min(1).optional(),
+
   // Database connection: either provide DATABASE_URL directly OR component pieces
   DATABASE_URL: z.string().url().optional(),
   POSTGRES_USER: z.string().min(1).optional(),
