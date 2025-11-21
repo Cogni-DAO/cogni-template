@@ -34,10 +34,12 @@ Client-side provider composition for the web UI shell. Configures React context 
   - `AppProviders` - Main composition component (imports all sub-providers)
   - `QueryProvider` - React Query client provider
   - `WalletProvider` - wagmi + RainbowKit provider (creates config internally via dynamic import)
+  - `buildWagmiConfigOptions` - Pure helper for wagmi config (testable without React)
+  - `WagmiConnector`, `WagmiConnectorsLib`, `WagmiConfigOptions` - Wagmi type aliases
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** Reads `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`, `NEXT_PUBLIC_CHAIN_ID`
-- **Files considered API:** app-providers.client.tsx, wallet.client.tsx
+- **Files considered API:** app-providers.client.tsx, wallet.client.tsx, wagmi-config-builder.ts
 
 ## Ports (optional)
 
@@ -47,7 +49,7 @@ Client-side provider composition for the web UI shell. Configures React context 
 
 ## Responsibilities
 
-- This directory **does**: compose client-side React providers; configure wagmi chains and connectors; provide global context for wallet connections
+- This directory **does**: compose client-side React providers; configure wagmi chains and connectors; provide global context for wallet connections; export pure config builder helpers
 - This directory **does not**: contain business logic; implement ports; make API calls; touch core domain
 
 ## Usage
@@ -87,3 +89,4 @@ import { AppProviders } from "./providers/app-providers.client";
 - Providers only configure client-side infrastructure, no domain logic
 - wagmi v2 API (compatible with RainbowKit 2.2.9)
 - WalletProvider uses dynamic import for connectors to avoid SSR IndexedDB errors (WalletConnect not SSR-safe)
+- wagmi-config-builder.ts extracted for testability: generic helper tested with simple types, production uses WagmiConnector

@@ -18,10 +18,14 @@ import { RainbowKitProvider } from "@rainbow-me/rainbowkit";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import type { Config } from "wagmi";
-import { createConfig, http, WagmiProvider } from "wagmi";
-import { baseSepolia, sepolia } from "wagmi/chains";
+import { createConfig, WagmiProvider } from "wagmi";
 
 import { clientEnv } from "@/shared/env";
+
+import {
+  buildWagmiConfigOptions,
+  type WagmiConnector,
+} from "./wagmi-config-builder";
 
 export function WalletProvider({
   children,
@@ -37,24 +41,20 @@ export function WalletProvider({
       // Dynamic import: only runs in browser, avoids SSR IndexedDB errors
       // WalletConnect library accesses IndexedDB at import time, so it must never be
       // statically imported in a module that Next.js evaluates during SSR/build
-      const { injected, walletConnect } = await import("wagmi/connectors");
+      const connectorsLib = await import("wagmi/connectors");
 
-      const chains = [sepolia, baseSepolia] as const;
-
-      const transports = {
-        [sepolia.id]: http(),
-        [baseSepolia.id]: http(),
-      };
-
-      // Graceful degradation: if WalletConnect Project ID missing, use injected only
-      const connectors = env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
-        ? [
-            injected(),
-            walletConnect({
-              projectId: env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
-            }),
-          ]
-        : [injected()];
+      // Build config options using pure helper (testable without React/jsdom)
+      const { chains, transports, connectors } =
+        buildWagmiConfigOptions<WagmiConnector>(
+          {
+            NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:
+              env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
+          },
+          {
+            injected: () => connectorsLib.injected(),
+            walletConnect: (opts) => connectorsLib.walletConnect(opts),
+          }
+        );
 
       // Connectors not safe for SSR
       const wagmiConfig = createConfig({
