@@ -41,7 +41,6 @@ describe("env schemas", () => {
       // LITELLM_BASE_URL: auto-detects based on NODE_ENV
       LITELLM_MASTER_KEY: "adminkey",
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: "test-project-id",
-      NEXT_PUBLIC_CHAIN_ID: "1",
     });
 
     const { serverEnv } = await import("@/shared/env/server");
@@ -49,7 +48,9 @@ describe("env schemas", () => {
 
     const env = serverEnv();
     expect(env.DATABASE_URL).toBe("postgresql://u:p@h:5432/db");
-    expect(clientEnv().NEXT_PUBLIC_CHAIN_ID).toBe(1);
+    expect(clientEnv().NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID).toBe(
+      "test-project-id"
+    );
   });
 
   it("uses provided DATABASE_URL when present", async () => {
@@ -59,7 +60,6 @@ describe("env schemas", () => {
       DATABASE_URL: "sqlite://build.db",
       LITELLM_MASTER_KEY: "adminkey",
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: "test-project-id",
-      NEXT_PUBLIC_CHAIN_ID: "1",
     });
 
     const { serverEnv } = await import("@/shared/env/server");

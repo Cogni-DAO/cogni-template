@@ -7,7 +7,7 @@
  * Scope: Validates NEXT_PUBLIC_* env vars for browser runtime; provides lazy clientEnv access. Does not handle server-only vars.
  * Invariants: Only processes NEXT_PUBLIC_ prefixed vars; validates on first access; fails fast on missing required vars.
  * Side-effects: process.env
- * Notes: Includes WalletConnect and chain configuration; lazy initialization prevents build-time access; Sepolia default (11155111).
+ * Notes: WalletConnect project ID optional (degrades to injected wallet only); lazy initialization prevents build-time access.
  * Links: Next.js public environment variables specification
  * @public
  */
@@ -33,8 +33,6 @@ export class ClientEnvValidationError extends Error {
 const clientSchema = z.object({
   // Optional - gracefully degrades to injected wallet only if missing
   NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().min(1).optional(),
-  // Ethereum Sepolia testnet (Aragon constraint)
-  NEXT_PUBLIC_CHAIN_ID: z.coerce.number().default(11155111),
 });
 
 type ClientEnv = z.infer<typeof clientSchema>;
@@ -47,7 +45,6 @@ export function clientEnv(): ClientEnv {
       _clientEnv = clientSchema.parse({
         NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:
           process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
-        NEXT_PUBLIC_CHAIN_ID: process.env.NEXT_PUBLIC_CHAIN_ID,
       });
     } catch (error) {
       if (error instanceof ZodError) {

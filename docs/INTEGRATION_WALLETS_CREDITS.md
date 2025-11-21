@@ -97,14 +97,109 @@ This ensures connectors only load in browser, avoiding `indexedDB is not defined
 
 ### Step 4: Wire wallet link into chat flow ⏸️ PENDING
 
-- [ ] Add wallet connect UI element
-- [ ] Implement client function to call POST /api/v1/wallet/link with shared contract types
-- [ ] Store returned accountId and apiKey client-side (context or localStorage for MVP)
-- [ ] Create minimal chat UI sending messages to /api/v1/ai/completion
-- [ ] Set Authorization header to stored apiKey
-- [ ] Render assistant messages on success
-- [ ] Show clear error state for credit-related errors (402 status)
-- [ ] Verify end-to-end: wallet connect → link → admin seed credits → chat → debit
+**Goal:** User connects wallet, links to account, receives API key, and successfully chats with credits being debited.
+
+#### 4.1 Backend: Wallet Link Endpoint ✅ COMPLETE
+
+- [x] Define `/api/v1/wallet/link` HTTP contract
+  - [x] `WalletLinkRequest { address: string }`
+  - [x] `WalletLinkResponse { accountId: string; apiKey: string }`
+  - [x] Zod schemas + unit tests
+- [x] Implement `POST /api/v1/wallet/link` route
+  - [x] Validate body with shared contract
+  - [x] Use `LITELLM_MVP_API_KEY` or other virtual key strategy
+  - [x] `deriveAccountIdFromApiKey(apiKey)`
+  - [x] `AccountService.ensureAccountExists(accountId)`
+  - [x] Return `{ accountId, apiKey }`
+  - [x] Tests: happy path, 400, 503/500
+
+**Files:**
+
+- `src/contracts/wallet.link.v1.contract.ts`
+- `src/app/api/v1/wallet/link/route.ts`
+- `src/app/_facades/wallet/link.server.ts`
+- `tests/unit/contracts/wallet.link.v1.contract.test.ts`
+- `tests/stack/api/wallet/link.stack.test.ts`
+
+#### 4.2 Backend: AI Completion Auth Boundary ✅ COMPLETE
+
+- [x] `/api/v1/ai/completion` route:
+  - [x] Require `Authorization: Bearer <apiKey>`
+  - [x] 401 if header missing/malformed
+  - [x] `accountId = deriveAccountIdFromApiKey(apiKey)`
+  - [x] Construct `LlmCaller { accountId, apiKey }`
+  - [x] Ensure account exists (or fail 403)
+  - [x] Delegate to `completion.execute(...)`
+
+**Files:**
+
+- `src/app/api/v1/ai/completion/route.ts`
+- `src/features/ai/services/completion.ts`
+
+#### 4.3 Frontend: Wallet Connect + Link ⏸️ PENDING
+
+- [x] Install and configure wagmi + RainbowKit + React Query providers
+- [x] Verify `/wallet-test` page can connect a wallet
+- [ ] Add wallet connect UI element in main app (header or landing hero)
+- [ ] After wallet connects:
+  - [ ] Read `address` from `useAccount()`
+  - [ ] Call `POST /api/v1/wallet/link` using shared contract types
+- [ ] Store `accountId` and `apiKey` client-side:
+  - [ ] Minimal solution: React context + localStorage
+  - [ ] Expose hook: `useCogniAuth() → { accountId, apiKey, isLinked }`
+
+**Files to create:**
+
+- `src/app/providers/auth-context.client.tsx` - Client-side auth state
+- `src/hooks/use-cogni-auth.ts` - Auth hook for components
+- Update: `src/app/layout.tsx` or header component
+
+**Reference:**
+
+- Existing: `src/app/providers/wallet.client.tsx`
+- Test harness: `src/app/wallet-test/page.tsx`
+
+#### 4.4 Frontend: Minimal Chat UI ⏸️ PENDING
+
+- [ ] Create `ChatPage` with:
+  - [ ] Messages list
+  - [ ] Input box + submit
+- [ ] On submit:
+  - [ ] Call `/api/v1/ai/completion` with body `{ messages }`
+  - [ ] Include `Authorization: Bearer <apiKey>` from `useCogniAuth()`
+- [ ] Render:
+  - [ ] Assistant messages on success
+  - [ ] Explicit error UI for:
+    - [ ] 401/403 (not linked / invalid key)
+    - [ ] 402 (insufficient credits)
+    - [ ] 5xx (generic failure)
+
+**Files to create:**
+
+- `src/features/chat/` - New feature slice (or extend existing)
+- `src/features/chat/components/chat-page.tsx`
+- `src/features/chat/components/message-list.tsx`
+- `src/features/chat/components/chat-input.tsx`
+- `src/features/chat/hooks/use-chat.ts`
+
+**Reference:**
+
+- Contract: `src/contracts/wallet.link.v1.contract.ts`
+- Completion route: `src/app/api/v1/ai/completion/route.ts`
+
+#### 4.5 End-to-End Verification ⏸️ PENDING
+
+- [ ] Admin manually seeds credits (existing `creditAccount` / SQL)
+- [ ] Flow:
+  - [ ] Connect wallet
+  - [ ] Call `/wallet/link` → see `{ accountId, apiKey }`
+  - [ ] Chat → receive assistant replies
+  - [ ] Observe credits decreasing in DB
+  - [ ] Drain credits and confirm 402 is returned + rendered in UI
+
+**Test files to create:**
+
+- `tests/e2e/wallet-chat-flow.e2e.test.ts` - Full user journey
 
 ---
 
