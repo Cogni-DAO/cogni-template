@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-20
+- **Last reviewed:** 2025-11-21
 - **Status:** draft
 
 ## Purpose
@@ -79,6 +79,7 @@ Constructed:
 
 Optional:
 
+- LITELLM_MVP_API_KEY (MVP wallet link single key - TODO: remove when proper wallet→key registry exists)
 - OPENROUTER_API_KEY (for LiteLLM providers)
 - SESSION_SECRET (≥32 chars) - TODO: when session management added
 

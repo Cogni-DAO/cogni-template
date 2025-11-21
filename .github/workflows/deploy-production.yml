@@ -76,6 +76,7 @@ jobs:
           APP_ENV: production
           APP_IMAGE: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           DOMAIN: ${{ secrets.DOMAIN }}
+          NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           POSTGRES_ROOT_USER: ${{ secrets.POSTGRES_ROOT_USER }}
           POSTGRES_ROOT_PASSWORD: ${{ secrets.POSTGRES_ROOT_PASSWORD }}

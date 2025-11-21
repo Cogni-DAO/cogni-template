@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-11-11
+- **Last reviewed:** 2025-11-21
 - **Status:** draft
 
 ## Purpose
@@ -41,9 +41,11 @@ HTTP API endpoints using Next.js App Router. Contract-validated entry points tha
   - `/api/v1/meta/health` [GET]
   - `/api/v1/meta/openapi` [GET]
   - `/api/v1/meta/route-manifest` [GET]
+  - `/api/v1/ai/completion` [POST]
+  - `/api/v1/wallet/link` [POST]
 - **CLI (if any):** none
 - **Env/Config keys:** none
-- **Files considered API:** v1/meta/\*/route.ts
+- **Files considered API:** v1/_/route.ts, admin/_/route.ts
 
 ## Ports (optional)
 

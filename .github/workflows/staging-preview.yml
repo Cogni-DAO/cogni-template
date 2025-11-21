@@ -66,6 +66,7 @@ jobs:
         env:
           IMAGE_NAME: ${{ steps.meta.outputs.image_name }}
           IMAGE_TAG: ${{ steps.meta.outputs.image_tag }}
+          NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID }}
         run: platform/ci/scripts/build.sh
 
       - name: Login to GHCR
