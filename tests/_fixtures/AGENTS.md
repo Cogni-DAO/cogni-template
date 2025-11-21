@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-07
+- **Last reviewed:** 2025-11-21
 - **Status:** draft
 
 ## Purpose
@@ -22,18 +22,18 @@ Static test data for consistent test scenarios across unit and integration tests
 ```json
 {
   "layer": "tests",
-  "may_import": [],
-  "must_not_import": ["*"]
+  "may_import": ["shared"],
+  "must_not_import": ["adapters", "core", "features", "app", "ports"]
 }
 ```
 
 ## Public Surface
 
-- **Exports:** JSON data files
+- **Exports:** JSON data files, wallet test data (test-data.ts), wallet HTTP helpers (api-helpers.ts)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** all .json files
+- **Files considered API:** all .json files, wallet/\*.ts
 
 ## Responsibilities
 
@@ -49,8 +49,10 @@ import proposals from "@tests/_fixtures/proposals.json"
 
 ## Standards
 
-- JSON only, no executable code
+- Prefer JSON for static data
+- TypeScript helpers allowed for DRY test utilities (api-helpers, test constants)
 - Keep data realistic but minimal
+- No business logic in fixtures
 
 ## Dependencies
 

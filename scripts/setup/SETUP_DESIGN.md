@@ -42,9 +42,10 @@ pnpm dev  # You're ready!
 2. Generate secure random values:
    - `LITELLM_MASTER_KEY` (sk-xxx format)
    - `DATABASE_URL` (postgresql://postgres:postgres@localhost:5432/cogni_template_dev)
-3. Prompt for manual `OPENROUTER_API_KEY`
-4. Run `platform/bootstrap/install/install-pnpm.sh`
-5. `pnpm install` and setup git hooks
+3. Prompt for `OPENROUTER_API_KEY`
+4. Prompt for `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (optional, from cloud.walletconnect.com)
+5. Run `platform/bootstrap/install/install-pnpm.sh`
+6. `pnpm install` and setup git hooks
 
 **No SSH keys, no Docker, no Cherry VMs, no GitHub secrets.**
 
@@ -120,6 +121,7 @@ pnpm setup github --env production
      - `CHERRY_AUTH_TOKEN` (prompt user for Cherry Servers API token)
      - `SONAR_TOKEN` (prompt user to create SonarCloud token)
      - `ACTIONS_AUTOMATION_BOT_PAT` (bot automation PAT, needs Contents:Write, Pull requests:Write, Actions:Read, Metadata:Read)
+     - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (optional from cloud.walletconnect.com; if missing, only injected wallets like MetaMask work)
 
 For current manual process, see [DEPLOY.md](../../platform/runbooks/DEPLOY.md).
 

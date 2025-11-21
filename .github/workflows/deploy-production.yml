@@ -76,6 +76,7 @@ jobs:
           APP_ENV: production
           APP_IMAGE: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           DOMAIN: ${{ secrets.DOMAIN }}
+          NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           POSTGRES_ROOT_USER: ${{ secrets.POSTGRES_ROOT_USER }}
           POSTGRES_ROOT_PASSWORD: ${{ secrets.POSTGRES_ROOT_PASSWORD }}
@@ -83,6 +84,7 @@ jobs:
           APP_DB_PASSWORD: ${{ secrets.APP_DB_PASSWORD }}
           APP_DB_NAME: ${{ secrets.APP_DB_NAME }}
           LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
+          LITELLM_MVP_API_KEY: test-mvp-key
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
           SESSION_SECRET: ${{ secrets.SESSION_SECRET }}
           VM_HOST: ${{ secrets.VM_HOST }}

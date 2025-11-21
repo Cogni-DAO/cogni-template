@@ -32,15 +32,24 @@ Every dependency points inward.
 - 100% OSS stack. Strict lint/type/style. Env validated at boot. Contract tests required for every adapter.
 - **Proof-of-Concept Scope** — implement minimal working integrations only; no product logic.
 
-**References:**  
-Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksforgeeks.org/system-design/hexagonal-architecture-system-design/)  
-[Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) - Infrastructure and CI/CD overview
+**References:**
+
+- Hexagonal: [Alistair Cockburn's System Design](https://www.geeksforgeeks.org/system-design/hexagonal-architecture-system-design/)
+- Infrastructure: [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md)
+- Accounts & Credits: [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md)
+- API Endpoints: [ACCOUNTS_API_KEY_ENDPOINTS.md](ACCOUNTS_API_KEY_ENDPOINTS.md)
+- Wallet Integration: [INTEGRATION_WALLETS_CREDITS.md](INTEGRATION_WALLETS_CREDITS.md)
+- Billing Evolution: [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md)
 
 ### Vertical slicing
 
 - Each feature is a slice under **features/** with its own `actions/`, `services/`, `components/`, `hooks/`, `types/`, `constants/`.
 - Slices may depend on **core** and **ports** only. Never on other slices or **adapters**.
-- Public surface changes in a slice must update that slice’s `AGENTS.md` and pass contract tests.
+- Public surface changes in a slice must update that slice's `AGENTS.md` and pass contract tests.
+
+### SSR-unsafe libraries
+
+Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause `ReferenceError` during Next.js SSR/build. Solution: dynamic import inside client-side `useEffect`, cache config in React state. See `src/app/providers/wallet.client.tsx` for WalletConnect example.
 
 ---
 
@@ -50,7 +59,7 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 - **platform/** → Infrastructure tooling, CI/CD scripts, deployment automation, dev setup.
 - **src/contracts/** → Operation contracts (id, Zod in/out, scopes, version). No logic.
 - **src/mcp/** → MCP host bootstrap. Registers tools mapped 1:1 to contracts.
-- **src/app/** → Delivery/UI + Next.js API routes. See import rules below.
+- **src/app/** → Delivery/UI + Next.js API routes. Includes `providers/` for client-side context composition (wagmi, RainbowKit, React Query).
 - **src/features/** → Vertical slices (use cases): `proposals/`, `auth/`… See import rules below.
 - **src/ports/** → Contracts/interfaces only.
 - **src/core/** → Pure domain. No I/O/time/RNG; inject via ports.
@@ -86,7 +95,7 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 ## Directory & Boundary Specification
 
 [x] .env.example # sample env vars for all services
-[ ] .env.local.example # local-only env template (never committed)
+[x] .env.local.example # local-only env template (never committed)
 [x] .gitignore # standard git ignore list
 [x] .nvmrc # node version pin (e.g., v20)
 [x] .editorconfig # IDE whitespace/newline rules
@@ -100,12 +109,12 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] package.json # deps, scripts, engines (db scripts added)
 [x] drizzle.config.ts # database migrations config
 [x] Dockerfile # reproducible build
-[ ] .dockerignore # ignore node_modules, artifacts, .env.\*
+[x] .dockerignore # ignore node_modules, artifacts, .env.\*
 [x] LICENSE # OSS license
 [x] CODEOWNERS # review ownership
 [x] SECURITY.md # disclosure policy
 [x] CONTRIBUTING.md # contribution standards
-[ ] README.md # overview
+[x] README.md # overview
 [ ] CHANGELOG.md # releases
 [ ] middleware.ts # headers, session/API-key guard, basic rate-limit
 [x] vitest.config.mts # unit/integration
@@ -114,7 +123,21 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 
 [x] docs/
 [x] ├── ARCHITECTURE.md # narrative + diagrams (longform)
-[x] └── UI_IMPLEMENTATION_GUIDE.md # practical UI development workflows
+[x] ├── ACCOUNTS_DESIGN.md # accounts & credits system design
+[x] ├── ACCOUNTS_API_KEY_ENDPOINTS.md # API endpoint contracts
+[x] ├── INTEGRATION_WALLETS_CREDITS.md # wallet connectivity (Steps 1-4)
+[x] ├── BILLING_EVOLUTION.md # billing system evolution (Stages 5-7)
+[x] ├── DATABASES.md # database architecture
+[x] ├── ENVIRONMENTS.md # environment configuration
+[x] ├── ERROR_HANDLING_ARCHITECTURE.md # error handling patterns
+[x] ├── FEATURE_DEVELOPMENT_GUIDE.md # feature development workflows
+[x] ├── IMPLEMENTATION_PLAN.md # implementation roadmap
+[x] ├── SETUP.md # developer setup guide
+[x] ├── STYLE.md # code style guide
+[x] ├── TESTING.md # testing strategy
+[x] ├── UI_IMPLEMENTATION_GUIDE.md # practical UI development workflows
+[x] ├── CI-CD.md # CI/CD documentation
+[x] └── templates/ # document templates
 
 [x] platform/ # platform tooling and infrastructure
 [x] ├── infra/ # Infrastructure as Code and deployment configs
@@ -131,8 +154,8 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] │ └── files/ # Shared templates and utility scripts
 [x] ├── ci/ # CI/CD automation
 [x] ├── bootstrap/ # One-time dev machine setup installers
-[ ] │ ├── install/ # Focused installer scripts (tofu, pnpm, docker, reuse)
-[ ] │ └── README.md # Installation instructions
+[x] │ ├── install/ # Focused installer scripts (tofu, pnpm, docker, reuse)
+[x] │ └── README.md # Installation instructions
 [x] └── runbooks/ # Deploy, rollback, incident docs
 
 [ ] public/
@@ -152,6 +175,7 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] │ ├── http/ # HTTP route contracts
 [x] │ ├── admin.accounts.register.v1.contract.ts # account registration
 [x] │ ├── admin.accounts.topup.v1.contract.ts # credit top-up
+[x] │ ├── wallet.link.v1.contract.ts # wallet-to-account linking
 [x] │ └── \*.contract.ts # individual operation contracts
 [ ] │
 [x] ├── mcp/ # MCP host (future)
@@ -162,13 +186,21 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] │ ├── layout.tsx
 [x] │ ├── page.tsx
 [x] │ ├── \_facades/ # server-side facades for UI
-[x] │ │ └── accounts/ # account management facades
-[ ] │ ├── providers.tsx # QueryClient, Wagmi, RainbowKit
+[x] │ │ ├── accounts/ # account management facades
+[x] │ │ └── wallet/ # wallet linking facades
+[x] │ ├── providers/ # Client-side provider composition (wagmi, RainbowKit, React Query)
+[x] │ │ ├── AGENTS.md
+[x] │ │ ├── app-providers.client.tsx
+[x] │ │ ├── wallet.client.tsx
+[x] │ │ ├── query.client.tsx
+[x] │ │ └── wagmi-config-builder.ts
+[x] │ ├── wallet-test/ # Dev wallet test harness
 [ ] │ ├── (public)/
 [ ] │ ├── (protected)/
 [x] │ └── api/
 [x] │ ├── v1/meta/ # health, route-manifest, openapi
-[x] │ ├── v1/ai/completion/ # AI completion endpoint  
+[x] │ ├── v1/ai/completion/ # AI completion endpoint
+[x] │ ├── v1/wallet/link/ # POST - wallet-to-account linking
 [x] │ └── admin/ # admin control plane endpoints
 [x] │ ├── accounts/
 [x] │ │ ├── register-litellm-key/ # POST - create account for API key
@@ -188,8 +220,14 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] │ │ ├── errors.ts # feature error types and guards
 [x] │ │ └── services/
 [x] │ │ └── adminAccounts.ts # admin account operations
-[x] │ └── site-meta/ # meta services (health, routes)
-[x] │ └── services/
+[x] │ ├── site-meta/ # meta services (health, routes)
+[x] │ │ └── services/
+[ ] │ ├── chat/ # wallet-linked chat feature (Step 4)
+[ ] │ │ ├── components/
+[ ] │ │ ├── hooks/
+[ ] │ │ └── services/
+[ ] │ ├── payments/ # on-chain payment processing (Stage 7)
+[ ] │ │ └── services/
 [ ] │ ├── auth/
 [ ] │ │ ├── actions.ts
 [ ] │ │ └── services/
@@ -313,10 +351,14 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 
 [x] tests/
 [x] ├── \_fakes/ # deterministic test doubles (stubs only)
-[x] ├── \_fixtures/ # static test data (stubs only)
-[x] ├── unit/ # core rules + features with mocked ports (structure only)
+[x] ├── \_fixtures/ # static test data including wallet test data
+[x] ├── unit/ # core rules + features with mocked ports
+[x] ├── stack/ # stack tests against dev infrastructure
 [x] ├── integration/ # adapters against local services (stubs only)
 [x] ├── contract/ # reusable port contract harness (stubs only)
+[x] ├── ports/ # port contract tests
+[x] ├── security/ # security validation tests
+[x] ├── lint/ # ESLint rule tests
 [x] └── setup.ts
 
 [x] e2e/
@@ -326,9 +368,11 @@ Alistair Cockburn's [Hexagonal Architecture (System Design)](https://www.geeksfo
 [x] scripts/
 [x] ├── validate-agents-md.mjs # validates AGENTS.md files
 [x] ├── validate-doc-headers.ts # validates doc headers
+[x] ├── check-all.sh # structured check workflow with auto-fix mode
+[x] ├── check-root-layout.ts # validates root directory structure
 [x] ├── setup/ # setup scripts
-[x] └── eslint/ # custom ESLint plugins
-[x] ├── plugins/ui-governance.cjs
+[x] ├── eslint/ # custom ESLint plugins
+[x] │ └── plugins/ui-governance.cjs
 [ ] ├── db/ # database scripts
 [ ] │ ├── seed.ts
 [ ] │ └── migrate.ts

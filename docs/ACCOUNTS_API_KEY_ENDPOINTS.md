@@ -285,29 +285,21 @@ Authorization: Bearer <apiKey>
    - `balance` from `accounts`.
    - `usage` from our ledger and/or LiteLLM usage APIs.
 
-#### B.2 Wallet-Based Onboarding (Future)
+#### B.2 Wallet-Based Onboarding (Step 3 Complete, Step 4 Pending)
 
-Once wallets are wired in (wagmi/RainbowKit + on-chain payments):
+With wallets integrated (wagmi/RainbowKit), on-chain payments pending:
 
-```http
-POST /api/v1/wallet/link
-POST /api/v1/wallet/fund
-```
+**Current Flow (POST /api/v1/wallet/link):**
 
-**High-level flow:**
+- User connects wallet via RainbowKit ConnectButton
+- Frontend calls `/api/v1/wallet/link` with address
+- Backend derives accountId, ensures account exists (creates with zero balance if needed)
+- Backend returns `{ accountId, apiKey }`
+- Frontend stores apiKey for `/api/v1/ai/completion` Authorization header
 
-- `/wallet/link`:
-  1. Wallet signs a message.
-  2. Backend verifies address ↔ signature.
-  3. Backend either:
-     - Creates a new account and LiteLLM key via admin APIs, then calls `register-litellm-key`, or
-     - Links the wallet to an existing account.
+**MVP:** Single `LITELLM_MVP_API_KEY` for all wallets, no signature verification. See `src/app/providers/AGENTS.md` and `src/app/wallet-test/` for implementation details.
 
-- `/wallet/fund`:
-  - For MVP: just a test endpoint that calls `creditAccount`.
-  - Later: validate on-chain transfers (USDC/token) and then credit the account ledger.
-
-These are layered on top of the same Accounts + Credits + completion flow; they don't change the core architecture.
+**Later:** On-chain funding via `/api/v1/wallet/fund` validates USDC transfers and credits account ledger.
 
 ---
 
