@@ -5,10 +5,11 @@ This document tracks wallet connectivity implementation (Steps 1-4) for the fron
 **Related Documentation:**
 
 - System architecture: [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md)
-- Billing evolution (Stages 4-7): [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md)
+- Security & authentication: [SECURITY_AUTH_SPEC.md](SECURITY_AUTH_SPEC.md)
+- Billing evolution (Stages 5-7): [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md)
 - API contracts: [ACCOUNTS_API_KEY_ENDPOINTS.md](ACCOUNTS_API_KEY_ENDPOINTS.md)
 
-**Scope:** Frontend wallet connectivity using wagmi/RainbowKit, backend `/api/v1/wallet/link` endpoint, and basic chat UI integration. For billing system evolution (dual-cost, markup, profit enforcement), see [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md).
+**Scope:** Frontend wallet connectivity using wagmi/RainbowKit, SIWE-based authentication with session management, and wallet-linked chat UI integration. For billing system evolution (dual-cost, markup, profit enforcement), see [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md).
 
 ---
 
@@ -18,44 +19,27 @@ This document tracks wallet connectivity implementation (Steps 1-4) for the fron
 
 ### Step 1: Define shared HTTP contract for /api/v1/wallet/link ✅ COMPLETE
 
-- [x] Define WalletLinkRequest type with `address` field (string for MVP, future-proofed for viem Address type)
-- [x] Define WalletLinkResponse type containing `accountId` and `apiKey` as strings
-- [x] Place contract in `src/contracts/wallet.link.v1.contract.ts` following existing patterns
-- [x] Add Zod schemas for runtime validation matching WalletLinkRequest/Response
-- [x] Create unit tests verifying contract shapes (12 tests passing)
-- [x] Single source of truth for /wallet/link request and response shapes
-- [x] Types compile and can be imported from both backend and frontend code
-- [x] All tests pass, `pnpm check` green (232 tests passing total)
+**Contract (TARGET - Secure):**
+
+- Request: `WalletLinkRequest { address: string }`
+- Response: `WalletLinkResponse { accountId: string }` (no apiKey)
+
+**Legacy (being replaced):** Old contract returned `{ accountId, apiKey }` to browser. This is insecure and being replaced by session-based auth in Step 4A.
 
 **Files Created:**
 
-- `src/contracts/wallet.link.v1.contract.ts` - Contract with Zod schemas and TypeScript types
-- `tests/unit/contracts/wallet.link.v1.contract.test.ts` - 12 unit tests validating contract
+- `src/contracts/wallet.link.v1.contract.ts` - Contract with Zod schemas
+- `tests/unit/contracts/wallet.link.v1.contract.test.ts` - Unit tests
 
 ### Step 2: Implement /api/v1/wallet/link backend route ✅ COMPLETE
 
-- [x] Create API route for POST /api/v1/wallet/link
-- [x] Parse and validate JSON as WalletLinkRequest
-- [x] Implement MVP strategy for apiKey resolution (single configured `LITELLM_MVP_API_KEY`)
-- [x] Derive accountId from apiKey using deriveAccountIdFromApiKey helper
-- [x] Ensure account exists using AccountService (create-if-missing with zero balance)
-- [x] Return WalletLinkResponse: { accountId, apiKey }
-- [x] Handle errors: 400 for malformed requests, 503 for misconfiguration, 500 for internal failures
-- [x] Add tests covering happy-path, invalid body, and failure scenarios (11 tests total)
+**Legacy (insecure):** Current implementation returns `{ accountId, apiKey }` to browser. Being replaced in Step 4.1 with session-based auth that returns `{ accountId }` only.
 
 **Files Created:**
 
-- `src/app/api/v1/wallet/link/route.ts` - POST endpoint with validation
-- `src/app/_facades/wallet/link.server.ts` - Facade coordinating AccountService
-- `tests/unit/app/_facades/wallet/link.test.ts` - 4 unit tests passing
-- `tests/stack/api/wallet/link.stack.test.ts` - 7 stack tests passing
-- `tests/_fixtures/wallet/test-data.ts` - Shared test constants (DRY)
-- `tests/_fixtures/wallet/api-helpers.ts` - Shared HTTP helpers (DRY)
-
-**Environment:**
-
-- Added `LITELLM_MVP_API_KEY` to `.env.example`, `.env.test`, `src/shared/env/server.ts`
-- Wallet display format: `0x12345...defAB` (first 5 + last 5 hex digits)
+- `src/app/api/v1/wallet/link/route.ts` - POST endpoint
+- `src/app/_facades/wallet/link.server.ts` - Facade
+- `tests/stack/api/wallet/link.stack.test.ts` - Stack tests
 
 ### Step 3: Install wallet libraries and add global providers ✅ COMPLETE
 
@@ -95,83 +79,193 @@ useEffect(() => {
 
 This ensures connectors only load in browser, avoiding `indexedDB is not defined` errors during Next.js build/SSR.
 
-### Step 4: Wire wallet link into chat flow ⏸️ PENDING
+### Step 4A: Wallet-based login & session (SIWE) ⏸️ PENDING
 
-**Goal:** User connects wallet, links to account, receives API key, and successfully chats with credits being debited.
+**Goal:** Implement secure wallet authentication using Sign-In with Ethereum (SIWE) with server-side session management.
 
-#### 4.1 Backend: Wallet Link Endpoint ✅ COMPLETE
+**See:** [SECURITY_AUTH_SPEC.md](SECURITY_AUTH_SPEC.md) for complete security architecture and implementation details.
 
-- [x] Define `/api/v1/wallet/link` HTTP contract
-  - [x] `WalletLinkRequest { address: string }`
-  - [x] `WalletLinkResponse { accountId: string; apiKey: string }`
-  - [x] Zod schemas + unit tests
-- [x] Implement `POST /api/v1/wallet/link` route
-  - [x] Validate body with shared contract
-  - [x] Use `LITELLM_MVP_API_KEY` or other virtual key strategy
-  - [x] `deriveAccountIdFromApiKey(apiKey)`
-  - [x] `AccountService.ensureAccountExists(accountId)`
-  - [x] Return `{ accountId, apiKey }`
-  - [x] Tests: happy path, 400, 503/500
+#### 4A.1 Backend: Auth Endpoints ⏸️ PENDING
 
-**Files:**
+**Create two auth endpoints for SIWE flow:**
 
-- `src/contracts/wallet.link.v1.contract.ts`
-- `src/app/api/v1/wallet/link/route.ts`
-- `src/app/_facades/wallet/link.server.ts`
-- `tests/unit/contracts/wallet.link.v1.contract.test.ts`
-- `tests/stack/api/wallet/link.stack.test.ts`
+- [ ] `POST /api/v1/auth/nonce`
+  - [ ] Input: `{ address: string }`
+  - [ ] Generate random 128-bit nonce
+  - [ ] Store `{ address, nonce, expiresAt }` in database (5 minute TTL)
+  - [ ] Build SIWE-style message with domain, chainId, nonce, timestamp
+  - [ ] Return `{ nonce, message }`
+  - [ ] Create contract: `src/contracts/auth.nonce.v1.contract.ts`
+  - [ ] Tests: happy path, invalid address, expired nonce
 
-#### 4.2 Backend: AI Completion Auth Boundary ✅ COMPLETE
-
-- [x] `/api/v1/ai/completion` route:
-  - [x] Require `Authorization: Bearer <apiKey>`
-  - [x] 401 if header missing/malformed
-  - [x] `accountId = deriveAccountIdFromApiKey(apiKey)`
-  - [x] Construct `LlmCaller { accountId, apiKey }`
-  - [x] Ensure account exists (or fail 403)
-  - [x] Delegate to `completion.execute(...)`
-
-**Files:**
-
-- `src/app/api/v1/ai/completion/route.ts`
-- `src/features/ai/services/completion.ts`
-
-#### 4.3 Frontend: Wallet Connect + Link ⏸️ PENDING
-
-- [x] Install and configure wagmi + RainbowKit + React Query providers
-- [x] Verify `/wallet-test` page can connect a wallet
-- [ ] Add wallet connect UI element in main app (header or landing hero)
-- [ ] After wallet connects:
-  - [ ] Read `address` from `useAccount()`
-  - [ ] Call `POST /api/v1/wallet/link` using shared contract types
-- [ ] Store `accountId` and `apiKey` client-side:
-  - [ ] Minimal solution: React context + localStorage
-  - [ ] Expose hook: `useCogniAuth() → { accountId, apiKey, isLinked }`
+- [ ] `POST /api/v1/auth/verify`
+  - [ ] Input: `{ address: string, signature: string }`
+  - [ ] Recover address from signature using viem
+  - [ ] Validate: recovered address matches, nonce valid and not expired
+  - [ ] On success:
+    - [ ] Resolve `accountId` for wallet (create if needed)
+    - [ ] Create session: `{ sessionId, accountId, walletAddress, expiresAt }`
+    - [ ] Set HttpOnly session cookie: `Secure; SameSite=Lax; Max-Age=604800`
+    - [ ] Return `{ accountId }` (for UX only, NOT apiKey)
+  - [ ] Create contract: `src/contracts/auth.verify.v1.contract.ts`
+  - [ ] Tests: valid signature, invalid signature, expired nonce, mismatched address
 
 **Files to create:**
 
-- `src/app/providers/auth-context.client.tsx` - Client-side auth state
-- `src/hooks/use-cogni-auth.ts` - Auth hook for components
-- Update: `src/app/layout.tsx` or header component
+- `src/features/auth/services/siwe.service.ts` - SIWE message generation and verification
+- `src/features/auth/services/session.service.ts` - Session CRUD operations
+- `src/ports/auth.port.ts` - AuthService interface
+- `src/adapters/server/auth/session.adapter.ts` - Session storage adapter
+- `src/app/api/v1/auth/nonce/route.ts` - Nonce endpoint
+- `src/app/api/v1/auth/verify/route.ts` - Verify endpoint
+- `src/contracts/auth.nonce.v1.contract.ts` - Nonce contract
+- `src/contracts/auth.verify.v1.contract.ts` - Verify contract
+
+#### 4A.2 Backend: Session Storage ⏸️ PENDING
+
+- [ ] Create `sessions` table in database (id, account_id, wallet_address, expires_at, created_at)
+- [ ] Create migration: `drizzle/migrations/000X_sessions_table.sql`
+- [ ] Update schema: `src/shared/db/schema.ts`
+- [ ] **[POST-MVP]** Session cleanup job for expired sessions
+
+**Files to create:**
+
+- Migration file for sessions table
+- Update: `src/shared/db/schema.ts`
+
+#### 4A.3 Backend: Session Middleware ⏸️ PENDING
+
+- [ ] Create session middleware for protected routes:
+  - [ ] Extract session cookie from request
+  - [ ] Validate session exists and not expired
+  - [ ] Load `accountId` and `walletAddress` from session
+  - [ ] Attach to request context
+  - [ ] Return 401 if session invalid
+- [ ] Apply middleware to protected routes
+
+**Files to create:**
+
+- `src/middleware/session.middleware.ts` - Session validation
+- `src/app/_middleware/auth.ts` - Route-level auth helpers
+
+#### 4A.4 Frontend: SIWE Sign-In Flow ⏸️ PENDING
+
+- [ ] Implement SIWE authentication flow (nonce → sign → verify)
+- [ ] Remove all localStorage API key storage
+- [ ] Remove Authorization header from chat requests
+- [ ] **[POST-MVP]** React context for `accountId` display (optional UX)
+
+**Files to create:**
+
+- `src/features/auth/hooks/use-siwe-auth.ts` - SIWE auth hook
+- Update: `src/app/wallet-test/page.tsx` - Add SIWE demo
+
+### Step 4: Wire wallet-linked chat via session ⏸️ PENDING
+
+**Goal:** User connects wallet, authenticates via SIWE, and successfully chats with session-based authentication while credits are debited.
+
+**Security Note:** API keys are server-only secrets. Browser authenticates with HttpOnly session cookie. See [SECURITY_AUTH_SPEC.md](SECURITY_AUTH_SPEC.md).
+
+#### 4.1 Backend: Update Wallet Link Endpoint ⏸️ PENDING
+
+**Current (INSECURE - TO BE REPLACED):**
+
+- [x] Returns `{ accountId, apiKey }` to browser (INSECURE)
+- [x] Client stores apiKey in localStorage (INSECURE)
+- [x] Uses `LITELLM_MVP_API_KEY` for all wallets
+
+**Target (SECURE):**
+
+- [ ] Update `/api/v1/wallet/link` to use session authentication:
+  - [ ] Require valid session (middleware enforces)
+  - [ ] Read `accountId` from session context
+  - [ ] Ensure account exists via `AccountService.ensureAccountExists(accountId)`
+  - [ ] Ensure apiKey exists for account (store server-side only)
+  - [ ] Return ONLY `{ accountId }` (no apiKey)
+  - [ ] Update contract: `WalletLinkResponse { accountId: string }`
+- [ ] Update tests to use session-based auth
+- [ ] Add apiKey storage to accounts table (if not exists)
+
+**Files:**
+
+- Update: `src/contracts/wallet.link.v1.contract.ts` - Remove apiKey from response
+- Update: `src/app/api/v1/wallet/link/route.ts` - Use session auth
+- Update: `src/app/_facades/wallet/link.server.ts` - Store apiKey server-side
+- Update: `tests/stack/api/wallet/link.stack.test.ts` - Session-based tests
+
+#### 4.2 Backend: Update AI Completion Auth (Dual Mode) ⏸️ PENDING
+
+**Current (API Key Only):**
+
+- [x] Requires `Authorization: Bearer <apiKey>` header
+- [x] Derives `accountId` from `apiKey`
+- [x] Constructs `LlmCaller { accountId, apiKey }`
+
+**Target (Dual Auth Mode):**
+
+- [ ] Update `/api/v1/ai/completion` to support both auth modes:
+  - [ ] **Primary mode: Session cookie**
+    - [ ] Check for valid session cookie first
+    - [ ] Read `accountId` from session
+    - [ ] Look up `apiKey` server-side from `accountId`
+    - [ ] Construct `LlmCaller { accountId, apiKey }`
+  - [ ] **Fallback mode: API key header** (for programmatic clients)
+    - [ ] If no session, check `Authorization: Bearer <apiKey>`
+    - [ ] Derive `accountId` from `apiKey` (existing logic)
+    - [ ] Construct `LlmCaller { accountId, apiKey }`
+  - [ ] Return 401 if neither auth mode present
+- [ ] Update tests to cover both auth modes
+- [ ] Existing credits + ledger logic unchanged
+
+**Files:**
+
+- Update: `src/app/api/v1/ai/completion/route.ts` - Add session auth mode
+- Update: `tests/stack/api/ai/completion.stack.test.ts` - Test both auth modes
+
+#### 4.3 Frontend: Wallet Connect + SIWE Auth ⏸️ PENDING
+
+- [x] Install and configure wagmi + RainbowKit + React Query providers
+- [x] Verify `/wallet-test` page can connect a wallet
+- [ ] Add wallet connect + SIWE auth UI (header or landing hero)
+- [ ] After wallet connects:
+  - [ ] Read `address` from `useAccount()`
+  - [ ] Implement SIWE flow (see Step 4A.4):
+    - [ ] Call `POST /api/v1/auth/nonce` with address
+    - [ ] Request signature via `signMessage`
+    - [ ] Call `POST /api/v1/auth/verify` with signature
+  - [ ] Store `accountId` in React context for UX only (optional, NOT for auth)
+  - [ ] Session cookie handled automatically by browser
+- [ ] Call `POST /api/v1/wallet/link` after successful auth
+  - [ ] Session cookie sent automatically
+  - [ ] Receives `{ accountId }` only (no apiKey)
+
+**Files to create:**
+
+- `src/features/auth/hooks/use-siwe-auth.ts` - SIWE authentication hook
+- `src/features/auth/context/auth-context.tsx` - Optional context for accountId display
+- Update: `src/app/wallet-test/page.tsx` - Add SIWE demo
 
 **Reference:**
 
 - Existing: `src/app/providers/wallet.client.tsx`
-- Test harness: `src/app/wallet-test/page.tsx`
+- Security spec: `docs/SECURITY_AUTH_SPEC.md`
 
-#### 4.4 Frontend: Minimal Chat UI ⏸️ PENDING
+#### 4.4 Frontend: Session-Based Chat UI ⏸️ PENDING
 
 - [ ] Create `ChatPage` with:
   - [ ] Messages list
   - [ ] Input box + submit
+  - [ ] Wallet connection status
 - [ ] On submit:
   - [ ] Call `/api/v1/ai/completion` with body `{ messages }`
-  - [ ] Include `Authorization: Bearer <apiKey>` from `useCogniAuth()`
+  - [ ] NO Authorization header (session cookie sent automatically)
+  - [ ] Browser handles session cookie transparently
 - [ ] Render:
   - [ ] Assistant messages on success
   - [ ] Explicit error UI for:
-    - [ ] 401/403 (not linked / invalid key)
+    - [ ] 401 (not authenticated - redirect to SIWE login)
     - [ ] 402 (insufficient credits)
+    - [ ] 403 (account not found / invalid session)
     - [ ] 5xx (generic failure)
 
 **Files to create:**
@@ -184,55 +278,71 @@ This ensures connectors only load in browser, avoiding `indexedDB is not defined
 
 **Reference:**
 
-- Contract: `src/contracts/wallet.link.v1.contract.ts`
 - Completion route: `src/app/api/v1/ai/completion/route.ts`
+- Security spec: `docs/SECURITY_AUTH_SPEC.md`
 
 #### 4.5 End-to-End Verification ⏸️ PENDING
 
-- [ ] Admin manually seeds credits (existing `creditAccount` / SQL)
-- [ ] Flow:
-  - [ ] Connect wallet
-  - [ ] Call `/wallet/link` → see `{ accountId, apiKey }`
-  - [ ] Chat → receive assistant replies
-  - [ ] Observe credits decreasing in DB
-  - [ ] Drain credits and confirm 402 is returned + rendered in UI
+- [ ] Admin seeds credits manually
+- [ ] Basic flow: Connect wallet → SIWE auth → chat → observe credits debited
+- [ ] Verify: Session cookie set, apiKey never visible in browser
+- [ ] **[POST-MVP]** Comprehensive e2e test suite
 
 **Test files to create:**
 
-- `tests/e2e/wallet-chat-flow.e2e.test.ts` - Full user journey
+- `tests/e2e/wallet-siwe-chat-flow.e2e.test.ts` - Basic flow test
 
 ---
 
-## High-Level Flow
+## High-Level Flow (with SIWE Auth)
 
-1. User connects an EVM wallet in the browser.
-2. Frontend calls `/api/v1/wallet/link` with the wallet address (and later, a signature).
-3. Backend:
-   - Derives a stable `accountId` from the LiteLLM API key.
-   - Ensures an `accounts` row exists (`ensureAccountExists(accountId)`).
-   - Ensures a LiteLLM virtual key is associated with that account.
-   - Returns `{ accountId, apiKey }` to the frontend.
-4. Frontend stores `apiKey` and uses it as `Authorization: Bearer <apiKey>` for all AI calls.
-5. `/api/v1/ai/completion`:
-   - Extracts `apiKey` from the Authorization header.
-   - Derives `accountId` from `apiKey`.
-   - Builds `LlmCaller { accountId, apiKey }`.
-   - Ensures account exists.
-   - Calls the completion feature, which:
-     - Calls LiteLLM via `LlmService`.
+### Authentication (Step 4A)
+
+1. User connects an EVM wallet in the browser (wagmi/RainbowKit).
+2. Frontend calls `/api/v1/auth/nonce` with wallet address → receives nonce and SIWE message.
+3. User signs SIWE message with wallet.
+4. Frontend calls `/api/v1/auth/verify` with signature:
+   - Backend verifies signature matches wallet address.
+   - Backend resolves/creates `accountId` for this wallet.
+   - Backend creates server-side session: `{ sessionId, accountId, walletAddress, expiresAt }`.
+   - Backend sets HttpOnly session cookie.
+   - Returns `{ accountId }` to frontend (for UX only, not auth).
+5. Frontend optionally stores `accountId` in React context for display.
+6. Session cookie automatically sent on all subsequent requests.
+
+### Wallet Linking (Step 4)
+
+7. Frontend calls `/api/v1/wallet/link` (session cookie sent automatically):
+   - Backend reads `accountId` from session.
+   - Ensures account exists (`ensureAccountExists(accountId)`).
+   - Ensures LiteLLM `apiKey` exists for account (stored server-side only).
+   - Returns `{ accountId }` to frontend (no apiKey exposed).
+
+### Chat Requests (Step 4)
+
+8. Frontend calls `/api/v1/ai/completion` with `{ messages }`:
+   - NO Authorization header (session cookie sent automatically).
+   - Backend validates session cookie → extracts `accountId`.
+   - Backend looks up `apiKey` server-side from `accountId`.
+   - Backend constructs `LlmCaller { accountId, apiKey }`.
+   - Backend calls completion feature:
+     - Calls LiteLLM via `LlmService` with `apiKey`.
      - Computes cost from token usage.
      - Debits credits via `AccountService.debitForUsage`.
+   - Returns assistant message to frontend.
+
+**Security Invariant:** API key never leaves the server. Browser authenticates with HttpOnly session cookie only.
 
 LiteLLM does upstream usage/cost tracking; our Postgres ledger tracks internal credits.
 
 ---
 
-## Frontend: Wallet + API Key Handling
+## Frontend: Wallet + Session-Based Auth
 
 ### Libraries
 
 - **RainbowKit**: wallet connect UI.
-- **wagmi**: React hooks for EVM account/chain.
+- **wagmi**: React hooks for EVM account/chain, including `signMessage` for SIWE.
 - **viem**: underlying EVM client (bundled with wagmi).
 
 ### Setup
@@ -251,49 +361,21 @@ In `src/app/layout.tsx`:
 
 - [x] RainbowKit's `<ConnectButton />` component available
 - [x] Test implementation in `src/app/wallet-test/page.tsx`
-- [ ] TODO Step 4: Add to header or home page
+- [ ] TODO Step 4: Add to header or home page with SIWE integration
 
-#### 3. Wallet Link Flow
+#### 3. SIWE Authentication Flow (Step 4A)
 
-After a successful connection (via `useAccount()`):
+After wallet connection: Call `/auth/nonce` → wallet signs message → call `/auth/verify` → session cookie set automatically (HttpOnly).
 
-[ ] Call `/api/v1/wallet/link` from the client with:
+**Security:** No localStorage, no Authorization headers. Session cookie sent automatically on all requests.
 
-```typescript
-await fetch("/api/v1/wallet/link", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ address }),
-});
-```
+#### 4. Wallet Link & Chat (Step 4)
 
-[ ] Handle response shape (MVP):
+After authentication, call `/wallet/link` → returns `{ accountId }` (no apiKey).
 
-```json
-{
-  "accountId": "key:a1b2c3...",
-  "apiKey": "LITELLM_VIRTUAL_KEY"
-}
-```
+Chat requests: Call `/ai/completion` with NO Authorization header (session cookie sent automatically).
 
-[ ] Store `apiKey` in a React context or local storage (MVP-level security; we can harden later).
-
-### Using the API Key for AI Calls
-
-[ ] When calling `/api/v1/ai/completion` from the frontend:
-
-```typescript
-await fetch("/api/v1/ai/completion", {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-    Authorization: `Bearer ${apiKey}`,
-  },
-  body: JSON.stringify({ messages }),
-});
-```
-
-No cookies or session state required for the MVP; the LiteLLM virtual key is the credential.
+**Security:** API key looked up server-side from session's `accountId`.
 
 ---
 
@@ -324,28 +406,34 @@ No cookies or session state required for the MVP; the LiteLLM virtual key is the
 
 ### `/api/v1/wallet/link` Route
 
-**Responsibilities:**
+**Responsibilities (Session-Based):**
 
-[ ] Parse `{ address }` from body.
-[ ] (Future) Verify the address via a signed message.
-[ ] Look up or create an account:
+[ ] Require valid session (middleware enforces)
+[ ] Read `accountId` from session context
+[ ] Parse `{ address }` from body (for audit/validation)
+[ ] Ensure account exists:
 
-- [ ] If this wallet is already mapped, reuse its `accountId` and `apiKey`.
-- [ ] Else: - [ ] Generate or assign a LiteLLM virtual key for this account. - [ ] Derive `accountId = deriveAccountIdFromApiKey(apiKey)`. - [ ] Call `accountService.ensureAccountExists(accountId)`.
-      [ ] Return `{ accountId, apiKey }` to the client.
+- [ ] Call `accountService.ensureAccountExists(accountId)`
+- [ ] Ensure LiteLLM `apiKey` exists for account (stored server-side only)
+      [ ] Return `{ accountId }` to the client (no apiKey exposed)
+- **accountId is treated strictly as a billing tenant; wallet addresses are linked separately and must not be encoded into accountId.**
 
 ### `/api/v1/ai/completion` Route
 
-**Responsibilities:**
+**Responsibilities (Dual Auth Mode):**
 
-[ ] Extract `Authorization: Bearer <apiKey>` header.
-[ ] If missing/malformed → 401 (do not call any services).
-[ ] Derive:
+[ ] **Primary mode: Session cookie auth**
 
-```typescript
-const accountId = deriveAccountIdFromApiKey(apiKey);
-const caller: LlmCaller = { accountId, apiKey };
-```
+- [ ] Check for valid session cookie
+- [ ] If present: read `accountId` from session, look up `apiKey` server-side
+- [ ] Construct `LlmCaller { accountId, apiKey }`
+
+[ ] **Fallback mode: API key header** (for programmatic clients)
+
+- [ ] If no session: extract `Authorization: Bearer <apiKey>` header
+- [ ] If present: derive `accountId` from `apiKey`, construct `LlmCaller`
+
+[ ] If neither mode present → 401
 
 [ ] Call into the feature service:
 
@@ -388,8 +476,9 @@ The accounts & credits system (see [Accounts & Credits System Design](ACCOUNTS_D
 Frontend never directly manipulates balances; it only:
 
 1. Connects wallet.
-2. Obtains `apiKey` + `accountId`.
-3. Calls AI endpoints with the Authorization header.
+2. Authenticates via SIWE (obtains session cookie).
+3. Calls AI endpoints (session cookie sent automatically).
+4. Optionally displays `accountId` for UX (not used for auth).
 
 ---
 
@@ -397,14 +486,20 @@ Frontend never directly manipulates balances; it only:
 
 ### Frontend
 
-[ ] RainbowKit + wagmi handle wallets
-[ ] Call `wallet/link` once to get LiteLLM virtual key
-[ ] Use returned key for all AI requests via Authorization header
+[ ] RainbowKit + wagmi handle wallet connections
+[ ] Implement SIWE authentication flow (nonce → sign → verify → session)
+[ ] Session cookie automatically sent on all requests (HttpOnly, Secure)
+[ ] NO Authorization headers for session-based clients
+[ ] NO localStorage for API keys
 
 ### Backend
 
-[ ] Next.js app routes construct `LlmCaller` from Authorization header
-[ ] Ensure accounts exist at auth boundary
+[ ] SIWE endpoints for wallet authentication (`/auth/nonce`, `/auth/verify`)
+[ ] Session storage (Postgres table with accountId, walletAddress, expiresAt)
+[ ] Session middleware for protected routes
+[ ] Next.js app routes construct `LlmCaller` from session or API key header
+[ ] Dual auth mode: session cookies (primary) + API key headers (programmatic clients)
+[ ] API keys stored and looked up server-side only
 [ ] Delegate to:
 
 - [ ] `LlmService` (LiteLLM adapter) for model calls
@@ -412,4 +507,4 @@ Frontend never directly manipulates balances; it only:
 
 ### Architecture
 
-The hexagonal architecture remains intact; wallets and LiteLLM keys are just different adapters feeding into the same `LlmCaller` + Accounts & Credits system.
+The hexagonal architecture remains intact; SIWE authentication and sessions are new adapters in the auth layer. The core `LlmCaller` + Accounts & Credits system is unchanged. API keys become server-only secrets looked up from `accountId`.

@@ -20,6 +20,12 @@ import type {
 import { serverEnv } from "@/shared/env";
 import { deriveAccountIdFromApiKey } from "@/shared/util";
 
+// NOTE: accountId here is a billing-tenant identifier, not a wallet ID.
+// Do NOT derive accountId from wallet addresses or enforce one-wallet-per-account.
+// In the future we will introduce an account_wallet_links table so a single account
+// can be associated with multiple wallets and OAuth identities.
+// For now, /wallet/link just chooses an account and returns { accountId } without
+// encoding wallet identity into the accountId.
 export async function linkWallet(
   input: WalletLinkInput
 ): Promise<WalletLinkOutput> {
