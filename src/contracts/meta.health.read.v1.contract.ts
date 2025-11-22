@@ -8,7 +8,7 @@
  * Invariants: Stable API contract; status enum remains consistent.
  * Side-effects: none
  * Notes: Used by monitoring systems and deployment health checks.
- * Links: /api/v1/meta/health endpoint
+ * Links: /health endpoint
  * @internal
  */
 

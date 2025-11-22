@@ -25,7 +25,7 @@ import {
 } from "@/ports";
 import { billingAccounts, creditLedger, virtualKeys } from "@/shared/db";
 
-const ZERO = "0" as const;
+const ZERO = 0;
 
 interface QueryableDb extends Pick<Database, "query" | "insert"> {
   query: Database["query"];
@@ -291,8 +291,8 @@ export class DrizzleAccountService implements AccountService {
     return typeof value === "number" ? value : Number(value);
   }
 
-  private fromNumber(num: number): string {
-    return String(num);
+  private fromNumber(num: number): number {
+    return num;
   }
 
   private generateVirtualKey(billingAccountId: string): string {

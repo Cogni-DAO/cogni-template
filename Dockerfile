@@ -65,6 +65,6 @@ RUN pnpm --version
 EXPOSE 3000
 
 HEALTHCHECK --interval=10s --timeout=2s --start-period=15s --retries=3 \
-  CMD curl -fsS http://0.0.0.0:3000/api/v1/meta/health || exit 1
+CMD curl -fsS http://0.0.0.0:3000/health || exit 1
 
 CMD ["node", "server.js"]

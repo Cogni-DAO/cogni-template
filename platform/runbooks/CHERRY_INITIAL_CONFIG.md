@@ -113,7 +113,7 @@ tofu apply
 Test endpoints:
 
 ```bash
-curl -I https://your-domain.com/api/v1/meta/health
+curl -I https://your-domain.com/health
 # Expected: HTTP/2 200
 
 docker ps
@@ -144,7 +144,7 @@ docker ps
 
 - Check app container status: `docker ps`
 - Verify internal network: `docker network ls`
-- Test direct app connection: `curl http://VM_IP:3000/api/v1/meta/health`
+- Test direct app connection: `curl http://VM_IP:3000/health`
 
 ## Outputs
 

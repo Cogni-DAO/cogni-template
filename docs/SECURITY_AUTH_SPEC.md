@@ -329,9 +329,9 @@ React components use Auth.js hooks:
 
 **Route Moves (Infrastructure/Meta Endpoints):**
 
-- [ ] Move `src/app/api/v1/meta/health/route.ts` → `src/app/health/route.ts`
-- [ ] Move `src/app/api/v1/meta/openapi/route.ts` → `src/app/openapi.json/route.ts`
-- [ ] Move `src/app/api/v1/meta/route-manifest/route.ts` → `src/app/meta/route-manifest/route.ts`
+- [x] Move `src/app/api/v1/meta/health/route.ts` → `src/app/health/route.ts`
+- [x] Move `src/app/api/v1/meta/openapi/route.ts` → `src/app/openapi.json/route.ts`
+- [x] Move `src/app/api/v1/meta/route-manifest/route.ts` → `src/app/meta/route-manifest/route.ts`
 - [ ] Update any tests/docs referencing old paths
 
 **Database Reset:**
@@ -412,7 +412,7 @@ React components use Auth.js hooks:
 ### Phase 4: Route Protection
 
 - [ ] Implement session auth on `/api/v1/ai/*` routes per "API Auth Policy (MVP)" section
-- [ ] Ensure public routes remain accessible: `/api/auth/*`, `/health`, `/openapi.json`, `/meta/route-manifest`
+- [x] Ensure public routes remain accessible: `/api/auth/*`, `/health`, `/openapi.json`, `/meta/route-manifest`
 - [ ] Test: unauthorized requests to `/api/v1/ai/*` return 401
 - [ ] Test: expired sessions are rejected
 - [ ] Test: public infrastructure routes remain accessible without auth

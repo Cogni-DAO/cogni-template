@@ -8,7 +8,7 @@
  * Invariants: Version remains stable; route paths match actual app structure.
  * Side-effects: none
  * Notes: Central source of truth for route discovery contracts.
- * Links: /api/v1/meta/route-manifest endpoint, e2e a11y testing
+ * Links: /meta/route-manifest endpoint, e2e a11y testing
  * @internal
  */
 

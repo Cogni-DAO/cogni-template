@@ -272,7 +272,7 @@ check_url() {
   return 1
 }
 
-check_url "https://$DOMAIN/api/v1/meta/health" "App"
+check_url "https://$DOMAIN/health" "App"
 
 # Store deployment metadata
 log_info "Recording deployment metadata..."
@@ -294,7 +294,7 @@ log_info ""
 log_info "🌐 Application URLs:"
 log_info "  - Main App: https://$DOMAIN"
 log_info "  - AI API: https://ai.$DOMAIN" 
-log_info "  - Health Check: https://$DOMAIN/api/v1/meta/health"
+log_info "  - Health Check: https://$DOMAIN/health"
 log_info ""
 log_info "📁 Deployment artifacts in $ARTIFACT_DIR:"
 log_info "  - deployment.json: Deployment metadata"

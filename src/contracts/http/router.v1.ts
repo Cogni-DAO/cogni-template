@@ -22,7 +22,7 @@ const c = initContract();
 export const ApiContractV1 = c.router({
   metaRouteManifest: {
     method: "GET",
-    path: "/api/v1/meta/route-manifest",
+    path: "/meta/route-manifest",
     summary: "Route manifest for UI + e2e",
     description: "Lists public routes and tags for a11y and agents.",
     responses: {
@@ -31,7 +31,7 @@ export const ApiContractV1 = c.router({
   },
   metaHealth: {
     method: "GET",
-    path: "/api/v1/meta/health",
+    path: "/health",
     summary: "Health check for liveness and readiness",
     description:
       "Returns service health status for monitoring and deployment checks.",

@@ -2,14 +2,14 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@app/api/v1/meta/route-manifest`
+ * Module: `@app/meta/route-manifest`
  * Purpose: HTTP endpoint exposing site route manifest for e2e testing.
  * Scope: Returns JSON route manifest. Does not include sensitive/auth routes.
  * Invariants: Static response; validates against contract schema.
  * Side-effects: IO (HTTP response)
- * Notes: Hex architecture adapter using contract validation; v1 API versioning.
- * Links: \@contracts/meta.route-manifest.read.v1.contract, \@features/site-meta/routeManifest
- * @internal
+ * Notes: Hex architecture adapter using contract validation; unversioned infra endpoint.
+ * Links: `@contracts/meta.route-manifest.read.v1.contract`, `@features/site-meta/routeManifest`
+ * @public
  */
 
 import { NextResponse } from "next/server";

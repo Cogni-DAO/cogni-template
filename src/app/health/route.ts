@@ -2,14 +2,14 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@app/api/v1/meta/health`
+ * Module: `@app/health`
  * Purpose: HTTP endpoint providing health check status for liveness and readiness probes.
  * Scope: Returns service health status. Does not include detailed system diagnostics.
  * Invariants: Always returns valid health schema; status reflects actual service state.
  * Side-effects: IO (HTTP response)
  * Notes: Basic stub implementation; can be extended with database/service checks.
- * Links: \@contracts/meta.health.read.v1.contract, monitoring systems
- * @internal
+ * Links: `@contracts/meta.health.read.v1.contract`, monitoring systems
+ * @public
  */
 
 import { NextResponse } from "next/server";
@@ -46,9 +46,6 @@ export function GET(): NextResponse {
       );
     }
 
-    /*
-     * Fallback for unexpected errors
-     */
     return new NextResponse(
       JSON.stringify({
         status: "error",

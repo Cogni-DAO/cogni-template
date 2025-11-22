@@ -2,14 +2,14 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@app/api/v1/meta/openapi`
+ * Module: `@app/openapi.json`
  * Purpose: HTTP endpoint serving OpenAPI v3 specification for API documentation.
  * Scope: Returns JSON OpenAPI document. Does not include sensitive/internal operations.
  * Invariants: Static response; matches ts-rest router exactly.
  * Side-effects: IO (HTTP response)
  * Notes: Generated from ts-rest contracts; used by API documentation tools.
- * Links: \@contracts/http/openapi.v1, ts-rest router
- * @internal
+ * Links: `@contracts/http/openapi.v1`, ts-rest router
+ * @public
  */
 
 import { NextResponse } from "next/server";

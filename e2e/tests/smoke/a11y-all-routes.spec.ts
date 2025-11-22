@@ -22,7 +22,7 @@ interface RouteEntry {
 
 test("[smoke] all a11y-smoke routes pass axe core checks", async ({ page }) => {
   // Fetch manifest over HTTP (black-box)
-  const response = await page.goto("/api/v1/meta/route-manifest");
+  const response = await page.goto("/meta/route-manifest");
   expect(response?.ok()).toBeTruthy();
 
   const body = await response?.text();
