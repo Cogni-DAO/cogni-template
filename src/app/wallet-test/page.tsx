@@ -21,9 +21,10 @@ import { getCsrfToken, signIn, signOut, useSession } from "next-auth/react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { SiweMessage } from "siwe";
 import { useAccount, useSignMessage } from "wagmi";
+import { sepolia } from "wagmi/chains";
 
 export default function WalletTestPage(): ReactNode {
-  const { address, isConnected, chain } = useAccount();
+  const { address, isConnected } = useAccount();
   const { signMessageAsync } = useSignMessage();
   const { data: session, status } = useSession();
   const [error, setError] = useState<string | null>(null);
@@ -82,7 +83,7 @@ export default function WalletTestPage(): ReactNode {
         statement: "Sign in with Ethereum to the app.",
         uri: window.location.origin,
         version: "1",
-        chainId: chain?.id ?? 1,
+        chainId: sepolia.id,
         nonce: csrfToken,
       });
 
@@ -107,7 +108,7 @@ export default function WalletTestPage(): ReactNode {
     } finally {
       setIsSigningIn(false);
     }
-  }, [address, isConnected, chain, signMessageAsync]);
+  }, [address, isConnected, signMessageAsync]);
 
   // Auto-trigger SIWE login when wallet connects (no manual button needed)
   useEffect(() => {
