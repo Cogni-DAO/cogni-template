@@ -3,11 +3,11 @@
 
 /**
  * Module: `@tests/stack/auth/auth-flow.stack`
- * Purpose: Verify Auth.js integration with billing and AI services.
- * Scope: Integration test importing route handler directly to mock auth() while using real DB and services. Does not test SIWE signature verification (mocked).
- * Invariants: Valid session triggers billing account creation and LLM call.
+ * Purpose: Verify Auth.js JWT session integration with billing and AI services.
+ * Scope: Integration test that mocks getSessionUser to verify session-gated routes. Uses real DB and services. Does not test SIWE signature verification.
+ * Invariants: Valid session triggers billing account creation and LLM call; missing session returns 401.
  * Side-effects: IO (database writes via container)
- * Notes: Mocks @/auth to simulate session; verifies structural correctness of the stack.
+ * Notes: Mocks @/app/_lib/auth/session to simulate JWT session state; verifies session enforcement and billing integration.
  * Links: docs/SECURITY_AUTH_SPEC.md
  * @public
  */
@@ -94,5 +94,27 @@ describe("Auth Flow Stack Test", () => {
       });
       expect(virtualKey).toBeDefined();
     }
+  });
+
+  it("should return 401 when no session is present", async () => {
+    // Arrange
+    vi.mocked(getSessionUser).mockResolvedValue(null);
+
+    const body = {
+      messages: [{ role: "user", content: "Hello AI" }],
+    };
+
+    const req = new NextRequest("http://localhost:3000/api/v1/ai/completion", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+
+    // Act
+    const response = await POST(req);
+
+    // Assert
+    expect(response.status).toBe(401);
+    const json = await response.json();
+    expect(json).toEqual({ error: "Session required" });
   });
 });

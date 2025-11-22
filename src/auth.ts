@@ -3,46 +3,24 @@
 
 /**
  * Module: `@/auth`
- * Purpose: Auth.js configuration using SIWE (Credentials provider) with Drizzle adapter.
- * Scope: Defines auth handlers, session strategy, and SIWE verification. Used by API routes and middleware. Does not handle client-side session management.
- * Invariants: Database-backed sessions; wallet address never leaves the server except via session payload.
- * Side-effects: IO (Auth.js DB operations via Drizzle)
+ * Purpose: Auth.js configuration using SIWE (Credentials provider) with JWT sessions.
+ * Scope: Defines auth handlers, JWT strategy, and SIWE verification. Users table tracks wallet addresses; no database sessions. Does not handle client-side session management or route protection.
+ * Invariants: JWT-backed sessions; wallet address in JWT token; manual user record management.
+ * Side-effects: IO (User table writes only, no session table)
  * Links: docs/SECURITY_AUTH_SPEC.md
  * @public
  */
 
 /* eslint-disable boundaries/no-unknown-files */
 
-import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { eq } from "drizzle-orm";
+import { cookies } from "next/headers";
 import NextAuth, { type User as NextAuthUser } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { SiweMessage } from "siwe";
 
 import { getDb } from "@/adapters/server/db/client";
-import {
-  accounts,
-  sessions,
-  users,
-  verificationTokens,
-} from "@/shared/db/schema.auth";
-
-/**
- * Get auth domain from environment.
- * NOTE: src/auth.ts is a boundary module and intentionally reads process.env
- * directly to avoid importing env/server.ts, keeping Next.js build imports lightweight.
- */
-function getAuthDomain(): string {
-  const domain = process.env.DOMAIN;
-  if (domain) return domain;
-  try {
-    const baseUrl = process.env.APP_BASE_URL ?? "http://localhost:3000";
-    const url = new URL(baseUrl);
-    return url.hostname;
-  } catch {
-    return "localhost";
-  }
-}
+import { users } from "@/shared/db/schema.auth";
 
 type DbUser = typeof users.$inferSelect;
 
@@ -65,15 +43,16 @@ function toNextAuthUser(
  * Direct export pattern per Auth.js v5 examples - no lazy initialization.
  * Build-time: Docker builder provides DATABASE_URL so getDb() can validate during build.
  * Runtime: Actual DB connections only happen when auth handlers are invoked.
+ *
+ * Note: No adapter with JWT strategy. Credentials provider manually manages users table.
+ * Database sessions table is not used; JWT tokens stored in HttpOnly cookies instead.
  */
 export const { auth, signIn, signOut, handlers } = NextAuth({
-  adapter: DrizzleAdapter(getDb(), {
-    usersTable: users,
-    accountsTable: accounts,
-    sessionsTable: sessions,
-    verificationTokensTable: verificationTokens,
-  }),
-  session: { strategy: "database" },
+  session: {
+    strategy: "jwt",
+    // 30 days
+    maxAge: 30 * 24 * 60 * 60,
+  },
   // Rely on AUTH_SECRET or NEXTAUTH_SECRET in process.env
   providers: [
     Credentials({
@@ -84,29 +63,77 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
         signature: { label: "Signature", type: "text" },
       },
       async authorize(credentials, req) {
-        if (!credentials?.message || !credentials?.signature) return null;
+        console.log("[SIWE] authorize() called with:", {
+          hasMessage: !!credentials?.message,
+          hasSignature: !!credentials?.signature,
+          messagePreview:
+            typeof credentials?.message === "string"
+              ? credentials.message.substring(0, 100)
+              : "N/A",
+        });
 
-        const siweMessage = new SiweMessage(credentials.message as string);
-        const domain = getAuthDomain();
-
-        // Enforce nonce match against Auth.js CSRF token cookie to mitigate replay
-        const csrfTokenFromCookie =
-          req?.headers
-            ?.get("cookie")
-            ?.match(/next-auth\.csrf-token=([^;]+);?/)?.[1]
-            ?.split("|")?.[0] ?? undefined;
-
-        if (!csrfTokenFromCookie || siweMessage.nonce !== csrfTokenFromCookie) {
+        if (!credentials?.message || !credentials?.signature) {
+          console.error("[SIWE] Missing credentials");
           return null;
         }
 
+        // Get domain from incoming request (single source of truth)
+        const host = req?.headers?.get("host");
+        if (!host) {
+          console.error("[SIWE] No host header in request");
+          return null;
+        }
+
+        const siweMessage = new SiweMessage(credentials.message as string);
+
+        console.log("[SIWE] Parsed message:", {
+          signedDomain: siweMessage.domain,
+          requestHost: host,
+          address: siweMessage.address,
+          nonce: siweMessage.nonce,
+        });
+
+        // CRITICAL: Enforce domain match (prevent domain spoofing)
+        if (siweMessage.domain !== host) {
+          console.error(
+            "[SIWE] Domain mismatch - signed domain must match request host",
+            {
+              signed: siweMessage.domain,
+              requestHost: host,
+            }
+          );
+          return null;
+        }
+
+        // Enforce nonce match against Auth.js CSRF token cookie to mitigate replay
+        const cookieStore = await cookies();
+        const csrfCookie = cookieStore.get("next-auth.csrf-token");
+        const csrfTokenFromCookie =
+          csrfCookie?.value?.split("|")?.[0] ?? undefined;
+
+        console.log("[SIWE] CSRF/Nonce check:", {
+          csrfFromCookie: csrfTokenFromCookie,
+          nonceFromMessage: siweMessage.nonce,
+          match: csrfTokenFromCookie === siweMessage.nonce,
+        });
+
+        if (!csrfTokenFromCookie || siweMessage.nonce !== csrfTokenFromCookie) {
+          console.error("[SIWE] Nonce mismatch");
+          return null;
+        }
+
+        console.log("[SIWE] Attempting signature verification...");
+        // Use request host for verification, not env-derived domain
         const verification = await siweMessage.verify({
           signature: credentials.signature as string,
-          domain,
+          domain: host,
           nonce: csrfTokenFromCookie,
         });
 
+        console.log("[SIWE] Verification result:", verification);
+
         if (!verification.success) {
+          console.error("[SIWE] Signature verification failed");
           return null;
         }
 
@@ -138,24 +165,27 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
     }),
   ],
   callbacks: {
-    session({ session, user }) {
-      if (session.user) {
-        session.user.id = user.id;
-        session.user.walletAddress = user.walletAddress ?? null;
-      }
-      return session;
-    },
-    jwt({ token, user }) {
+    async jwt({ token, user }) {
       if (user) {
-        if (user.id) {
-          token.sub = user.id;
+        // SIWE invariant: wallet address must exist
+        if (!user.walletAddress) {
+          throw new Error("SIWE authentication must provide wallet address");
         }
-        const wallet = user.walletAddress ?? null;
-        if (wallet) {
-          token.walletAddress = wallet;
-        }
+        token.id = user.id;
+        token.walletAddress = user.walletAddress;
       }
       return token;
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        const userId = typeof token.id === "string" ? token.id : "";
+        const walletAddr =
+          typeof token.walletAddress === "string" ? token.walletAddress : null;
+
+        session.user.id = userId;
+        session.user.walletAddress = walletAddr;
+      }
+      return session;
     },
   },
   trustHost: process.env.NODE_ENV === "development",

@@ -116,7 +116,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] CONTRIBUTING.md # contribution standards
 [x] README.md # overview
 [ ] CHANGELOG.md # releases
-[ ] middleware.ts # headers, session/API-key guard, basic rate-limit
+[x] src/middleware.ts # Auth middleware for /api/v1/ai/\* routes (Note: Next.js 16 deprecates in favor of proxy.ts, migrate post-MVP)
 [x] vitest.config.mts # unit/integration
 [x] vitest.api.config.mts # API integration tests
 [x] playwright.config.ts # UI/e2e
@@ -198,15 +198,9 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [ ] │ ├── (public)/
 [ ] │ ├── (protected)/
 [x] │ └── api/
-[x] │ ├── v1/meta/ # health, route-manifest, openapi
-[x] │ ├── v1/ai/completion/ # AI completion endpoint
-[ ] │ ├── v1/wallet/link/ # POST - wallet-to-account linking (removed in session-only design)
-[x] │ └── admin/ # admin control plane endpoints
-[x] │ ├── accounts/
-[x] │ │ ├── register-litellm-key/ # POST - create account for API key
-[x] │ │ └── [accountId]/
-[x] │ │ └── credits/
-[x] │ │ └── topup/ # POST - manual credit funding
+[x] │ ├── auth/[...nextauth]/ # Auth.js routes (signin, session, signout, csrf)
+[x] │ ├── v1/ai/completion/ # AI completion endpoint (session-protected)
+[x] │ └── admin/ # admin control plane endpoints (removed wallet/link in auth refactor)
 [ ] │ ├── balance/route.ts # exposes credits
 [ ] │ ├── keys/create/route.ts # API-key issuance
 [ ] │ └── web3/verify/route.ts # calls wallet verification port
