@@ -209,21 +209,21 @@ Session → user.id → billing_account → default virtual_key → LiteLLM API 
 
 ### Phase 0: Database Reset
 
-- [ ] Drop existing tables, delete migrations
+- [x] Drop existing tables, delete migrations
 - [x] Update schema: `billing_accounts` + `virtual_keys` + `credit_ledger`
-- [ ] Generate fresh migrations
-- [ ] Let Auth.js adapter create identity tables
+- [x] Generate fresh migrations
+- [x] Let Auth.js adapter create identity tables
 
 ### Phase 1-2: Auth.js Setup
 
-- [ ] Install next-auth@beta, @auth/drizzle-adapter, siwe
-- [ ] Create `src/auth.ts` with Credentials provider + SIWE verification
+- [x] Install next-auth@beta, @auth/drizzle-adapter, siwe
+- [x] Create `src/auth.ts` with Credentials provider + SIWE verification
 - [ ] Wire RainbowKit to Auth.js signIn()
 
 ### Phase 3: Billing Integration
 
-- [ ] Implement `src/lib/auth/mapping.ts` (getOrCreateBillingAccountForUser)
-- [ ] Provision default virtual key on first login (call LiteLLM `/key/generate` with `LITELLM_MASTER_KEY`; may attach `metadata.cogni_billing_account_id`)
+- [x] Implement `src/lib/auth/mapping.ts` (getOrCreateBillingAccountForUser)
+- [x] Provision default virtual key on first login (call LiteLLM `/key/generate` with `LITELLM_MASTER_KEY`; may attach `metadata.cogni_billing_account_id`)
 - [x] Update completion route to use session auth + virtual_keys lookup
 - [x] Remove `/api/v1/wallet/link` endpoint
 

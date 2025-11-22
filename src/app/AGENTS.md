@@ -43,7 +43,7 @@ Next.js App Router delivery layer. UI pages and API routes that expose features 
 - **Routes (if any):**
   - App pages: `/` (homepage)
   - Meta: `/health`, `/openapi.json`, `/meta/route-manifest`
-  - API: `/api/v1/ai/completion`, `/api/admin/accounts/register-litellm-key`, `/api/admin/accounts/[accountId]/credits/topup`
+  - API: `/api/auth/*`, `/api/v1/ai/completion`
 - **CLI (if any):** none
 - **Env/Config keys:** none
 - **Files considered API:** layout.tsx, page.tsx, api/\*\*/route.ts, health/route.ts, openapi.json/route.ts, meta/\*\*/route.ts
