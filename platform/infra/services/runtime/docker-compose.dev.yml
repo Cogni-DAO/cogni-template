@@ -27,7 +27,7 @@ services:
       - LITELLM_BASE_URL=http://litellm:4000
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - SESSION_SECRET=${SESSION_SECRET}
+      - AUTH_SECRET=${AUTH_SECRET}
       - PORT=${PORT:-3000}
       - PINO_LOG_LEVEL=${PINO_LOG_LEVEL:-info}
     depends_on:

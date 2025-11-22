@@ -107,7 +107,7 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
 
         // Enforce nonce match against Auth.js CSRF token cookie to mitigate replay
         const cookieStore = await cookies();
-        const csrfCookie = cookieStore.get("next-auth.csrf-token");
+        const csrfCookie = cookieStore.get("authjs.csrf-token");
         const csrfTokenFromCookie =
           csrfCookie?.value?.split("|")?.[0] ?? undefined;
 

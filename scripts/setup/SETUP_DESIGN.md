@@ -110,7 +110,7 @@ pnpm setup github --env production
      - `DATABASE_URL` (postgresql://APP_DB_USER:APP_DB_PASSWORD@postgres:5432/APP_DB_NAME)
    - **Service secrets:** Fresh generation per environment
      - `LITELLM_MASTER_KEY` (new random sk-xxx key)
-     - `SESSION_SECRET` (generated random string)
+     - `AUTH_SECRET` (generated random string)
      - `OPENROUTER_API_KEY` (prompt if not in local env)
    - **Deployment secrets:** From previous steps
      - `SSH_DEPLOY_KEY` (from `~/.ssh/cogni_template_<env>_deploy`)

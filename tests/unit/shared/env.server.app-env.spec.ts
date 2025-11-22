@@ -20,7 +20,7 @@ describe("serverEnv APP_ENV validation", () => {
   beforeEach(() => {
     vi.resetModules(); // ensure we re-evaluate the module each test
     process.env = { ...ORIGINAL_ENV }; // fresh copy
-    delete process.env.SESSION_SECRET;
+    delete process.env.AUTH_SECRET;
   });
 
   afterEach(() => {
@@ -35,7 +35,7 @@ describe("serverEnv APP_ENV validation", () => {
       POSTGRES_PASSWORD: "postgres",
       POSTGRES_DB: "test_db",
       LITELLM_MASTER_KEY: "test-key",
-      SESSION_SECRET: "x".repeat(32),
+      AUTH_SECRET: "x".repeat(32),
     });
 
     const { serverEnv } = await import("@/shared/env/server");
@@ -51,7 +51,7 @@ describe("serverEnv APP_ENV validation", () => {
       POSTGRES_PASSWORD: "postgres",
       POSTGRES_DB: "test_db",
       LITELLM_MASTER_KEY: "test-key",
-      SESSION_SECRET: "x".repeat(32),
+      AUTH_SECRET: "x".repeat(32),
     });
 
     const { serverEnv } = await import("@/shared/env/server");

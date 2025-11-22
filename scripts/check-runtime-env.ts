@@ -23,8 +23,8 @@ async function main(): Promise<void> {
 
     // Enforce secrets that are optional in build schema but required in runtime
     const missingSecrets: string[] = [];
-    if (!env.SESSION_SECRET || env.SESSION_SECRET.length < 32) {
-      missingSecrets.push("SESSION_SECRET (must be >= 32 chars)");
+    if (!env.AUTH_SECRET || env.AUTH_SECRET.length < 32) {
+      missingSecrets.push("AUTH_SECRET (must be >= 32 chars)");
     }
     if (!env.LITELLM_MASTER_KEY) {
       missingSecrets.push("LITELLM_MASTER_KEY");

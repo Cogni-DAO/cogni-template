@@ -81,7 +81,7 @@ Optional:
 
 - LITELLM_MVP_API_KEY (MVP wallet link single key - TODO: remove when proper wallet→key registry exists)
 - OPENROUTER_API_KEY (for LiteLLM providers)
-- SESSION_SECRET (≥32 chars) - TODO: when session management added
+- AUTH_SECRET (≥32 chars) - TODO: when session management added
 
 **Public client (client.ts)**
 
@@ -142,5 +142,5 @@ Bump Last reviewed date. Ensure pnpm lint && pnpm typecheck pass.
 ## Notes
 
 - Lazy serverEnv() function prevents build-time database access
-- SESSION_SECRET rotation can be added later via SESSION_SECRETS CSV when session management is implemented
+- AUTH_SECRET rotation can be added later via AUTH_SECRETS CSV when session management is implemented
 - LITELLM_BASE_URL automatically detects deployment context (local dev vs Docker network)

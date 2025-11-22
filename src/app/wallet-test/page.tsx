@@ -88,6 +88,7 @@ export default function WalletTestPage(): ReactNode {
 
       const preparedMessage = message.prepareMessage();
       const signature = await signMessageAsync({
+        account: address,
         message: preparedMessage,
       });
 
