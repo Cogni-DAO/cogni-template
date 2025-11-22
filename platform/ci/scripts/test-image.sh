@@ -73,15 +73,15 @@ done
 # Test health endpoint directly
 log_info "Testing health endpoint..."
 for i in {1..10}; do
-    if curl -fsS http://localhost:3000/api/v1/meta/health >/dev/null 2>&1; then
+    if curl -fsS http://localhost:3000/health >/dev/null 2>&1; then
         log_info "✅ Health endpoint responding correctly"
-        RESPONSE=$(curl -s http://localhost:3000/api/v1/meta/health)
+        RESPONSE=$(curl -s http://localhost:3000/health)
         log_info "Response: $RESPONSE"
         break
     elif [[ $i -eq 10 ]]; then
         log_error "Health endpoint test failed (30s timeout)"
         log_error "Attempting to fetch response for debugging:"
-        curl -v http://localhost:3000/api/v1/meta/health 2>&1 || true
+        curl -v http://localhost:3000/health 2>&1 || true
         log_error ""
         log_error "Container logs:"
         docker logs test-container
