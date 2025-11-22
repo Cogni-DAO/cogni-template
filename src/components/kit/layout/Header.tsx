@@ -4,10 +4,10 @@
 /**
  * Module: `@components/kit/layout/Header`
  * Purpose: Site header component using existing kit components for navigation and theme switching.
- * Scope: Provides header layout with branding and controls. Does not handle routing logic or user authentication.
+ * Scope: Provides header layout with branding, navigation, and wallet authentication. Does not handle routing logic or page-level state management.
  * Invariants: Uses existing Container and CVA factories; blocks className prop; responsive design.
- * Side-effects: none
- * Notes: Composes existing Container, ModeToggle components; uses CVA styling only; based on saas-starter patterns.
+ * Side-effects: IO (wallet authentication via WalletConnectButton)
+ * Notes: Composes existing Container, ModeToggle, WalletConnectButton components; uses CVA styling only.
  * Links: docs/UI_IMPLEMENTATION_GUIDE.md, Container.tsx, ModeToggle.tsx
  * @public
  */
@@ -21,6 +21,7 @@ import {
   GithubButton,
   ModeToggle,
   NavigationLink,
+  WalletConnectButton,
 } from "@/components";
 import { brandText, header, row } from "@/styles/ui";
 
@@ -63,6 +64,8 @@ export function Header(): ReactElement {
               autoAnimate={true}
               animationDuration={10}
             />
+
+            <WalletConnectButton />
 
             <ModeToggle />
           </div>
