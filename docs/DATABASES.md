@@ -4,6 +4,27 @@ This document describes database organization, migration strategies, and databas
 
 **For stack deployment modes and environment details, see [ENVIRONMENTS.md](ENVIRONMENTS.md).**
 
+## Quick Start: Primary Development Workflow
+
+**If you only need to know ONE thing:**
+
+```bash
+# Daily development (fake adapters, no external API calls)
+pnpm dev:stack:test           # Start app + infrastructure in test mode
+pnpm dev:stack:test:setup     # First time: create test DB + migrate
+pnpm test:stack:dev           # Run stack tests
+```
+
+**For real AI calls (production adapters):**
+
+```bash
+pnpm dev:stack                # Same as above, but hits real LiteLLM/OpenRouter
+```
+
+**Docker stacks:** Used primarily in CI, not required for daily development. See sections 2.3-2.5 for details.
+
+---
+
 ## Database Separation
 
 **Database Security Model**: Two-user PostgreSQL architecture separating administrative and application access.
@@ -108,17 +129,66 @@ pnpm dev:stack     # Start app using same database
 **Commands:**
 
 ```bash
-pnpm test:stack:setup    # Create database + run migrations
-pnpm test:stack:dev      # Run vitest stack tests against host app
+pnpm dev:stack:test:setup    # Create database + run migrations
+pnpm test:stack:dev          # Run vitest stack tests against host app
+pnpm dev:stack:test:reset    # Nuclear reset (drop + recreate + migrate)
 ```
 
 **Details:**
 
-- `test:stack:setup` creates `cogni_template_stack_test` and runs migrations using test environment
+- `dev:stack:test:setup` creates `cogni_template_stack_test` and runs migrations using test environment
 - `test:stack:dev` uses `vitest.stack.config.mts` (loads `.env.local` then `.env.test`)
 - `reset-db.ts` truncates tables in the **host** stack DB between tests
 
-### 2.3 Docker Stack Testing
+### 2.3 Docker Dev Stack
+
+**Database:** `cogni_template_dev` (container Postgres)
+
+**Environment:** `.env.local` passed to Docker Compose
+
+**Commands:**
+
+```bash
+# First time setup (creates DB + runs migrations)
+pnpm docker:dev:stack:setup     # Complete: build stack, create DB, migrate
+
+# Manual steps (if needed)
+pnpm docker:dev:stack           # Start containers
+pnpm docker:dev:db:create       # Create database
+pnpm docker:dev:stack:migrate   # Run migrations in container
+```
+
+**Key Properties:**
+
+- Dev stack owns schema and migrations in shared `postgres_data` volume
+- Uses `docker-compose.dev.yml` with real adapters
+- Postgres exposed on `localhost:55432` for debugging
+
+### 2.4 Docker Stack (Production Simulation)
+
+**Database:** `cogni_template_dev` (reuses dev stack's database)
+
+**Environment:** `.env.local` passed to Docker Compose
+
+**Commands:**
+
+```bash
+pnpm docker:stack:setup         # Start production compose (assumes DB exists)
+```
+
+**Key Properties:**
+
+- Uses hardened `docker-compose.yml` production configuration
+- Shares same `postgres_data` volume as dev stack
+- **Assumes database already created and migrated** via `docker:dev:stack:setup`
+- `docker:stack:migrate` available but not used in local workflow
+
+**Local Workflow:**
+
+1. **After nuking volumes:** Run `pnpm docker:dev:stack:setup` once to create schema
+2. **To simulate prod:** Run `pnpm docker:stack:setup` (reuses existing DB/schema from shared volume)
+
+### 2.5 Docker Stack Testing
 
 **Database:** `cogni_template_stack_test` (container Postgres)
 

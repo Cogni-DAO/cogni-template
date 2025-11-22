@@ -118,7 +118,7 @@ pnpm dev:stack    # Start infra containers + Next.js dev server
 
 ```bash
 pnpm dev:stack:test           # Start test app server
-pnpm test:stack:setup         # Create test database + migrations
+pnpm dev:stack:test:setup     # Create test database + migrations
 pnpm test:stack:dev           # Run stack tests against host app
 ```
 

@@ -50,19 +50,26 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 ## Usage
 
 ```bash
-pnpm dev                # start dev server
-pnpm dev:stack          # start dev server + infrastructure (main dev workflow)
-pnpm dev:stack:test     # start dev server + infrastructure for testing
-pnpm docker:stack       # start full production simulation locally (https://localhost - browser will warn about cert)
-pnpm docker:stack:test  # start full stack for testing with Docker
-pnpm build              # build for production
-pnpm check              # lint + type + format validation
-pnpm test               # run unit/integration tests (no server required)
-pnpm test:ci            # run tests with test coverage statistics
-pnpm test:int           # Integration tests (testcontainers, no server)
-pnpm test:stack:dev     # Full Stack tests (requires dev:stack:test running)
-pnpm test:stack:docker  # Full Stack tests (requires docker:stack:test running)
-pnpm format             # prettier format fixes
-pnpm check:docs         # lint AGENTS.md documentation
-pnpm e2e                # Black box end-to-end tests (run on pnpm docker:stack)
+pnpm dev                      # start dev server
+pnpm dev:stack                # start dev server + infrastructure (main dev workflow)
+pnpm dev:stack:test           # start dev server + infrastructure for testing
+pnpm dev:stack:test:setup     # first time: create test DB + run migrations
+pnpm docker:dev:stack         # start all services containerized (with build)
+pnpm docker:dev:stack:fast    # start all services containerized (skip build for speed)
+pnpm docker:test:stack        # start all services containerized in test mode (with build)
+pnpm docker:test:stack:fast   # start all services containerized in test mode (skip build)
+pnpm docker:stack             # start full production simulation locally (https://localhost - browser will warn about cert)
+pnpm docker:stack:fast        # start production simulation (skip build for speed)
+pnpm build                    # build for production
+pnpm check                    # lint + type + format validation
+pnpm test                     # run unit/integration tests (no server required)
+pnpm test:ci                  # run tests with test coverage statistics
+pnpm test:int                 # Integration tests (testcontainers, no server)
+pnpm test:stack:dev           # Full Stack tests (requires dev:stack:test running)
+pnpm test:stack:docker        # Full Stack tests (requires docker:test:stack running)
+pnpm format                   # prettier format fixes
+pnpm check:docs               # lint AGENTS.md documentation
+pnpm e2e                      # Black box end-to-end tests (run on pnpm docker:stack)
 ```
+
+**Fast variants:** Commands with `:fast` skip Docker rebuilds, using existing images for faster startup.
