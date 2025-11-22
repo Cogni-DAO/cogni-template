@@ -9,12 +9,13 @@ Extends the accounts system defined in [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) 
 - System architecture: [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md)
 - API contracts: [ACCOUNTS_API_KEY_ENDPOINTS.md](ACCOUNTS_API_KEY_ENDPOINTS.md)
 - Wallet integration: [INTEGRATION_WALLETS_CREDITS.md](INTEGRATION_WALLETS_CREDITS.md)
+- Payments (MVP funding): [PAYMENTS_RESMIC.md](PAYMENTS_RESMIC.md)
 
 ---
 
 ## Stage 6.5 – Dual-Cost Accounting & Profit Margin
 
-**Core Goal:** Per LLM call, compute `provider_cost_credits` from tokens + model pricing, compute `user_price_credits = ceil(provider_cost_credits × USER_PRICE_MARKUP_FACTOR)`, enforce `user_price_credits ≥ provider_cost_credits`, and atomically record both alongside a debit in integer credits.
+**Core Goal:** Per LLM call, use LiteLLM's response cost (USD) as provider cost oracle, convert to credits, apply markup, enforce `user_price_credits ≥ provider_cost_credits`, and atomically record both with a debit.
 
 **Credit Unit Standard:**
 
@@ -23,9 +24,14 @@ Extends the accounts system defined in [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) 
 - All balances stored as BIGINT integers
 - Default markup: 2.0× (100% markup = 50% margin)
 
-**MVP Credit Top-Ups:**
+**Provider Cost Source:**
 
-Credits UP (real users) are handled via `POST /api/v1/payments/resmic/webhook`. The webhook verifies the Resmic signature, resolves the user's `billing_account_id`, inserts a positive `credit_ledger` entry with `reason='resmic_payment'` (or `'onchain_deposit'`), and updates `billing_accounts.balance_credits`.
+- LiteLLM computes per-request cost and exposes it as a per-call "response cost" in USD
+- Our code converts that USD cost → `provider_cost_credits` → `user_price_credits`
+- We do not maintain hardcoded per-model USD pricing tables; LiteLLM's pricing map is the canonical source
+- Token counts and model metadata are stored for audit/analysis only, not for cost calculation
+
+Credits increase via positive entries in credit_ledger (e.g., from payments webhooks or admin tools); the specific payment rails are defined in the payments spec.
 
 ---
 
@@ -51,6 +57,12 @@ Credits UP (real users) are handled via `POST /api/v1/payments/resmic/webhook`. 
 
 **Schema:** id, billing_account_id (FK → billing_accounts.id), virtual_key_id (FK → virtual_keys.id), request_id, model, prompt_tokens, completion_tokens, provider_cost_credits (BIGINT), user_price_credits (BIGINT), markup_factor_applied, created_at
 
+**Cost Semantics:**
+
+- `provider_cost_credits = ceil(LiteLLM_response_cost_usd × CREDITS_PER_USDC)`
+- `user_price_credits = ceil(provider_cost_credits × USER_PRICE_MARKUP_FACTOR)`
+- Model and token fields are for audit/analysis only, not cost calculation
+
 **Files:**
 
 - `src/shared/db/migrations/*_llm_usage_tracking.sql` - CREATE TABLE with indexes
@@ -59,7 +71,8 @@ Credits UP (real users) are handled via `POST /api/v1/payments/resmic/webhook`. 
 **Notes:**
 
 - Mirrors credit_ledger by linking both billing_account_id and virtual_key_id
-- Enables tracking which specific virtual key (and LiteLLM virtual key) generated each LLM call
+- Enables tracking which specific virtual key generated each LLM call
+- LiteLLM maintains its own spend logs; llm_usage is our app-local mirror keyed by billing_account_id + request_id
 
 ---
 
@@ -79,26 +92,26 @@ Credits UP (real users) are handled via `POST /api/v1/payments/resmic/webhook`. 
 
 ---
 
-### 6.5.4 Provider Pricing Module
+### 6.5.4 Pricing Helpers
 
-**Goal:** Compute provider_cost_credits from token usage and model pricing; compute user_price_credits with markup.
+**Goal:** Provide pure conversion functions for USD → credits and markup application.
 
 **Responsibilities:**
 
-- PROVIDER_PRICING map: minimal set of supported models with USD rates per million tokens
-- calculateProviderCost(): tokens → credits (Math.ceil)
-- calculateUserPrice(): provider cost → user price with markup (Math.ceil)
-- Throw error for unknown models (no guessing)
+- `usdToCredits(usd)`: Convert USD cost to BIGINT credits using CREDITS_PER_USDC from env
+- `calculateUserPriceCredits(providerCostCredits, markupFactor)`: Apply markup and round up (Math.ceil)
 
 **Files:**
 
-- `src/core/billing/pricing.ts` - Rewrite with provider pricing table
-- `tests/unit/core/billing/pricing.test.ts` - Test calculations
+- `src/core/billing/pricing.ts` - Pure conversion helpers only
+- `tests/unit/core/billing/pricing.test.ts` - Test conversions and rounding
+- `src/shared/env/server.ts` - CREDITS_PER_USDC validation
 
 **Constraints:**
 
+- These helpers do NOT contain model-specific pricing data
+- All USD costs come from LiteLLM's response, not computed locally
 - Read CREDITS_PER_USDC from env, do not hardcode
-- Support only models actually used in production initially
 
 ---
 
@@ -106,45 +119,25 @@ Credits UP (real users) are handled via `POST /api/v1/payments/resmic/webhook`. 
 
 **Goal:** Single AccountService method that records llm_usage and debits user_price_credits in one transaction.
 
-**New Port Method:**
+**New Port Method:** `recordLlmUsage(billingAccountId, virtualKeyId, requestId, model, promptTokens, completionTokens, providerCostCredits, userPriceCredits, markupFactorApplied)`
 
-```typescript
-recordLlmUsage(
-  billingAccountId: string,
-  virtualKeyId: string,
-  requestId: string,
-  model: string,
-  promptTokens: number,
-  completionTokens: number,
-  providerCostCredits: bigint,
-  userPriceCredits: bigint,
-  markupFactorApplied: number
-): Promise<void>
-```
+**Parameters:** All cost values (providerCostCredits, userPriceCredits) are pre-computed by completion service using LiteLLM response cost and pricing helpers. No pricing logic in adapter.
 
 **Implementation:** Single DB transaction that:
 
 1. Inserts llm_usage row with all fields
 2. Inserts credit_ledger debit row (amount = -userPriceCredits, billing_account_id, virtual_key_id)
 3. Updates billing_accounts.balance_credits
-4. Enforces non-negative balance
+4. Checks if resulting balance would be negative
+5. If negative: throws InsufficientCreditsError and rolls back entire transaction (no llm_usage, no ledger entry, no balance change)
 
-**Insufficient Balance Handling (MVP):**
-
-When `user_price_credits` exceeds current balance:
-
-- Commit full debit (allowing negative balance temporarily)
-- Record complete `llm_usage` row (full audit trail of provider cost)
-- Update `billing_accounts.balance_credits` to negative value
-- Throw `InsufficientCreditsError` after commit (logged but not blocking)
-
-This strategy ensures full cost visibility while accepting temporary overdraft risk in MVP. Post-MVP will add pre-call estimation to prevent negative balances.
+**Balance Invariant:** Balances remain non-negative. Insufficient credits are detected post-call but prevent transaction commit. The LLM call has already been made (token waste), but no billing records are persisted.
 
 **Files:**
 
 - `src/ports/accounts.port.ts` - Add recordLlmUsage interface
 - `src/adapters/server/accounts/drizzle.adapter.ts` - Implement atomic operation
-- `tests/unit/adapters/server/accounts/drizzle.adapter.spec.ts` - Test transaction rollback
+- `tests/unit/adapters/server/accounts/drizzle.adapter.spec.ts` - Test transaction behavior
 
 **Notes:**
 
@@ -155,18 +148,24 @@ This strategy ensures full cost visibility while accepting temporary overdraft r
 
 ### 6.5.6 Wire Dual-Cost into Completion Flow
 
-**Goal:** Update completion service to use pricing module and recordLlmUsage after LLM call.
+**Goal:** Update completion service to use pricing helpers and recordLlmUsage after LLM call.
 
 **Flow:**
 
-1. Call LiteLLM
-2. Extract modelId, promptTokens, completionTokens from response
-3. Calculate provider cost and user price
-4. Assert user_price ≥ provider_cost
-5. Call AccountService.recordLlmUsage with all fields
+1. Call LiteLLM via LlmService
+2. Extract from LlmService response:
+   - modelId
+   - promptTokens, completionTokens
+   - providerCostUsd (from LiteLLM response cost)
+3. Convert USD to credits: `provider_cost_credits = usdToCredits(providerCostUsd)`
+4. Apply markup: `user_price_credits = calculateUserPriceCredits(provider_cost_credits, markupFactor)`
+5. Assert `user_price_credits ≥ provider_cost_credits`
+6. Call `AccountService.recordLlmUsage` with all fields
 
 **Files:**
 
+- `src/ports/llm.port.ts` - Update LlmService response to include providerCostUsd
+- `src/adapters/server/ai/litellm.adapter.ts` - Extract cost from LiteLLM response
 - `src/features/ai/services/completion.ts` - Add dual-cost calculation
 - `tests/unit/features/ai/services/completion.test.ts` - Test profit invariant
 
@@ -190,22 +189,43 @@ This strategy ensures full cost visibility while accepting temporary overdraft r
 
 ---
 
-## Out of Scope (Future Work)
+## Stage 7 – Payments Integration (Resmic MVP)
 
-**Deferred to later stages:**
+**Core Role:** Resmic is the OSS crypto billing layer we use as the default way real users convert USDC → credits.
+
+**High-Level Flow:**
+
+1. Users pay in USDC via Resmic checkout/widget
+2. Resmic sends signed webhook to our app
+3. Webhook handler resolves billing_account_id, converts USDC amount → credits using CREDITS_PER_USDC
+4. Writes positive credit_ledger row with `reason='resmic_payment'` or `'onchain_deposit'`
+5. Updates billing_accounts.balance_credits from ledger
+
+**Stage 7 Context:** This is part of the overall MVP loop (real money in → credits). It builds on Stage 6.5's dual-cost accounting without modifying the billing mechanics.
+
+**Implementation Details:** Endpoint definitions, Resmic SDK integration, webhook signature validation, and routing are defined in the payments spec.
+
+**Reference:** See `docs/PAYMENTS_RESMIC.md` for MVP funding path details (webhook endpoints, SDK setup, testing).
+
+---
+
+## Future Work
+
+**Deferred beyond MVP:**
 
 - Pre-call max-cost estimation and 402 without calling LLM
 - Reconciliation scripts and monitoring dashboards
 - credit_holds table for soft reservations
-- Complex historical balance migrations (using pre-launch reset instead)
 
 ---
 
 ## Success Criteria
 
-**Verification queries:**
+**Verification:**
 
 - Single SQL query against llm_usage shows provider_cost_credits and user_price_credits per request
 - Aggregate query computes total provider costs vs total user revenue over period
 - Code enforces user_price_credits ≥ provider_cost_credits on every call
 - All credits stored as BIGINT with 1 credit = $0.001 invariant respected
+- Provider cost comes from LiteLLM's response cost, not from local model pricing map
+- llm_usage rows can be joined with LiteLLM logs by requestId to cross-check costs
