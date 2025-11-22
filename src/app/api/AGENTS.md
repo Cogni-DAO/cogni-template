@@ -38,11 +38,7 @@ HTTP API endpoints using Next.js App Router. Contract-validated entry points tha
 
 - **Exports:** none
 - **Routes (if any):**
-  - `/api/v1/meta/health` [GET]
-  - `/api/v1/meta/openapi` [GET]
-  - `/api/v1/meta/route-manifest` [GET]
   - `/api/v1/ai/completion` [POST]
-  - `/api/v1/wallet/link` [POST]
 - **CLI (if any):** none
 - **Env/Config keys:** none
 - **Files considered API:** v1/_/route.ts, admin/_/route.ts
@@ -61,9 +57,7 @@ HTTP API endpoints using Next.js App Router. Contract-validated entry points tha
 ## Usage
 
 ```bash
-curl http://localhost:3000/api/v1/meta/health
-curl http://localhost:3000/api/v1/meta/openapi
-curl http://localhost:3000/api/v1/meta/route-manifest
+curl http://localhost:3000/api/v1/ai/completion
 ```
 
 ## Standards
@@ -85,5 +79,4 @@ curl http://localhost:3000/api/v1/meta/route-manifest
 
 ## Notes
 
-- v1 API prefix for versioning
-- Meta endpoints provide service information and OpenAPI spec
+- v1 API prefix for versioned product routes

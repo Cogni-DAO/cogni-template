@@ -8,7 +8,7 @@ HEALTH_URL="${1:-}"
 
 if [[ -z "$HEALTH_URL" ]]; then
     echo "Usage: $0 <health-url>"
-    echo "Example: $0 https://canary.cognidao.org/api/v1/meta/health"
+    echo "Example: $0 https://canary.cognidao.org/health"
     exit 1
 fi
 

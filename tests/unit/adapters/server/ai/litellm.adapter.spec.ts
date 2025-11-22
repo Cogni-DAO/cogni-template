@@ -28,8 +28,9 @@ vi.mock("@/shared/env", () => ({
 describe("LiteLlmAdapter", () => {
   let adapter: LlmService;
   const testCaller: LlmCaller = {
-    accountId: "test-user-123",
-    apiKey: "test-api-key-456",
+    billingAccountId: "test-user-123",
+    virtualKeyId: "vk-test-1",
+    litellmVirtualKey: "test-api-key-456",
   };
 
   // Mock fetch globally

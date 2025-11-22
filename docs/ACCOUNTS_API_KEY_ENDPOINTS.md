@@ -1,328 +1,146 @@
-# Required Accounts + API Key Endpoints
+# Accounts & LiteLLM Virtual Key Endpoints
 
-This document defines the **minimum set of HTTP endpoints** we need to manage:
+**Purpose:** Document how Cogni-template provisions and uses LiteLLM virtual keys for billing accounts, and which LiteLLM HTTP endpoints we depend on now vs later.
 
-- **Accounts** (our billing/credit tenants)
-- **API keys** (LiteLLM virtual keys)
+LiteLLM virtual keys are how LiteLLM tracks usage and associates calls with Teams/organizations. In Cogni-template, virtual keys are _purely internal_ in the MVP: they live in the `virtual_keys` table and are only used server-side when calling the LiteLLM proxy. In a future version, any user-visible "API keys" we expose in the UI will be backed 1:1 by rows in `virtual_keys` (and thus by LiteLLM virtual keys).
 
-It also draws a hard line between:
+**Core loop:** Auth.js session → `users` → `billing_accounts` → `virtual_keys` → LiteLLM `/chat/completions`.
 
-- The **barebones MVP workflow** we are building now.
-- The **extended endpoint surface** we should grow into over time.
+**Related:**
 
-Throughout, we follow two principles:
-
-1. **Control plane vs data plane** are strictly separated.
-2. **LiteLLM is the API key authority**; we wrap it with our own account and credit model.
+- Auth design: [SECURITY_AUTH_SPEC.md](SECURITY_AUTH_SPEC.md)
+- Billing model: [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md)
+- Billing evolution: [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md)
 
 ---
 
 ## Core Concepts
 
-- **Account**  
-  Our billing/credit entity (`accounts` table, `accountId`). This is what we debit credits from.
+- **Auth.js user** – Identity row in the Auth.js `users` table, created via SIWE (wallet login). Represents identity and session ownership.
+- **Billing account** – Row in `billing_accounts` (our table). Represents a billing tenant and owns LiteLLM virtual keys. We differentiate tenants via separate virtual keys and our own `billing_accounts` + `credit_ledger` records.
+- **LiteLLM Team** – (Future/Optional) LiteLLM's grouping concept for spend analytics. Not used in MVP; virtual keys are sufficient for authentication and per-account tracking.
+- **Virtual key** – Row in `virtual_keys`. Stores a LiteLLM virtual key string (`litellm_virtual_key`) plus flags (`is_default`, `active`, label, etc.). Multiple virtual keys can belong to one billing account.
+- **LiteLLM master key** – The Proxy admin key (`LITELLM_MASTER_KEY`) we use to call LiteLLM's control-plane endpoints like `/key/generate`.
+- **LlmCaller** – Internal type `{ billingAccountId; virtualKeyId; litellmVirtualKey }` constructed server-side for each call to LiteLLM. This is the canonical internal call descriptor for LLM usage in the new billing design and replaces the older `{ accountId; apiKey }` shape.
 
-- **LiteLLM Virtual Key** (`apiKey`)  
-  A key managed by LiteLLM, used for LLM calls and usage tracking. Each key is bound to a LiteLLM team/user, which we map to an `accountId`.
+**Invariant:** LiteLLM virtual keys are **never** returned to the browser. They only live in `virtual_keys` and are only used by server-side adapters.
 
-- **LlmCaller**  
-  Internal type used by our ports: `{ accountId: string; apiKey: string; }`.
-
-- **Control Plane**  
-  Endpoints used by operators / onboarding flows to:
-  - Create accounts.
-  - Register LiteLLM keys to accounts.
-  - Top up credits.
-
-- **Data Plane**  
-  Endpoints used by client apps:
-  - Call AI (`/completion`).
-  - Query balance/usage (later).
-
-**Invariant:** No data-plane endpoint should ever create accounts or keys as a side-effect.
+**See also:** [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) "Three-Layer Identity System" for complete architecture.
 
 ---
 
-## Endpoint Taxonomy
+## LiteLLM Endpoints Used in MVP
 
-We group endpoints into two planes:
+We run the LiteLLM Proxy with a Postgres DB and `LITELLM_MASTER_KEY` as described in the **LiteLLM Getting Started guide** (Docker + `config.yaml`). See **Getting Started Tutorial → Generate a virtual key** and **Key Management API Endpoints Swagger** for the full spec.
 
-- `/admin/*` → **Control plane** (operator / backend only)
-- `/api/v1/*` → **Data plane** (public client usage, authenticated by LiteLLM virtual keys)
+**Official Docs:** https://docs.litellm.ai/docs/
 
----
+### 1. Chat Completions (Data Plane)
 
-## MVP: Barebones Workflow (What We Build Now)
+- **Endpoint:** `POST /chat/completions`
+- **Auth:** `Authorization: Bearer <virtual_key>`
+- **Docs:** [LiteLLM Getting Started](https://docs.litellm.ai/docs/), section "Make a successful /chat/completion call"
 
-### 1. Data Plane: AI Completion
+Cogni-template calls this endpoint from our `LlmService` adapter using the `litellm_virtual_key` stored in `virtual_keys`. We read `usage.total_tokens` from the response to update our `credit_ledger`.
 
-**Endpoint:**
+### 2. Virtual Key Generation (Control Plane)
 
-```http
-POST /api/v1/ai/completion
-Authorization: Bearer <LITELLM_VIRTUAL_KEY>
-Content-Type: application/json
-```
+- **Endpoint:** `POST /key/generate`
+- **Auth:** `Authorization: Bearer <LITELLM_MASTER_KEY>`
+- **Docs:** [LiteLLM Virtual Keys](https://docs.litellm.ai/docs/proxy/virtual_keys), section "Create Key w/ RPM Limit" and [Key Management API Endpoints Swagger](https://litellm-api.up.railway.app/)
 
-**Purpose:**
+**MVP behavior:** `getOrCreateBillingAccountForUser(user)` calls `/key/generate` once per new billing account to create a default virtual key for that tenant. We store the returned key string in `virtual_keys.litellm_virtual_key` and mark it `is_default = true`.
 
-- Main AI entry point.
-- Enforces "no key → no call".
-- Debits internal credits after each successful completion.
+We do **not** expose `/key/generate` directly to browser clients; it is only called from our server using the master key.
 
-**Behavior (high level):**
-
-1. Extract `apiKey` from `Authorization: Bearer <key>`.
-2. Look up `accountId` for this `apiKey` via our mapping (either:
-   - `deriveAccountIdFromApiKey(apiKey)` if we control issuance, and the account is known, or
-   - an explicit `api_keys` mapping table).
-3. If no account found → `403 Forbidden` / "Unknown API key" (do not call LiteLLM).
-4. Construct `LlmCaller { accountId, apiKey }`.
-5. Call the completion feature:
-   - Calls LiteLLM via `LlmService` using `apiKey`.
-   - Reads `usage.totalTokens` from the response.
-   - Calculates `cost` via `calculateCost({ modelId, totalTokens })`.
-   - Calls `AccountService.debitForUsage({ accountId, cost, requestId, metadata })`.
-6. If debit fails with `InsufficientCreditsError`:
-   - Return 402-style "insufficient credits" error.
-   - For MVP, we accept that the upstream LLM call already happened (token waste is tolerated).
-7. On success, return the completion message.
-
-**Notes:**
-
-- No account creation here.
-- No key creation here.
-- This is pure data plane.
-
-### 2. Control Plane: Register Account + LiteLLM Key
-
-For MVP, accounts must be created explicitly, not implicitly.
-
-#### 2.1 Register Key for an Account (MVP Onboarding)
-
-**Endpoint:**
-
-```http
-POST /admin/accounts/register-litellm-key
-Content-Type: application/json
-Authorization: Bearer <INTERNAL_ADMIN_TOKEN>  # or equivalent operator auth
-```
-
-**Request body:**
+**Example request:**
 
 ```json
+POST /key/generate
+Authorization: Bearer <LITELLM_MASTER_KEY>
 {
-  "apiKey": "LITELLM_VIRTUAL_KEY",
-  "displayName": "Derek Dev Key"
+  "max_budget": null,
+  "models": [],
+  "metadata": {
+    "cogni_billing_account_id": "billing-account-xyz"
+  }
 }
 ```
 
-**Behavior:**
-
-1. Validate caller is an operator / internal process (not a public client).
-2. Optionally verify `apiKey` against LiteLLM (e.g. call its admin/key-info endpoint) to ensure it's valid and under our control.
-3. Derive or look up `accountId` for this key:
-   - Option A (MVP-simple): `accountId = deriveAccountIdFromApiKey(apiKey)`
-4. If `accounts` row does not exist:
-   - Insert `accounts` row:
-     - `id = accountId`
-     - `display_name = displayName`
-     - `balance_credits = 0` (or seeded)
-   - Insert or update `api_keys` mapping (if we choose to have a separate table).
-5. Return:
+**Example response:**
 
 ```json
 {
-  "accountId": "key:a1b2c3d4...",
-  "displayName": "Derek Dev Key",
-  "balanceCredits": 0
+  "key": "sk-...",
+  "key_name": null,
+  "expires": null,
+  "user_id": null
 }
 ```
 
-**Why this exists:**
+---
 
-- This is the only way an `accounts` row is created in the MVP.
-- It replaces the "autoprovision on /completion" anti-pattern.
-- You or future automated flows (wallet onboarding) call this endpoint to onboard keys.
+## MVP Internal Provisioning Flow (No Public Control-Plane HTTP)
 
-#### 2.2 Manual Credit Top-Up (MVP)
+In the new Auth.js + SIWE design, **MVP does not expose any account/key management HTTP endpoints**. All provisioning happens inside a single helper:
 
-**Endpoint:**
+- **Module:** `src/lib/auth/mapping.ts`
+- **Function:** `getOrCreateBillingAccountForUser(user)`
 
-```http
-POST /admin/accounts/:accountId/credits/topup
-Content-Type: application/json
-Authorization: Bearer <INTERNAL_ADMIN_TOKEN>
-```
+**MVP behavior:**
 
-**Request body:**
+1. **Input:** Auth.js `user` object (from `auth()`), which includes the wallet address from SIWE.
+2. **Look up** existing `billing_accounts` row where `owner_user_id = user.id`.
+3. **If none exists:**
+   - Create a new `billing_accounts` row:
+     - `owner_user_id = user.id`
+     - `balance_credits = 0`
+   - Call LiteLLM `POST /key/generate` with our `LITELLM_MASTER_KEY` to create a virtual key for this account:
+     - Set `metadata.cogni_billing_account_id` = new billing account ID (for tracking)
+   - Insert a `virtual_keys` row:
+     - `billing_account_id = billing_accounts.id`
+     - `litellm_virtual_key = <key from LiteLLM>`
+     - `is_default = true`, `active = true`, `label = 'Default'`
+4. **Return:** `{ billingAccountId, defaultVirtualKeyId, litellmVirtualKey }` for use by the LLM adapter.
 
-```json
-{
-  "amount": 100.0,
-  "reason": "topup_manual",
-  "reference": "initial_seed"
-}
-```
+From this point on, all LLM calls for this user go through the same `billing_accounts` + `virtual_keys` records.
 
-**Behavior:**
-
-1. Validate operator auth.
-2. Use `AccountService.creditAccount({ accountId, amount, reason, reference })`.
-3. This:
-   - Inserts a positive delta row into `credit_ledger`.
-   - Updates `accounts.balance_credits` accordingly.
-4. Return updated balance:
-
-```json
-{
-  "accountId": "key:a1b2c3d4...",
-  "balanceCredits": 100.0
-}
-```
-
-**Why this exists:**
-
-- You need a way to seed or refill credits for testing and internal usage before wallets/on-chain payments are wired.
-- Minimal way to simulate "wallet funded the app" without touching blockchain yet.
+**Credit top-ups (MVP):** Real user payments flow through Resmic webhook at `POST /api/v1/payments/resmic/webhook`. The webhook verifies the Resmic payload, resolves the user's `billing_account_id`, inserts a positive `credit_ledger` entry with `reason='resmic_payment'` (or `'onchain_deposit'`), and updates `billing_accounts.balance_credits`. Dev/test environments can seed credits directly via database fixtures or scripts.
 
 ---
 
-## MVP Endpoint Checklist
+## Our HTTP Endpoints That Use Billing Accounts & Keys (MVP)
 
-For the barebones system to function end-to-end:
+### 1. `/api/v1/ai/completion` (Data Plane)
 
-**Control Plane (admin-only):**
+- **Auth:** Auth.js session only (HttpOnly cookie). No API key in the request.
+- **Flow:**
+  1. Call `auth()` and require `session.user` (wallet login)
+  2. Call `getOrCreateBillingAccountForUser(session.user)`
+  3. Load the default `virtual_keys` row for that billing account
+  4. Call LiteLLM `POST /chat/completions` with `Authorization: Bearer <litellm_virtual_key>`
+  5. Record usage in `credit_ledger` for `billing_account_id` + `virtual_key_id`
 
-- [ ] `POST /admin/accounts/register-litellm-key`  
-       Explicitly creates/binds accounts to LiteLLM virtual keys.
-
-- [ ] `POST /admin/accounts/:accountId/credits/topup`  
-       Manually adds credits via the ledger.
-
-**Data Plane (public API):**
-
-- [ ] `POST /api/v1/ai/completion`  
-       Uses `Authorization: Bearer <apiKey>`, validates existing account, calls LiteLLM, and debits credits.
-
-That's it for MVP. Everything else is "later".
+**There is no MVP HTTP endpoint for "register key" or "top up credits".** Those are internal operations for now (tests and scripts can seed balances directly in the database).
 
 ---
 
-## Extended Endpoint Surface (Future)
+## Future: Operator HTTP API for Accounts & Keys (Post-MVP)
 
-Once the MVP loop is real, we can extend in two dimensions:
+Once the core wallet → session → billing loop is stable, we will add an operator-facing HTTP API (likely with Auth.js-based admin roles) to manage accounts and keys. These routes are **not implemented in MVP**, but we keep them here as design intent:
 
-1. Deeper control plane (orgs, keys, usage).
-2. Self-serve data plane (balance, usage, wallet flows).
+**Potential routes:**
 
-### A. Extended Control Plane Endpoints
+- `GET /api/admin/billing-accounts` – List billing accounts and key summaries
+- `GET /api/admin/billing-accounts/:billingAccountId` – Inspect one billing account, balance, and ledger summary
+- `GET /api/admin/billing-accounts/:billingAccountId/virtual-keys` – List virtual keys for that account
+- `POST /api/admin/billing-accounts/:billingAccountId/virtual-keys` – Create a new LiteLLM virtual key for that account (wraps LiteLLM `POST /key/generate`)
+- `POST /api/admin/billing-accounts/:billingAccountId/credits/topup` – Manually credit the account (writes to `credit_ledger`, adjusts balance)
 
-These are still admin/privileged.
+Later, we can also expose self-serve data-plane endpoints (e.g., `/api/v1/accounts/me/balance`, `/api/v1/accounts/me/usage`) that infer `billing_account_id` from either the session or an `Authorization: Bearer <virtual_key>` header once we implement dual-auth mode.
 
-#### A.1 Organizations (Optional, Future)
+**For the full set of LiteLLM key and spend management endpoints, see:**
 
-If we want multiple DAOs or groups:
-
-```http
-POST /admin/orgs
-GET  /admin/orgs/:orgId
-GET  /admin/orgs/:orgId/accounts
-```
-
-Map `orgId` to LiteLLM `org_id` and possibly different DAO multi-sigs.
-
-#### A.2 Full Account Management
-
-```http
-GET    /admin/accounts
-GET    /admin/accounts/:accountId
-GET    /admin/accounts/:accountId/ledger
-GET    /admin/accounts/:accountId/usage          # proxy LiteLLM usage/spend
-PATCH  /admin/accounts/:accountId                # update displayName, status, limits
-POST   /admin/accounts/:accountId/credits/adjust # arbitrary +/- adjustments with reason
-```
-
-#### A.3 Key Management (Wrapping LiteLLM)
-
-Instead of manual key creation in LiteLLM UI, we can drive it from our admin API:
-
-```http
-POST   /admin/accounts/:accountId/keys
-       # calls LiteLLM key generation, stores mapping
-
-GET    /admin/accounts/:accountId/keys
-
-POST   /admin/accounts/:accountId/keys/:keyId/regenerate
-       # calls LiteLLM key_regenerate
-
-DELETE /admin/accounts/:accountId/keys/:keyId
-       # calls LiteLLM delete_key
-```
-
-These map closely to LiteLLM's key management APIs and org/team/user contexts.
-
-### B. Extended Data Plane Endpoints (Client-Facing)
-
-Once we want self-serve UX beyond "just call completion", we add:
-
-#### B.1 Caller Balance and Usage
-
-Use the caller's `Authorization: Bearer <apiKey>` to infer account:
-
-```http
-GET /api/v1/accounts/me/balance
-Authorization: Bearer <apiKey>
-
-GET /api/v1/accounts/me/usage
-Authorization: Bearer <apiKey>
-```
-
-**Behavior:**
-
-1. Resolve `accountId` from `apiKey`.
-2. Return:
-   - `balance` from `accounts`.
-   - `usage` from our ledger and/or LiteLLM usage APIs.
-
-#### B.2 Wallet-Based Onboarding (Step 3 Complete, Step 4 Pending)
-
-With wallets integrated (wagmi/RainbowKit), on-chain payments pending:
-
-**Current Flow (POST /api/v1/wallet/link):**
-
-- User connects wallet via RainbowKit ConnectButton
-- Frontend calls `/api/v1/wallet/link` with address
-- Backend derives accountId, ensures account exists (creates with zero balance if needed)
-- Backend returns `{ accountId, apiKey }`
-- Frontend stores apiKey for `/api/v1/ai/completion` Authorization header
-
-**MVP:** Single `LITELLM_MVP_API_KEY` for all wallets, no signature verification. See `src/app/providers/AGENTS.md` and `src/app/wallet-test/` for implementation details.
-
-**Later:** On-chain funding via `/api/v1/wallet/fund` validates USDC transfers and credits account ledger.
-
----
-
-## Summary
-
-**MVP endpoints (do now):**
-
-- `POST /admin/accounts/register-litellm-key`
-- `POST /admin/accounts/:accountId/credits/topup`
-- `POST /api/v1/ai/completion`
-
-**Later (control plane):**
-
-- Org-level endpoints.
-- Full account CRUD, ledger and usage views.
-- Programmatic key management (creating/rotating LiteLLM keys).
-
-**Later (data plane):**
-
-- Self-serve balance and usage endpoints.
-- Wallet-based onboarding and funding routes.
-
-**Everything is anchored on one invariant:**
-
-> Data-plane endpoints never create accounts or keys.  
-> Accounts + keys are created only through explicit, privileged control-plane workflows.
+- [LiteLLM Virtual Keys](https://docs.litellm.ai/docs/proxy/virtual_keys) – Virtual Keys section
+- [Key Management API Endpoints Swagger](https://litellm-api.up.railway.app/) – Full API reference
+- [LiteLLM Spend Tracking](https://docs.litellm.ai/docs/proxy/logging) – For mapping LiteLLM's usage records into our `credit_ledger` over time

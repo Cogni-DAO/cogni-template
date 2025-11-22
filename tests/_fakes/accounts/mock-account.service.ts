@@ -22,8 +22,7 @@ import type { AccountService } from "@/ports";
  */
 export function createMockAccountService(): AccountService {
   return {
-    createAccountForApiKey: vi.fn(),
-    getAccountByApiKey: vi.fn(),
+    getOrCreateBillingAccountForUser: vi.fn(),
     getBalance: vi.fn(),
     debitForUsage: vi.fn(),
     creditAccount: vi.fn(),
@@ -36,13 +35,12 @@ export function createMockAccountService(): AccountService {
  */
 export function createMockAccountServiceWithDefaults(): AccountService {
   return {
-    createAccountForApiKey: vi.fn().mockResolvedValue({
-      accountId: "test-account-id",
-      balanceCredits: 0,
-    }),
-    getAccountByApiKey: vi.fn().mockResolvedValue({
-      accountId: "test-account-id",
+    getOrCreateBillingAccountForUser: vi.fn().mockResolvedValue({
+      id: "billing-test-account-id",
+      ownerUserId: "test-user",
       balanceCredits: 100,
+      defaultVirtualKeyId: "virtual-key-1",
+      litellmVirtualKey: "vk-test-123",
     }),
     getBalance: vi.fn().mockResolvedValue(100),
     debitForUsage: vi.fn().mockResolvedValue(undefined),

@@ -12,12 +12,15 @@
  * @public
  */
 
-export type { AccountService } from "./accounts.port";
 export {
-  AccountNotFoundPortError,
+  type AccountService,
+  type BillingAccount,
+  BillingAccountNotFoundPortError,
   InsufficientCreditsPortError,
-  isAccountNotFoundPortError,
+  isBillingAccountNotFoundPortError,
   isInsufficientCreditsPortError,
+  isVirtualKeyNotFoundPortError,
+  VirtualKeyNotFoundPortError,
 } from "./accounts.port";
 export type { Clock } from "./clock.port";
 export type { LlmCaller, LlmService } from "./llm.port";

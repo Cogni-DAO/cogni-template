@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Account management feature providing admin operations for API key registration, credit top-up, and account validation. Translates domain errors to feature boundaries.
+Account error translation and billing safety helpers that map port-level errors into stable feature-level shapes for the app layer.
 
 ## Pointers
 
@@ -36,11 +36,11 @@ Account management feature providing admin operations for API key registration, 
 
 ## Public Surface
 
-- **Exports:** registerAccount, topupCredits, getAccountForApiKey services; AccountsFeatureError types
+- **Exports:** AccountsFeatureError types and mapping helpers
 - **Routes (if any):** none (consumed by app layer)
 - **CLI (if any):** none
 - **Env/Config keys:** none
-- **Files considered API:** services/adminAccounts.ts, errors.ts
+- **Files considered API:** errors.ts
 
 ## Ports (optional)
 
@@ -50,7 +50,7 @@ Account management feature providing admin operations for API key registration, 
 
 ## Responsibilities
 
-- This directory **does**: Orchestrate admin account operations, translate domain/port errors to feature errors, provide Result-based APIs
+- This directory **does**: Translate port errors to feature errors; provide stable error contracts for app layer
 - This directory **does not**: Handle HTTP concerns, authenticate requests, persist data directly
 
 ## Usage
@@ -64,8 +64,7 @@ pnpm typecheck
 
 ## Standards
 
-- All service functions return Result types (`{ ok: true, data }` or `{ ok: false, error }`)
-- Error translation from domain/port errors to AccountsFeatureError
+- Error translation from port errors to AccountsFeatureError
 - Unit tests with mocked ports required
 
 ## Dependencies

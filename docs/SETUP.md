@@ -31,9 +31,9 @@ pnpm dev:stack          # Start app + infrastructure (main workflow)
 **Host Stack Tests:**
 
 ```bash
-pnpm test:stack:setup   # Create test database + migrations
-pnpm test:stack:dev     # Run stack tests against host app
-pnpm test:stack:reset   # Nuclear reset when test DB is corrupted
+pnpm dev:stack:test:setup   # Create test database + migrations
+pnpm test:stack:dev         # Run stack tests against host app
+pnpm dev:stack:test:reset   # Nuclear reset when test DB is corrupted
 ```
 
 **Docker Stack Tests:**

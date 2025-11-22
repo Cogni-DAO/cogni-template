@@ -18,8 +18,9 @@ import type { Message } from "@/core";
 export type { Message } from "@/core";
 
 export interface LlmCaller {
-  accountId: string;
-  apiKey: string;
+  billingAccountId: string;
+  virtualKeyId: string;
+  litellmVirtualKey: string;
 }
 
 export interface LlmService {

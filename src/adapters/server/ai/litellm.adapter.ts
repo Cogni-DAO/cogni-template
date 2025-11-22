@@ -25,7 +25,7 @@ export class LiteLlmAdapter implements LlmService {
     const maxTokens = params.maxTokens ?? 2048;
 
     // Extract caller data - caller required by route enforcement
-    const { accountId: user, apiKey } = params.caller;
+    const { billingAccountId: user, litellmVirtualKey } = params.caller;
 
     // Convert core Messages to LiteLLM format
     const liteLlmMessages = params.messages.map((msg) => ({
@@ -49,7 +49,7 @@ export class LiteLlmAdapter implements LlmService {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
+            Authorization: `Bearer ${litellmVirtualKey}`,
           },
           body: JSON.stringify(requestBody),
           /** 30 second timeout */

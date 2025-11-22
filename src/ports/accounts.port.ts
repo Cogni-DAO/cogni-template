@@ -3,39 +3,52 @@
 
 /**
  * Module: `@ports/accounts`
- * Purpose: Account service port interface and port-level errors for credit accounting operations.
- * Scope: Defines contracts for account creation, validation, and credit management. Does not implement business logic.
- * Invariants: All operations are atomic, account IDs are stable, credit operations maintain ledger integrity
+ * Purpose: Billing account service port interface and port-level errors for credit accounting operations.
+ * Scope: Defines contracts for billing account lifecycle, virtual key provisioning, and credit management. Does not implement business logic.
+ * Invariants: All operations are atomic, billing accounts own virtual keys, credit ledger integrity is preserved
  * Side-effects: none (interface definition only)
- * Notes: Implemented by database adapters, used by features and admin routes
- * Links: Implemented by DrizzleAccountService, used by completion feature and admin endpoints
+ * Notes: Implemented by database adapters, used by features and app facades
+ * Links: Implemented by DrizzleAccountService, used by completion feature and auth mapping
  * @public
  */
 
 /**
- * Port-level error thrown by adapters when account has insufficient credits
+ * Port-level error thrown by adapters when billing account has insufficient credits
  * Structured data for feature layer to translate into domain errors
  */
 export class InsufficientCreditsPortError extends Error {
   constructor(
-    public readonly accountId: string,
+    public readonly billingAccountId: string,
     public readonly cost: number,
     public readonly previousBalance: number
   ) {
     super(
-      `Insufficient credits: account ${accountId} has ${previousBalance}, needs ${cost}`
+      `Insufficient credits: billing account ${billingAccountId} has ${previousBalance}, needs ${cost}`
     );
     this.name = "InsufficientCreditsPortError";
   }
 }
 
 /**
- * Port-level error thrown by adapters when account is not found
+ * Port-level error thrown by adapters when billing account is not found
  */
-export class AccountNotFoundPortError extends Error {
-  constructor(public readonly accountId: string) {
-    super(`Account not found: ${accountId}`);
-    this.name = "AccountNotFoundPortError";
+export class BillingAccountNotFoundPortError extends Error {
+  constructor(public readonly billingAccountId: string) {
+    super(`Billing account not found: ${billingAccountId}`);
+    this.name = "BillingAccountNotFoundPortError";
+  }
+}
+
+/**
+ * Port-level error thrown when a virtual key lookup fails for a billing account
+ */
+export class VirtualKeyNotFoundPortError extends Error {
+  constructor(
+    public readonly billingAccountId: string,
+    public readonly virtualKeyId?: string
+  ) {
+    super(`Virtual key not found for billing account: ${billingAccountId}`);
+    this.name = "VirtualKeyNotFoundPortError";
   }
 }
 
@@ -51,59 +64,73 @@ export function isInsufficientCreditsPortError(
 }
 
 /**
- * Type guard to check if error is AccountNotFoundPortError
+ * Type guard to check if error is BillingAccountNotFoundPortError
  */
-export function isAccountNotFoundPortError(
+export function isBillingAccountNotFoundPortError(
   error: unknown
-): error is AccountNotFoundPortError {
-  return error instanceof Error && error.name === "AccountNotFoundPortError";
+): error is BillingAccountNotFoundPortError {
+  return (
+    error instanceof Error && error.name === "BillingAccountNotFoundPortError"
+  );
+}
+
+/**
+ * Type guard to check if error is VirtualKeyNotFoundPortError
+ */
+export function isVirtualKeyNotFoundPortError(
+  error: unknown
+): error is VirtualKeyNotFoundPortError {
+  return error instanceof Error && error.name === "VirtualKeyNotFoundPortError";
+}
+
+export interface BillingAccount {
+  id: string;
+  ownerUserId: string;
+  balanceCredits: number;
+  defaultVirtualKeyId: string;
+  litellmVirtualKey: string;
 }
 
 export interface AccountService {
   /**
-   * Creates account for API key (admin endpoints only)
-   * Idempotent - safe to call multiple times with same API key
+   * Idempotently create or fetch a billing account for the given user.
+   * Ensures a default virtual key exists and is returned for data-plane calls.
    */
-  createAccountForApiKey(params: {
-    apiKey: string;
+  getOrCreateBillingAccountForUser(params: {
+    userId: string;
+    walletAddress?: string;
     displayName?: string;
-  }): Promise<{ accountId: string; balanceCredits: number }>;
+  }): Promise<BillingAccount>;
 
   /**
-   * Validates account exists for API key (completion route)
-   * Returns null for unknown keys - caller should return 403
+   * Reads cached balance from billing_accounts table.
+   * Not recomputed from ledger for performance.
    */
-  getAccountByApiKey(apiKey: string): Promise<{
-    accountId: string;
-    balanceCredits: number;
-  } | null>;
+  getBalance(billingAccountId: string): Promise<number>;
 
   /**
-   * Reads cached balance from accounts table
-   * Not recomputed from ledger for performance
-   */
-  getBalance(accountId: string): Promise<number>;
-
-  /**
-   * Atomic credit deduction after LLM usage
-   * Prevents race conditions with single operation
-   * Throws InsufficientCreditsError if balance would go negative
+   * Atomic credit deduction after LLM usage.
+   * Prevents race conditions with single operation.
+   * Throws InsufficientCreditsError if balance would go negative.
    */
   debitForUsage(params: {
-    accountId: string;
+    billingAccountId: string;
+    virtualKeyId: string;
     cost: number;
     requestId: string;
     metadata?: Record<string, unknown>;
   }): Promise<void>;
 
   /**
-   * Credit account for funding/testing flows
-   * Inserts positive delta into ledger and returns new balance atomically
+   * Credit billing account for funding/testing flows.
+   * Inserts positive delta into ledger and returns new balance atomically.
    */
   creditAccount(params: {
-    accountId: string;
+    billingAccountId: string;
     amount: number;
     reason: string;
     reference?: string;
+    virtualKeyId?: string;
+    metadata?: Record<string, unknown>;
   }): Promise<{ newBalance: number }>;
 }

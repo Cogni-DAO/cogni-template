@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-11
+- **Last reviewed:** 2025-11-22
 - **Status:** draft
 
 ## Purpose
@@ -77,4 +77,4 @@ pnpm e2e:prod   # alias for e2e:smoke
 
 - Tests tagged for smoke project in playwright.config.ts
 - Must be safe to run against production environments
-- a11y-all-routes.spec.ts dynamically discovers routes via /api/v1/meta/route-manifest
+- a11y-all-routes.spec.ts dynamically discovers routes via /meta/route-manifest

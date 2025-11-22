@@ -3,140 +3,155 @@
 
 /**
  * Module: `@adapters/server/accounts/drizzle`
- * Purpose: DrizzleAccountService implementation for PostgreSQL account operations.
- * Scope: Implements AccountService port with ledger-based credit accounting. Does not handle authentication or business rules.
- * Invariants: All credit operations are atomic, ledger is source of truth, accounts.balance_credits is computed cache
+ * Purpose: DrizzleAccountService implementation for PostgreSQL billing account operations.
+ * Scope: Implements AccountService port with ledger-based credit accounting and virtual key management. Does not handle authentication or business rules.
+ * Invariants: All credit operations are atomic, ledger is source of truth, billing_accounts.balance_credits is computed cache
  * Side-effects: IO (database operations)
- * Notes: Uses transactions for consistency, throws domain errors for business rule violations
+ * Notes: Uses transactions for consistency, throws port errors for business rule violations
  * Links: Implements AccountService port, uses shared database schema
  * @public
  */
 
-import { eq, sql } from "drizzle-orm";
+import { randomBytes, randomUUID } from "node:crypto";
+
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Database } from "@/adapters/server/db/client";
-import type { AccountService } from "@/ports";
+import type { AccountService, BillingAccount } from "@/ports";
 import {
-  AccountNotFoundPortError,
+  BillingAccountNotFoundPortError,
   InsufficientCreditsPortError,
+  VirtualKeyNotFoundPortError,
 } from "@/ports";
-import { accounts, creditLedger } from "@/shared/db";
-import { deriveAccountIdFromApiKey } from "@/shared/util";
+import { billingAccounts, creditLedger, virtualKeys } from "@/shared/db";
 
-type QueryableDb = Pick<Database, "query">;
+const ZERO = 0;
 
-/**
- * PostgreSQL implementation of AccountService using Drizzle ORM
- *
- * CRITICAL TRANSACTION SEMANTICS:
- * - All credit operations MUST be wrapped in a single db.transaction()
- * - InsufficientCreditsError MUST NOT be caught within the transaction
- * - On error, the transaction rolls back: no ledger entry, no balance change
- * - This prevents persisting negative balances or incomplete ledger entries
- */
+interface QueryableDb extends Pick<Database, "query" | "insert"> {
+  query: Database["query"];
+  insert: Database["insert"];
+}
+
+interface VirtualKeyRow {
+  id: string;
+  litellmVirtualKey: string;
+}
+
 export class DrizzleAccountService implements AccountService {
   constructor(private readonly db: Database) {}
 
-  async createAccountForApiKey({
-    apiKey,
+  async getOrCreateBillingAccountForUser({
+    userId,
     displayName,
   }: {
-    apiKey: string;
+    userId: string;
+    walletAddress?: string;
     displayName?: string;
-  }): Promise<{ accountId: string; balanceCredits: number }> {
-    const accountId = deriveAccountIdFromApiKey(apiKey);
-
-    await this.db.transaction(async (tx) => {
-      // Only create if doesn't exist (idempotent)
-      const existing = await tx.query.accounts.findFirst({
-        where: eq(accounts.id, accountId),
+  }): Promise<BillingAccount> {
+    return await this.db.transaction(async (tx) => {
+      const existingAccount = await tx.query.billingAccounts.findFirst({
+        where: eq(billingAccounts.ownerUserId, userId),
       });
 
-      if (!existing) {
-        await tx.insert(accounts).values({
-          id: accountId,
-          balanceCredits: "0.00",
-          displayName: displayName ?? null,
-        });
+      if (existingAccount) {
+        const defaultKey = await this.findDefaultKey(tx, existingAccount.id);
+        return {
+          id: existingAccount.id,
+          ownerUserId: existingAccount.ownerUserId,
+          balanceCredits: this.toNumber(existingAccount.balanceCredits),
+          defaultVirtualKeyId: defaultKey.id,
+          litellmVirtualKey: defaultKey.litellmVirtualKey,
+        };
       }
-    });
 
-    return { accountId, balanceCredits: 0 };
+      const billingAccountId = randomUUID();
+
+      await tx.insert(billingAccounts).values({
+        id: billingAccountId,
+        ownerUserId: userId,
+        balanceCredits: ZERO,
+        // Display name intentionally optional; stored later when UX surfaces exist
+      });
+
+      const createdKey = await this.insertDefaultKey(
+        tx,
+        billingAccountId,
+        displayName ? { label: displayName } : {}
+      );
+
+      return {
+        id: billingAccountId,
+        ownerUserId: userId,
+        balanceCredits: 0,
+        defaultVirtualKeyId: createdKey.id,
+        litellmVirtualKey: createdKey.litellmVirtualKey,
+      };
+    });
   }
 
-  async getAccountByApiKey(apiKey: string): Promise<{
-    accountId: string;
-    balanceCredits: number;
-  } | null> {
-    const accountId = deriveAccountIdFromApiKey(apiKey);
-
-    const account = await this.db.query.accounts.findFirst({
-      where: eq(accounts.id, accountId),
-    });
-
-    if (!account) return null;
-
-    return {
-      accountId: account.id,
-      balanceCredits: this.toNumber(account.balanceCredits),
-    };
-  }
-
-  async getBalance(accountId: string): Promise<number> {
-    const account = await this.db.query.accounts.findFirst({
-      where: eq(accounts.id, accountId),
+  async getBalance(billingAccountId: string): Promise<number> {
+    const account = await this.db.query.billingAccounts.findFirst({
+      where: eq(billingAccounts.id, billingAccountId),
     });
 
     if (!account) {
-      throw new AccountNotFoundPortError(accountId);
+      throw new BillingAccountNotFoundPortError(billingAccountId);
     }
 
     return this.toNumber(account.balanceCredits);
   }
 
   async debitForUsage({
-    accountId,
+    billingAccountId,
+    virtualKeyId,
     cost,
     requestId,
     metadata,
   }: {
-    accountId: string;
+    billingAccountId: string;
+    virtualKeyId: string;
     cost: number;
     requestId: string;
     metadata?: Record<string, unknown>;
   }): Promise<void> {
     await this.db.transaction(async (tx) => {
-      await this.ensureAccountExists(tx, accountId);
+      await this.ensureBillingAccountExists(tx, billingAccountId);
+      await this.ensureVirtualKeyExists(tx, billingAccountId, virtualKeyId);
 
-      // Insert ledger entry (source of truth)
+      const normalizedCost = this.normalizeAmount(cost, {
+        enforceMinimumOne: true,
+      });
+      const amount = this.fromNumber(-normalizedCost);
+
+      const [updatedAccount] = await tx
+        .update(billingAccounts)
+        .set({
+          balanceCredits: sql`balance_credits + ${amount}`,
+        })
+        .where(eq(billingAccounts.id, billingAccountId))
+        .returning({ balanceCredits: billingAccounts.balanceCredits });
+
+      if (!updatedAccount) {
+        throw new BillingAccountNotFoundPortError(billingAccountId);
+      }
+
+      const newBalance = this.toNumber(updatedAccount.balanceCredits);
+
       await tx.insert(creditLedger).values({
-        accountId,
-        delta: this.fromNumber(-cost),
+        billingAccountId,
+        virtualKeyId,
+        amount,
+        balanceAfter: this.fromNumber(newBalance),
         reason: "ai_usage",
         reference: requestId,
         metadata: metadata ?? null,
       });
 
-      // Update computed balance atomically
-      const [updatedAccount] = await tx
-        .update(accounts)
-        .set({
-          balanceCredits: sql`balance_credits - ${this.fromNumber(cost)}`,
-        })
-        .where(eq(accounts.id, accountId))
-        .returning({ balanceCredits: accounts.balanceCredits });
-
-      if (!updatedAccount) {
-        throw new AccountNotFoundPortError(accountId);
-      }
-
-      const newBalance = this.toNumber(updatedAccount.balanceCredits);
-
       if (newBalance < 0) {
-        const previousBalance = Number((newBalance + cost).toFixed(2));
+        const previousBalance = newBalance + normalizedCost;
         throw new InsufficientCreditsPortError(
-          accountId,
-          cost,
+          billingAccountId,
+          normalizedCost,
           previousBalance < 0 ? 0 : previousBalance
         );
       }
@@ -144,69 +159,155 @@ export class DrizzleAccountService implements AccountService {
   }
 
   async creditAccount({
-    accountId,
+    billingAccountId,
     amount,
     reason,
     reference,
+    virtualKeyId,
+    metadata,
   }: {
-    accountId: string;
+    billingAccountId: string;
     amount: number;
     reason: string;
     reference?: string;
+    virtualKeyId?: string;
+    metadata?: Record<string, unknown>;
   }): Promise<{ newBalance: number }> {
     return await this.db.transaction(async (tx) => {
-      await this.ensureAccountExists(tx, accountId);
+      await this.ensureBillingAccountExists(tx, billingAccountId);
+      const resolvedVirtualKeyId =
+        virtualKeyId ?? (await this.findDefaultKey(tx, billingAccountId)).id;
 
-      await tx.insert(creditLedger).values({
-        accountId,
-        delta: this.fromNumber(amount),
-        reason,
-        reference: reference ?? null,
-        metadata: null,
-      });
+      const normalizedAmount = this.normalizeAmount(amount);
+      const amountDecimal = this.fromNumber(normalizedAmount);
 
       const [updatedAccount] = await tx
-        .update(accounts)
+        .update(billingAccounts)
         .set({
-          balanceCredits: sql`balance_credits + ${this.fromNumber(amount)}`,
+          balanceCredits: sql`balance_credits + ${amountDecimal}`,
         })
-        .where(eq(accounts.id, accountId))
-        .returning({ balanceCredits: accounts.balanceCredits });
+        .where(eq(billingAccounts.id, billingAccountId))
+        .returning({ balanceCredits: billingAccounts.balanceCredits });
 
       if (!updatedAccount) {
-        throw new AccountNotFoundPortError(accountId);
+        throw new BillingAccountNotFoundPortError(billingAccountId);
       }
 
-      return { newBalance: this.toNumber(updatedAccount.balanceCredits) };
+      const newBalance = this.toNumber(updatedAccount.balanceCredits);
+
+      await tx.insert(creditLedger).values({
+        billingAccountId,
+        virtualKeyId: resolvedVirtualKeyId,
+        amount: amountDecimal,
+        balanceAfter: this.fromNumber(newBalance),
+        reason,
+        reference: reference ?? null,
+        metadata: metadata ?? null,
+      });
+
+      return { newBalance };
     });
   }
 
-  /**
-   * Convert Drizzle decimal string to number
-   * Handles the impedance mismatch between domain (number) and database (decimal)
-   */
-  private toNumber(decimal: string): number {
-    return parseFloat(decimal);
-  }
-
-  /**
-   * Convert number to decimal string for database
-   * Ensures proper precision for monetary values
-   */
-  private fromNumber(num: number): string {
-    return num.toFixed(2);
-  }
-
-  private async ensureAccountExists(
+  private async ensureBillingAccountExists(
     tx: QueryableDb,
-    accountId: string
+    billingAccountId: string
   ): Promise<void> {
-    const account = await tx.query.accounts.findFirst({
-      where: eq(accounts.id, accountId),
+    const account = await tx.query.billingAccounts.findFirst({
+      where: eq(billingAccounts.id, billingAccountId),
     });
 
     if (!account) {
-      throw new AccountNotFoundPortError(accountId);
+      throw new BillingAccountNotFoundPortError(billingAccountId);
     }
+  }
+
+  private async ensureVirtualKeyExists(
+    tx: QueryableDb,
+    billingAccountId: string,
+    virtualKeyId: string
+  ): Promise<void> {
+    const key = await tx.query.virtualKeys.findFirst({
+      where: and(
+        eq(virtualKeys.billingAccountId, billingAccountId),
+        eq(virtualKeys.id, virtualKeyId)
+      ),
+    });
+
+    if (!key) {
+      throw new VirtualKeyNotFoundPortError(billingAccountId, virtualKeyId);
+    }
+  }
+
+  private async findDefaultKey(
+    tx: QueryableDb,
+    billingAccountId: string
+  ): Promise<VirtualKeyRow> {
+    const defaultKey = await tx.query.virtualKeys.findFirst({
+      where: and(
+        eq(virtualKeys.billingAccountId, billingAccountId),
+        eq(virtualKeys.isDefault, true)
+      ),
+    });
+
+    if (!defaultKey) {
+      throw new VirtualKeyNotFoundPortError(billingAccountId);
+    }
+
+    return {
+      id: defaultKey.id,
+      litellmVirtualKey: defaultKey.litellmVirtualKey,
+    };
+  }
+
+  private async insertDefaultKey(
+    tx: QueryableDb,
+    billingAccountId: string,
+    params: { label?: string }
+  ): Promise<VirtualKeyRow> {
+    const generatedKey = this.generateVirtualKey(billingAccountId);
+    const [created] = await tx
+      .insert(virtualKeys)
+      .values({
+        billingAccountId,
+        litellmVirtualKey: generatedKey,
+        label: params.label ?? "Default",
+        isDefault: true,
+        active: true,
+      })
+      .returning({
+        id: virtualKeys.id,
+        litellmVirtualKey: virtualKeys.litellmVirtualKey,
+      });
+
+    if (!created) {
+      throw new VirtualKeyNotFoundPortError(billingAccountId);
+    }
+
+    return created;
+  }
+
+  private toNumber(value: number | string | bigint): number {
+    return typeof value === "number" ? value : Number(value);
+  }
+
+  private fromNumber(num: number): number {
+    return num;
+  }
+
+  private generateVirtualKey(billingAccountId: string): string {
+    const randomSegment = randomBytes(16).toString("base64url");
+    return `vk-${billingAccountId.slice(0, 8)}-${randomSegment}`;
+  }
+
+  private normalizeAmount(
+    rawAmount: number,
+    options: { enforceMinimumOne?: boolean } = {}
+  ): number {
+    const rounded = Math.round(rawAmount);
+    if (options.enforceMinimumOne && rounded === 0) {
+      return 1;
+    }
+    return rounded;
   }
 }

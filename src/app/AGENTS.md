@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-11-21
+- **Last reviewed:** 2025-11-22
 - **Status:** draft
 
 ## Purpose
@@ -42,10 +42,11 @@ Next.js App Router delivery layer. UI pages and API routes that expose features 
 - **Exports:** none
 - **Routes (if any):**
   - App pages: `/` (homepage)
-  - API: `/api/v1/meta/health`, `/api/v1/meta/openapi`, `/api/v1/meta/route-manifest`, `/api/v1/ai/completion`, `/api/v1/wallet/link`, `/api/admin/accounts/register-litellm-key`, `/api/admin/accounts/[accountId]/credits/topup`
+  - Meta: `/health`, `/openapi.json`, `/meta/route-manifest`
+  - API: `/api/v1/ai/completion`, `/api/admin/accounts/register-litellm-key`, `/api/admin/accounts/[accountId]/credits/topup`
 - **CLI (if any):** none
 - **Env/Config keys:** none
-- **Files considered API:** layout.tsx, page.tsx, api/\*\*/route.ts
+- **Files considered API:** layout.tsx, page.tsx, api/\*\*/route.ts, health/route.ts, openapi.json/route.ts, meta/\*\*/route.ts
 
 ## Ports (optional)
 

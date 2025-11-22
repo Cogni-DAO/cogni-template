@@ -13,7 +13,8 @@
  */
 
 import {
-  decimal,
+  bigint,
+  boolean,
   jsonb,
   pgTable,
   text,
@@ -22,15 +23,32 @@ import {
 } from "drizzle-orm/pg-core";
 
 /**
- * Accounts table - tracks internal credit balances for LiteLLM virtual keys
- * Maps to LlmCaller.accountId from the authentication layer
+ * Billing accounts table - tracks credit balances for LiteLLM virtual keys
+ * Maps to billing identity derived from Auth.js user.id
  */
-export const accounts = pgTable("accounts", {
+export const billingAccounts = pgTable("billing_accounts", {
   id: text("id").primaryKey(),
-  displayName: text("display_name"),
-  balanceCredits: decimal("balance_credits", { precision: 10, scale: 2 })
+  ownerUserId: text("owner_user_id").notNull().unique(),
+  balanceCredits: bigint("balance_credits", { mode: "number" })
     .notNull()
-    .default("0.00"),
+    .default(0),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+/**
+ * LiteLLM virtual keys associated with billing accounts
+ */
+export const virtualKeys = pgTable("virtual_keys", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  billingAccountId: text("billing_account_id")
+    .notNull()
+    .references(() => billingAccounts.id, { onDelete: "cascade" }),
+  litellmVirtualKey: text("litellm_virtual_key").notNull(),
+  label: text("label").default("Default"),
+  isDefault: boolean("is_default").notNull().default(false),
+  active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -42,10 +60,16 @@ export const accounts = pgTable("accounts", {
  */
 export const creditLedger = pgTable("credit_ledger", {
   id: uuid("id").defaultRandom().primaryKey(),
-  accountId: text("account_id")
+  billingAccountId: text("billing_account_id")
     .notNull()
-    .references(() => accounts.id, { onDelete: "cascade" }),
-  delta: decimal("delta", { precision: 10, scale: 2 }).notNull(),
+    .references(() => billingAccounts.id, { onDelete: "cascade" }),
+  virtualKeyId: uuid("virtual_key_id")
+    .notNull()
+    .references(() => virtualKeys.id, { onDelete: "cascade" }),
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  balanceAfter: bigint("balance_after", { mode: "number" })
+    .notNull()
+    .default(0),
   reason: text("reason").notNull(),
   reference: text("reference"),
   metadata: jsonb("metadata")

@@ -37,7 +37,7 @@ Single source of truth for externally callable operations. Each file defines an 
 
 ## Public Surface
 
-- **Exports:** ai.completion.v1, admin.accounts.register.v1, admin.accounts.topup.v1, wallet.link.v1, meta.health.read.v1, meta.route-manifest.read.v1; http/router.v1.ts (ts-rest contracts); http/openapi.v1.ts (OpenAPI generation)
+- **Exports:** ai.completion.v1, meta.health.read.v1, meta.route-manifest.read.v1; http/router.v1.ts (ts-rest contracts); http/openapi.v1.ts (OpenAPI generation)
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none

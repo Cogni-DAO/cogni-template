@@ -3,9 +3,9 @@
 
 /**
  * Module: `@app/api/v1/ai/completion`
- * Purpose: HTTP endpoint for AI completion with account validation.
- * Scope: Validate API keys, delegate to completion facade, map feature errors to HTTP codes. Does not handle rate limiting.
- * Invariants: Validates with contract, translates DTOs, handles accounts and completion errors cleanly
+ * Purpose: HTTP endpoint for AI completion with billing account resolution.
+ * Scope: Require session, delegate to completion facade, map feature errors to HTTP codes. Does not handle rate limiting.
+ * Invariants: Validates with contract, translates DTOs, handles billing/account errors cleanly
  * Side-effects: IO (HTTP request/response)
  * Notes: Route validates accounts via features layer, maps AccountsFeatureError to HTTP status codes
  * Links: Uses contract for validation, delegates to completion facade, maps feature errors
@@ -15,24 +15,17 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { completion } from "@/app/_facades/ai/completion.server";
+import { getSessionUser } from "@/app/_lib/auth/session";
 import { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
 import { isAccountsFeatureError } from "@/features/accounts/public";
-import { deriveAccountIdFromApiKey } from "@/shared/util";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    // Enforce API key at boundary - 401 before facade call
-    const authHeader = request.headers.get("authorization");
-
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "API key required" }, { status: 401 });
-    }
-
-    const apiKey = authHeader.slice("Bearer ".length).trim();
-    if (!apiKey) {
-      return NextResponse.json({ error: "API key required" }, { status: 401 });
+    const sessionUser = getSessionUser(request);
+    if (!sessionUser) {
+      return NextResponse.json({ error: "Session required" }, { status: 401 });
     }
 
     let body: unknown;
@@ -45,14 +38,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Validate input with contract
     const input = aiCompletionOperation.input.parse(body);
 
-    // Construct LlmCaller at auth boundary - only place this happens
-    const caller = {
-      accountId: deriveAccountIdFromApiKey(apiKey),
-      apiKey,
-    };
-
     // Delegate to bootstrap facade
-    const { message } = await completion({ ...input, caller });
+    const { message } = await completion({ ...input, sessionUser });
 
     // Validate and return output
     return NextResponse.json(aiCompletionOperation.output.parse({ message }));
@@ -67,18 +54,21 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Handle accounts feature errors
     if (isAccountsFeatureError(error)) {
-      if (error.kind === "UNKNOWN_API_KEY") {
-        return NextResponse.json({ error: "Unknown API key" }, { status: 403 });
-      }
       if (error.kind === "INSUFFICIENT_CREDITS") {
         return NextResponse.json(
           { error: "Insufficient credits" },
           { status: 402 }
         );
       }
-      if (error.kind === "ACCOUNT_NOT_FOUND") {
+      if (error.kind === "BILLING_ACCOUNT_NOT_FOUND") {
         return NextResponse.json(
           { error: "Account not found" },
+          { status: 403 }
+        );
+      }
+      if (error.kind === "VIRTUAL_KEY_NOT_FOUND") {
+        return NextResponse.json(
+          { error: "Virtual key not found" },
           { status: 403 }
         );
       }

@@ -136,7 +136,7 @@ The `deploy.sh` script performs **rolling updates** without downtime:
 Deployment includes automatic health validation:
 
 1. **Container Deployment**: SSH executes container updates
-2. **Health Gate**: Curl loop tests `https://domain/api/v1/meta/health`
+2. **Health Gate**: Curl loop tests `https://domain/health`
 3. **Timeout**: 5 minutes maximum wait
 4. **Failure Handling**: Deployment fails if health check fails
 
@@ -228,7 +228,7 @@ Access via Loki/Grafana dashboard or API queries.
 
 **Health Check Failures**:
 
-- Test app directly: `curl http://vm-ip:3000/api/v1/meta/health`
+- Test app directly: `curl http://vm-ip:3000/health`
 - Check container networking: `docker network ls`
 - Verify Caddy configuration
 

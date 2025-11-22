@@ -8,7 +8,7 @@
  * Invariants: Stable API contract; schema validates all responses.
  * Side-effects: none
  * Notes: Used by e2e testing and future MCP tooling; follows hex architecture.
- * Links: \@features/site-meta/routeManifest, /api/v1/meta/route-manifest endpoint
+ * Links: \@features/site-meta/routeManifest, /meta/route-manifest endpoint
  * @internal
  */
 

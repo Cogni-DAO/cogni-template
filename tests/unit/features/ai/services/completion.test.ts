@@ -29,8 +29,9 @@ import type { LlmCaller } from "@/ports";
 describe("features/ai/services/completion", () => {
   // Helper to create test caller
   const createTestCaller = (): LlmCaller => ({
-    accountId: "test-user",
-    apiKey: "test-key-12345678",
+    billingAccountId: "billing-test-user",
+    virtualKeyId: "virtual-key-123",
+    litellmVirtualKey: "vk-test-key",
   });
 
   describe("execute", () => {

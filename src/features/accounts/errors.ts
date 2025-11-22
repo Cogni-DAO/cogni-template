@@ -3,33 +3,38 @@
 
 /**
  * Module: `@features/accounts/errors`
- * Purpose: Feature-level error types for account management operations.
- * Scope: Defines errors that cross the feature boundary to app layer. Does not include internal domain errors.
- * Invariants: Stable interface for app layer error handling; maps from domain errors
+ * Purpose: Translate account port errors into feature-level error shapes.
+ * Scope: Provides AccountsFeatureError types and guards; does not call ports or adapters.
+ * Invariants: Pure functions, no side effects, no I/O.
  * Side-effects: none
- * Notes: App layer imports these for HTTP error mapping; features translate domain → feature errors
- * Links: Used by app routes for error handling, mapped from core domain errors
+ * Notes: Consumed by app facades to surface stable error kinds.
+ * Links: src/features/accounts/public.ts
  * @public
  */
+import {
+  BillingAccountNotFoundPortError,
+  InsufficientCreditsPortError,
+  VirtualKeyNotFoundPortError,
+} from "@/ports";
 
-/**
- * Feature-level error algebra for accounts operations
- * Clean typed errors that cross the feature boundary to app layer
- */
 export type AccountsFeatureError =
-  | { kind: "UNKNOWN_API_KEY" }
-  | { kind: "ACCOUNT_NOT_FOUND"; accountId: string }
+  | {
+      kind: "BILLING_ACCOUNT_NOT_FOUND";
+      billingAccountId: string;
+    }
   | {
       kind: "INSUFFICIENT_CREDITS";
-      accountId: string;
+      billingAccountId: string;
       required: number;
       available: number;
     }
-  | { kind: "GENERIC"; message: string };
+  | {
+      kind: "VIRTUAL_KEY_NOT_FOUND";
+      billingAccountId: string;
+      virtualKeyId?: string;
+    }
+  | { kind: "GENERIC"; message?: string };
 
-/**
- * Type guard to check if error is AccountsFeatureError
- */
 export function isAccountsFeatureError(
   error: unknown
 ): error is AccountsFeatureError {
@@ -37,6 +42,43 @@ export function isAccountsFeatureError(
     typeof error === "object" &&
     error !== null &&
     "kind" in error &&
-    typeof (error as Record<string, unknown>).kind === "string"
+    typeof (error as AccountsFeatureError).kind === "string"
   );
+}
+
+export function mapAccountsPortErrorToFeature(
+  error: unknown
+): AccountsFeatureError {
+  if (error instanceof BillingAccountNotFoundPortError) {
+    return {
+      kind: "BILLING_ACCOUNT_NOT_FOUND",
+      billingAccountId: error.billingAccountId,
+    };
+  }
+
+  if (error instanceof VirtualKeyNotFoundPortError) {
+    return {
+      kind: "VIRTUAL_KEY_NOT_FOUND",
+      billingAccountId: error.billingAccountId,
+      ...(error.virtualKeyId ? { virtualKeyId: error.virtualKeyId } : {}),
+    };
+  }
+
+  if (error instanceof InsufficientCreditsPortError) {
+    return {
+      kind: "INSUFFICIENT_CREDITS",
+      billingAccountId: error.billingAccountId,
+      required: error.cost,
+      available: error.previousBalance,
+    };
+  }
+
+  if (isAccountsFeatureError(error)) {
+    return error;
+  }
+
+  return {
+    kind: "GENERIC",
+    message: error instanceof Error ? error.message : "Unknown account error",
+  };
 }

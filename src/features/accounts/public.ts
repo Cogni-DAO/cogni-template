@@ -13,14 +13,7 @@
  */
 
 export type { AccountsFeatureError } from "./errors";
-export { isAccountsFeatureError } from "./errors";
-export type {
-  GetAccountForApiKeyResult,
-  RegisterAccountResult,
-  TopupCreditsResult,
-} from "./services/adminAccounts";
 export {
-  getAccountForApiKey,
-  registerAccount,
-  topupCredits,
-} from "./services/adminAccounts";
+  isAccountsFeatureError,
+  mapAccountsPortErrorToFeature,
+} from "./errors";

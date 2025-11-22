@@ -200,7 +200,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ └── api/
 [x] │ ├── v1/meta/ # health, route-manifest, openapi
 [x] │ ├── v1/ai/completion/ # AI completion endpoint
-[x] │ ├── v1/wallet/link/ # POST - wallet-to-account linking
+[ ] │ ├── v1/wallet/link/ # POST - wallet-to-account linking (removed in session-only design)
 [x] │ └── admin/ # admin control plane endpoints
 [x] │ ├── accounts/
 [x] │ │ ├── register-litellm-key/ # POST - create account for API key

@@ -146,7 +146,7 @@ POSTGRES_DB=${APP_DB_NAME}
 ## Health Validation
 
 1. **Container healthchecks**: Docker HEALTHCHECK in Dockerfile
-2. **App health**: `https://${domain}/api/v1/meta/health` successful curl
+2. **App health**: `https://${domain}/health` successful curl
 
 ## Current State
 

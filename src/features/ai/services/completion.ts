@@ -72,9 +72,11 @@ export async function execute(
   if (modelId) debitMetadata.model = modelId;
   if (provider) debitMetadata.provider = provider;
   if (llmRequestId) debitMetadata.llmRequestId = llmRequestId;
+  debitMetadata.virtualKeyId = caller.virtualKeyId;
 
   await accountService.debitForUsage({
-    accountId: caller.accountId,
+    billingAccountId: caller.billingAccountId,
+    virtualKeyId: caller.virtualKeyId,
     cost,
     requestId,
     metadata: debitMetadata,
