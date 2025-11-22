@@ -36,9 +36,11 @@ fix/abc → staging (PR with full CI checks)
 push to staging → staging-preview.yml
 ```
 
-**Jobs:** `build → push → deploy → e2e → promote`
+**Jobs:** `build → test-image → push → deploy → e2e → promote`
 
-- Builds & pushes preview image to GHCR
+- Builds Docker image
+- Tests container health (startup + health endpoint with hardcoded test env)
+- Pushes validated image to GHCR
 - Deploys to preview environment
 - Runs full Playwright E2E tests
 - **If E2E passes:** auto-creates release branch + PR to main
@@ -56,11 +58,13 @@ release/YYYYMMDD-<shortsha> → main (PR)
 ### 4. Production Deploy
 
 ```
-push to main → build-prod.yml → manual deploy-production.yml
+push to main → build-prod.yml (build → test → push) → deploy-production.yml (triggers on success only)
 ```
 
 - Auto-builds immutable `prod-<sha>` image
-- Manual production deployment via workflow_dispatch
+- Tests container health before push (hardcoded test environment)
+- Deploy workflow triggers only on build success
+- Rolling deployment (no downtime)
 
 ## Key Features
 

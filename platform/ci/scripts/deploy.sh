@@ -204,19 +204,23 @@ ENV_EOF
 log_info "Logging into GHCR for private image pulls..."
 echo "${GHCR_DEPLOY_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
 
+log_info "Validating required images are available..."
+if ! docker compose pull --dry-run; then
+  log_error "❌ Required images not found in registry"
+  log_error "Build workflow may have failed - check previous workflow run"
+  exit 1
+fi
+
 log_info "Running Docker cleanup to free space..."
 docker system prune -af --volumes || echo "Docker cleanup failed, continuing..."
 
 log_info "Pulling latest images..."
 docker compose pull
 
-log_info "Stopping existing containers..."
-docker compose down || true
-
-log_info "Running database migrations..."
+log_info "Running database migrations with new image..."
 docker compose run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'
 
-log_info "Starting runtime stack..."
+log_info "Starting runtime stack (rolling update)..."
 docker compose up -d --remove-orphans
 
 log_info "Waiting for containers to be ready..."

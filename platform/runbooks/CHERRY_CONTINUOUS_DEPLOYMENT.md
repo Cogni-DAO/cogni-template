@@ -29,10 +29,18 @@ Automated deployment workflows are configured for the complete CI/CD pipeline:
 The deployment uses provider-agnostic scripts that work across any CI system:
 
 ```bash
-platform/ci/scripts/build.sh    # Build Docker image (linux/amd64)
-platform/ci/scripts/push.sh     # Push to GHCR with authentication
-platform/ci/scripts/deploy.sh   # Deploy via OpenTofu
+platform/ci/scripts/build.sh       # Build Docker image (linux/amd64)
+platform/ci/scripts/test-image.sh  # Validate image health (hardcoded test env)
+platform/ci/scripts/push.sh        # Push to GHCR with authentication
+platform/ci/scripts/deploy.sh      # Deploy via Docker Compose (rolling update)
 ```
+
+**Key features:**
+
+- Each script has single responsibility
+- Scripts are reusable locally and in any CI system
+- `test-image.sh` catches health failures before push
+- `deploy.sh` performs rolling updates (no downtime)
 
 ## Overview
 
@@ -68,11 +76,12 @@ on:
     branches: [main, production]
 ```
 
-### Build → Push → Deploy Pipeline
+### Build → Test → Push → Deploy Pipeline
 
 1. **Build**: Create Docker image with tag `production-${short_sha}`
-2. **Push**: Upload to GHCR with authentication
-3. **Deploy**: SSH-based deployment via OpenTofu
+2. **Test**: Validate image starts and health endpoint responds 200 (hardcoded test env)
+3. **Push**: Upload to GHCR with authentication (only if test passes)
+4. **Deploy**: Rolling update via Docker Compose (no downtime)
 
 ## Manual Deployment
 
@@ -107,6 +116,20 @@ export TF_VAR_ssh_private_key="$(cat ~/.ssh/your_private_key)"
 # Deploy
 tofu apply -auto-approve
 ```
+
+## Deployment Safety
+
+The `deploy.sh` script performs **rolling updates** without downtime:
+
+1. **Image Validation**: `docker compose pull --dry-run` verifies image exists in registry
+2. **Space Cleanup**: `docker system prune` frees disk space (after validation)
+3. **Image Pull**: Downloads new images
+4. **Migrations**: Runs database migrations (old containers still running)
+5. **Rolling Update**: `docker compose up -d --remove-orphans` recreates only changed services
+
+**No `docker compose down`:** Old containers keep serving traffic until new containers are healthy. If deployment fails, old containers remain running.
+
+**Backward-compatible migrations:** Brief window where old app code talks to new schema is acceptable if migrations are additive.
 
 ## Health Validation
 
