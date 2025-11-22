@@ -105,7 +105,7 @@ In the new Auth.js + SIWE design, **MVP does not expose any account/key manageme
 
 From this point on, all LLM calls for this user go through the same `billing_accounts` + `virtual_keys` records.
 
-**Credit top-ups (MVP):** Real user payments flow through Resmic webhook at `POST /api/v1/payments/resmic/webhook`. The webhook verifies the Resmic payload, resolves the user's `billing_account_id`, inserts a positive `credit_ledger` entry with `reason='resmic_payment'` (or `'onchain_deposit'`), and updates `billing_accounts.balance_credits`. Dev/test environments can seed credits directly via database fixtures or scripts.
+**Credit top-ups (MVP):** Real user funding currently enters the system via `POST /api/v1/payments/resmic/confirm` (session-based), which writes positive `credit_ledger` rows with `reason='resmic_payment'` and updates `billing_accounts.balance_credits`. The endpoint resolves `billing_account_id` from the SIWE session (not from request body). The Resmic SDK is a frontend-only payment widget; it does not send a webhook or signed callback. The client calls the confirm endpoint after Resmic's payment status callback fires in the browser. Dev/test environments can seed credits directly via database fixtures or scripts. Post-MVP, a Ponder-based on-chain watcher will provide reconciliation and observability for payments; see `docs/PAYMENTS_PONDER_VERIFICATION.md`.
 
 ---
 

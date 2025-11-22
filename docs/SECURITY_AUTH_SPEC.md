@@ -56,15 +56,22 @@ User signs SIWE message via RainbowKit → Auth.js Credentials provider creates 
   - `/api/v1/ai/completion` - Chat endpoint with credit deduction
 - Any new `/api/v1/*` routes that use LLM or affect credits must be session-protected
 
-**Payment Webhooks (Public, Webhook Signature Auth):**
+**Payment Endpoints (User Session Required):**
 
-- `POST /api/v1/payments/resmic/webhook` - Resmic payment webhook for credit top-ups (verified via webhook signature)
+- `POST /api/v1/payments/resmic/confirm` - Resmic payment confirmation for credit top-ups (SIWE session with HttpOnly cookie, billing_account_id derived from session)
 
 **Provisioning & Operations (Not HTTP in MVP):**
 
 - **Virtual key provisioning:** Happens internally in `src/lib/auth/mapping.ts` via `getOrCreateBillingAccountForUser(user)` using LiteLLM MASTER_KEY, not via HTTP endpoints
-- **Credit top-ups (real users):** Handled via Resmic payment webhook (`POST /api/v1/payments/resmic/webhook`). Webhook verifies signature, resolves `billing_account_id`, inserts positive `credit_ledger` entry with `reason='resmic_payment'` or `'onchain_deposit'`, and updates `billing_accounts.balance_credits`. Dev/test environments can seed credits via database fixtures.
+- **Credit top-ups (real users):** Handled via Resmic confirm endpoint (`POST /api/v1/payments/resmic/confirm`). The endpoint requires an active SIWE session, resolves `billing_account_id` from the session (not from request body), inserts positive `credit_ledger` entry with `reason='resmic_payment'`, and updates `billing_accounts.balance_credits`. Dev/test environments can seed credits via database fixtures.
 - **Future operator API:** Post-MVP may add `/api/operator/*` for key management, analytics, and manual adjustments
+
+**Future On-Chain Watcher (Post-MVP):**
+
+- A Ponder-based on-chain indexer will run as a separate internal service (not a public endpoint) that reads from Base/Base Sepolia RPC and indexes USDC transfers into the DAO wallet.
+- Ponder will either connect directly to the same Postgres or expose a private HTTP/GraphQL API for reconciliation jobs.
+- All writes to `credit_ledger` still go through our app's business logic; Ponder provides an independent view for observability and fraud detection.
+- **Full spec:** See `docs/PAYMENTS_PONDER_VERIFICATION.md`.
 
 ---
 
@@ -336,15 +343,15 @@ React components use Auth.js hooks:
 
 **Database Reset:**
 
-- [ ] Drop all existing tables from database
-- [ ] Delete all migration files in `src/shared/db/migrations/` or equivalent
-- [ ] Update `src/shared/db/schema.ts` to define new schema:
+- [x] Drop all existing tables from database
+- [x] Delete all migration files in `src/shared/db/migrations/` or equivalent
+- [x] Update `src/shared/db/schema.ts` to define new schema:
   - Remove old `accounts` table definition
   - Add `billing_accounts` table (with `owner_user_id`, `balance_credits`)
   - Add `virtual_keys` table (with `billing_account_id`, `litellm_virtual_key`, `label`, `is_default`, `active`)
   - Keep/update `credit_ledger` table (with `billing_account_id`, `virtual_key_id`)
-- [ ] Generate fresh migrations for new schema
-- [ ] Let Auth.js Drizzle adapter create its own tables (`users`, `accounts`, `sessions`, `verification_tokens`)
+- [x] Generate fresh migrations for new schema (see `src/adapters/server/db/migrations/0000_silly_siren.sql`)
+- [x] Let Auth.js Drizzle adapter create its own tables (`users`, `accounts`, `sessions`, `verification_tokens`)
 
 **API Routes to Remove (v0 MVP patterns):**
 
@@ -383,46 +390,46 @@ React components use Auth.js hooks:
 
 ### Phase 1: Auth.js Setup
 
-- [ ] Install dependencies: `next-auth@beta`, `@auth/drizzle-adapter`, `siwe`
-- [ ] Create `src/auth.ts` with SIWE provider configuration
-- [ ] Configure Drizzle adapter to use existing Postgres connection
-- [ ] Add `SESSION_SECRET` to `.env` (for JWT signing)
-- [ ] Create test route to verify `auth()` returns session
+- [x] Install dependencies: `next-auth@beta`, `@auth/drizzle-adapter`, `siwe`
+- [x] Create `src/auth.ts` with SIWE provider configuration
+- [x] Configure Drizzle adapter to use existing Postgres connection
+- [x] Add `SESSION_SECRET` to `.env` (for JWT signing)
+- [x] Expose Auth.js handler (`/api/auth/[...nextauth]`) and rely on built-in `/api/auth/session` for session checks
 
 ### Phase 2: Frontend Integration
 
-- [ ] Create `src/app/providers/auth.client.tsx` with SessionProvider
-- [ ] Update root layout to wrap app in SessionProvider
-- [ ] Wire RainbowKit sign-in to Auth.js `signIn()` method
-- [ ] Add sign-out button calling `signOut()`
-- [ ] Test: wallet connect → sign message → session created
+- [x] Create `src/app/providers/auth.client.tsx` with SessionProvider
+- [x] Update root layout to wrap app in SessionProvider (see `src/app/providers/app-providers.client.tsx`)
+- [ ] Wire RainbowKit sign-in to Auth.js `signIn()` method (frontend implementation pending)
+- [ ] Add sign-out button calling `signOut()` (frontend implementation pending)
+- [x] Test: Stack test validates session → billing → LLM flow (see `tests/stack/auth/auth-flow.stack.test.ts`)
 
 ### Phase 3: Billing Integration
 
-- [ ] Create `src/lib/auth/mapping.ts` with `getOrCreateBillingAccountForUser(user)` function
+- [x] Create `src/lib/auth/mapping.ts` with `getOrCreateBillingAccountForUser(user)` function
   - On first login, provisions LiteLLM virtual key via `/key/generate` with MASTER_KEY
   - Creates `billing_accounts` row with `owner_user_id`
   - Creates default `virtual_keys` row with `is_default = true`, storing the LiteLLM key string
-- [ ] Update `src/adapters/server/accounts/drizzle.adapter.ts` to work with `billing_accounts` + `virtual_keys`
-- [ ] Update `/api/v1/ai/completion` to use session-only auth
-  - Replace `Authorization` header logic with `auth()` call
+- [x] Update `src/adapters/server/accounts/drizzle.adapter.ts` to work with `billing_accounts` + `virtual_keys`
+- [x] Update `/api/v1/ai/completion` to use session-only auth
+  - Replace `Authorization` header logic with `getSessionUser()` call
   - Implement session → user → billing_account → virtual_key resolution
-- [ ] Test: sign in → chat → credits deducted correctly
+- [x] Test: Stack test validates complete flow (see `tests/stack/auth/auth-flow.stack.test.ts`)
 
 ### Phase 4: Route Protection
 
-- [ ] Implement session auth on `/api/v1/ai/*` routes per "API Auth Policy (MVP)" section
+- [x] Implement session auth on `/api/v1/ai/*` routes per "API Auth Policy (MVP)" section
 - [x] Ensure public routes remain accessible: `/api/auth/*`, `/health`, `/openapi.json`, `/meta/route-manifest`
-- [ ] Test: unauthorized requests to `/api/v1/ai/*` return 401
-- [ ] Test: expired sessions are rejected
-- [ ] Test: public infrastructure routes remain accessible without auth
+- [x] Test: Stack test validates session requirement (see `tests/stack/auth/auth-flow.stack.test.ts`)
+- [ ] Test: expired sessions are rejected (integration test pending)
+- [x] Test: public infrastructure routes remain accessible without auth (existing tests pass)
 
 ### Phase 5: Cleanup
 
-- [ ] Remove any localStorage API key handling from frontend (if exists)
+- [x] Remove any localStorage API key handling from frontend (no localStorage code found)
 - [x] Remove any `Authorization` header code from chat requests
-- [ ] Update docs and environment variable examples
-- [x] Verify no legacy custom auth endpoints remain
+- [x] Update docs and environment variable examples (SESSION_SECRET added to .env.example)
+- [x] Verify no legacy custom auth endpoints remain (all removed in Phase 0)
 
 ---
 

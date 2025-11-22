@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-11-21
+- **Last reviewed:** 2025-11-23
 - **Status:** draft
 
 ## Purpose
 
-Client-side provider composition for the web UI shell. Configures React context providers (wagmi, RainbowKit, React Query) that wrap the Next.js App Router tree.
+Client-side provider composition for the web UI shell. Configures React context providers (Auth.js SessionProvider, wagmi, RainbowKit, React Query) that wrap the Next.js App Router tree.
 
 ## Pointers
 
@@ -32,6 +32,7 @@ Client-side provider composition for the web UI shell. Configures React context 
 
 - **Exports:**
   - `AppProviders` - Main composition component (imports all sub-providers)
+  - `AuthProvider` - Auth.js SessionProvider wrapper for auth context
   - `QueryProvider` - React Query client provider
   - `WalletProvider` - wagmi + RainbowKit provider (creates config internally via dynamic import)
   - `buildWagmiConfigOptions` - Pure helper for wagmi config (testable without React)
@@ -49,8 +50,8 @@ Client-side provider composition for the web UI shell. Configures React context 
 
 ## Responsibilities
 
-- This directory **does**: compose client-side React providers; configure wagmi chains and connectors; provide global context for wallet connections; export pure config builder helpers
-- This directory **does not**: contain business logic; implement ports; make API calls; touch core domain
+- This directory **does**: compose client-side React providers; configure wagmi chains and connectors; provide global context for wallet connections and auth sessions; export pure config builder helpers
+- This directory **does not**: contain business logic; implement ports; make direct API calls; touch core domain
 
 ## Usage
 
@@ -66,7 +67,7 @@ import { AppProviders } from "./providers/app-providers.client";
 ## Standards
 
 - All provider components are client components ('use client')
-- Provider order matters: QueryProvider → WalletProvider
+- Provider order matters: AuthProvider → QueryProvider → WalletProvider
 - wagmi config uses Ethereum Sepolia (11155111) as primary chain per Aragon constraint
 - Base Sepolia (84532) available as additional testnet
 - Structure ready for mainnet expansion (Base, Optimism, etc.)
@@ -74,7 +75,7 @@ import { AppProviders } from "./providers/app-providers.client";
 ## Dependencies
 
 - **Internal:** @shared/env (client env only)
-- **External:** wagmi, viem, @rainbow-me/rainbowkit, @tanstack/react-query
+- **External:** next-auth/react, wagmi, viem, @rainbow-me/rainbowkit, @tanstack/react-query
 
 ## Change Protocol
 

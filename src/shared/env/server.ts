@@ -40,6 +40,8 @@ const serverSchema = z.object({
 
   // Application environment (controls adapter wiring)
   APP_ENV: z.enum(["test", "production"]),
+  APP_BASE_URL: z.string().url().optional(),
+  DOMAIN: z.string().optional(),
 
   // LLM (Stage 8) - App only needs proxy access, not provider keys
   LITELLM_BASE_URL: z
@@ -50,7 +52,7 @@ const serverSchema = z.object({
         ? "http://litellm:4000"
         : "http://localhost:4000"
     ),
-  LITELLM_MASTER_KEY: z.string().min(1),
+  LITELLM_MASTER_KEY: z.string().min(1).optional(),
   DEFAULT_MODEL: z.string().default("openrouter/auto"),
 
   // TODO: Remove when proper wallet→key registry exists (MVP crutch)
@@ -65,8 +67,7 @@ const serverSchema = z.object({
   DB_HOST: z.string().default("localhost"),
   DB_PORT: z.coerce.number().default(5432),
 
-  // TODO: Enable when session management is implemented
-  // SESSION_SECRET: z.string().min(32),
+  SESSION_SECRET: z.string().min(32).optional(),
 
   // Optional
   PORT: z.coerce.number().default(3000),

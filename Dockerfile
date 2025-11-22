@@ -24,6 +24,12 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
     NODE_ENV=production \
     APP_ENV=${APP_ENV}
 
+# Build-time DB env for NextAuth + Drizzle adapter validation during `pnpm build`.
+# No actual DB connection is made at build time; these values satisfy config validation only.
+# Runtime containers will override with real credentials.
+ENV DATABASE_URL="postgresql://build_user:build_pass@build-host.invalid:5432/build_db" \
+    AUTH_SECRET="build-time-secret-min-32-chars-long-placeholder"
+
 RUN pnpm build
 
 # 3) Runtime – includes app and migration capabilities

@@ -45,7 +45,7 @@ export default async function resetStackTestDatabase() {
   try {
     // Wipe tables in dependency-safe order (ledger → keys → accounts)
     // TRUNCATE is faster than DELETE and resets sequences
-    await sql`TRUNCATE TABLE credit_ledger, virtual_keys, billing_accounts RESTART IDENTITY CASCADE`;
+    await sql`TRUNCATE TABLE credit_ledger, virtual_keys, billing_accounts, verification_tokens, sessions, accounts, users RESTART IDENTITY CASCADE`;
 
     console.log("✅ Stack test database reset complete");
   } catch (error) {

@@ -67,10 +67,16 @@ Session → user.id → billing_account → default virtual_key → LiteLLM API 
 
 **Credits UP (Real Users):**
 
-- Resmic payment webhook receives payment notification
-- `POST /api/v1/payments/resmic/webhook` verifies signature, resolves `billing_account_id`
-- Inserts positive `credit_ledger` row with `reason='resmic_payment'` (or `'onchain_deposit'`)
+- User pays via Resmic checkout/widget (frontend-only SDK) in the browser
+- Resmic sets payment status callback to true client-side once payment is believed to be mined
+- Frontend calls `POST /api/v1/payments/resmic/confirm` (session-authenticated)
+- Backend resolves `billing_account_id` from SIWE session (not from request body)
+- Inserts positive `credit_ledger` row with `reason='resmic_payment'`
 - Updates `billing_accounts.balance_credits`
+
+**MVP Trust Model:** The SIWE session and Resmic UI callback are the only gates; no on-chain verification in the critical path.
+
+**Post-MVP Hardening:** A Ponder-based on-chain indexer will watch the DAO wallet for USDC transfers and provide reconciliation/observability (not a hard gate initially). See `docs/PAYMENTS_PONDER_VERIFICATION.md`.
 
 **Credits DOWN (LLM Usage):**
 
@@ -156,9 +162,9 @@ Session → user.id → billing_account → default virtual_key → LiteLLM API 
 
 - `/api/auth/*` - Auth.js routes (handled automatically)
 
-**Payment Routes (Public, Webhook Auth):**
+**Payment Routes (Session Required):**
 
-- `src/app/api/v1/payments/resmic/webhook/route.ts` - Resmic payment webhook (top-up credits)
+- `src/app/api/v1/payments/resmic/confirm/route.ts` - Resmic payment confirmation (top-up credits, session-authenticated)
 
 **Infrastructure Routes (Public, Unversioned):**
 
@@ -209,21 +215,21 @@ Session → user.id → billing_account → default virtual_key → LiteLLM API 
 
 ### Phase 0: Database Reset
 
-- [ ] Drop existing tables, delete migrations
+- [x] Drop existing tables, delete migrations
 - [x] Update schema: `billing_accounts` + `virtual_keys` + `credit_ledger`
-- [ ] Generate fresh migrations
-- [ ] Let Auth.js adapter create identity tables
+- [x] Generate fresh migrations
+- [x] Let Auth.js adapter create identity tables
 
 ### Phase 1-2: Auth.js Setup
 
-- [ ] Install next-auth@beta, @auth/drizzle-adapter, siwe
-- [ ] Create `src/auth.ts` with Credentials provider + SIWE verification
+- [x] Install next-auth@beta, @auth/drizzle-adapter, siwe
+- [x] Create `src/auth.ts` with Credentials provider + SIWE verification
 - [ ] Wire RainbowKit to Auth.js signIn()
 
 ### Phase 3: Billing Integration
 
-- [ ] Implement `src/lib/auth/mapping.ts` (getOrCreateBillingAccountForUser)
-- [ ] Provision default virtual key on first login (call LiteLLM `/key/generate` with `LITELLM_MASTER_KEY`; may attach `metadata.cogni_billing_account_id`)
+- [x] Implement `src/lib/auth/mapping.ts` (getOrCreateBillingAccountForUser)
+- [x] Provision default virtual key on first login (call LiteLLM `/key/generate` with `LITELLM_MASTER_KEY`; may attach `metadata.cogni_billing_account_id`)
 - [x] Update completion route to use session auth + virtual_keys lookup
 - [x] Remove `/api/v1/wallet/link` endpoint
 

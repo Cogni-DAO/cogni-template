@@ -13,5 +13,5 @@
  */
 export interface SessionUser {
   id: string;
-  walletAddress?: string;
+  walletAddress?: string | null;
 }
