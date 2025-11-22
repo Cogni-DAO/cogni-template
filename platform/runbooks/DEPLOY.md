@@ -53,10 +53,12 @@ For database architecture details, see [DATABASES.md](../../docs/DATABASES.md).
 # Add SSH key to agent
 ssh-add ~/.ssh/cogni_template_preview_deploy
 
-# Build and Push to GHCR
+# Build, Test, and Push to GHCR
 export IMAGE_NAME=ghcr.io/cogni-dao/cogni-template
 export IMAGE_TAG=preview-local-$(git rev-parse --short HEAD)
-platform/ci/scripts/build.sh && platform/ci/scripts/push.sh
+platform/ci/scripts/build.sh && \
+  platform/ci/scripts/test-image.sh && \
+  platform/ci/scripts/push.sh
 
 # Set all environment variables
 export DEPLOY_ENVIRONMENT=preview
