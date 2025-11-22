@@ -25,7 +25,7 @@ import {
 } from "@/ports";
 import { billingAccounts, creditLedger, virtualKeys } from "@/shared/db";
 
-const ZERO_DECIMAL = "0.00" as const;
+const ZERO = "0" as const;
 
 interface QueryableDb extends Pick<Database, "query" | "insert"> {
   query: Database["query"];
@@ -69,7 +69,7 @@ export class DrizzleAccountService implements AccountService {
       await tx.insert(billingAccounts).values({
         id: billingAccountId,
         ownerUserId: userId,
-        balanceCredits: ZERO_DECIMAL,
+        balanceCredits: ZERO,
         // Display name intentionally optional; stored later when UX surfaces exist
       });
 
@@ -118,7 +118,10 @@ export class DrizzleAccountService implements AccountService {
       await this.ensureBillingAccountExists(tx, billingAccountId);
       await this.ensureVirtualKeyExists(tx, billingAccountId, virtualKeyId);
 
-      const amount = this.fromNumber(-cost);
+      const normalizedCost = this.normalizeAmount(cost, {
+        enforceMinimumOne: true,
+      });
+      const amount = this.fromNumber(-normalizedCost);
 
       const [updatedAccount] = await tx
         .update(billingAccounts)
@@ -145,10 +148,10 @@ export class DrizzleAccountService implements AccountService {
       });
 
       if (newBalance < 0) {
-        const previousBalance = Number((newBalance + cost).toFixed(2));
+        const previousBalance = newBalance + normalizedCost;
         throw new InsufficientCreditsPortError(
           billingAccountId,
-          cost,
+          normalizedCost,
           previousBalance < 0 ? 0 : previousBalance
         );
       }
@@ -175,7 +178,8 @@ export class DrizzleAccountService implements AccountService {
       const resolvedVirtualKeyId =
         virtualKeyId ?? (await this.findDefaultKey(tx, billingAccountId)).id;
 
-      const amountDecimal = this.fromNumber(amount);
+      const normalizedAmount = this.normalizeAmount(amount);
+      const amountDecimal = this.fromNumber(normalizedAmount);
 
       const [updatedAccount] = await tx
         .update(billingAccounts)
@@ -283,16 +287,27 @@ export class DrizzleAccountService implements AccountService {
     return created;
   }
 
-  private toNumber(decimal: string): number {
-    return parseFloat(decimal);
+  private toNumber(value: number | string | bigint): number {
+    return typeof value === "number" ? value : Number(value);
   }
 
   private fromNumber(num: number): string {
-    return num.toFixed(2);
+    return String(num);
   }
 
   private generateVirtualKey(billingAccountId: string): string {
     const randomSegment = randomBytes(16).toString("base64url");
     return `vk-${billingAccountId.slice(0, 8)}-${randomSegment}`;
+  }
+
+  private normalizeAmount(
+    rawAmount: number,
+    options: { enforceMinimumOne?: boolean } = {}
+  ): number {
+    const rounded = Math.round(rawAmount);
+    if (options.enforceMinimumOne && rounded === 0) {
+      return 1;
+    }
+    return rounded;
   }
 }

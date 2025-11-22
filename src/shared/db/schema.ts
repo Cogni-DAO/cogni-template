@@ -13,8 +13,8 @@
  */
 
 import {
+  bigint,
   boolean,
-  decimal,
   jsonb,
   pgTable,
   text,
@@ -29,9 +29,9 @@ import {
 export const billingAccounts = pgTable("billing_accounts", {
   id: text("id").primaryKey(),
   ownerUserId: text("owner_user_id").notNull().unique(),
-  balanceCredits: decimal("balance_credits", { precision: 10, scale: 2 })
+  balanceCredits: bigint("balance_credits", { mode: "number" })
     .notNull()
-    .default("0.00"),
+    .default(0),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -66,10 +66,10 @@ export const creditLedger = pgTable("credit_ledger", {
   virtualKeyId: uuid("virtual_key_id")
     .notNull()
     .references(() => virtualKeys.id, { onDelete: "cascade" }),
-  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
-  balanceAfter: decimal("balance_after", { precision: 10, scale: 2 })
+  amount: bigint("amount", { mode: "number" }).notNull(),
+  balanceAfter: bigint("balance_after", { mode: "number" })
     .notNull()
-    .default("0.00"),
+    .default(0),
   reason: text("reason").notNull(),
   reference: text("reference"),
   metadata: jsonb("metadata")

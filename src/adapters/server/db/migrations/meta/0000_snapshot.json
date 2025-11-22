@@ -1,11 +1,11 @@
 {
-  "id": "5b1a66c2-21c7-4cdb-85aa-4203475fd7bf",
+  "id": "0d737c20-55e8-4e7f-8246-1602b54b38bb",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.accounts": {
-      "name": "accounts",
+    "public.billing_accounts": {
+      "name": "billing_accounts",
       "schema": "",
       "columns": {
         "id": {
@@ -14,18 +14,18 @@
           "primaryKey": true,
           "notNull": true
         },
-        "display_name": {
-          "name": "display_name",
+        "owner_user_id": {
+          "name": "owner_user_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "balance_credits": {
           "name": "balance_credits",
-          "type": "numeric(10, 2)",
+          "type": "bigint",
           "primaryKey": false,
           "notNull": true,
-          "default": "'0.00'"
+          "default": 0
         },
         "created_at": {
           "name": "created_at",
@@ -37,6 +37,172 @@
       },
       "indexes": {},
       "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "billing_accounts_owner_user_id_unique": {
+          "name": "billing_accounts_owner_user_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["owner_user_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.credit_ledger": {
+      "name": "credit_ledger",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "billing_account_id": {
+          "name": "billing_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "virtual_key_id": {
+          "name": "virtual_key_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "amount": {
+          "name": "amount",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "balance_after": {
+          "name": "balance_after",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "reason": {
+          "name": "reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "reference": {
+          "name": "reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "metadata": {
+          "name": "metadata",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'null'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "credit_ledger_billing_account_id_billing_accounts_id_fk": {
+          "name": "credit_ledger_billing_account_id_billing_accounts_id_fk",
+          "tableFrom": "credit_ledger",
+          "tableTo": "billing_accounts",
+          "columnsFrom": ["billing_account_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "credit_ledger_virtual_key_id_virtual_keys_id_fk": {
+          "name": "credit_ledger_virtual_key_id_virtual_keys_id_fk",
+          "tableFrom": "credit_ledger",
+          "tableTo": "virtual_keys",
+          "columnsFrom": ["virtual_key_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.virtual_keys": {
+      "name": "virtual_keys",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "billing_account_id": {
+          "name": "billing_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "litellm_virtual_key": {
+          "name": "litellm_virtual_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "label": {
+          "name": "label",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'Default'"
+        },
+        "is_default": {
+          "name": "is_default",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "active": {
+          "name": "active",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "virtual_keys_billing_account_id_billing_accounts_id_fk": {
+          "name": "virtual_keys_billing_account_id_billing_accounts_id_fk",
+          "tableFrom": "virtual_keys",
+          "tableTo": "billing_accounts",
+          "columnsFrom": ["billing_account_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
