@@ -110,7 +110,7 @@ describe("SIWE Session Stack Test", () => {
         Cookie: csrfCookie,
       },
       body: body.toString(),
-      redirect: "follow",
+      redirect: "manual", // Don't follow redirects - inspect the immediate response
     });
 
     // Assert: Auth should fail (no session cookie or error response)
