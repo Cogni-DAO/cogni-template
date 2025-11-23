@@ -188,5 +188,6 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
       return session;
     },
   },
-  trustHost: process.env.NODE_ENV === "development",
+  // Always trust reverse proxy host headers; app only runs behind our own Caddy / managed proxies.
+  trustHost: true,
 });
