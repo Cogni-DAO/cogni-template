@@ -5,14 +5,14 @@
  * Module: `@unit/app/providers/wagmi-config-builder`
  * Purpose: Unit tests for wagmi config builder pure function.
  * Scope: Tests chain configuration and conditional connector logic with simple TestConnector type. Does not test React or dynamic imports.
- * Invariants: Sepolia + Base Sepolia always included; WalletConnect conditional on projectId; injected always present.
+ * Invariants: Sepolia hardcoded for MVP; WalletConnect conditional on projectId; injected always present.
  * Side-effects: none (unit tests with mocks)
  * Notes: Uses generic ConnectorsLib<TestConnector> for fully-typed test fakes. No any casts needed.
  * Links: Tests @app/providers/wagmi-config-builder
  */
 
 import { describe, expect, it, vi } from "vitest";
-import { baseSepolia, sepolia } from "wagmi/chains";
+import { sepolia } from "wagmi/chains";
 
 import {
   buildWagmiConfigOptions,
@@ -25,7 +25,7 @@ interface TestConnector {
 }
 
 describe("buildWagmiConfigOptions", () => {
-  it("should include Sepolia and Base Sepolia chains", () => {
+  it("should include Sepolia chain only", () => {
     const env: WalletEnv = {
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: undefined,
     };
@@ -37,9 +37,8 @@ describe("buildWagmiConfigOptions", () => {
 
     const result = buildWagmiConfigOptions(env, connectorsLib);
 
-    expect(result.chains).toEqual([sepolia, baseSepolia]);
+    expect(result.chains).toEqual([sepolia]);
     expect(result.transports).toHaveProperty(sepolia.id.toString());
-    expect(result.transports).toHaveProperty(baseSepolia.id.toString());
   });
 
   it("should include WalletConnect connector when projectId is present", () => {

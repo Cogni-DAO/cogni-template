@@ -17,13 +17,15 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Database } from "@/adapters/server/db/client";
-import type { AccountService, BillingAccount } from "@/ports";
 import {
+  type AccountService,
+  type BillingAccount,
   BillingAccountNotFoundPortError,
   InsufficientCreditsPortError,
   VirtualKeyNotFoundPortError,
 } from "@/ports";
 import { billingAccounts, creditLedger, virtualKeys } from "@/shared/db";
+import { serverEnv } from "@/shared/env";
 
 const ZERO = 0;
 
@@ -265,12 +267,61 @@ export class DrizzleAccountService implements AccountService {
     billingAccountId: string,
     params: { label?: string }
   ): Promise<VirtualKeyRow> {
-    const generatedKey = this.generateVirtualKey(billingAccountId);
+    const env = serverEnv();
+
+    // In test mode, avoid network calls and generate deterministic key
+    if (env.isTestMode) {
+      const fakeKey = this.generateVirtualKey(billingAccountId);
+      const [created] = await tx
+        .insert(virtualKeys)
+        .values({
+          billingAccountId,
+          litellmVirtualKey: fakeKey,
+          label: params.label ?? "Default",
+          isDefault: true,
+          active: true,
+        })
+        .returning({
+          id: virtualKeys.id,
+          litellmVirtualKey: virtualKeys.litellmVirtualKey,
+        });
+
+      if (!created) {
+        throw new VirtualKeyNotFoundPortError(billingAccountId);
+      }
+
+      return created;
+    }
+
+    const response = await fetch(`${env.LITELLM_BASE_URL}/key/generate`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.LITELLM_MASTER_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        metadata: { cogni_billing_account_id: billingAccountId },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to generate LiteLLM virtual key: ${response.status} ${response.statusText}`
+      );
+    }
+
+    const json = (await response.json()) as { key?: string };
+    const litellmVirtualKey = json.key;
+
+    if (!litellmVirtualKey) {
+      throw new Error("LiteLLM response missing key");
+    }
+
     const [created] = await tx
       .insert(virtualKeys)
       .values({
         billingAccountId,
-        litellmVirtualKey: generatedKey,
+        litellmVirtualKey,
         label: params.label ?? "Default",
         isDefault: true,
         active: true,

@@ -62,6 +62,7 @@ const REQUIRED_PATHS: PathRequirement[] = [
 ];
 
 const ALLOWED_ROOT_ENTRIES = new Set<string>([
+  ".agent",
   ".allstar",
   ".claude",
   ".cogni",
@@ -71,6 +72,7 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   ".env.example",
   ".env.local.example",
   ".env.test.example",
+  ".gemini",
   ".github",
   ".gitignore",
   ".husky",

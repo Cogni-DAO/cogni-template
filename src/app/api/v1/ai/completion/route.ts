@@ -23,7 +23,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
-    const sessionUser = getSessionUser(request);
+    const sessionUser = await getSessionUser();
     if (!sessionUser) {
       return NextResponse.json({ error: "Session required" }, { status: 401 });
     }

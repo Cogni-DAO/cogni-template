@@ -38,6 +38,7 @@ HTTP API endpoints using Next.js App Router. Contract-validated entry points tha
 
 - **Exports:** none
 - **Routes (if any):**
+  - `/api/auth/[...nextauth]` [GET, POST]
   - `/api/v1/ai/completion` [POST]
 - **CLI (if any):** none
 - **Env/Config keys:** none

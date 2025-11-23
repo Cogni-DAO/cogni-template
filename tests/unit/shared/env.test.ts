@@ -37,7 +37,7 @@ describe("env schemas", () => {
       POSTGRES_DB: "db",
       DB_HOST: "h",
       DB_PORT: "5432",
-      // TODO: SESSION_SECRET: "x".repeat(32),
+      AUTH_SECRET: "x".repeat(32),
       // LITELLM_BASE_URL: auto-detects based on NODE_ENV
       LITELLM_MASTER_KEY: "adminkey",
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: "test-project-id",
@@ -59,6 +59,7 @@ describe("env schemas", () => {
       APP_ENV: "test",
       DATABASE_URL: "sqlite://build.db",
       LITELLM_MASTER_KEY: "adminkey",
+      AUTH_SECRET: "x".repeat(32),
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: "test-project-id",
     });
 

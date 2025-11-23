@@ -1,4 +1,4 @@
-# Resmic Payments Integration (PAYMENTS_RESMIC.md)
+# Resmic Payments Integration (MVP)
 
 Resmic is our **MVP crypto payment UI** for topping up internal credits. It sits in the **payments layer** and feeds the **billing layer** by creating `credit_ledger` entries, but does **not** replace or change the dual-cost billing system defined in:
 
@@ -8,7 +8,16 @@ Resmic is our **MVP crypto payment UI** for topping up internal credits. It sits
 Billing = how we track and charge for LLM usage (credits, provider_cost_credits, user_price_credits).
 Payments = how users acquire credits (Resmic, on-chain watchers, etc).
 
-This document defines **how we use Resmic**, what it can and cannot do, and how it connects to `billing_accounts` and `credit_ledger`.
+---
+
+## MVP Scope
+
+**For MVP, only Sections 3 and 4 are required for the first working loop.**
+
+- **Section 3:** Frontend Implementation (Resmic component + payment confirmation)
+- **Section 4:** Backend Implementation (confirm endpoint + service logic)
+
+**Sections 5–7** describe post-MVP hardening, security monitoring, and operational procedures. These are **not blocking** for initial Resmic integration but document future improvements.
 
 ---
 
@@ -27,13 +36,14 @@ Resmic is a **frontend-only React SDK** that renders a crypto payment button and
 - Components:
   - `CryptoPayment` (newer consolidated component)
   - `EVMConnect` / `StarkNetConnect` (older per-chain components)
+  - **Note:** Component names come from the Resmic SDK and may change. This spec uses current naming as illustrative examples; always defer to official Resmic SDK documentation for exact component names and props.
 - Props (EVM):
   - `Address` – our receiving wallet address (DAO / multisig)
   - `Chains` – allowed EVM chains
   - `Tokens` – allowed tokens (USDC, ETH, etc.)
   - `Amount` – **USD amount** to receive
   - `noOfBlockConformation` – how many blocks to wait
-  - `setPaymentStatus` – **boolean-only** callback for "payment done"
+  - `setPaymentStatus` – **boolean-only** callback that fires in the browser when Resmic believes the payment is mined (no cryptographic proof, no server-side guarantee)
 
 **Critically:**
 
@@ -65,7 +75,7 @@ We keep a **hard separation**:
     - All debits/credits recorded in `credit_ledger`
 - **Payments layer** (this doc):
   - Integrates **Resmic** as one source of "credits UP"
-  - Adds `credit_ledger` rows with `reason = 'resmic_payment'` (or equivalent)
+  - Adds `credit_ledger` rows with `reason = 'resmic_payment'`
   - Does **not** compute LLM costs; just funds balances
 
 **Concretely:**
@@ -75,14 +85,30 @@ We keep a **hard separation**:
 
 ---
 
-## 3. Frontend Implementation
+## 2.5 MVP Security Boundary
+
+**For MVP, the ONLY trust boundary for credits is:**
+
+1. **SIWE-authenticated session** (HttpOnly cookie, resolved by Auth.js)
+2. **Resmic SDK running in an authenticated UI** (frontend-only payment widget)
+3. **Our `POST /api/v1/payments/resmic/confirm` endpoint** — resolves `billing_account_id` from session, validates idempotency via `clientPaymentId`, writes `credit_ledger` + updates `billing_accounts.balance_credits`
+
+**What is NOT in the MVP critical path:**
+
+- ❌ On-chain verification (no tx hash passed to backend, no RPC calls to verify transfers)
+- ❌ Resmic webhooks or signed callbacks (Resmic is frontend-only)
+- ❌ Ponder on-chain watcher (introduced post-MVP for reconciliation; see `docs/PAYMENTS_PONDER_VERIFICATION.md`)
+
+**Security posture:** We trust the SIWE session and treat Resmic as a soft oracle. Post-MVP hardening via Ponder is described in `docs/PAYMENTS_PONDER_VERIFICATION.md`.
+
+---
+
+## 3. Frontend Implementation (MVP Required)
 
 ### 3.1 Prerequisites
 
 - [ ] User authentication via SIWE (Auth.js) working with sessions
-- [ ] Frontend can access `billing_account_id` from session/context
 - [ ] DAO receiving wallet address configured in environment variables
-- [ ] `CREDITS_PER_USDC` constant available to frontend (via API or config)
 
 ### 3.2 Resmic Component Integration
 
@@ -104,29 +130,29 @@ We keep a **hard separation**:
   - [ ] Generate unique client-side `clientPaymentId` (UUID)
   - [ ] Call backend endpoint with payload:
     - [ ] `amountUsdCents` (Resmic `Amount` × 100, e.g., $10 → 1000 cents)
-    - [ ] `clientPaymentId` (UUID for idempotency)
-    - [ ] Optional: `billingAccountId` (for validation only), `chainId`, `tokenSymbol`, `timestamp`
+      - **Note:** `amountUsdCents` is our own internal billing convention for credit math, not a value provided by Resmic. The frontend computes this from Resmic's `Amount` prop before calling the confirm endpoint.
+    - [ ] `clientPaymentId` (UUID for idempotency, REQUIRED)
+    - [ ] Optional metadata: `chainId`, `tokenSymbol`, `timestamp`
   - [ ] Handle response:
-    - [ ] Success: update UI with new balance, show success message
-    - [ ] Error 409 (duplicate): treat as success, refresh balance
-    - [ ] Error 401/403: redirect to login
+    - [ ] Success (200): update UI with new balance, show success message
+    - [ ] Error 401: redirect to login
     - [ ] Error 500: show retry option
   - [ ] Store `clientPaymentId` in localStorage to prevent double-submission
-  - [ ] Do NOT send `billingAccountId` in body (let backend extract from session), or send only for validation
+
+**Critical:** Do NOT send `billingAccountId` in request body. Backend resolves it from session only.
 
 ### 3.4 UI/UX Requirements
 
 - [ ] "Buy Credits" button in header/sidebar when logged in
-- [ ] Credit balance display showing current `balance_credits / 1000` USDC
+- [ ] Credit balance display (fetch from API, no client-side conversion needed)
 - [ ] Payment amount selector (preset amounts: 10, 25, 50, 100 USD)
 - [ ] Loading state during Resmic transaction
 - [ ] Success confirmation with new balance
 - [ ] Error messaging for failed payments
-- [ ] Transaction history link (future: shows `credit_ledger` entries)
 
 ---
 
-## 4. Backend Implementation
+## 4. Backend Implementation (MVP Required)
 
 ### 4.1 API Endpoint
 
@@ -136,41 +162,42 @@ We keep a **hard separation**:
 
 **Input (validated via Zod contract):**
 
-- `amountUsdCents` (integer number of US cents, e.g., 1000 = $10.00)
-- `clientPaymentId` (UUID from frontend, required for idempotency)
-- `metadata` (optional: chain, token, timestamp)
-- `billingAccountId` (optional, only for validation - never used as source of truth)
+- `amountUsdCents` (integer cents, REQUIRED, e.g., 1000 = $10.00)
+- `clientPaymentId` (UUID, REQUIRED for idempotency)
+- `metadata` (optional object: chain, token, timestamp)
 
 **Behavior:**
 
 1. Resolve `billing_account_id` from SIWE session (only source of truth)
-2. If `billingAccountId` present in body: validate it equals session account, reject with 403 if mismatch
-3. Check idempotency: query `credit_ledger` for existing row with `reason = 'resmic_payment'` AND `reference = clientPaymentId`
-   - If exists: return `{ billingAccountId, balanceCredits }` (no-op, existing balance)
-   - If new: proceed to step 4
-4. Compute `credits = (amountUsdCents / 100) * CREDITS_PER_USDC` (convert cents → dollars → credits)
-5. Insert `credit_ledger` row:
+2. Check idempotency: query `credit_ledger` for existing row with `reason = 'resmic_payment'` AND `reference = clientPaymentId`
+   - If exists: return `{ billingAccountId, balanceCredits }` (no-op, idempotent)
+   - If new: proceed to step 3
+3. Compute credits using integer math:
+   - With `1 credit = $0.001` and `1 cent = $0.01`, therefore `1 cent = 10 credits`
+   - Formula: `credits = amountUsdCents * 10`
+   - Alternative with CREDITS_PER_USDC: `credits = (amountUsdCents * CREDITS_PER_USDC) / 100` (integer division)
+4. Insert `credit_ledger` row:
    - `billing_account_id` (from session)
-   - `amount = credits` (BIGINT)
+   - `virtual_key_id` (default key for account)
+   - `amount = credits` (BIGINT, positive value)
    - `reason = 'resmic_payment'`
    - `reference = clientPaymentId` (required for idempotency)
    - `metadata = serialized JSON` (amountUsdCents, chain, token, timestamp)
-6. Update `billing_accounts.balance_credits += credits`
-7. Return `{ billingAccountId, balanceCredits }`
+5. Update `billing_accounts.balance_credits += credits`
+6. Return `{ billingAccountId, balanceCredits }`
 
 **Implementation checklist:**
 
 - [ ] Create route file: `src/app/api/v1/payments/resmic/confirm/route.ts`
 - [ ] Add Zod contract: `src/contracts/payments.resmic.confirm.v1.contract.ts`
-  - [ ] Request schema: `{ amountUsdCents: number, clientPaymentId: string, billingAccountId?: string, metadata?: object }`
-  - [ ] Response schema: `{ billingAccountId, balanceCredits }`
-  - [ ] Note: amountUsdCents is integer cents (1000 = $10.00), not dollars
+  - [ ] Request schema: `{ amountUsdCents: number, clientPaymentId: string, metadata?: object }`
+  - [ ] Response schema: `{ billingAccountId: string, balanceCredits: number }`
+  - [ ] Validate: `amountUsdCents` > 0, `clientPaymentId` is valid UUID
 - [ ] Implement route handler:
   - [ ] Extract SIWE session from cookie
   - [ ] Validate session exists and is active
   - [ ] Parse and validate request body against contract
-  - [ ] Resolve `billing_account_id` from session (only source of truth)
-  - [ ] If body includes `billingAccountId`: validate matches session, return 403 if mismatch
+  - [ ] Resolve `billing_account_id` from session (never from body)
   - [ ] Call payment service with session-derived `billingAccountId` and validated data
   - [ ] Return response with new balance
 
@@ -185,12 +212,14 @@ We keep a **hard separation**:
 - [ ] Create payment service: `src/features/payments/services/resmic-confirm.ts`
 - [ ] Implement confirmation logic:
   - [ ] Check for existing `credit_ledger` entry: `reason = 'resmic_payment' AND reference = clientPaymentId`
-  - [ ] If exists: return existing balance (no-op, idempotent)
+  - [ ] If exists: return existing balance (idempotent, no-op)
   - [ ] If new: proceed with credit
-  - [ ] Convert `(amountUsdCents / 100) * CREDITS_PER_USDC` → credits (BIGINT)
+  - [ ] Compute credits: `amountUsdCents * 10` (integer math, 1 cent = 10 credits)
+  - [ ] Resolve default `virtual_key_id` for billing account
   - [ ] Insert `credit_ledger` row:
     - [ ] `billing_account_id` from session (only source)
-    - [ ] `amount` = computed credits
+    - [ ] `virtual_key_id` (default key)
+    - [ ] `amount` = computed credits (BIGINT)
     - [ ] `reason = 'resmic_payment'`
     - [ ] `reference` = `clientPaymentId` from request (required)
     - [ ] `metadata` = JSON with `{ amountUsdCents, chain, token, timestamp }`
@@ -204,7 +233,7 @@ We keep a **hard separation**:
 
 ### 4.3 Database Changes
 
-- [ ] Ensure `credit_ledger.reference` field exists (should be present from billing schema)
+- [ ] Verify `credit_ledger.reference` field exists (present in schema)
 - [ ] Add index on `credit_ledger.reference` for idempotency lookups
 - [ ] Verify `credit_ledger.metadata` JSONB column can store payment metadata
 
@@ -223,25 +252,19 @@ We keep a **hard separation**:
 
 ---
 
-## 5. Security & Monitoring
+## 5. Post-MVP: Security & Monitoring
 
-### 5.1 Security Mitigations (MVP)
+**Note:** This section describes future hardening. Not required for MVP.
+
+### 5.1 Rate Limiting (Future)
 
 - [ ] Implement rate limiting on `/payments/resmic/confirm`:
-  - [ ] Max 10 credits per hour per account
-  - [ ] Max 5 payment confirmations per hour per account
+  - [ ] Max 10 payments per hour per account
+  - [ ] Max $1000 USD equivalent per day per account
   - [ ] Return 429 on rate limit exceeded
-- [ ] Add request logging:
-  - [ ] Log all payment confirmation attempts with session ID
-  - [ ] Log payment amounts, timestamps, and results
-  - [ ] Include metadata for manual reconciliation
-- [ ] Idempotency enforcement:
-  - [ ] Query `credit_ledger` for existing row: `reason = 'resmic_payment' AND reference = clientPaymentId`
-  - [ ] If found: return current balance without inserting (200 OK, no-op)
-  - [ ] If not found: insert new ledger entry and update balance
-  - [ ] No 409 needed - idempotent endpoints return success on duplicate
+- [ ] Add request logging for all payment attempts
 
-### 5.2 Manual Reconciliation Process
+### 5.2 Manual Reconciliation Process (Future)
 
 - [ ] Create reconciliation script: `scripts/reconcile/resmic-payments.ts`
 - [ ] Script functionality:
@@ -252,47 +275,44 @@ We keep a **hard separation**:
   - [ ] Output CSV report with mismatches
 - [ ] Add to ops runbook: `platform/runbooks/RESMIC_RECONCILIATION.md`
 
-### 5.3 Monitoring & Alerts
+### 5.3 Monitoring & Alerts (Future)
 
 - [ ] Add monitoring for:
   - [ ] Payment confirmation success rate
-  - [ ] Average time from UI click to backend confirm
   - [ ] Total credits purchased per day
-  - [ ] Failed payment attempts (401, 403, 500 errors)
+  - [ ] Failed payment attempts (401, 500 errors)
 - [ ] Alert conditions:
   - [ ] More than 5 failed payments in 10 minutes
   - [ ] Daily credit total exceeds expected threshold
-  - [ ] On-chain balance discrepancy > 10%
 
 ---
 
-## 6. Testing Requirements
+## 6. Post-MVP: Testing Requirements
 
-### 6.1 Unit Tests
+**Note:** MVP should have basic stack tests. Comprehensive testing is post-MVP.
+
+### 6.1 Unit Tests (MVP: Basic Coverage)
 
 - [ ] Payment service idempotency (duplicate `clientPaymentId` handling - must return same balance)
-- [ ] Credit calculation accuracy (cents → USD → credits conversion: `(cents / 100) * CREDITS_PER_USDC`)
-- [ ] Metadata serialization/deserialization
+- [ ] Credit calculation accuracy: `amountUsdCents * 10 = credits`
 - [ ] Error handling for invalid session, missing fields
 
-### 6.2 Integration Tests
+### 6.2 Integration Tests (Post-MVP: Full Coverage)
 
 - [ ] Full flow with real database:
   - [ ] Create session, call confirm, verify ledger entry
   - [ ] Test idempotency: call confirm twice with same `clientPaymentId`, verify balance only credited once
   - [ ] Verify balance updates atomically
-  - [ ] Test body `billingAccountId` validation: send mismatched ID, expect 403
 - [ ] Rate limiting enforcement
 
-### 6.3 Stack Tests
+### 6.3 Stack Tests (MVP: Basic E2E)
 
 - [ ] End-to-end API test hitting `/payments/resmic/confirm`
 - [ ] Test with valid SIWE session (billing account resolved from session)
 - [ ] Test unauthorized (no session) → expect 401
-- [ ] Test body `billingAccountId` mismatch vs session → expect 403
 - [ ] Test duplicate `clientPaymentId` → expect 200 OK with existing balance
 
-### 6.4 Manual Testing Checklist
+### 6.4 Manual Testing Checklist (MVP)
 
 - [ ] Frontend integration:
   - [ ] Install Resmic component in dev environment
@@ -304,15 +324,14 @@ We keep a **hard separation**:
   - [ ] Call confirm endpoint twice with same `clientPaymentId`
   - [ ] Verify second call returns 200 OK with same balance (no-op)
   - [ ] Verify ledger only has one entry for that `clientPaymentId`
-- [ ] Rate limiting:
-  - [ ] Trigger multiple payments rapidly
-  - [ ] Verify rate limit kicks in after threshold
 
 ---
 
-## 7. Known Limitations & Future Work
+## 7. Post-MVP: Future Hardening
 
-### 7.1 Current Limitations
+**Note:** These improvements are not part of the initial shipping loop.
+
+### 7.1 Current Limitations (Accepted for MVP)
 
 **No cryptographic proof:**
 
@@ -323,20 +342,21 @@ We keep a **hard separation**:
 **Client can lie:**
 
 - ❌ Malicious client could call `/confirm` without Resmic payment
-- ⚠️ Mitigated by: SIWE auth, rate limiting, manual reconciliation
+- ⚠️ Mitigated by: SIWE auth, rate limiting (post-MVP), manual reconciliation
 
 **No automatic reconciliation:**
 
 - ❌ No on-chain watcher comparing DAO wallet balance to ledger
-- ⚠️ Mitigated by: manual reconciliation script (ops process)
+- ⚠️ Mitigated by: manual reconciliation script (post-MVP)
 
-### 7.2 Future Hardening (Post-MVP)
+### 7.2 Future Improvements
 
-- [ ] Add on-chain watcher service:
-  - [ ] Monitor DAO address for USDC/ETH transfers
-  - [ ] Match tx amounts to `credit_ledger` entries by timestamp
-  - [ ] Auto-flag suspicious credits with no matching tx
-  - [ ] Document in `docs/ONCHAIN_WATCHER.md`
+- [ ] Add on-chain watcher service (Ponder):
+  - [ ] Run Ponder indexer as separate service watching Base/Base Sepolia
+  - [ ] Index USDC Transfer events into DAO wallet → `onchain_payments` table
+  - [ ] Periodic reconciliation job compares `onchain_payments` vs `credit_ledger` (reason='resmic_payment')
+  - [ ] Auto-flag discrepancies for manual review
+  - [ ] **Full spec:** See `docs/PAYMENTS_PONDER_VERIFICATION.md` for runtime topology, indexing config, and integration phases
 - [ ] Implement tx hash capture:
   - [ ] Fork Resmic or use ethers.js to capture tx hash client-side
   - [ ] Pass tx hash to confirm endpoint
@@ -345,9 +365,6 @@ We keep a **hard separation**:
   - [ ] If Resmic adds server-side webhooks, switch to webhook model
   - [ ] Implement signature verification
   - [ ] Remove client-initiated confirm pattern
-- [ ] Multi-signature protection:
-  - [ ] Require 2-of-3 DAO approval for large credit purchases (>$100)
-  - [ ] Implement approval queue for high-value payments
 
 ---
 
@@ -355,32 +372,57 @@ We keep a **hard separation**:
 
 ### 8.1 Complete MVP Flow
 
-**Status: ⏸️ Pending Stage 7 Implementation**
+**Status:** Sections 3-4 implement the payment integration. Sections 5-7 are future work.
 
-Full loop with all current pieces:
+Full loop with MVP pieces:
 
 1. **Auth:** ✅ User connects wallet and logs in via SIWE → session cookie → `billing_account_id`
-2. **Payments (this doc):** ⏸️ User uses Resmic "Buy Credits":
+2. **Payments (this doc - Sections 3-4):** User uses Resmic "Buy Credits":
    - [ ] DAO multisig address receives crypto
    - [ ] Resmic sets `paymentStatus = true`
-   - [ ] Frontend calls `/api/v1/payments/resmic/confirm`
-   - [ ] Backend credits `billing_accounts.balance_credits`
-3. **Billing (Stage 6.5):** ⏸️ LLM usage with dual-cost accounting:
+   - [ ] Frontend calls `/api/v1/payments/resmic/confirm` with `amountUsdCents` + `clientPaymentId`
+   - [ ] Backend credits `billing_accounts.balance_credits` via `credit_ledger` insert
+3. **Billing (Stage 6.5):** LLM usage with dual-cost accounting:
    - [ ] User calls `/api/v1/ai/completion`
    - [ ] LLM call via LiteLLM returns `response_cost_usd`
    - [ ] We convert to `provider_cost_credits`, compute `user_price_credits`
    - [ ] Enforce `user_price ≥ provider_cost`, and debit
    - [ ] `llm_usage` + `credit_ledger` record the full cost trail
 
-### 8.2 Success Criteria
+### 8.2 Success Criteria (MVP)
 
 - [ ] User can purchase credits via Resmic UI on testnet
 - [ ] Credits appear in `credit_ledger` with `reason = 'resmic_payment'`
 - [ ] Balance increases correctly in `billing_accounts`
-- [ ] Duplicate payments prevented via idempotency
-- [ ] Rate limiting prevents abuse
-- [ ] Manual reconciliation script detects on-chain vs ledger discrepancies
+- [ ] Duplicate payments prevented via `clientPaymentId` idempotency
+- [ ] Integer credit math: 1 cent = 10 credits, verifiable in ledger
 
 ---
+
+## Key Design Decisions
+
+**Credit Math (Integer Only):**
+
+- 1 credit = $0.001
+- 1 USDC = 1,000 credits
+- 1 cent = 10 credits
+- Formula: `credits = amountUsdCents * 10`
+
+**Session-Based Security:**
+
+- `billing_account_id` resolved from SIWE session only
+- No `billingAccountId` in request body
+- Prevents privilege escalation attacks
+
+**Idempotency:**
+
+- `clientPaymentId` is REQUIRED UUID
+- Stored in `credit_ledger.reference`
+- Query before insert prevents double-credits
+
+**MVP vs Post-MVP:**
+
+- Sections 3-4: Required for first working loop
+- Sections 5-7: Future hardening, not blocking
 
 Resmic is one concrete, OSS way to complete "credits UP" for the MVP — but it remains cleanly separated from the internal billing logic and can be replaced or supplemented later (direct on-chain watchers, other payment providers, etc.).

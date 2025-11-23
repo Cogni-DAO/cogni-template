@@ -125,10 +125,11 @@ export default [
     },
   },
 
-  // Allow process.env only in environment files and E2E infrastructure
+  // Allow process.env only in environment files, auth config, and E2E infrastructure
   {
     files: [
       "src/shared/env/**/*.{ts,tsx}",
+      "src/auth.ts", // Auth.js needs NODE_ENV for trustHost and domain config
       "e2e/**/*.{ts,tsx}",
       "playwright.config.ts",
       "tests/**/*.ts",

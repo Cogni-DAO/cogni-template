@@ -21,6 +21,24 @@ async function main(): Promise<void> {
 
     const env = serverEnv();
 
+    // Enforce secrets that are optional in build schema but required in runtime
+    const missingSecrets: string[] = [];
+    if (!env.AUTH_SECRET || env.AUTH_SECRET.length < 32) {
+      missingSecrets.push("AUTH_SECRET (must be >= 32 chars)");
+    }
+    if (!env.LITELLM_MASTER_KEY) {
+      missingSecrets.push("LITELLM_MASTER_KEY");
+    }
+
+    if (missingSecrets.length > 0) {
+      console.error("❌ Runtime environment validation failed");
+      console.error(
+        "   Missing or invalid secrets:",
+        missingSecrets.join(", ")
+      );
+      process.exit(1);
+    }
+
     console.log("✅ Runtime environment validation passed");
     console.log(`   NODE_ENV: ${env.NODE_ENV}`);
     console.log(`   APP_ENV: ${env.APP_ENV}`);

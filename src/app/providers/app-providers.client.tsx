@@ -16,13 +16,16 @@
 
 import type { ReactNode } from "react";
 
+import { AuthProvider } from "./auth.client";
 import { QueryProvider } from "./query.client";
 import { WalletProvider } from "./wallet.client";
 
 export function AppProviders({ children }: { children: ReactNode }): ReactNode {
   return (
-    <QueryProvider>
-      <WalletProvider>{children}</WalletProvider>
-    </QueryProvider>
+    <AuthProvider>
+      <QueryProvider>
+        <WalletProvider>{children}</WalletProvider>
+      </QueryProvider>
+    </AuthProvider>
   );
 }

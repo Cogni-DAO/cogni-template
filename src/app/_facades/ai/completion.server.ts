@@ -20,6 +20,7 @@ import {
   type MessageDto,
   toCoreMessages,
 } from "@/features/ai/services/mappers";
+import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { LlmCaller } from "@/ports";
 import {
   isBillingAccountNotFoundPortError,
@@ -47,12 +48,15 @@ export async function completion(
   // Resolve dependencies from bootstrap (pure composition root)
   const { llmService, accountService, clock } = resolveAiDeps();
 
-  const billingAccount = await accountService.getOrCreateBillingAccountForUser({
-    userId: input.sessionUser.id,
-    ...(input.sessionUser.walletAddress
-      ? { walletAddress: input.sessionUser.walletAddress }
-      : {}),
-  });
+  const billingAccount = await getOrCreateBillingAccountForUser(
+    accountService,
+    {
+      userId: input.sessionUser.id,
+      ...(input.sessionUser.walletAddress
+        ? { walletAddress: input.sessionUser.walletAddress }
+        : {}),
+    }
+  );
 
   const caller: LlmCaller = {
     billingAccountId: billingAccount.id,

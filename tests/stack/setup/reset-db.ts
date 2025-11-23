@@ -43,11 +43,27 @@ export default async function resetStackTestDatabase() {
   });
 
   try {
-    // Wipe tables in dependency-safe order (ledger → keys → accounts)
-    // TRUNCATE is faster than DELETE and resets sequences
-    await sql`TRUNCATE TABLE credit_ledger, virtual_keys, billing_accounts RESTART IDENTITY CASCADE`;
+    // Dynamically discover all user tables (exclude postgres system tables)
+    const tables = await sql<{ tablename: string }[]>`
+      SELECT tablename
+      FROM pg_tables
+      WHERE schemaname = 'public'
+    `;
 
-    console.log("✅ Stack test database reset complete");
+    if (tables.length === 0) {
+      console.log("⚠️  No tables found in public schema - skipping truncate");
+      return () => Promise.resolve();
+    }
+
+    // Build TRUNCATE statement with all discovered tables
+    const tableNames = tables.map((t) => t.tablename).join(", ");
+
+    // TRUNCATE with CASCADE handles foreign key constraints automatically
+    await sql.unsafe(`TRUNCATE TABLE ${tableNames} RESTART IDENTITY CASCADE`);
+
+    console.log(
+      `✅ Stack test database reset complete (${tables.length} tables truncated)`
+    );
   } catch (error) {
     console.error("❌ Failed to reset stack test database:", error);
     throw error;
