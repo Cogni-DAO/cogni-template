@@ -21,7 +21,10 @@ export default auth((req) => {
   const isLoggedIn = !!req.auth;
   const { pathname } = req.nextUrl;
 
-  // Protect /api/v1/ai/* routes
+  // Protect /api/v1/ai/* routes (second line of defense)
+  // IMPORTANT: All route handlers under /api/v1/ai must still call auth() server-side.
+  // This proxy provides early rejection for unauthenticated requests, but handlers
+  // are responsible for their own auth enforcement.
   if (pathname.startsWith("/api/v1/ai")) {
     if (!isLoggedIn) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
