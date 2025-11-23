@@ -162,7 +162,7 @@ Credits increase via positive entries in credit_ledger (e.g., from the Resmic co
   - [ ] `src/features/ai/services/completion.ts` - Add dual-cost calculation
   - [ ] `tests/unit/features/ai/services/completion.test.ts` - Test profit invariant
 
-**MVP Simplification:** Skip pre-call max-cost estimate initially; detect insufficient credits post-call (improve later)
+**Current Guard (MVP+):** Pre-call balance check uses a conservative estimate (prompt chars ÷ 4 + max completion tokens) to block zero/low balances before contacting the provider. Post-call debit is best-effort and does not block the response if it fails for insufficient credits. Replace this heuristic with configurable, per-model pricing once provider costs are wired.
 
 ---
 
