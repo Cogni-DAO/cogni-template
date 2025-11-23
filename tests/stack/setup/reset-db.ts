@@ -56,7 +56,8 @@ export default async function resetStackTestDatabase() {
     }
 
     // Build TRUNCATE statement with all discovered tables
-    const tableNames = tables.map((t) => t.tablename).join(", ");
+    // Quote each table name to handle mixed-case PostgreSQL identifiers (e.g., LiteLLM_AuditLog)
+    const tableNames = tables.map((t) => `"${t.tablename}"`).join(", ");
 
     // TRUNCATE with CASCADE handles foreign key constraints automatically
     await sql.unsafe(`TRUNCATE TABLE ${tableNames} RESTART IDENTITY CASCADE`);
