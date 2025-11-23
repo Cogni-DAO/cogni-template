@@ -151,6 +151,15 @@ We keep a **hard separation**:
 - [ ] Success confirmation with new balance
 - [ ] Error messaging for failed payments
 
+### 3.5 Credits Page (MVP UI)
+
+- [ ] Protected route `/credits` under `(app)` showing current balance, “Buy credits” card, and recent transactions.
+- [ ] Payment method: crypto only (Resmic). Auto top-up not supported.
+- [ ] Purchase CTA triggers Resmic widget; on success, call confirm endpoint and refresh balance/ledger.
+- [ ] Recent transactions table lists latest `credit_ledger` rows (amount, date, status) with link to full usage.
+- [ ] Notes block clarifies crypto-only and no auto top-up.
+- [ ] Loading/empty states for balance and transactions.
+
 ---
 
 ## 4. Backend Implementation (MVP Required)
@@ -428,3 +437,19 @@ Full loop with MVP pieces:
 - Sections 5-7: Future hardening, not blocking
 
 Resmic is one concrete, OSS way to complete "credits UP" for the MVP — but it remains cleanly separated from the internal billing logic and can be replaced or supplemented later (direct on-chain watchers, other payment providers, etc.).
+
+---
+
+## 9. Next Agent Handoff (MVP Completion Checklist)
+
+- Wire `/credits` page to real data:
+  - Fetch balance from billing account API; fetch recent `credit_ledger` entries; invalidate cache after confirm.
+  - Connect “Purchase with Resmic” CTA to Resmic SDK; on success, call `POST /api/v1/payments/resmic/confirm` with `{ amountUsdCents, clientPaymentId, metadata }`.
+- Finish backend contract/tests:
+  - Ensure confirm route validates session, idempotency, and writes `credit_ledger` + balance.
+  - Add integration test: happy path + duplicate confirm (idempotent).
+- UI polish:
+  - Replace mock transactions with live data, add loading/empty/error states.
+  - Keep crypto-only messaging; omit auto top-up entirely.
+- Documentation/testing:
+  - Update any remaining docs/AGENTS if routes change; run `pnpm check` (or at least lint+type+tests) after wiring.
