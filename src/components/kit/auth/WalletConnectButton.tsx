@@ -22,6 +22,11 @@ import { SiweMessage } from "siwe";
 import { useAccount, useSignMessage } from "wagmi";
 import { sepolia } from "wagmi/chains";
 
+import {
+  computeWalletSessionAction,
+  normalizeWalletAddress,
+} from "@/shared/auth";
+
 export interface WalletConnectButtonProps {
   /**
    * Whether to show error messages inline (default: false)
@@ -44,15 +49,13 @@ export function WalletConnectButton({
   useEffect(() => {
     if (status !== "authenticated" || !session) return;
 
-    const sessionAddress = session.user?.walletAddress?.toLowerCase();
-    const connectedAddress = address?.toLowerCase();
+    const action = computeWalletSessionAction({
+      isConnected,
+      connectedAddress: normalizeWalletAddress(address),
+      sessionAddress: normalizeWalletAddress(session.user?.walletAddress),
+    });
 
-    // Sign out if no wallet connected or wallet doesn't match session
-    if (
-      !isConnected ||
-      !connectedAddress ||
-      (sessionAddress && sessionAddress !== connectedAddress)
-    ) {
+    if (action === "sign_out") {
       void signOut();
     }
   }, [address, isConnected, session, status]);
