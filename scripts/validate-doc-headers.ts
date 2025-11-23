@@ -7,7 +7,7 @@
  * Scope: Scans e2e, infra, scripts, src, tests directories for .ts/.tsx files; does not validate runtime behavior or generated files.
  * Invariants: Required fields non-empty; Module matches `@layer/path` pattern; SPDX headers exact match.
  * Side-effects: IO
- * Notes: Supports parenthetical descriptions in side-effects; supports Next.js dynamic route brackets; enforces unified header format.
+ * Notes: Supports parenthetical descriptions in side-effects; supports Next.js dynamic routes [] and route groups (); enforces unified header format.
  * Links: docs/STYLE.md, scripts/validate-agents-md.mjs
  * @internal
  */
@@ -53,7 +53,7 @@ const ALLOWED_SIDE_EFFECTS = [
   "process.env",
   "global",
 ];
-const MODULE_PATTERN = /^`@[A-Za-z0-9_/.[\]-]+`$/;
+const MODULE_PATTERN = /^`@[A-Za-z0-9_/.[\]()\\-]+`$/;
 
 // REUSE-IgnoreStart
 const SPDX_LICENSE =

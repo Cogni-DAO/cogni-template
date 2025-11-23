@@ -20,7 +20,7 @@ describe("bootstrap container DI wiring", () => {
   beforeEach(() => {
     vi.resetModules(); // ensure fresh module evaluation
     process.env = { ...ORIGINAL_ENV }; // clean env copy
-    delete process.env.SESSION_SECRET;
+    delete process.env.AUTH_SECRET;
   });
 
   afterEach(() => {
@@ -37,7 +37,7 @@ describe("bootstrap container DI wiring", () => {
         POSTGRES_PASSWORD: "postgres",
         POSTGRES_DB: "test_db",
         LITELLM_MASTER_KEY: "test-key",
-        SESSION_SECRET: "x".repeat(32),
+        AUTH_SECRET: "x".repeat(32),
       });
 
       // Import after env setup to get correct adapter wiring
@@ -59,7 +59,7 @@ describe("bootstrap container DI wiring", () => {
         POSTGRES_PASSWORD: "postgres",
         POSTGRES_DB: "prod_db",
         LITELLM_MASTER_KEY: "prod-key",
-        SESSION_SECRET: "x".repeat(32),
+        AUTH_SECRET: "x".repeat(32),
       });
 
       // Import after env setup
@@ -80,7 +80,7 @@ describe("bootstrap container DI wiring", () => {
         POSTGRES_PASSWORD: "postgres",
         POSTGRES_DB: "dev_db",
         LITELLM_MASTER_KEY: "dev-key",
-        SESSION_SECRET: "x".repeat(32),
+        AUTH_SECRET: "x".repeat(32),
       });
 
       const { createContainer } = await import("@/bootstrap/container");
@@ -102,7 +102,7 @@ describe("bootstrap container DI wiring", () => {
         POSTGRES_PASSWORD: "postgres",
         POSTGRES_DB: "test_db",
         LITELLM_MASTER_KEY: "test-key",
-        SESSION_SECRET: "x".repeat(32),
+        AUTH_SECRET: "x".repeat(32),
       });
     });
 

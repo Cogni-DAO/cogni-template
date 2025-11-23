@@ -69,7 +69,7 @@ export VM_HOST=your-vm-ip
 export DATABASE_URL="postgresql://cogni_app_preview:$APP_DB_PASSWORD_PREVIEW@postgres:5432/cogni_template_preview"
 export LITELLM_MASTER_KEY=sk-...
 export OPENROUTER_API_KEY=sk-...
-export SESSION_SECRET=your-session-secret
+export AUTH_SECRET=your-session-secret
 export POSTGRES_ROOT_USER=postgres
 export POSTGRES_ROOT_PASSWORD=$POSTGRES_ROOT_PASSWORD_PREVIEW
 export APP_DB_USER=cogni_app_preview
@@ -107,7 +107,7 @@ gh secret set DATABASE_URL --env preview --body "postgresql://cogni_app_preview:
 
 Also add service secrets:
 
-- `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `SESSION_SECRET`, `DOMAIN`
+- `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `AUTH_SECRET`, `DOMAIN`
 - `VM_HOST` = auto-populated by base infrastructure workflow
 
 For complete secrets list, see [DEPLOYMENT_ARCHITECTURE.md](DEPLOYMENT_ARCHITECTURE.md).

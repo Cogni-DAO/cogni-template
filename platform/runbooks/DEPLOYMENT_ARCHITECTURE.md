@@ -101,7 +101,7 @@ For private GHCR images, VMs authenticate using bot account credentials:
 **GitHub Secrets** (clean naming):
 
 - **Repository secrets**: `GHCR_DEPLOY_TOKEN`, `CHERRY_AUTH_TOKEN`, `SONAR_TOKEN` (shared across environments)
-- **Environment secrets** (`preview`/`production`): `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, `DATABASE_URL`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `SESSION_SECRET`, `SSH_DEPLOY_KEY`, `VM_HOST`, `DOMAIN`
+- **Environment secrets** (`preview`/`production`): `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, `DATABASE_URL`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `AUTH_SECRET`, `SSH_DEPLOY_KEY`, `VM_HOST`, `DOMAIN`
 
 **Private Registry Access**: `GHCR_DEPLOY_TOKEN` enables pulling private images from GitHub Container Registry using `Cogni-1729` bot account.
 

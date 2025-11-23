@@ -67,7 +67,8 @@ const serverSchema = z.object({
   DB_HOST: z.string().default("localhost"),
   DB_PORT: z.coerce.number().default(5432),
 
-  SESSION_SECRET: z.string().min(32).optional(),
+  // Auth.js v5 secret (required for JWT signing)
+  AUTH_SECRET: z.string().min(32),
 
   // Optional
   PORT: z.coerce.number().default(3000),

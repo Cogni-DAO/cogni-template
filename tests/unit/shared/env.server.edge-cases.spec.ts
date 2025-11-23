@@ -37,7 +37,7 @@ describe("server env edge cases", () => {
       POSTGRES_PASSWORD: "postgres",
       POSTGRES_DB: "test_db",
       LITELLM_MASTER_KEY: "test-key",
-      SESSION_SECRET: "x".repeat(32),
+      AUTH_SECRET: "x".repeat(32),
     });
 
     const { serverEnv } = await import("@/shared/env/server");

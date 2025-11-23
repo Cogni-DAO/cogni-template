@@ -56,7 +56,7 @@ export function WalletProvider({
           }
         );
 
-      // Connectors not safe for SSR
+      // SSR disabled: config created client-side in useEffect
       const wagmiConfig = createConfig({
         chains,
         transports,

@@ -13,7 +13,7 @@
 
 ## One Sentence Summary
 
-User signs SIWE message via RainbowKit → Auth.js Credentials provider creates Postgres session → API routes read session → resolve user.id → billing_account → default virtual_key → LiteLLM call.
+User signs SIWE message via RainbowKit → Auth.js Credentials provider creates JWT session → API routes read session → resolve user.id → billing_account → default virtual_key → LiteLLM call.
 
 ---
 
@@ -133,9 +133,12 @@ User signs SIWE message via RainbowKit → Auth.js Credentials provider creates 
 **Required:**
 
 - `next-auth@beta` (v5) - Core authentication framework
-- `@auth/drizzle-adapter` - Postgres session storage via Drizzle ORM
 - `siwe` - Official Sign-In with Ethereum library
 - `viem` - Already installed (used by SIWE for message verification)
+
+**Optional (for user/account management):**
+
+- `@auth/drizzle-adapter` - Postgres user/account storage via Drizzle ORM (NOT used for session storage in JWT mode)
 
 **Already Installed:**
 
@@ -158,11 +161,12 @@ User signs SIWE message via RainbowKit → Auth.js Credentials provider creates 
 
 **API Routes:**
 
-- `/api/auth/*` - Auth.js built-in routes (handled automatically)
+- `/api/auth/[...nextauth]/route.ts` - Auth.js catch-all route handler (exports `handlers` from `src/auth.ts`)
+  - Provides all Auth.js built-in routes automatically:
   - `/api/auth/signin` - Triggers SIWE flow
   - `/api/auth/session` - Returns current session
   - `/api/auth/signout` - Clears session
-  - `/api/auth/csrf` - CSRF token
+  - `/api/auth/csrf` - CSRF token for SIWE nonce
 
 **Utilities:**
 
@@ -173,6 +177,10 @@ User signs SIWE message via RainbowKit → Auth.js Credentials provider creates 
 
 - `src/middleware.ts` - Auth middleware for route protection
 - See "API Auth Policy (MVP)" section above for complete list of public vs protected routes
+
+**Note on Next.js 16 Middleware Deprecation:**
+
+Next.js 16 deprecates the `middleware.ts` file convention in favor of `proxy.ts`. Current implementation uses `src/middleware.ts` which triggers a deprecation warning. Migration to `proxy.ts` is planned for post-MVP but is NOT blocking the current authentication implementation. The middleware functionality (protecting `/api/v1/ai/:path*` routes) works correctly with the deprecated naming.
 
 ---
 
@@ -212,7 +220,8 @@ Auth.js does NOT ship a first-class SIWE provider. We implement SIWE using an Au
 - Cookie name: `authjs.session-token` (production) or `next-auth.session-token` (dev)
 - Security: HttpOnly, Secure, SameSite=Lax
 - Expiry: 30 days default (configurable in `src/auth.ts`)
-- Storage: Postgres via Drizzle adapter
+- Storage: **JWT-based** (signed token, not database)
+- Session data: Wallet address and user ID embedded in JWT via callbacks
 
 **No custom cookie code needed** - Auth.js handles all cookie operations.
 
@@ -266,16 +275,18 @@ React components use Auth.js hooks:
 
 **Decision:** Our billing table is renamed from `accounts` to `billing_accounts` to avoid collision with Auth.js's `accounts` table. Auth.js keeps its default table names.
 
-### Auth.js Identity Tables (Managed by Drizzle Adapter)
+### Auth.js Identity Tables (Via Drizzle Adapter)
+
+**Note on JWT Strategy:** With `session: { strategy: "jwt" }`, Auth.js does NOT use the `sessions` table. The Drizzle adapter is still configured to manage `users` and `accounts` tables for identity persistence, but session state is stored in the JWT cookie, not the database.
 
 **Created automatically when Auth.js runs:**
 
 - `users` - User records (includes wallet address from SIWE)
 - `accounts` - Auth.js provider accounts (links users to auth providers)
-- `sessions` - Active sessions with expiry
+- `sessions` - Session table schema exists but **remains empty** with JWT strategy
 - `verification_tokens` - Email verification (unused for SIWE, but Auth.js creates it)
 
-**Migration:** Auth.js Drizzle adapter auto-migrates these tables.
+**Migration:** Auth.js Drizzle adapter auto-migrates these tables on first run, or they can be managed via Drizzle Kit migrations.
 
 ### Our Billing Tables
 
@@ -302,11 +313,13 @@ React components use Auth.js hooks:
 
 - `id` (PK) - Transaction identifier
 - `billing_account_id` (FK → `billing_accounts.id`) - Which billing account
-- `virtual_key_id` (FK → `virtual_keys.id`, nullable) - Which key was used
+- `virtual_key_id` (FK → `virtual_keys.id`, **NOT NULL** in MVP) - Which key was used
 - `amount` - Credit delta (positive = add, negative = deduct)
 - `balance_after` - Balance snapshot after transaction
 - `description` - Transaction description
 - Timestamps: `created_at`
+
+**Note:** The MVP implementation requires `virtual_key_id` to be NOT NULL. Future enhancements may make this nullable to support admin credit adjustments not tied to a specific key.
 
 ### LiteLLM Integration Model
 
@@ -339,7 +352,7 @@ React components use Auth.js hooks:
 - [x] Move `src/app/api/v1/meta/health/route.ts` → `src/app/health/route.ts`
 - [x] Move `src/app/api/v1/meta/openapi/route.ts` → `src/app/openapi.json/route.ts`
 - [x] Move `src/app/api/v1/meta/route-manifest/route.ts` → `src/app/meta/route-manifest/route.ts`
-- [ ] Update any tests/docs referencing old paths
+- [x] Update any tests/docs referencing old paths
 
 **Database Reset:**
 
@@ -393,15 +406,15 @@ React components use Auth.js hooks:
 - [x] Install dependencies: `next-auth@beta`, `@auth/drizzle-adapter`, `siwe`
 - [x] Create `src/auth.ts` with SIWE provider configuration
 - [x] Configure Drizzle adapter to use existing Postgres connection
-- [x] Add `SESSION_SECRET` to `.env` (for JWT signing)
+- [x] Add `AUTH_SECRET` to `.env` (for JWT signing)
 - [x] Expose Auth.js handler (`/api/auth/[...nextauth]`) and rely on built-in `/api/auth/session` for session checks
 
 ### Phase 2: Frontend Integration
 
 - [x] Create `src/app/providers/auth.client.tsx` with SessionProvider
 - [x] Update root layout to wrap app in SessionProvider (see `src/app/providers/app-providers.client.tsx`)
-- [ ] Wire RainbowKit sign-in to Auth.js `signIn()` method (frontend implementation pending)
-- [ ] Add sign-out button calling `signOut()` (frontend implementation pending)
+- [ ] Wire RainbowKit sign-in to Auth.js `signIn()` method (frontend UX implementation pending)
+- [ ] Add sign-out button calling `signOut()` (frontend UX implementation pending)
 - [x] Test: Stack test validates session → billing → LLM flow (see `tests/stack/auth/auth-flow.stack.test.ts`)
 
 ### Phase 3: Billing Integration
@@ -421,14 +434,14 @@ React components use Auth.js hooks:
 - [x] Implement session auth on `/api/v1/ai/*` routes per "API Auth Policy (MVP)" section
 - [x] Ensure public routes remain accessible: `/api/auth/*`, `/health`, `/openapi.json`, `/meta/route-manifest`
 - [x] Test: Stack test validates session requirement (see `tests/stack/auth/auth-flow.stack.test.ts`)
-- [ ] Test: expired sessions are rejected (integration test pending)
+- [ ] Test: expired JWT sessions are rejected (N/A for MVP - JWT expiry handled by Auth.js, no custom expiry tests)
 - [x] Test: public infrastructure routes remain accessible without auth (existing tests pass)
 
 ### Phase 5: Cleanup
 
 - [x] Remove any localStorage API key handling from frontend (no localStorage code found)
 - [x] Remove any `Authorization` header code from chat requests
-- [x] Update docs and environment variable examples (SESSION_SECRET added to .env.example)
+- [x] Update docs and environment variable examples (AUTH_SECRET added to .env.example)
 - [x] Verify no legacy custom auth endpoints remain (all removed in Phase 0)
 
 ---
@@ -524,15 +537,40 @@ Auth.js does NOT provide a built-in SIWE provider. We implement SIWE via:
 
 ### Session vs JWT Strategy
 
-**Our Choice:** Database sessions (not JWT)
+**Our Choice:** JWT sessions (not database)
 
 **Reasons:**
 
-- Proper logout/revocation (delete session row)
-- Audit trail (who's logged in, when)
-- No token size limits (can store more data if needed)
+- **Simpler for MVP:** No session table management, no cleanup jobs
+- **Stateless:** API routes don't need database queries to validate sessions
+- **Sufficient for current scope:** Wallet address + user ID fit comfortably in JWT
+- **Auth.js default:** Works seamlessly with Credentials provider
 
-**Configured in:** `src/auth.ts` with `strategy: "database"`
+**Trade-offs Accepted:**
+
+- No server-side revocation (logout clears cookie but JWT persists until expiry)
+- No session audit trail in database (relies on application logs)
+- Token size constraints (not an issue for minimal session data)
+
+**Configured in:** `src/auth.ts` with `session: { strategy: "jwt" }`
+
+**Note:** The `sessions` table from Auth.js schema exists but is **unused** with JWT strategy. It may be removed or kept for future database session migration.
+
+### Infrastructure Requirement: Host Allowlist
+
+**CRITICAL:** The SIWE implementation uses `req.headers.host` as the single source of truth for domain verification. The deployment infrastructure (Next.js config, reverse proxy, CDN) **MUST** enforce an allowed host list to prevent domain spoofing attacks.
+
+**Expected behavior:**
+
+- Allowed hosts: `localhost:3000` (dev), `preview.cognidao.org` (preview), `cognidao.org` (prod)
+- Requests with unauthorized `Host` headers should be rejected at the infrastructure layer
+- The application assumes any request reaching `src/auth.ts` has an allowed host
+
+**Configuration:**
+
+- Next.js: Set `experimental.allowedOrigins` in `next.config.js`
+- Reverse proxy: Configure `Host` header validation
+- CDN: Restrict to configured domains
 
 ---
 

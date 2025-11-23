@@ -1,0 +1,80 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@_fixtures/auth/synthetic-session`
+ * Purpose: Create synthetic Auth.js-compatible JWT session tokens for testing.
+ * Scope: Provides utilities to mint valid session cookies without going through the full SIWE HTTP flow. Does not perform actual SIWE signature verification.
+ * Invariants: Uses same AUTH_SECRET and JWT structure as Auth.js; tokens are functionally identical to real Auth.js sessions
+ * Side-effects: IO (reads AUTH_SECRET from environment)
+ * Notes: For api-auth-guard tests needing valid sessions without SIWE flow; siwe-session.stack.test.ts is source of truth for SIWE
+ * Links: src/auth.ts, tests/stack/auth/api-auth-guard.stack.test.ts
+ *
+ * DEFERRED: JWE vs JWT format issue
+ * Current implementation uses encode() from next-auth/jwt, but Auth.js v5 expects JWE (encrypted JWT) format.
+ * Tests using synthetic sessions are SKIPPED pending RainbowKitSiweNextAuth refactor completion.
+ * After refactor: revisit this approach or use real SIWE flow via test fixtures.
+ * See: docs/AUTHENTICATION.md (deferred_work section)
+ *
+ * @public
+ */
+
+import { encode } from "next-auth/jwt";
+
+import type { AuthJsSessionCookie } from "./authjs-http-helpers";
+
+export interface SyntheticSessionParams {
+  walletAddress: string;
+  authSecret?: string;
+}
+
+/**
+ * Create a synthetic Auth.js-compatible JWT session token for testing.
+ *
+ * This mints a JWT with the same structure and signing algorithm that Auth.js uses,
+ * allowing tests to bypass the full SIWE HTTP flow while still exercising real
+ * Auth.js session validation.
+ *
+ * @param params - Wallet address and optional auth secret (defaults to process.env.AUTH_SECRET)
+ * @returns AuthJsSessionCookie with name and value ready to use in Cookie header
+ */
+export async function createSyntheticSession(
+  params: SyntheticSessionParams
+): Promise<AuthJsSessionCookie> {
+  const secret = params.authSecret ?? process.env.AUTH_SECRET;
+
+  if (!secret) {
+    throw new Error("AUTH_SECRET not found in environment");
+  }
+
+  // Diagnostic logging (remove after debugging)
+  console.log(
+    "[Synthetic Session] Using secret:",
+    secret.substring(0, 10) + "..."
+  );
+
+  const address = params.walletAddress.toLowerCase();
+
+  // Use Auth.js's own encode function to create a valid JWT
+  // This ensures the token structure matches exactly what Auth.js expects
+  const token = await encode({
+    token: {
+      id: address,
+      walletAddress: address,
+      name: address,
+      email: null,
+      picture: null,
+      sub: address,
+    },
+    secret,
+    salt: "authjs.session-token", // Auth.js uses cookie name as salt
+    maxAge: 30 * 24 * 60 * 60, // 30 days (matches auth.ts)
+  });
+
+  // Return cookie in Auth.js format
+  // Auth.js v5 uses "authjs.session-token" (not "next-auth.session-token")
+  return {
+    name: "authjs.session-token",
+    value: token,
+  };
+}

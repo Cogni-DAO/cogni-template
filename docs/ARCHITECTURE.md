@@ -116,12 +116,13 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] CONTRIBUTING.md # contribution standards
 [x] README.md # overview
 [ ] CHANGELOG.md # releases
-[ ] middleware.ts # headers, session/API-key guard, basic rate-limit
+[x] src/proxy.ts # Auth proxy for /api/v1/ai/\* routes
 [x] vitest.config.mts # unit/integration
 [x] vitest.api.config.mts # API integration tests
 [x] playwright.config.ts # UI/e2e
 
 [x] docs/
+[x] ├── AUTHENTICATION.md # SIWE and session management architecture
 [x] ├── ARCHITECTURE.md # narrative + diagrams (longform)
 [x] ├── ACCOUNTS_DESIGN.md # accounts & credits system design
 [x] ├── ACCOUNTS_API_KEY_ENDPOINTS.md # API endpoint contracts
@@ -185,9 +186,9 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] ├── app/ # delivery (Next UI + routes)
 [x] │ ├── layout.tsx
 [x] │ ├── page.tsx
-[x] │ ├── \_facades/ # server-side facades for UI
-[x] │ │ ├── accounts/ # account management facades
-[x] │ │ └── wallet/ # wallet linking facades
+[x] │ ├── \_lib/ # private app-level helpers
+[x] │ │ └── auth/ # session helpers
+[x] │ │ └── session.ts
 [x] │ ├── providers/ # Client-side provider composition (wagmi, RainbowKit, React Query)
 [x] │ │ ├── AGENTS.md
 [x] │ │ ├── app-providers.client.tsx
@@ -195,18 +196,12 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ │ ├── query.client.tsx
 [x] │ │ └── wagmi-config-builder.ts
 [x] │ ├── wallet-test/ # Dev wallet test harness
-[ ] │ ├── (public)/
-[ ] │ ├── (protected)/
+[ ] │ ├── (public)/ # public, unauthenticated pages
+[ ] │ ├── (app)/ # protected, authenticated pages
 [x] │ └── api/
-[x] │ ├── v1/meta/ # health, route-manifest, openapi
-[x] │ ├── v1/ai/completion/ # AI completion endpoint
-[ ] │ ├── v1/wallet/link/ # POST - wallet-to-account linking (removed in session-only design)
-[x] │ └── admin/ # admin control plane endpoints
-[x] │ ├── accounts/
-[x] │ │ ├── register-litellm-key/ # POST - create account for API key
-[x] │ │ └── [accountId]/
-[x] │ │ └── credits/
-[x] │ │ └── topup/ # POST - manual credit funding
+[x] │ ├── auth/[...nextauth]/ # Auth.js routes (signin, session, signout, csrf)
+[x] │ ├── v1/ai/completion/ # AI completion endpoint (session-protected)
+[x] │ └── admin/ # admin control plane endpoints (removed wallet/link in auth refactor)
 [ ] │ ├── balance/route.ts # exposes credits
 [ ] │ ├── keys/create/route.ts # API-key issuance
 [ ] │ └── web3/verify/route.ts # calls wallet verification port
@@ -301,6 +296,10 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [ ] │ └── cli/ # command-line adapters (future)
 [ ] │
 [x] ├── shared/ # small, pure, framework-agnostic
+[x] │ ├── auth/ # shared types and pure helpers for auth
+[x] │ │ ├── AGENTS.md
+[x] │ │ ├── session.ts
+[x] │ │ └── wallet-session.ts
 [x] │ ├── env/
 [x] │ │ ├── server.ts # Zod-validated private vars
 [x] │ │ ├── client.ts # validated public vars
