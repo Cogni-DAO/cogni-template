@@ -19,6 +19,7 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - APP_ENV=${APP_ENV}
       - APP_BASE_URL=${APP_BASE_URL:-https://localhost}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-${APP_BASE_URL:-https://localhost}}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=${POSTGRES_DB:-cogni_template_dev}
