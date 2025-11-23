@@ -34,6 +34,9 @@ jobs:
 
       - name: Create archive tag for branch tip
         run: |
+          # Configure git identity for automated commits
+          git config user.name "Cogni"
+          git config user.email "steward@cognidao.org"
 
           PR_NUMBER="${{ github.event.pull_request.number }}"
           SOURCE_BRANCH="${{ github.event.pull_request.head.ref }}"
