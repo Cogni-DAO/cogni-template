@@ -17,8 +17,8 @@ import { base } from "wagmi/chains";
 /** Wagmi chain object for Base mainnet. */
 export const CHAIN = base;
 
-/** Base mainnet chain ID. */
-export const CHAIN_ID = CHAIN.id as const;
+/** Base mainnet chain ID (8453). */
+export const CHAIN_ID = CHAIN.id;
 
 /**
  * The single chain ID used throughout the application.
