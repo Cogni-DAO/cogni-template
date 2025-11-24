@@ -21,6 +21,7 @@ import {
   type AccountService,
   type BillingAccount,
   BillingAccountNotFoundPortError,
+  type CreditLedgerEntry,
   InsufficientCreditsPortError,
   VirtualKeyNotFoundPortError,
 } from "@/ports";
@@ -38,6 +39,8 @@ interface VirtualKeyRow {
   id: string;
   litellmVirtualKey: string;
 }
+
+type CreditLedgerRow = typeof creditLedger.$inferSelect;
 
 export class DrizzleAccountService implements AccountService {
   constructor(private readonly db: Database) {}
@@ -211,6 +214,52 @@ export class DrizzleAccountService implements AccountService {
     });
   }
 
+  async listCreditLedgerEntries({
+    billingAccountId,
+    limit,
+    reason,
+  }: {
+    billingAccountId: string;
+    limit?: number | undefined;
+    reason?: string | undefined;
+  }): Promise<CreditLedgerEntry[]> {
+    const where = reason
+      ? and(
+          eq(creditLedger.billingAccountId, billingAccountId),
+          eq(creditLedger.reason, reason)
+        )
+      : eq(creditLedger.billingAccountId, billingAccountId);
+
+    const rows = await this.db.query.creditLedger.findMany({
+      where,
+      orderBy: (ledger, { desc: orderDesc }) => orderDesc(ledger.createdAt),
+      ...(limit ? { limit } : {}),
+    });
+
+    return rows.map((row) => this.mapLedgerRow(row));
+  }
+
+  async findCreditLedgerEntryByReference({
+    billingAccountId,
+    reason,
+    reference,
+  }: {
+    billingAccountId: string;
+    reason: string;
+    reference: string;
+  }): Promise<CreditLedgerEntry | null> {
+    const entry = await this.db.query.creditLedger.findFirst({
+      where: and(
+        eq(creditLedger.billingAccountId, billingAccountId),
+        eq(creditLedger.reason, reason),
+        eq(creditLedger.reference, reference)
+      ),
+      orderBy: (ledger, { desc: orderDesc }) => orderDesc(ledger.createdAt),
+    });
+
+    return entry ? this.mapLedgerRow(entry) : null;
+  }
+
   private async ensureBillingAccountExists(
     tx: QueryableDb,
     billingAccountId: string
@@ -360,5 +409,19 @@ export class DrizzleAccountService implements AccountService {
       return 1;
     }
     return rounded;
+  }
+
+  private mapLedgerRow(row: CreditLedgerRow): CreditLedgerEntry {
+    return {
+      id: row.id,
+      billingAccountId: row.billingAccountId,
+      virtualKeyId: row.virtualKeyId,
+      amount: this.toNumber(row.amount),
+      balanceAfter: this.toNumber(row.balanceAfter),
+      reason: row.reason,
+      reference: row.reference ?? null,
+      metadata: (row.metadata as Record<string, unknown> | null) ?? null,
+      createdAt: row.createdAt,
+    };
   }
 }

@@ -15,16 +15,17 @@ cogni_dao:
   dao_contract: "0x067d3d827fAb4F3cE7c7A3D3b97F5898d490761D" # Current Cogni parent DAO Contract Address
   plugin_contract: "0x67966e0e9E30fEA545f2EeDE4253f96e1Fb68E2c" # DAO's Aragon Voting Plugin Address
   signal_contract: "0x685350a73E7bC60143568d32040EE3d79C0b11DD" # DAO's CogniSignal Contract Address
-  chain_id: "11155111" # Chain ID: Sepolia
+  chain_id: "8453" # Chain ID: Base mainnet
   base_url: "https://proposal.cognidao.org" # v0 Base URL: cogni-proposal-launcher service
 
 # DAO Financial Rails Configuration
 payments_in:
-  resmic:
+  widget:
+    provider: depay # Current widget provider (DePay OSS mode)
+    receiving_address: "0x070075F1389Ae1182aBac722B36CA12285d0c949" # Expected receiver (DAO Wallet), testing only address rn
     receiving_address_env: NEXT_PUBLIC_DAO_WALLET_ADDRESS
     allowed_chains:
       - base
-      - base-sepolia
     allowed_tokens:
       - USDC
 

@@ -13,3 +13,6 @@
 
 /* Chat constants */
 export const MAX_MESSAGE_CHARS = 4000;
+
+/* Payments */
+export * from "./payments";

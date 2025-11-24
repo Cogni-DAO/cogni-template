@@ -395,6 +395,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 - **Contracts**: `tests/contract` must pass for any adapter.
 - **Env**: Zod-validated; build fails on invalid/missing.
 - **Security**: middleware sets headers, verifies session or API key, rate-limits.
+- **Financial Rails**: `NEXT_PUBLIC_DAO_WALLET_ADDRESS` is immutable and must match `repo-spec.yaml`. Validated by `scripts/validate-chain-config.ts`. Any payment logic must use this address.
 
 ### Styling Invariants
 

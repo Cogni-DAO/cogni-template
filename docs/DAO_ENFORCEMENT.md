@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Define how the Cogni DAO "owns" the Resmic payments loop in cogni-template, and how cogni-git-review enforces that ownership at PR time.
+Define how the Cogni DAO "owns" the crypto widget payments loop in cogni-template, and how cogni-git-review enforces that ownership at PR time.
 
-This document is **binding** for the Resmic MVP:
+This document is **binding** for the payments MVP:
 
 - It describes the only allowed way to mint credits from crypto payments.
 - It describes how repository config and cogni-git-review gates detect violations.
@@ -13,49 +13,49 @@ This document is **binding** for the Resmic MVP:
 
 ## 1. DAO-Owned Financial Loop (MVP View)
 
-For the Resmic MVP, the DAO "ownership" of payments is enforced at three layers:
+For the payments MVP, the DAO "ownership" of payments is enforced at three layers:
 
 1. **Configuration**
    - The DAO payment receiving address is stored in environment variables, not code.
-   - Frontend uses `NEXT_PUBLIC_DAO_WALLET_ADDRESS` as the Resmic `Address` prop.
+   - Frontend uses `NEXT_PUBLIC_DAO_WALLET_ADDRESS` for the payment widget receiver address.
    - Backend uses `DAO_WALLET_ADDRESS_BASE` / `DAO_WALLET_ADDRESS_BASE_SEPOLIA` for ops and future watchers.
 
 2. **Runtime Invariants**
-   - Only authenticated SIWE sessions can call `POST /api/v1/payments/resmic/confirm`.
+   - Only authenticated SIWE sessions can call `POST /api/v1/payments/credits/confirm`.
    - That endpoint resolves the caller's `billing_account_id` from the session only.
-   - Credits are minted by inserting a `credit_ledger` row with `reason = 'resmic_payment'` and updating `billing_accounts.balance_credits`.
+   - Credits are minted by inserting a `credit_ledger` row with `reason = 'widget_payment'` and updating `billing_accounts.balance_credits`.
 
 3. **Static Enforcement (cogni-git-review)**
    - `.cogni/repo-spec.yaml` declares the payments config and allowed envs.
    - cogni-git-review gates ensure no code paths exist outside the approved rails.
 
-For MVP, we accept that Resmic is a **soft oracle**: we trust `setPaymentStatus(true)` as "user paid" and rely on later Ponder/on-chain reconciliation for hard guarantees.
+For MVP, we accept that crypto widgets are a **soft oracle**: we trust the widget's success callback as "user paid" and rely on later Ponder/on-chain reconciliation for hard guarantees.
 
 ---
 
-## 2. Resmic MVP Invariants
+## 2. Payments MVP Invariants
 
 ### 2.1 Frontend Invariants
 
-1. **Resmic Address Source**
-   - The `Address` prop for Resmic components MUST come from `NEXT_PUBLIC_DAO_WALLET_ADDRESS`.
-   - No literal `0x...` addresses may be hardcoded into Resmic usage or any other `src/**` app code.
+1. **Widget Address Source**
+   - The receiver address for payment widgets MUST come from `NEXT_PUBLIC_DAO_WALLET_ADDRESS`.
+   - No literal `0x...` addresses may be hardcoded into widget configuration or any other `src/**` app code.
 
 2. **Auth + Payment Flow**
    - User must be logged in via SIWE (Auth.js session) before the "Buy Credits" UI is shown.
-   - On `setPaymentStatus(true)`, the UI:
+   - On widget payment success callback (e.g., DePay's `succeeded` event), the UI:
      - Computes `amountUsdCents` from the selected Amount,
      - Generates a `clientPaymentId` (UUID),
-     - Calls `POST /api/v1/payments/resmic/confirm` with `{ amountUsdCents, clientPaymentId, metadata? }`.
+     - Calls `POST /api/v1/payments/credits/confirm` with `{ amountUsdCents, clientPaymentId, metadata? }`.
    - The UI must **never** send `billingAccountId` or user identifiers in the body.
 
 3. **Discovery**
-   - The "Buy Credits" button must live in a shared layout/header and open a single `BuyCreditsModal` (or equivalent) component that owns the Resmic integration.
+   - The "Buy Credits" button must live in a shared layout/header and open a single `BuyCreditsModal` (or equivalent) component that owns the payment widget integration.
 
 ### 2.2 Backend Invariants
 
 1. **Single Minting Endpoint**
-   - `POST /api/v1/payments/resmic/confirm` is the ONLY endpoint allowed to create `credit_ledger` entries with `reason = 'resmic_payment'`.
+   - `POST /api/v1/payments/credits/confirm` is the ONLY endpoint allowed to create `credit_ledger` entries with `reason = 'widget_payment'`.
 
 2. **Session-Only Identity**
    - `billing_account_id` is resolved from the SIWE session via Auth.js → `user.id` → billing account mapping.
@@ -67,30 +67,31 @@ For MVP, we accept that Resmic is a **soft oracle**: we trust `setPaymentStatus(
      - `1 credit = $0.001`
      - `1 cent = 10 credits`
      - `credits = amountUsdCents * 10` (or equivalent formula using `CREDITS_PER_USDC`).
-   - The ledger row uses `amount = credits` (positive BIGINT) and `reason = 'resmic_payment'`.
+   - The ledger row uses `amount = credits` (positive BIGINT) and `reason = 'widget_payment'`.
 
 4. **Idempotency**
    - `clientPaymentId` is REQUIRED and must be a UUID.
-   - Before minting credits, the service checks for an existing `credit_ledger` row with `reason = 'resmic_payment'` and `reference = clientPaymentId`.
+   - Before minting credits, the service checks for an existing `credit_ledger` row with `reason = 'widget_payment'` and `reference = clientPaymentId`.
    - If such a row exists, the operation is a no-op and returns the current balance.
 
 5. **Atomicity**
    - `credit_ledger` insert and `billing_accounts.balance_credits` update must occur in a single transaction.
 
 6. **Reason Isolation**
-   - The literal `resmic_payment` reason should be defined once (e.g. in a shared constants module) and used only by the Resmic confirm service.
+   - The literal `widget_payment` reason should be defined once (e.g. in a shared constants module) and used only by the credits confirm service.
 
 ---
 
 ## 3. Repo-Spec Requirements for DAO Financial Rails
 
-The `.cogni/repo-spec.yaml` in cogni-template MUST declare the Resmic and env conventions so cogni-git-review can enforce them.
+The `.cogni/repo-spec.yaml` in cogni-template MUST declare the payment widget and env conventions so cogni-git-review can enforce them.
 
 Example (simplified):
 
 ```yaml
 payments_in:
-  resmic:
+  widget:
+    provider: depay # Current widget provider (DePay OSS mode)
     receiving_address_env: NEXT_PUBLIC_DAO_WALLET_ADDRESS
     allowed_chains:
       - base
@@ -117,7 +118,7 @@ secrets:
 
 This is declarative only. It describes:
 
-- Which env var carries the DAO receiving address for Resmic.
+- Which env var carries the DAO receiving address for payment widgets.
 - Which env vars are considered sensitive API keys.
 - Which host/master-key pair defines the LLM proxy.
 
@@ -141,23 +142,23 @@ The cogni-git-review repository implements static gates that read `.cogni/repo-s
 
 - Ensures the DAO multisig and any other on-chain addresses must be supplied via configuration (env) instead of being baked into code.
 
-### 4.2 Gate: resmic-payment-reason
+### 4.2 Gate: widget-payment-reason
 
-**Intent:** Ensure only the Resmic confirm flow can mint `resmic_payment` credits.
+**Intent:** Ensure only the credits confirm flow can mint `widget_payment` credits.
 
 **Behavior (conceptual):**
 
-- If `payments_in.resmic` exists in repo-spec, the gate activates.
-- Scan PR diffs for the string `resmic_payment`.
+- If `payments_in.widget` exists in repo-spec, the gate activates.
+- Scan PR diffs for the string `widget_payment`.
 - Allow it only in:
-  - `src/app/api/v1/payments/resmic/**/route.ts`,
-  - `src/features/payments/resmic/**`,
-  - and a shared constants file (e.g. `src/shared/constants/**/credit-reasons.ts`).
-- If `resmic_payment` appears in any other file, the gate FAILS.
+  - `src/app/api/v1/payments/credits/**/route.ts`,
+  - `src/features/payments/**`,
+  - and a shared constants file (e.g. `src/shared/constants/**/payments.ts`).
+- If `widget_payment` appears in any other file, the gate FAILS.
 
 **Effect:**
 
-- No other feature can sneak in a code path that writes `credit_ledger` rows pretending to be Resmic.
+- No other feature can sneak in a code path that writes `credit_ledger` rows pretending to be widget payments.
 
 ### 4.3 Gate: provider-api-key-usage
 
@@ -184,7 +185,7 @@ The cogni-git-review repository implements static gates that read `.cogni/repo-s
 
 As we add Ponder/on-chain verification and additional payment providers, this document remains the baseline:
 
-- All on-chain payment flows must settle into `credit_ledger` via well-defined reasons (e.g. `resmic_payment`, `onchain_deposit`).
+- All on-chain payment flows must settle into `credit_ledger` via well-defined reasons (e.g. `widget_payment`, `onchain_deposit`).
 - `.cogni/repo-spec.yaml` is the single source of truth for which env vars and providers are allowed to participate in the DAO's financial rails.
 - cogni-git-review evolves with new gates and reasons, but the core invariants remain:
   - No literal EVM addresses in code.

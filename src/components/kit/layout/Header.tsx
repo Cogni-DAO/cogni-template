@@ -14,12 +14,9 @@
 
 "use client";
 
-import { useConnectModal } from "@rainbow-me/rainbowkit";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
-import type { MouseEvent, ReactElement } from "react";
+import type { ReactElement } from "react";
 
 import {
   Container,
@@ -31,19 +28,6 @@ import {
 import { brandText, header, row } from "@/styles/ui";
 
 export function Header(): ReactElement {
-  const { data: session } = useSession();
-  const { openConnectModal } = useConnectModal();
-  const router = useRouter();
-
-  const handleChatClick = (e: MouseEvent): void => {
-    e.preventDefault();
-    if (session) {
-      router.push("/chat");
-    } else {
-      openConnectModal?.();
-    }
-  };
-
   return (
     <header role="banner" className={header()}>
       <Container size="lg">
@@ -67,9 +51,8 @@ export function Header(): ReactElement {
               aria-label="Primary"
               className={row({ align: "center", gap: "md" })}
             >
-              <NavigationLink href="/chat" onClick={handleChatClick}>
-                Chat
-              </NavigationLink>
+              <NavigationLink href="/chat">Chat</NavigationLink>
+              <NavigationLink href="/credits">Credits</NavigationLink>
             </nav>
 
             <GithubButton

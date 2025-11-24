@@ -91,6 +91,18 @@ export interface BillingAccount {
   litellmVirtualKey: string;
 }
 
+export interface CreditLedgerEntry {
+  id: string;
+  billingAccountId: string;
+  virtualKeyId: string;
+  amount: number;
+  balanceAfter: number;
+  reason: string;
+  reference: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: Date;
+}
+
 export interface AccountService {
   /**
    * Idempotently create or fetch a billing account for the given user.
@@ -133,4 +145,22 @@ export interface AccountService {
     virtualKeyId?: string;
     metadata?: Record<string, unknown>;
   }): Promise<{ newBalance: number }>;
+
+  /**
+   * Fetch credit ledger entries for a billing account ordered by newest first.
+   */
+  listCreditLedgerEntries(params: {
+    billingAccountId: string;
+    limit?: number | undefined;
+    reason?: string | undefined;
+  }): Promise<CreditLedgerEntry[]>;
+
+  /**
+   * Lookup a specific credit ledger entry by reference and reason for idempotency checks.
+   */
+  findCreditLedgerEntryByReference(params: {
+    billingAccountId: string;
+    reason: string;
+    reference: string;
+  }): Promise<CreditLedgerEntry | null>;
 }

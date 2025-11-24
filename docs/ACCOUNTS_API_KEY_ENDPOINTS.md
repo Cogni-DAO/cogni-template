@@ -105,7 +105,7 @@ In the new Auth.js + SIWE design, **MVP does not expose any account/key manageme
 
 From this point on, all LLM calls for this user go through the same `billing_accounts` + `virtual_keys` records.
 
-**Credit top-ups (MVP):** Real user funding currently enters the system via `POST /api/v1/payments/resmic/confirm` (session-based), which writes positive `credit_ledger` rows with `reason='resmic_payment'` and updates `billing_accounts.balance_credits`. The endpoint resolves `billing_account_id` from the SIWE session (not from request body). The Resmic SDK is a frontend-only payment widget; it does not send a webhook or signed callback. The client calls the confirm endpoint after Resmic's payment status callback fires in the browser. Dev/test environments can seed credits directly via database fixtures or scripts. Post-MVP, a Ponder-based on-chain watcher will provide reconciliation and observability for payments; see `docs/PAYMENTS_PONDER_VERIFICATION.md`.
+**Credit top-ups (MVP):** Real user funding currently enters the system via `POST /api/v1/payments/credits/confirm` (session-based), which writes positive `credit_ledger` rows with `reason='widget_payment'` and updates `billing_accounts.balance_credits`. The endpoint resolves `billing_account_id` from the SIWE session (not from request body). The payment widget (DePay) is a frontend-only SDK; it does not send a webhook or signed callback. The client calls the confirm endpoint after the widget's success callback fires in the browser. Dev/test environments can seed credits directly via database fixtures or scripts. Post-MVP, a Ponder-based on-chain watcher will provide reconciliation and observability for payments; see `docs/PAYMENTS_PONDER_VERIFICATION.md`.
 
 ---
 
@@ -121,7 +121,21 @@ From this point on, all LLM calls for this user go through the same `billing_acc
   4. Call LiteLLM `POST /chat/completions` with `Authorization: Bearer <litellm_virtual_key>`
   5. Record usage in `credit_ledger` for `billing_account_id` + `virtual_key_id`
 
-**There is no MVP HTTP endpoint for "register key" or "top up credits".** Those are internal operations for now (tests and scripts can seed balances directly in the database).
+Session-based credit top-ups now flow through the widget confirm endpoint below; there is still no public HTTP surface for admin key registration or manual balance edits.
+
+### 2. `/api/v1/payments/credits/confirm` (Payments)
+
+- [x] **Auth:** Auth.js session only (HttpOnly cookie). No billing account identifier in the payload.
+- [x] **Flow:**
+  1. Client calls after payment widget reports success (e.g., DePay `succeeded` event) with `{ amountUsdCents, clientPaymentId, metadata }`.
+  2. Server resolves billing account from session via `getOrCreateBillingAccountForUser`.
+  3. Idempotent ledger write: insert `credit_ledger` row with `reason = 'widget_payment'` and `reference = clientPaymentId`; credits computed as `amountUsdCents * 10`.
+  4. Returns `{ billingAccountId, balanceCredits }` from cached balance.
+
+### 3. `/api/v1/payments/credits/summary` (Payments)
+
+- [x] **Auth:** Auth.js session only.
+- [x] **Flow:** Returns `{ billingAccountId, balanceCredits, ledger[] }` for the authenticated billing account, ordered newest-first, used by the Credits page to refresh balance/history after confirm.
 
 ---
 

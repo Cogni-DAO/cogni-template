@@ -5,7 +5,7 @@
  * Module: `@app/providers/wagmi-config-builder`
  * Purpose: Pure function to build wagmi configuration options with conditional connector logic.
  * Scope: Builds chains, transports, and connectors based on environment. Does not create wagmi config or import React.
- * Invariants: Sepolia hardcoded for MVP; WalletConnect only when projectId present; injected always included.
+ * Invariants: Base mainnet hardcoded; WalletConnect only when projectId present; injected always included.
  * Side-effects: none
  * Notes: Extracted for testability in node environment without jsdom. Used by WalletProvider after dynamic import.
  * Links: wagmi v2 configuration
@@ -14,7 +14,8 @@
 
 import type { CreateConnectorFn, Transport } from "wagmi";
 import { http } from "wagmi";
-import { sepolia } from "wagmi/chains";
+
+import { CHAIN } from "@/shared/web3";
 
 export interface WalletEnv {
   NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID?: string | undefined;
@@ -26,7 +27,7 @@ export interface ConnectorsLib<TConnector> {
 }
 
 interface BaseConfigOptions<TConnector> {
-  chains: readonly [typeof sepolia];
+  chains: readonly [typeof CHAIN];
   transports: Record<number, Transport>;
   connectors: TConnector[];
 }
@@ -40,10 +41,10 @@ export function buildWagmiConfigOptions<TConnector>(
   env: WalletEnv,
   connectorsLib: ConnectorsLib<TConnector>
 ): BaseConfigOptions<TConnector> {
-  const chains = [sepolia] as const;
+  const chains = [CHAIN] as const;
 
   const transports = {
-    [sepolia.id]: http(),
+    [CHAIN.id]: http(),
   };
 
   // Always include injected wallet

@@ -25,6 +25,20 @@ Auth.js manages identity via SIWE; our billing layer owns LiteLLM virtual keys a
 
 ---
 
+### Future Migration: Multi-Wallet & OAuth
+
+> [!NOTE]
+> **Current State (MVP)**: 1 Wallet = 1 User. The `users` table enforces `UNIQUE(wallet_address)`.
+>
+> **Future State**: When adding OAuth or multi-wallet support:
+>
+> 1.  Introduce standard Auth.js `accounts` table.
+> 2.  Move uniqueness constraint to `(provider, providerAccountId)` in `accounts`.
+> 3.  Demote `users.walletAddress` to a "primary wallet" field or remove it in favor of the `accounts` link.
+> 4.  Migrate existing users by creating an `accounts` row for their current wallet.
+
+## 6. Security & Compliance
+
 ## Identity & Billing Model
 
 ### Three-Layer Identity System
@@ -67,14 +81,14 @@ Session → user.id → billing_account → default virtual_key → LiteLLM API 
 
 **Credits UP (Real Users):**
 
-- User pays via Resmic checkout/widget (frontend-only SDK) in the browser
-- Resmic sets payment status callback to true client-side once payment is believed to be mined
-- Frontend calls `POST /api/v1/payments/resmic/confirm` (session-authenticated)
+- User pays via payment widget (DePay, frontend-only SDK) in the browser
+- Widget fires success callback (e.g., `succeeded` event) client-side once payment is confirmed on-chain
+- Frontend calls `POST /api/v1/payments/credits/confirm` (session-authenticated)
 - Backend resolves `billing_account_id` from SIWE session (not from request body)
-- Inserts positive `credit_ledger` row with `reason='resmic_payment'`
+- Inserts positive `credit_ledger` row with `reason='widget_payment'`
 - Updates `billing_accounts.balance_credits`
 
-**MVP Trust Model:** The SIWE session and Resmic UI callback are the only gates; no on-chain verification in the critical path.
+**MVP Trust Model:** The SIWE session and widget success callback are the only gates; no on-chain verification in the critical path.
 
 **Post-MVP Hardening:** A Ponder-based on-chain indexer will watch the DAO wallet for USDC transfers and provide reconciliation/observability (not a hard gate initially). See `docs/PAYMENTS_PONDER_VERIFICATION.md`.
 
@@ -164,7 +178,7 @@ Session → user.id → billing_account → default virtual_key → LiteLLM API 
 
 **Payment Routes (Session Required):**
 
-- `src/app/api/v1/payments/resmic/confirm/route.ts` - Resmic payment confirmation (top-up credits, session-authenticated)
+- `src/app/api/v1/payments/credits/confirm/route.ts` - Widget payment confirmation (top-up credits, session-authenticated)
 
 **Infrastructure Routes (Public, Unversioned):**
 

@@ -20,5 +20,5 @@ export const users = pgTable("users", {
   email: text("email"),
   emailVerified: timestamp("email_verified", { withTimezone: true }),
   image: text("image"),
-  walletAddress: text("wallet_address"),
+  walletAddress: text("wallet_address").unique(),
 });

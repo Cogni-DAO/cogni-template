@@ -2,11 +2,11 @@
 
 **Status:** Post-MVP hardening. Not required for initial launch.
 
-**Purpose:** Introduce a Ponder-based on-chain indexer that provides an independent view of USDC transfers into the DAO wallet for reconciliation, observability, and future fraud prevention. This does NOT replace the Resmic confirm endpoint in MVP; it adds a second layer of truth.
+**Purpose:** Introduce a Ponder-based on-chain indexer that provides an independent view of USDC transfers into the DAO wallet for reconciliation, observability, and future fraud prevention. This does NOT replace the widget confirm endpoint in MVP; it adds a second layer of truth.
 
 **Related:**
 
-- MVP payments flow: [RESMIC_PAYMENTS.md](RESMIC_PAYMENTS.md)
+- MVP payments flow: [DEPAY_PAYMENTS.md](DEPAY_PAYMENTS.md)
 - Billing layer: [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md)
 - Auth model: [SECURITY_AUTH_SPEC.md](SECURITY_AUTH_SPEC.md)
 
@@ -20,10 +20,10 @@ Ponder watches Base/Base Sepolia for USDC transfers into our DAO wallet, indexes
 
 ## MVP vs v2 Security Model
 
-**MVP (Resmic Confirm Only):**
+**MVP (Widget Confirm Only):**
 
-- Trust boundary: SIWE session + `/api/v1/payments/resmic/confirm` endpoint
-- Credits granted based on Resmic payment status callback in browser
+- Trust boundary: SIWE session + `/api/v1/payments/credits/confirm` endpoint
+- Credits granted based on widget success callback in browser (DePay `succeeded` event)
 - No on-chain verification in critical path
 - No tx hash captured or verified
 
@@ -37,7 +37,7 @@ Ponder watches Base/Base Sepolia for USDC transfers into our DAO wallet, indexes
 **v2 (Ponder as Gate, Phase 2 - Future):**
 
 - For large payments or high-risk accounts, require matching on-chain transfer before marking credits as settled
-- Requires capturing tx hash on frontend (Resmic SDK doesn't expose this; may need client-side wallet integration)
+- Requires capturing tx hash on frontend (DePay widget provides this in success callback)
 - Hard gate for high-value transactions
 
 ---
@@ -58,7 +58,7 @@ Ponder watches Base/Base Sepolia for USDC transfers into our DAO wallet, indexes
 - [ ] Add RPC endpoint URLs to `.env.example`:
   - `PONDER_RPC_BASE_MAINNET` - Base mainnet RPC
   - `PONDER_RPC_BASE_SEPOLIA` - Base Sepolia testnet RPC
-- [ ] Add DAO wallet addresses (already in env from Resmic integration):
+- [ ] Add DAO wallet addresses (already in env from widget integration):
   - `DAO_WALLET_ADDRESS_BASE`
   - `DAO_WALLET_ADDRESS_BASE_SEPOLIA`
 - [ ] Add Ponder database connection string:
@@ -136,7 +136,7 @@ Ponder watches Base/Base Sepolia for USDC transfers into our DAO wallet, indexes
 
 - Periodic reconciliation job (cron or background worker) runs every N hours
 - Query Ponder GraphQL endpoint for all confirmed transfers in the last period
-- Query app database for `credit_ledger` rows where `reason IN ('resmic_payment', 'onchain_deposit')` in same period
+- Query app database for `credit_ledger` rows where `reason IN ('widget_payment', 'onchain_deposit')` in same period
 - Compare totals:
   - Sum of on-chain `amount_usd` from Ponder
   - Sum of credited amounts from `credit_ledger` (convert credits to USD: credits / 1000)
@@ -177,13 +177,13 @@ Ponder watches Base/Base Sepolia for USDC transfers into our DAO wallet, indexes
 
 **Prerequisites:**
 
-- Capture transaction hash on frontend (requires changes to Resmic integration or direct wallet interaction)
+- Capture transaction hash on frontend (DePay widget provides this in success callback)
 - Store `tx_hash` in `credit_ledger.reference` field or new `credit_ledger.tx_hash` column
 - Define thresholds for "high-value" (e.g., > $100 USD) or "high-risk" accounts
 
 **Behavior:**
 
-- When user calls `/api/v1/payments/resmic/confirm`, if payment exceeds threshold:
+- When user calls `/api/v1/payments/credits/confirm`, if payment exceeds threshold:
   - Insert `credit_ledger` row with `status='pending'`
   - Do NOT update `billing_accounts.balance_credits` yet
   - Return response indicating payment is pending verification
@@ -194,7 +194,7 @@ Ponder watches Base/Base Sepolia for USDC transfers into our DAO wallet, indexes
 
 **Implementation Checklist:**
 
-- [ ] Add `tx_hash` field to `/payments/resmic/confirm` request schema (optional)
+- [ ] Add `tx_hash` field to `/payments/credits/confirm` request schema (optional, provided by DePay widget)
 - [ ] Add `status` column to `credit_ledger` ('pending' | 'confirmed')
 - [ ] Implement threshold logic in confirm endpoint
 - [ ] Create verification job that queries Ponder by tx_hash
@@ -203,13 +203,13 @@ Ponder watches Base/Base Sepolia for USDC transfers into our DAO wallet, indexes
 
 **Files:**
 
-- `src/contracts/payments.resmic.confirm.v1.contract.ts` - Add optional `tx_hash` field
+- `src/contracts/payments.credits.confirm.v1.contract.ts` - Add optional `tx_hash` field
 - `src/shared/db/migrations/*_add_credit_ledger_status.sql` - Add status column
-- `src/features/payments/services/resmic-confirm.ts` - Threshold logic
+- `src/features/payments/services/creditsConfirm.ts` - Threshold logic
 - `src/workers/ponder-verification-job.ts` - Verification worker
-- `tests/unit/features/payments/services/resmic-confirm.test.ts` - Test pending flow
+- `tests/unit/features/payments/services/creditsConfirm.test.ts` - Test pending flow
 
-**Note:** Phase 2 requires frontend changes to capture tx_hash. Resmic SDK does not expose this; may need to fork Resmic or use direct wallet interaction (ethers.js/viem) alongside Resmic UI.
+**Note:** Phase 2 requires frontend changes to capture tx_hash. DePay widget provides transaction hash in the `succeeded` callback, making this integration straightforward.
 
 ---
 
@@ -217,9 +217,9 @@ Ponder watches Base/Base Sepolia for USDC transfers into our DAO wallet, indexes
 
 **Layered Defense:**
 
-1. **Layer 1 (MVP):** SIWE session + Resmic confirm endpoint
+1. **Layer 1 (MVP):** SIWE session + widget confirm endpoint
    - Primary gate: authenticated session resolves billing_account_id
-   - Trust assumption: Resmic payment status callback reflects real payment
+   - Trust assumption: widget success callback reflects real payment
    - Mitigation: Rate limiting, idempotency, manual monitoring
 
 2. **Layer 2 (Phase 1):** Ponder reconciliation
@@ -411,7 +411,7 @@ Ponder watches Base/Base Sepolia for USDC transfers into our DAO wallet, indexes
 
 **Why not verify every payment on-chain?**
 
-- Resmic SDK doesn't expose tx_hash (would require significant frontend rework)
+- DePay widget provides tx_hash in success callback, making this straightforward
 - Most payments are small; fraud risk is proportional to amount
 - On-chain verification adds latency (wait for confirmations)
 - Phase 1 catches fraud via reconciliation; Phase 2 prevents it for high-value only
@@ -424,5 +424,5 @@ Ponder watches Base/Base Sepolia for USDC transfers into our DAO wallet, indexes
 - [Ponder Indexing Guide](https://ponder.sh/docs/indexing/design-your-schema) - Schema and event handlers
 - [Base Network](https://base.org/) - Layer 2 network documentation
 - [USDC on Base](https://basescan.org/token/0x833589fcd6edb6e08f4c7c32d4f71b54bda02913) - USDC contract on Base mainnet
-- [RESMIC_PAYMENTS.md](RESMIC_PAYMENTS.md) - MVP payments flow (Resmic confirm endpoint)
+- [DEPAY_PAYMENTS.md](DEPAY_PAYMENTS.md) - MVP payments flow (widget confirm endpoint)
 - [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md) - Credit accounting and dual-cost billing

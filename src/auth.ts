@@ -13,6 +13,8 @@
 
 /* eslint-disable boundaries/no-unknown-files */
 
+import { randomUUID } from "node:crypto";
+
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import NextAuth, { type User as NextAuthUser } from "next-auth";
@@ -24,16 +26,13 @@ import { users } from "@/shared/db/schema.auth";
 
 type DbUser = typeof users.$inferSelect;
 
-function toNextAuthUser(
-  row: DbUser | undefined,
-  address: string
-): NextAuthUser {
-  const walletAddress = row?.walletAddress ?? address ?? null;
+function toNextAuthUser(row: DbUser, address: string): NextAuthUser {
+  const walletAddress = row.walletAddress ?? address;
   return {
-    id: row?.id ?? address,
-    name: row?.name ?? address,
-    email: row?.email ?? null,
-    image: row?.image ?? null,
+    id: row.id,
+    name: row.name ?? null,
+    email: row.email ?? null,
+    image: row.image ?? null,
     walletAddress,
   };
 }
@@ -139,28 +138,36 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
 
         const address = siweMessage.address.toLowerCase();
         const db = getDb();
-        const existing = await db.query.users.findFirst({
-          where: eq(users.id, address),
+
+        // Optimistic fetch first (fast path)
+        let user = await db.query.users.findFirst({
+          where: eq(users.walletAddress, address),
         });
 
-        if (existing) {
-          return toNextAuthUser(existing, address);
+        if (user) {
+          return toNextAuthUser(user, address);
         }
 
-        const [created] = await db
+        // Insert with conflict handling (race condition safety)
+        await db
           .insert(users)
           .values({
-            id: address,
-            name: address,
+            id: randomUUID(),
             walletAddress: address,
           })
-          .onConflictDoUpdate({
-            target: users.id,
-            set: { walletAddress: address, name: address },
-          })
-          .returning();
+          .onConflictDoNothing({ target: users.walletAddress });
 
-        return toNextAuthUser(created, address);
+        // Fetch again to get the definitive record (ours or the winner's)
+        user = await db.query.users.findFirst({
+          where: eq(users.walletAddress, address),
+        });
+
+        if (!user) {
+          console.error("[SIWE] Failed to create or retrieve user");
+          return null;
+        }
+
+        return toNextAuthUser(user, address);
       },
     }),
   ],

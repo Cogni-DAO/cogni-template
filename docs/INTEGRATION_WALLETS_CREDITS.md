@@ -48,7 +48,7 @@ This document tracks wallet connectivity implementation (Steps 1-4) for the fron
 - [x] Create WalletProvider with dynamic connector imports (wagmi config created in useEffect)
 - [x] Create QueryProvider, WalletProvider, and AppProviders composition
 - [x] Wrap root app layout with AppProviders (inside ThemeProvider)
-- [x] Configure client env schema with NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID (optional) and NEXT_PUBLIC_CHAIN_ID
+- [x] Configure client env schema with NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID (optional)
 - [x] Import RainbowKit CSS in layout.tsx (global CSS pattern)
 - [x] Create src/app/wallet-test/page.tsx dev test page with useAccount hook
 - [x] Implement dynamic import pattern for SSR-safe WalletConnect (browser-only IndexedDB)

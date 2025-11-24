@@ -86,7 +86,7 @@ Optional:
 **Public client (client.ts)**
 
 - NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
-- NEXT_PUBLIC_CHAIN_ID (number, default 1)
+- NEXT_PUBLIC_CHAIN_ID (removed; chain is fixed to Base mainnet)
 
 Rule: only NEXT*PUBLIC*\* keys may appear in client.ts.
 

@@ -9,7 +9,7 @@ Extends the accounts system defined in [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) 
 - System architecture: [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md)
 - API contracts: [ACCOUNTS_API_KEY_ENDPOINTS.md](ACCOUNTS_API_KEY_ENDPOINTS.md)
 - Wallet integration: [INTEGRATION_WALLETS_CREDITS.md](INTEGRATION_WALLETS_CREDITS.md)
-- Payments (MVP funding): [PAYMENTS_RESMIC.md](PAYMENTS_RESMIC.md)
+- Payments (MVP funding): [DEPAY_PAYMENTS.md](DEPAY_PAYMENTS.md)
 
 ---
 
@@ -31,7 +31,7 @@ Extends the accounts system defined in [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) 
 - We do not maintain hardcoded per-model USD pricing tables; LiteLLM's pricing map is the canonical source
 - Token counts and model metadata are stored for audit/analysis only, not for cost calculation
 
-Credits increase via positive entries in credit_ledger (e.g., from the Resmic confirm endpoint or future webhooks/admin tools).
+Credits increase via positive entries in credit_ledger (e.g., from the widget confirm endpoint or future webhooks/admin tools).
 
 ---
 
@@ -185,14 +185,14 @@ Credits increase via positive entries in credit_ledger (e.g., from the Resmic co
 
 - [ ] **Goal:** Introduce a separate on-chain indexer (Ponder) that watches the DAO wallet on Base/Base Sepolia for USDC transfers and provides an independent view of funds received for reconciliation and fraud detection.
 
-**MVP Status:** NOT used in the crediting critical path. MVP credits are granted via `POST /api/v1/payments/resmic/confirm` (session-authenticated; see `docs/RESMIC_PAYMENTS.md`). Ponder is initially used for observability and reconciliation only.
+**MVP Status:** NOT used in the crediting critical path. MVP credits are granted via `POST /api/v1/payments/credits/confirm` (session-authenticated; see `docs/DEPAY_PAYMENTS.md`). Ponder is initially used for observability and reconciliation only.
 
 **High-Level Behavior:**
 
 1. **Indexing:** Ponder runs as a separate Docker service, connects to Base/Base Sepolia RPC, and indexes ERC20 Transfer events for USDC into the DAO wallet address.
 2. **Storage:** For each confirmed transfer (after N block confirmations), Ponder writes `{ tx_hash, chain_id, from, to, token_contract, amount, block_number, timestamp }` to its own Postgres database in an `onchain_payments` table.
-3. **Reconciliation (Phase 1, Post-MVP):** Our app periodically queries Ponder (via GraphQL/SQL/HTTP) to compare `onchain_payments` totals vs `credit_ledger` rows where `reason IN ('resmic_payment', 'onchain_deposit')`. Discrepancies are logged and surfaced to ops; no automatic blocking.
-4. **Stronger Guarantees (Phase 2, Future):** For large payments or high-risk accounts, require a matching `onchain_payments` row before marking credits as fully settled (will require capturing tx_hash on the frontend, currently not exposed by Resmic SDK).
+3. **Reconciliation (Phase 1, Post-MVP):** Our app periodically queries Ponder (via GraphQL/SQL/HTTP) to compare `onchain_payments` totals vs `credit_ledger` rows where `reason IN ('widget_payment', 'onchain_deposit')`. Discrepancies are logged and surfaced to ops; no automatic blocking.
+4. **Stronger Guarantees (Phase 2, Future):** For large payments or high-risk accounts, require a matching `onchain_payments` row before marking credits as fully settled (will require capturing tx_hash on the frontend, provided by DePay widget).
 
 **Implementation Details:** Runtime topology, Ponder indexing configuration, integration phases, and security model are defined in `docs/PAYMENTS_PONDER_VERIFICATION.md`.
 

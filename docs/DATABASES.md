@@ -66,7 +66,7 @@ export function buildDatabaseUrl(env: DbEnvInput): string {
 
 **Environment Examples:**
 
-- **Host development:** `postgresql://postgres:postgres@localhost:5432/cogni_template_dev`
+- **Host development:** `postgresql://postgres:postgres@localhost:55432/cogni_template_dev`
 - **Host testing:** `postgresql://postgres:postgres@localhost:5432/cogni_template_stack_test`
 - **Container (internal):** `postgresql://cogni_app_preview:password@postgres:5432/cogni_template_preview`
 - **Host tests → container:** `postgresql://postgres:postgres@localhost:55432/cogni_template_stack_test`
@@ -104,7 +104,7 @@ POSTGRES_DB=${APP_DB_NAME}
 
 **Migration Commands:**
 
-- `pnpm db:migrate` - Host environments (uses dotenv to load env files)
+- `pnpm dev:stack:db:migrate` - Host environments (uses dotenv to load env files)
 - `pnpm db:migrate:container` - Container environments (uses pre-loaded env vars)
 
 ### 2.1 Local Development
@@ -116,8 +116,8 @@ POSTGRES_DB=${APP_DB_NAME}
 **Commands:**
 
 ```bash
-pnpm db:migrate    # Migrate dev database
-pnpm dev:stack     # Start app using same database
+pnpm dev:stack:db:migrate    # Migrate dev database
+pnpm dev:stack               # Start app using same database
 ```
 
 ### 2.2 Host Stack Tests

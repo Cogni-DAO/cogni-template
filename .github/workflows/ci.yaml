@@ -22,6 +22,7 @@ jobs:
     env:
       NODE_ENV: test
       LITELLM_MASTER_KEY: build-key
+      NEXT_PUBLIC_DAO_WALLET_ADDRESS: ${{ secrets.NEXT_PUBLIC_DAO_WALLET_ADDRESS }}
 
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -43,6 +44,9 @@ jobs:
 
       - name: REUSE SPDX compliance
         uses: fsfe/reuse-action@772649cfa03a64a08c458c7cca9a6a473d74e7f9 # v6
+
+      - name: Validate chain configuration
+        run: pnpm validate:chain
 
       - name: Full static + unit test suite
         run: pnpm check

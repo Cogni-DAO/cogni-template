@@ -16,6 +16,7 @@ export {
   type AccountService,
   type BillingAccount,
   BillingAccountNotFoundPortError,
+  type CreditLedgerEntry,
   InsufficientCreditsPortError,
   isBillingAccountNotFoundPortError,
   isInsufficientCreditsPortError,

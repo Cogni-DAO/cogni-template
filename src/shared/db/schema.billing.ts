@@ -14,6 +14,7 @@
 import {
   bigint,
   boolean,
+  index,
   jsonb,
   pgTable,
   text,
@@ -51,24 +52,33 @@ export const virtualKeys = pgTable("virtual_keys", {
     .defaultNow(),
 });
 
-export const creditLedger = pgTable("credit_ledger", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  billingAccountId: text("billing_account_id")
-    .notNull()
-    .references(() => billingAccounts.id, { onDelete: "cascade" }),
-  virtualKeyId: uuid("virtual_key_id")
-    .notNull()
-    .references(() => virtualKeys.id, { onDelete: "cascade" }),
-  amount: bigint("amount", { mode: "number" }).notNull(),
-  balanceAfter: bigint("balance_after", { mode: "number" })
-    .notNull()
-    .default(0),
-  reason: text("reason").notNull(),
-  reference: text("reference"),
-  metadata: jsonb("metadata")
-    .$type<Record<string, unknown> | null>()
-    .default(null),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const creditLedger = pgTable(
+  "credit_ledger",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    billingAccountId: text("billing_account_id")
+      .notNull()
+      .references(() => billingAccounts.id, { onDelete: "cascade" }),
+    virtualKeyId: uuid("virtual_key_id")
+      .notNull()
+      .references(() => virtualKeys.id, { onDelete: "cascade" }),
+    amount: bigint("amount", { mode: "number" }).notNull(),
+    balanceAfter: bigint("balance_after", { mode: "number" })
+      .notNull()
+      .default(0),
+    reason: text("reason").notNull(),
+    reference: text("reference"),
+    metadata: jsonb("metadata")
+      .$type<Record<string, unknown> | null>()
+      .default(null),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => ({
+    referenceReasonIdx: index("credit_ledger_reference_reason_idx").on(
+      table.reference,
+      table.reason
+    ),
+  })
+);
