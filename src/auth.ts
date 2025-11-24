@@ -138,28 +138,36 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
 
         const address = siweMessage.address.toLowerCase();
         const db = getDb();
-        const existing = await db.query.users.findFirst({
+
+        // Optimistic fetch first (fast path)
+        let user = await db.query.users.findFirst({
           where: eq(users.walletAddress, address),
         });
 
-        if (existing) {
-          return toNextAuthUser(existing, address);
+        if (user) {
+          return toNextAuthUser(user, address);
         }
 
-        const [created] = await db
+        // Insert with conflict handling (race condition safety)
+        await db
           .insert(users)
           .values({
             id: randomUUID(),
             walletAddress: address,
           })
-          .returning();
+          .onConflictDoNothing({ target: users.walletAddress });
 
-        if (!created) {
-          console.error("[SIWE] Failed to create user");
+        // Fetch again to get the definitive record (ours or the winner's)
+        user = await db.query.users.findFirst({
+          where: eq(users.walletAddress, address),
+        });
+
+        if (!user) {
+          console.error("[SIWE] Failed to create or retrieve user");
           return null;
         }
 
-        return toNextAuthUser(created, address);
+        return toNextAuthUser(user, address);
       },
     }),
   ],

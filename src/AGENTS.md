@@ -16,6 +16,14 @@ Next.js application source implementing hexagonal architecture for a fully web3-
 
 - [Root AGENTS.md](../AGENTS.md)
 - [Architecture](../docs/ARCHITECTURE.md)
+- [Authentication overview](../docs/AUTHENTICATION.md)
+- [Accounts design (billing + identity)](../docs/ACCOUNTS_DESIGN.md)
+- [Security & auth spec](../docs/SECURITY_AUTH_SPEC.md)
+- [Database architecture](../docs/DATABASES.md)
+- [Environment modes](../docs/ENVIRONMENTS.md)
+- [Auth schema](shared/db/schema.auth.ts) - Users table with SIWE wallet identity
+- [Billing schema](shared/db/schema.billing.ts) - Billing accounts, ledger, virtual keys
+- [Auth implementation](auth.ts) - NextAuth.js with SIWE provider
 
 ## Boundaries
 
@@ -78,3 +86,4 @@ pnpm typecheck
 
 - Every subdirectory has detailed AGENTS.md with specific layer rules
 - Dependencies flow inward per hexagonal architecture principles
+- **Authentication**: SIWE-based wallet auth with `users.wallet_address` UNIQUE constraint (1 wallet = 1 user MVP, see ACCOUNTS_DESIGN.md for multi-wallet migration plan)

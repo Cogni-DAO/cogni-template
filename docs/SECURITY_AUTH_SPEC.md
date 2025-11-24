@@ -453,6 +453,18 @@ React components use Auth.js hooks:
 1. **Battle-tested Security**: Industry-standard auth framework, audited and maintained
 2. **XSS Protection**: HttpOnly cookies cannot be read by JavaScript
 3. **CSRF Protection**: Built-in CSRF tokens and SameSite cookies
+
+### Future Migration: Multi-Wallet Support
+
+> [!IMPORTANT]
+> **Current Constraint**: The system currently enforces a strict **1 Wallet = 1 User** model via a `UNIQUE` constraint on `users.wallet_address`.
+>
+> **Migration Strategy**: To support multiple wallets or OAuth providers per user in the future:
+>
+> 1.  Implement the standard Auth.js `accounts` table.
+> 2.  Move the uniqueness constraint from `users.wallet_address` to `accounts(provider, provider_account_id)`.
+> 3.  Migrate existing user wallets into the `accounts` table as `provider='ethereum'`.
+
 4. **Session Management**: Automatic expiry, rotation, and revocation
 5. **Provider Abstraction**: Easy to add OAuth/social login later
 

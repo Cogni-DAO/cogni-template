@@ -21,7 +21,7 @@ export const creditsConfirmOperation = {
     "Credits billing account balance after a widget payment confirmation using client-provided idempotency keys.",
   input: z.object({
     amountUsdCents: z.number().int().positive(),
-    clientPaymentId: z.string().uuid(),
+    clientPaymentId: z.string().min(1),
     metadata: z.record(z.string(), z.unknown()).optional(),
   }),
   output: z.object({

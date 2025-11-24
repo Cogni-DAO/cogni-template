@@ -25,6 +25,20 @@ Auth.js manages identity via SIWE; our billing layer owns LiteLLM virtual keys a
 
 ---
 
+### Future Migration: Multi-Wallet & OAuth
+
+> [!NOTE]
+> **Current State (MVP)**: 1 Wallet = 1 User. The `users` table enforces `UNIQUE(wallet_address)`.
+>
+> **Future State**: When adding OAuth or multi-wallet support:
+>
+> 1.  Introduce standard Auth.js `accounts` table.
+> 2.  Move uniqueness constraint to `(provider, providerAccountId)` in `accounts`.
+> 3.  Demote `users.walletAddress` to a "primary wallet" field or remove it in favor of the `accounts` link.
+> 4.  Migrate existing users by creating an `accounts` row for their current wallet.
+
+## 6. Security & Compliance
+
 ## Identity & Billing Model
 
 ### Three-Layer Identity System

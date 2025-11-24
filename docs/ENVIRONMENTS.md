@@ -42,7 +42,7 @@ This document describes the 6 deployment modes (from app-only to full production
 
 **Base Configuration:** `.env.local`
 
-- Database pieces: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `DB_HOST=localhost`, `DB_PORT=5432`, `POSTGRES_DB=cogni_template_dev`
+- Database pieces: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `DB_HOST=localhost`, `DB_PORT=55432`, `POSTGRES_DB=cogni_template_dev`
 - App settings: `APP_ENV=production`, `LITELLM_MASTER_KEY`, etc.
 
 **Test Overrides:** `.env.test`
@@ -225,7 +225,7 @@ postgresql://postgres:postgres@localhost:55432/cogni_template_stack_test
 | Service    | App Only         | Host Stack Development | Host Stack Test  | Docker Dev Stack    | Docker Dev Stack Test | Docker Stack        |
 | ---------- | ---------------- | ---------------------- | ---------------- | ------------------- | --------------------- | ------------------- |
 | App        | `localhost:3000` | `localhost:3000`       | `localhost:3000` | `https://localhost` | `https://localhost`   | `https://localhost` |
-| PostgreSQL | None             | `localhost:5432`       | `localhost:5432` | `localhost:55432`   | `localhost:55432`     | Internal only       |
+| PostgreSQL | None             | `localhost:55432`      | `localhost:5432` | `localhost:55432`   | `localhost:55432`     | Internal only       |
 | LiteLLM    | None             | `localhost:4000`       | `localhost:4000` | Internal only       | Internal only         | Internal only       |
 
 **Note:** Docker Dev Stack modes expose PostgreSQL on `55432` for debugging and test access. Full production Docker Stack keeps all services internal. All containers communicate internally via `postgres:5432`.

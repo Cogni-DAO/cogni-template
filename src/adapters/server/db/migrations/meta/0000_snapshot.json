@@ -1,5 +1,5 @@
 {
-  "id": "76fb19d1-d778-4fae-95cc-158b902f3635",
+  "id": "0918260a-bf3a-41fa-849d-049729c02630",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -48,7 +48,13 @@
       "indexes": {},
       "foreignKeys": {},
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "users_wallet_address_unique": {
+          "name": "users_wallet_address_unique",
+          "nullsNotDistinct": false,
+          "columns": ["wallet_address"]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
@@ -171,7 +177,29 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "credit_ledger_reference_reason_idx": {
+          "name": "credit_ledger_reference_reason_idx",
+          "columns": [
+            {
+              "expression": "reference",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "reason",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "credit_ledger_billing_account_id_billing_accounts_id_fk": {
           "name": "credit_ledger_billing_account_id_billing_accounts_id_fk",
