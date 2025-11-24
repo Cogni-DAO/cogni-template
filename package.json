@@ -68,6 +68,7 @@
     "e2e:debug": "dotenv -e .env -- env PWDEBUG=1 playwright test",
     "e2e:report": "playwright show-report e2e/artifacts/report",
     "env:check": "tsx scripts/check-runtime-env.ts",
+    "validate:chain": "tsx scripts/validate-chain-config.ts",
     "prepare": "husky"
   },
   "engines": {
@@ -131,6 +132,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
+    "yaml": "^2.6.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",

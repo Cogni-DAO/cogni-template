@@ -4,25 +4,28 @@
 /**
  * Module: `@shared/web3/chain`
  * Purpose: Single source of truth for blockchain network configuration across all web3 integrations.
- * Scope: Defines chain ID, DePay configuration, and token addresses; does not perform network calls.
- * Invariants: Base mainnet only for production; all blockchain interactions must use this configuration.
+ * Scope: Defines chain ID, DePay configuration, and token addresses; does not perform network calls. EVM-only (wagmi Chain). Solana would require a separate module.
+ * Invariants: Base mainnet only; all blockchain interactions must use this configuration.
  * Side-effects: none
  * Notes: USDC address is the official USDC deployment on Base mainnet.
  * Links: docs/DEPAY_PAYMENTS.md
  * @public
  */
 
-import { clientEnv } from "@/shared/env";
+import { base } from "wagmi/chains";
+
+/** Wagmi chain object for Base mainnet. */
+export const CHAIN = base;
 
 /** Base mainnet chain ID. */
-export const BASE_CHAIN_ID = 8453 as const;
+export const CHAIN_ID = CHAIN.id as const;
 
 /**
  * The single chain ID used throughout the application.
- * Defaults to Base mainnet (8453).
+ * Always Base; if we ever add another EVM chain, this module must be revisited.
  */
 export function getChainId(): number {
-  return clientEnv().NEXT_PUBLIC_CHAIN_ID ?? BASE_CHAIN_ID;
+  return CHAIN_ID;
 }
 
 /**

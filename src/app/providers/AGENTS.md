@@ -41,7 +41,7 @@ Client-side provider composition for the web UI shell. Configures React context 
   - `WagmiConnector`, `WagmiConnectorsLib`, `WagmiConfigOptions` - Wagmi type aliases
 - **Routes (if any):** none
 - **CLI (if any):** none
-- **Env/Config keys:** Reads `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`, `NEXT_PUBLIC_CHAIN_ID`
+- **Env/Config keys:** Reads `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
 - **Files considered API:** app-providers.client.tsx, wallet.client.tsx, wagmi-config-builder.ts, rainbowkit-theme.ts
 
 ## Ports (optional)

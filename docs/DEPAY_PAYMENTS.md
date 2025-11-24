@@ -133,7 +133,7 @@ We keep a **hard separation**:
 
 - [x] SIWE-authenticated session (Auth.js) working with JWT cookies.
 - [x] `NEXT_PUBLIC_DAO_WALLET_ADDRESS` set (receiver).
-- [x] `NEXT_PUBLIC_CHAIN_ID` set (defaults to Sepolia 11155111).
+- [x] Chain hardcoded to Base mainnet (8453); no env override.
 - [x] Shared chain config lives at `src/shared/web3/chain.ts` (current values: `DEPAY_BLOCKCHAIN = "ethereum"`, Sepolia USDC test token).
 
 ### 3.2 DePay Widget Integration (CDN, OSS)
