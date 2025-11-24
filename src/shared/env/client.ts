@@ -34,6 +34,8 @@ const clientSchema = z.object({
   // Optional - gracefully degrades to injected wallet only if missing
   NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().min(1).optional(),
   NEXT_PUBLIC_DAO_WALLET_ADDRESS: z.string().min(1).optional(),
+  // Chain configuration - Sepolia testnet
+  NEXT_PUBLIC_CHAIN_ID: z.coerce.number().optional().default(11155111),
 });
 
 type ClientEnv = z.infer<typeof clientSchema>;
@@ -48,6 +50,7 @@ export function clientEnv(): ClientEnv {
           process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
         NEXT_PUBLIC_DAO_WALLET_ADDRESS:
           process.env.NEXT_PUBLIC_DAO_WALLET_ADDRESS,
+        NEXT_PUBLIC_CHAIN_ID: process.env.NEXT_PUBLIC_CHAIN_ID,
       });
     } catch (error) {
       if (error instanceof ZodError) {

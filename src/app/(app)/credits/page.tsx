@@ -3,12 +3,12 @@
 
 /**
  * Module: `@app/(app)/credits/page`
- * Purpose: Protected credits page showing balance, ledger history, and Resmic purchase CTA.
- * Scope: Client component using React Query to fetch billing data and trigger Resmic confirm flow; does not manage session auth or server-side billing logic.
- * Invariants: Billing account inferred from authenticated session; Resmic payments are crypto-only with no auto top-up.
+ * Purpose: Protected credits page showing balance, ledger history, and DePay purchase CTA.
+ * Scope: Client component using React Query to fetch billing data and trigger confirm flow; does not manage session auth or server-side billing logic.
+ * Invariants: Billing account inferred from authenticated session; crypto-only with no auto top-up.
  * Side-effects: IO (network requests to payments APIs); global (localStorage for idempotency keys).
- * Notes: Resmic widget runs client-side only; confirmation calls backend with UUID idempotency keys.
- * Links: docs/RESMIC_PAYMENTS.md
+ * Notes: DePay widget runs client-side only; confirmation calls backend with UUID idempotency keys.
+ * Links: docs/DEPAY_PAYMENTS.md
  * @public
  */
 
@@ -22,12 +22,11 @@ import {
   useRef,
   useState,
 } from "react";
-// eslint-disable-next-line boundaries/entry-point
-import { Chains, CryptoPayment, Tokens } from "resmic";
 
 import { Button } from "@/components";
-import type { ResmicConfirmInput } from "@/contracts/payments.resmic.confirm.v1.contract";
-import type { ResmicSummaryOutput } from "@/contracts/payments.resmic.summary.v1.contract";
+import { DePayWidget } from "@/components/vendor/depay";
+import type { CreditsConfirmInput } from "@/contracts/payments.credits.confirm.v1.contract";
+import type { CreditsSummaryOutput } from "@/contracts/payments.credits.summary.v1.contract";
 import { clientEnv } from "@/shared/env";
 import {
   badge,
@@ -41,28 +40,24 @@ import {
   twoColumn,
 } from "@/styles/ui";
 
-const PAYMENT_AMOUNTS = [10, 25, 50, 100] as const;
+const PAYMENT_AMOUNTS = [0.1, 10, 25, 50, 100] as const;
 const DEFAULT_LEDGER_LIMIT = 10;
-const DEFAULT_CHAIN = Chains.Sepolia;
-const DEFAULT_TOKEN = Tokens.USDT;
-const ALLOWED_CHAINS = { Sepolia: DEFAULT_CHAIN };
-const ALLOWED_TOKENS = [DEFAULT_TOKEN];
 
-async function fetchSummary(): Promise<ResmicSummaryOutput> {
+async function fetchSummary(): Promise<CreditsSummaryOutput> {
   const response = await fetch(
-    "/api/v1/payments/resmic/summary?limit=" + DEFAULT_LEDGER_LIMIT
+    "/api/v1/payments/credits/summary?limit=" + DEFAULT_LEDGER_LIMIT
   );
   if (!response.ok) {
     throw new Error("Unable to load credits");
   }
-  return (await response.json()) as ResmicSummaryOutput;
+  return (await response.json()) as CreditsSummaryOutput;
 }
 
-async function confirmPayment(payload: ResmicConfirmInput): Promise<{
+async function confirmPayment(payload: CreditsConfirmInput): Promise<{
   billingAccountId: string;
   balanceCredits: number;
 }> {
-  const response = await fetch("/api/v1/payments/resmic/confirm", {
+  const response = await fetch("/api/v1/payments/credits/confirm", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -99,10 +94,10 @@ export default function CreditsPage(): ReactElement {
   );
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const queryClient = useQueryClient();
-  const lastPaymentIdRef = useRef<string | null>(null);
+  const currentPaymentIdRef = useRef<string | null>(null);
 
   const summaryQuery = useQuery({
-    queryKey: ["resmic-summary"],
+    queryKey: ["payments-summary"],
     queryFn: fetchSummary,
   });
 
@@ -110,7 +105,7 @@ export default function CreditsPage(): ReactElement {
     mutationFn: confirmPayment,
     onSuccess: async () => {
       setStatusMessage("Credits added successfully");
-      await queryClient.invalidateQueries({ queryKey: ["resmic-summary"] });
+      await queryClient.invalidateQueries({ queryKey: ["payments-summary"] });
     },
     onError: (error: unknown) => {
       const message =
@@ -123,35 +118,48 @@ export default function CreditsPage(): ReactElement {
     () => clientEnv().NEXT_PUBLIC_DAO_WALLET_ADDRESS ?? "",
     []
   );
-  const resmicReady = walletAddress.length > 0;
+  const dePayReady = walletAddress.length > 0;
 
-  const handlePaymentStatus = useCallback(
-    (paymentStatus: boolean) => {
-      if (!paymentStatus || confirmMutation.isPending) return;
-      const clientPaymentId = crypto.randomUUID();
-      lastPaymentIdRef.current = clientPaymentId;
+  const handlePaymentSuccess = useCallback(
+    (txInfo: { txHash: string; blockchain: string; token: string }) => {
+      const clientPaymentId =
+        txInfo.txHash && txInfo.txHash !== "unknown"
+          ? txInfo.txHash
+          : (currentPaymentIdRef.current ?? crypto.randomUUID());
+
+      currentPaymentIdRef.current = clientPaymentId;
 
       try {
-        localStorage.setItem("resmic:lastPaymentId", clientPaymentId);
+        localStorage.setItem("depay:lastPaymentId", clientPaymentId);
       } catch {
-        // Non-blocking if storage is unavailable
+        // best-effort
       }
 
-      const payload: ResmicConfirmInput = {
-        amountUsdCents: selectedAmount * 100,
+      setStatusMessage(null);
+
+      const amountUsdCents = Math.round(selectedAmount * 100);
+
+      const payload: CreditsConfirmInput = {
+        amountUsdCents,
         clientPaymentId,
         metadata: {
-          chainId: DEFAULT_CHAIN.id,
-          tokenSymbol: DEFAULT_TOKEN.name,
+          provider: "depay",
+          txHash: txInfo.txHash,
+          blockchain: txInfo.blockchain,
+          token: txInfo.token,
           timestamp: new Date().toISOString(),
         },
       };
 
-      setStatusMessage(null);
       confirmMutation.mutate(payload);
     },
-    [confirmMutation, selectedAmount]
+    [selectedAmount, confirmMutation]
   );
+
+  const handlePaymentFailure = useCallback((message: string) => {
+    setStatusMessage(message);
+    console.log("[Payment] Failed:", message);
+  }, []);
 
   const ledgerEntries = summaryQuery.data?.ledger ?? [];
 
@@ -161,20 +169,17 @@ export default function CreditsPage(): ReactElement {
         <div className={twoColumn({})}>
           <div className={card({ variant: "elevated" })}>
             <div className={cardHeader()}>
-              <div className="flex items-start justify-between gap-[var(--spacing-md)]">
-                <div className="space-y-[var(--spacing-xs)]">
-                  <div className={heading({ level: "h2" })}>Credits</div>
-                  <div
-                    className={paragraph({
-                      size: "md",
-                      tone: "subdued",
-                      spacing: "xs",
-                    })}
-                  >
-                    Crypto-only credit purchases. No auto top-up.
-                  </div>
+              <div className="space-y-[var(--spacing-xs)]">
+                <div className={heading({ level: "h2" })}>Credits</div>
+                <div
+                  className={paragraph({
+                    size: "md",
+                    tone: "subdued",
+                    spacing: "xs",
+                  })}
+                >
+                  Powered by DePay. No auto top-up.
                 </div>
-                <span className={badge({ intent: "secondary" })}>Resmic</span>
               </div>
               <div className="mt-[var(--spacing-sm)] grid gap-[var(--spacing-xs)] lg:grid-cols-2">
                 <div className="bg-muted rounded-lg p-[var(--spacing-md)]">
@@ -237,7 +242,7 @@ export default function CreditsPage(): ReactElement {
                           <span
                             className={badge({
                               intent:
-                                entry.reason === "resmic_payment"
+                                entry.reason === "widget_payment"
                                   ? "secondary"
                                   : "outline",
                             })}
@@ -275,14 +280,7 @@ export default function CreditsPage(): ReactElement {
 
           <div className={card({ variant: "default" })}>
             <div className={cardHeader()}>
-              <div className="flex items-center justify-between">
-                <div className={heading({ level: "h3" })}>
-                  Buy credits with Resmic
-                </div>
-                <span className={badge({ intent: "default" })}>
-                  Crypto only
-                </span>
-              </div>
+              <div className={heading({ level: "h3" })}>Buy Credits</div>
               <div
                 className={paragraph({
                   size: "sm",
@@ -291,7 +289,7 @@ export default function CreditsPage(): ReactElement {
                 })}
               >
                 Choose an amount, complete the crypto payment, and we will
-                credit your balance once Resmic reports success.
+                credit your balance once the transaction confirms.
               </div>
             </div>
             <div className={cardContent()}>
@@ -307,28 +305,17 @@ export default function CreditsPage(): ReactElement {
                 ))}
               </div>
               <div className="mt-[var(--spacing-lg)] space-y-[var(--spacing-sm)]">
-                {!resmicReady ? (
+                {!dePayReady ? (
                   <div className={paragraph({ tone: "default" })}>
-                    Configure NEXT_PUBLIC_DAO_WALLET_ADDRESS to enable Resmic
-                    purchases.
+                    Configure NEXT_PUBLIC_DAO_WALLET_ADDRESS to enable payments.
                   </div>
                 ) : (
-                  <CryptoPayment
-                    Address={walletAddress}
-                    Tokens={ALLOWED_TOKENS}
-                    Chains={ALLOWED_CHAINS}
-                    Amount={selectedAmount}
-                    noOfBlockConformation={3}
-                    setPaymentStatus={handlePaymentStatus}
-                    Style={{
-                      displayName: "Purchase with Resmic",
-                      backgroundColor: "var(--color-primary)",
-                      color: "var(--color-white)",
-                      borderRadius: "12px",
-                      padding: "12px 16px",
-                      fontSize: "16px",
-                      border: "1px solid var(--color-primary)",
-                    }}
+                  <DePayWidget
+                    amountUsd={selectedAmount}
+                    receiverAddress={walletAddress}
+                    disabled={confirmMutation.isPending}
+                    onSucceeded={handlePaymentSuccess}
+                    onFailed={handlePaymentFailure}
                   />
                 )}
                 <div className={paragraph({ size: "sm", tone: "subdued" })}>
