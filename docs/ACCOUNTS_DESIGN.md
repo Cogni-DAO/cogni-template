@@ -195,6 +195,7 @@ Session → user.id → billing_account → default virtual_key → LiteLLM API 
 - API keys (LiteLLM virtual keys) are server-only secrets
 - Browser only holds Auth.js session cookie (HttpOnly)
 - Server resolves: session → billing_account → virtual_key on each request
+- Billing account + default virtual key are provisioned lazily on the first billable action (AI completion or payment/top-up) by calling `getOrCreateBillingAccountForUser(session.user)`; never accept `billing_account_id` from the client
 
 ### 4. MVP Scope: Session-Only Auth
 
@@ -232,6 +233,7 @@ Session → user.id → billing_account → default virtual_key → LiteLLM API 
 - [x] Provision default virtual key on first login (call LiteLLM `/key/generate` with `LITELLM_MASTER_KEY`; may attach `metadata.cogni_billing_account_id`)
 - [x] Update completion route to use session auth + virtual_keys lookup
 - [x] Remove `/api/v1/wallet/link` endpoint
+- [ ] Ensure billing account + default virtual key are created on session creation and any payment/top-up flows (invoke `getOrCreateBillingAccountForUser` outside AI facade)
 
 ### Phase 4-5: Protection & Cleanup
 

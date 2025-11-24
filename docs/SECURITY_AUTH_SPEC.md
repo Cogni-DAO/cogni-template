@@ -21,19 +21,19 @@ User signs SIWE message via RainbowKit → Auth.js Credentials provider creates 
 
 **What MVP includes:**
 
-- Auth.js session-only authentication (HttpOnly cookies, no Bearer token support)
-- SIWE via Credentials provider + `siwe` library
-- Session → user.id → billing_account → virtual_key resolution
-- LiteLLM virtual key provisioning on first login (via `/key/generate` with master key)
-- Credit deduction per LLM request
-- Clean database reset (no migration from old schema)
+- [x] Auth.js session-only authentication (HttpOnly cookies, no Bearer token support)
+- [x] SIWE via Credentials provider + `siwe` library
+- [x] Session → user.id → billing_account → virtual_key resolution
+- [x] LiteLLM virtual key provisioning on first login (via `/key/generate` with master key)
+- [x] Credit deduction per LLM request
+- [x] Clean database reset (no migration from old schema)
 
 **What MVP explicitly excludes (post-MVP):**
 
-- Programmatic access via `Authorization: Bearer <virtual_key>` header (session-only for MVP)
-- Multi-wallet per user
-- On-chain payment integration
-- Custom `/api/v1/auth/*` endpoints (we only use Auth.js `/api/auth/*`)
+- [x] Programmatic access via `Authorization: Bearer <virtual_key>` header (session-only for MVP)
+- [x] Multi-wallet per user
+- [x] On-chain payment integration
+- [x] Custom `/api/v1/auth/*` endpoints (we only use Auth.js `/api/auth/*`)
 
 ---
 
@@ -45,33 +45,33 @@ User signs SIWE message via RainbowKit → Auth.js Credentials provider creates 
 
 **Public Infrastructure/Meta Endpoints (No Auth Required):**
 
-- `/health` - Healthcheck for liveness/readiness probes
-- `/openapi.json` - OpenAPI specification document
-- `/meta/route-manifest` - Route manifest for testing/debugging
-- `/api/auth/*` - Auth.js routes (signin, signout, session, csrf)
+- [x] `/health` - Healthcheck for liveness/readiness probes
+- [x] `/openapi.json` - OpenAPI specification document
+- [x] `/meta/route-manifest` - Route manifest for testing/debugging
+- [x] `/api/auth/*` - Auth.js routes (signin, signout, session, csrf)
 
 **User Session Required (Versioned Product API):**
 
-- `/api/v1/ai/*` - All LLM and credit-impacting endpoints
-  - `/api/v1/ai/completion` - Chat endpoint with credit deduction
+- [x] `/api/v1/ai/*` - All LLM and credit-impacting endpoints
+  - [x] `/api/v1/ai/completion` - Chat endpoint with credit deduction
 - Any new `/api/v1/*` routes that use LLM or affect credits must be session-protected
 
 **Payment Endpoints (User Session Required):**
 
-- `POST /api/v1/payments/resmic/confirm` - Resmic payment confirmation for credit top-ups (SIWE session with HttpOnly cookie, billing_account_id derived from session)
+- [ ] `POST /api/v1/payments/resmic/confirm` - Resmic payment confirmation for credit top-ups (SIWE session with HttpOnly cookie, billing_account_id derived from session)
 
 **Provisioning & Operations (Not HTTP in MVP):**
 
-- **Virtual key provisioning:** Happens internally in `src/lib/auth/mapping.ts` via `getOrCreateBillingAccountForUser(user)` using LiteLLM MASTER_KEY, not via HTTP endpoints
-- **Credit top-ups (real users):** Handled via Resmic confirm endpoint (`POST /api/v1/payments/resmic/confirm`). The endpoint requires an active SIWE session, resolves `billing_account_id` from the session (not from request body), inserts positive `credit_ledger` entry with `reason='resmic_payment'`, and updates `billing_accounts.balance_credits`. Dev/test environments can seed credits via database fixtures.
-- **Future operator API:** Post-MVP may add `/api/operator/*` for key management, analytics, and manual adjustments
+- [x] **Virtual key provisioning:** Happens internally in `src/lib/auth/mapping.ts` via `getOrCreateBillingAccountForUser(user)` using LiteLLM MASTER_KEY, not via HTTP endpoints
+- [ ] **Credit top-ups (real users):** Handled via Resmic confirm endpoint (`POST /api/v1/payments/resmic/confirm`). The endpoint requires an active SIWE session, resolves `billing_account_id` from the session (not from request body), inserts positive `credit_ledger` entry with `reason='resmic_payment'`, and updates `billing_accounts.balance_credits`. Dev/test environments can seed credits via database fixtures.
+- [ ] **Future operator API:** Post-MVP may add `/api/operator/*` for key management, analytics, and manual adjustments
 
 **Future On-Chain Watcher (Post-MVP):**
 
-- A Ponder-based on-chain indexer will run as a separate internal service (not a public endpoint) that reads from Base/Base Sepolia RPC and indexes USDC transfers into the DAO wallet.
-- Ponder will either connect directly to the same Postgres or expose a private HTTP/GraphQL API for reconciliation jobs.
-- All writes to `credit_ledger` still go through our app's business logic; Ponder provides an independent view for observability and fraud detection.
-- **Full spec:** See `docs/PAYMENTS_PONDER_VERIFICATION.md`.
+- [ ] A Ponder-based on-chain indexer will run as a separate internal service (not a public endpoint) that reads from Base/Base Sepolia RPC and indexes USDC transfers into the DAO wallet.
+- [ ] Ponder will either connect directly to the same Postgres or expose a private HTTP/GraphQL API for reconciliation jobs.
+- [ ] All writes to `credit_ledger` still go through our app's business logic; Ponder provides an independent view for observability and fraud detection.
+- [ ] **Full spec:** See `docs/PAYMENTS_PONDER_VERIFICATION.md`.
 
 ---
 
@@ -132,51 +132,51 @@ User signs SIWE message via RainbowKit → Auth.js Credentials provider creates 
 
 **Required:**
 
-- `next-auth@beta` (v5) - Core authentication framework
-- `siwe` - Official Sign-In with Ethereum library
-- `viem` - Already installed (used by SIWE for message verification)
+- [x] `next-auth@beta` (v5) - Core authentication framework
+- [x] `siwe` - Official Sign-In with Ethereum library
+- [x] `viem` - Already installed (used by SIWE for message verification)
 
 **Optional (for user/account management):**
 
-- `@auth/drizzle-adapter` - Postgres user/account storage via Drizzle ORM (NOT used for session storage in JWT mode)
+- [x] `@auth/drizzle-adapter` - Postgres user/account storage via Drizzle ORM (NOT used for session storage in JWT mode)
 
 **Already Installed:**
 
-- `wagmi` - Wallet connection (existing)
-- `@rainbow-me/rainbowkit` - Wallet UI (existing)
-- `drizzle-orm` - Database ORM (existing)
+- [x] `wagmi` - Wallet connection (existing)
+- [x] `@rainbow-me/rainbowkit` - Wallet UI (existing)
+- [x] `drizzle-orm` - Database ORM (existing)
 
 ### File Structure
 
 **Configuration:**
 
-- `src/auth.ts` - Auth.js configuration (providers, callbacks, session strategy)
-- `src/auth.config.ts` (optional) - Shared auth config for middleware
+- [x] `src/auth.ts` - Auth.js configuration (providers, callbacks, session strategy)
+- [ ] `src/auth.config.ts` (optional) - Shared auth config for middleware
 
 **Database Schema:**
 
-- Auth.js identity tables (via Drizzle adapter): `users`, `accounts` (Auth.js provider accounts), `sessions`, `verification_tokens`
-- Our billing tables: `billing_accounts` (renamed to avoid collision), `virtual_keys`, `credit_ledger`
+- [ ] Auth.js identity tables (via Drizzle adapter): `users`, `accounts` (Auth.js provider accounts), `sessions`, `verification_tokens`
+- [x] Our billing tables: `billing_accounts` (renamed to avoid collision), `virtual_keys`, `credit_ledger`
 - See "Database Schema" section below for detailed table structure and LiteLLM integration
 
 **API Routes:**
 
-- `/api/auth/[...nextauth]/route.ts` - Auth.js catch-all route handler (exports `handlers` from `src/auth.ts`)
+- [x] `/api/auth/[...nextauth]/route.ts` - Auth.js catch-all route handler (exports `handlers` from `src/auth.ts`)
   - Provides all Auth.js built-in routes automatically:
-  - `/api/auth/signin` - Triggers SIWE flow
-  - `/api/auth/session` - Returns current session
-  - `/api/auth/signout` - Clears session
-  - `/api/auth/csrf` - CSRF token for SIWE nonce
+  - [x] `/api/auth/signin` - Triggers SIWE flow
+  - [x] `/api/auth/session` - Returns current session
+  - [x] `/api/auth/signout` - Clears session
+  - [x] `/api/auth/csrf` - CSRF token for SIWE nonce
 
 **Utilities:**
 
-- `src/lib/auth/helpers.ts` - Session lookup utilities (auth(), getSession())
-- `src/lib/auth/mapping.ts` - User → billing account resolution (getOrCreateBillingAccountForUser)
+- [ ] `src/lib/auth/helpers.ts` - Session lookup utilities (auth(), getSession())
+- [x] `src/lib/auth/mapping.ts` - User → billing account resolution (getOrCreateBillingAccountForUser)
 
 **Implementation Files:**
 
-- `src/middleware.ts` - Auth middleware for route protection
-- See "API Auth Policy (MVP)" section above for complete list of public vs protected routes
+- [ ] `src/middleware.ts` - Auth middleware for route protection
+- [x] See "API Auth Policy (MVP)" section above for complete list of public vs protected routes
 
 **Note on Next.js 16 Middleware Deprecation:**
 

@@ -19,6 +19,7 @@ services:
       - NODE_ENV=${NODE_ENV:-production}
       - APP_ENV=${APP_ENV}
       - APP_BASE_URL=${APP_BASE_URL:-https://localhost}
+      - NEXTAUTH_URL=${NEXTAUTH_URL:-${APP_BASE_URL:-https://localhost}}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=${POSTGRES_DB:-cogni_template_dev}
@@ -42,9 +43,12 @@ services:
     restart: unless-stopped
     networks:
       - web
+    ports:
+      - "4000:4000"
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+      - LITELLM_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}
     volumes:
       - ./configs/litellm.config.yaml:/app/config.yaml:ro
     command: --config /app/config.yaml --host 0.0.0.0 --port 4000

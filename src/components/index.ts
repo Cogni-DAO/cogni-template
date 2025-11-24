@@ -19,6 +19,7 @@ export { Badge } from "./kit/data-display/Badge";
 export { GithubButton } from "./kit/data-display/GithubButton";
 export { TerminalFrame } from "./kit/data-display/TerminalFrame";
 export { Button } from "./kit/inputs/Button";
+export { Input } from "./kit/inputs/Input";
 export { ModeToggle } from "./kit/inputs/ModeToggle";
 export { Container } from "./kit/layout/Container";
 export { Header } from "./kit/layout/Header";

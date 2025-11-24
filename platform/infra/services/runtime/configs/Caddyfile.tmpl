@@ -6,7 +6,13 @@
   }
 }
 
-{$DOMAIN}, www.{$DOMAIN} {
+# Redirect www to non-www (canonical domain)
+www.{$DOMAIN} {
+  redir https://{$DOMAIN}{uri} permanent
+}
+
+# Canonical domain
+{$DOMAIN} {
   encode zstd gzip
   reverse_proxy app:3000
   log {

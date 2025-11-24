@@ -23,6 +23,19 @@ import {
   trimConversationHistory,
 } from "@/core";
 import type { AccountService, Clock, LlmCaller, LlmService } from "@/ports";
+import { InsufficientCreditsPortError } from "@/ports";
+
+const DEFAULT_MAX_COMPLETION_TOKENS = 2048;
+const CHARS_PER_TOKEN_ESTIMATE = 4;
+
+function estimateTotalTokens(messages: Message[]): number {
+  const totalChars = messages.reduce(
+    (sum, message) => sum + message.content.length,
+    0
+  );
+  const promptTokens = Math.ceil(totalChars / CHARS_PER_TOKEN_ESTIMATE);
+  return promptTokens + DEFAULT_MAX_COMPLETION_TOKENS;
+}
 
 export async function execute(
   messages: Message[],
@@ -42,6 +55,21 @@ export async function execute(
     userMessages,
     MAX_MESSAGE_CHARS
   );
+
+  // Preflight credit check before calling the provider using a conservative estimate
+  const estimatedTotalTokens = estimateTotalTokens(trimmedMessages);
+  const estimatedCost = calculateCost({ totalTokens: estimatedTotalTokens });
+  const currentBalance = await accountService.getBalance(
+    caller.billingAccountId
+  );
+
+  if (currentBalance < estimatedCost) {
+    throw new InsufficientCreditsPortError(
+      caller.billingAccountId,
+      estimatedCost,
+      currentBalance
+    );
+  }
 
   const requestId = randomUUID();
 
@@ -74,13 +102,20 @@ export async function execute(
   if (llmRequestId) debitMetadata.llmRequestId = llmRequestId;
   debitMetadata.virtualKeyId = caller.virtualKeyId;
 
-  await accountService.debitForUsage({
-    billingAccountId: caller.billingAccountId,
-    virtualKeyId: caller.virtualKeyId,
-    cost,
-    requestId,
-    metadata: debitMetadata,
-  });
+  try {
+    await accountService.debitForUsage({
+      billingAccountId: caller.billingAccountId,
+      virtualKeyId: caller.virtualKeyId,
+      cost,
+      requestId,
+      metadata: debitMetadata,
+    });
+  } catch (error) {
+    // If we reached the provider, do not fail the response on post-call debit errors
+    if (!(error instanceof InsufficientCreditsPortError)) {
+      throw error;
+    }
+  }
 
   // Feature sets timestamp after completion using injected clock
   return {

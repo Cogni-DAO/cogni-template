@@ -37,17 +37,17 @@ We run the LiteLLM Proxy with a Postgres DB and `LITELLM_MASTER_KEY` as describe
 
 ### 1. Chat Completions (Data Plane)
 
-- **Endpoint:** `POST /chat/completions`
-- **Auth:** `Authorization: Bearer <virtual_key>`
-- **Docs:** [LiteLLM Getting Started](https://docs.litellm.ai/docs/), section "Make a successful /chat/completion call"
+- [x] **Endpoint:** `POST /chat/completions`
+- [x] **Auth:** `Authorization: Bearer <virtual_key>`
+- [x] **Docs:** [LiteLLM Getting Started](https://docs.litellm.ai/docs/), section "Make a successful /chat/completion call"
 
 Cogni-template calls this endpoint from our `LlmService` adapter using the `litellm_virtual_key` stored in `virtual_keys`. We read `usage.total_tokens` from the response to update our `credit_ledger`.
 
 ### 2. Virtual Key Generation (Control Plane)
 
-- **Endpoint:** `POST /key/generate`
-- **Auth:** `Authorization: Bearer <LITELLM_MASTER_KEY>`
-- **Docs:** [LiteLLM Virtual Keys](https://docs.litellm.ai/docs/proxy/virtual_keys), section "Create Key w/ RPM Limit" and [Key Management API Endpoints Swagger](https://litellm-api.up.railway.app/)
+- [x] **Endpoint:** `POST /key/generate`
+- [x] **Auth:** `Authorization: Bearer <LITELLM_MASTER_KEY>`
+- [x] **Docs:** [LiteLLM Virtual Keys](https://docs.litellm.ai/docs/proxy/virtual_keys), section "Create Key w/ RPM Limit" and [Key Management API Endpoints Swagger](https://litellm-api.up.railway.app/)
 
 **MVP behavior:** `getOrCreateBillingAccountForUser(user)` calls `/key/generate` once per new billing account to create a default virtual key for that tenant. We store the returned key string in `virtual_keys.litellm_virtual_key` and mark it `is_default = true`.
 
@@ -113,8 +113,8 @@ From this point on, all LLM calls for this user go through the same `billing_acc
 
 ### 1. `/api/v1/ai/completion` (Data Plane)
 
-- **Auth:** Auth.js session only (HttpOnly cookie). No API key in the request.
-- **Flow:**
+- [x] **Auth:** Auth.js session only (HttpOnly cookie). No API key in the request.
+- [x] **Flow:**
   1. Call `auth()` and require `session.user` (wallet login)
   2. Call `getOrCreateBillingAccountForUser(session.user)`
   3. Load the default `virtual_keys` row for that billing account
@@ -131,11 +131,11 @@ Once the core wallet → session → billing loop is stable, we will add an oper
 
 **Potential routes:**
 
-- `GET /api/admin/billing-accounts` – List billing accounts and key summaries
-- `GET /api/admin/billing-accounts/:billingAccountId` – Inspect one billing account, balance, and ledger summary
-- `GET /api/admin/billing-accounts/:billingAccountId/virtual-keys` – List virtual keys for that account
-- `POST /api/admin/billing-accounts/:billingAccountId/virtual-keys` – Create a new LiteLLM virtual key for that account (wraps LiteLLM `POST /key/generate`)
-- `POST /api/admin/billing-accounts/:billingAccountId/credits/topup` – Manually credit the account (writes to `credit_ledger`, adjusts balance)
+- [ ] `GET /api/admin/billing-accounts` – List billing accounts and key summaries
+- [ ] `GET /api/admin/billing-accounts/:billingAccountId` – Inspect one billing account, balance, and ledger summary
+- [ ] `GET /api/admin/billing-accounts/:billingAccountId/virtual-keys` – List virtual keys for that account
+- [ ] `POST /api/admin/billing-accounts/:billingAccountId/virtual-keys` – Create a new LiteLLM virtual key for that account (wraps LiteLLM `POST /key/generate`)
+- [ ] `POST /api/admin/billing-accounts/:billingAccountId/credits/topup` – Manually credit the account (writes to `credit_ledger`, adjusts balance)
 
 Later, we can also expose self-serve data-plane endpoints (e.g., `/api/v1/accounts/me/balance`, `/api/v1/accounts/me/usage`) that infer `billing_account_id` from either the session or an `Authorization: Bearer <virtual_key>` header once we implement dual-auth mode.
 

@@ -18,6 +18,32 @@ cogni_dao:
   chain_id: "11155111" # Chain ID: Sepolia
   base_url: "https://proposal.cognidao.org" # v0 Base URL: cogni-proposal-launcher service
 
+# DAO Financial Rails Configuration
+payments_in:
+  resmic:
+    receiving_address_env: NEXT_PUBLIC_DAO_WALLET_ADDRESS
+    allowed_chains:
+      - base
+      - base-sepolia
+    allowed_tokens:
+      - USDC
+
+providers:
+  openrouter:
+    api_host: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+  # cherryservers:
+  #   api_host: https://api.cherryservers.com/v1
+  #   api_key_env: CHERRY_API_TOKEN
+
+llm_proxy:
+  host_env: LITELLM_PROXY_URL
+  master_key_env: LITELLM_MASTER_KEY
+
+secrets:
+  manager:
+    type: env
+
 # Gates run in the order they appear below.
 gates:
   # Built-in gates (run directly in bot process)

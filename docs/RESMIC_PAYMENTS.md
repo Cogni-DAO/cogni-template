@@ -4,6 +4,7 @@ Resmic is our **MVP crypto payment UI** for topping up internal credits. It sits
 
 - [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md)
 - [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md)
+- [DAO_ENFORCEMENT.md](DAO_ENFORCEMENT.md) (Binding enforcement rules)
 
 Billing = how we track and charge for LLM usage (credits, provider_cost_credits, user_price_credits).
 Payments = how users acquire credits (Resmic, on-chain watchers, etc).
@@ -115,7 +116,7 @@ We keep a **hard separation**:
 - [ ] Install Resmic SDK: `npm install @resmic/react-sdk`
 - [ ] Create `BuyCreditsModal` or `PaymentWidget` component
 - [ ] Implement Resmic component with props:
-  - [ ] `Address` = DAO's receiving EVM address (from env)
+  - [ ] `Address` = `NEXT_PUBLIC_DAO_WALLET_ADDRESS` (from env, enforced by DAO_ENFORCEMENT.md)
   - [ ] `Chains` = `[Chains.Base, Chains.BaseSepolia]` for testnet/mainnet
   - [ ] `Tokens` = `[Tokens.USDC]` (or allowed set)
   - [ ] `Amount` = user-selected USD amount (10, 25, 50, 100)
@@ -169,22 +170,23 @@ We keep a **hard separation**:
 **Behavior:**
 
 1. Resolve `billing_account_id` from SIWE session (only source of truth)
-2. Check idempotency: query `credit_ledger` for existing row with `reason = 'resmic_payment'` AND `reference = clientPaymentId`
+2. If no billing account exists yet, create it by calling `getOrCreateBillingAccountForUser(session.user)` before any credit mutations
+3. Check idempotency: query `credit_ledger` for existing row with `reason = 'resmic_payment'` AND `reference = clientPaymentId`
    - If exists: return `{ billingAccountId, balanceCredits }` (no-op, idempotent)
-   - If new: proceed to step 3
-3. Compute credits using integer math:
+   - If new: proceed to step 4
+4. Compute credits using integer math:
    - With `1 credit = $0.001` and `1 cent = $0.01`, therefore `1 cent = 10 credits`
    - Formula: `credits = amountUsdCents * 10`
    - Alternative with CREDITS_PER_USDC: `credits = (amountUsdCents * CREDITS_PER_USDC) / 100` (integer division)
-4. Insert `credit_ledger` row:
+5. Insert `credit_ledger` row:
    - `billing_account_id` (from session)
    - `virtual_key_id` (default key for account)
    - `amount = credits` (BIGINT, positive value)
    - `reason = 'resmic_payment'`
    - `reference = clientPaymentId` (required for idempotency)
    - `metadata = serialized JSON` (amountUsdCents, chain, token, timestamp)
-5. Update `billing_accounts.balance_credits += credits`
-6. Return `{ billingAccountId, balanceCredits }`
+6. Update `billing_accounts.balance_credits += credits`
+7. Return `{ billingAccountId, balanceCredits }`
 
 **Implementation checklist:**
 
@@ -197,7 +199,7 @@ We keep a **hard separation**:
   - [ ] Extract SIWE session from cookie
   - [ ] Validate session exists and is active
   - [ ] Parse and validate request body against contract
-  - [ ] Resolve `billing_account_id` from session (never from body)
+  - [ ] Resolve `billing_account_id` from session (never from body) and call `getOrCreateBillingAccountForUser(session.user)` before credit mutations
   - [ ] Call payment service with session-derived `billingAccountId` and validated data
   - [ ] Return response with new balance
 

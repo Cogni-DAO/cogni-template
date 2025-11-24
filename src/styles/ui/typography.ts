@@ -139,6 +139,9 @@ export const prose = cva("prose", {
 const promptToneVariants = {
   default: "text-foreground",
   success: "text-success",
+  info: "text-info",
+  warning: "text-warning",
+  error: "text-error",
 } as const;
 
 const promptFamilyVariants = {

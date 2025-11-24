@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-11-23
+- **Last reviewed:** 2025-11-24
 - **Status:** draft
 
 ## Purpose
@@ -35,12 +35,14 @@ Client-side provider composition for the web UI shell. Configures React context 
   - `AuthProvider` - Auth.js SessionProvider wrapper for auth context
   - `QueryProvider` - React Query client provider
   - `WalletProvider` - wagmi + RainbowKit provider (creates config internally via dynamic import)
+  - `createAppLightTheme` - RainbowKit light theme matching design system (--muted colors)
+  - `createAppDarkTheme` - RainbowKit dark theme matching design system (--accent colors)
   - `buildWagmiConfigOptions` - Pure helper for wagmi config (testable without React)
   - `WagmiConnector`, `WagmiConnectorsLib`, `WagmiConfigOptions` - Wagmi type aliases
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** Reads `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`, `NEXT_PUBLIC_CHAIN_ID`
-- **Files considered API:** app-providers.client.tsx, wallet.client.tsx, wagmi-config-builder.ts
+- **Files considered API:** app-providers.client.tsx, wallet.client.tsx, wagmi-config-builder.ts, rainbowkit-theme.ts
 
 ## Ports (optional)
 
@@ -91,3 +93,4 @@ import { AppProviders } from "./providers/app-providers.client";
 - wagmi v2 API (compatible with RainbowKit 2.2.9)
 - WalletProvider uses dynamic import for connectors to avoid SSR IndexedDB errors (WalletConnect not SSR-safe)
 - wagmi-config-builder.ts extracted for testability: generic helper tested with simple types, production uses WagmiConnector
+- RainbowKit theme functions use design system tokens: light mode uses --muted for subtle button appearance, dark mode uses --accent for proper contrast

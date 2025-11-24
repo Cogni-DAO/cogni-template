@@ -15,6 +15,7 @@
 "use client";
 
 import { RainbowKitProvider } from "@rainbow-me/rainbowkit";
+import { useTheme } from "next-themes";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import type { Config } from "wagmi";
@@ -22,6 +23,7 @@ import { createConfig, WagmiProvider } from "wagmi";
 
 import { clientEnv } from "@/shared/env";
 
+import { createAppDarkTheme, createAppLightTheme } from "./rainbowkit-theme";
 import {
   buildWagmiConfigOptions,
   type WagmiConnector,
@@ -32,6 +34,7 @@ export function WalletProvider({
 }: {
   children: ReactNode;
 }): ReactNode {
+  const { resolvedTheme } = useTheme();
   const [config, setConfig] = useState<Config | null>(null);
 
   useEffect(() => {
@@ -75,9 +78,16 @@ export function WalletProvider({
     return null;
   }
 
+  // Determine RainbowKit theme based on resolved theme
+  // Default to light if resolvedTheme is undefined (initial render)
+  const rainbowKitTheme =
+    resolvedTheme === "dark" ? createAppDarkTheme() : createAppLightTheme();
+
   return (
     <WagmiProvider config={config}>
-      <RainbowKitProvider>{children}</RainbowKitProvider>
+      <RainbowKitProvider theme={rainbowKitTheme}>
+        {children}
+      </RainbowKitProvider>
     </WagmiProvider>
   );
 }

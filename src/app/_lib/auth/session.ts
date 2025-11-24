@@ -4,10 +4,10 @@
 /**
  * Module: `@app/_lib/auth/session`
  * Purpose: Server-side session resolver using Auth.js with wallet-first invariant.
- * Scope: Server-only helper that derives a SessionUser from Auth.js session; does not perform direct database access.
- * Invariants: Returns null unless both id AND walletAddress are present (wallet-first auth); delegates DB access to Auth.js.
- * Side-effects: IO (Auth.js session retrieval via Drizzle adapter)
- * Notes: Wraps auth() from src/auth.ts; enforces walletAddress requirement at boundary.
+ * Scope: Server-only helper that derives a SessionUser from an Auth.js session. Does not perform database access or user existence checks.
+ * Invariants: Returns null unless both id AND walletAddress are present (wallet-first auth).
+ * Side-effects: IO (Auth.js session retrieval)
+ * Notes: This resolver is a thin wrapper around Auth.js, enforcing a wallet-first session model.
  * Links: docs/SECURITY_AUTH_SPEC.md
  * @public
  */

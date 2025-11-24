@@ -28,8 +28,8 @@ This document tracks wallet connectivity implementation (Steps 1-4) for the fron
 
 **Files Created:**
 
-- `src/contracts/wallet.link.v1.contract.ts` - Contract with Zod schemas
-- `tests/unit/contracts/wallet.link.v1.contract.test.ts` - Unit tests
+- [ ] `src/contracts/wallet.link.v1.contract.ts` - Contract with Zod schemas
+- [ ] `tests/unit/contracts/wallet.link.v1.contract.test.ts` - Unit tests
 
 ### Step 2: Implement /api/v1/wallet/link backend route ✅ COMPLETE
 
@@ -37,9 +37,9 @@ This document tracks wallet connectivity implementation (Steps 1-4) for the fron
 
 **Files Created:**
 
-- `src/app/api/v1/wallet/link/route.ts` - POST endpoint
-- `src/app/_facades/wallet/link.server.ts` - Facade
-- `tests/stack/api/wallet/link.stack.test.ts` - Stack tests
+- [ ] `src/app/api/v1/wallet/link/route.ts` - POST endpoint
+- [ ] `src/app/_facades/wallet/link.server.ts` - Facade
+- [ ] `tests/stack/api/wallet/link.stack.test.ts` - Stack tests
 
 ### Step 3: Install wallet libraries and add global providers ✅ COMPLETE
 
@@ -170,9 +170,9 @@ This ensures connectors only load in browser, avoiding `indexedDB is not defined
 
 **Current (INSECURE - TO BE REPLACED):**
 
-- [x] Returns `{ accountId, apiKey }` to browser (INSECURE)
-- [x] Client stores apiKey in localStorage (INSECURE)
-- [x] Uses `LITELLM_MVP_API_KEY` for all wallets
+- [ ] Returns `{ accountId, apiKey }` to browser (INSECURE)
+- [ ] Client stores apiKey in localStorage (INSECURE)
+- [ ] Uses `LITELLM_MVP_API_KEY` for all wallets
 
 **Target (SECURE):**
 
@@ -197,9 +197,9 @@ This ensures connectors only load in browser, avoiding `indexedDB is not defined
 
 **Current (API Key Only):**
 
-- [x] Requires `Authorization: Bearer <apiKey>` header
-- [x] Derives `accountId` from `apiKey`
-- [x] Constructs `LlmCaller { accountId, apiKey }`
+- [ ] Requires `Authorization: Bearer <apiKey>` header
+- [ ] Derives `accountId` from `apiKey`
+- [ ] Constructs `LlmCaller { accountId, apiKey }`
 
 **Target (Dual Auth Mode):**
 

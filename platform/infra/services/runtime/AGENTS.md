@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-20
+- **Last reviewed:** 2025-11-24
 - **Status:** draft
 
 ## Purpose
@@ -35,7 +35,7 @@ Production runtime configuration directory copied to VM hosts for container orch
 - **Exports:** none
 - **Routes (if any):** none
 - **CLI (if any):** docker-compose commands
-- **Env/Config keys:** `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, `DATABASE_URL`
+- **Env/Config keys:** `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, `DATABASE_URL`, `APP_BASE_URL`, `NEXTAUTH_URL`, `AUTH_SECRET`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `LITELLM_DATABASE_URL`
 - **Files considered API:** `docker-compose.yml`, `postgres-init/*.sh`
 
 ## Ports (optional)
@@ -46,7 +46,7 @@ Production runtime configuration directory copied to VM hosts for container orch
 
 ## Responsibilities
 
-- This directory **does**: Provide production runtime configuration copied to VM hosts for deployment
+- This directory **does**: Provide production runtime configuration copied to VM hosts for deployment (including LiteLLM networking + database wiring in dev stack)
 - This directory **does not**: Handle build-time configuration or development-only settings
 
 ## Usage
@@ -83,3 +83,4 @@ docker compose run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'
 - **HIGHLY PROTECTED**: This directory is rsync'd to production VMs
 - Database security uses two-user model (root + app credentials)
 - Init scripts run only on first postgres container startup
+- `NEXTAUTH_URL` env var provided with shell fallback to `APP_BASE_URL`; Auth.js uses `trustHost: true` (safe behind Caddy)
