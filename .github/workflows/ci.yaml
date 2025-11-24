@@ -22,7 +22,6 @@ jobs:
     env:
       NODE_ENV: test
       LITELLM_MASTER_KEY: build-key
-      NEXT_PUBLIC_DAO_WALLET_ADDRESS: ${{ secrets.NEXT_PUBLIC_DAO_WALLET_ADDRESS }}
 
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
