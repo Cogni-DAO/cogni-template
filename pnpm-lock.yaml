@@ -108,6 +108,9 @@ importers:
       '@commitlint/config-conventional':
         specifier: ^19.8.1
         version: 19.8.1
+      '@depay/web3-mock':
+        specifier: ^15.1.1
+        version: 15.3.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
       '@eslint/js':
         specifier: ^9.39.1
         version: 9.39.1
@@ -636,6 +639,10 @@ packages:
       '@depay/web3-tokens': ^11.0.0
       decimal.js: ^10.4.3
       ethers: 5.7.2
+
+  '@depay/web3-mock@15.3.0':
+    resolution: {integrity: sha512-xx8U79YSwAQ4TSO8uNmj0EPaMFLvcJe7aXcR1v48TNVdSocjm59mJupCQZbcn8bUx8Vtq+bIWDnJkXzMdW5xfA==}
+    engines: {node: '>=16'}
 
   '@depay/web3-payments@15.3.3':
     resolution: {integrity: sha512-soBQprnb9EdqW8pIYdU/1KzZGM3iiumg4qKuO86mgs779RonvXg+y8mhTn4Eto3LFsPQbeAzvRvaOEtOhQVy8Q==}
@@ -8173,7 +8180,16 @@ snapshots:
       decimal.js: 10.6.0
       ethers: 5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)
 
-  '@depay/web3-payments@15.3.3(c7883683b9a24fdc0e64e073a19ca5fd)':
+  '@depay/web3-mock@15.3.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)':
+    dependencies:
+      '@depay/solana-web3.js': 1.98.3
+      '@depay/web3-blockchains': 9.8.10
+      ethers: 5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+    transitivePeerDependencies:
+      - bufferutil
+      - utf-8-validate
+
+  '@depay/web3-payments@15.3.3(hqvmb6fsalsmhequyt2hgqvkuy)':
     dependencies:
       '@depay/solana-web3.js': 1.98.3
       '@depay/web3-blockchains': 9.8.10
@@ -8212,7 +8228,7 @@ snapshots:
       '@depay/web3-blockchains': 9.8.10
       '@depay/web3-client': 11.1.10(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10))
       '@depay/web3-exchanges': 15.7.3(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(@depay/web3-client@11.1.10(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)))(@depay/web3-tokens@11.1.0(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(@depay/web3-client@11.1.10(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)))(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)))(decimal.js@10.6.0)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10))
-      '@depay/web3-payments': 15.3.3(c7883683b9a24fdc0e64e073a19ca5fd)
+      '@depay/web3-payments': 15.3.3(hqvmb6fsalsmhequyt2hgqvkuy)
       '@depay/web3-tokens': 11.1.0(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(@depay/web3-client@11.1.10(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)))(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10))
       '@depay/web3-wallets': 18.1.17(@depay/coinbase-wallet-sdk@3.8.4(@babel/core@7.28.5)(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10))(@depay/solana-web3.js@1.98.3)(@depay/walletconnect-v2@2.12.2(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))(@depay/web3-blockchains@9.8.10)(@depay/web3-client@11.1.10(@depay/solana-web3.js@1.98.3)(@depay/web3-blockchains@9.8.10)(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)))(ethers@5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10))
       '@tanstack/react-virtual': 3.13.12(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
@@ -11025,7 +11041,7 @@ snapshots:
       '@vitest/pretty-format': 4.0.9
       tinyrainbow: 3.0.3
 
-  '@wagmi/connectors@6.2.0(fbadb1ce4204bd53a8e14f87245a5e6c)':
+  '@wagmi/connectors@6.2.0(f2cxjm75vlh4w6fntbllhpftam)':
     dependencies:
       '@base-org/account': 2.4.0(@types/react@19.2.7)(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.0.0))(utf-8-validate@5.0.10)(ws@8.17.1(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@4.1.12)
       '@coinbase/wallet-sdk': 4.3.6(@types/react@19.2.7)(bufferutil@4.0.9)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.0.0))(utf-8-validate@5.0.10)(zod@4.1.12)
@@ -16169,7 +16185,7 @@ snapshots:
   wagmi@2.19.5(@tanstack/query-core@5.90.10)(@tanstack/react-query@5.90.10(react@19.0.0))(@types/react@19.2.7)(bufferutil@4.0.9)(fastestsmallesttextencoderdecoder@1.0.22)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))(ws@8.17.1(bufferutil@4.0.9)(utf-8-validate@5.0.10))(zod@4.1.12):
     dependencies:
       '@tanstack/react-query': 5.90.10(react@19.0.0)
-      '@wagmi/connectors': 6.2.0(fbadb1ce4204bd53a8e14f87245a5e6c)
+      '@wagmi/connectors': 6.2.0(f2cxjm75vlh4w6fntbllhpftam)
       '@wagmi/core': 2.22.1(@tanstack/query-core@5.90.10)(@types/react@19.2.7)(immer@9.0.21)(react@19.0.0)(typescript@5.9.3)(use-sync-external-store@1.4.0(react@19.0.0))(viem@2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.12))
       react: 19.0.0
       use-sync-external-store: 1.4.0(react@19.0.0)
