@@ -132,9 +132,9 @@ We keep a **hard separation**:
 ### 3.1 Prerequisites
 
 - [x] SIWE-authenticated session (Auth.js) working with JWT cookies.
-- [x] `NEXT_PUBLIC_DAO_WALLET_ADDRESS` set (receiver).
-- [x] Chain hardcoded to Base mainnet (8453); no env override.
-- [x] Shared chain config lives at `src/shared/web3/chain.ts` (current values: `DEPAY_BLOCKCHAIN = "ethereum"`, Sepolia USDC test token).
+- [x] `.cogni/repo-spec.yaml` declares `payments_in.widget.receiving_address` and `cogni_dao.chain_id` (governance, no env override).
+- [x] Chain hardcoded to Base mainnet (8453); validated against repo-spec by `scripts/validate-chain-config.ts`.
+- [x] Shared chain config lives at `src/shared/web3/chain.ts` (current values: `DEPAY_BLOCKCHAIN = "base"`, USDC on Base mainnet).
 
 ### 3.2 DePay Widget Integration (CDN, OSS)
 
@@ -260,8 +260,8 @@ We keep a **hard separation**:
 
 ### 4.4 Environment Configuration
 
-- [x] `.env.example` includes `NEXT_PUBLIC_DAO_WALLET_ADDRESS`.
-- [x] `src/shared/env/client.ts` validates `NEXT_PUBLIC_DAO_WALLET_ADDRESS`.
+- [x] DAO receiving wallet + chain come from `.cogni/repo-spec.yaml` (no env override); server helper reads/caches config for the credits page.
+- [x] `src/shared/env/client.ts` only validates `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` for optional wallet connectivity.
 
 ---
 
@@ -500,7 +500,7 @@ DePay Widgets (OSS mode) is one concrete, zero-fee way to complete "credits UP" 
    - **No contract changes required** — same request/response schema
 
 4. **Environment changes:**
-   - Keep `NEXT_PUBLIC_DAO_WALLET_ADDRESS` (same as before)
+   - Wallet/chain config now comes from `.cogni/repo-spec.yaml` (no DAO wallet env var)
    - Remove any Resmic-specific env vars if present
 
 5. **Security model:**

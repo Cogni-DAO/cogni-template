@@ -395,7 +395,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 - **Contracts**: `tests/contract` must pass for any adapter.
 - **Env**: Zod-validated; build fails on invalid/missing.
 - **Security**: middleware sets headers, verifies session or API key, rate-limits.
-- **Financial Rails**: `NEXT_PUBLIC_DAO_WALLET_ADDRESS` is immutable and must match `repo-spec.yaml`. Validated by `scripts/validate-chain-config.ts`. Any payment logic must use this address.
+- **Financial Rails**: DAO receiving wallet + chain live in `.cogni/repo-spec.yaml` (no env override). `scripts/validate-chain-config.ts` enforces chain_id alignment with `@/shared/web3/CHAIN_ID`; widget config is read server-side and passed to clients as props.
 
 ### Styling Invariants
 

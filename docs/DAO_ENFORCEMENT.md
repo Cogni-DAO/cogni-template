@@ -16,9 +16,9 @@ This document is **binding** for the payments MVP:
 For the payments MVP, the DAO "ownership" of payments is enforced at three layers:
 
 1. **Configuration**
-   - The DAO payment receiving address is stored in environment variables, not code.
-   - Frontend uses `NEXT_PUBLIC_DAO_WALLET_ADDRESS` for the payment widget receiver address.
-   - Backend uses `DAO_WALLET_ADDRESS_BASE` / `DAO_WALLET_ADDRESS_BASE_SEPOLIA` for ops and future watchers.
+   - The DAO payment receiving address and chain_id live in `.cogni/repo-spec.yaml` (governance in git, not env).
+   - Server code reads repo-spec and passes widget config as props; the browser never reads env vars or the filesystem.
+   - Backend ops/watchers derive addresses from repo-spec (no env override).
 
 2. **Runtime Invariants**
    - Only authenticated SIWE sessions can call `POST /api/v1/payments/credits/confirm`.
@@ -38,8 +38,8 @@ For MVP, we accept that crypto widgets are a **soft oracle**: we trust the widge
 ### 2.1 Frontend Invariants
 
 1. **Widget Address Source**
-   - The receiver address for payment widgets MUST come from `NEXT_PUBLIC_DAO_WALLET_ADDRESS`.
-   - No literal `0x...` addresses may be hardcoded into widget configuration or any other `src/**` app code.
+   - The receiver address for payment widgets MUST come from the repo-spec helper (server-provided props).
+   - No literal `0x...` addresses may be hardcoded into widget configuration or any other `src/**` app code; no env overrides.
 
 2. **Auth + Payment Flow**
    - User must be logged in via SIWE (Auth.js session) before the "Buy Credits" UI is shown.
@@ -92,12 +92,14 @@ Example (simplified):
 payments_in:
   widget:
     provider: depay # Current widget provider (DePay OSS mode)
-    receiving_address_env: NEXT_PUBLIC_DAO_WALLET_ADDRESS
+    receiving_address: "0x0000000000000000000000000000000000000000" # DAO-owned receiver (no env override)
     allowed_chains:
       - base
-      - base-sepolia
     allowed_tokens:
       - USDC
+
+cogni_dao:
+  chain_id: "8453"
 
 providers:
   openrouter:
@@ -118,7 +120,7 @@ secrets:
 
 This is declarative only. It describes:
 
-- Which env var carries the DAO receiving address for payment widgets.
+- Which DAO receiving address and chain the widget must use (governed in git, not env).
 - Which env vars are considered sensitive API keys.
 - Which host/master-key pair defines the LLM proxy.
 

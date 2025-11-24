@@ -2,6 +2,12 @@
 
 A production-ready Next.js template for AI-powered autonomous organizations.
 
+## Payments Configuration (read this first)
+
+- `.cogni/repo-spec.yaml` is the single source of truth for the DAO receiving wallet, chain_id, and widget provider. There is **no env override**.
+- The credits page reads repo-spec server-side and passes the config to the client widget as props.
+- Changing the wallet or chain requires a repo-spec edit + redeploy; build-time validation fails if repo-spec.chain_id drifts from the app CHAIN_ID.
+
 ## There are 2 ways you could be using this repository! Which are you?
 
 ### 1. 👨‍💻 Contributor: Improve the Template

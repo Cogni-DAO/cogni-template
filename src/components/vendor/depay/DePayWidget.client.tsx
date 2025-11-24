@@ -19,7 +19,7 @@ import type { ReactElement } from "react";
 import { useState } from "react";
 
 import { Button } from "@/components";
-import { DEPAY_BLOCKCHAIN, USDC_TOKEN_ADDRESS } from "@/shared/web3";
+import { CHAIN_ID, DEPAY_BLOCKCHAIN, USDC_TOKEN_ADDRESS } from "@/shared/web3";
 
 declare global {
   interface Window {
@@ -31,6 +31,7 @@ declare global {
 
 interface DePayWidgetProps {
   amountUsd: number;
+  chainId: number;
   receiverAddress: string;
   disabled?: boolean;
   onSucceeded: (txInfo: {
@@ -43,6 +44,7 @@ interface DePayWidgetProps {
 
 export function DePayWidget({
   amountUsd,
+  chainId,
   receiverAddress,
   disabled = false,
   onSucceeded,
@@ -59,11 +61,21 @@ export function DePayWidget({
 
     setIsProcessing(true);
 
+    const blockchain =
+      chainId === CHAIN_ID
+        ? DEPAY_BLOCKCHAIN
+        : (() => {
+            console.error(
+              `[DePay] Unsupported chain ${chainId}; expected ${CHAIN_ID}`
+            );
+            return DEPAY_BLOCKCHAIN;
+          })();
+
     try {
       await window.DePayWidgets.Payment({
         accept: [
           {
-            blockchain: DEPAY_BLOCKCHAIN,
+            blockchain,
             token: USDC_TOKEN_ADDRESS,
             receiver: receiverAddress,
           },
@@ -75,7 +87,7 @@ export function DePayWidget({
         succeeded: (transaction: { id?: string }) => {
           onSucceeded({
             txHash: transaction?.id ?? "unknown",
-            blockchain: DEPAY_BLOCKCHAIN,
+            blockchain,
             token: "USDC",
           });
         },

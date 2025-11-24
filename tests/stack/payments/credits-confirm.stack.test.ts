@@ -3,143 +3,80 @@
 
 /**
  * Module: `@tests/stack/payments/credits-confirm.stack`
- * Purpose: Full-stack verification of widget payment confirm endpoint idempotency and balance updates.
- * Scope: Uses SIWE session to call /api/v1/payments/credits/confirm and summary endpoints over HTTP; does not mock adapters or bypass API layer.
- * Invariants: 1 cent = 10 credits; duplicate clientPaymentId does not double credit balance.
- * Side-effects: IO (writes to billing tables via API calls).
- * Notes: Requires running stack with Auth.js + Postgres.
- * Links: docs/DEPAY_PAYMENTS.md
+ * Purpose: Stack-level validation that confirmCreditsPaymentFacade applies widget payments idempotently.
+ * Scope: Calls the real facade + DrizzleAccountService against Postgres; does not bypass ports with mocks or hit HTTP routes.
+ * Invariants: Duplicate clientPaymentId does not double credit; ledger/reference remains single-entry.
+ * Side-effects: IO (writes to billing tables via facade + DB).
+ * Notes: Runs with stack test DB; cleans up inserted user/billing records.
+ * Links: docs/DEPAY_PAYMENTS.md, src/app/_facades/payments/credits.server.ts
  * @public
  */
 
 import { randomUUID } from "node:crypto";
 
-import { siweLogin } from "@tests/_fixtures/auth/authjs-http-helpers";
-import { generateTestWallet } from "@tests/_fixtures/auth/siwe-helpers";
+import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
-function baseUrl(path = ""): string {
-  const root = process.env.TEST_BASE_URL ?? "http://localhost:3000";
-  return path ? new URL(path.replace(/^\//, ""), root).toString() : root;
-}
+import { getDb } from "@/adapters/server/db/client";
+import { confirmCreditsPaymentFacade } from "@/app/_facades/payments/credits.server";
+import { users } from "@/shared/db/schema.auth";
+import { billingAccounts, creditLedger } from "@/shared/db/schema.billing";
 
-async function getSummary(cookie: string): Promise<{
-  billingAccountId: string;
-  balanceCredits: number;
-  ledger: { amount: number; reason: string; reference: string | null }[];
-}> {
-  const response = await fetch(baseUrl("/api/v1/payments/credits/summary"), {
-    headers: { Cookie: cookie },
-  });
+describe("Credits confirm stack (idempotent on clientPaymentId)", () => {
+  it("applies credits once per clientPaymentId and returns consistent balance", async () => {
+    const db = getDb();
+    const sessionUser = {
+      id: `user-${randomUUID()}`,
+      walletAddress: `0x${"1".repeat(40)}`,
+    };
 
-  expect(response.ok).toBe(true);
-  return (await response.json()) as Awaited<ReturnType<typeof getSummary>>;
-}
-
-/**
- * SKIP REASON: Auth.js session cookie extraction currently broken in test environment.
- *
- * Issue: siweLogin() returns success=true but sessionCookie=null due to:
- * 1. Auth.js redirects to /api/auth/error?error=Configuration (308 → 302)
- * 2. Fetch API cannot reliably extract Set-Cookie from redirect chains
- * 3. No cookies returned even after manually following redirects
- *
- * Payment logic IS tested via:
- * - Unit tests: tests/unit/features/payments/services/creditsConfirm.spec.ts
- * - Unit tests: tests/unit/app/_facades/payments/credits.server.spec.ts
- *
- * TODO: Fix Auth.js test configuration OR implement proper HTTP cookie jar
- * for authenticated stack testing (see tests/_fixtures/auth/authjs-http-helpers.ts).
- */
-describe.skip("Credits confirm endpoint (auth broken - see comment above)", () => {
-  it("credits balance on first confirm call", async () => {
-    const wallet = generateTestWallet("credits-confirm-happy-path");
-    const domain = new URL(baseUrl()).host;
-    const login = await siweLogin({
-      baseUrl: baseUrl(),
-      wallet,
-      domain,
-      chainId: 11155111,
+    await db.insert(users).values({
+      id: sessionUser.id,
+      walletAddress: sessionUser.walletAddress,
+      name: "Stack Test User",
     });
 
-    expect(login.success).toBe(true);
-    expect(login.sessionCookie).toBeTruthy();
+    const clientPaymentId = `stack-test-${randomUUID()}`;
 
-    const sessionCookie = `${login.sessionCookie?.name}=${login.sessionCookie?.value}`;
-    const clientPaymentId = randomUUID();
-
-    const response = await fetch(baseUrl("/api/v1/payments/credits/confirm"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Cookie: sessionCookie,
-      },
-      body: JSON.stringify({
-        amountUsdCents: 1000,
+    try {
+      const first = await confirmCreditsPaymentFacade({
+        sessionUser,
+        amountUsdCents: 10,
         clientPaymentId,
-        metadata: { test: true },
-      }),
-    });
+        metadata: { provider: "depay", test: true },
+      });
 
-    expect(response.ok).toBe(true);
-    const body = (await response.json()) as { balanceCredits: number };
-    expect(body.balanceCredits).toBe(1000 * 10);
-
-    const summary = await getSummary(sessionCookie);
-    expect(summary.balanceCredits).toBe(body.balanceCredits);
-    expect(summary.ledger[0]?.reference).toBe(clientPaymentId);
-  });
-
-  it("is idempotent for duplicate clientPaymentId", async () => {
-    const wallet = generateTestWallet("credits-confirm-idempotent");
-    const domain = new URL(baseUrl()).host;
-    const login = await siweLogin({
-      baseUrl: baseUrl(),
-      wallet,
-      domain,
-      chainId: 11155111,
-    });
-
-    expect(login.success).toBe(true);
-    expect(login.sessionCookie).toBeTruthy();
-
-    const sessionCookie = `${login.sessionCookie?.name}=${login.sessionCookie?.value}`;
-    const clientPaymentId = randomUUID();
-
-    const first = await fetch(baseUrl("/api/v1/payments/credits/confirm"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Cookie: sessionCookie,
-      },
-      body: JSON.stringify({
-        amountUsdCents: 500,
+      const second = await confirmCreditsPaymentFacade({
+        sessionUser,
+        amountUsdCents: 10,
         clientPaymentId,
-      }),
-    });
-    expect(first.ok).toBe(true);
-    const firstBody = (await first.json()) as { balanceCredits: number };
+        metadata: { provider: "depay", test: true },
+      });
 
-    const second = await fetch(baseUrl("/api/v1/payments/credits/confirm"), {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Cookie: sessionCookie,
-      },
-      body: JSON.stringify({
-        amountUsdCents: 500,
-        clientPaymentId,
-      }),
-    });
-    expect(second.ok).toBe(true);
-    const secondBody = (await second.json()) as { balanceCredits: number };
+      expect(second.balanceCredits).toBe(first.balanceCredits);
 
-    expect(secondBody.balanceCredits).toBe(firstBody.balanceCredits);
+      const billingAccount = await db.query.billingAccounts.findFirst({
+        where: eq(billingAccounts.ownerUserId, sessionUser.id),
+      });
 
-    const summary = await getSummary(sessionCookie);
-    expect(
-      summary.ledger.filter((entry) => entry.reference === clientPaymentId)
-        .length
-    ).toBe(1);
+      expect(billingAccount).toBeTruthy();
+      if (!billingAccount) {
+        throw new Error("Billing account was not created");
+      }
+
+      const ledgerEntries = await db.query.creditLedger.findMany({
+        where: and(
+          eq(creditLedger.billingAccountId, billingAccount.id),
+          eq(creditLedger.reference, clientPaymentId)
+        ),
+      });
+
+      expect(ledgerEntries).toHaveLength(1);
+      expect(ledgerEntries[0]?.reason).toBe("widget_payment");
+      expect(ledgerEntries[0]?.balanceAfter).toBe(first.balanceCredits);
+    } finally {
+      // Cleanup cascades to billing/ledger via FK
+      await db.delete(users).where(eq(users.id, sessionUser.id));
+    }
   });
 });

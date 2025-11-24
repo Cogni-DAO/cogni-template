@@ -33,7 +33,6 @@ export class ClientEnvValidationError extends Error {
 const clientSchema = z.object({
   // Optional - gracefully degrades to injected wallet only if missing
   NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: z.string().min(1).optional(),
-  NEXT_PUBLIC_DAO_WALLET_ADDRESS: z.string().min(1).optional(),
 });
 
 type ClientEnv = z.infer<typeof clientSchema>;
@@ -46,8 +45,6 @@ export function clientEnv(): ClientEnv {
       _clientEnv = clientSchema.parse({
         NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID:
           process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
-        NEXT_PUBLIC_DAO_WALLET_ADDRESS:
-          process.env.NEXT_PUBLIC_DAO_WALLET_ADDRESS,
       });
     } catch (error) {
       if (error instanceof ZodError) {

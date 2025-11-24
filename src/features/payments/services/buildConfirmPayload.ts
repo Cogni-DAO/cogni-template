@@ -52,7 +52,8 @@ export interface ConfirmPayload {
  */
 export function buildConfirmPayload(
   txInfo: DePayTransactionInfo,
-  amountUsd: number
+  amountUsd: number,
+  provider = "depay"
 ): ConfirmPayload {
   // Use transaction hash as idempotency key (prevents double-crediting same tx)
   // Fallback to random UUID if hash is invalid/missing (should not happen in production)
@@ -68,7 +69,7 @@ export function buildConfirmPayload(
     amountUsdCents,
     clientPaymentId,
     metadata: {
-      provider: "depay",
+      provider,
       txHash: txInfo.txHash,
       blockchain: txInfo.blockchain,
       token: txInfo.token,

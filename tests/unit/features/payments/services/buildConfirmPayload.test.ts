@@ -105,6 +105,18 @@ describe("buildConfirmPayload", () => {
     });
   });
 
+  it("should allow overriding provider metadata", () => {
+    const txInfo = {
+      txHash: "0xabcdef1234567890",
+      blockchain: "ethereum",
+      token: "USDC",
+    };
+
+    const payload = buildConfirmPayload(txInfo, 10.0, "custom-provider");
+
+    expect(payload.metadata?.provider).toBe("custom-provider");
+  });
+
   it("should generate ISO timestamp in metadata", () => {
     const txInfo = {
       txHash: "0xabcdef1234567890",

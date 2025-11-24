@@ -23,7 +23,6 @@ payments_in:
   widget:
     provider: depay # Current widget provider (DePay OSS mode)
     receiving_address: "0x070075F1389Ae1182aBac722B36CA12285d0c949" # Expected receiver (DAO Wallet), testing only address rn
-    receiving_address_env: NEXT_PUBLIC_DAO_WALLET_ADDRESS
     allowed_chains:
       - base
     allowed_tokens:
