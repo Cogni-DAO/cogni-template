@@ -32,4 +32,4 @@ export const DEPAY_BLOCKCHAIN = "base";
 /**
  * USDC token address on Base mainnet.
  */
-export const USDC_TOKEN_ADDRESS = "0x833589fCD6eDb6e08f4c7C32D4f71b54bdA02913";
+export const USDC_TOKEN_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";

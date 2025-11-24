@@ -20,12 +20,12 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useState } from "react";
 import { SiweMessage } from "siwe";
 import { useAccount, useSignMessage } from "wagmi";
-import { sepolia } from "wagmi/chains";
 
 import {
   computeWalletSessionAction,
   normalizeWalletAddress,
 } from "@/shared/auth";
+import { getChainId } from "@/shared/web3";
 
 export interface WalletConnectButtonProps {
   /**
@@ -96,7 +96,7 @@ export function WalletConnectButton({
         statement: "Sign in with Ethereum to the app.",
         uri: window.location.origin,
         version: "1",
-        chainId: sepolia.id,
+        chainId: getChainId(),
         nonce: csrfToken,
       });
 
