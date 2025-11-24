@@ -2,11 +2,13 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `scripts/validate-chain-config`
+ * Module: `@scripts/validate-chain-config`
  * Purpose: Validate that .cogni/repo-spec.yaml declares the same chain (Base) as the app.
- * Scope: Build/CI-time guard; reads repo spec and compares chain_id to CHAIN_ID.
+ * Scope: Build/CI-time guard; reads repo spec and compares chain_id to CHAIN_ID; does not mutate repo files.
  * Invariants: Base mainnet only (chain_id 8453); fails fast if mismatched or missing.
- * Side-effects: process exit with non-zero on mismatch.
+ * Side-effects: IO (reads repo-spec from disk); terminates process on mismatch.
+ * Links: .cogni/repo-spec.yaml, src/shared/web3/chain.ts
+ * @public
  */
 
 import fs from "node:fs";
