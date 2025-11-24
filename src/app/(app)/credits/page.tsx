@@ -15,18 +15,13 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  type ReactElement,
-  useCallback,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type ReactElement, useCallback, useMemo, useState } from "react";
 
 import { Button } from "@/components";
 import { DePayWidget } from "@/components/vendor/depay";
 import type { CreditsConfirmInput } from "@/contracts/payments.credits.confirm.v1.contract";
 import type { CreditsSummaryOutput } from "@/contracts/payments.credits.summary.v1.contract";
+import { buildConfirmPayload } from "@/features/payments/services/buildConfirmPayload";
 import { clientEnv } from "@/shared/env";
 import {
   badge,
@@ -94,7 +89,6 @@ export default function CreditsPage(): ReactElement {
   );
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const queryClient = useQueryClient();
-  const currentPaymentIdRef = useRef<string | null>(null);
 
   const summaryQuery = useQuery({
     queryKey: ["payments-summary"],
@@ -122,35 +116,17 @@ export default function CreditsPage(): ReactElement {
 
   const handlePaymentSuccess = useCallback(
     (txInfo: { txHash: string; blockchain: string; token: string }) => {
-      const clientPaymentId =
-        txInfo.txHash && txInfo.txHash !== "unknown"
-          ? txInfo.txHash
-          : (currentPaymentIdRef.current ?? crypto.randomUUID());
+      // Build confirm payload using shared helper
+      const payload = buildConfirmPayload(txInfo, selectedAmount);
 
-      currentPaymentIdRef.current = clientPaymentId;
-
+      // Store payment ID for reference (best-effort, no error if localStorage fails)
       try {
-        localStorage.setItem("depay:lastPaymentId", clientPaymentId);
+        localStorage.setItem("depay:lastPaymentId", payload.clientPaymentId);
       } catch {
-        // best-effort
+        // Ignore storage errors
       }
 
       setStatusMessage(null);
-
-      const amountUsdCents = Math.round(selectedAmount * 100);
-
-      const payload: CreditsConfirmInput = {
-        amountUsdCents,
-        clientPaymentId,
-        metadata: {
-          provider: "depay",
-          txHash: txInfo.txHash,
-          blockchain: txInfo.blockchain,
-          token: txInfo.token,
-          timestamp: new Date().toISOString(),
-        },
-      };
-
       confirmMutation.mutate(payload);
     },
     [selectedAmount, confirmMutation]

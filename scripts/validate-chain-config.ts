@@ -4,7 +4,7 @@
 /**
  * Module: `@scripts/validate-chain-config`
  * Purpose: Validate that .cogni/repo-spec.yaml declares the same chain (Base) as the app, and that the configured payment receiver matches the spec.
- * Scope: Build/CI-time guard; reads repo spec and compares chain_id to CHAIN_ID; compares receiving_address to env var.
+ * Scope: Build/CI-time guard; reads repo spec and compares chain_id to CHAIN_ID and receiving_address to env var; does not mutate files or perform runtime validation.
  * Invariants: Base mainnet only (chain_id 8453); fails fast if chain ID or receiver address mismatches.
  * Side-effects: IO (reads repo-spec from disk); terminates process on mismatch.
  * Links: .cogni/repo-spec.yaml, src/shared/web3/chain.ts

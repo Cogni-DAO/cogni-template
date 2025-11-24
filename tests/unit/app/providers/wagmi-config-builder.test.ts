@@ -12,20 +12,20 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-import { sepolia } from "wagmi/chains";
 
 import {
   buildWagmiConfigOptions,
   type ConnectorsLib,
   type WalletEnv,
 } from "@/app/providers/wagmi-config-builder";
+import { CHAIN } from "@/shared/web3";
 
 interface TestConnector {
   kind: "injected" | "wc";
 }
 
 describe("buildWagmiConfigOptions", () => {
-  it("should include Sepolia chain only", () => {
+  it("should include configured chain only (Base)", () => {
     const env: WalletEnv = {
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: undefined,
     };
@@ -37,8 +37,8 @@ describe("buildWagmiConfigOptions", () => {
 
     const result = buildWagmiConfigOptions(env, connectorsLib);
 
-    expect(result.chains).toEqual([sepolia]);
-    expect(result.transports).toHaveProperty(sepolia.id.toString());
+    expect(result.chains).toEqual([CHAIN]);
+    expect(result.transports).toHaveProperty(CHAIN.id.toString());
   });
 
   it("should include WalletConnect connector when projectId is present", () => {

@@ -12,7 +12,7 @@
  * @public
  */
 
-import type { Chain, CreateConnectorFn, Transport } from "wagmi";
+import type { CreateConnectorFn, Transport } from "wagmi";
 import { http } from "wagmi";
 
 import { CHAIN } from "@/shared/web3";
@@ -27,7 +27,7 @@ export interface ConnectorsLib<TConnector> {
 }
 
 interface BaseConfigOptions<TConnector> {
-  chains: readonly [Chain];
+  chains: readonly [typeof CHAIN];
   transports: Record<number, Transport>;
   connectors: TConnector[];
 }
