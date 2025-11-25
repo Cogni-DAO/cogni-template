@@ -7,10 +7,11 @@
  * Scope: Re-exports public utility functions. Does not export internal helpers or types.
  * Invariants: No circular dependencies; maintains clean public API.
  * Side-effects: none
- * Notes: Changes here affect module's public API contract.
+ * Notes: Changes here affect module's public API contract; includes UUID validation export.
  * Links: ARCHITECTURE.md#public-surface
  * @public
  */
 
 export { deriveAccountIdFromApiKey } from "./accountId";
 export { cn } from "./cn";
+export { isValidUuid } from "./uuid";

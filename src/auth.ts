@@ -5,7 +5,7 @@
  * Module: `@/auth`
  * Purpose: NextAuth.js configuration and export.
  * Scope: App-wide authentication configuration. Does not handle client-side session management.
- * Invariants: SIWE provider with "credentials" ID. Session user ID is DB UUID (users.id) for FKs; walletAddress is separate attribute.
+ * Invariants: Uses SIWE (Sign-In with Ethereum) provider with "credentials" ID; returns DB UUID as user ID.
  * Side-effects: IO (Handles session creation, validation, and persistence)
  * Links: docs/AUTHENTICATION.md
  * @public
@@ -134,8 +134,8 @@ export const authOptions: NextAuthOptions = {
 
           console.log("[SIWE] Login success for:", fields.address);
 
+          // Always use DB UUID as primary ID
           return {
-            // Use DB UUID as primary ID for FK relationships
             id: user.id,
             walletAddress: fields.address,
           };
@@ -163,5 +163,5 @@ export const authOptions: NextAuthOptions = {
     },
   },
   // Enable debugging to diagnose login issues
-  debug: true,
+  debug: process.env.NODE_ENV === "development",
 };

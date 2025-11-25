@@ -36,6 +36,7 @@ describe("server env edge cases", () => {
       POSTGRES_USER: "postgres",
       POSTGRES_PASSWORD: "postgres",
       POSTGRES_DB: "test_db",
+      DB_HOST: "localhost",
       LITELLM_MASTER_KEY: "test-key",
       AUTH_SECRET: "x".repeat(32),
     });

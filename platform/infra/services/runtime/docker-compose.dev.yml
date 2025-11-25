@@ -48,7 +48,7 @@ services:
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
-      - LITELLM_DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}
+      - LITELLM_DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/litellm_dev
     volumes:
       - ./configs/litellm.config.yaml:/app/config.yaml:ro
     command: --config /app/config.yaml --host 0.0.0.0 --port 4000
@@ -92,16 +92,49 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-cogni_template_dev}
       POSTGRES_USER: ${POSTGRES_USER:-user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      LITELLM_DB_NAME: litellm_dev
     ports:
       - "55432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    command:
+      - "postgres"
+      - "-c"
+      - "log_statement=ddl"
+      - "-c"
+      - "log_line_prefix=%m [%u@%d] %a %p "
+      - "-c"
+      - "log_connections=on"
+      - "-c"
+      - "log_disconnections=on"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-user}"]
       interval: 10s
       timeout: 2s
       retries: 3
       start_period: 10s
+
+  db-provision:
+    image: postgres:15
+    container_name: db-provision
+    profiles:
+      - bootstrap
+    restart: "no"
+    networks:
+      - web
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      APP_DB_NAME: ${POSTGRES_DB:-cogni_template_dev}
+      LITELLM_DB_NAME: litellm_dev
+    volumes:
+      - ./postgres-init/provision.sh:/app/provision.sh:ro
+    entrypoint: ["/bin/bash", "/app/provision.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   promtail:
     image: grafana/promtail:2.9.0

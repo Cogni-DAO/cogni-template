@@ -19,12 +19,15 @@
  * @public
  */
 
+import { randomUUID } from "node:crypto";
+
 import { encode } from "next-auth/jwt";
 
 import type { NextAuthSessionCookie } from "./nextauth-http-helpers";
 
 export interface SyntheticSessionParams {
   walletAddress: string;
+  userId?: string; // Optional UUID v4 for user ID (defaults to random UUID)
   authSecret?: string;
 }
 
@@ -35,7 +38,10 @@ export interface SyntheticSessionParams {
  * allowing tests to bypass the full SIWE HTTP flow while still exercising real
  * NextAuth session validation.
  *
- * @param params - Wallet address and optional auth secret (defaults to process.env.AUTH_SECRET)
+ * @param params - Configuration including wallet address, optional userId (UUID v4), and auth secret
+ * @param params.walletAddress - Ethereum wallet address
+ * @param params.userId - Optional UUID v4 for user ID (defaults to random UUID)
+ * @param params.authSecret - Optional auth secret (defaults to process.env.AUTH_SECRET)
  * @returns NextAuthSessionCookie with name and value ready to use in Cookie header
  */
 export async function createSyntheticSession(
@@ -54,12 +60,13 @@ export async function createSyntheticSession(
   );
 
   const address = params.walletAddress.toLowerCase();
+  const userId = params.userId ?? randomUUID(); // Use provided UUID or generate one
 
   // Use NextAuth's own encode function to create a valid JWT
   // This ensures the token structure matches exactly what NextAuth expects
   const token = await encode({
     token: {
-      id: address,
+      id: userId, // Must be UUID v4 to match DB schema and validation
       walletAddress: address,
       name: address,
       email: null,
