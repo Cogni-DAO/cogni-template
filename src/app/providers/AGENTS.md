@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Client-side provider composition for the web UI shell. Configures React context providers (Auth.js SessionProvider, wagmi, RainbowKit, React Query) that wrap the Next.js App Router tree.
+Client-side provider composition for the web UI shell. Configures React context providers (NextAuth SessionProvider, wagmi, RainbowKit, React Query) that wrap the Next.js App Router tree.
 
 ## Pointers
 
@@ -32,7 +32,7 @@ Client-side provider composition for the web UI shell. Configures React context 
 
 - **Exports:**
   - `AppProviders` - Main composition component (imports all sub-providers)
-  - `AuthProvider` - Auth.js SessionProvider wrapper for auth context
+  - `AuthProvider` - NextAuth SessionProvider wrapper for auth context
   - `QueryProvider` - React Query client provider
   - `WalletProvider` - wagmi + RainbowKit provider (creates config internally via dynamic import)
   - `createAppLightTheme` - RainbowKit light theme matching design system (--muted colors)

@@ -209,21 +209,21 @@ Auth.js does NOT ship a first-class SIWE provider. We implement SIWE using an Au
 
 **Files Involved:**
 
-- `src/auth.ts` - Auth.js config with Credentials provider + `siwe` verification logic
+- `src/auth.ts` - NextAuth config with Credentials provider + `siwe` verification logic
 - `src/app/providers/auth.client.tsx` - SessionProvider wrapper
-- Auth.js Drizzle adapter - Writes to `users`, `accounts`, `sessions` tables
+- NextAuth Drizzle adapter - Writes to `users`, `accounts`, `sessions` tables
 
 ### 2. Session Cookie Management
 
-**Handled by Auth.js:**
+**Handled by NextAuth:**
 
-- Cookie name: `authjs.session-token` (production) or `next-auth.session-token` (dev)
+- Cookie name: `__Secure-next-auth.session-token` (production) or `next-auth.session-token` (dev)
 - Security: HttpOnly, Secure, SameSite=Lax
 - Expiry: 30 days default (configurable in `src/auth.ts`)
 - Storage: **JWT-based** (signed token, not database)
 - Session data: Wallet address and user ID embedded in JWT via callbacks
 
-**No custom cookie code needed** - Auth.js handles all cookie operations.
+**No custom cookie code needed** - NextAuth handles all cookie operations.
 
 ### 3. Protected API Routes
 
@@ -231,8 +231,8 @@ Auth.js does NOT ship a first-class SIWE provider. We implement SIWE using an Au
 
 **MVP Per-Request Resolution Flow (Session-Only):**
 
-1. `const session = await auth()` (Auth.js helper). If no session → return 401.
-2. Extract `userId = session.user.id` (Auth.js user ID)
+1. `const session = await auth()` (NextAuth helper). If no session → return 401.
+2. Extract `userId = session.user.id` (NextAuth user ID)
 3. Call `getOrCreateBillingAccountForUser(userId)` from `src/lib/auth/mapping.ts`
    - Returns `{ billingAccountId, defaultVirtualKeyId, litellmVirtualKey }`
    - On first login, creates `billing_accounts` row with `owner_user_id = userId` and provisions default virtual key (via LiteLLM `/key/generate` with master key)
@@ -589,10 +589,10 @@ Auth.js does NOT provide a built-in SIWE provider. We implement SIWE via:
 ## Key Invariants
 
 - LiteLLM virtual keys never leave the server (stored in `virtual_keys` table)
-- Auth.js manages all session operations (cookies, storage, expiry)
+- NextAuth manages all session operations (cookies, storage, expiry)
 - SIWE (via Credentials provider + `siwe` library) proves wallet ownership
 - Billing layer owns LiteLLM virtual keys (`billing_accounts` → `virtual_keys`)
 - Each user has one billing account with one default virtual key (MVP)
 - All credit changes flow through `credit_ledger` (append-only audit log)
 
-**Reference:** Auth.js docs at [authjs.dev](https://authjs.dev), SIWE spec at [eips.ethereum.org/EIPS/eip-4361](https://eips.ethereum.org/EIPS/eip-4361)
+**Reference:** NextAuth docs at [next-auth.js.org](https://next-auth.js.org), SIWE spec at [eips.ethereum.org/EIPS/eip-4361](https://eips.ethereum.org/EIPS/eip-4361)

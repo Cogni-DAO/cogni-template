@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@_fixtures/auth/authjs-http-helpers`
- * Purpose: HTTP helpers for testing Auth.js flows over the network.
+ * Module: `@_fixtures/auth/nextauth-http-helpers`
+ * Purpose: HTTP helpers for testing NextAuth flows over the network.
  * Scope: Provides utilities for CSRF token retrieval, SIWE login, and session cookie management. Does not contain test assertions.
  * Invariants: All requests use fetch() for real HTTP calls; session cookies are preserved across requests
- * Side-effects: IO (HTTP requests to Auth.js endpoints)
- * Notes: Use for stack tests exercising Auth.js flows end-to-end; Uses undici's fetch for Set-Cookie on redirects
+ * Side-effects: IO (HTTP requests to NextAuth endpoints)
+ * Notes: Use for stack tests exercising NextAuth flows end-to-end; Uses undici's fetch for Set-Cookie on redirects
  * Links: tests/stack/auth/, docs/SECURITY_AUTH_SPEC.md
  * @public
  */
@@ -20,7 +20,7 @@ import { fetch } from "undici";
 import type { TestWallet } from "./siwe-helpers";
 import { createAndSignSiweMessage } from "./siwe-helpers";
 
-export interface AuthJsSessionCookie {
+export interface NextAuthSessionCookie {
   name: string;
   value: string;
 }
@@ -39,7 +39,7 @@ interface AuthCallbackErrorResponse {
 }
 
 /**
- * Get CSRF token from Auth.js /api/auth/csrf endpoint
+ * Get CSRF token from NextAuth /api/auth/csrf endpoint
  * Returns both the token (from JSON body) and the cookie (from Set-Cookie header)
  */
 export async function getCsrfToken(baseUrl: string): Promise<CsrfTokenResult> {
@@ -58,13 +58,13 @@ export async function getCsrfToken(baseUrl: string): Promise<CsrfTokenResult> {
     throw new Error("No Set-Cookie header in CSRF response");
   }
 
-  const csrfCookieRegex = /authjs\.csrf-token=([^;]+)/;
+  const csrfCookieRegex = /next-auth\.csrf-token=([^;]+)/;
   const csrfCookieMatch = csrfCookieRegex.exec(setCookieHeader);
   if (!csrfCookieMatch) {
     throw new Error("CSRF cookie not found in Set-Cookie header");
   }
 
-  const csrfCookie = `authjs.csrf-token=${csrfCookieMatch[1]}`;
+  const csrfCookie = `next-auth.csrf-token=${csrfCookieMatch[1]}`;
 
   return {
     csrfToken: data.csrfToken,
@@ -78,7 +78,7 @@ export async function getCsrfToken(baseUrl: string): Promise<CsrfTokenResult> {
  */
 export function extractSessionCookie(
   response: UndiciResponse
-): AuthJsSessionCookie | null {
+): NextAuthSessionCookie | null {
   // Use getSetCookie() to get all Set-Cookie headers (works with redirects)
   const setCookieHeaders = response.headers.getSetCookie
     ? response.headers.getSetCookie()
@@ -92,11 +92,11 @@ export function extractSessionCookie(
     }
   }
 
-  // Auth.js uses different cookie names in dev vs prod:
+  // NextAuth uses different cookie names in dev vs prod:
   // - dev: next-auth.session-token
-  // - prod: __Secure-authjs.session-token or authjs.session-token
+  // - prod: __Secure-next-auth.session-token or next-auth.session-token
   const sessionCookieRegex =
-    /(next-auth\.session-token|authjs\.session-token|__Secure-authjs\.session-token)=([^;]+)/;
+    /(next-auth\.session-token|__Secure-next-auth\.session-token)=([^;]+)/;
 
   for (const cookieHeader of setCookieHeaders) {
     const sessionCookieMatch = sessionCookieRegex.exec(cookieHeader);
@@ -120,7 +120,7 @@ export interface SiweLoginParams {
 
 export interface SiweLoginResult {
   success: boolean;
-  sessionCookie: AuthJsSessionCookie | null;
+  sessionCookie: NextAuthSessionCookie | null;
   error?: string;
 }
 
@@ -130,17 +130,17 @@ export interface SiweLoginResult {
  * Steps:
  * 1. Get CSRF token
  * 2. Create and sign SIWE message
- * 3. POST to Auth.js credentials callback
+ * 3. POST to NextAuth credentials callback
  * 4. Extract session cookie from response
  *
- * Note: Success is determined by HTTP status (2xx/3xx) and absence of Auth.js error.
+ * Note: Success is determined by HTTP status (2xx/3xx) and absence of NextAuth error.
  * Uses undici's fetch to access Set-Cookie headers on redirect responses.
  */
 export async function siweLogin(
   params: SiweLoginParams
 ): Promise<SiweLoginResult> {
   try {
-    // Step 1: Get CSRF token AND cookie (must send cookie back to Auth.js)
+    // Step 1: Get CSRF token AND cookie (must send cookie back to NextAuth)
     const { csrfToken, csrfCookie } = await getCsrfToken(params.baseUrl);
 
     // Step 2: Create and sign SIWE message
@@ -154,7 +154,7 @@ export async function siweLogin(
       params.wallet
     );
 
-    // Step 3: POST to Auth.js credentials callback
+    // Step 3: POST to NextAuth credentials callback
     // CRITICAL: Must send CSRF cookie back (behave like a browser)
     const callbackUrl = `${params.baseUrl}/api/auth/callback/siwe`;
 
@@ -170,19 +170,19 @@ export async function siweLogin(
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        // Send CSRF cookie back (Auth.js validates this matches the token)
+        // Send CSRF cookie back (NextAuth validates this matches the token)
         Cookie: csrfCookie,
       },
       body: body.toString(),
       redirect: "manual", // Don't follow redirects - session cookie is in 302 response
     });
 
-    // Check if login failed (Auth.js returns errors in JSON or 4xx status)
+    // Check if login failed (NextAuth returns errors in JSON or 4xx status)
     if (response.status >= 400) {
       return {
         success: false,
         sessionCookie: null,
-        error: `Auth.js callback failed with status ${response.status}`,
+        error: `NextAuth callback failed with status ${response.status}`,
       };
     }
 
@@ -201,7 +201,7 @@ export async function siweLogin(
     const sessionCookie = extractSessionCookie(response);
 
     // Success determined by HTTP semantics, not cookie extraction
-    // 2xx/3xx with no error body = Auth.js accepted the SIWE signature
+    // 2xx/3xx with no error body = NextAuth accepted the SIWE signature
     return {
       success: true,
       sessionCookie,
@@ -217,11 +217,11 @@ export async function siweLogin(
 }
 
 /**
- * Get session data from Auth.js /api/auth/session endpoint
+ * Get session data from NextAuth /api/auth/session endpoint
  */
 export async function getSession(
   baseUrl: string,
-  sessionCookie: AuthJsSessionCookie | null
+  sessionCookie: NextAuthSessionCookie | null
 ): Promise<unknown> {
   const headers: HeadersInit = {};
 

@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Shared authentication types and pure helpers used across app layer and adapters. Provides TypeScript types for Auth.js session data including wallet address extensions, plus pure functions for auth logic. Pure auth types + helpers; no DB, no React, no Next APIs.
+Shared authentication types and pure helpers used across app layer and adapters. Provides TypeScript types for NextAuth session data including wallet address extensions, plus pure functions for auth logic. Pure auth types + helpers; no DB, no React, no Next APIs.
 
 ## Pointers
 
@@ -41,7 +41,7 @@ Shared authentication types and pure helpers used across app layer and adapters.
 
 - **Exports:**
   - `SessionUser` - Extended user type with walletAddress
-  - `Session` - Extended Auth.js session type
+  - `Session` - Extended NextAuth session type
   - `WalletSessionState` - Input type for wallet-session consistency check
   - `WalletSessionAction` - Output type ("sign_out" | "none")
   - `NormalizedAddress` - Canonical wallet address type (`0x${string}` | null)
@@ -61,7 +61,7 @@ Shared authentication types and pure helpers used across app layer and adapters.
 
 ## Responsibilities
 
-- This directory **does**: Define shared TypeScript types for Auth.js session data with wallet address extension; provide pure helper functions for wallet-session consistency checking
+- This directory **does**: Define shared TypeScript types for NextAuth session data with wallet address extension; provide pure helper functions for wallet-session consistency checking
 - This directory **does not**: Implement runtime authentication logic, handle session management, perform I/O operations, or interact with React/Next.js APIs
 
 ## Usage
@@ -79,9 +79,9 @@ import {
 ## Standards
 
 - Pure type definitions and pure helper functions only
-- Must remain framework-agnostic (no Auth.js runtime imports, no React, no Next.js)
-- Types extend Auth.js base types via module augmentation
-- Helper functions accept external types (wagmi, Auth.js) and normalize to canonical forms
+- Must remain framework-agnostic (no NextAuth runtime imports, no React, no Next.js)
+- Types extend NextAuth base types via module augmentation
+- Helper functions accept external types (wagmi, NextAuth) and normalize to canonical forms
 
 ## Dependencies
 
@@ -97,7 +97,7 @@ import {
 
 ## Notes
 
-- Session types must match what Auth.js JWT callbacks populate
+- Session types must match what NextAuth JWT callbacks populate
 - `walletAddress` is the primary user identifier in this system (wallet-first auth)
-- `normalizeWalletAddress()` handles boundary between external types (wagmi `undefined`, Auth.js `null | undefined`) and internal canonical form (`null`)
+- `normalizeWalletAddress()` handles boundary between external types (wagmi `undefined`, NextAuth `null | undefined`) and internal canonical form (`null`)
 - Pure functions tested via unit tests in `tests/unit/auth/wallet-session.test.ts`

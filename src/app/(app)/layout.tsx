@@ -5,8 +5,8 @@
  * Module: `@app/\(app\)/layout`
  * Purpose: Auth guard layout for protected application pages.
  * Scope: Client layout component that enforces authentication for all routes under (app). Does not handle business logic or page content.
- * Invariants: Requires valid Auth.js session to render children; redirects unauthenticated users to home; shows loading state during auth check.
- * Side-effects: IO (Auth.js session retrieval via client hook, Next.js navigation)
+ * Invariants: Requires valid NextAuth session to render children; redirects unauthenticated users to home; shows loading state during auth check.
+ * Side-effects: IO (NextAuth session retrieval via client hook, Next.js navigation)
  * Notes: All pages under (app)/* require authentication. Do NOT add per-page auth checks.
  * Links: docs/SECURITY_AUTH_SPEC.md
  * @public

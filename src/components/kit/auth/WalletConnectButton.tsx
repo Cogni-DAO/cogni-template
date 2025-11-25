@@ -6,7 +6,7 @@
  * Purpose: Wallet connection kit component with SIWE authentication.
  * Scope: Client component that wraps RainbowKit ConnectButton with automatic SIWE signing. Enforces wallet-session consistency globally when mounted. Does not handle wallet selection UI or chain switching.
  * Invariants: Connected wallet address must match session wallet address; wallet disconnection clears session; auto-triggers SIWE on connect.
- * Side-effects: IO (Auth.js session creation via signIn, session destruction via signOut on wallet disconnect/change)
+ * Side-effects: IO (NextAuth session creation via signIn, session destruction via signOut on wallet disconnect/change)
  * Notes: Kit component for reuse in header and other locations. Session consistency enforced wherever this component is mounted.
  * Links: https://www.rainbowkit.com/docs/connect-button, docs/SECURITY_AUTH_SPEC.md
  * @public

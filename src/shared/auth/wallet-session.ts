@@ -30,16 +30,16 @@ export interface WalletSessionState {
    */
   connectedAddress: NormalizedAddress;
   /**
-   * The wallet address stored in the Auth.js session (normalized)
+   * The wallet address stored in the NextAuth session (normalized)
    */
   sessionAddress: NormalizedAddress;
 }
 
 /**
- * Normalize a wallet address from external sources (wagmi, Auth.js) into canonical form.
+ * Normalize a wallet address from external sources (wagmi, NextAuth) into canonical form.
  * Converts undefined/null/empty to null, otherwise returns lowercased address.
  *
- * @param value - Address from wagmi useAccount or Auth.js session (may be undefined, null, or string)
+ * @param value - Address from wagmi useAccount or NextAuth session (may be undefined, null, or string)
  * @returns Normalized address (null or lowercase 0x-prefixed string)
  */
 export function normalizeWalletAddress(

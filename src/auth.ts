@@ -3,7 +3,7 @@
 
 /**
  * Module: `@/auth`
- * Purpose: Auth.js configuration using SIWE (Credentials provider) with JWT sessions.
+ * Purpose: NextAuth v4 configuration using SIWE (Credentials provider) with JWT sessions.
  * Scope: Defines auth handlers, JWT strategy, and SIWE verification. Users table tracks wallet addresses; no database sessions. Does not handle client-side session management or route protection.
  * Invariants: JWT-backed sessions; wallet address in JWT token; manual user record management.
  * Side-effects: IO (User table writes only, no session table)
@@ -17,7 +17,8 @@ import { randomUUID } from "node:crypto";
 
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
-import NextAuth, { type User as NextAuthUser } from "next-auth";
+import type { NextAuthOptions, Session, User as NextAuthUser } from "next-auth";
+import NextAuth, { getServerSession } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { SiweMessage } from "siwe";
 
@@ -37,21 +38,25 @@ function toNextAuthUser(row: DbUser, address: string): NextAuthUser {
   };
 }
 
+export const authSecret =
+  process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? "";
+
 /**
  * NextAuth configuration and exports.
- * Direct export pattern per Auth.js v5 examples - no lazy initialization.
+ * Uses explicit handler for App Router and helper for server-side session resolution.
  * Build-time: Docker builder provides DATABASE_URL so getDb() can validate during build.
  * Runtime: Actual DB connections only happen when auth handlers are invoked.
  *
  * Note: No adapter with JWT strategy. Credentials provider manually manages users table.
  * Database sessions table is not used; JWT tokens stored in HttpOnly cookies instead.
  */
-export const { auth, signIn, signOut, handlers } = NextAuth({
+export const authConfig: NextAuthOptions = {
   session: {
     strategy: "jwt",
     // 30 days
     maxAge: 30 * 24 * 60 * 60,
   },
+  ...(authSecret ? { secret: authSecret } : {}),
   // Rely on AUTH_SECRET or NEXTAUTH_SECRET in process.env
   providers: [
     Credentials({
@@ -104,9 +109,9 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
           return null;
         }
 
-        // Enforce nonce match against Auth.js CSRF token cookie to mitigate replay
+        // Enforce nonce match against NextAuth CSRF token cookie to mitigate replay
         const cookieStore = await cookies();
-        const csrfCookie = cookieStore.get("authjs.csrf-token");
+        const csrfCookie = cookieStore.get("next-auth.csrf-token");
         const csrfTokenFromCookie =
           csrfCookie?.value?.split("|")?.[0] ?? undefined;
 
@@ -195,6 +200,15 @@ export const { auth, signIn, signOut, handlers } = NextAuth({
       return session;
     },
   },
-  // Always trust reverse proxy host headers; app only runs behind our own Caddy / managed proxies.
-  trustHost: true,
-});
+};
+
+export function auth(): Promise<Session | null> {
+  return getServerSession(authConfig);
+}
+
+const nextAuthHandler = NextAuth(authConfig);
+
+export const handlers = {
+  GET: nextAuthHandler,
+  POST: nextAuthHandler,
+};

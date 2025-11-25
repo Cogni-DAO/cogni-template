@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/stack/auth/api-auth-guard.stack`
  * Purpose: Verify protected APIs enforce session-only authentication end-to-end.
- * Scope: Tests /api/v1/ai/* routes with and without valid Auth.js session cookies. Validates proxy.ts middleware and per-route auth() enforcement. Does not test UI or client-side auth flows.
+ * Scope: Tests /api/v1/ai/* routes with and without valid NextAuth session cookies. Validates proxy.ts middleware and per-route session enforcement. Does not test UI or client-side auth flows.
  * Invariants: Unauthenticated requests return 401; authenticated requests with valid session succeed; no bypass via missing middleware
  * Side-effects: IO (HTTP requests, database writes, LLM service calls)
  * Notes: Uses synthetic sessions not SIWE; See siwe-session.stack.test.ts for SIWE pipeline; Focuses on API auth and billing
@@ -58,7 +58,7 @@ describe("API Auth Guard Stack Test", () => {
     const wallet = generateTestWallet("test-api-guard-wallet");
     const walletAddress = wallet.account.address.toLowerCase();
 
-    // Create synthetic Auth.js session token (bypasses SIWE flow)
+    // Create synthetic NextAuth session token (bypasses SIWE flow)
     const sessionCookie = await createSyntheticSession({
       walletAddress,
     });
@@ -154,7 +154,7 @@ describe("API Auth Guard Stack Test", () => {
     const wallet = generateTestWallet("test-proxy-auth-wallet");
     const walletAddress = wallet.account.address.toLowerCase();
 
-    // Create synthetic Auth.js session token (bypasses SIWE flow)
+    // Create synthetic NextAuth session token (bypasses SIWE flow)
     const sessionCookie = await createSyntheticSession({
       walletAddress,
     });

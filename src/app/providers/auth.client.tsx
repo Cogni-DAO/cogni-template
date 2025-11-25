@@ -3,7 +3,7 @@
 
 /**
  * Module: `@app/providers/auth.client`
- * Purpose: SessionProvider wrapper for Auth.js client context.
+ * Purpose: SessionProvider wrapper for NextAuth client context.
  * Scope: Client-only provider to wrap the App tree. Does not fetch data or add side effects.
  * Invariants: Minimal; only composes SessionProvider.
  * Side-effects: none

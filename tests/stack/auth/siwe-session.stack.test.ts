@@ -3,9 +3,9 @@
 
 /**
  * Module: `@tests/stack/auth/siwe-session.stack`
- * Purpose: Verify real SIWE → Auth.js → JWT → session pipeline over HTTP.
- * Scope: Tests the complete authentication flow without mocking Auth.js internals. Does not test UI components or client-side wallet connection.
- * Invariants: Uses real Auth.js endpoints; no vi.mock() of auth internals; wallet address must be normalized (lowercase)
+ * Purpose: Verify real SIWE → NextAuth → JWT → session pipeline over HTTP.
+ * Scope: Tests the complete authentication flow without mocking NextAuth internals. Does not test UI components or client-side wallet connection.
+ * Invariants: Uses real NextAuth endpoints; no vi.mock() of auth internals; wallet address must be normalized (lowercase)
  * Side-effects: IO (HTTP requests, database writes)
  * Notes: Exercises actual JWT callbacks and session callbacks in src/auth.ts. Uses undici's fetch to access Set-Cookie headers on redirect responses.
  * Links: docs/SECURITY_AUTH_SPEC.md, src/auth.ts
@@ -15,7 +15,7 @@
 import {
   getSession,
   siweLogin,
-} from "@tests/_fixtures/auth/authjs-http-helpers";
+} from "@tests/_fixtures/auth/nextauth-http-helpers";
 import { generateTestWallet } from "@tests/_fixtures/auth/siwe-helpers";
 import { describe, expect, it } from "vitest";
 
@@ -38,7 +38,7 @@ describe("SIWE Session Stack Test", () => {
       chainId: 11155111, // Sepolia
     });
 
-    // Assert: Auth.js accepted the SIWE signature (HTTP 2xx/3xx, no error)
+    // Assert: NextAuth accepted the SIWE signature (HTTP 2xx/3xx, no error)
     expect(loginResult.success).toBe(true);
     expect(loginResult.error).toBeUndefined();
 
@@ -75,7 +75,7 @@ describe("SIWE Session Stack Test", () => {
 
     // Get CSRF token and cookie
     const { getCsrfToken } = await import(
-      "@tests/_fixtures/auth/authjs-http-helpers"
+      "@tests/_fixtures/auth/nextauth-http-helpers"
     );
     const { createSiweMessage, signSiweMessage } = await import(
       "@tests/_fixtures/auth/siwe-helpers"
@@ -131,9 +131,9 @@ describe("SIWE Session Stack Test", () => {
     const sessionData = await getSession(baseUrl(), null);
 
     // Assert: Session should be empty/null
-    // Auth.js returns {} or null for unauthenticated requests
+    // NextAuth returns {} or null for unauthenticated requests
     if (sessionData === null) {
-      // Auth.js v5 may return null for no session
+      // NextAuth may return null for no session
       expect(sessionData).toBeNull();
     } else {
       const session = sessionData as { user?: unknown };

@@ -3,7 +3,7 @@
 
 /**
  * Module: `@lib/auth/mapping`
- * Purpose: Map Auth.js user identity to billing account + virtual key resolution.
+ * Purpose: Map NextAuth user identity to billing account + virtual key resolution.
  * Scope: Simple orchestration layer to keep mapping logic out of adapters/routes. Does not depend on framework.
  * Invariants: Delegates to AccountService; no framework dependencies.
  * Side-effects: IO (via injected AccountService)

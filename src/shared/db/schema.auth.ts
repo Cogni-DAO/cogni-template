@@ -3,7 +3,7 @@
 
 /**
  * Module: `@shared/db/schema.auth`
- * Purpose: Minimal Auth.js schema for JWT-only strategy with SIWE.
+ * Purpose: Minimal NextAuth schema for JWT-only strategy with SIWE.
  * Scope: Only users table needed for JWT strategy. Does not include database sessions, OAuth accounts, or email verification tables.
  * Invariants: wallet_address is the primary user identifier for SIWE authentication.
  * Side-effects: none (schema definitions only)

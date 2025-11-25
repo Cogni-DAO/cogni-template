@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/unit/app/app-layout-auth-guard`
  * Purpose: Unit tests for (app)/layout auth guard invariant enforcement.
- * Scope: Tests that AppLayout enforces authenticated sessions must have walletAddress. Does not test routing or actual Auth.js integration.
+ * Scope: Tests that AppLayout enforces authenticated sessions must have walletAddress. Does not test routing or actual NextAuth integration.
  * Invariants: loading shows UI; unauthenticated redirects; authenticated without wallet calls signOut; authenticated with wallet renders children.
  * Side-effects: none (mocked hooks)
  * Notes: Uses React Testing Library with mocked useSession, signOut, and useRouter. DOM environment via test-level override.

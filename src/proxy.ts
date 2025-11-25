@@ -4,7 +4,7 @@
 /**
  * Module: `@/proxy`
  * Purpose: Next.js 16 proxy (formerly middleware) for route protection.
- * Scope: Root-level proxy. Enforces session auth on /api/v1/ai/* routes via Auth.js auth() wrapper. Does not handle auth for other API routes.
+ * Scope: Root-level proxy. Enforces session auth on /api/v1/ai/* routes via NextAuth JWT token inspection. Does not handle auth for other API routes.
  * Invariants: Public routes remain accessible; protected routes require valid session.
  * Side-effects: none
  * Links: docs/SECURITY_AUTH_SPEC.md
@@ -13,16 +13,32 @@
 
 /* eslint-disable boundaries/no-unknown-files */
 
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
 
-import { auth } from "@/auth";
+import { authConfig, authSecret } from "@/auth";
 
-export default auth((req) => {
-  const isLoggedIn = !!req.auth;
+export default async function proxy(req: NextRequest): Promise<NextResponse> {
   const { pathname } = req.nextUrl;
 
+  const tokenSecret = authSecret || authConfig.secret;
+
+  if (!tokenSecret && pathname.startsWith("/api/v1/ai")) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const token =
+    tokenSecret && pathname.startsWith("/api/v1/ai")
+      ? await getToken({
+          req,
+          secret: tokenSecret,
+        })
+      : null;
+
+  const isLoggedIn = !!token;
+
   // Protect /api/v1/ai/* routes (second line of defense)
-  // IMPORTANT: All route handlers under /api/v1/ai must still call auth() server-side.
+  // IMPORTANT: All route handlers under /api/v1/ai must still call getServerSession() server-side.
   // This proxy provides early rejection for unauthenticated requests, but handlers
   // are responsible for their own auth enforcement.
   if (pathname.startsWith("/api/v1/ai")) {
@@ -32,7 +48,7 @@ export default auth((req) => {
   }
 
   return NextResponse.next();
-});
+}
 
 export const config = {
   // Only run middleware on /api/v1/ai/* routes to avoid unnecessary overhead

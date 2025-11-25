@@ -3,11 +3,11 @@
 
 /**
  * Module: `@app/_lib/auth/session`
- * Purpose: Server-side session resolver using Auth.js with wallet-first invariant.
- * Scope: Server-only helper that derives a SessionUser from an Auth.js session. Does not perform database access or user existence checks.
+ * Purpose: Server-side session resolver using NextAuth with wallet-first invariant.
+ * Scope: Server-only helper that derives a SessionUser from a NextAuth session. Does not perform database access or user existence checks.
  * Invariants: Returns null unless both id AND walletAddress are present (wallet-first auth).
- * Side-effects: IO (Auth.js session retrieval)
- * Notes: This resolver is a thin wrapper around Auth.js, enforcing a wallet-first session model.
+ * Side-effects: IO (NextAuth session retrieval)
+ * Notes: This resolver is a thin wrapper around NextAuth, enforcing a wallet-first session model.
  * Links: docs/SECURITY_AUTH_SPEC.md
  * @public
  */

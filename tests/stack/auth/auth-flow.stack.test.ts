@@ -3,7 +3,7 @@
 
 /**
  * Module: `@tests/stack/auth/auth-flow.stack`
- * Purpose: Verify Auth.js JWT session integration with billing and AI services.
+ * Purpose: Verify NextAuth JWT session integration with billing and AI services.
  * Scope: Integration test that mocks getSessionUser to verify session-gated routes. Uses real DB and services. Does not test SIWE signature verification.
  * Invariants: Valid session triggers billing account creation and LLM call; missing session returns 401.
  * Side-effects: IO (database writes via container)

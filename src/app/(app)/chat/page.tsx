@@ -6,7 +6,7 @@
  * Purpose: Protected chat page.
  * Scope: Client component that displays the chat interface. Does NOT handle authentication - enforced by (app)/layout.tsx.
  * Invariants: Session guaranteed by (app)/layout auth guard.
- * Side-effects: IO (Auth.js session retrieval via client hook)
+ * Side-effects: IO (NextAuth session retrieval via client hook)
  * Notes: Displays the main chat terminal.
  * Links: src/features/chat/components/Terminal.tsx
  * @public

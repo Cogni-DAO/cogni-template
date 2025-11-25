@@ -4,10 +4,10 @@
 /**
  * Module: `@tests/unit/auth/siwe-primitives`
  * Purpose: Unit tests for SIWE library primitives (domain/nonce/signature verification).
- * Scope: Tests the siwe library's verify() method directly to prove cryptographic verification works. Does not test Auth.js integration.
+ * Scope: Tests the siwe library's verify() method directly to prove cryptographic verification works. Does not test NextAuth integration.
  * Invariants: Valid signature passes; domain/nonce/signature mismatches fail.
  * Side-effects: none
- * Notes: Tests the underlying crypto primitives that src/auth.ts:66-156 relies on. Auth.js integration tested via stack tests.
+ * Notes: Tests the underlying crypto primitives that src/auth.ts:66-156 relies on. NextAuth integration tested via stack tests.
  * Links: src/auth.ts (lines 94-131), docs/SECURITY_AUTH_SPEC.md
  * @public
  */
