@@ -23,7 +23,7 @@ services:
       # Database configuration: supports both DATABASE_URL (prod) and component vars (local)
       - DATABASE_URL=${DATABASE_URL}
       - DB_HOST=postgres
-      - DB_PORT=${DB_PORT:-5432}
+      - DB_PORT=5432
       - POSTGRES_USER=${APP_DB_USER}
       - POSTGRES_PASSWORD=${APP_DB_PASSWORD}
       - POSTGRES_DB=${APP_DB_NAME}
