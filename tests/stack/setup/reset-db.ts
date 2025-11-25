@@ -34,6 +34,9 @@ export default async function resetStackTestDatabase() {
   );
 
   const databaseUrl = process.env.DATABASE_URL ?? buildDatabaseUrl(filteredEnv);
+  const parsedUrl = new URL(databaseUrl);
+  const parsedPort = Number(parsedUrl.port || "5432");
+  const parsedHost = parsedUrl.hostname;
 
   const sql = postgres(databaseUrl, {
     max: 1, // Use only one connection for setup
@@ -43,6 +46,7 @@ export default async function resetStackTestDatabase() {
   });
 
   const expectedDb = process.env.POSTGRES_DB;
+  const expectedHost = process.env.DB_HOST ?? "localhost";
   const expectedPort =
     typeof process.env.DB_PORT === "number"
       ? process.env.DB_PORT
@@ -69,12 +73,18 @@ export default async function resetStackTestDatabase() {
       );
     }
 
+    if (Number.isFinite(expectedPort) && parsedPort !== expectedPort) {
+      throw new Error(
+        `Connected using unexpected host/port: ${parsedHost}:${parsedPort} (expected ${expectedHost}:${expectedPort})`
+      );
+    }
+
     if (
       Number.isFinite(expectedPort) &&
       connectionInfo.server_port !== expectedPort
     ) {
-      throw new Error(
-        `Connected to unexpected port: ${connectionInfo.server_port} (expected ${expectedPort})`
+      console.warn(
+        `⚠️  Server reports port ${connectionInfo.server_port}; host-mapped port is ${expectedPort}. Proceeding (db name and URL port verified).`
       );
     }
 
