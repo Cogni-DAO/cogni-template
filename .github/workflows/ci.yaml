@@ -65,7 +65,7 @@ jobs:
       POSTGRES_PASSWORD: password
       POSTGRES_DB: cogni_template_test
       DB_HOST: postgres
-      DB_PORT: 5432
+      DB_PORT: 55432
       # Docker Compose environment variables
       APP_IMAGE: cogni-template-ci-${{ github.sha }}
       DOMAIN: localhost
