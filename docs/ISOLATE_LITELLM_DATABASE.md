@@ -1,5 +1,7 @@
 # Database Incident (2025-11-25)
 
+Note: addressed now. Litellm db split from app db. Added drop protection.
+
 ## What happened
 
 - Dev app tables (`users`, `billing_accounts`, `credit_ledger`, `virtual_keys`) kept disappearing while migrations reported success.
@@ -12,7 +14,7 @@
 - Removed host Postgres instances: `brew services stop postgresql@14 postgresql@15 && brew uninstall postgresql@14 postgresql@15` and deleted `/opt/homebrew/var/postgresql@14` and `/opt/homebrew/var/postgresql@15`.
 - Hardened test reset: added a guard in `tests/stack/setup/reset-db.ts` to verify `current_database()` and port match env before TRUNCATE.
 - Script fixes:
-  - `dev:stack:test:db:create` now uses `-p "$DB_PORT"` so it respects the configured port.
+  - `db:provision:test` now handles database creation for the test environment.
   - Docker dev/test scripts set `DB_PORT=5432` for in-container connections (host remains 55432) to avoid hitting a non-existent port inside the network.
 - Reset dev DB and reapplied migrations in the right order:
   - `docker stop litellm`

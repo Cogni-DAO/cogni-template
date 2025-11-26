@@ -33,7 +33,7 @@ Full-stack HTTP API integration tests requiring running Docker Compose infrastru
 
 - **Exports:** none (test-only directory)
 - **Routes (if any):** none
-- **CLI (if any):** pnpm test:stack, pnpm test:stack:setup, pnpm test:stack:db:create, pnpm test:stack:db:migrate, pnpm docker:stack:test
+- **CLI (if any):** pnpm test:stack, pnpm test:stack:setup, pnpm test:stack:db:migrate, pnpm docker:stack:test
 - **Env/Config keys:** TEST_BASE_URL, DATABASE_URL, POSTGRES_DB, APP_ENV
 - **Files considered API:** \*.stack.test.ts files
 

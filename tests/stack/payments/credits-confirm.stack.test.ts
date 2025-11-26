@@ -26,7 +26,7 @@ describe("Credits confirm stack (idempotent on clientPaymentId)", () => {
   it("applies credits once per clientPaymentId and returns consistent balance", async () => {
     const db = getDb();
     const sessionUser = {
-      id: `user-${randomUUID()}`,
+      id: randomUUID(), // Valid UUID v4 for testing
       walletAddress: `0x${"1".repeat(40)}`,
     };
 

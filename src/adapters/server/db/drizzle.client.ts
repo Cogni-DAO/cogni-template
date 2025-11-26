@@ -32,6 +32,9 @@ function createDb(): Database {
       max: 10,
       idle_timeout: 20,
       connect_timeout: 10,
+      connection: {
+        application_name: "cogni_template_app",
+      },
     });
     _db = drizzle(client, { schema });
   }

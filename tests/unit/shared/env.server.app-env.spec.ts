@@ -34,6 +34,7 @@ describe("serverEnv APP_ENV validation", () => {
       POSTGRES_USER: "postgres",
       POSTGRES_PASSWORD: "postgres",
       POSTGRES_DB: "test_db",
+      DB_HOST: "localhost",
       LITELLM_MASTER_KEY: "test-key",
       AUTH_SECRET: "x".repeat(32),
     });
@@ -50,6 +51,7 @@ describe("serverEnv APP_ENV validation", () => {
       POSTGRES_USER: "postgres",
       POSTGRES_PASSWORD: "postgres",
       POSTGRES_DB: "test_db",
+      DB_HOST: "postgres",
       LITELLM_MASTER_KEY: "test-key",
       AUTH_SECRET: "x".repeat(32),
     });

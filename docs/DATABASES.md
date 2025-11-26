@@ -35,6 +35,25 @@ pnpm dev:stack                # Same as above, but hits real LiteLLM/OpenRouter
 
 All stack deployment modes use the same migration tooling but connect to appropriate database instances. Test environments always use the test database and reset it between test runs.
 
+## Database Provisioning (Infrastructure-as-Code)
+
+To ensure a repeatable and consistent database state across environments (especially for `docker compose` setups), we use a dedicated provisioning service.
+
+### The `db-provision` Service
+
+In `docker-compose.dev.yml`, the `db-provision` service handles:
+
+1.  **Idempotent Database Creation**: Automatically creates `APP_DB_NAME` (e.g., `cogni_template_dev`) and `LITELLM_DB_NAME` (e.g., `litellm_dev`) if they do not exist.
+2.  **Isolation**: Ensures LiteLLM has its own isolated database to prevent schema collisions with the main application.
+
+This service is gated behind the `bootstrap` profile and runs only when explicitly requested or on fresh stack bring-up if configured.
+
+### Development vs. Production Roles
+
+- **Development (MVP):** For simplicity, the local development environment connects to Postgres using the `superuser` (`postgres`) credentials. This avoids complex role management during rapid iteration but means the app has theoretical power to DROP tables.
+  - _Note:_ `provision.sh` in dev currently skips role hardening to align with this MVP choice.
+- **Production:** Production deployments MUST use the Two-User Model described below (Root vs. App User) with restricted privileges. The application user should NOT have `DROP` or `TRUNCATE` permissions on the schema in production.
+
 ## Current Schema Baseline (Phase 0)
 
 - **billing_accounts** — `id` (text PK), `owner_user_id` (unique), `balance_credits BIGINT DEFAULT 0`, timestamps.
@@ -54,7 +73,7 @@ export function buildDatabaseUrl(env: DbEnvInput): string {
   const user = env.POSTGRES_USER; // Maps to APP_DB_USER in containers
   const password = env.POSTGRES_PASSWORD; // Maps to APP_DB_PASSWORD in containers
   const db = env.POSTGRES_DB; // Maps to APP_DB_NAME in containers
-  const host = env.DB_HOST ?? "localhost";
+  const host = env.DB_HOST; // No default - must be explicit
   const port =
     typeof env.DB_PORT === "number"
       ? env.DB_PORT
@@ -154,7 +173,7 @@ pnpm docker:dev:stack:setup     # Complete: build stack, create DB, migrate
 
 # Manual steps (if needed)
 pnpm docker:dev:stack           # Start containers
-pnpm docker:dev:db:create       # Create database
+pnpm db:provision               # Create database
 pnpm docker:dev:stack:migrate   # Run migrations in container
 ```
 

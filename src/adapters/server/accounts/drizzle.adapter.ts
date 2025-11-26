@@ -5,7 +5,7 @@
  * Module: `@adapters/server/accounts/drizzle`
  * Purpose: DrizzleAccountService implementation for PostgreSQL billing account operations.
  * Scope: Implements AccountService port with ledger-based credit accounting and virtual key management. Does not handle authentication or business rules.
- * Invariants: All credit operations are atomic, ledger is source of truth, billing_accounts.balance_credits is computed cache
+ * Invariants: Atomic credit ops; ledger is source of truth; balance is computed cache; strictly validates UUID v4 inputs.
  * Side-effects: IO (database operations)
  * Notes: Uses transactions for consistency, throws port errors for business rule violations
  * Links: Implements AccountService port, uses shared database schema
@@ -27,6 +27,7 @@ import {
 } from "@/ports";
 import { billingAccounts, creditLedger, virtualKeys } from "@/shared/db";
 import { serverEnv } from "@/shared/env";
+import { isValidUuid } from "@/shared/util";
 
 const ZERO = 0;
 
@@ -53,6 +54,14 @@ export class DrizzleAccountService implements AccountService {
     walletAddress?: string;
     displayName?: string;
   }): Promise<BillingAccount> {
+    if (!isValidUuid(userId)) {
+      const env = serverEnv();
+      const dbFingerprint = `${env.DB_HOST}:${env.DB_PORT}/${env.POSTGRES_DB}`;
+      throw new Error(
+        `BUG: expected valid UUID v4 for owner_user_id, got: ${userId}. DB: ${dbFingerprint}`
+      );
+    }
+
     return await this.db.transaction(async (tx) => {
       const existingAccount = await tx.query.billingAccounts.findFirst({
         where: eq(billingAccounts.ownerUserId, userId),

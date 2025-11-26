@@ -218,6 +218,12 @@ docker system prune -af --volumes || echo "Docker cleanup failed, continuing..."
 log_info "Pulling latest images..."
 docker compose pull
 
+log_info "Bringing up postgres first..."
+docker compose up -d postgres
+
+log_info "Running DB provisioning (explicit)..."
+docker compose --profile bootstrap run --rm db-provision
+
 log_info "Running database migrations with new image..."
 docker compose run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'
 

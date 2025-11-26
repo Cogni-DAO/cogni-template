@@ -7,7 +7,7 @@
  * Scope: Validates process.env for server runtime; provides lazy server environment access. Does not handle client-side env vars.
  * Invariants: All required env vars validated on first access; provides boolean flags for runtime and test modes; fails fast on invalid env.
  * Side-effects: process.env
- * Notes: Includes APP_ENV for adapter wiring; LLM config; constructs DATABASE_URL from pieces; lazy initialization prevents build-time access.
+ * Notes: APP_ENV for adapter wiring; LLM config; DATABASE_URL from direct var or all DB component vars; lazy init prevents build-time access.
  * Links: Environment configuration specification
  * @public
  */
@@ -64,7 +64,7 @@ const serverSchema = z.object({
   POSTGRES_USER: z.string().min(1).optional(),
   POSTGRES_PASSWORD: z.string().min(1).optional(),
   POSTGRES_DB: z.string().min(1).optional(),
-  DB_HOST: z.string().default("localhost"),
+  DB_HOST: z.string().optional(),
   DB_PORT: z.coerce.number().default(5432),
 
   // NextAuth secret (required for JWT signing)
@@ -106,10 +106,11 @@ export function serverEnv(): ServerEnv {
         if (
           !parsed.POSTGRES_USER ||
           !parsed.POSTGRES_PASSWORD ||
-          !parsed.POSTGRES_DB
+          !parsed.POSTGRES_DB ||
+          !parsed.DB_HOST
         ) {
           throw new Error(
-            "Either DATABASE_URL or all component variables (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB) must be provided"
+            "Either DATABASE_URL or all component variables (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DB_HOST) must be provided"
           );
         }
         DATABASE_URL = buildDatabaseUrl({

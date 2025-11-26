@@ -5,7 +5,7 @@
  * Module: `@shared/db/db-url`
  * Purpose: Database URL construction utility for PostgreSQL connections.
  * Scope: Single source of truth for DATABASE_URL construction from env pieces. Safe for both app runtime and tooling. Does not handle connections or validation.
- * Invariants: No Next.js imports, no zod, no side-effects; pure function only.
+ * Invariants: Pure function; no Next.js/Zod deps; strictly requires POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DB_HOST.
  * Side-effects: none
  * Notes: Throws on missing required pieces; no configuration options to keep tooling simple.
  * Links: Used by server env validation and drizzle configuration
@@ -24,7 +24,7 @@ export function buildDatabaseUrl(env: DbEnvInput): string {
   const user = env.POSTGRES_USER;
   const password = env.POSTGRES_PASSWORD;
   const db = env.POSTGRES_DB;
-  const host = env.DB_HOST ?? "localhost";
+  const host = env.DB_HOST;
   const port =
     typeof env.DB_PORT === "number"
       ? env.DB_PORT
@@ -34,6 +34,10 @@ export function buildDatabaseUrl(env: DbEnvInput): string {
     throw new TypeError(
       "Missing required DB env vars: POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB"
     );
+  }
+
+  if (!host) {
+    throw new TypeError("Missing required DB env var: DB_HOST");
   }
 
   if (!Number.isFinite(port)) {

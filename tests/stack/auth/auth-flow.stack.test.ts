@@ -31,7 +31,7 @@ describe("Auth Flow Stack Test", () => {
   it("should resolve billing account and call LLM service with valid session", async () => {
     // Arrange
     const mockSessionUser: SessionUser = {
-      id: "stack-test-user",
+      id: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d", // Valid UUID v4 for testing
       walletAddress: "0x1234567890abcdef1234567890abcdef12345678",
     };
 
