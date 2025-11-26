@@ -82,7 +82,7 @@ export const FlipWords = ({
         {/* edit suggested by Sajal: https://x.com/DewanganSajal */}
         {(currentWord ?? "").split(" ").map((word, wordIndex) => (
           <motion.span
-            key={word + wordIndex}
+            key={`${wordIndex}-${word}`}
             initial={{ opacity: 0, y: 10, filter: "blur(8px)" }}
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             transition={{
@@ -93,7 +93,7 @@ export const FlipWords = ({
           >
             {word.split("").map((letter, letterIndex) => (
               <motion.span
-                key={word + letterIndex}
+                key={`${wordIndex}-${letterIndex}-${letter}`}
                 initial={{ opacity: 0, y: 10, filter: "blur(8px)" }}
                 animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 transition={{

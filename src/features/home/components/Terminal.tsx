@@ -30,11 +30,13 @@ export function Terminal(): ReactElement {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
+    if (currentStep >= steps.length - 1) return;
+
     const timer = setTimeout(() => {
       setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1));
     }, 500);
     return () => clearTimeout(timer);
-  }, [currentStep, steps.length]);
+  }, [currentStep]);
 
   const onCopy = (): void => {
     navigator.clipboard.writeText(steps.join("\n"));
@@ -46,7 +48,7 @@ export function Terminal(): ReactElement {
     <TerminalFrame onCopy={onCopy} copied={copied}>
       {steps.map((step, index) => (
         <Reveal
-          key={index}
+          key={step}
           state={index > currentStep ? "hidden" : "visible"}
           duration="normal"
           delay="none"
