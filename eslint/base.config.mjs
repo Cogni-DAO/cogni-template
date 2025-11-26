@@ -71,6 +71,7 @@ export default [
       // TypeScript strict rules
       // Disable rules now handled by Biome
       "@typescript-eslint/no-unused-vars": "off", // Biome: noUnusedVariables
+      "@typescript-eslint/no-explicit-any": "off", // Biome: noExplicitAny
 
       "@typescript-eslint/no-misused-promises": [
         "error",

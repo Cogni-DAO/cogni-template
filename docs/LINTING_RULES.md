@@ -48,7 +48,8 @@
   > **Note**: Enabled in Biome as useImportType (error), removed from ESLint base and app configs. Enforces type-only imports.
 - [x] **Commit 5**: Migrate `no-unused-vars` & `unused-imports` (with parity tests)
   > **Note**: Enabled in Biome as noUnusedVariables + noUnusedImports (error), removed from ESLint. Both rules flag unused code; underscore-prefix allowed.
-- [ ] **Commit 6**: Migrate `no-explicit-any`
+- [x] **Commit 6**: Migrate `no-explicit-any`
+  > **Note**: Enabled in Biome as noExplicitAny (error), disabled in ESLint. Flags all explicit `any` types.
 - [ ] **Commit 7**: Migrate Import Sorting (`simple-import-sort`)
 - [ ] **Commit 8**: Final ESLint Cleanup & Verification
 

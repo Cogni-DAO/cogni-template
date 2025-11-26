@@ -27,6 +27,7 @@ const ALLOWED_UNSKIPPED_SPECS = new Set([
   "process-env.spec.ts", // Commit 3: noProcessEnv
   "type-imports.spec.ts", // Commit 4: useImportType
   "unused-vars.spec.ts", // Commit 5: noUnusedVariables + noUnusedImports
+  "no-explicit-any.spec.ts", // Commit 6: noExplicitAny
   "meta.spec.ts", // Meta-tests (always active)
 ]);
 
