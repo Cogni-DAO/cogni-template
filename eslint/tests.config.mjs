@@ -10,6 +10,7 @@ export default [
       "no-restricted-imports": "off",
       "tsdoc/syntax": "off",
       "no-inline-comments": "off",
+      "no-unused-vars": "off", // Biome handles this (Commit 5)
     },
   },
 
