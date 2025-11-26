@@ -75,6 +75,7 @@ fi
 run_check "test" "pnpm test"
 run_check "check:docs" "pnpm check:docs"
 run_check "check:root-layout" "pnpm check:root-layout"
+run_check "arch:check" "pnpm arch:check"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

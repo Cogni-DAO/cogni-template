@@ -67,6 +67,10 @@
                   "crisp-sdk-web"
                 ],
                 "message": "Vendor SDK imports are restricted to infra adapters"
+              },
+              {
+                "group": ["**/__arch_probes__/**", "@/__arch_probes__/**"],
+                "message": "Architecture probe imports are forbidden outside of tests - probes are test-only fixtures"
               }
             ]
           }
@@ -148,6 +152,18 @@
       "includes": ["tests/**/fixtures/**"],
       "linter": { "enabled": false },
       "formatter": { "enabled": false }
+    },
+    {
+      "includes": ["src/**/__arch_probes__/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "off"
+            }
+          }
+        }
+      }
     }
   ]
 }

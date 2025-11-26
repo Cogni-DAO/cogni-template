@@ -43,6 +43,9 @@ tests
 e2e
 playwright.config.ts
 
+# Architecture test fixtures (never needed in any Docker stage)
+src/**/__arch_probes__
+
 # CI / meta
 .github
 .gitlab-ci.yml
