@@ -64,15 +64,12 @@ echo "🔧 Checking app role '$APP_USER'..."
 role_exists=$(run_sql_as_root "postgres" "SELECT 1 FROM pg_roles WHERE rolname = '$APP_USER'" | grep -c 1 || true)
 if [ "$role_exists" -eq 0 ]; then
   echo "   -> Creating role '$APP_USER'..."
-  # Use psql variables + format() for safe quoting (handles special chars including quotes)
+  # Use psql variable for password (:'var' substitutes as properly-quoted literal)
+  # Note: psql variables only work with heredoc/stdin, not with -c flag
   PGPASSWORD="$PG_PASS" psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "postgres" -v ON_ERROR_STOP=1 \
-    -v app_user="$APP_USER" \
-    -v app_pass="$APP_PASS" \
-    -c "DO \$\$ BEGIN
-          IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = :'app_user') THEN
-            EXECUTE format('CREATE ROLE %I WITH LOGIN PASSWORD %L', :'app_user', :'app_pass');
-          END IF;
-        END \$\$;"
+    -v app_pass="$APP_PASS" <<SQL
+CREATE ROLE "$APP_USER" WITH LOGIN PASSWORD :'app_pass';
+SQL
 else
   echo "   -> Role '$APP_USER' already exists."
 fi
