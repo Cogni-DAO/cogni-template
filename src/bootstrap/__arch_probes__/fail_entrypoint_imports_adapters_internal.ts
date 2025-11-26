@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@adapters/__arch_probes__/fail_entrypoint_imports_internal`
+ * Module: `@bootstrap/__arch_probes__/fail_entrypoint_imports_adapters_internal`
  * Purpose: Architecture probe demonstrating invalid import from internal adapter file (must fail dependency-cruiser).
- * Scope: Tests forbidden internal module import. Does NOT test canonical imports.
+ * Scope: Tests forbidden internal module import from bootstrap layer. Does NOT test canonical imports.
  * Invariants: Must be rejected by dependency-cruiser with no-internal-adapter-imports violation.
  * Side-effects: none
  * Notes: Used by tests/arch/entrypoints-boundaries.spec.ts to validate entry point enforcement.
