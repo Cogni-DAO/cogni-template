@@ -67,6 +67,7 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   ".claude",
   ".cogni",
   ".cursor",
+  ".dependency-cruiser.cjs",
   ".dockerignore",
   ".editorconfig",
   ".env.example",
