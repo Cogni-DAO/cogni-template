@@ -13,9 +13,8 @@ const layers = {
   app: "^src/app",
   adapters: "^src/adapters",
   adaptersServer: "^src/adapters/server",
-  adaptersWorker: "^src/adapters/worker",
-  adaptersCli: "^src/adapters/cli",
   adaptersTest: "^src/adapters/test",
+  // adaptersWorker, adaptersCli: add when implemented
   shared: "^src/shared",
   bootstrap: "^src/bootstrap",
   lib: "^src/lib",
@@ -158,27 +157,6 @@ module.exports = {
       },
     },
 
-    // adapters/worker → adapters/worker, ports, shared, types
-    {
-      from: { path: layers.adaptersWorker },
-      to: {
-        path: [
-          layers.adaptersWorker,
-          layers.ports,
-          layers.shared,
-          layers.types,
-        ],
-      },
-    },
-
-    // adapters/cli → adapters/cli, ports, shared, types
-    {
-      from: { path: layers.adaptersCli },
-      to: {
-        path: [layers.adaptersCli, layers.ports, layers.shared, layers.types],
-      },
-    },
-
     // adapters/test → adapters/test, ports, shared, types
     {
       from: { path: layers.adaptersTest },
@@ -225,6 +203,12 @@ module.exports = {
     {
       from: { path: layers.assets },
       to: { path: [layers.assets] },
+    },
+
+    // types → types only (leaf layer: pure type definitions)
+    {
+      from: { path: layers.types },
+      to: { path: [layers.types] },
     },
 
     // Files not in a known layer are caught by the forbidden `no-unknown-layer` rule below.
@@ -292,6 +276,20 @@ module.exports = {
       },
       comment:
         "Import from @/adapters/server (index.ts), not internal adapter files",
+    },
+
+    // adapters/test: must use @/adapters/test (index.ts), not internal files
+    {
+      name: "no-internal-test-adapter-imports",
+      severity: "error",
+      from: {
+        path: "^src/(?!adapters/test/)",
+      },
+      to: {
+        path: "^src/adapters/test/(?!index\\.ts$).*\\.ts$",
+      },
+      comment:
+        "Import from @/adapters/test (index.ts), not internal test adapter files",
     },
 
     // features: only allow services/ and components/ subdirectories
