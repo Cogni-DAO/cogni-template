@@ -2,7 +2,7 @@
 
 **Core Mission**: A crypto-metered AI infrastructure loop where chat is just one client. DAO multi-sig → pays for GPU + OpenRouter/LiteLLM → users interact (chat/API) → users pay back in crypto → DAO multi-sig.
 
-This codebase uses a Clean Architecture, hex-inspired layering model with strict, enforced boundaries: `app → features → ports → core`, and `adapters` implementing `ports` from the outside. Domain logic and errors live in `core`, feature services expose stable, per-feature contracts (including error algebras), and the `app` layer only talks to features, never directly to core. Dependency-cruiser enforces these rules (e.g. no `app → core`, no `adapters → core`, `shared/types` remain domain-agnostic). See [.dependency-cruiser.cjs](../.dependency-cruiser.cjs) for boundary rules and [tests/arch/AGENTS.md](../tests/arch/AGENTS.md) for enforcement tests.
+This codebase uses a Clean Architecture, hex-inspired layering model with strict, enforced boundaries: `app → features → ports → core`, and `adapters` implementing `ports` from the outside. Domain logic and errors live in `core`, feature services expose stable, per-feature contracts (including error algebras), and the `app` layer only talks to features, never directly to core. Dependency-cruiser enforces these rules (e.g. no `app → core`, no `adapters → core`, `shared/types` remain domain-agnostic). See [.dependency-cruiser.cjs](../.dependency-cruiser.cjs) for boundary rules, [tests/arch/AGENTS.md](../tests/arch/AGENTS.md) for enforcement tests, and [ARCHITECTURE_ENFORCEMENT_GAPS.md](ARCHITECTURE_ENFORCEMENT_GAPS.md) for current enforcement status.
 
 Strict **Hexagonal (Ports & Adapters)** for a full-stack TypeScript app on **Next.js App Router**.  
 Purpose: a **metered AI backend** with per-request logging, credit accounting, and crypto billing.  
@@ -463,6 +463,7 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 
 ## Related Documentation
 
+- [Architecture Enforcement Status](ARCHITECTURE_ENFORCEMENT_GAPS.md) - Current boundary enforcement coverage and known gaps
 - [Environment & Stack Deployment Modes](ENVIRONMENTS.md) - All 6 deployment modes, environment variables, and when to use each
 - [Database & Migration Architecture](DATABASES.md) - Database organization, migration strategies, and URL construction
 - [Testing Strategy](TESTING.md) - Environment-based test adapters and stack testing approaches
