@@ -65,12 +65,10 @@ run_check "typecheck" "pnpm typecheck"
 
 if [ "$FIX_MODE" = true ]; then
   run_check "lint" "pnpm lint:fix"
-  run_check "format (biome)" "pnpm format:biome"
-  run_check "format (prettier)" "pnpm format:prettier"
+  run_check "format" "pnpm format"
 else
   run_check "lint" "pnpm lint"
-  run_check "format:check (biome)" "pnpm format:biome:check"
-  run_check "format:check (prettier)" "pnpm format:prettier:check"
+  run_check "format" "pnpm format:check"
 fi
 
 

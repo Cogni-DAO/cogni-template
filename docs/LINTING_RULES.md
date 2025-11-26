@@ -31,18 +31,22 @@
 - [x] Update `lint-staged` to use `biome check --apply` instead of Prettier for TS/TSX/JS
 - [ ] Update CI to use `biome format` for formatting checks
 - [x] Verify no formatting churn: run format, commit, run again (no diff)
-- [ ] **Decision**: Keep/remove Prettier based on Tailwind sorting parity
+- [x] **Decision**: Keep/remove Prettier based on Tailwind sorting parity
+  > **Outcome**: **Hybrid Model**. We use Biome for JS/TS/JSON (including Tailwind sorting via `useSortedClasses`) and keep Prettier for MD/CSS/YAML only.
 
-### Phase 2: Lint Migration (1-2 days)
+### Phase 2: Lint Migration (Atomic Commits)
 
-- [ ] Move 31 easy rules to Biome config (remove from ESLint)
-- [ ] **Decision**: Migrate React/Next.js rules if 80%+ coverage achieved
-- [ ] **Decision**: Migrate a11y rules if 80%+ coverage and <20% false positives
-- [ ] Update ESLint config to remove all migrated rules
-- [ ] Run full test suite: `pnpm test` + all lint integration tests must pass
-- [ ] Verify boundaries tests pass: `tests/lint/eslint/boundaries.spec.ts`
-- [ ] Verify UI governance tests pass: `tests/lint/eslint/ui-governance.spec.ts`
-- [ ] Create `docs/BIOME_MIGRATION_DECISIONS.md` with final configuration
+- [x] **Commit 1A**: Toolchain MVP (Pipeline Only)
+  > **Note**: Establishes Biome pipeline with MVP rules (recommended disabled). No source code changes.
+- [x] **Commit 1B**: Mechanical Biome Apply
+  > **Note**: Repo-wide formatting and class sorting fixes. Purely mechanical.
+- [ ] **Commit 2**: Migrate `no-default-export`
+- [ ] **Commit 3**: Migrate `no-process-env` (with parity tests)
+- [ ] **Commit 4**: Migrate `consistent-type-imports` (with parity tests)
+- [ ] **Commit 5**: Migrate `no-unused-vars` & `unused-imports` (with parity tests)
+- [ ] **Commit 6**: Migrate `no-explicit-any`
+- [ ] **Commit 7**: Migrate Import Sorting (`simple-import-sort`)
+- [ ] **Commit 8**: Final ESLint Cleanup & Verification
 
 ### Validation & Documentation
 
@@ -224,6 +228,8 @@ yarn.lock
 
 **Action Required**: Run Phase 0 parity test with `useSortedClasses` before deciding
 
+> **Update**: `useSortedClasses` has been validated and is active. We are using Biome for Tailwind sorting in JS/TS/tsx files.
+
 ---
 
 ### Biome Formatter Configuration (Equivalent)
@@ -305,7 +311,56 @@ Here's the equivalent `biome.json` configuration:
 
 ### Recommended Migration Path for Formatting
 
-Given the critical dependency on Tailwind class sorting, here are three viable strategies:
+Given the critical dependency on Tailwind class sorting, we have selected **Option A (Hybrid)**.
+
+#### Option A: Hybrid (Biome + Prettier for non-code files)
+
+**Setup**:
+
+1. Use Biome for all JS/TS/JSON formatting and linting (including Tailwind sorting).
+2. Keep Prettier **only** for `.md`, `.css`, `.yaml`, `.yml` files.
+3. **Crucial**: Do not run `prettier --write .` globally. Scope it to specific extensions.
+
+**Pros**:
+
+- ✅ Get Biome speed for most files (code)
+- ✅ Keep Tailwind sorting (via Biome `useSortedClasses`)
+- ✅ No new tools (no `rustywind`)
+- ✅ Prettier handles the rest (docs, styles, config)
+
+**Cons**:
+
+- ❌ Two formatters to maintain (but scoped by file type)
+
+**Config**:
+
+```json
+// package.json scripts
+{
+  "format": "pnpm format:biome && pnpm format:prettier",
+  "format:check": "pnpm format:biome:check && pnpm format:prettier:check"
+}
+
+// lint-staged
+{
+  "*.{ts,tsx,js,jsx,mjs,cjs,json}": ["biome check --apply"],
+  "*.{md,css,yaml,yml}": ["prettier --write"]
+}
+```
+
+**Complexity**: 🟢 Easy
+
+---
+
+#### [DEPRECATED] Option B: Biome + rustywind
+
+_This option was considered but rejected to avoid tool sprawl._
+
+---
+
+#### [DEPRECATED] Option C: Keep Prettier (Status Quo)
+
+_This option was rejected to move towards Biome's performance benefits._
 
 #### Option A: Hybrid (Biome + Prettier for Tailwind)
 

@@ -98,6 +98,7 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   "README.md",
   "REUSE.toml",
   "SECURITY.md",
+  "biome.json",
   "commitlint.config.cjs",
   "components.json",
   "docs",

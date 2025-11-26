@@ -13,7 +13,6 @@
  */
 
 import js from "@eslint/js";
-import globals from "globals";
 import tsPlugin from "@typescript-eslint/eslint-plugin";
 import tsParser from "@typescript-eslint/parser";
 import prettierConfig from "eslint-config-prettier";
@@ -23,6 +22,7 @@ import simpleImportSort from "eslint-plugin-simple-import-sort";
 import tsdoc from "eslint-plugin-tsdoc";
 import unicorn from "eslint-plugin-unicorn";
 import unused from "eslint-plugin-unused-imports";
+import globals from "globals";
 
 /** @type {import('eslint').Linter.Config[]} */
 export default [
@@ -71,7 +71,7 @@ export default [
       ...tsPlugin.configs["stylistic-type-checked"].rules,
 
       // TypeScript strict rules
-      "@typescript-eslint/no-explicit-any": "error",
+
       "@typescript-eslint/no-unused-vars": [
         "error",
         {

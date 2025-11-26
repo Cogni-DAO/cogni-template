@@ -53,7 +53,7 @@ const ALLOWED_SIDE_EFFECTS = [
   "process.env",
   "global",
 ];
-const MODULE_PATTERN = /^`@[A-Za-z0-9_/.[\]()\\-]+`$/;
+const MODULE_PATTERN = /^`@[A-Za-z0-9_/.[\]()-]+`$/;
 
 // REUSE-IgnoreStart
 const SPDX_LICENSE =
