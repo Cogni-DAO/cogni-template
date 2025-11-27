@@ -1,5 +1,5 @@
 {
-  "id": "7716f7ce-2a28-48a6-9ba4-b563de237ae4",
+  "id": "9b2e8bf8-ec0a-4a86-bd5f-ada06d5a5c01",
   "prevId": "0918260a-bf3a-41fa-849d-049729c02630",
   "version": "7",
   "dialect": "postgresql",
@@ -275,25 +275,32 @@
           "name": "provider_cost_usd",
           "type": "numeric",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "provider_cost_credits": {
           "name": "provider_cost_credits",
           "type": "bigint",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "user_price_credits": {
           "name": "user_price_credits",
           "type": "bigint",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "markup_factor": {
           "name": "markup_factor",
           "type": "numeric",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
+        },
+        "billing_status": {
+          "name": "billing_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'needs_review'"
         },
         "usage": {
           "name": "usage",

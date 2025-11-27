@@ -6,10 +6,11 @@ CREATE TABLE "llm_usage" (
 	"model" text,
 	"prompt_tokens" integer,
 	"completion_tokens" integer,
-	"provider_cost_usd" numeric NOT NULL,
-	"provider_cost_credits" bigint NOT NULL,
-	"user_price_credits" bigint NOT NULL,
-	"markup_factor" numeric NOT NULL,
+	"provider_cost_usd" numeric,
+	"provider_cost_credits" bigint,
+	"user_price_credits" bigint,
+	"markup_factor" numeric,
+	"billing_status" text DEFAULT 'needs_review' NOT NULL,
 	"usage" jsonb NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL
 );
