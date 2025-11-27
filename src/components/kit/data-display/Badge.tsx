@@ -38,11 +38,11 @@ export function Badge({
   asChild = false,
   className,
 }: BadgeProps): ReactElement {
-  const Component = asChild ? Slot : "span";
+  const COMPONENT = asChild ? Slot : "span";
 
   return (
-    <Component className={cn(badge({ intent, size }), className)}>
+    <COMPONENT className={cn(badge({ intent, size }), className)}>
       {children}
-    </Component>
+    </COMPONENT>
   );
 }

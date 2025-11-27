@@ -26,7 +26,9 @@ export async function confirmCreditsPaymentFacade(params: {
 }): Promise<{ billingAccountId: string; balanceCredits: number }> {
   const { accountService } = createContainer();
 
-  let billingAccount;
+  let billingAccount: Awaited<
+    ReturnType<typeof getOrCreateBillingAccountForUser>
+  >;
   try {
     billingAccount = await getOrCreateBillingAccountForUser(accountService, {
       userId: params.sessionUser.id,
@@ -74,7 +76,9 @@ export async function getCreditsSummaryFacade(params: {
 }> {
   const { accountService } = createContainer();
 
-  let billingAccount;
+  let billingAccount: Awaited<
+    ReturnType<typeof getOrCreateBillingAccountForUser>
+  >;
   try {
     billingAccount = await getOrCreateBillingAccountForUser(accountService, {
       userId: params.sessionUser.id,

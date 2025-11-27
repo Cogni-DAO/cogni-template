@@ -28,6 +28,7 @@ export function HomeCtaSection(): ReactElement {
         <a
           href="https://github.com/cogni-template/cogni-template"
           target="_blank"
+          rel="noopener"
         >
           <Button size="lg" variant="outline">
             View the code

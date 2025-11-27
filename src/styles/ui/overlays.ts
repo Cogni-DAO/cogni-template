@@ -33,7 +33,7 @@ const terminalFrameSizeVariants = {
  * Terminal frame styling for code display and interactive terminals
  */
 export const terminalFrame = cva(
-  "rounded-lg shadow-[var(--shadow-lg)] font-mono",
+  "rounded-lg font-mono shadow-[var(--shadow-lg)]",
   {
     variants: {
       surface: terminalFrameSurfaceVariants,
@@ -71,21 +71,21 @@ export const terminalDot = cva(
  * Terminal header styling for window controls bar
  */
 export const terminalHeader = cva(
-  "flex items-center justify-between p-[var(--spacing-md)] mb-[var(--spacing-xs)]"
+  "mb-[var(--spacing-xs)] flex items-center justify-between p-[var(--spacing-md)]"
 );
 
 /**
  * Terminal body styling for content area
  */
 export const terminalBody = cva(
-  "p-[var(--spacing-md)] space-y-[var(--spacing-sm)]"
+  "space-y-[var(--spacing-sm)] p-[var(--spacing-md)]"
 );
 
 /**
  * Icon button styling for interactive icons
  */
 export const iconButton = cva(
-  "text-muted-foreground hover:text-foreground transition-colors"
+  "text-muted-foreground transition-colors hover:text-foreground"
 );
 
 const iconToneVariants = {
@@ -205,7 +205,7 @@ const dropdownContentSizeVariants = {
  * Dropdown menu content styling for consistent surface + sizing
  */
 export const dropdownContent = cva(
-  "bg-popover text-popover-foreground z-[var(--z-overlay)] overflow-hidden rounded-[var(--radius-md)] border border-border p-[var(--spacing-xs)] shadow-[var(--shadow-md)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-[var(--radix-dropdown-menu-content-transform-origin)]",
+  "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-[var(--z-overlay)] origin-[var(--radix-dropdown-menu-content-transform-origin)] overflow-hidden rounded-[var(--radius-md)] border border-border bg-popover p-[var(--spacing-xs)] text-popover-foreground shadow-[var(--shadow-md)] data-[state=closed]:animate-out data-[state=open]:animate-in",
   {
     variants: {
       size: dropdownContentSizeVariants,
@@ -246,5 +246,5 @@ export const dropdownMenuCheck = cva("", {
  * Skip link styling for accessibility navigation
  */
 export const skipLink = cva(
-  "sr-only focus:not-sr-only focus:absolute focus:top-[var(--position-sm)] focus:left-[var(--position-sm)] focus:z-[var(--z-overlay)] focus:px-[var(--position-sm)] focus:py-[var(--spacing-sm)] focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:shadow-[var(--shadow-lg)] transition-all duration-[var(--duration-fast)]"
+  "sr-only transition-all duration-[var(--duration-fast)] focus:not-sr-only focus:absolute focus:top-[var(--position-sm)] focus:left-[var(--position-sm)] focus:z-[var(--z-overlay)] focus:rounded-md focus:bg-primary focus:px-[var(--position-sm)] focus:py-[var(--spacing-sm)] focus:text-primary-foreground focus:shadow-[var(--shadow-lg)]"
 );

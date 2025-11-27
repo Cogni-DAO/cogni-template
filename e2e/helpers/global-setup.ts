@@ -14,29 +14,29 @@
 
 import type { FullConfig } from "@playwright/test";
 
-export default async function globalSetup(cfg: FullConfig): Promise<void> {
-  const isCI = !!process.env.CI;
+export async function globalSetup(cfg: FullConfig): Promise<void> {
+  const isCi = !!process.env.CI;
   const BASE_URL = process.env.TEST_BASE_URL;
   const ENABLE_PROD = process.env.E2E_ENABLE_PROD;
 
   console.log("🎭 Playwright Global Setup");
-  console.log(`Environment: ${isCI ? "CI" : "Local"}`);
+  console.log(`Environment: ${isCi ? "CI" : "Local"}`);
 
   const anyProject = cfg.projects[0];
-  const baseURL = (anyProject?.use?.baseURL as string | undefined) ?? BASE_URL;
+  const baseUrl = (anyProject?.use?.baseURL as string | undefined) ?? BASE_URL;
 
-  if (baseURL) {
-    console.log(`Base URL: ${baseURL}`);
+  if (baseUrl) {
+    console.log(`Base URL: ${baseUrl}`);
 
     // Health check the target URL
     try {
-      const res = await fetch(baseURL, { method: "HEAD" });
+      const res = await fetch(baseUrl, { method: "HEAD" });
       if (!res.ok) {
-        throw new Error(`Target not healthy: ${baseURL} (${res.status})`);
+        throw new Error(`Target not healthy: ${baseUrl} (${res.status})`);
       }
-      console.log(`✅ Target healthy: ${baseURL}`);
+      console.log(`✅ Target healthy: ${baseUrl}`);
     } catch (error) {
-      throw new Error(`Target not reachable: ${baseURL} - ${error}`);
+      throw new Error(`Target not reachable: ${baseUrl} - ${error}`);
     }
   }
 
@@ -46,7 +46,7 @@ export default async function globalSetup(cfg: FullConfig): Promise<void> {
   }
 
   // Validate environment in CI
-  if (isCI && !BASE_URL) {
+  if (isCi && !BASE_URL) {
     throw new Error("CI environment requires TEST_BASE_URL");
   }
 }

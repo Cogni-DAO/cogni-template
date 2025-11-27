@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@app/\(app\)/layout`
+ * Module: `@app/(app)/layout`
  * Purpose: Auth guard layout for protected application pages.
  * Scope: Client layout component that enforces authentication for all routes under (app). Does not handle business logic or page content.
  * Invariants: Requires valid NextAuth session to render children; redirects unauthenticated users to home; shows loading state during auth check.

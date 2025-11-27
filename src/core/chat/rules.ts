@@ -12,7 +12,7 @@
  * @public
  */
 
-import { type Message, type MessageRole } from "./model";
+import type { Message, MessageRole } from "./model";
 
 // Constants and errors defined in core
 export const MAX_MESSAGE_CHARS = 4000;

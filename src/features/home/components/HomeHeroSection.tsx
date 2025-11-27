@@ -19,7 +19,7 @@ import { container, grid, section } from "@/components";
 
 // Hero-specific layout styles (localized to this component)
 const heroTextWrapper = cva(
-  "sm:text-center md:mx-auto md:max-w-[var(--size-container-lg)] lg:col-span-12 lg:text-left lg:mb-[var(--spacing-xl)]",
+  "sm:text-center md:mx-auto md:max-w-[var(--size-container-lg)] lg:col-span-12 lg:mb-[var(--spacing-xl)] lg:text-left",
   {
     variants: {
       width: {
@@ -34,7 +34,7 @@ const heroTextWrapper = cva(
 );
 
 const heroButtonContainer = cva(
-  "mt-[var(--spacing-xl)] text-center -mx-[var(--spacing-xl)] sm:-mx-[var(--spacing-4xl)] md:-mx-[var(--spacing-5xl)]"
+  "-mx-[var(--spacing-xl)] sm:-mx-[var(--spacing-4xl)] md:-mx-[var(--spacing-5xl)] mt-[var(--spacing-xl)] text-center"
 );
 
 const heroVisualContainer = cva(

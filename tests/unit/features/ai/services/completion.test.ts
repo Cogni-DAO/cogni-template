@@ -13,12 +13,12 @@
  */
 
 import { createMockAccountServiceWithDefaults, FakeClock } from "@tests/_fakes";
-import { FakeLlmService } from "@tests/_fakes/ai/fakes";
 import {
   createConversation,
   createLongMessage,
   createMixedRoleConversation,
   createUserMessage,
+  FakeLlmService,
 } from "@tests/_fakes/ai/fakes";
 import { describe, expect, it } from "vitest";
 

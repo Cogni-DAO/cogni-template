@@ -2,7 +2,7 @@
 
 **Core Mission**: A crypto-metered AI infrastructure loop where chat is just one client. DAO multi-sig → pays for GPU + OpenRouter/LiteLLM → users interact (chat/API) → users pay back in crypto → DAO multi-sig.
 
-This codebase uses a Clean Architecture, hex-inspired layering model with strict, enforced boundaries: `app → features → ports → core`, and `adapters` implementing `ports` from the outside. Domain logic and errors live in `core`, feature services expose stable, per-feature contracts (including error algebras), and the `app` layer only talks to features, never directly to core. ESLint boundaries codify these rules (e.g. no `app → core`, no `adapters → core`, `shared/types` remain domain-agnostic).
+This codebase uses a Clean Architecture, hex-inspired layering model with strict, enforced boundaries: `app → features → ports → core`, and `adapters` implementing `ports` from the outside. Domain logic and errors live in `core`, feature services expose stable, per-feature contracts (including error algebras), and the `app` layer only talks to features, never directly to core. Dependency-cruiser enforces these rules (e.g. no `app → core`, no `adapters → core`, `shared/types` remain domain-agnostic). See [.dependency-cruiser.cjs](../.dependency-cruiser.cjs) for boundary rules, [tests/arch/AGENTS.md](../tests/arch/AGENTS.md) for enforcement tests, and [ARCHITECTURE_ENFORCEMENT_GAPS.md](ARCHITECTURE_ENFORCEMENT_GAPS.md) for current enforcement status.
 
 Strict **Hexagonal (Ports & Adapters)** for a full-stack TypeScript app on **Next.js App Router**.  
 Purpose: a **metered AI backend** with per-request logging, credit accounting, and crypto billing.  
@@ -99,9 +99,10 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] .gitignore # standard git ignore list
 [x] .nvmrc # node version pin (e.g., v20)
 [x] .editorconfig # IDE whitespace/newline rules
+[x] .dependency-cruiser.cjs # hex architecture boundary rules
 [x] .prettierrc # code formatting config
 [x] .prettierignore # exclude build/artifacts
-[x] eslint.config.mjs # eslint config (boundaries, tailwind, import rules)
+[x] eslint.config.mjs # eslint config (tailwind, UI governance, import rules)
 [x] commitlint.config.cjs # conventional commits enforcement
 [x] tailwind.config.ts # Tailwind theme + presets
 [x] tsconfig.json # typescript + alias paths
@@ -390,8 +391,8 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
   - `contracts` → `@/shared|@/types` only. Never imported by `features|ports|core`.
   - `bootstrap` → `@/adapters/server|@/ports` (DI composition only).
   - `mcp` → `@/contracts|@/bootstrap|@/features/*/services/*|@/ports` (never `app|components`).
-- **ESLint**: flat config with path rules; `eslint-plugin-boundaries`.
-- **Dependency-cruiser**: optional CI gate for graph violations.
+- **ESLint**: flat config for UI governance and Tailwind rules.
+- **Dependency-cruiser**: enforces hexagonal architecture boundaries; CI gate for import violations. Arch probes in `src/**/__arch_probes__/` validate boundaries via tests; excluded from builds (tsconfig, .dockerignore).
 - **Contracts**: `tests/contract` must pass for any adapter.
 - **Env**: Zod-validated; build fails on invalid/missing.
 - **Security**: middleware sets headers, verifies session or API key, rate-limits.
@@ -462,6 +463,7 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 
 ## Related Documentation
 
+- [Architecture Enforcement Status](ARCHITECTURE_ENFORCEMENT_GAPS.md) - Current boundary enforcement coverage and known gaps
 - [Environment & Stack Deployment Modes](ENVIRONMENTS.md) - All 6 deployment modes, environment variables, and when to use each
 - [Database & Migration Architecture](DATABASES.md) - Database organization, migration strategies, and URL construction
 - [Testing Strategy](TESTING.md) - Environment-based test adapters and stack testing approaches

@@ -19,7 +19,7 @@ import { pathToFileURL } from "node:url";
 
 import { ESLint } from "eslint";
 
-type ESLintConfig = Omit<ESLint.ConfigData, "plugins"> & {
+type EsLintConfig = Omit<ESLint.ConfigData, "plugins"> & {
   languageOptions?: {
     parserOptions?: {
       project?: string;
@@ -30,7 +30,7 @@ type ESLintConfig = Omit<ESLint.ConfigData, "plugins"> & {
   plugins?: Record<string, object>;
 };
 
-interface TSRule {
+interface TsRule {
   meta?: {
     docs?: {
       requiresTypeChecking?: boolean;
@@ -39,8 +39,8 @@ interface TSRule {
 }
 
 // Strip type-aware parser options only, preserve all other settings
-function stripTypeProjects(flat: ESLintConfig[]): ESLintConfig[] {
-  return flat.map((e: ESLintConfig) => {
+function stripTypeProjects(flat: EsLintConfig[]): EsLintConfig[] {
+  return flat.map((e: EsLintConfig) => {
     const out = { ...e };
 
     // Strip type-aware parser options
@@ -63,18 +63,18 @@ function stripTypeProjects(flat: ESLintConfig[]): ESLintConfig[] {
 
 // Disable ONLY rules that require type info
 async function disableTypedTsRules(
-  flat: ESLintConfig[]
-): Promise<ESLintConfig[]> {
+  flat: EsLintConfig[]
+): Promise<EsLintConfig[]> {
   const tsPlugin = (await import("@typescript-eslint/eslint-plugin")).default;
 
   // Build list of rule ids that require types
   const typedRuleIds = Object.entries(tsPlugin.rules)
     .filter(
-      ([, rule]) => (rule as TSRule)?.meta?.docs?.requiresTypeChecking === true
+      ([, rule]) => (rule as TsRule)?.meta?.docs?.requiresTypeChecking === true
     )
     .map(([name]) => `@typescript-eslint/${name}`);
 
-  return flat.map((entry: ESLintConfig) => {
+  return flat.map((entry: EsLintConfig) => {
     if (!entry.rules) return entry;
     const rules = { ...entry.rules };
     for (const id of typedRuleIds) {
@@ -85,7 +85,7 @@ async function disableTypedTsRules(
 }
 
 // Preserve plugins in each entry but dedupe identical plugin objects
-function preservePluginContext(flat: ESLintConfig[]): ESLintConfig[] {
+function preservePluginContext(flat: EsLintConfig[]): EsLintConfig[] {
   const seenPlugins: Record<string, object> = Object.create(null);
 
   // First pass: collect unique plugin objects

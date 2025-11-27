@@ -12,7 +12,7 @@
  * @public
  */
 
-import { z, ZodError } from "zod";
+import { ZodError, z } from "zod";
 
 import { buildDatabaseUrl } from "@/shared/db";
 
@@ -85,10 +85,10 @@ type ServerEnv = z.infer<typeof serverSchema> & {
   isTestMode: boolean;
 };
 
-let _env: ServerEnv | null = null;
+let ENV: ServerEnv | null = null;
 
 export function serverEnv(): ServerEnv {
-  if (_env === null) {
+  if (ENV === null) {
     try {
       const parsed = serverSchema.parse(process.env);
       const isDev = parsed.NODE_ENV === "development";
@@ -122,7 +122,7 @@ export function serverEnv(): ServerEnv {
         });
       }
 
-      _env = {
+      ENV = {
         ...parsed,
         DATABASE_URL,
         isDev,
@@ -161,7 +161,7 @@ export function serverEnv(): ServerEnv {
       throw error;
     }
   }
-  return _env;
+  return ENV;
 }
 
 export type { ServerEnv };

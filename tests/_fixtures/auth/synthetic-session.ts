@@ -56,7 +56,7 @@ export async function createSyntheticSession(
   // Diagnostic logging (remove after debugging)
   console.log(
     "[Synthetic Session] Using secret:",
-    secret.substring(0, 10) + "..."
+    `${secret.substring(0, 10)}...`
   );
 
   const address = params.walletAddress.toLowerCase();

@@ -18,7 +18,7 @@ import { getToken } from "next-auth/jwt";
 
 import { authOptions, authSecret } from "@/auth";
 
-export default async function proxy(req: NextRequest): Promise<NextResponse> {
+export async function proxy(req: NextRequest): Promise<NextResponse> {
   const { pathname } = req.nextUrl;
 
   const tokenSecret = authSecret || authOptions.secret;

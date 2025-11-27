@@ -16,7 +16,8 @@ import { describe, expect, it } from "vitest";
 
 import { lintFixture } from "./runEslint";
 
-describe("n/no-process-env rule", () => {
+// Migrated to Biome (Commit 3) - see tests/lint/biome/process-env.spec.ts
+describe.skip("n/no-process-env rule", () => {
   it("should block process.env in regular app files", async () => {
     const result = await lintFixture(
       "src/app/page.tsx",

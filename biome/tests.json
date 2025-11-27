@@ -1,0 +1,14 @@
+{
+  "overrides": [
+    {
+      "includes": ["tests/**", "e2e/**", "**/*.test.ts", "**/*.spec.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    }
+  ]
+}

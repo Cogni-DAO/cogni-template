@@ -12,11 +12,11 @@
  * @public
  */
 
-import { FakeLlmService } from "@tests/_fakes/ai/fakes";
 import {
   createLongMessage,
   createSystemMessage,
   createUserMessage,
+  FakeLlmService,
 } from "@tests/_fakes/ai/fakes";
 import errorCases from "@tests/_fixtures/ai/error-cases.json";
 import { describe, expect, it } from "vitest";

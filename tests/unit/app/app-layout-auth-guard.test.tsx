@@ -59,12 +59,12 @@ describe("AppLayout Auth Guard", () => {
       data: null,
     };
 
-    const { default: AppLayout } = await import("@/app/(app)/layout");
+    const { default: APP_LAYOUT } = await import("@/app/(app)/layout");
 
     render(
-      <AppLayout>
+      <APP_LAYOUT>
         <div data-testid="children">Protected Content</div>
-      </AppLayout>
+      </APP_LAYOUT>
     );
 
     // Should show loading state
@@ -84,12 +84,12 @@ describe("AppLayout Auth Guard", () => {
       data: null,
     };
 
-    const { default: AppLayout } = await import("@/app/(app)/layout");
+    const { default: APP_LAYOUT } = await import("@/app/(app)/layout");
 
     const { container } = render(
-      <AppLayout>
+      <APP_LAYOUT>
         <div data-testid="children">Protected Content</div>
-      </AppLayout>
+      </APP_LAYOUT>
     );
 
     // Should call router.replace('/') via useEffect
@@ -117,12 +117,12 @@ describe("AppLayout Auth Guard", () => {
       },
     };
 
-    const { default: AppLayout } = await import("@/app/(app)/layout");
+    const { default: APP_LAYOUT } = await import("@/app/(app)/layout");
 
     render(
-      <AppLayout>
+      <APP_LAYOUT>
         <div data-testid="children">Protected Content</div>
-      </AppLayout>
+      </APP_LAYOUT>
     );
 
     // Should render children
@@ -142,12 +142,12 @@ describe("AppLayout Auth Guard", () => {
       },
     };
 
-    const { default: AppLayout } = await import("@/app/(app)/layout");
+    const { default: APP_LAYOUT } = await import("@/app/(app)/layout");
 
     render(
-      <AppLayout>
+      <APP_LAYOUT>
         <div data-testid="children">Protected Content</div>
-      </AppLayout>
+      </APP_LAYOUT>
     );
 
     // Should call signOut via useEffect
@@ -174,12 +174,12 @@ describe("AppLayout Auth Guard", () => {
       },
     };
 
-    const { default: AppLayout } = await import("@/app/(app)/layout");
+    const { default: APP_LAYOUT } = await import("@/app/(app)/layout");
 
     render(
-      <AppLayout>
+      <APP_LAYOUT>
         <div data-testid="children">Protected Content</div>
-      </AppLayout>
+      </APP_LAYOUT>
     );
 
     // Should call signOut via useEffect
@@ -197,12 +197,12 @@ describe("AppLayout Auth Guard", () => {
       data: {}, // No user property
     };
 
-    const { default: AppLayout } = await import("@/app/(app)/layout");
+    const { default: APP_LAYOUT } = await import("@/app/(app)/layout");
 
     render(
-      <AppLayout>
+      <APP_LAYOUT>
         <div data-testid="children">Protected Content</div>
-      </AppLayout>
+      </APP_LAYOUT>
     );
 
     // Should call signOut via useEffect

@@ -71,7 +71,7 @@ export function NavigationLink({
   const isActive =
     match === "exact"
       ? current === target
-      : current === target || current.startsWith(target + "/");
+      : current === target || current.startsWith(`${target}/`);
 
   return (
     <Link

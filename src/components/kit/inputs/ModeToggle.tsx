@@ -31,15 +31,15 @@ import {
   themeIcon,
 } from "@/styles/ui";
 
-const DropdownMenu = DropdownMenuPrimitive.Root;
-const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
+const DROPDOWN_MENU = DropdownMenuPrimitive.Root;
+const DROPDOWN_MENU_TRIGGER = DropdownMenuPrimitive.Trigger;
 
 type DropdownMenuContentProps = React.ComponentPropsWithoutRef<
   typeof DropdownMenuPrimitive.Content
 > &
   VariantProps<typeof dropdownContent>;
 
-const DropdownMenuContent = React.forwardRef<
+const DROPDOWN_MENU_CONTENT = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
   DropdownMenuContentProps
 >(({ className, sideOffset = 4, size = "md", ...props }, ref) => (
@@ -52,9 +52,9 @@ const DropdownMenuContent = React.forwardRef<
     />
   </DropdownMenuPrimitive.Portal>
 ));
-DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
+DROPDOWN_MENU_CONTENT.displayName = DropdownMenuPrimitive.Content.displayName;
 
-const DropdownMenuItem = React.forwardRef<
+const DROPDOWN_MENU_ITEM = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item>
 >(({ className, ...props }, ref) => (
@@ -64,7 +64,7 @@ const DropdownMenuItem = React.forwardRef<
     {...props}
   />
 ));
-DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
+DROPDOWN_MENU_ITEM.displayName = DropdownMenuPrimitive.Item.displayName;
 
 type ModeToggleBaseProps = ComponentProps<"button">;
 
@@ -110,11 +110,11 @@ export const ModeToggle = forwardRef<HTMLButtonElement, ModeToggleProps>(
     };
 
     const currentTheme = getCurrentTheme();
-    const CurrentIcon = currentTheme.icon;
+    const CURRENT_ICON = currentTheme.icon;
 
     return (
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
+      <DROPDOWN_MENU>
+        <DROPDOWN_MENU_TRIGGER asChild>
           <button
             ref={ref}
             type="button"
@@ -122,11 +122,11 @@ export const ModeToggle = forwardRef<HTMLButtonElement, ModeToggleProps>(
             aria-label="Select theme"
             {...props}
           >
-            <CurrentIcon className={themeIcon({ state: "visible" })} />
+            <CURRENT_ICON className={themeIcon({ state: "visible" })} />
           </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" size="md">
-          <DropdownMenuItem
+        </DROPDOWN_MENU_TRIGGER>
+        <DROPDOWN_MENU_CONTENT align="end" size="md">
+          <DROPDOWN_MENU_ITEM
             onClick={() => setTheme("light")}
             className={dropdownMenuItem()}
           >
@@ -135,8 +135,8 @@ export const ModeToggle = forwardRef<HTMLButtonElement, ModeToggleProps>(
             {theme === "light" && (
               <Check className={dropdownMenuCheck({ size: "sm" })} />
             )}
-          </DropdownMenuItem>
-          <DropdownMenuItem
+          </DROPDOWN_MENU_ITEM>
+          <DROPDOWN_MENU_ITEM
             onClick={() => setTheme("dark")}
             className={dropdownMenuItem()}
           >
@@ -145,8 +145,8 @@ export const ModeToggle = forwardRef<HTMLButtonElement, ModeToggleProps>(
             {theme === "dark" && (
               <Check className={dropdownMenuCheck({ size: "sm" })} />
             )}
-          </DropdownMenuItem>
-          <DropdownMenuItem
+          </DROPDOWN_MENU_ITEM>
+          <DROPDOWN_MENU_ITEM
             onClick={() => setTheme("system")}
             className={dropdownMenuItem()}
           >
@@ -155,9 +155,9 @@ export const ModeToggle = forwardRef<HTMLButtonElement, ModeToggleProps>(
             {theme === "system" && (
               <Check className={dropdownMenuCheck({ size: "sm" })} />
             )}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          </DROPDOWN_MENU_ITEM>
+        </DROPDOWN_MENU_CONTENT>
+      </DROPDOWN_MENU>
     );
   }
 );

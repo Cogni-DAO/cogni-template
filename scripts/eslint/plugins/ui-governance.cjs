@@ -261,7 +261,7 @@ function createClassRule(ruleId, filterTypes) {
 
       return {
         ImportDeclaration(node) {
-          const source = node.source && node.source.value;
+          const source = node.source?.value;
           if (typeof source !== "string") return;
           if (
             source === "clsx" ||
@@ -269,7 +269,7 @@ function createClassRule(ruleId, filterTypes) {
             source === "@/shared/util"
           ) {
             for (const spec of node.specifiers) {
-              if (spec.local && spec.local.name) {
+              if (spec.local?.name) {
                 trackedNames.add(spec.local.name);
               }
             }
@@ -320,7 +320,7 @@ function createVendorRule() {
 
       return {
         ImportDeclaration(node) {
-          const source = node.source && node.source.value;
+          const source = node.source?.value;
           if (typeof source !== "string") return;
           if (source.startsWith(vendorAlias)) {
             context.report({

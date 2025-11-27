@@ -14,7 +14,8 @@
 
 "use client";
 import { AnimatePresence, motion } from "motion/react";
-import React, { useCallback, useEffect, useState } from "react";
+import type React from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { cn } from "@/shared/util";
 
@@ -73,7 +74,7 @@ export const FlipWords = ({
           position: "absolute",
         }}
         className={cn(
-          "text-foreground relative z-10 inline-block px-[var(--spacing-sm)]",
+          "relative z-10 inline-block px-[var(--spacing-sm)] text-foreground",
           className
         )}
         key={currentWord}
@@ -81,7 +82,7 @@ export const FlipWords = ({
         {/* edit suggested by Sajal: https://x.com/DewanganSajal */}
         {(currentWord ?? "").split(" ").map((word, wordIndex) => (
           <motion.span
-            key={word + wordIndex}
+            key={`${wordIndex}-${word}`}
             initial={{ opacity: 0, y: 10, filter: "blur(8px)" }}
             animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
             transition={{
@@ -92,7 +93,7 @@ export const FlipWords = ({
           >
             {word.split("").map((letter, letterIndex) => (
               <motion.span
-                key={word + letterIndex}
+                key={`${wordIndex}-${letterIndex}-${letter}`}
                 initial={{ opacity: 0, y: 10, filter: "blur(8px)" }}
                 animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
                 transition={{

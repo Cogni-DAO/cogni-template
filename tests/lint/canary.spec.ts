@@ -23,7 +23,7 @@ describe("ESLint Config Canary", () => {
   const expectOff = (rule: unknown): void =>
     expect(["off", 0]).toContain(severity(rule));
 
-  it("core policy + UI governance stay enforced for features files", async (): Promise<void> => {
+  it("UI governance stay enforced for features files", async (): Promise<void> => {
     const eslint = new ESLint({ cwd: process.cwd() });
     const cfg = await eslint.calculateConfigForFile(
       "src/features/home/components/X.tsx"
@@ -34,8 +34,6 @@ describe("ESLint Config Canary", () => {
     expectError(rules["ui-governance/no-arbitrary-non-token-values"]);
     expectError(rules["ui-governance/token-classname-patterns"]);
     expectError(rules["ui-governance/no-vendor-imports-outside-kit"]);
-    expect(severity(rules["import/no-internal-modules"])).toBe(2);
-    expect(severity(rules["boundaries/element-types"])).toBe(2);
   });
 
   it("kit layer inherits UI governance rules", async (): Promise<void> => {

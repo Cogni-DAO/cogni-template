@@ -16,7 +16,8 @@ import { describe, expect, it } from "vitest";
 
 import { lintFixture } from "./runEslint";
 
-describe("Type Import Consistency", () => {
+// Migrated to Biome (Commit 4) - see tests/lint/biome/type-imports.spec.ts
+describe.skip("Type Import Consistency", () => {
   describe("Type-only port imports", () => {
     it("allows type-only port imports in features", async () => {
       const { errors } = await lintFixture(

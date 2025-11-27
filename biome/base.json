@@ -1,0 +1,169 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.3.7/schema.json",
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 80,
+    "lineEnding": "lf"
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": {
+          "level": "error",
+          "options": {
+            "ignoreRestSiblings": true
+          }
+        }
+      },
+      "style": {
+        "noDefaultExport": "error",
+        "noProcessEnv": "error",
+        "useImportType": "error",
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": [
+                  "@vercel/**",
+                  "@sentry/**",
+                  "@datadog/**",
+                  "@clerk/**",
+                  "@auth0/**",
+                  "@supabase/**",
+                  "@upstash/**",
+                  "@amplitude/**",
+                  "@segment/**",
+                  "@fullstory/**",
+                  "@intercom/**",
+                  "newrelic",
+                  "dd-trace",
+                  "logrocket",
+                  "analytics-node",
+                  "mixpanel-browser",
+                  "mixpanel",
+                  "hotjar",
+                  "posthog-js",
+                  "posthog-node",
+                  "@hotjar/browser",
+                  "bugsnag",
+                  "rollbar",
+                  "honeybadger",
+                  "firebase/app",
+                  "firebase/auth",
+                  "firebase/firestore",
+                  "firebase/database",
+                  "appwrite",
+                  "pocketbase",
+                  "launchdarkly-node-server-sdk",
+                  "launchdarkly-react-client-sdk",
+                  "configcat-node",
+                  "configcat-js",
+                  "crisp-sdk-web"
+                ],
+                "message": "Vendor SDK imports are restricted to infra adapters"
+              },
+              {
+                "group": ["**/__arch_probes__/**", "@/__arch_probes__/**"],
+                "message": "Architecture probe imports are forbidden outside of tests - probes are test-only fixtures"
+              }
+            ]
+          }
+        }
+      },
+      "nursery": {
+        "useSortedClasses": {
+          "level": "error",
+          "options": {
+            "attributes": ["class", "className"],
+            "functions": ["cn", "clsx", "cva"]
+          }
+        }
+      },
+      "suspicious": {
+        "noExplicitAny": "error"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "arrowParentheses": "always",
+      "bracketSpacing": true,
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "es5"
+    },
+    "globals": ["React"]
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["src/infra/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/shared/env/**/*.ts",
+        "src/shared/env/**/*.tsx",
+        "src/auth.ts",
+        "e2e/**/*.{ts,tsx}",
+        "playwright.config.ts",
+        "tests/**/*.ts",
+        "scripts/**/*.{ts,js,cjs,mjs}",
+        "docs/templates/**/*.ts",
+        "**/*.config.ts",
+        "**/*.config.js",
+        "**/*.config.cjs",
+        "**/*.config.mts",
+        "drizzle.config.ts"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noProcessEnv": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/*.d.ts"],
+      "formatter": { "enabled": false },
+      "linter": { "enabled": false }
+    },
+    {
+      "includes": ["tests/**/fixtures/**"],
+      "linter": { "enabled": false },
+      "formatter": { "enabled": false }
+    },
+    {
+      "includes": ["src/**/__arch_probes__/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "off"
+            }
+          }
+        }
+      }
+    }
+  ]
+}

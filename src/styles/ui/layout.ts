@@ -69,7 +69,7 @@ const paddingVariants = {
  * Page shell styling for full-page body wrapper
  */
 export const pageShell = cva(
-  "bg-background text-foreground min-h-[var(--height-screen-dvh)] antialiased"
+  "min-h-[var(--height-screen-dvh)] bg-background text-foreground antialiased"
 );
 
 const pageContainerMaxWidthVariants = {
@@ -264,7 +264,7 @@ const headerPaddingVariants = {
 /**
  * Header styling for site header with border, background, and padding
  */
-export const header = cva("border-b border-border bg-background", {
+export const header = cva("border-border border-b bg-background", {
   variants: {
     pad: headerPaddingVariants,
   },

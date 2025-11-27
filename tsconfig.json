@@ -54,5 +54,5 @@
     "**/*.mjs",
     ".next/dev/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "test*/**/fixtures/**"]
+  "exclude": ["node_modules", "test*/**/fixtures/**", "**/__arch_probes__/**"]
 }

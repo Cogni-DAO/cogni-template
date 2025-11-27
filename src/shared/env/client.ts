@@ -12,7 +12,7 @@
  * @public
  */
 
-import { z, ZodError } from "zod";
+import { ZodError, z } from "zod";
 
 export interface ClientEnvValidationMeta {
   code: "INVALID_CLIENT_ENV";

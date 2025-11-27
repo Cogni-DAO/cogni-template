@@ -25,7 +25,7 @@ function SafeWalletProvider({
 }: {
   readonly children: ReactNode;
 }): ReactNode {
-  const [Component, setComponent] = useState<ComponentType<{
+  const [COMPONENT, setComponent] = useState<ComponentType<{
     children: ReactNode;
   }> | null>(null);
 
@@ -35,11 +35,11 @@ function SafeWalletProvider({
     });
   }, []);
 
-  if (!Component) {
+  if (!COMPONENT) {
     return <>{children}</>;
   }
 
-  return <Component>{children}</Component>;
+  return <COMPONENT>{children}</COMPONENT>;
 }
 
 export function AppProviders({

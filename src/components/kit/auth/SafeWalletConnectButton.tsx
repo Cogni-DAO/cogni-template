@@ -20,7 +20,7 @@ export const SafeWalletConnectButton = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="bg-muted h-10 w-36 animate-pulse rounded-xl" />
+      <div className="h-10 w-36 animate-pulse rounded-xl bg-muted" />
     ),
   }
 );

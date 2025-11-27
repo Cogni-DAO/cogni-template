@@ -14,7 +14,7 @@
 "use client";
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import React from "react";
+import type React from "react";
 
 import { useWalletSessionConsistency } from "./useWalletSessionConsistency";
 

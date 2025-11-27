@@ -60,13 +60,21 @@ jobs:
           # Known hosts
           ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
 
-          # Test SSH connection
-          echo "Testing SSH connection..."
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=10 root@"$VM_HOST" "echo 'SSH test successful'" || {
-            echo "SSH test failed. Key fingerprint:"
-            ssh-keygen -lf ~/.ssh/deploy_key || echo "Could not read key fingerprint"
+          # Test SSH connection with full error capture and keepalive
+          echo "Testing SSH connection to $VM_HOST..."
+          SSH_DEBUG=${SSH_DEBUG:-0}
+          SSH_VERBOSE=""; if [ "$SSH_DEBUG" = "1" ]; then SSH_VERBOSE="-vvv"; fi
+          set +e
+          OUT=$(ssh $SSH_VERBOSE -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 root@"$VM_HOST" "echo SSH test successful" 2>&1)
+          RC=$?
+          set -e
+          echo "$OUT"
+          if [ $RC -ne 0 ]; then
+            echo "❌ SSH failed (rc=$RC)"
+            echo "Known hosts:"; tail -n 5 ~/.ssh/known_hosts || true
             exit 1
-          }
+          fi
+          echo "✅ SSH connection successful"
         env:
           SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
           VM_HOST: ${{ secrets.VM_HOST }}

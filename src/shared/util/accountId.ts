@@ -12,7 +12,7 @@
  * @public
  */
 
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 
 /**
  * Derives a collision-safe account ID from an API key.
@@ -32,5 +32,5 @@ import { createHash } from "crypto";
  */
 export function deriveAccountIdFromApiKey(apiKey: string): string {
   const hash = createHash("sha256").update(apiKey).digest("hex");
-  return "key:" + hash.slice(0, 32);
+  return `key:${hash.slice(0, 32)}`;
 }

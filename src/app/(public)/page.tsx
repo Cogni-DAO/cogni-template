@@ -22,6 +22,7 @@ import { Button } from "@/components";
 const heroButtonWithBadges = cva(
   "flex flex-col items-center gap-[var(--spacing-lg)]"
 );
+
 import { FeaturesSection } from "@/features/home/components/FeaturesSection";
 import { HeroContent } from "@/features/home/components/HeroContent";
 import { HomeCtaSection } from "@/features/home/components/HomeCtaSection";
@@ -59,6 +60,7 @@ export default function HomePage(): ReactElement {
             <a
               href="https://github.com/cogni-template/cogni-template"
               target="_blank"
+              rel="noopener"
             >
               <Button size="lg" variant="outline" rightIcon={<ArrowRight />}>
                 Launch Your Own

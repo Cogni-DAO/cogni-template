@@ -12,8 +12,8 @@
  * @public
  */
 
-const fs = require("fs");
-const path = require("path");
+const fs = require("node:fs");
+const path = require("node:path");
 
 // Per-path cache for parsed tokens
 const tokenCache = new Map();
@@ -25,9 +25,7 @@ const tokenCache = new Map();
  */
 function resolveCssPath(context) {
   // 1) explicit option wins
-  const optPath =
-    (context.options && context.options[0] && context.options[0].cssPath) ||
-    null;
+  const optPath = context.options?.[0]?.cssPath || null;
   if (optPath) return path.resolve(optPath);
 
   // 2) env var for tests
@@ -373,11 +371,7 @@ module.exports = {
             let isTrackedCall = false;
 
             // Handle direct calls (cva, clsx, cn)
-            if (
-              node.callee &&
-              node.callee.name &&
-              trackedNames.has(node.callee.name)
-            ) {
+            if (node.callee?.name && trackedNames.has(node.callee.name)) {
               isTrackedCall = true;
             }
             // Handle member expressions (e.g., utils.cn)

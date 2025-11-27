@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@app/\(app\)/chat/page`
+ * Module: `@app/(app)/chat/page`
  * Purpose: Protected chat page.
  * Scope: Client component that displays the chat interface. Does NOT handle authentication - enforced by (app)/layout.tsx.
  * Invariants: Session guaranteed by (app)/layout auth guard.

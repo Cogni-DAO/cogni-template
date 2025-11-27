@@ -16,7 +16,7 @@ import postgres from "postgres";
 
 import { buildDatabaseUrl } from "@/shared/db/db-url";
 
-export default async function resetStackTestDatabase() {
+export async function setup() {
   console.log("🧹 Resetting stack test database...");
 
   // Build DATABASE_URL from environment pieces (consistent with app behavior)

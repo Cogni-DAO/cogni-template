@@ -12,11 +12,10 @@
  * @public
  */
 
-// Re-export all CVA factories from domain-split modules
-export * from "./ui/index";
-
 // Export specific variant types for backward compatibility
 export type { BadgeIntent } from "./ui/data";
+// Re-export all CVA factories from domain-split modules
+export * from "./ui/index";
 export type { ButtonSize } from "./ui/inputs";
 export type { ContainerSize } from "./ui/layout";
 export type { HeadingLevel } from "./ui/typography";

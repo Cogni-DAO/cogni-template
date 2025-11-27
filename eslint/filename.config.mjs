@@ -102,7 +102,6 @@ export default [
           ignoreMiddleExtensions: true,
         },
       ],
-      "import/no-default-export": "error",
     },
   },
 
@@ -130,7 +129,6 @@ export default [
     files: ["src/components/kit/**/*.{ts,tsx}"],
     rules: {
       "unicorn/filename-case": ["error", { cases: { pascalCase: true } }],
-      "import/no-default-export": "error",
     },
   },
 

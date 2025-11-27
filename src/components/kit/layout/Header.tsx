@@ -29,7 +29,7 @@ import { brandText, header, row } from "@/styles/ui";
 
 export function Header(): ReactElement {
   return (
-    <header role="banner" className={header()}>
+    <header className={header()}>
       <Container size="lg">
         <div
           className={row({ justify: "between", align: "center", gap: "md" })}

@@ -23,7 +23,7 @@ import { WalletConnectButton } from "@/components";
 export default function WalletTestPage(): ReactNode {
   return (
     <div className="flex flex-col gap-[var(--spacing-md)] p-[var(--spacing-lg)]">
-      <h1 className="text-[length:var(--font-size-xl)] font-[var(--font-weight-bold)]">
+      <h1 className="font-[var(--font-weight-bold)] text-[length:var(--font-size-xl)]">
         Wallet Connection Test
       </h1>
       <WalletConnectButton />

@@ -12,6 +12,24 @@
  * @public
  */
 
+// Export variant types for external use
+export type { VariantProps } from "class-variance-authority";
+// Code components
+export { codeToken, heroActionContainer, heroCodeBlock } from "./code";
+// Data display components
+export {
+  avatar,
+  avatarFallback,
+  avatarImage,
+  badge,
+  card,
+  cardContent,
+  cardFooter,
+  cardHeader,
+  iconBox,
+} from "./data";
+// Input components
+export { button, modeToggle } from "./inputs";
 // Layout components
 export {
   container,
@@ -25,35 +43,6 @@ export {
   section,
   twoColumn,
 } from "./layout";
-
-// Data display components
-export {
-  avatar,
-  avatarFallback,
-  avatarImage,
-  badge,
-  card,
-  cardContent,
-  cardFooter,
-  cardHeader,
-  iconBox,
-} from "./data";
-
-// Input components
-export { button, modeToggle } from "./inputs";
-
-// Typography components
-export {
-  brandText,
-  heading,
-  paragraph,
-  prompt,
-  prose,
-  textAccent,
-} from "./typography";
-
-// Code components
-export { codeToken, heroActionContainer, heroCodeBlock } from "./code";
 
 // Overlay components
 export {
@@ -71,6 +60,12 @@ export {
   terminalHeader,
   themeIcon,
 } from "./overlays";
-
-// Export variant types for external use
-export type { VariantProps } from "class-variance-authority";
+// Typography components
+export {
+  brandText,
+  heading,
+  paragraph,
+  prompt,
+  prose,
+  textAccent,
+} from "./typography";

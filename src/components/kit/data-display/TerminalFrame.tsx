@@ -55,6 +55,7 @@ export function TerminalFrame({
           <span className={terminalDot({ color: "green" })} />
         </div>
         <button
+          type="button"
           onClick={onCopy}
           className={iconButton()}
           aria-label="Copy to clipboard"

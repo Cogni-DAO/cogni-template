@@ -12,6 +12,7 @@
  * @public
  */
 
+export { container, grid, section } from "@/styles/ui";
 export { Reveal } from "./kit/animation/Reveal";
 export { SafeWalletConnectButton as WalletConnectButton } from "./kit/auth/SafeWalletConnectButton";
 export { Avatar, AvatarFallback, AvatarImage } from "./kit/data-display/Avatar";
@@ -34,4 +35,3 @@ export {
 } from "./kit/typography/CodeHero";
 export { HeroActionWords } from "./kit/typography/HeroActionWords";
 export { Prompt } from "./kit/typography/Prompt";
-export { container, grid, section } from "@/styles/ui";

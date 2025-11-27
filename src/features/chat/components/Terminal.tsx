@@ -20,6 +20,7 @@ import { useState } from "react";
 import { Button, Input, Prompt, Reveal, TerminalFrame } from "@/components";
 
 interface Message {
+  id: string;
   role: "user" | "assistant";
   content: string;
 }
@@ -39,7 +40,11 @@ export function Terminal({ onAuthExpired }: TerminalProps): ReactElement {
     e.preventDefault();
     if (!input.trim()) return;
 
-    const userMessage: Message = { role: "user", content: input };
+    const userMessage: Message = {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: input,
+    };
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInput("");
@@ -56,6 +61,7 @@ export function Terminal({ onAuthExpired }: TerminalProps): ReactElement {
       if (response.ok) {
         const data = await response.json();
         const assistantMessage: Message = {
+          id: `assistant-${Date.now()}`,
           role: "assistant",
           content: data.message,
         };
@@ -88,8 +94,13 @@ export function Terminal({ onAuthExpired }: TerminalProps): ReactElement {
     <TerminalFrame onCopy={onCopy} copied={copied}>
       <div className="flex h-full flex-col">
         <div className="flex-grow overflow-y-auto p-4">
-          {messages.map((message, index) => (
-            <Reveal key={index} state="visible" duration="normal" delay="none">
+          {messages.map((message) => (
+            <Reveal
+              key={message.id}
+              state="visible"
+              duration="normal"
+              delay="none"
+            >
               <div className="mb-2">
                 <Prompt tone={message.role === "user" ? "info" : "success"}>
                   {message.role}
@@ -113,7 +124,7 @@ export function Terminal({ onAuthExpired }: TerminalProps): ReactElement {
             </Reveal>
           )}
         </div>
-        <div className="bg-border h-px" />
+        <div className="h-px bg-border" />
         <form onSubmit={handleSubmit} className="flex p-4">
           <Input
             type="text"

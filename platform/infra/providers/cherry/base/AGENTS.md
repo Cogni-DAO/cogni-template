@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-12
+- **Last reviewed:** 2025-11-27
 - **Status:** draft
 
 ## Purpose
 
-Immutable VM provisioning with SSH deploy key management and Docker/Docker Compose installation for Cherry Servers infrastructure.
+Immutable VM provisioning with SSH deploy key management, Docker/Docker Compose installation, and swap configuration for Cherry Servers infrastructure.
 
 ## Pointers
 
@@ -43,7 +43,7 @@ Immutable VM provisioning with SSH deploy key management and Docker/Docker Compo
 
 ## Responsibilities
 
-- This directory **does**: VM provisioning, SSH deploy key installation, Docker/Docker Compose bootstrap, VM host output to GitHub secrets
+- This directory **does**: VM provisioning, SSH deploy key installation, Docker/Docker Compose bootstrap, swap provisioning via cloud-init, VM host output to GitHub secrets
 - This directory **does not**: Application deployment (handled by SSH + Docker Compose from GitHub Actions)
 
 ## Usage

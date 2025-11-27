@@ -1,0 +1,36 @@
+{
+  "overrides": [
+    {
+      "includes": [
+        "src/app/**/page.tsx",
+        "src/app/**/layout.tsx",
+        "src/app/**/loading.tsx",
+        "src/app/**/error.tsx",
+        "src/app/**/not-found.tsx",
+        "src/app/**/template.tsx",
+        "src/app/**/global-error.tsx",
+        "src/app/**/default.tsx",
+        "src/app/**/opengraph-image.tsx",
+        "src/app/**/twitter-image.tsx",
+        "next.config.ts",
+        "tailwind.config.ts",
+        "drizzle.config.ts",
+        "playwright.config.ts",
+        "vitest.config.mts",
+        "vitest.integration.config.mts",
+        "vitest.stack.config.mts",
+        "postcss.config.mjs",
+        "commitlint.config.cjs",
+        "eslint.config.mjs",
+        "eslint/*.config.mjs"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
+    }
+  ]
+}
