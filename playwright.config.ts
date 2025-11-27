@@ -14,7 +14,7 @@ export default defineConfig({
     ["list"],
   ],
   outputDir: "e2e/artifacts/test-results",
-  globalSetup: "./e2e/helpers/global-setup.ts",
+  globalSetup: "./e2e/helpers/global-setup.cjs",
   use: {
     baseURL: BASE,
     headless: true,

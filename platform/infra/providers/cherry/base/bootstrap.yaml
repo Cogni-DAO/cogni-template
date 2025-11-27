@@ -7,6 +7,10 @@ packages:
   - gnupg
   - lsb-release
 
+swap:
+  filename: /swapfile
+  size: 2147483648
+
 write_files:
   - path: /etc/docker/daemon.json
     owner: root:root

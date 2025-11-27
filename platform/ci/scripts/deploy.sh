@@ -243,7 +243,7 @@ docker compose --profile bootstrap run --rm db-provision
 log_info "[$(date -u +%H:%M:%S)] DB provisioning complete"
 
 log_info "[$(date -u +%H:%M:%S)] Running database migrations..."
-docker compose run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'
+docker compose run --rm --no-deps --entrypoint sh app -lc 'pnpm db:migrate:container'
 log_info "[$(date -u +%H:%M:%S)] Migrations complete"
 
 log_info "[$(date -u +%H:%M:%S)] Starting runtime stack (rolling update)..."
