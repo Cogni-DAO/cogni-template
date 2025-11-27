@@ -20,6 +20,7 @@ export default [
       "commitlint.config.cjs",
       "*.config.cjs",
       "test*/**/fixtures/**",
+      "**/__arch_probes__/**",
       "**/*.md",
       "**/*.css",
       "**/.env*",

@@ -92,7 +92,6 @@ export function KpiBadge({
 }: KpiBadgeProps): ReactElement {
   const content =
     kind === "external-image" && imageSrc ? (
-      // eslint-disable-next-line @next/next/no-img-element -- Feature-only badge uses static third-party SVG badges; Next Image import is blocked for feature layers.
       // biome-ignore lint/performance/noImgElement: Feature layer cannot import Next.js Image component due to hexagonal architecture boundaries; external third-party badge SVGs
       <img
         src={imageSrc}

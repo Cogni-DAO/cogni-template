@@ -64,10 +64,10 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 run_check "typecheck" "pnpm typecheck"
 
 if [ "$FIX_MODE" = true ]; then
-  run_check "lint" "pnpm lint:fix -- --reporter=summary --max-diagnostics=50"
+  run_check "lint" "pnpm lint:fix"
   run_check "format" "pnpm format"
 else
-  run_check "lint" "pnpm lint -- --reporter=summary --max-diagnostics=50"
+  run_check "lint" "pnpm lint"
   run_check "format" "pnpm format:check"
 fi
 
