@@ -172,6 +172,10 @@ log_info() {
     echo -e "\033[0;32m[INFO]\033[0m $1"
 }
 
+log_warn() {
+    echo -e "\033[1;33m[WARN]\033[0m $1"
+}
+
 log_info "Setting up runtime environment on VM..."
 
 # Set compose project name for consistent container naming

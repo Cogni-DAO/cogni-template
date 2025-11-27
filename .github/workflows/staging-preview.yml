@@ -126,12 +126,23 @@ jobs:
           ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
 
           # Test SSH connection
-          echo "Testing SSH connection..."
-          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=10 root@"$VM_HOST" "echo 'SSH test successful'" || {
-            echo "SSH test failed. Key fingerprint:"
+          SSH_DEBUG=${SSH_DEBUG:-0}
+          SSH_VERBOSE=""
+          if [ "$SSH_DEBUG" = "1" ]; then
+            SSH_VERBOSE="-vvv"
+            echo "SSH debug mode enabled"
+          fi
+
+          echo "Testing SSH connection to $VM_HOST..."
+          if ! ssh $SSH_VERBOSE -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=30 root@"$VM_HOST" "echo 'SSH test successful'" 2>&1; then
+            echo "❌ SSH connection failed"
+            echo "Key fingerprint:"
             ssh-keygen -lf ~/.ssh/deploy_key || echo "Could not read key fingerprint"
+            echo "Known hosts entry:"
+            grep "$VM_HOST" ~/.ssh/known_hosts || echo "No known_hosts entry found"
             exit 1
-          }
+          fi
+          echo "✅ SSH connection successful"
 
       - name: Deploy to preview
         run: platform/ci/scripts/deploy.sh
