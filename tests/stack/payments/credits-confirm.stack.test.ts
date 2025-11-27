@@ -73,7 +73,7 @@ describe("Credits confirm stack (idempotent on clientPaymentId)", () => {
 
       expect(ledgerEntries).toHaveLength(1);
       expect(ledgerEntries[0]?.reason).toBe("widget_payment");
-      expect(ledgerEntries[0]?.balanceAfter).toBe(first.balanceCredits);
+      expect(Number(ledgerEntries[0]?.balanceAfter)).toBe(first.balanceCredits);
     } finally {
       // Cleanup cascades to billing/ledger via FK
       await db.delete(users).where(eq(users.id, sessionUser.id));

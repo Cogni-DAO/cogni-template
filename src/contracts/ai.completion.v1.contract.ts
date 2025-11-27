@@ -38,6 +38,8 @@ export const aiCompletionOperation = {
     message: MessageDtoSchema.omit({ timestamp: true }).extend({
       /** Always present in response */
       timestamp: z.string(),
+      /** Request ID for billing reference */
+      requestId: z.string(),
     }),
   }),
 } as const;

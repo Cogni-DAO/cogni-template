@@ -24,7 +24,7 @@ export interface SeedUserParams {
 }
 
 export interface SeedBillingParams {
-  balanceCredits?: number;
+  balanceCredits?: number | bigint;
   virtualKeyLabel?: string;
   litellmVirtualKey?: string;
 }
@@ -67,7 +67,7 @@ export async function seedAuthenticatedUser(
     .values({
       id: `billing-${user.id}`,
       ownerUserId: user.id,
-      balanceCredits: billingParams.balanceCredits ?? 1000,
+      balanceCredits: BigInt(billingParams.balanceCredits ?? 1000),
     })
     .returning();
 

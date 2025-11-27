@@ -3,9 +3,9 @@
 
 /**
  * Module: `@shared/db/schema.billing`
- * Purpose: Billing tables schema (billing_accounts, virtual_keys, credit_ledger).
- * Scope: Billing only; does not include auth identity tables.
- * Invariants: BigInt credits, FK to auth.users for owner.
+ * Purpose: Billing tables schema with nullable cost fields and billing status discrimination.
+ * Scope: Defines billing_accounts, virtual_keys, credit_ledger, llm_usage with support for incomplete cost data. Does not include auth identity tables.
+ * Invariants: BigInt credits, FK to auth.users for owner, billingStatus defaults to needs_review, cost fields nullable for graceful degradation
  * Side-effects: none (schema definitions only)
  * Links: None
  * @public
@@ -15,7 +15,9 @@ import {
   bigint,
   boolean,
   index,
+  integer,
   jsonb,
+  numeric,
   pgTable,
   text,
   timestamp,
@@ -30,9 +32,7 @@ export const billingAccounts = pgTable("billing_accounts", {
     .notNull()
     .unique()
     .references(() => users.id, { onDelete: "cascade" }),
-  balanceCredits: bigint("balance_credits", { mode: "number" })
-    .notNull()
-    .default(0),
+  balanceCredits: bigint("balance_credits", { mode: "bigint" }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -62,10 +62,8 @@ export const creditLedger = pgTable(
     virtualKeyId: uuid("virtual_key_id")
       .notNull()
       .references(() => virtualKeys.id, { onDelete: "cascade" }),
-    amount: bigint("amount", { mode: "number" }).notNull(),
-    balanceAfter: bigint("balance_after", { mode: "number" })
-      .notNull()
-      .default(0),
+    amount: bigint("amount", { mode: "bigint" }).notNull(),
+    balanceAfter: bigint("balance_after", { mode: "bigint" }).notNull(),
     reason: text("reason").notNull(),
     reference: text("reference"),
     metadata: jsonb("metadata")
@@ -80,5 +78,40 @@ export const creditLedger = pgTable(
       table.reference,
       table.reason
     ),
+  })
+);
+
+export const llmUsage = pgTable(
+  "llm_usage",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    billingAccountId: text("billing_account_id")
+      .notNull()
+      .references(() => billingAccounts.id, { onDelete: "cascade" }),
+    virtualKeyId: uuid("virtual_key_id")
+      .notNull()
+      .references(() => virtualKeys.id, { onDelete: "cascade" }),
+    requestId: text("request_id"),
+    model: text("model"),
+    promptTokens: integer("prompt_tokens"),
+    completionTokens: integer("completion_tokens"),
+    providerCostUsd: numeric("provider_cost_usd"),
+    providerCostCredits: bigint("provider_cost_credits", {
+      mode: "bigint",
+    }),
+    userPriceCredits: bigint("user_price_credits", {
+      mode: "bigint",
+    }),
+    markupFactor: numeric("markup_factor"),
+    billingStatus: text("billing_status").notNull().default("needs_review"),
+    usage: jsonb("usage").notNull(),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => ({
+    billingAccountIdx: index("llm_usage_billing_account_idx").on(
+      table.billingAccountId
+    ),
+    virtualKeyIdx: index("llm_usage_virtual_key_idx").on(table.virtualKeyId),
+    requestIdx: index("llm_usage_request_idx").on(table.requestId),
   })
 );

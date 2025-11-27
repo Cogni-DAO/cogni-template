@@ -197,15 +197,14 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ │ ├── query.client.tsx
 [x] │ │ └── wagmi-config-builder.ts
 [x] │ ├── wallet-test/ # Dev wallet test harness
-[ ] │ ├── (public)/ # public, unauthenticated pages
-[ ] │ ├── (app)/ # protected, authenticated pages
+[x] │ ├── (public)/ # public, unauthenticated pages
+[x] │ ├── (app)/ # protected, authenticated pages
 [x] │ └── api/
-[x] │ ├── auth/[...nextauth]/ # Auth.js routes (signin, session, signout, csrf)
-[x] │ ├── v1/ai/completion/ # AI completion endpoint (session-protected)
-[x] │ └── admin/ # admin control plane endpoints (removed wallet/link in auth refactor)
-[ ] │ ├── balance/route.ts # exposes credits
-[ ] │ ├── keys/create/route.ts # API-key issuance
-[ ] │ └── web3/verify/route.ts # calls wallet verification port
+[x] │ ├── auth/[...nextauth]/ # Auth.js routes
+[x] │ ├── v1/
+[x] │ │ ├── ai/completion/ # AI completion (session-protected, credit-metered)
+[x] │ │ └── payments/credits/ # credit payment endpoints
+[x] │ └── admin/accounts/ # admin account management
 [ ] │
 [x] ├── features/ # application services
 [x] │ ├── home/ # home page data
@@ -218,12 +217,10 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ │ └── adminAccounts.ts # admin account operations
 [x] │ ├── site-meta/ # meta services (health, routes)
 [x] │ │ └── services/
-[ ] │ ├── chat/ # wallet-linked chat feature (Step 4)
-[ ] │ │ ├── components/
-[ ] │ │ ├── hooks/
-[ ] │ │ └── services/
-[ ] │ ├── payments/ # on-chain payment processing (Stage 7)
-[ ] │ │ └── services/
+[x] │ ├── chat/ # authenticated chat feature
+[x] │ │ └── components/
+[x] │ ├── payments/ # widget payment processing
+[x] │ │ └── services/
 [ ] │ ├── auth/
 [ ] │ │ ├── actions.ts
 [ ] │ │ └── services/
@@ -279,6 +276,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ │ ├── db/ # database client and connection
 [x] │ │ │ ├── drizzle.client.ts # drizzle instance
 [x] │ │ │ ├── client.ts # main database client export
+[x] │ │ │ ├── migrations/ # schema migrations (see shared/db/schema.\*.ts)
 [x] │ │ │ └── index.ts # db exports
 [x] │ │ ├── time/system.adapter.ts # system clock
 [x] │ │ └── index.ts # server adapter exports
@@ -307,7 +305,10 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ │ ├── build.ts # build-time env
 [x] │ │ └── index.ts
 [x] │ ├── db/ # database schema
-[x] │ │ ├── schema.ts # Drizzle schema definitions
+[x] │ │ ├── AGENTS.md
+[x] │ │ ├── schema.ts # schema exports
+[x] │ │ ├── schema.auth.ts # auth tables
+[x] │ │ ├── schema.billing.ts # billing tables (billing_accounts, credit_ledger, llm_usage)
 [x] │ │ └── index.ts
 [x] │ ├── constants/
 [x] │ │ └── index.ts
@@ -350,10 +351,10 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [ ] └── images/
 
 [x] tests/
-[x] ├── \_fakes/ # deterministic test doubles (stubs only)
-[x] ├── \_fixtures/ # static test data including wallet test data
+[x] ├── \_fakes/ # deterministic test doubles
+[x] ├── \_fixtures/ # static test data and setup helpers
 [x] ├── unit/ # core rules + features with mocked ports
-[x] ├── stack/ # stack tests against dev infrastructure
+[x] ├── stack/ # stack tests against dev infrastructure (auth, ai, payments)
 [x] ├── integration/ # adapters against local services (stubs only)
 [x] ├── contract/ # reusable port contract harness (stubs only)
 [x] ├── ports/ # port contract tests

@@ -14,6 +14,7 @@
 
 export {
   type AccountService,
+  type BilledLlmUsageParams,
   type BillingAccount,
   BillingAccountNotFoundPortError,
   type CreditLedgerEntry,
@@ -21,6 +22,7 @@ export {
   isBillingAccountNotFoundPortError,
   isInsufficientCreditsPortError,
   isVirtualKeyNotFoundPortError,
+  type NeedsReviewLlmUsageParams,
   VirtualKeyNotFoundPortError,
 } from "./accounts.port";
 export type { Clock } from "./clock.port";

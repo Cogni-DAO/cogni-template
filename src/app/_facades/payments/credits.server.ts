@@ -3,16 +3,18 @@
 
 /**
  * Module: `@app/_facades/payments/credits.server`
- * Purpose: App-layer wiring for widget payments. Resolves dependencies and delegates to feature services.
- * Scope: Server-only facade. Handles billing account resolution from session user and maps to feature inputs; does not perform direct persistence or HTTP handling.
- * Invariants: Billing account comes exclusively from session identity; no body-provided account identifiers.
+ * Purpose: App-layer wiring for widget payments. Resolves dependencies, delegates to feature services, and maps port types to contract DTOs.
+ * Scope: Server-only facade. Handles billing account resolution from session user, maps Date to ISO string for contract compliance; does not perform direct persistence or HTTP handling.
+ * Invariants: Billing account from session identity only; return types use z.infer; Date fields map to ISO strings.
  * Side-effects: IO (via AccountService port).
- * Notes: Errors bubble to route handlers for HTTP mapping.
- * Links: docs/DEPAY_PAYMENTS.md
+ * Notes: Errors bubble to route handlers for HTTP mapping. Facades own DTO mapping (port types → contract types).
+ * Links: docs/DEPAY_PAYMENTS.md, src/contracts/AGENTS.md
  * @public
  */
 
 import { createContainer } from "@/bootstrap/container";
+import type { CreditsConfirmOutput } from "@/contracts/payments.credits.confirm.v1.contract";
+import type { CreditsSummaryOutput } from "@/contracts/payments.credits.summary.v1.contract";
 import { confirmCreditsPayment } from "@/features/payments/services/creditsConfirm";
 import { getCreditsSummary } from "@/features/payments/services/creditsSummary";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
@@ -23,7 +25,7 @@ export async function confirmCreditsPaymentFacade(params: {
   amountUsdCents: number;
   clientPaymentId: string;
   metadata?: Record<string, unknown> | undefined;
-}): Promise<{ billingAccountId: string; balanceCredits: number }> {
+}): Promise<CreditsConfirmOutput> {
   const { accountService } = createContainer();
 
   let billingAccount: Awaited<
@@ -61,19 +63,7 @@ export async function confirmCreditsPaymentFacade(params: {
 export async function getCreditsSummaryFacade(params: {
   sessionUser: SessionUser;
   limit?: number | undefined;
-}): Promise<{
-  billingAccountId: string;
-  balanceCredits: number;
-  ledger: {
-    id: string;
-    amount: number;
-    balanceAfter: number;
-    reason: string;
-    reference: string | null;
-    metadata: Record<string, unknown> | null;
-    createdAt: Date;
-  }[];
-}> {
+}): Promise<CreditsSummaryOutput> {
   const { accountService } = createContainer();
 
   let billingAccount: Awaited<
@@ -94,8 +84,23 @@ export async function getCreditsSummaryFacade(params: {
     throw error;
   }
 
-  return getCreditsSummary(accountService, {
+  const result = await getCreditsSummary(accountService, {
     billingAccountId: billingAccount.id,
     limit: params.limit,
   });
+
+  // Map port types (Date) to contract types (ISO string)
+  return {
+    billingAccountId: result.billingAccountId,
+    balanceCredits: result.balanceCredits,
+    ledger: result.ledger.map((entry) => ({
+      id: entry.id,
+      amount: entry.amount,
+      balanceAfter: entry.balanceAfter,
+      reason: entry.reason,
+      reference: entry.reference,
+      metadata: entry.metadata,
+      createdAt: entry.createdAt.toISOString(),
+    })),
+  };
 }

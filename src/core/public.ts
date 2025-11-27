@@ -23,7 +23,10 @@ export {
   isUnknownApiKeyError,
   UnknownApiKeyError,
 } from "./accounts/public";
-export { calculateCost } from "./billing/pricing";
+export {
+  calculateUserPriceCredits,
+  usdToCredits,
+} from "./billing/pricing";
 export type { Conversation, Message, MessageRole } from "./chat/model";
 export {
   assertMessageLength,

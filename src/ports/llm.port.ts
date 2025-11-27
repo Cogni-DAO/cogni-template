@@ -39,5 +39,6 @@ export interface LlmService {
     };
     finishReason?: "stop" | "length" | "tool_calls" | "content_filter" | string;
     providerMeta?: Record<string, unknown>;
+    providerCostUsd?: number;
   }>;
 }

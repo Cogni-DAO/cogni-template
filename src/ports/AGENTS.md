@@ -5,13 +5,13 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-17
+- **Last reviewed:** 2025-11-28
 - **Status:** draft
 
 ## Purpose
 
 Define **port interfaces** that the domain depends on and adapters must implement.
-Ports describe _what_ the domain needs from external services, not _how_ they work.
+Ports describe _what_ the domain needs from external services, not _how_ they work. Includes AccountService with dual-cost LLM billing support.
 
 ## Pointers
 
@@ -36,7 +36,12 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
 
 ## Public Surface
 
-- **Exports:** Port interfaces only
+- **Exports:**
+  - AccountService (getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordLlmUsage, listCreditLedgerEntries, findCreditLedgerEntryByReference)
+  - LlmService (completion with optional providerCostUsd)
+  - Clock (now)
+  - Port-level errors (InsufficientCreditsPortError, BillingAccountNotFoundPortError, VirtualKeyNotFoundPortError)
+  - Types (BilledLlmUsageParams, NeedsReviewLlmUsageParams, LlmCaller, BillingAccount, CreditLedgerEntry)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config:** none

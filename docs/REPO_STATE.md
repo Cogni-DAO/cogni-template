@@ -1,16 +1,16 @@
 # Repository State Summary
 
-**Branch:** `feat/resmic` (ahead of `origin/staging`)
-**Assessment Date:** 2025-11-24
-**Core Mission:** Crypto-metered AI infrastructure where users pay DAO wallet → get credits → consume LLM → billing tracked in ledger
+**Branch:** `staging` (includes feat/billing)
+**Assessment Date:** 2025-11-28
+**Core Mission:** Crypto-metered AI infrastructure where users pay DAO wallet → get credits → consume LLM → billing tracked with dual-cost accounting
 
 **Related Documentation:**
 
 - [Accounts Design](./ACCOUNTS_DESIGN.md) - Identity & billing model
 - [Security & Auth Spec](./SECURITY_AUTH_SPEC.md) - SIWE authentication architecture
 - [DePay Payments](./DEPAY_PAYMENTS.md) - Payment widget integration
-- [Billing Evolution](./BILLING_EVOLUTION.md) - Dual-cost accounting (Stage 6.5)
-- [Payments Ponder Verification](./PAYMENTS_PONDER_VERIFICATION.md) - On-chain watcher spec
+- [Billing Evolution](./BILLING_EVOLUTION.md) - Dual-cost accounting implementation
+- [Payments Ponder Verification](./PAYMENTS_PONDER_VERIFICATION.md) - **Required for production security**
 - [DAO Enforcement](./DAO_ENFORCEMENT.md) - Binding enforcement rules
 - [Wallet & Credits Integration](./INTEGRATION_WALLETS_CREDITS.md) - Wallet integration flow
 - [API Key Endpoints](./ACCOUNTS_API_KEY_ENDPOINTS.md) - LiteLLM virtual key management
@@ -25,11 +25,11 @@
 
 - **Files:**
   - [`src/auth.ts`](../src/auth.ts) - Credentials provider with SIWE verification
-  - [`src/shared/auth/`](../src/shared/auth/) - Session types and wallet-session consistency helpers
+  - [`src/shared/auth/`](../src/shared/auth/) - Session types and wallet-session helpers
   - [`src/app/(app)/layout.tsx`](<../src/app/(app)/layout.tsx>) - Protected route guard
-  - [`src/components/kit/auth/WalletConnectButton.tsx`](../src/components/kit/auth/WalletConnectButton.tsx) - Wallet connection UI
+  - [`src/components/kit/auth/`](../src/components/kit/auth/) - Wallet connection UI
 - **Status:** Auth.js manages identity; SIWE proves wallet ownership; sessions resolve to billing accounts
-- **Reference:** [Security & Auth Spec](./SECURITY_AUTH_SPEC.md)
+- **Reference:** [SECURITY_AUTH_SPEC.md](./SECURITY_AUTH_SPEC.md)
 
 ### 2. Wallet Integration ✅
 
@@ -38,28 +38,29 @@
 - **Files:**
   - [`src/app/providers/`](../src/app/providers/) - Provider composition (Auth → Query → Wallet)
   - [`src/shared/web3/chain.ts`](../src/shared/web3/chain.ts) - Hardcoded Base mainnet (8453), validation enforced
-  - [`scripts/validate-chain-config.ts`](../scripts/validate-chain-config.ts) - Build-time validator matching repo-spec
+  - [`scripts/validate-chain-config.ts`](../scripts/validate-chain-config.ts) - Build-time validator
 - **Status:** Chain locked to Base mainnet; wallet connects in browser; RainbowKit themed
-- **Reference:** [Wallet & Credits Integration](./INTEGRATION_WALLETS_CREDITS.md)
+- **Reference:** [INTEGRATION_WALLETS_CREDITS.md](./INTEGRATION_WALLETS_CREDITS.md)
 
-### 3. DePay Payment Widget (Frontend) ✅
+### 3. DePay Payment Widget ✅
 
-**OSS Mode (0% fees, no DePay backend):** Frontend-only payment UI
+**OSS Mode (0% fees):** Frontend-only payment UI
 
 - **Files:**
-  - [`src/components/vendor/depay/DePayWidget.client.tsx`](../src/components/vendor/depay/DePayWidget.client.tsx) - CDN-based widget wrapper
+  - [`src/components/vendor/depay/`](../src/components/vendor/depay/) - CDN-based widget wrapper
   - [`src/app/(app)/credits/page.tsx`](<../src/app/(app)/credits/page.tsx>) - Credits page with purchase flow
 - **Implementation:**
   - Amount selection ($0.10, $10, $25, $50, $100)
   - DePay widget fires `succeeded` callback client-side
   - Generates `clientPaymentId` from txHash (UUID fallback)
   - Calls `POST /api/v1/payments/credits/confirm` with metadata
-- **Status:** Widget loads, renders, handles callbacks; idempotency keys generated
-- **Reference:** [DePay Payments](./DEPAY_PAYMENTS.md) - Sections 3-4
+- **Status:** Widget operational; idempotency keys generated; callback wired
+- **Security Note:** ⚠️ **MVP trust model: client-side callback only. See [Post-MVP Security Hardening](#post-mvp-security-hardening) for production requirements.**
+- **Reference:** [DEPAY_PAYMENTS.md](./DEPAY_PAYMENTS.md)
 
 ### 4. Payment Confirmation Backend ✅
 
-**Endpoints:** Session-authenticated credit top-up
+**Session-Authenticated Credit Top-Up:**
 
 - **Routes:**
   - `POST /api/v1/payments/credits/confirm` - Credits billing account after widget success
@@ -69,15 +70,13 @@
   - Idempotent via `clientPaymentId` lookup in `credit_ledger.reference`
   - Conversion: `credits = amountUsdCents * 10` (1 cent = 10 credits)
   - Inserts `credit_ledger` row with `reason='widget_payment'`
-  - Updates `billing_accounts.balance_credits`
+  - Updates `billing_accounts.balance_credits` atomically
 - **Files:**
-  - [`src/features/payments/services/creditsConfirm.ts`](../src/features/payments/services/creditsConfirm.ts) - Service logic
-  - [`src/app/_facades/payments/credits.server.ts`](../src/app/_facades/payments/credits.server.ts) - App-layer wiring
-  - [`src/app/api/v1/payments/credits/confirm/route.ts`](../src/app/api/v1/payments/credits/confirm/route.ts) - Confirm endpoint
-  - [`src/app/api/v1/payments/credits/summary/route.ts`](../src/app/api/v1/payments/credits/summary/route.ts) - Summary endpoint
-  - [`tests/stack/payments/credits-confirm.stack.test.ts`](../tests/stack/payments/credits-confirm.stack.test.ts) - Stack tests
-- **Status:** Backend logic complete; idempotency working; balance updates atomically
-- **Reference:** [DePay Payments](./DEPAY_PAYMENTS.md) - Section 4
+  - [`src/features/payments/services/`](../src/features/payments/services/) - Service logic
+  - [`src/app/api/v1/payments/credits/`](../src/app/api/v1/payments/credits/) - HTTP routes
+  - [`tests/stack/payments/`](../tests/stack/payments/) - Stack tests
+- **Status:** Idempotency working; balance updates atomically
+- **Reference:** [DEPAY_PAYMENTS.md](./DEPAY_PAYMENTS.md) - Section 4
 
 ### 5. Database Schema (Billing Layer) ✅
 
@@ -86,205 +85,187 @@
 - `users` (Auth.js identity) - `wallet_address` indexed
 - `billing_accounts` - `balance_credits` (BIGINT), `owner_user_id` FK
 - `virtual_keys` - `litellm_virtual_key`, `is_default`, `active`
-- `credit_ledger` - append-only audit log (`amount`, `balance_after`, `reason`, `reference`, `metadata` JSONB)
-- **Migration:** [`0001_resmic_reference_index.sql`](../src/adapters/server/db/migrations/0001_resmic_reference_index.sql) - Index on `(reference, reason)` for idempotency
+- `credit_ledger` - Append-only audit log (`amount`, `balance_after`, `reason`, `reference`, `metadata` JSONB)
+- `llm_usage` - Per-call tracking with nullable cost fields and `billing_status` discrimination
 
-**Status:** Schema migrated; BIGINT credits in place; ledger supports widget payments
+**Migrations:**
 
-**Reference:** [Accounts Design](./ACCOUNTS_DESIGN.md) - Database Schema section
+- [`0001_slippery_madelyne_pryor.sql`](../src/adapters/server/db/migrations/0001_slippery_madelyne_pryor.sql) - Initial schema
+- [`0002_bizarre_celestials.sql`](../src/adapters/server/db/migrations/0002_bizarre_celestials.sql) - Nullable costs + billing_status
 
-### 6. Billing Integration (Partial) ⚠️
+**Status:** Schema migrated; BIGINT credits; ledger supports widget payments and LLM usage
 
-**Working:**
+**Reference:** [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md), [BILLING_EVOLUTION.md](./BILLING_EVOLUTION.md)
 
-- [`src/lib/auth/mapping.ts`](../src/lib/auth/mapping.ts) - `getOrCreateBillingAccountForUser()` provisions accounts + default virtual keys
-- [`src/adapters/server/accounts/drizzle.adapter.ts`](../src/adapters/server/accounts/drizzle.adapter.ts) - AccountService implementation
-- [`src/app/api/v1/ai/completion/route.ts`](../src/app/api/v1/ai/completion/route.ts) - Uses session auth + resolves virtual keys
-- Credits deducted from balance on LLM calls
+### 6. Dual-Cost LLM Billing ✅
 
-**NOT Working:**
+**Provider Cost Tracking + User Pricing with Profit Margin:**
 
-- ❌ Dual-cost accounting (Stage 6.5) - `provider_cost_credits` vs `user_price_credits`
-- ❌ `llm_usage` table doesn't exist yet
-- ❌ LiteLLM response cost not being extracted
-- ❌ Markup factor not applied
+- **Implementation:**
+  - LiteLLM adapter extracts `x-litellm-response-cost` header ([`src/adapters/server/ai/litellm.adapter.ts`](../src/adapters/server/ai/litellm.adapter.ts))
+  - Pricing helpers: `usdToCredits()`, `calculateUserPriceCredits()` ([`src/core/billing/pricing.ts`](../src/core/billing/pricing.ts))
+  - Markup factor: `USER_PRICE_MARKUP_FACTOR` env var (default 2.0 = 50% margin)
+  - Discriminated union types: `BilledLlmUsageParams` vs `NeedsReviewLlmUsageParams` ([`src/ports/accounts.port.ts`](../src/ports/accounts.port.ts))
+  - Atomic `recordLlmUsage()` branches on `billingStatus`:
+    - `"billed"` → insert usage + debit credits + ledger entry
+    - `"needs_review"` → insert usage only (no debit, logged for ops review)
+  - Completion service wires dual-cost calculation ([`src/features/ai/services/completion.ts`](../src/features/ai/services/completion.ts))
+  - Returns `requestId` in API response for traceability
+- **Behavior:**
+  - LiteLLM provides cost → full billing with profit margin enforcement
+  - Cost header missing → logs warning, records usage with NULL costs, user gets free response
+  - Post-call billing errors never block user response (graceful degradation)
+- **Invariant:** `user_price_credits >= provider_cost_credits` when billed
+- **Tests:**
+  - [`tests/unit/core/billing/pricing.test.ts`](../tests/unit/core/billing/pricing.test.ts) - Pricing logic
+  - [`tests/stack/ai/completion-billing.stack.test.ts`](../tests/stack/ai/completion-billing.stack.test.ts) - Integration test
+  - [`tests/stack/ai/billing-e2e.stack.test.ts`](../tests/stack/ai/billing-e2e.stack.test.ts) - E2E billing flow (fake LLM)
+- **Status:** Complete; profit margins enforced; graceful degradation working
+- **Reference:** [BILLING_EVOLUTION.md](./BILLING_EVOLUTION.md)
 
-**Reference:** [Billing Evolution](./BILLING_EVOLUTION.md) - Stage 6.5 (not implemented)
+### 7. Credits Page UI ✅
+
+**Balance Display + Purchase Flow:**
+
+- **Features:**
+  - Real-time balance from `GET /api/v1/payments/credits/summary`
+  - Recent transactions table from `credit_ledger` (last 10 entries)
+  - "Buy Credits" with DePay widget integration
+  - Loading/error states
+  - Balance updates after payment confirmation
+- **Status:** Live data wired; React Query cache invalidation working
+- **Reference:** [`src/app/(app)/credits/`](<../src/app/(app)/credits/>)
 
 ---
 
 ## ⚠️ What's PARTIALLY COMPLETE (Code Exists, Needs Work)
 
-### 7. Credits Page UI ⚠️
+### 8. Account API Keys ⚠️
 
-**Working:**
+**Current State:**
 
-- ✅ Balance display
-- ✅ "Buy Credits" button with amount selection
-- ✅ DePay widget integration
-- ✅ Payment confirmation flow
-- ✅ Loading/error states
+- ✅ Virtual keys provisioned automatically on account creation
+- ✅ Completion endpoint uses virtual keys internally
+- ❌ No user-facing API key management
+- ❌ No endpoints to list/create/revoke API keys
+- ❌ No UI to display API keys for external usage
 
-**Missing:**
+**What's Missing:**
 
-- ❌ Recent transactions table shows mock data (needs live `credit_ledger` query)
-- ❌ No link to full usage history
-- ❌ "Crypto-only" messaging implied but not explicit
+- [ ] `GET /api/v1/accounts/keys` - List user's API keys
+- [ ] `POST /api/v1/accounts/keys` - Create new API key
+- [ ] `DELETE /api/v1/accounts/keys/:id` - Revoke API key
+- [ ] API key authentication middleware (for external clients)
+- [ ] UI page to manage API keys
+- [ ] API key display (show once on creation)
 
-**Status:** 80% complete; needs live data hookup
+**Reference:** [ACCOUNTS_API_KEY_ENDPOINTS.md](./ACCOUNTS_API_KEY_ENDPOINTS.md) - Full spec (not implemented)
 
-**Reference:** [DePay Payments](./DEPAY_PAYMENTS.md) - Section 3.6
+### 9. Usage Tracking & History ⚠️
 
-### 8. Documentation ⚠️
+**Current State:**
 
-**Working:**
+- ✅ `llm_usage` table tracks every LLM call with costs
+- ✅ `credit_ledger` provides audit trail
+- ❌ No user-facing usage history endpoint
+- ❌ No usage analytics or breakdown
+- ❌ No cost reports
 
-- ✅ All file TSDoc headers complete (202 files pass validation)
-- ✅ AGENTS.md files exist for all new modules (web3, payments)
-- ✅ Updated `providers/AGENTS.md` for Base mainnet
-- ✅ Comprehensive docs ([DEPAY_PAYMENTS.md](./DEPAY_PAYMENTS.md), [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md), [BILLING_EVOLUTION.md](./BILLING_EVOLUTION.md))
+**What's Missing:**
 
-**Missing:**
+- [ ] `GET /api/v1/usage/history` - List LLM calls with costs
+- [ ] `GET /api/v1/usage/summary` - Usage analytics (by model, by day, etc.)
+- [ ] Usage page in UI showing detailed history
+- [ ] Cost breakdown by request
+- [ ] Export functionality (CSV/JSON)
 
-- ❌ Stage 6.5 implementation not documented (because not implemented)
-
-**Status:** Docs are thorough but reflect incomplete billing layer
+**Impact:** Users can see balance changes in ledger but not detailed per-request LLM usage
 
 ---
 
 ## ❌ What's NOT STARTED
 
-### 9. Stage 6.5: Dual-Cost Accounting ❌
+### 10. Post-MVP Security Hardening ❌
 
-**From [BILLING_EVOLUTION.md](./BILLING_EVOLUTION.md) - ALL UNCHECKED:**
+**Ponder On-Chain Verification:**
 
-- [ ] 6.5.1 - Migrate to integer credits (schema done, migration not run)
-- [ ] 6.5.2 - Add `llm_usage` table (not created)
-- [ ] 6.5.3 - Environment config (`USER_PRICE_MARKUP_FACTOR`, `CREDITS_PER_USDC`)
-- [ ] 6.5.4 - Pricing helpers (`usdToCredits`, `calculateUserPriceCredits`)
-- [ ] 6.5.5 - Atomic billing operation (`recordLlmUsage` port method)
-- [ ] 6.5.6 - Wire dual-cost into completion flow
-- [ ] 6.5.7 - Documentation updates
+**Current Trust Model (MVP):**
 
-**Impact:** LLM calls currently deduct credits but don't track provider cost vs user price; no profit margin enforcement.
+- ✅ SIWE-authenticated session resolves billing account
+- ✅ DePay widget running in authenticated UI
+- ⚠️ **Soft oracle:** Trust widget `succeeded` callback without on-chain verification
+- ⚠️ No cryptographic proof of payment validated server-side
 
-### 10. RainbowKit → Auth.js Integration ❌
+**Security Gap:**
 
-**From [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md) Phase 1-2:**
+- Client could fabricate payment confirmations (mitigated by session auth, idempotency, manual monitoring)
+- No automatic reconciliation with on-chain data
 
-- [ ] Wire RainbowKit to Auth.js `signIn()` (wallet connects but doesn't trigger SIWE auth automatically)
+**Required for Production - See [PAYMENTS_PONDER_VERIFICATION.md](./PAYMENTS_PONDER_VERIFICATION.md):**
 
-**Impact:** User must manually trigger sign-in after wallet connection.
+#### Phase 1A: Ponder Setup
 
-### 11. Route Protection & Cleanup ❌
+- [ ] Add Ponder service to Docker compose
+- [ ] Configure indexing for Base Sepolia testnet
+- [ ] Index USDC transfers to DAO wallet
+- [ ] Test indexing with manual transfers
+- [ ] Verify GraphQL queries work
 
-**From [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md) Phase 4-5:**
+#### Phase 1B: Reconciliation
+
+- [ ] Build reconciliation service and GraphQL client
+- [ ] Add background job scheduler (BullMQ or similar)
+- [ ] Periodic job compares Ponder data vs `credit_ledger`
+- [ ] Flag discrepancies for manual review
+- [ ] Add monitoring and alerts
+- [ ] Deploy to dev environment
+
+#### Phase 1C: Production
+
+- [ ] Configure Base mainnet indexing
+- [ ] Deploy Ponder to production infrastructure
+- [ ] Enable reconciliation job in production
+- [ ] Monitor for 2–4 weeks, tune thresholds
+
+#### Phase 2: On-Chain Gate (Future)
+
+- [ ] Capture tx_hash on frontend (DePay provides this)
+- [ ] Add `status` column to `credit_ledger` ('pending' | 'confirmed')
+- [ ] For high-value payments (>$100), require on-chain confirmation
+- [ ] Verification worker checks Ponder for matching tx_hash
+- [ ] Add user-facing "pending" state in UI
+- [ ] Define timeout and manual review process
+
+**Files to Create:**
+
+- `platform/ponder/` - Ponder configuration and indexing logic
+- `src/features/payments/services/ponder-reconciliation.ts` - Reconciliation service
+- `src/workers/reconciliation-job.ts` - Background job scheduler
+- `platform/runbooks/PONDER_RECONCILIATION.md` - Operations runbook
+
+**Status:** ❌ Not implemented; required before production launch with real funds
+
+**Full Spec:** [PAYMENTS_PONDER_VERIFICATION.md](./PAYMENTS_PONDER_VERIFICATION.md)
+
+### 11. Operational Hardening ❌
+
+**From [DEPAY_PAYMENTS.md](./DEPAY_PAYMENTS.md) Sections 5-7:**
+
+- [ ] Rate limiting on `/payments/credits/confirm`
+- [ ] Rate limiting on `/ai/completion`
+- [ ] Manual reconciliation script
+- [ ] Monitoring dashboards (Grafana)
+- [ ] Alerts for discrepancies
+- [ ] Prometheus metrics
+- [ ] Runbooks for common scenarios
+
+### 12. Route Protection & Cleanup ❌
+
+**From [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md):**
 
 - [ ] Add middleware for route protection (currently using layout guards only)
-- [ ] Remove any localStorage apiKey code (may still exist)
-- [ ] Update all tests for new schema (only payment tests updated)
-
-### 12. Post-MVP Hardening ❌
-
-**All deferred (Sections 5-7 in [DEPAY_PAYMENTS.md](./DEPAY_PAYMENTS.md)):**
-
-- [ ] Rate limiting on `/payments/confirm`
-- [ ] Manual reconciliation script
-- [ ] Monitoring & alerts
-- [ ] DePay Tracking API integration (1.5% fees)
-- [ ] Ponder on-chain watcher (0% fees, full spec in [PAYMENTS_PONDER_VERIFICATION.md](./PAYMENTS_PONDER_VERIFICATION.md))
-
----
-
-## 🔍 Current Trust Model (MVP)
-
-**Security Boundary:**
-
-1. ✅ SIWE-authenticated session (HttpOnly cookie)
-2. ✅ DePay widget running in authenticated UI
-3. ✅ Backend resolves `billing_account_id` from session only
-4. ⚠️ **Soft oracle:** Trust widget `succeeded` callback (no on-chain verification in critical path)
-
-**Known Limitations:**
-
-- ❌ No cryptographic proof of payment in backend
-- ❌ No tx hash verification server-side
-- ❌ Client could fabricate confirm calls (mitigated by session auth only)
-- ❌ No automatic reconciliation with on-chain data
-
-**Post-MVP Hardening Options:**
-
-- **DePay Tracking API:** 1.5% fees, server-side validation
-- **Ponder Watcher:** 0% fees, self-hosted on-chain indexer (full spec in [PAYMENTS_PONDER_VERIFICATION.md](./PAYMENTS_PONDER_VERIFICATION.md))
-
-**Reference:** [DePay Payments](./DEPAY_PAYMENTS.md) - Section 1.5 (Security Model)
-
----
-
-## 📊 Success Criteria Status
-
-**From [DEPAY_PAYMENTS.md](./DEPAY_PAYMENTS.md) Section 8.2:**
-
-| Criterion                                                        | Status                            |
-| ---------------------------------------------------------------- | --------------------------------- |
-| User can purchase credits via DePay widget                       | ⚠️ **Code ready, not E2E tested** |
-| Credits appear in `credit_ledger` with `reason='widget_payment'` | ✅ **Backend logic complete**     |
-| Balance increases in `billing_accounts`                          | ✅ **Atomic update working**      |
-| Duplicate payments prevented via `clientPaymentId`               | ✅ **Idempotency implemented**    |
-| Integer credit math: 1 cent = 10 credits                         | ✅ **Formula correct**            |
-
-**Overall MVP Completion:** ~75% (core loop exists, needs E2E validation + billing layer finishing)
-
----
-
-## 🚀 Next Steps to Complete MVP
-
-### Immediate (Required for First User Flow)
-
-#### 1. Wire Credits Page to Live Data
-
-- [ ] Replace mock transactions with `GET /api/v1/payments/credits/summary` call
-- [ ] Invalidate React Query cache after payment confirm
-- [ ] Add link to full usage page (or remove if not MVP)
-
-#### 2. E2E Testing
-
-- [ ] Test full flow: wallet connect → DePay widget → payment → balance update
-- [ ] Test idempotency: duplicate `clientPaymentId` returns same balance
-- [ ] Test unauthorized access: no session → 401
-
-#### 3. RainbowKit Auth Integration
-
-- [ ] Wire `onConnect` to trigger Auth.js `signIn()` with SIWE
-
-### Short-Term (Needed for Profit Tracking)
-
-#### 4. Stage 6.5 - Dual-Cost Accounting
-
-- [ ] Create `llm_usage` table migration
-- [ ] Add `USER_PRICE_MARKUP_FACTOR` (default 2.0)
-- [ ] Implement `recordLlmUsage()` port method
-- [ ] Extract LiteLLM response cost in adapter
-- [ ] Apply markup in completion service
-- [ ] Test profit invariant: `user_price ≥ provider_cost`
-
-**Reference:** [Billing Evolution](./BILLING_EVOLUTION.md) - Stage 6.5 complete spec
-
-### Medium-Term (Operational Readiness)
-
-#### 5. Route Protection & Cleanup
-
-- [ ] Add route protection middleware
-- [ ] Remove localStorage API key code
-- [ ] Update remaining tests
-
-#### 6. Monitoring & Reconciliation
-
-- [ ] Add payment monitoring dashboard
-- [ ] Create reconciliation script
-- [ ] Set up alerts
-
-**Reference:** [DePay Payments](./DEPAY_PAYMENTS.md) - Sections 5-7
+- [ ] Comprehensive API authentication tests
+- [ ] Security audit of auth flow
 
 ---
 
@@ -295,25 +276,21 @@
 - 1 credit = $0.001 USD
 - 1 USDC = 1,000 credits
 - 1 cent = 10 credits
+- Default markup: 2.0× (50% profit margin)
 
 **Payment Flow (Working):**
 
-- User pays via DePay widget → DAO wallet receives crypto → frontend calls confirm → backend credits account
+User pays crypto → DAO wallet receives → frontend calls confirm → backend credits account
 
-**LLM Billing (Incomplete):**
+**LLM Billing (Working):**
 
-- ❌ Provider cost not tracked
-- ❌ User price not separated
-- ❌ No profit margin enforcement
-- ⚠️ Simple debit happens, but no cost breakdown
+- ✅ Provider cost extracted from LiteLLM headers
+- ✅ User price calculated with configurable markup
+- ✅ Profit margin enforced: `user_price >= provider_cost`
+- ✅ Dual-cost tracked in `llm_usage` table
+- ✅ Graceful degradation when cost unavailable (free response, logged for review)
 
-**Conversion Working:**
-
-- ✅ `amountUsdCents * 10 = credits` (integer math)
-- ✅ BIGINT storage (no floating point)
-- ✅ Ledger audit trail
-
-**Reference:** [Billing Evolution](./BILLING_EVOLUTION.md) - Credit Unit Standard
+**Reference:** [BILLING_EVOLUTION.md](./BILLING_EVOLUTION.md) - Credit Unit Standard
 
 ---
 
@@ -321,31 +298,89 @@
 
 ### ✅ Working
 
-- Auth.js + SIWE wallet authentication ([SECURITY_AUTH_SPEC.md](./SECURITY_AUTH_SPEC.md))
-- DePay widget integration (frontend) ([DEPAY_PAYMENTS.md](./DEPAY_PAYMENTS.md))
-- Payment confirmation backend with idempotency
+- Auth.js + SIWE wallet authentication
+- DePay widget integration (frontend + backend)
+- Payment confirmation with idempotency
 - Credits ledger and balance updates
-- Database schema (`billing_accounts`, `virtual_keys`, `credit_ledger`) ([ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md))
+- Dual-cost LLM billing with profit margin enforcement
+- Database schema complete
 - Chain configuration locked to Base mainnet
-- Build-time validation
+- Credits page UI with live data
+- Graceful degradation when LiteLLM cost unavailable
 
-### ⚠️ Partially Working
+### ⚠️ Partial / In Progress
 
-- Credits page UI (needs live data)
-- LLM billing (debits work, no cost breakdown)
-- RainbowKit (connects, no auto-signin)
+- Account API keys (internal only, no user management)
+- Usage tracking (stored but no user-facing endpoints/UI)
 
-### ❌ Not Started
+### ❌ Not Started (Critical for Production)
 
-- Dual-cost accounting (Stage 6.5) ([BILLING_EVOLUTION.md](./BILLING_EVOLUTION.md))
-- Route protection middleware
-- Post-MVP hardening (rate limits, reconciliation, Ponder)
+- **Ponder on-chain verification** (see [PAYMENTS_PONDER_VERIFICATION.md](./PAYMENTS_PONDER_VERIFICATION.md))
+- Account API key management endpoints + UI
+- Usage history endpoints + UI
+- Rate limiting
+- Monitoring & alerting
+- Reconciliation procedures
+
+### 🚀 Next Steps to Complete MVP
+
+#### Immediate (Required for First External API Users)
+
+1. **Account API Key Management**
+   - [ ] Implement key management endpoints (list, create, revoke)
+   - [ ] Add API key authentication middleware
+   - [ ] Build API keys management page
+   - [ ] Add API key display (show once pattern)
+   - [ ] Update docs with API usage examples
+
+2. **Usage History**
+   - [ ] Build `/api/v1/usage/history` endpoint
+   - [ ] Build `/api/v1/usage/summary` endpoint with analytics
+   - [ ] Create usage history page in UI
+   - [ ] Add cost breakdown per request
+   - [ ] Add export functionality
+
+#### Short-Term (Operational Readiness)
+
+3. **Ponder Indexer (Phase 1)**
+   - [ ] Deploy Ponder service
+   - [ ] Configure Base Sepolia + mainnet indexing
+   - [ ] Implement reconciliation job
+   - [ ] See [PAYMENTS_PONDER_VERIFICATION.md](./PAYMENTS_PONDER_VERIFICATION.md)
+
+4. **Hardening**
+   - [ ] Add rate limiting (payment + completion endpoints)
+   - [ ] Set up monitoring dashboards
+   - [ ] Create reconciliation runbooks
+   - [ ] Add alerts for discrepancies
+
+#### Medium-Term (Production Security)
+
+5. **Ponder Phase 2 (On-Chain Gate)**
+   - [ ] Capture tx_hash from DePay widget
+   - [ ] Implement pending credit state
+   - [ ] Verification worker for high-value payments
+   - [ ] See [PAYMENTS_PONDER_VERIFICATION.md](./PAYMENTS_PONDER_VERIFICATION.md)
 
 ### Overall Assessment
 
-**Payment intake loop:** ~80% complete
-**Billing cost tracking loop (Stage 6.5):** 0% complete
+**Core Payment + Billing Loop:** 80% complete
 
-The system can accept crypto payments and deduct credits for LLM usage, but it cannot yet enforce profit margins or track provider vs user costs.
+- Can accept crypto payments ✅
+- Track dual-cost billing with profit margins ✅
+- Need API key management + usage history ⚠️
 
-**To Ship MVP:** Need ~1-2 more work sessions to wire live data, test E2E, and implement Stage 6.5 (dual-cost accounting).
+**Production Security:** 40% complete
+
+- Authentication working ✅
+- Payment idempotency working ✅
+- **Need Ponder on-chain verification** ❌ (critical blocker)
+- Need rate limiting + monitoring ❌
+
+**External API Readiness:** 60% complete
+
+- Can bill LLM usage ✅
+- Need API key management ❌
+- Need usage history endpoints ❌
+
+The system can accept crypto payments and track LLM costs with profit margins, but requires API key management for external users and Ponder verification for production-grade fraud prevention.

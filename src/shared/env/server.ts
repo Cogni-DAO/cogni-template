@@ -59,6 +59,10 @@ const serverSchema = z.object({
   // Wallet link MVP - single API key for all wallets (temporary)
   LITELLM_MVP_API_KEY: z.string().default("test-mvp-api-key"),
 
+  // Billing (Stage 6.5)
+  USER_PRICE_MARKUP_FACTOR: z.coerce.number().min(1.0).default(2.0),
+  CREDITS_PER_USDC: z.coerce.number().int().positive().default(1000),
+
   // Database connection: either provide DATABASE_URL directly OR component pieces
   DATABASE_URL: z.string().url().optional(),
   POSTGRES_USER: z.string().min(1).optional(),

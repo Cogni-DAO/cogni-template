@@ -61,6 +61,30 @@ pnpm -w lint
 pnpm -w typecheck
 ```
 
+## Implementation Guidelines
+
+When implementing or updating an API endpoint:
+
+1. **Define the contract first** in `src/contracts/<feature>.<name>.v1.contract.ts`
+2. **In facades/routes/services**, derive types from the contract:
+
+   ```typescript
+   import type { z } from "zod";
+   import { myOperation } from "@/contracts/my-feature.v1.contract";
+
+   type Input = z.infer<typeof myOperation.input>;
+   type Output = z.infer<typeof myOperation.output>;
+   ```
+
+3. **In tests**, import and use the contract schema for validation:
+   ```typescript
+   const result = await myOperation.output.parse(response);
+   ```
+4. **Never introduce a parallel TypeScript interface** for the same payload shape
+5. **Contract changes flow one way:** Update contract → Fix TypeScript errors → Fix Zod validation errors
+
+This prevents drift between routes, facades, services, tests, and UI clients. The contract owns the shape.
+
 ## Standards
 
 - Zod schemas only; export Input/Output TS types via z.infer.

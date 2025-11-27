@@ -37,10 +37,10 @@ Credits increase via positive entries in credit_ledger (e.g., from the widget co
 
 ### 6.5.1 Migrate Credits to Integer Units
 
-- [ ] **Goal:** Change billing_accounts.balance_credits and credit_ledger.amount to BIGINT, reset balances to 0 for pre-launch clean slate.
+- [x] **Goal:** Change billing_accounts.balance_credits and credit_ledger.amount to BIGINT, reset balances to 0 for pre-launch clean slate.
 
 - **Files:**
-  - [ ] `src/shared/db/migrations/*_integer_credits.sql` - ALTER TABLE to BIGINT, reset to 0
+  - [x] `src/shared/db/migrations/*_integer_credits.sql` - ALTER TABLE to BIGINT, reset to 0
   - [x] `src/shared/db/schema.ts` - Update type definitions to BIGINT
 
 **Notes:**
@@ -52,19 +52,19 @@ Credits increase via positive entries in credit_ledger (e.g., from the widget co
 
 ### 6.5.2 Add llm_usage Table
 
-- [ ] **Goal:** Track provider_cost_credits and user_price_credits per call for audit and profit verification.
+- [x] **Goal:** Track provider_cost_credits and user_price_credits per call for audit and profit verification.
 
-- **Schema:** id, billing_account_id (FK → billing_accounts.id), virtual_key_id (FK → virtual_keys.id), request_id, model, prompt_tokens, completion_tokens, provider_cost_credits (BIGINT), user_price_credits (BIGINT), markup_factor_applied, created_at
+- **Schema:** id, billing_account_id (FK → billing_accounts.id), virtual_key_id (FK → virtual_keys.id), request_id, model, prompt_tokens, completion_tokens, provider_cost_usd (numeric), provider_cost_credits (BIGINT), user_price_credits (BIGINT), markup_factor (numeric), usage (jsonb), created_at
 
 **Cost Semantics:**
 
-- `provider_cost_credits = ceil(LiteLLM_response_cost_usd × CREDITS_PER_USDC)`
-- `user_price_credits = ceil(provider_cost_credits × USER_PRICE_MARKUP_FACTOR)`
+- `provider_cost_credits = usdToCredits(LiteLLM_response_cost_usd)`
+- `user_price_credits = calculateUserPriceCredits(provider_cost_credits, USER_PRICE_MARKUP_FACTOR)`
 - Model and token fields are for audit/analysis only, not cost calculation
 
 - **Files:**
-  - [ ] `src/shared/db/migrations/*_llm_usage_tracking.sql` - CREATE TABLE with indexes
-  - [ ] `src/shared/db/schema.ts` - Add llmUsage table definition
+  - [x] `src/adapters/server/db/migrations/0001_billing_evolution.sql` - Consolidated migration
+  - [x] `src/shared/db/schema.billing.ts` - Add llmUsage table definition
 
 **Notes:**
 
@@ -76,45 +76,44 @@ Credits increase via positive entries in credit_ledger (e.g., from the widget co
 
 ### 6.5.3 Environment Configuration
 
-- [ ] **Goal:** Configure markup factor and credit unit conversion via environment variables.
+- [x] **Goal:** Configure markup factor and credit unit conversion via environment variables.
 
 - **Variables:**
-  - [ ] `USER_PRICE_MARKUP_FACTOR=2.0` - Profit markup (2.0 = 50% margin)
-  - [ ] `CREDITS_PER_USDC=1000` - Credit unit conversion
+  - [x] `USER_PRICE_MARKUP_FACTOR=2.0` - Profit markup (2.0 = 50% margin)
+  - [x] `CREDITS_PER_USDC=1000` - Credit unit conversion
 
 - **Files:**
-  - [ ] `.env.example` - Add both variables
-  - [ ] `src/shared/env/server.ts` - Add Zod validation (min/max ranges)
+  - [x] `.env.example` - Add both variables
+  - [x] `src/shared/env/server.ts` - Add Zod validation (min/max ranges)
 
 ---
 
 ### 6.5.4 Pricing Helpers
 
-- [ ] **Goal:** Provide pure conversion functions for USD → credits and markup application.
+- [x] **Goal:** Provide pure conversion functions for USD → credits and markup application.
 
 **Responsibilities:**
 
-- `usdToCredits(usd)`: Convert USD cost to BIGINT credits using CREDITS_PER_USDC from env
-- `calculateUserPriceCredits(providerCostCredits, markupFactor)`: Apply markup and round up (Math.ceil)
+- `usdToCredits(usd, creditsPerUsd)`: Convert USD cost to BIGINT credits using provided conversion rate (Math.ceil)
+- `calculateUserPriceCredits(providerCostCredits, markupFactor)`: Apply markup to CREDITS and round up (Math.ceil)
 
 - **Files:**
-  - [ ] `src/core/billing/pricing.ts` - Pure conversion helpers only
-  - [ ] `tests/unit/core/billing/pricing.test.ts` - Test conversions and rounding
-  - [ ] `src/shared/env/server.ts` - CREDITS_PER_USDC validation
+  - [x] `src/core/billing/pricing.ts` - Conversion helpers
+  - [x] `tests/unit/core/billing/pricing.test.ts` - Test conversions and rounding
 
 **Constraints:**
 
 - These helpers do NOT contain model-specific pricing data
 - All USD costs come from LiteLLM's response, not computed locally
-- Read CREDITS_PER_USDC from env, do not hardcode
+- Conversion rate is passed as parameter to maintain core layer purity (no env dependencies)
 
 ---
 
 ### 6.5.5 Atomic Billing Operation
 
-- [ ] **Goal:** Single AccountService method that records llm_usage and debits user_price_credits in one transaction.
+- [x] **Goal:** Single AccountService method that records llm_usage and debits user_price_credits in one transaction.
 
-- [ ] **New Port Method:** `recordLlmUsage(billingAccountId, virtualKeyId, requestId, model, promptTokens, completionTokens, providerCostCredits, userPriceCredits, markupFactorApplied)`
+- [x] **New Port Method:** `recordLlmUsage(billingAccountId, virtualKeyId, requestId, model, promptTokens, completionTokens, providerCostUsd, providerCostCredits, userPriceCredits, markupFactorApplied)`
 
 **Parameters:** All cost values (providerCostCredits, userPriceCredits) are pre-computed by completion service using LiteLLM response cost and pricing helpers. No pricing logic in adapter.
 
@@ -129,9 +128,9 @@ Credits increase via positive entries in credit_ledger (e.g., from the widget co
 **Balance Invariant:** Balances remain non-negative. Insufficient credits are detected post-call but prevent transaction commit. The LLM call has already been made (token waste), but no billing records are persisted.
 
 - **Files:**
-  - [ ] `src/ports/accounts.port.ts` - Add recordLlmUsage interface
-  - [ ] `src/adapters/server/accounts/drizzle.adapter.ts` - Implement atomic operation
-  - [ ] `tests/unit/adapters/server/accounts/drizzle.adapter.spec.ts` - Test transaction behavior
+  - [x] `src/ports/accounts.port.ts` - Add recordLlmUsage interface
+  - [x] `src/adapters/server/accounts/drizzle.adapter.ts` - Implement atomic operation
+  - [x] `tests/unit/adapters/server/accounts/drizzle.adapter.spec.ts` - Test transaction behavior
 
 **Notes:**
 
@@ -142,7 +141,7 @@ Credits increase via positive entries in credit_ledger (e.g., from the widget co
 
 ### 6.5.6 Wire Dual-Cost into Completion Flow
 
-- [ ] **Goal:** Update completion service to use pricing helpers and recordLlmUsage after LLM call.
+- [x] **Goal:** Update completion service to use pricing helpers and recordLlmUsage after LLM call.
 
 **Flow:**
 
@@ -151,16 +150,16 @@ Credits increase via positive entries in credit_ledger (e.g., from the widget co
    - modelId
    - promptTokens, completionTokens
    - providerCostUsd (from LiteLLM response cost)
-3. Convert USD to credits: `provider_cost_credits = usdToCredits(providerCostUsd)`
+3. Convert USD to credits: `provider_cost_credits = usdToCredits(providerCostUsd, CREDITS_PER_USDC)`
 4. Apply markup: `user_price_credits = calculateUserPriceCredits(provider_cost_credits, markupFactor)`
 5. Assert `user_price_credits ≥ provider_cost_credits`
 6. Call `AccountService.recordLlmUsage` with all fields
 
 - **Files:**
-  - [ ] `src/ports/llm.port.ts` - Update LlmService response to include providerCostUsd
-  - [ ] `src/adapters/server/ai/litellm.adapter.ts` - Extract cost from LiteLLM response
-  - [ ] `src/features/ai/services/completion.ts` - Add dual-cost calculation
-  - [ ] `tests/unit/features/ai/services/completion.test.ts` - Test profit invariant
+  - [x] `src/ports/llm.port.ts` - Update LlmService response to include providerCostUsd
+  - [x] `src/adapters/server/ai/litellm.adapter.ts` - Extract cost from LiteLLM response
+  - [x] `src/features/ai/services/completion.ts` - Add dual-cost calculation
+  - [x] `tests/unit/features/ai/services/completion.test.ts` - Test profit invariant
 
 **Current Guard (MVP+):** Pre-call balance check uses a conservative estimate (prompt chars ÷ 4 + max completion tokens) to block zero/low balances before contacting the provider. Post-call debit is best-effort and does not block the response if it fails for insufficient credits. Replace this heuristic with configurable, per-model pricing once provider costs are wired.
 
