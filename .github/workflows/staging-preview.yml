@@ -125,21 +125,18 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
 
-          # Test SSH connection
-          SSH_DEBUG=${SSH_DEBUG:-0}
-          SSH_VERBOSE=""
-          if [ "$SSH_DEBUG" = "1" ]; then
-            SSH_VERBOSE="-vvv"
-            echo "SSH debug mode enabled"
-          fi
-
+          # Test SSH connection with full error capture and keepalive
           echo "Testing SSH connection to $VM_HOST..."
-          if ! ssh $SSH_VERBOSE -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=30 root@"$VM_HOST" "echo 'SSH test successful'" 2>&1; then
-            echo "❌ SSH connection failed"
-            echo "Key fingerprint:"
-            ssh-keygen -lf ~/.ssh/deploy_key || echo "Could not read key fingerprint"
-            echo "Known hosts entry:"
-            grep "$VM_HOST" ~/.ssh/known_hosts || echo "No known_hosts entry found"
+          SSH_DEBUG=${SSH_DEBUG:-0}
+          SSH_VERBOSE=""; if [ "$SSH_DEBUG" = "1" ]; then SSH_VERBOSE="-vvv"; fi
+          set +e
+          OUT=$(ssh $SSH_VERBOSE -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 root@"$VM_HOST" "echo SSH test successful" 2>&1)
+          RC=$?
+          set -e
+          echo "$OUT"
+          if [ $RC -ne 0 ]; then
+            echo "❌ SSH failed (rc=$RC)"
+            echo "Known hosts:"; tail -n 5 ~/.ssh/known_hosts || true
             exit 1
           fi
           echo "✅ SSH connection successful"
