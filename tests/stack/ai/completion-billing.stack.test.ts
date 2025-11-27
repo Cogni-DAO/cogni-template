@@ -121,6 +121,18 @@ describe("Completion Billing Stack Test", () => {
     expect(usageRow.model).toBeTruthy();
     expect(usageRow.promptTokens).toBeGreaterThan(0);
     expect(usageRow.completionTokens).toBeGreaterThan(0);
+    expect(usageRow.billingStatus).toBe("billed");
+    expect(usageRow.providerCostCredits).not.toBeNull();
+    expect(usageRow.userPriceCredits).not.toBeNull();
+
+    // Type guard assertions for non-null cost fields
+    if (
+      usageRow.providerCostCredits === null ||
+      usageRow.userPriceCredits === null
+    ) {
+      throw new Error("Cost fields must not be null when billingStatus=billed");
+    }
+
     expect(usageRow.providerCostCredits).toBeGreaterThan(0n);
     expect(usageRow.userPriceCredits).toBeGreaterThan(0n);
     // Invariant: user price >= provider cost

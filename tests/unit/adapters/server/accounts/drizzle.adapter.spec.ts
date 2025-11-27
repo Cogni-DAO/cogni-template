@@ -61,6 +61,7 @@ describe("DrizzleAccountService", () => {
 
   describe("recordLlmUsage", () => {
     const params = {
+      billingStatus: "billed" as const,
       billingAccountId: "acc-123",
       virtualKeyId: "vk-123",
       requestId: "req-123",

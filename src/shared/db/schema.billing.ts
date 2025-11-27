@@ -3,9 +3,9 @@
 
 /**
  * Module: `@shared/db/schema.billing`
- * Purpose: Billing tables schema (billing_accounts, virtual_keys, credit_ledger, llm_usage).
- * Scope: Billing only; does not include auth identity tables.
- * Invariants: BigInt credits, FK to auth.users for owner.
+ * Purpose: Billing tables schema with nullable cost fields and billing status discrimination.
+ * Scope: Defines billing_accounts, virtual_keys, credit_ledger, llm_usage with support for incomplete cost data. Does not include auth identity tables.
+ * Invariants: BigInt credits, FK to auth.users for owner, billingStatus defaults to needs_review, cost fields nullable for graceful degradation
  * Side-effects: none (schema definitions only)
  * Links: None
  * @public
@@ -95,14 +95,15 @@ export const llmUsage = pgTable(
     model: text("model"),
     promptTokens: integer("prompt_tokens"),
     completionTokens: integer("completion_tokens"),
-    providerCostUsd: numeric("provider_cost_usd").notNull(),
+    providerCostUsd: numeric("provider_cost_usd"),
     providerCostCredits: bigint("provider_cost_credits", {
       mode: "bigint",
-    }).notNull(),
+    }),
     userPriceCredits: bigint("user_price_credits", {
       mode: "bigint",
-    }).notNull(),
-    markupFactor: numeric("markup_factor").notNull(),
+    }),
+    markupFactor: numeric("markup_factor"),
+    billingStatus: text("billing_status").notNull().default("needs_review"),
     usage: jsonb("usage").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },

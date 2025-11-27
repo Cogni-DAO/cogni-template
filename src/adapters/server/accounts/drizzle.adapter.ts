@@ -3,11 +3,11 @@
 
 /**
  * Module: `@adapters/server/accounts/drizzle`
- * Purpose: DrizzleAccountService implementation for PostgreSQL billing account operations.
- * Scope: Implements AccountService port with ledger-based credit accounting and virtual key management. Does not handle authentication or business rules.
- * Invariants: Atomic credit ops; ledger is source of truth; balance is computed cache; strictly validates UUID v4 inputs.
+ * Purpose: DrizzleAccountService implementation for PostgreSQL billing account operations with discriminated billing flow.
+ * Scope: Implements AccountService port with ledger-based credit accounting and virtual key management. Branches on billingStatus to debit or record. Does not compute pricing.
+ * Invariants: Atomic ops; ledger source of truth; balance cached; UUID v4 validated; billed debits, needs_review skips
  * Side-effects: IO (database operations)
- * Notes: Uses transactions for consistency, throws port errors for business rule violations
+ * Notes: Uses transactions for consistency, throws port errors for business rule violations, supports nullable cost fields in llm_usage
  * Links: Implements AccountService port, uses shared database schema
  * @public
  */
@@ -19,10 +19,12 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@/adapters/server/db/client";
 import {
   type AccountService,
+  type BilledLlmUsageParams,
   type BillingAccount,
   BillingAccountNotFoundPortError,
   type CreditLedgerEntry,
   InsufficientCreditsPortError,
+  type NeedsReviewLlmUsageParams,
   VirtualKeyNotFoundPortError,
 } from "@/ports";
 import {
@@ -176,94 +178,97 @@ export class DrizzleAccountService implements AccountService {
     });
   }
 
-  async recordLlmUsage({
-    billingAccountId,
-    virtualKeyId,
-    requestId,
-    model,
-    promptTokens,
-    completionTokens,
-    providerCostUsd,
-    providerCostCredits,
-    userPriceCredits,
-    markupFactorApplied,
-    metadata,
-  }: {
-    billingAccountId: string;
-    virtualKeyId: string;
-    requestId: string;
-    model: string;
-    promptTokens: number;
-    completionTokens: number;
-    providerCostUsd: number;
-    providerCostCredits: bigint;
-    userPriceCredits: bigint;
-    markupFactorApplied: number;
-    metadata?: Record<string, unknown>;
-  }): Promise<void> {
+  async recordLlmUsage(
+    params: BilledLlmUsageParams | NeedsReviewLlmUsageParams
+  ): Promise<void> {
     await this.db.transaction(async (tx) => {
-      await this.ensureBillingAccountExists(tx, billingAccountId);
-      await this.ensureVirtualKeyExists(tx, billingAccountId, virtualKeyId);
+      await this.ensureBillingAccountExists(tx, params.billingAccountId);
+      await this.ensureVirtualKeyExists(
+        tx,
+        params.billingAccountId,
+        params.virtualKeyId
+      );
 
-      // 2. Insert usage record
-      await tx.insert(llmUsage).values({
-        billingAccountId,
-        virtualKeyId,
-        requestId,
-        model,
-        promptTokens,
-        completionTokens,
-        providerCostUsd: providerCostUsd.toString(),
-        providerCostCredits,
-        userPriceCredits,
-        markupFactor: markupFactorApplied.toString(),
-        usage: {
-          promptTokens,
-          completionTokens,
-          totalTokens: promptTokens + completionTokens,
-        },
-      });
+      if (params.billingStatus === "billed") {
+        // Insert usage record with cost data
+        await tx.insert(llmUsage).values({
+          billingAccountId: params.billingAccountId,
+          virtualKeyId: params.virtualKeyId,
+          requestId: params.requestId,
+          model: params.model,
+          promptTokens: params.promptTokens,
+          completionTokens: params.completionTokens,
+          providerCostUsd: params.providerCostUsd.toString(),
+          providerCostCredits: params.providerCostCredits,
+          userPriceCredits: params.userPriceCredits,
+          markupFactor: params.markupFactorApplied.toString(),
+          billingStatus: "billed",
+          usage: {
+            promptTokens: params.promptTokens,
+            completionTokens: params.completionTokens,
+            totalTokens: params.promptTokens + params.completionTokens,
+          },
+        });
 
-      // 3. Debit Ledger
-      // Note: userPriceCredits is positive, so we negate it for the ledger amount
-      const debitAmount = -userPriceCredits;
+        // Debit credits atomically
+        const debitAmount = -params.userPriceCredits;
 
-      const [updatedAccount] = await tx
-        .update(billingAccounts)
-        .set({
-          balanceCredits: sql`${billingAccounts.balanceCredits} + ${debitAmount}`,
-        })
-        .where(eq(billingAccounts.id, billingAccountId))
-        .returning({ balanceCredits: billingAccounts.balanceCredits });
+        const [updatedAccount] = await tx
+          .update(billingAccounts)
+          .set({
+            balanceCredits: sql`${billingAccounts.balanceCredits} + ${debitAmount}`,
+          })
+          .where(eq(billingAccounts.id, params.billingAccountId))
+          .returning({ balanceCredits: billingAccounts.balanceCredits });
 
-      if (!updatedAccount) {
-        throw new BillingAccountNotFoundPortError(billingAccountId);
-      }
+        if (!updatedAccount) {
+          throw new BillingAccountNotFoundPortError(params.billingAccountId);
+        }
 
-      const newBalance = updatedAccount.balanceCredits; // bigint
+        const newBalance = updatedAccount.balanceCredits;
 
-      await tx.insert(creditLedger).values({
-        billingAccountId,
-        virtualKeyId,
-        amount: debitAmount,
-        balanceAfter: newBalance,
-        reason: "llm_usage",
-        reference: requestId,
-        metadata: metadata ?? null,
-      });
+        await tx.insert(creditLedger).values({
+          billingAccountId: params.billingAccountId,
+          virtualKeyId: params.virtualKeyId,
+          amount: debitAmount,
+          balanceAfter: newBalance,
+          reason: "llm_usage",
+          reference: params.requestId,
+          metadata: params.metadata ?? null,
+        });
 
-      // 4. Check Balance
-      if (newBalance < 0n) {
-        // Convert to number for error message (safe for display)
-        const costNum = Number(userPriceCredits);
-        const balanceNum = Number(newBalance);
-        const previousBalance = balanceNum + costNum;
+        // Check balance after debit
+        if (newBalance < 0n) {
+          const costNum = Number(params.userPriceCredits);
+          const balanceNum = Number(newBalance);
+          const previousBalance = balanceNum + costNum;
 
-        throw new InsufficientCreditsPortError(
-          billingAccountId,
-          costNum,
-          previousBalance < 0 ? 0 : previousBalance
-        );
+          throw new InsufficientCreditsPortError(
+            params.billingAccountId,
+            costNum,
+            previousBalance < 0 ? 0 : previousBalance
+          );
+        }
+      } else {
+        // Insert usage record without cost data, no credit debit
+        await tx.insert(llmUsage).values({
+          billingAccountId: params.billingAccountId,
+          virtualKeyId: params.virtualKeyId,
+          requestId: params.requestId,
+          model: params.model,
+          promptTokens: params.promptTokens,
+          completionTokens: params.completionTokens,
+          providerCostUsd: null,
+          providerCostCredits: null,
+          userPriceCredits: null,
+          markupFactor: null,
+          billingStatus: "needs_review",
+          usage: {
+            promptTokens: params.promptTokens,
+            completionTokens: params.completionTokens,
+            totalTokens: params.promptTokens + params.completionTokens,
+          },
+        });
       }
     });
   }

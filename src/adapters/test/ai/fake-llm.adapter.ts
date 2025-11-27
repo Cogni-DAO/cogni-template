@@ -19,6 +19,13 @@ export class FakeLlmAdapter implements LlmService {
     params: Parameters<LlmService["completion"]>[0]
   ): ReturnType<LlmService["completion"]> {
     // Fixed deterministic response for CI/test environments
+    console.log(
+      JSON.stringify({
+        level: "info",
+        msg: "[FakeLlmAdapter] used",
+        requestId: params.caller.billingAccountId, // approximate correlation
+      })
+    );
     return {
       message: {
         role: "assistant",
