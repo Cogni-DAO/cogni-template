@@ -69,9 +69,12 @@ describe("app/_facades/ai/completion.server", () => {
       });
 
       mockExecute.mockResolvedValue({
-        role: "assistant",
-        content: "AI response",
-        timestamp: "2025-01-01T12:00:00.000Z",
+        message: {
+          role: "assistant",
+          content: "AI response",
+          timestamp: "2025-01-01T12:00:00.000Z",
+        },
+        requestId: "req-123",
       });
 
       // Act
@@ -83,6 +86,7 @@ describe("app/_facades/ai/completion.server", () => {
           role: "assistant",
           content: "AI response",
           timestamp: "2025-01-01T12:00:00.000Z",
+          requestId: "req-123",
         },
       });
 
@@ -194,9 +198,12 @@ describe("app/_facades/ai/completion.server", () => {
       });
 
       mockExecute.mockResolvedValue({
-        role: "assistant",
-        content: "Response",
-        timestamp: fixedTime,
+        message: {
+          role: "assistant",
+          content: "Response",
+          timestamp: fixedTime,
+        },
+        requestId: "req-456",
       });
 
       // Act

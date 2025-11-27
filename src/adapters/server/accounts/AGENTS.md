@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-26
+- **Last reviewed:** 2025-11-28
 - **Status:** draft
 
 ## Purpose
 
-PostgreSQL implementations of account service ports for credit accounting operations.
+PostgreSQL implementations of account service ports for credit accounting operations with dual-cost LLM billing support (tracks both provider cost and user price).
 
 ## Pointers
 
@@ -43,8 +43,8 @@ PostgreSQL implementations of account service ports for credit accounting operat
 
 ## Responsibilities
 
-- This directory **does**: Implement AccountService using PostgreSQL via Drizzle ORM
-- This directory **does not**: Handle business logic or authentication
+- This directory **does**: Implement AccountService using PostgreSQL via Drizzle ORM; atomic recordLlmUsage with billing status discrimination (billed vs needs_review); transaction rollback on insufficient credits; virtual key provisioning via LiteLLM API
+- This directory **does not**: Handle business logic or authentication; compute pricing (uses pre-calculated values from features layer); validate markup invariants
 
 ## Usage
 
@@ -75,3 +75,5 @@ pnpm test tests/integration/
 
 - Implements ledger-based accounting with computed balance cache
 - Transaction semantics critical for credit integrity
+- recordLlmUsage branches on billingStatus: "billed" debits credits, "needs_review" records usage only
+- Supports nullable cost fields in llm_usage table for graceful degradation when provider cost unavailable

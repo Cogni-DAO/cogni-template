@@ -5,17 +5,18 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-13
+- **Last reviewed:** 2025-11-28
 - **Status:** draft
 
 ## Purpose
 
-Pure domain logic with entities, rules, and business invariants. No I/O, time, or RNG dependencies.
+Pure domain logic with entities, rules, and business invariants. No I/O, time, or RNG dependencies. Includes account models, credit pricing calculations, and chat message validation.
 
 ## Pointers
 
 - [Root AGENTS.md](../../AGENTS.md)
 - [Architecture](../../docs/ARCHITECTURE.md)
+- [Billing Evolution](../../docs/BILLING_EVOLUTION.md)
 
 ## Boundaries
 
@@ -50,8 +51,8 @@ Pure domain logic with entities, rules, and business invariants. No I/O, time, o
 
 ## Responsibilities
 
-- This directory **does**: Define domain entities, business rules, validation logic
-- This directory **does not**: Perform I/O, access external services, handle UI concerns
+- This directory **does**: Define domain entities (Account, Message), business rules (credit sufficiency, message trimming), validation logic (message length, role normalization), pricing calculations (USD to credits with markup)
+- This directory **does not**: Perform I/O, access external services, handle UI concerns, read env vars
 
 ## Usage
 
@@ -82,3 +83,5 @@ pnpm typecheck
 ## Notes
 
 - Inject Clock/Rng via ports for deterministic testing
+- Pricing helpers use BigInt for credit amounts to prevent rounding errors
+- All credit calculations round up (Math.ceil) to ensure minimum 1 credit for non-zero costs

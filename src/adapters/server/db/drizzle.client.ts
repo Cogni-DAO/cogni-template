@@ -36,6 +36,22 @@ function createDb(): Database {
         application_name: "cogni_template_app",
       },
     });
+
+    try {
+      const url = new URL(env.DATABASE_URL);
+      console.log(
+        JSON.stringify({
+          level: "info",
+          msg: "[DB] Connection initialized",
+          database: url.pathname.slice(1),
+          host: url.hostname,
+          port: url.port,
+        })
+      );
+    } catch (e) {
+      console.warn("[DB] Failed to parse DATABASE_URL for logging", e);
+    }
+
     _db = drizzle(client, { schema });
   }
   return _db;

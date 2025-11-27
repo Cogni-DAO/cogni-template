@@ -28,6 +28,7 @@ export function createMockAccountService(): AccountService {
     creditAccount: vi.fn(),
     listCreditLedgerEntries: vi.fn(),
     findCreditLedgerEntryByReference: vi.fn(),
+    recordLlmUsage: vi.fn(),
   };
 }
 
@@ -49,5 +50,6 @@ export function createMockAccountServiceWithDefaults(): AccountService {
     creditAccount: vi.fn().mockResolvedValue({ newBalance: 150 }),
     listCreditLedgerEntries: vi.fn().mockResolvedValue([]),
     findCreditLedgerEntryByReference: vi.fn().mockResolvedValue(null),
+    recordLlmUsage: vi.fn().mockResolvedValue(undefined),
   };
 }

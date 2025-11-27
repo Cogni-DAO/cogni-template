@@ -19,6 +19,13 @@ export class FakeLlmAdapter implements LlmService {
     params: Parameters<LlmService["completion"]>[0]
   ): ReturnType<LlmService["completion"]> {
     // Fixed deterministic response for CI/test environments
+    console.log(
+      JSON.stringify({
+        level: "info",
+        msg: "[FakeLlmAdapter] used",
+        requestId: params.caller.billingAccountId, // approximate correlation
+      })
+    );
     return {
       message: {
         role: "assistant",
@@ -30,6 +37,7 @@ export class FakeLlmAdapter implements LlmService {
         totalTokens: 15,
       },
       finishReason: "stop",
+      providerCostUsd: 0.0001, // Small fixed cost for billing tests ($0.0001 = 0.1 credits @ 1000 credits/USD)
       providerMeta: {
         model: params.model ?? "fake-model",
         provider: "fake",

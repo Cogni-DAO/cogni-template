@@ -12,7 +12,10 @@
  * @public
  */
 
+import type { z } from "zod";
+
 import { resolveAiDeps } from "@/bootstrap/container";
+import type { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
 import { mapAccountsPortErrorToFeature } from "@/features/accounts/public";
 import { execute } from "@/features/ai/services/completion";
 import {
@@ -34,13 +37,8 @@ interface CompletionInput {
   sessionUser: SessionUser;
 }
 
-interface CompletionOutput {
-  message: {
-    role: "assistant";
-    content: string;
-    timestamp: string;
-  };
-}
+// Type-level enforcement: facade MUST return exact contract shape
+type CompletionOutput = z.infer<typeof aiCompletionOperation.output>;
 
 export async function completion(
   input: CompletionInput
@@ -79,9 +77,14 @@ export async function completion(
     );
 
     // Map core result back to DTO
-    const message = fromCoreMessage(result);
+    const messageDto = fromCoreMessage(result.message);
 
-    return { message };
+    return {
+      message: {
+        ...messageDto,
+        requestId: result.requestId,
+      },
+    };
   } catch (error) {
     if (
       isInsufficientCreditsPortError(error) ||

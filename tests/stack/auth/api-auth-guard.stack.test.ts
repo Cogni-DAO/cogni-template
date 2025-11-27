@@ -77,7 +77,7 @@ describe("API Auth Guard Stack Test", () => {
     await db.insert(billingAccounts).values({
       id: billingAccountId,
       ownerUserId: walletAddress,
-      balanceCredits: 1000, // Sufficient credits
+      balanceCredits: 1000n, // Sufficient credits
     });
 
     await db.insert(virtualKeys).values({
@@ -122,7 +122,7 @@ describe("API Auth Guard Stack Test", () => {
     });
 
     expect(updatedBillingAccount).toBeDefined();
-    expect(updatedBillingAccount?.balanceCredits).toBeLessThan(1000); // Credits were deducted
+    expect(updatedBillingAccount?.balanceCredits).toBeLessThan(1000n); // Credits were deducted
   });
 
   it("should enforce auth at proxy level (middleware) for /api/v1/ai/* routes", async () => {

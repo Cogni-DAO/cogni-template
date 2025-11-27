@@ -4,11 +4,11 @@
 /**
  * Module: `@app/api/v1/payments/credits/summary`
  * Purpose: HTTP endpoint to fetch billing balance and recent credit ledger entries for widget payments UI.
- * Scope: Enforces SIWE session, validates query params, delegates to payments facade; does not access database directly.
- * Invariants: Billing account derived from session only; returns ledger ordered newest first.
+ * Scope: Enforces SIWE session, validates query params with contract schema, delegates to payments facade; does not access database directly or perform DTO mapping.
+ * Invariants: Billing account derived from session only; returns ledger ordered newest first; facade handles all DTO mapping.
  * Side-effects: IO (reads billing data via AccountService port).
- * Notes: Used by /credits page for balance and history display.
- * Links: docs/DEPAY_PAYMENTS.md
+ * Notes: Used by /credits page for balance and history display. Routes are thin validators; DTO mapping happens in facades.
+ * Links: docs/DEPAY_PAYMENTS.md, src/contracts/AGENTS.md
  * @public
  */
 
@@ -38,15 +38,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       limit: input.limit,
     });
 
-    const serialized = {
-      ...summary,
-      ledger: summary.ledger.map((entry) => ({
-        ...entry,
-        createdAt: entry.createdAt.toISOString(),
-      })),
-    };
-
-    return NextResponse.json(creditsSummaryOperation.output.parse(serialized));
+    // Facade already returns contract-compliant shape (createdAt as ISO string)
+    return NextResponse.json(creditsSummaryOperation.output.parse(summary));
   } catch (error) {
     if (error && typeof error === "object" && "issues" in error) {
       return NextResponse.json(

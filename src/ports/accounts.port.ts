@@ -3,11 +3,11 @@
 
 /**
  * Module: `@ports/accounts`
- * Purpose: Billing account service port interface and port-level errors for credit accounting operations.
- * Scope: Defines contracts for billing account lifecycle, virtual key provisioning, and credit management. Does not implement business logic.
- * Invariants: All operations are atomic, billing accounts own virtual keys, credit ledger integrity is preserved
+ * Purpose: Billing account service port interface with discriminated union types for LLM billing and port-level errors.
+ * Scope: Defines contracts for billing account lifecycle, virtual key provisioning, and credit management with type-safe billing discrimination. Does not implement business logic.
+ * Invariants: All operations atomic; billing accounts own virtual keys; ledger integrity preserved; billingStatus discriminates cost fields
  * Side-effects: none (interface definition only)
- * Notes: Implemented by database adapters, used by features and app facades
+ * Notes: Uses BilledLlmUsageParams and NeedsReviewLlmUsageParams for type-safe recordLlmUsage; implemented by database adapters
  * Links: Implemented by DrizzleAccountService, used by completion feature and auth mapping
  * @public
  */
@@ -103,6 +103,38 @@ export interface CreditLedgerEntry {
   createdAt: Date;
 }
 
+/**
+ * LLM usage with cost data - billed to user account
+ */
+export type BilledLlmUsageParams = {
+  billingStatus: "billed";
+  billingAccountId: string;
+  virtualKeyId: string;
+  requestId: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  providerCostUsd: number;
+  providerCostCredits: bigint;
+  userPriceCredits: bigint;
+  markupFactorApplied: number;
+  metadata?: Record<string, unknown>;
+};
+
+/**
+ * LLM usage without cost data - recorded but not billed
+ */
+export type NeedsReviewLlmUsageParams = {
+  billingStatus: "needs_review";
+  billingAccountId: string;
+  virtualKeyId: string;
+  requestId: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  metadata?: Record<string, unknown>;
+};
+
 export interface AccountService {
   /**
    * Idempotently create or fetch a billing account for the given user.
@@ -154,6 +186,15 @@ export interface AccountService {
     limit?: number | undefined;
     reason?: string | undefined;
   }): Promise<CreditLedgerEntry[]>;
+
+  /**
+   * Records LLM usage with discriminated billing status.
+   * - billingStatus: "billed" → records usage + debits credits atomically (throws InsufficientCreditsPortError if insufficient)
+   * - billingStatus: "needs_review" → records usage only (no credit debit, no cost fields)
+   */
+  recordLlmUsage(
+    params: BilledLlmUsageParams | NeedsReviewLlmUsageParams
+  ): Promise<void>;
 
   /**
    * Lookup a specific credit ledger entry by reference and reason for idempotency checks.

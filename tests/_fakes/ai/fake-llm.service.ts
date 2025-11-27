@@ -61,6 +61,7 @@ export class FakeLlmService implements LlmService {
     };
     finishReason?: string;
     providerMeta?: Record<string, unknown>;
+    providerCostUsd?: number;
   }> {
     // Log the call for assertions
     this.callLog.push({ ...params });
@@ -85,6 +86,7 @@ export class FakeLlmService implements LlmService {
       };
       finishReason?: string;
       providerMeta?: Record<string, unknown>;
+      providerCostUsd?: number;
     } = {
       message: {
         role: "assistant" as const,
@@ -96,6 +98,7 @@ export class FakeLlmService implements LlmService {
         provider: "fake",
         requestId: "fake-request-id",
       },
+      providerCostUsd: 0.0001, // Small fixed cost for billing tests
     };
 
     if (this.options.finishReason) {

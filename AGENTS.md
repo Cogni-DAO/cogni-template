@@ -33,6 +33,13 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - **Toolchain:** pnpm, ESLint, Prettier, Vitest, Playwright, SonarQube
 - **CI entrypoint:** `pnpm check`
 
+## API Contracts are the Single Source of Truth
+
+- All HTTP/API request/response shapes **must** be defined in `src/contracts/*.contract.ts` using Zod
+- Facades, routes, services, and tests **must** use `z.infer<typeof ...>` from these contracts instead of re-declaring types
+- If the contract shape changes, update the contract file first and then fix whatever TypeScript + Zod complain about
+- No other manual type definitions are allowed for those shapes
+
 ## Pointers
 
 - [Developer Setup](docs/SETUP.md)

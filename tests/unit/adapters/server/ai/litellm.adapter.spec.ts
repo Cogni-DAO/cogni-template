@@ -4,10 +4,10 @@
 /**
  * Module: `@adapters/server/ai/litellm`
  * Purpose: Unit tests for LiteLLM adapter with mocked HTTP calls and error handling.
- * Scope: Tests adapter logic, parameter handling, response parsing. Does NOT test real LiteLLM service.
- * Invariants: No real HTTP calls; deterministic responses; validates LlmService contract compliance
+ * Scope: Tests adapter logic, parameter handling, response parsing, missing cost handling. Does NOT test real LiteLLM service.
+ * Invariants: No real HTTP calls; deterministic responses; validates LlmService contract compliance; warns on missing cost
  * Side-effects: none (mocked fetch)
- * Notes: Tests defaults, error handling, timeout enforcement, response mapping
+ * Notes: Tests defaults, error handling, timeout enforcement, response mapping, console.warn spy for cost warnings
  * Links: src/adapters/server/ai/litellm.adapter.ts, LlmService port
  * @public
  */
@@ -64,11 +64,13 @@ describe("LiteLlmAdapter", () => {
         completion_tokens: 8,
         total_tokens: 18,
       },
+      response_cost: 0.0002,
     };
 
     it("sends correct request to LiteLLM API", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => mockSuccessResponse,
       });
 
@@ -97,6 +99,7 @@ describe("LiteLlmAdapter", () => {
     it("uses provided parameters over defaults", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => mockSuccessResponse,
       });
 
@@ -121,9 +124,13 @@ describe("LiteLlmAdapter", () => {
       });
     });
 
-    it("returns properly formatted response with usage", async () => {
+    it("returns properly formatted response with usage and cost from header", async () => {
+      const mockHeaders = new Headers();
+      mockHeaders.set("x-litellm-response-cost", "0.0002");
+
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: mockHeaders,
         json: async () => mockSuccessResponse,
       });
 
@@ -135,40 +142,59 @@ describe("LiteLlmAdapter", () => {
           content: "Hello! How can I help you today?",
         },
         finishReason: "stop",
-        providerMeta: {
-          model: "gpt-3.5-turbo",
-          provider: "litellm",
-          requestId: "chatcmpl-test-123",
-        },
+        providerMeta: mockSuccessResponse,
         usage: {
           promptTokens: 10,
           completionTokens: 8,
           totalTokens: 18,
         },
+        providerCostUsd: 0.0002,
       });
     });
 
-    it("returns response without usage when not provided", async () => {
-      const responseWithoutUsage = {
-        ...mockSuccessResponse,
-        usage: undefined,
-      };
+    it("returns message without providerCostUsd when x-litellm-response-cost header is missing", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
+      // Mock response without cost header
+      const mockHeaders = new Headers();
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => responseWithoutUsage,
+        headers: mockHeaders,
+        json: async () => mockSuccessResponse,
       });
 
       const result = await adapter.completion(basicParams);
 
-      expect(result.usage).toBeUndefined();
-      expect(result.message).toBeDefined();
-      expect(result.providerMeta).toBeDefined();
+      // Message should still be returned
+      expect(result.message.content).toBe("Hello! How can I help you today?");
+      expect(result.message.role).toBe("assistant");
+
+      // providerCostUsd should be absent (not undefined)
+      expect(result).not.toHaveProperty("providerCostUsd");
+
+      // Other fields should still be present
+      expect(result.usage).toEqual({
+        promptTokens: 10,
+        completionTokens: 8,
+        totalTokens: 18,
+      });
+
+      // Structured warning with BILLING_NO_PROVIDER_COST code should be logged
+      expect(warnSpy).toHaveBeenCalledOnce();
+      const loggedArg = warnSpy.mock.calls[0]?.[0];
+      expect(loggedArg).toBeDefined();
+      const loggedData = JSON.parse(loggedArg as string);
+      expect(loggedData.code).toBe("BILLING_NO_PROVIDER_COST");
+      expect(loggedData.model).toBe("gpt-3.5-turbo");
+      expect(loggedData.totalTokens).toBe(18);
+
+      warnSpy.mockRestore();
     });
 
     it("handles multiple messages correctly", async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => mockSuccessResponse,
       });
 
@@ -216,15 +242,17 @@ describe("LiteLlmAdapter", () => {
             finish_reason: "stop",
           },
         ],
+        response_cost: 0.0002,
       };
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => invalidResponse,
       });
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "LiteLLM completion failed: Invalid response from LiteLLM: missing content"
+        "LiteLLM completion failed: Invalid response from LiteLLM"
       );
     });
 
@@ -232,15 +260,17 @@ describe("LiteLlmAdapter", () => {
       const invalidResponse = {
         id: "test-id",
         choices: null,
+        response_cost: 0.0002,
       };
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => invalidResponse,
       });
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "LiteLLM completion failed: Invalid response from LiteLLM: missing content"
+        "LiteLLM completion failed: Invalid response from LiteLLM"
       );
     });
 
@@ -261,19 +291,21 @@ describe("LiteLlmAdapter", () => {
     });
 
     it("handles different finish reasons", async () => {
-      const lengthResponse = {
+      const responseWithFinishReason = {
         ...mockSuccessResponse,
         choices: [
           {
-            ...mockSuccessResponse.choices[0],
+            message: { content: "Response" },
             finish_reason: "length",
           },
         ],
+        response_cost: 0.0002,
       };
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => lengthResponse,
+        headers: new Headers(),
+        json: async () => responseWithFinishReason,
       });
 
       const result = await adapter.completion(basicParams);
@@ -288,10 +320,12 @@ describe("LiteLlmAdapter", () => {
           completion_tokens: "12",
           total_tokens: "27",
         },
+        response_cost: 0.0002,
       };
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => responseWithStringUsage,
       });
 
@@ -311,10 +345,12 @@ describe("LiteLlmAdapter", () => {
           completion_tokens: null,
           total_tokens: undefined,
         },
+        response_cost: 0.0002,
       };
 
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => responseWithInvalidUsage,
       });
 
@@ -336,9 +372,11 @@ describe("LiteLlmAdapter", () => {
     it("completion method returns a promise", () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
+        headers: new Headers(),
         json: async () => ({
           id: "test",
           choices: [{ message: { content: "test" }, finish_reason: "stop" }],
+          response_cost: 0.0002,
         }),
       });
 

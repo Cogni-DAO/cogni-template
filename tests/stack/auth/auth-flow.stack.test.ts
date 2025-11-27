@@ -55,7 +55,7 @@ describe("Auth Flow Stack Test", () => {
     await db.insert(billingAccounts).values({
       id: billingAccountId,
       ownerUserId: mockSessionUser.id,
-      balanceCredits: 1000, // Sufficient credits
+      balanceCredits: 1000n, // Sufficient credits
     });
 
     // Seed virtual key
