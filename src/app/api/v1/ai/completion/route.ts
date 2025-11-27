@@ -39,10 +39,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const input = aiCompletionOperation.input.parse(body);
 
     // Delegate to bootstrap facade
-    const { message } = await completion({ ...input, sessionUser });
+    const result = await completion({ ...input, sessionUser });
 
-    // Validate and return output
-    return NextResponse.json(aiCompletionOperation.output.parse({ message }));
+    // Validate and return output (wrap result in message to match contract)
+    return NextResponse.json(
+      aiCompletionOperation.output.parse({ message: result })
+    );
   } catch (error) {
     // Handle Zod validation errors
     if (error && typeof error === "object" && "issues" in error) {
