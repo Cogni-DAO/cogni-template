@@ -4,10 +4,10 @@
 /**
  * Module: `@adapters/server/ai/litellm`
  * Purpose: Unit tests for LiteLLM adapter with mocked HTTP calls and error handling.
- * Scope: Tests adapter logic, parameter handling, response parsing. Does NOT test real LiteLLM service.
- * Invariants: No real HTTP calls; deterministic responses; validates LlmService contract compliance
+ * Scope: Tests adapter logic, parameter handling, response parsing, missing cost handling. Does NOT test real LiteLLM service.
+ * Invariants: No real HTTP calls; deterministic responses; validates LlmService contract compliance; warns on missing cost
  * Side-effects: none (mocked fetch)
- * Notes: Tests defaults, error handling, timeout enforcement, response mapping
+ * Notes: Tests defaults, error handling, timeout enforcement, response mapping, console.warn spy for cost warnings
  * Links: src/adapters/server/ai/litellm.adapter.ts, LlmService port
  * @public
  */
@@ -146,7 +146,9 @@ describe("LiteLlmAdapter", () => {
       });
     });
 
-    it("throws error when response_cost is missing", async () => {
+    it("returns message without providerCostUsd when response_cost is missing", async () => {
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
       const responseWithoutCost = {
         ...mockSuccessResponse,
         response_cost: undefined,
@@ -157,9 +159,30 @@ describe("LiteLlmAdapter", () => {
         json: async () => responseWithoutCost,
       });
 
-      await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "Billing error: Provider cost missing from response"
+      const result = await adapter.completion(basicParams);
+
+      // Message should still be returned
+      expect(result.message.content).toBe("Hello! How can I help you today?");
+      expect(result.message.role).toBe("assistant");
+
+      // providerCostUsd should be absent (not undefined)
+      expect(result).not.toHaveProperty("providerCostUsd");
+
+      // Other fields should still be present
+      expect(result.usage).toEqual({
+        promptTokens: 10,
+        completionTokens: 8,
+        totalTokens: 18,
+      });
+
+      // Warning should be logged (prevents regression)
+      expect(warnSpy).toHaveBeenCalledOnce();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("[LiteLlmAdapter] Missing response_cost"),
+        expect.any(String)
       );
+
+      warnSpy.mockRestore();
     });
 
     it("handles multiple messages correctly", async () => {

@@ -3,11 +3,11 @@
 
 /**
  * Module: `@features/ai/services/completion`
- * Purpose: Use case orchestration for AI completion.
- * Scope: Coordinate core rules, port calls, set output timestamp. Does not handle authentication, rate limiting, or credit deduction.
- * Invariants: Only imports core, ports, shared - never contracts or adapters
+ * Purpose: Use case orchestration for AI completion with dual-cost billing.
+ * Scope: Coordinate core rules, port calls, set output timestamp, record usage. Does not handle authentication or rate limiting.
+ * Invariants: Only imports core, ports, shared - never contracts or adapters; pre-call credit check enforced; post-call billing never blocks response
  * Side-effects: IO (via ports)
- * Notes: Applies business rules then delegates to LLM service; accepts AccountService for future credit operations
+ * Notes: Logs warnings when cost is zero; post-call billing errors swallowed to preserve UX
  * Links: Called by API routes, uses core domain and ports
  * @public
  */
@@ -98,6 +98,21 @@ export async function execute(
   // Calculate actual costs
   // If providerCostUsd is missing (should be caught by adapter), default to 0 to avoid crash, but log error
   const providerCostUsd = result.providerCostUsd ?? 0;
+
+  // Feature-level warning when cost is missing (correlates with adapter warning)
+  if (providerCostUsd === 0) {
+    console.warn(
+      "[CompletionService] Zero provider cost - user not charged",
+      JSON.stringify({
+        requestId,
+        billingAccountId: caller.billingAccountId,
+        modelId,
+        promptTokens: result.usage?.promptTokens ?? 0,
+        completionTokens: result.usage?.completionTokens ?? 0,
+      })
+    );
+  }
+
   const markupFactor = serverEnv().USER_PRICE_MARKUP_FACTOR;
   // 5. Calculate costs (Credits-Centric)
   const providerCostCredits = usdToCredits(
@@ -140,23 +155,30 @@ export async function execute(
       },
     });
   } catch (error) {
-    // If we reached the provider, do not fail the response on post-call debit errors
-    // But we should probably log this critical failure
-    if (!(error instanceof InsufficientCreditsPortError)) {
-      console.error(
-        "[CompletionService] Failed to record LLM usage",
-        JSON.stringify({ requestId, error })
+    // Post-call billing is best-effort - NEVER block user response after LLM succeeded
+    if (error instanceof InsufficientCreditsPortError) {
+      // Pre-flight passed but post-call failed - race condition or concurrent usage
+      console.warn(
+        "[CompletionService] Post-call insufficient credits (user got response for free)",
+        JSON.stringify({
+          requestId,
+          billingAccountId: caller.billingAccountId,
+          required: error.cost,
+          available: error.previousBalance,
+        })
       );
-      // We still rethrow if it's not a credit issue, or swallow?
-      // Existing logic swallowed non-credit errors? No, it rethrew.
-      // "if (!(error instanceof InsufficientCreditsPortError)) { throw error; }"
-      // So we keep that behavior.
-      throw error;
+    } else {
+      // Other errors (DB down, FK constraint, etc.) are operational issues
+      console.error(
+        "[CompletionService] CRITICAL: Post-call billing failed - user response NOT blocked",
+        JSON.stringify({
+          requestId,
+          billingAccountId: caller.billingAccountId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      );
     }
-    // If it IS an InsufficientCreditsPortError, we swallow it?
-    // The original code swallowed it: "if (!(error instanceof ...)) { throw error; }" implies if it IS instance, do nothing.
-    // Wait, if debit fails due to insufficient credits AFTER the call, we effectively gave it for free but stopped future calls.
-    // That seems to be the intended behavior for "post-payment" style checks where pre-flight passed.
+    // DO NOT RETHROW - user already got LLM response, must see it
   }
 
   // Feature sets timestamp after completion using injected clock

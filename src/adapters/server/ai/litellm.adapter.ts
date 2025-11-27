@@ -5,9 +5,9 @@
  * Module: `@adapters/server/ai/litellm`
  * Purpose: LiteLLM service implementation for AI completion.
  * Scope: Implement LlmService port, return content only (no timestamps). Does not handle authentication or rate limiting.
- * Invariants: Never sets timestamps, never logs prompts/keys, enforces timeouts
+ * Invariants: Never sets timestamps, never logs prompts/keys, enforces timeouts, returns message even if cost data missing
  * Side-effects: IO (HTTP calls to LiteLLM)
- * Notes: Provides defaults from serverEnv, handles provider-specific formatting
+ * Notes: Provides defaults from serverEnv, handles provider-specific formatting, logs warning when response_cost absent
  * Links: Implements LlmService port, uses serverEnv configuration
  * @internal
  */
@@ -78,16 +78,8 @@ export class LiteLlmAdapter implements LlmService {
         throw new Error("Invalid response from LiteLLM");
       }
 
-      // Fail closed if cost is missing to prevent free usage
-      if (typeof data.response_cost !== "number") {
-        console.error(
-          "[LiteLlmAdapter] Missing response_cost in LiteLLM response",
-          JSON.stringify(data)
-        );
-        throw new Error("Billing error: Provider cost missing from response");
-      }
-
-      return {
+      // Build result object conditionally to satisfy exactOptionalPropertyTypes
+      const result: Awaited<ReturnType<LlmService["completion"]>> = {
         message: {
           role: "assistant",
           content: data.choices[0].message.content,
@@ -99,12 +91,30 @@ export class LiteLlmAdapter implements LlmService {
             Number(data.usage?.prompt_tokens) +
               Number(data.usage?.completion_tokens) || 0,
         },
-        ...(data.choices[0].finish_reason
-          ? { finishReason: data.choices[0].finish_reason }
-          : {}),
-        providerCostUsd: data.response_cost,
         providerMeta: data as unknown as Record<string, unknown>,
       };
+
+      // Add optional fields only when present
+      if (data.choices[0].finish_reason) {
+        result.finishReason = data.choices[0].finish_reason;
+      }
+
+      if (typeof data.response_cost === "number") {
+        result.providerCostUsd = data.response_cost;
+      } else {
+        // Log warning but don't block response - service layer handles billing
+        console.warn(
+          "[LiteLlmAdapter] Missing response_cost in LiteLLM response - billing may be incomplete",
+          JSON.stringify({
+            model,
+            hasUsage: !!data.usage,
+            promptTokens: data.usage?.prompt_tokens,
+            completionTokens: data.usage?.completion_tokens,
+          })
+        );
+      }
+
+      return result;
     } catch (error) {
       // Map provider errors to typed errors (no stack leaks)
       if (error instanceof Error) {
