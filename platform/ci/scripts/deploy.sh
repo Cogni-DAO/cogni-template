@@ -212,23 +212,39 @@ if ! docker compose pull --dry-run; then
   exit 1
 fi
 
-log_info "Running Docker cleanup to free space..."
-docker system prune -af --volumes || echo "Docker cleanup failed, continuing..."
+# Safe garbage collection - removes only stopped containers and dangling images
+log_info "Running safe Docker garbage collection..."
+docker container prune -f || true
+docker image prune -f || true
 
-log_info "Pulling latest images..."
+# Conditional hard cleanup - only when disk pressure demands it
+DISK_USAGE=$(df / | tail -1 | awk '{print $5}' | sed 's/%//')
+if [[ "$DISK_USAGE" -gt 80 ]]; then
+  log_warn "Disk usage at ${DISK_USAGE}% - running aggressive cleanup..."
+  docker image prune -af --filter "until=168h" || true
+  docker builder prune -af --filter "until=168h" || true
+else
+  log_info "Disk usage at ${DISK_USAGE}% - layer cache preserved"
+fi
+
+log_info "[$(date -u +%H:%M:%S)] Pulling updated images..."
 docker compose pull
+log_info "[$(date -u +%H:%M:%S)] Pull complete"
 
 log_info "Bringing up postgres first..."
 docker compose up -d postgres
 
-log_info "Running DB provisioning (explicit)..."
+log_info "[$(date -u +%H:%M:%S)] Running DB provisioning..."
 docker compose --profile bootstrap run --rm db-provision
+log_info "[$(date -u +%H:%M:%S)] DB provisioning complete"
 
-log_info "Running database migrations with new image..."
+log_info "[$(date -u +%H:%M:%S)] Running database migrations..."
 docker compose run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'
+log_info "[$(date -u +%H:%M:%S)] Migrations complete"
 
-log_info "Starting runtime stack (rolling update)..."
+log_info "[$(date -u +%H:%M:%S)] Starting runtime stack (rolling update)..."
 docker compose up -d --remove-orphans
+log_info "[$(date -u +%H:%M:%S)] Stack up complete"
 
 log_info "Waiting for containers to be ready..."
 sleep 10
