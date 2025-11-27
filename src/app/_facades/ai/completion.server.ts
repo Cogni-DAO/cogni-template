@@ -77,9 +77,14 @@ export async function completion(
     );
 
     // Map core result back to DTO
-    const message = fromCoreMessage(result);
+    const messageDto = fromCoreMessage(result.message);
 
-    return { message };
+    return {
+      message: {
+        ...messageDto,
+        requestId: result.requestId,
+      },
+    };
   } catch (error) {
     if (
       isInsufficientCreditsPortError(error) ||

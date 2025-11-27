@@ -61,11 +61,12 @@ describe("features/ai/services/completion", () => {
       );
 
       // Assert
-      expect(result).toEqual({
+      expect(result.message).toEqual({
         role: "assistant",
         content: "AI response",
         timestamp: "2025-01-01T12:00:00.000Z",
       });
+      expect(result.requestId).toBeDefined();
       expect(llmService.wasCalled()).toBe(true);
       expect(llmService.getLastCall()?.messages).toHaveLength(2); // user + assistant
       expect(accountService.recordLlmUsage).toHaveBeenCalled();
@@ -172,7 +173,7 @@ describe("features/ai/services/completion", () => {
       );
 
       // Assert
-      expect(result.timestamp).toBe(fixedTime);
+      expect(result.message.timestamp).toBe(fixedTime);
     });
 
     it("should propagate LLM service errors", async () => {

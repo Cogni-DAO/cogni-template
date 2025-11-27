@@ -47,7 +47,7 @@ export async function execute(
   accountService: AccountService,
   clock: Clock,
   caller: LlmCaller
-): Promise<Message> {
+): Promise<{ message: Message; requestId: string }> {
   // Apply core business rules first
   const userMessages = filterSystemMessages(messages);
 
@@ -95,65 +95,63 @@ export async function execute(
   const modelId =
     typeof providerMeta.model === "string" ? providerMeta.model : "unknown";
 
-  // Calculate actual costs
-  // If providerCostUsd is missing (should be caught by adapter), default to 0 to avoid crash, but log error
-  const providerCostUsd = result.providerCostUsd ?? 0;
+  const baseMetadata = {
+    system: "ai_completion",
+    provider: providerMeta.provider,
+    llmRequestId: providerMeta.requestId,
+    totalTokens,
+  };
 
-  // Feature-level warning when cost is missing (correlates with adapter warning)
-  if (providerCostUsd === 0) {
-    console.warn(
-      "[CompletionService] Zero provider cost - user not charged",
-      JSON.stringify({
-        requestId,
-        billingAccountId: caller.billingAccountId,
-        modelId,
-        promptTokens: result.usage?.promptTokens ?? 0,
-        completionTokens: result.usage?.completionTokens ?? 0,
-      })
-    );
-  }
-
-  const markupFactor = serverEnv().USER_PRICE_MARKUP_FACTOR;
-  // 5. Calculate costs (Credits-Centric)
-  const providerCostCredits = usdToCredits(
-    providerCostUsd,
-    serverEnv().CREDITS_PER_USDC
-  );
-  const userPriceCredits = calculateUserPriceCredits(
-    providerCostCredits,
-    markupFactor
-  );
-
-  // Enforce profit margin invariant
-  if (userPriceCredits < providerCostCredits) {
-    // This should be impossible due to calculateUserPriceCredits logic,
-    // but we assert it here for safety.
-    console.error(
-      `[CompletionService] Invariant violation: User price (${userPriceCredits}) < Provider cost (${providerCostCredits})`
-    );
-    // We still proceed, but maybe we should throw?
-    // For now, the pricing helper guarantees this, so it's a sanity check.
-  }
+  // Branch based on whether provider cost is available
+  // Branch based on whether provider cost is available
 
   try {
-    await accountService.recordLlmUsage({
-      billingAccountId: caller.billingAccountId,
-      virtualKeyId: caller.virtualKeyId,
-      requestId,
-      model: modelId,
-      promptTokens: result.usage?.promptTokens ?? 0,
-      completionTokens: result.usage?.completionTokens ?? 0,
-      providerCostUsd, // Store for audit
-      providerCostCredits,
-      userPriceCredits,
-      markupFactorApplied: markupFactor,
-      metadata: {
-        system: "ai_completion", // New metadata field
-        provider: providerMeta.provider,
-        llmRequestId: providerMeta.requestId,
-        totalTokens,
-      },
-    });
+    if (typeof result.providerCostUsd === "number") {
+      // Cost available - calculate markup and bill user
+      const markupFactor = serverEnv().USER_PRICE_MARKUP_FACTOR;
+      const providerCostCredits = usdToCredits(
+        result.providerCostUsd,
+        serverEnv().CREDITS_PER_USDC
+      );
+      const userPriceCredits = calculateUserPriceCredits(
+        providerCostCredits,
+        markupFactor
+      );
+
+      // Enforce profit margin invariant
+      if (userPriceCredits < providerCostCredits) {
+        console.error(
+          `[CompletionService] Invariant violation: User price (${userPriceCredits}) < Provider cost (${providerCostCredits})`
+        );
+      }
+
+      await accountService.recordLlmUsage({
+        billingStatus: "billed",
+        billingAccountId: caller.billingAccountId,
+        virtualKeyId: caller.virtualKeyId,
+        requestId,
+        model: modelId,
+        promptTokens: result.usage?.promptTokens ?? 0,
+        completionTokens: result.usage?.completionTokens ?? 0,
+        providerCostUsd: result.providerCostUsd,
+        providerCostCredits,
+        userPriceCredits,
+        markupFactorApplied: markupFactor,
+        metadata: baseMetadata,
+      });
+    } else {
+      // No cost available - record usage but don't bill
+      await accountService.recordLlmUsage({
+        billingStatus: "needs_review",
+        billingAccountId: caller.billingAccountId,
+        virtualKeyId: caller.virtualKeyId,
+        requestId,
+        model: modelId,
+        promptTokens: result.usage?.promptTokens ?? 0,
+        completionTokens: result.usage?.completionTokens ?? 0,
+        metadata: baseMetadata,
+      });
+    }
   } catch (error) {
     // Post-call billing is best-effort - NEVER block user response after LLM succeeded
     if (error instanceof InsufficientCreditsPortError) {
@@ -179,11 +177,19 @@ export async function execute(
       );
     }
     // DO NOT RETHROW - user already got LLM response, must see it
+    // EXCEPT in test environment where we need to catch these issues
+    if (serverEnv().APP_ENV === "test") {
+      throw error;
+    }
   }
 
   // Feature sets timestamp after completion using injected clock
+  // Feature sets timestamp after completion using injected clock
   return {
-    ...result.message,
-    timestamp: clock.now(),
+    message: {
+      ...result.message,
+      timestamp: clock.now(),
+    },
+    requestId,
   };
 }
