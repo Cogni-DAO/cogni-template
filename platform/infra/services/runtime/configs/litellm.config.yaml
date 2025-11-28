@@ -1,20 +1,52 @@
-# LiteLLM Configuration Example
-# Copy this to litellm.config.yaml and update with your API keys
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+# LiteLLM Proxy Configuration
+# Purpose: Model routing configuration for LiteLLM proxy with OpenRouter models
+# Scope: Defines model aliases, provider routing (openrouter/ prefix), and database settings
+# Notes: All models route through OpenRouter; free tier models may hit rate limits without API key
+# Links: https://docs.litellm.ai/docs/providers/openrouter
 
 model_list:
-  # OpenAI GPT-4o Mini via OpenRouter
-  - model_name: openai/gpt-4o-mini
+  # Free ZDR Models (Zero Data Retention) via OpenRouter
+  # TODO: Add provider.zdr flag when you want to restrict model selection to ZDR only.
+  # See: https://openrouter.ai/docs/guides/features/zdr
+  # "provider": { "zdr": true }
+  - model_name: qwen3-4b
     litellm_params:
-      model: gpt-4o-mini
+      model: openrouter/qwen/qwen3-4b:free
       api_key: "os.environ/OPENROUTER_API_KEY"
-      api_base: "https://openrouter.ai/api/v1"
 
-  # Anthropic Claude 3 Haiku via OpenRouter
-  - model_name: openrouter/anthropic/claude-3-haiku
+  - model_name: qwen3-235b
     litellm_params:
-      model: anthropic/claude-3-haiku
+      model: openrouter/qwen/qwen3-235b-a22b:free
       api_key: "os.environ/OPENROUTER_API_KEY"
-      api_base: "https://openrouter.ai/api/v1"
+
+  - model_name: qwen3-coder
+    litellm_params:
+      model: openrouter/qwen/qwen3-coder:free
+      api_key: "os.environ/OPENROUTER_API_KEY"
+
+  - model_name: hermes-3-405b
+    litellm_params:
+      model: openrouter/nousresearch/hermes-3-llama-3.1-405b:free
+      api_key: "os.environ/OPENROUTER_API_KEY"
+
+  - model_name: gpt-oss-20b
+    litellm_params:
+      model: openrouter/openai/gpt-oss-20b:free
+      api_key: "os.environ/OPENROUTER_API_KEY"
+
+  # Paid Models (for reference)
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openrouter/openai/gpt-4o-mini
+      api_key: "os.environ/OPENROUTER_API_KEY"
+
+  - model_name: claude-3-haiku
+    litellm_params:
+      model: openrouter/anthropic/claude-3-haiku
+      api_key: "os.environ/OPENROUTER_API_KEY"
 
 general_settings:
   master_key: "os.environ/LITELLM_MASTER_KEY"

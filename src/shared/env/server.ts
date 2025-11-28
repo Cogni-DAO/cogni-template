@@ -53,7 +53,7 @@ const serverSchema = z.object({
         : "http://localhost:4000"
     ),
   LITELLM_MASTER_KEY: z.string().min(1).optional(),
-  DEFAULT_MODEL: z.string().default("openrouter/auto"),
+  DEFAULT_MODEL: z.string().default("gpt-4o-mini"),
 
   // TODO: Remove when proper wallet→key registry exists (MVP crutch)
   // Wallet link MVP - single API key for all wallets (temporary)
