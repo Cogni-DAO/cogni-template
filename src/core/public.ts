@@ -37,3 +37,33 @@ export {
   normalizeMessageRole,
   trimConversationHistory,
 } from "./chat/rules";
+export type {
+  ClientVisibleStatus,
+  PaymentAttempt,
+  PaymentAttemptStatus,
+  PaymentErrorCode,
+} from "./payments/public";
+export {
+  InvalidStateTransitionError,
+  isIntentExpired,
+  isInvalidStateTransitionError,
+  isPaymentIntentExpiredError,
+  isPaymentNotFoundError,
+  isPaymentVerificationError,
+  isTerminalState,
+  isTxHashAlreadyBoundError,
+  isValidPaymentAmount,
+  isValidTransition,
+  isVerificationTimedOut,
+  MAX_PAYMENT_CENTS,
+  MIN_PAYMENT_CENTS,
+  PAYMENT_INTENT_TTL_MS,
+  PaymentIntentExpiredError,
+  PaymentNotFoundError,
+  PaymentVerificationError,
+  PENDING_UNVERIFIED_TTL_MS,
+  rawUsdcToUsdCents,
+  TxHashAlreadyBoundError,
+  toClientVisibleStatus,
+  usdCentsToRawUsdc,
+} from "./payments/public";

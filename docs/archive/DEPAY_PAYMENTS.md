@@ -1,6 +1,14 @@
-# DePay Payments Integration (MVP)
+# DePay Payments Integration
 
-DePay Widgets is our **MVP crypto payment UI** for topping up internal credits. It sits in the **payments layer** and feeds the **billing layer** by creating `credit_ledger` entries, but does **not** replace or change the dual-cost billing system defined in:
+**⚠️ DEPRECATED:** This document describes the original DePay widget approach. The project has moved to a direct wagmi/viem implementation with backend verification.
+
+**See instead:** [PAYMENTS_DESIGN.md](PAYMENTS_DESIGN.md) - Current payment system design
+
+---
+
+## Historical Context
+
+DePay Widgets was the **initial MVP crypto payment UI** for topping up internal credits. It sat in the **payments layer** and fed the **billing layer** by creating `credit_ledger` entries, but did **not** replace or change the dual-cost billing system defined in:
 
 - [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md)
 - [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md)

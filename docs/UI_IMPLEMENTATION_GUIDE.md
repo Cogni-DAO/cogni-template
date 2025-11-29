@@ -1,97 +1,275 @@
 # UI Implementation Guide
 
-A practical guide to our layered UI architecture with CVA styling.
+Canonical reference for UI development. Read this before writing any UI code.
 
-## Architecture Layers (Import Rules)
+## TL;DR — 5 Rules
 
-See [ARCHITECTURE.md Enforcement Rules](ARCHITECTURE.md#enforcement-rules) for canonical import patterns and entry points.
+1. **Kit is the only API surface** — Import from `@/components`, never from `@/styles/ui` or vendor directories directly.
+2. **Tokens only** — All colors, spacing, typography use semantic tokens. ESLint enforces via `no-raw-colors`.
+3. **className = layout only** — Pass `className` for flex/grid/gap/margin. Never for colors or typography.
+4. **Check kit first** — Before creating new UI, scan `src/components/kit/`. Extend existing components via variants.
+5. **Mobile-first** — Design at 360px. Single-column stack default. No fixed heights.
 
-**UI-specific rules**:
+---
 
-- `components/kit` → `@/styles/ui`, vendor/ui-primitives
-- `features` → `@/components` for UI components (never `@/styles/ui` directly). Other standard imports (`@/core`, `@/ports`, `@/shared`) still allowed.
-- `app` → `@/components`, `@/features/*/components/*`
+## Architecture Layers
 
-## Directory Structure & Component Placement
+See [ARCHITECTURE.md Enforcement Rules](ARCHITECTURE.md#enforcement-rules) for canonical import patterns.
 
-- **`src/components/kit/`** - Reusable components across features. Styled with CVA + token utilities. Expose `className?: string` for layout-only overrides (flex/grid/gap/margin), not for recoloring or typography changes.
-- **`src/components/app/shell/`** - Global layout components (AppShell, MainHeader, Footer)
-- **`src/components/app/common/`** - Cross-feature app components (UserMenu, DaoStatusBadge)
-- **`src/features/*/components/`** - Feature-specific components (used only once). Use kit components.
-- **`src/styles/ui/`** - CVA factories using design tokens (literal classes allowed here).
-- **`src/components/vendor/ui-primitives/`** - Vendored code (shadcn). Read-only, no @/\* imports.
+**Import rules**:
 
-**Placement Decision**: Building for reuse? → `components/kit/`. Feature-specific or still exploring? → `features/*/components/` (use short-lived branches for spikes; no special experimental folder needed).
+| Layer            | Can Import From                                              |
+| ---------------- | ------------------------------------------------------------ |
+| `components/kit` | `@/styles/ui`, `@radix-ui/*`, vendor internals               |
+| `features/*`     | `@/components` (kit barrel), `@/core`, `@/ports`, `@/shared` |
+| `app/*`          | `@/components`, `@/features/*/components/*`                  |
 
-**Promotion Rules**: feature → app/common (2+ features, Cogni-specific) → kit (generic, domain-neutral)
+**Never**: features → `@/styles/ui` directly. Only kit wraps styling.
 
-## Core Workflow
+---
 
-### 1. Before Building Anything
+## Component Placement
 
-**Avoid implementing new primitives at all costs!** Scan `/src/components/kit/` first and prioritize reuse. If nothing fits, check shadcn/Radix for a primitive to wrap through kit.
+| Directory                    | Purpose                                 | Example                        |
+| ---------------------------- | --------------------------------------- | ------------------------------ |
+| `src/components/kit/`        | Reusable primitives (domain-neutral)    | `Button`, `Badge`, `Container` |
+| `src/components/app/shell/`  | Global layout                           | `AppShell`, `MainHeader`       |
+| `src/components/app/common/` | Cross-feature, Cogni-specific           | `UserMenu`, `DaoStatusBadge`   |
+| `src/features/*/components/` | Feature-specific (used once)            | `HomeHeroSection`              |
+| `src/styles/ui/`             | CVA factories (literal classes allowed) | `button`, `badge`, `grid`      |
 
-### 2. Need New Styling?
+**Decision tree**:
 
-1. **Reuse existing tokens** — add tokens only in `tailwind.css` + `theme.ts` when semantics are missing.
-2. **Extend kit components** before creating new ones; add variants/props when reasonable.
-3. **Add/extend CVA helpers** in `src/styles/ui/` when a styling pattern becomes shared.
-4. **Export from the barrel** at `src/components/index.ts` once the primitive is ready.
+- Building for reuse? → `components/kit/`
+- Feature-specific or exploring? → `features/*/components/`
+- Used by 2+ features, Cogni-specific? → `components/app/common/`
 
-### 3. Extending vs Creating
+**Promotion**: feature → app/common → kit (after 2+ consumers)
 
-**❌ Wrong**: Invent a bespoke primitive (IconButton, TextWithSpacing) without checking kit.  
-**✅ Right**: Extend kit via variants/props (e.g., `Button` adding `rightIcon`, `Card` adding `accent`).
+---
 
-**Naming**: Kit stays canonical (`CtaSection`); feature components use a domain prefix (`HomeHeroSection`). Promote to kit after a second consumer.
+## Styling System
 
-## Using Vendor Components (shadcn/Radix)
+### Token Architecture
 
-### shadcn Integration
+| File                      | Purpose                                 |
+| ------------------------- | --------------------------------------- |
+| `src/styles/tailwind.css` | CSS custom properties (source of truth) |
+| `src/styles/theme.ts`     | TypeScript keys (no values)             |
+| `src/styles/ui/*.ts`      | CVA factories                           |
 
-1. Generate (or copy) components into `src/components/vendor/ui-primitives/shadcn/`.
-2. Keep vendor files isolated; only adjust imports via `./_vendorUtils`.
-3. Wrap the primitive inside `src/components/kit/*` (required by `no-vendor-imports-outside-kit`).
-4. Examples: `GithubButton`, `ModeToggle`, and dropdown menus in kit.
+**Adding a token**:
 
-### Radix Integration
+1. Add `--token-name` to `tailwind.css`
+2. Add key to `theme.ts`
+3. Use `prefix-[var(--token-name)]` or semantic utility
 
-1. Import `@radix-ui/react-*` primitives directly in kit wrappers.
-2. Compose CVA classes from `@/styles/ui` for the base look; `className` is available for layout tweaks only.
-3. Examples: `ModeToggle`, navigation menus, and inputs under `/src/components/kit`.
+### Token Rules (ESLint + CI Enforced)
 
-## Styling Rules
+**Colors** (ESLint `no-raw-colors`):
 
-- **Tokens = SoT:** define/extend tokens only in `src/styles/tailwind.css` (values) + `src/styles/theme.ts` (keys). Tailwind’s palette is trimmed to these semantics.
-- **Color/typography utilities:** `bg-*/text-*/border-*/ring-*/shadow-*` classes must use semantic prefixes (e.g., `bg-surface-2`, `text-fg-muted`) or `prefix-[var(--token)]`. Raw hex/rgb/hsl values are blocked by `no-raw-colors`.
-- **Arbitrary values:** Tailwind arbitrary utilities are only allowed when wrapping `var(--token)` (e.g., `gap-[var(--spacing-lg)]`), enforced by `no-arbitrary-non-token-values`.
-- **Kit components:** use CVA factories for base styling but may expose `className?: string` for layout/composition overrides (flex/grid/gap/m/p/size). Do not introduce new colors/typography via `className`.
-- **Feature components:** can combine kit primitives with Tailwind layout utilities directly, as long as they honor the token rules. If a layout repeats across features, promote it into kit.
-- **Vendor isolation:** only kit wrappers may import from `src/components/vendor/ui-primitives/shadcn/**`, enforced by `no-vendor-imports-outside-kit`.
-- **Machine-readable spec:** see `docs/ui-style-spec.json` for the canonical list of allowed prefixes/patterns used by automated audits.
+- ✅ `bg-primary`, `text-foreground`, `border-border` (semantic)
+- ✅ `bg-[var(--chart-6)]` (bracketed token)
+- ❌ `bg-blue-500`, `text-red-600` (raw palette)
 
-**CVA Pattern**: declare `const *Variants = { ... } satisfies Record<TokenKey,string>` and pass that identifier to `cva`. Keep literal class strings inside `src/styles/ui/**`.
+**Arbitrary values** (ESLint `no-arbitrary-non-token-values`):
 
-## Token Architecture
+- ✅ `rounded-[var(--radius)]`, `gap-[var(--spacing-lg)]`
+- ❌ `w-[123px]`, `mt-[47px]` (magic numbers)
 
-**Values**: `tailwind.css` (single source of truth)  
-**Types**: `theme.ts` (keys only, no values)  
-**Minimal Workflow**: Adding new token requires only 2 files: add `--token` to tailwind.css, add key to theme.ts, use `prefix-[var(--token)]`
+**Typography** (CI ripgrep check):
 
-**Bracketed Token Syntax**: Use `prefix-[var(--token)]` for direct token access (e.g., `text-[var(--chart-6)]`, `ring-offset-[var(--ring-offset-w-sm)]`). Prefer semantic utilities (`bg-primary`) when available. ESLint blocks raw utilities (`text-white`, `z-50`) and enforces token usage.
+- ✅ Use typography tokens from `@/styles/ui` in kit components
+- ❌ `text-xs`, `text-lg`, `text-2xl` outside `styles/ui/**` and `kit/**`
 
-**Examples**: Study `/src/styles/ui/inputs.ts`, `/src/styles/ui/layout.ts` for implementation patterns
+Typography is enforced via CI (`pnpm check`) not ESLint — keeps linting fast and low false-positives.
 
-## Barrel Exports
+### CVA Pattern
 
-Always update `src/components/index.ts` when adding kit components.  
-**Examples**: See existing exports in `/src/components/index.ts`
+```typescript
+// In src/styles/ui/*.ts
+const buttonToneVariants = {
+  primary: "bg-primary text-primary-foreground",
+  secondary: "bg-secondary text-secondary-foreground",
+} satisfies Record<ToneKey, string>;
+
+export const button = cva("inline-flex items-center ...", {
+  variants: { tone: buttonToneVariants },
+  defaultVariants: { tone: "primary" },
+});
+```
+
+### className Policy
+
+Kit components expose `className?: string` for **layout-only overrides**:
+
+- ✅ `className="mt-4 flex-1"` (margin, flex)
+- ✅ `className="w-full max-w-md"` (sizing)
+- ❌ `className="bg-red-500 text-lg"` (color, typography) — use variants
+
+---
+
+## Mobile-First Axioms
+
+1. **360px baseline** — Design for smallest viewport first
+2. **Single-column stack** — Default to vertical flow; add columns only at breakpoints
+3. **No fixed heights** — Use `min-h-*` or aspect ratios, except for media assets
+4. **Overflow rules** — Add `min-w-0` on flex children, `overflow-x-auto` on wide content
+5. **Breakpoints when forced** — Add `sm:`, `md:`, `lg:` only when the 360px layout breaks
+
+### Layout System
+
+| Token                     | Value  | Use Case                         |
+| ------------------------- | ------ | -------------------------------- |
+| `--size-container-sm`     | 42rem  | Narrow content (forms, articles) |
+| `--size-container-md`     | 48rem  | Default content width            |
+| `--size-container-lg`     | 64rem  | Wide content                     |
+| `--size-container-xl`     | 80rem  | Full-width sections              |
+| `--size-container-screen` | 1280px | Max page width                   |
+
+**Breakpoints** (Tailwind defaults):
+
+- `sm:` — 640px+ (landscape phones)
+- `md:` — 768px+ (tablets)
+- `lg:` — 1024px+ (laptops)
+- `xl:` — 1280px+ (desktops)
+
+### Responsive className Rules
+
+Responsive prefixes are **allowed for layout**, **forbidden for styling**:
+
+- ✅ `className="flex-col sm:flex-row"` (layout change)
+- ✅ `className="grid-cols-1 md:grid-cols-2 lg:grid-cols-3"` (column change)
+- ✅ `className="gap-4 lg:gap-6"` (spacing with tokens)
+- ❌ `className="sm:bg-red-500"` (color override at breakpoint)
+- ❌ `className="md:text-lg"` (typography override at breakpoint)
+- ❌ `className="lg:[margin-left:47px]"` (magic breakpoint hack)
+
+---
+
+## shadcn/Radix Ownership
+
+shadcn/Radix code is **copied and owned**, not a dependency jail:
+
+- Upstream reference kept in file headers for updates
+- Kit is the only API surface — features import from `@/components`
+- Vendor files live in `src/components/vendor/ui-primitives/`
+- ESLint `no-vendor-imports-outside-kit` enforces isolation
+
+**Workflow**:
+
+1. Copy shadcn component to `vendor/ui-primitives/shadcn/`
+2. Create kit wrapper in `src/components/kit/`
+3. Export from `src/components/index.ts`
+
+---
+
+## Quality Gates (Post-Consolidation)
+
+For canonical kit components after [UI_CLEANUP_PLAN.md](UI_CLEANUP_PLAN.md) Phase 3.
+
+**All gates run in CI** — not manual checklists. PR blocked if any fail.
+
+| Gate               | Tool        | CI Command             | Requirement              |
+| ------------------ | ----------- | ---------------------- | ------------------------ |
+| Lint + Types       | Biome + TSC | `pnpm check`           | No errors                |
+| Token enforcement  | ESLint + rg | `pnpm check`           | No raw colors/typography |
+| Story              | Storybook   | `pnpm storybook:build` | All variants documented  |
+| Visual Regression  | Playwright  | `pnpm test:visual`     | No unexpected changes    |
+| Accessibility      | axe-core    | `pnpm e2e:a11y`        | WCAG 2.1 AA pass         |
+| Mobile Performance | Lighthouse  | `pnpm lighthouse`      | Mobile score ≥ 90        |
+
+**PR checklist** (future, after Storybook setup):
+
+- [ ] Storybook story with all variants
+- [ ] Visual regression pass (3 viewports: 360px, 768px, 1280px)
+- [ ] `pnpm check` passes (includes token/typography enforcement)
+- [ ] Lighthouse mobile ≥ 90
+
+---
+
+## Tooling Commands
+
+```bash
+# Development
+pnpm dev              # Start dev server
+pnpm check            # Lint + type + format (CI entrypoint)
+
+# Testing
+pnpm test             # Unit/integration tests
+pnpm e2e              # E2E tests (black box)
+pnpm e2e:smoke        # Smoke tests only
+
+# Future (after Storybook setup)
+pnpm storybook        # Component catalog
+pnpm storybook:build  # Build static catalog
+pnpm test:visual      # Playwright visual regression
+```
+
+---
+
+## Component Catalog
+
+### Inputs
+
+- [`Button`](../src/components/kit/inputs/Button.tsx) — Primary action trigger
+- [`Input`](../src/components/kit/inputs/Input.tsx) — Text input field
+- [`ModeToggle`](../src/components/kit/inputs/ModeToggle.tsx) — Light/dark theme switcher
+
+### Data Display
+
+- [`Badge`](../src/components/kit/data-display/Badge.tsx) — Status/label indicator
+- [`Avatar`](../src/components/kit/data-display/Avatar.tsx) — User avatar with fallback
+- [`TerminalFrame`](../src/components/kit/data-display/TerminalFrame.tsx) — Terminal-style container
+- [`GithubButton`](../src/components/kit/data-display/GithubButton.tsx) — GitHub star button
+
+### Layout
+
+- [`Container`](../src/components/kit/layout/Container.tsx) — Max-width container
+- [`Header`](../src/components/kit/layout/Header.tsx) — Page header
+
+### Navigation
+
+- [`NavigationLink`](../src/components/kit/navigation/NavigationLink.tsx) — Nav link with active state
+- [`SkipLink`](../src/components/kit/navigation/SkipLink.tsx) — Accessibility skip link
+
+### Sections
+
+- [`Hero`](../src/components/kit/sections/Hero.tsx) — Hero section layout
+- [`CtaSection`](../src/components/kit/sections/CtaSection.tsx) — Call-to-action section
+- [`FeaturesGrid`](../src/components/kit/sections/FeaturesGrid.tsx) — Feature showcase grid
+
+### Typography
+
+- [`Prompt`](../src/components/kit/typography/Prompt.tsx) — Terminal prompt text
+- [`CodeHero`](../src/components/kit/typography/CodeHero.tsx) — Code block with syntax tokens
+
+### Animation
+
+- [`Reveal`](../src/components/kit/animation/Reveal.tsx) — Scroll-triggered reveal
+
+### Auth
+
+- [`WalletConnectButton`](../src/components/kit/auth/SafeWalletConnectButton.tsx) — Web3 wallet connection
+
+---
 
 ## Validation Checklist
 
-- [ ] Checked kit + vendor wrappers before adding new UI.
-- [ ] Colors/typography utilities use semantic prefixes or token vars.
-- [ ] Arbitrary Tailwind values wrap `var(--token)` when used.
-- [ ] Kit component overrides stay layout-only; CVA handles core styling.
-- [ ] Vendor primitives only referenced from kit.
-- [ ] Barrels updated and `pnpm check` (lint+type+tests) passes.
+Before submitting UI changes:
+
+- [ ] Checked kit first — no unnecessary new primitives
+- [ ] All colors/typography use semantic tokens or `[var(--token)]`
+- [ ] className overrides are layout-only
+- [ ] Works at 360px viewport
+- [ ] Barrel exports updated (`src/components/index.ts`)
+- [ ] `pnpm check` passes
+
+---
+
+## References
+
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Layer enforcement rules
+- [UI_CLEANUP_PLAN.md](UI_CLEANUP_PLAN.md) — Consolidation roadmap
+- [ui-style-spec.json](ui-style-spec.json) — Machine-readable style spec
+- [src/styles/ui/](../src/styles/ui/) — CVA factory implementations
