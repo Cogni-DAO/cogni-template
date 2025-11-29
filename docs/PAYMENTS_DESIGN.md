@@ -373,8 +373,8 @@ PENDING_UNVERIFIED -> FAILED (on tx revert OR receipt not found after 24h)
 
 **Key Columns:**
 
-- `id` (UUID, PK) - attemptId
-- `billing_account_id` (TEXT, FK) - owner (TEXT matches existing schema)
+- `id` (UUID, PK, default gen_random_uuid()) - attemptId
+- `billing_account_id` (TEXT, NOT NULL, FK → billing_accounts) - owner
 - `from_address` (TEXT, NOT NULL) - SIWE wallet checksummed via `getAddress()`
 - `chain_id` (INTEGER) - Ethereum Sepolia (11155111) for MVP, Base mainnet (8453) in Phase 3
 - `tx_hash` (TEXT, nullable) - bound on submit
@@ -384,9 +384,8 @@ PENDING_UNVERIFIED -> FAILED (on tx revert OR receipt not found after 24h)
 - `expires_at` (TIMESTAMP, nullable) - NULL after submit (only for CREATED_INTENT)
 - `submitted_at` (TIMESTAMP, nullable) - set when txHash bound (for PENDING_UNVERIFIED timeout)
 - `last_verify_attempt_at` (TIMESTAMP, nullable) - for GET throttle
-- `verify_attempt_count` (INTEGER, default 0) - incremented on each verification attempt
+- `verify_attempt_count` (INTEGER, NOT NULL, default 0) - incremented on each verification attempt
 - `created_at` (TIMESTAMP, NOT NULL, default now())
-- `updated_at` (TIMESTAMP, NOT NULL, default now())
 
 **Required Indexes:**
 
@@ -421,37 +420,15 @@ PENDING_UNVERIFIED -> FAILED (on tx revert OR receipt not found after 24h)
 
 **MUST enforce exactly-once credit at DB level with chain awareness:**
 
-**Two options:**
-
-**(A) Add chain_id column to credit_ledger:**
-
-```sql
-ALTER TABLE credit_ledger ADD COLUMN chain_id INTEGER;
-CREATE UNIQUE INDEX credit_ledger_payment_ref_unique
-ON credit_ledger(chain_id, reference)
-WHERE reason = 'widget_payment';
-```
-
-**(B) Use composite reference format:**
-
-```sql
--- reference format: "${chainId}:${txHash}"
-CREATE UNIQUE INDEX credit_ledger_payment_ref_unique
-ON credit_ledger(reference)
-WHERE reason = 'widget_payment';
-```
-
-**Recommendation:** Option B (composite reference) is simpler for MVP.
-
-**MVP Implementation (Option B):**
-
 ```sql
 CREATE UNIQUE INDEX credit_ledger_payment_ref_unique
 ON credit_ledger(reference)
 WHERE reason = 'widget_payment';
 ```
 
-Reference format: `"${chainId}:${txHash}"` (e.g., `"11155111:0xabc123..."`)
+**Reference format:** `"${chainId}:${txHash}"` (e.g., `"11155111:0xabc123..."`)
+
+**Implementation:** Feature service passes composite reference to `confirmCreditsPayment()` for idempotency.
 
 ---
 
@@ -460,10 +437,10 @@ Reference format: `"${chainId}:${txHash}"` (e.g., `"11155111:0xabc123..."`)
 **Three layers:**
 
 1. **Partial unique index** on `payment_attempts(chain_id, tx_hash)` - prevents same txHash across attempts
-2. **Unique constraint** on `credit_ledger(reference)` for payments with chain awareness - DB-level exactly-once (see options above)
+2. **Unique constraint** on `credit_ledger(reference)` for payments - DB-level exactly-once with composite reference
 3. **FOR UPDATE lock** in settlement transaction - prevents race conditions
 
-**Chain awareness in ledger:** Reference MUST include chain context to prevent collisions. Use composite reference `"${chainId}:${txHash}"` (option B) for MVP simplicity.
+**Chain awareness in ledger:** Reference MUST include chain context to prevent collisions. Use composite reference `"${chainId}:${txHash}"`.
 
 ---
 
