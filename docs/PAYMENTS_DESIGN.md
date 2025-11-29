@@ -37,10 +37,11 @@
 
 **Adapters:**
 
-- [ ] Create `adapters/server/payments/drizzle.adapter.ts` (PaymentAttemptRepository)
-- [ ] Create `adapters/server/payments/ponder-onchain-verifier.adapter.ts` (OnChainVerifier - stubbed now, real Ponder in Phase 3)
-- [ ] Create `adapters/test/payments/fake-onchain-verifier.adapter.ts` (OnChainVerifier - deterministic fake for tests)
-- [ ] Wire in `bootstrap/container.ts`: production uses PonderOnChainVerifierAdapter, test uses FakeOnChainVerifierAdapter
+- [x] Create `adapters/server/payments/drizzle-payment-attempt.adapter.ts` (PaymentAttemptRepository)
+- [x] Create `adapters/server/payments/ponder-onchain-verifier.adapter.ts` (OnChainVerifier - stubbed now, real Ponder in Phase 3)
+- [x] Create `adapters/test/payments/fake-onchain-verifier.adapter.ts` (OnChainVerifier - deterministic fake for tests)
+- [x] Export from `adapters/server/index.ts` and `adapters/test/index.ts`
+- [x] Wire in `bootstrap/container.ts`: production uses PonderOnChainVerifierAdapter, test uses FakeOnChainVerifierAdapter
 
 **Feature Service:**
 
@@ -404,12 +405,14 @@ PENDING_UNVERIFIED -> FAILED (on tx revert OR receipt not found after 24h)
 
 - `id` (UUID, PK, default gen_random_uuid())
 - `attempt_id` (UUID, NOT NULL, FK → payment_attempts)
-- `event_type` (TEXT, NOT NULL) - `INTENT_CREATED`, `TX_SUBMITTED`, `VERIFICATION_ATTEMPTED`, `CREDITED`, `REJECTED`, `FAILED`, `EXPIRED`
-- `from_status` (TEXT, nullable) - previous status (null for INTENT_CREATED)
-- `to_status` (TEXT, NOT NULL) - new status
-- `error_code` (TEXT, nullable) - only for REJECTED/FAILED events
+- `event_type` (TEXT, NOT NULL) - Operation verbs: `INTENT_CREATED`, `TX_SUBMITTED`, `VERIFICATION_ATTEMPTED`, `STATUS_CHANGED`
+- `from_status` (TEXT, nullable) - Previous PaymentAttemptStatus (null for INTENT_CREATED)
+- `to_status` (TEXT, NOT NULL) - New PaymentAttemptStatus
+- `error_code` (TEXT, nullable) - PaymentErrorCode for failure events
 - `metadata` (JSONB, nullable) - txHash, blockNumber, validation details
 - `created_at` (TIMESTAMP, NOT NULL, default now())
+
+**Event semantics:** event_type describes the operation (verb); from_status/to_status hold the actual states.
 
 **Index:**
 
