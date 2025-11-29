@@ -19,3 +19,4 @@ export {
 export { FakeClock } from "./fake-clock";
 export { FakeRng } from "./fake-rng";
 export { FakeTelemetry } from "./fake-telemetry";
+export * from "./payments/fakes";
