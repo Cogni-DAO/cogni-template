@@ -22,8 +22,9 @@
 
 **Ports:**
 
-- [ ] Create `ports/payment-attempt.port.ts` with PaymentAttemptRepository interface
-- [ ] Create `ports/onchain-verifier.port.ts` with OnChainVerifier interface (no Ponder-specific types)
+- [x] Create `ports/payment-attempt.port.ts` with PaymentAttemptRepository interface
+- [x] Create `ports/onchain-verifier.port.ts` with OnChainVerifier interface (no Ponder-specific types)
+- [x] Export from `ports/index.ts`
 
 **Database:**
 
