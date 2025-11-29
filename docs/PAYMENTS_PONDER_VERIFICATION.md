@@ -2,11 +2,11 @@
 
 **Status:** Post-MVP hardening. Not required for initial launch.
 
-**Purpose:** Introduce a Ponder-based on-chain indexer that provides an independent view of USDC transfers into the DAO wallet for reconciliation, observability, and future fraud prevention. This does NOT replace the widget confirm endpoint in MVP; it adds a second layer of truth.
+**Purpose:** Introduce a Ponder-based on-chain indexer that provides an independent view of USDC transfers into the DAO wallet for reconciliation, observability, and future fraud prevention. This supplements the MVP backend verification (direct viem receipt validation) with a durable event source.
 
 **Related:**
 
-- MVP payments flow: [DEPAY_PAYMENTS.md](DEPAY_PAYMENTS.md)
+- **MVP payments flow:** [PAYMENTS_DESIGN.md](PAYMENTS_DESIGN.md) - Complete payment system design
 - Billing layer: [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md)
 - Auth model: [SECURITY_AUTH_SPEC.md](SECURITY_AUTH_SPEC.md)
 
