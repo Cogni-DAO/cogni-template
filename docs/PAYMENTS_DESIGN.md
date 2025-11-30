@@ -69,17 +69,17 @@
 - `PENDING_UNVERIFIED_TTL_MS = 24 * 60 * 60 * 1000` (in core/payments/rules.ts)
 - [x] `VERIFY_THROTTLE_SECONDS = 10` (GET polling throttle)
 
-**MVP Tests (9 critical scenarios):**
+**MVP Tests (9 critical scenarios):** ✅ COMPLETE
 
-- [ ] Sender mismatch → REJECTED with SENDER_MISMATCH
-- [ ] Wrong token/recipient/amount → REJECTED with appropriate code
-- [ ] Missing receipt → stays PENDING_UNVERIFIED (within 24h window)
-- [ ] PENDING_UNVERIFIED timeout → FAILED after 24h from submit with RECEIPT_NOT_FOUND
-- [ ] Insufficient confirmations → stays PENDING_UNVERIFIED
-- [ ] Duplicate submit (same attempt+hash) → 200 idempotent
-- [ ] Same txHash different attempt → 409
-- [ ] Atomic settle: verify no CREDITED without ledger entry (DB assertion)
-- [ ] Ownership: not owned → 404
+- [x] Sender mismatch → REJECTED with SENDER_MISMATCH
+- [x] Wrong token/recipient/amount → REJECTED with appropriate code
+- [x] Missing receipt → stays PENDING_UNVERIFIED (within 24h window)
+- [x] PENDING_UNVERIFIED timeout → FAILED after 24h from submit with RECEIPT_NOT_FOUND
+- [x] Insufficient confirmations → stays PENDING_UNVERIFIED then CREDITED when sufficient
+- [x] Duplicate submit (same attempt+hash) → 200 idempotent
+- [x] Same txHash different attempt → 409
+- [x] Atomic settle: verify no CREDITED without ledger entry (DB assertion)
+- [x] Ownership: not owned → 404
 
 ---
 

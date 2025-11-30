@@ -1,6 +1,6 @@
 # Payment Testing Plan & Implementation
 
-**Status:** Phase 1 Complete, Phase 2 Pending
+**Status:** Phase 1 Complete, Phase 2 Complete, Phase 4 Complete
 **Purpose:** Systematic test coverage for payment system from core domain through full MVP scenarios
 
 ---
@@ -97,27 +97,37 @@
 
 ---
 
-### Phase 4: MVP Full-Flow Scenarios ⏸️ DEFERRED
+### Phase 4: MVP Full-Flow Scenarios ✅ COMPLETE
 
 **Prerequisites:** Full backend implementation (DB + adapters + services + APIs)
 
-**Type:** Integration tests with database + fake verifier configured for specific outcomes
+**Type:** Stack tests with database + fake verifier configured for specific outcomes
 
-**Location:** `tests/integration/payments/mvp-flows.spec.ts`
+**Location:** `tests/stack/payments/mvp-scenarios.stack.test.ts`
+
+**Test Infrastructure:**
+
+- [x] Added singleton accessor to FakeOnChainVerifierAdapter (`getTestOnChainVerifier`, `resetTestOnChainVerifier`)
+- [x] Updated DI container to use singleton in test mode
+- [x] Exported test helpers from `src/adapters/test/index.ts`
 
 **9 Critical MVP Scenarios (from PAYMENTS_DESIGN.md):**
 
-- [ ] Sender mismatch → REJECTED with SENDER_MISMATCH
-- [ ] Wrong token/recipient/amount → REJECTED with appropriate code
-- [ ] Missing receipt → stays PENDING_UNVERIFIED (within 24h window)
-- [ ] PENDING_UNVERIFIED timeout → FAILED after 24h with RECEIPT_NOT_FOUND
-- [ ] Insufficient confirmations → stays PENDING_UNVERIFIED
-- [ ] Duplicate submit (same attempt+hash) → 200 idempotent
-- [ ] Same txHash different attempt → 409 conflict
-- [ ] Atomic settle → verify no CREDITED without ledger entry (DB assertion)
-- [ ] Ownership enforcement → not owned returns 404
+- [x] Sender mismatch → REJECTED with SENDER_MISMATCH
+- [x] Wrong token/recipient/amount → REJECTED with appropriate code
+- [x] Missing receipt → stays PENDING_UNVERIFIED (within 24h window)
+- [x] PENDING_UNVERIFIED timeout → FAILED after 24h with RECEIPT_NOT_FOUND
+- [x] Insufficient confirmations → stays PENDING_UNVERIFIED then CREDITED when sufficient
+- [x] Duplicate submit (same attempt+hash) → 200 idempotent
+- [x] Same txHash different attempt → 409 conflict
+- [x] Atomic settle → verify bidirectional invariant (CREDITED ↔ ledger entry)
+- [x] Ownership enforcement → not owned returns 404
 
-**Test Strategy:** See "MVP Test Scenarios Strategy" section below for implementation details.
+**Test Results:** 11 tests passing (9 scenarios + 2 atomicity assertions), 259ms duration
+
+**Production Bug Fixed:** Added `defaultVirtualKeyId` parameter to payment service and facades (was empty string, causing settlement failures)
+
+**Test Pattern:** Uses `seedAuthenticatedUser` fixture for proper setup with billing account + virtual key; configures FakeOnChainVerifierAdapter via singleton; asserts both response shape and DB state.
 
 ---
 
