@@ -5,7 +5,7 @@
  * Module: `@styles/ui/code`
  * Purpose: Code syntax highlighting and spacing styling factories.
  * Scope: Provides CVA factories for code token styling and layout. Does not handle component logic.
- * Invariants: All variants use design tokens; token kinds map to chart colors; maintains accessibility.
+ * Invariants: All variants use design tokens; token kinds map to syntax-* palette; maintains accessibility.
  * Side-effects: none
  * Notes: Extracted from typography.ts for better organization of code-specific styling.
  * Links: src/components/kit/typography/CodeHero.tsx, src/styles/theme.ts
@@ -15,18 +15,18 @@
 import { cva } from "class-variance-authority";
 
 const codeTokenKindVariants = {
-  keyword: "!text-[var(--color-chart-6)]",
-  operator: "!text-[var(--color-chart-2)]",
-  variable: "!text-[var(--color-chart-5)]",
+  keyword: "!text-[var(--color-syntax-keyword)]",
+  operator: "!text-[var(--color-syntax-operator)]",
+  variable: "!text-[var(--color-syntax-string)]",
   punctuation: "!text-muted-foreground",
-  parenthesis: "!text-[var(--color-chart-3)]",
-  property: "!text-[var(--color-chart-1)]",
-  delimiter: "!text-[var(--color-chart-4)]",
+  parenthesis: "!text-[var(--color-syntax-punctuation)]",
+  property: "!text-[var(--color-syntax-property)]",
+  delimiter: "!text-[var(--color-syntax-delimiter)]",
   // Aliases for hero code components
   // Same as variable
-  identifier: "!text-[var(--color-chart-5)]",
+  identifier: "!text-[var(--color-syntax-string)]",
   // Same as property
-  accent: "!text-[var(--color-chart-1)]",
+  accent: "!text-[var(--color-syntax-property)]",
 } as const;
 
 const codeTokenSpacingRightVariants = {

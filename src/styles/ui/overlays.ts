@@ -248,3 +248,32 @@ export const dropdownMenuCheck = cva("", {
 export const skipLink = cva(
   "sr-only transition-all duration-[var(--duration-fast)] focus:not-sr-only focus:absolute focus:top-[var(--position-sm)] focus:left-[var(--position-sm)] focus:z-[var(--z-overlay)] focus:rounded-md focus:bg-primary focus:px-[var(--position-sm)] focus:py-[var(--spacing-sm)] focus:text-primary-foreground focus:shadow-[var(--shadow-lg)]"
 );
+
+/**
+ * Chat container with flex column layout
+ */
+export const chatContainer = cva("flex h-full flex-col");
+
+/**
+ * Chat messages area - mobile fix: overflow-y-scroll for iOS momentum scrolling
+ */
+export const chatMessages = cva(
+  "flex-grow overflow-y-scroll p-[var(--spacing-md)] sm:p-[var(--spacing-lg)]"
+);
+
+/**
+ * Individual chat message wrapper
+ */
+export const chatMessage = cva("mb-[var(--spacing-sm)]");
+
+/**
+ * Visual divider between messages and input
+ */
+export const chatDivider = cva("h-px bg-border");
+
+/**
+ * Chat input form container with gap
+ */
+export const chatForm = cva(
+  "flex gap-[var(--spacing-sm)] p-[var(--spacing-md)] sm:p-[var(--spacing-lg)]"
+);

@@ -8,38 +8,20 @@
  * Invariants: Uses layout primitives; single-column responsive design.
  * Side-effects: none
  * Notes: Composes section, container, grid layout for homepage hero pattern.
- * Links: src/styles/ui/layout.ts, src/components/kit/sections/hero.styles.ts
+ * Links: src/styles/ui/layout.ts
  * @public
  */
 
-import { cva } from "class-variance-authority";
 import type { ReactElement, ReactNode } from "react";
 
-import { container, grid, section } from "@/components";
-
-// Hero-specific layout styles (localized to this component)
-const heroTextWrapper = cva(
-  "sm:text-center md:mx-auto md:max-w-[var(--size-container-lg)] lg:col-span-12 lg:mb-[var(--spacing-xl)] lg:text-left",
-  {
-    variants: {
-      width: {
-        auto: "",
-        fixed: "[&>h1]:min-w-measure",
-      },
-    },
-    defaultVariants: {
-      width: "auto",
-    },
-  }
-);
-
-const heroButtonContainer = cva(
-  "-mx-[var(--spacing-xl)] sm:-mx-[var(--spacing-4xl)] md:-mx-[var(--spacing-5xl)] mt-[var(--spacing-xl)] text-center"
-);
-
-const heroVisualContainer = cva(
-  "relative mt-[var(--spacing-md-plus)] sm:mx-auto lg:col-span-12 lg:mx-auto lg:mt-0 lg:max-w-none"
-);
+import {
+  container,
+  grid,
+  heroButtons,
+  heroText,
+  heroVisual,
+  section,
+} from "@/components";
 
 interface HomeHeroSectionProps {
   /**
@@ -66,15 +48,15 @@ export function HomeHeroSection({
       <div className={container({ size: "lg", spacing: "xl" })}>
         <div className={grid({ cols: "12", gap: "md" })}>
           {/* Text content area */}
-          <div className={heroTextWrapper({ width: "fixed" })}>
+          <div className={heroText({ width: "fixed" })}>
             {textContent}
 
             {/* Button area */}
-            <div className={heroButtonContainer()}>{buttonContent}</div>
+            <div className={heroButtons()}>{buttonContent}</div>
           </div>
 
           {/* Visual content area */}
-          <div className={heroVisualContainer()}>{visualContent}</div>
+          <div className={heroVisual()}>{visualContent}</div>
         </div>
       </div>
     </section>

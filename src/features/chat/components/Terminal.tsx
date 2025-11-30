@@ -18,7 +18,18 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { FormEvent, ReactElement } from "react";
 import { useState } from "react";
 
-import { Button, Input, Prompt, Reveal, TerminalFrame } from "@/components";
+import {
+  Button,
+  chatContainer,
+  chatDivider,
+  chatForm,
+  chatMessage,
+  chatMessages,
+  Input,
+  Prompt,
+  Reveal,
+  TerminalFrame,
+} from "@/components";
 
 interface Message {
   id: string;
@@ -99,8 +110,8 @@ export function Terminal({ onAuthExpired }: TerminalProps): ReactElement {
 
   return (
     <TerminalFrame onCopy={onCopy} copied={copied}>
-      <div className="flex h-full flex-col">
-        <div className="flex-grow overflow-y-auto p-4">
+      <div className={chatContainer()}>
+        <div className={chatMessages()}>
           {messages.map((message) => (
             <Reveal
               key={message.id}
@@ -108,7 +119,7 @@ export function Terminal({ onAuthExpired }: TerminalProps): ReactElement {
               duration="normal"
               delay="none"
             >
-              <div className="mb-2">
+              <div className={chatMessage()}>
                 <Prompt tone={message.role === "user" ? "info" : "success"}>
                   {message.role}
                 </Prompt>{" "}
@@ -118,30 +129,29 @@ export function Terminal({ onAuthExpired }: TerminalProps): ReactElement {
           ))}
           {isLoading && (
             <Reveal state="visible" duration="normal" delay="none">
-              <div className="mb-2">
+              <div className={chatMessage()}>
                 <Prompt tone="warning">assistant</Prompt> thinking...
               </div>
             </Reveal>
           )}
           {error && (
             <Reveal state="visible" duration="normal" delay="none">
-              <div className="mb-2">
+              <div className={chatMessage()}>
                 <Prompt tone="error">Error</Prompt> {error}
               </div>
             </Reveal>
           )}
         </div>
-        <div className="h-px bg-border" />
-        <form onSubmit={handleSubmit} className="flex p-4">
+        <div className={chatDivider()} />
+        <form onSubmit={handleSubmit} className={chatForm()}>
           <Input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your message..."
-            className="flex-grow"
             disabled={isLoading}
           />
-          <Button type="submit" disabled={isLoading} className="ml-2">
+          <Button type="submit" disabled={isLoading}>
             Send
           </Button>
         </form>

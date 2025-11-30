@@ -12,7 +12,19 @@
  * @public
  */
 
-export { container, grid, section } from "@/styles/ui";
+export {
+  chatContainer,
+  chatDivider,
+  chatForm,
+  chatMessage,
+  chatMessages,
+  container,
+  grid,
+  heroButtons,
+  heroText,
+  heroVisual,
+  section,
+} from "@/styles/ui";
 export { Reveal } from "./kit/animation/Reveal";
 export { SafeWalletConnectButton as WalletConnectButton } from "./kit/auth/SafeWalletConnectButton";
 export { Avatar, AvatarFallback, AvatarImage } from "./kit/data-display/Avatar";

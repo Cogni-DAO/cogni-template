@@ -131,7 +131,7 @@ const iconBoxSizeVariants = {
 
 const iconBoxColorVariants = {
   orange: "bg-warning",
-  blue: "bg-[var(--color-chart-6)]",
+  blue: "bg-accent-blue",
   green: "bg-success",
   red: "bg-danger",
 } as const;
@@ -149,6 +149,63 @@ export const iconBox = cva(
     defaultVariants: { size: "md", color: "blue" },
   }
 );
+
+/**
+ * Stats display box for key metrics
+ */
+export const statsBox = cva("rounded-lg bg-muted p-[var(--spacing-md)]");
+
+/**
+ * Stats grid - responsive 2-column layout with top margin
+ */
+export const statsGrid = cva(
+  "mt-[var(--spacing-sm)] grid gap-[var(--spacing-xs)] lg:grid-cols-2"
+);
+
+const ledgerListGapVariants = {
+  xs: "space-y-[var(--spacing-xs)]",
+  sm: "space-y-[var(--spacing-sm)]",
+} as const;
+
+const ledgerListMtVariants = {
+  none: "",
+  lg: "mt-[var(--spacing-lg)]",
+} as const;
+
+/**
+ * Ledger list with vertical spacing and optional top margin
+ */
+export const ledgerList = cva("space-y-[var(--spacing-sm)]", {
+  variants: {
+    gap: ledgerListGapVariants,
+    mt: ledgerListMtVariants,
+  },
+  defaultVariants: { gap: "sm", mt: "none" },
+});
+
+/**
+ * Ledger entry container for transaction history
+ */
+export const ledgerEntry = cva(
+  "flex flex-col gap-[var(--spacing-2xs)] rounded-md border border-border p-[var(--spacing-md)]"
+);
+
+/**
+ * Ledger entry header row with space-between layout
+ */
+export const ledgerHeader = cva("flex items-center justify-between");
+
+/**
+ * Ledger metadata row with timestamp and balance info
+ */
+export const ledgerMeta = cva(
+  "flex flex-wrap items-center gap-[var(--spacing-sm)] text-[var(--text-sm)] text-muted-foreground"
+);
+
+/**
+ * Amount button grid for payment selection
+ */
+export const amountButtons = cva("flex flex-wrap gap-[var(--spacing-sm)]");
 
 // Export variant types for external use
 export type BadgeIntent = VariantProps<typeof badge>["intent"];

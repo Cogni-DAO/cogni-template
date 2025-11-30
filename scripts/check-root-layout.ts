@@ -110,6 +110,7 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   "eslint",
   "eslint.config.mjs",
   "infra",
+  "knip.json",
   "next.config.ts",
   "package.json",
   "platform",
