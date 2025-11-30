@@ -60,6 +60,12 @@ export {
   terminalHeader,
   themeIcon,
 } from "./overlays";
+// Payment components
+export {
+  paymentFlowContainer,
+  paymentFlowStatus,
+  paymentFlowStep,
+} from "./payments";
 // Typography components
 export {
   brandText,
