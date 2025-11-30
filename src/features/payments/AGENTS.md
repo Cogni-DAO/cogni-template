@@ -39,8 +39,10 @@ Feature layer for USDC payment attempts with backend verification. Handles payme
   - `getCreditsSummary(accountService, input)` - Fetch balance and recent ledger entries
 - **Exports (hooks/):**
   - `usePaymentFlow(options)` - React hook orchestrating USDC payment flow with wagmi + backend
+  - `useCreditsSummary(options)` - React Query hook for fetching credits balance and ledger entries
 - **Exports (api/):**
   - `paymentsClient` - Typed HTTP client for payment endpoints (discriminated union returns)
+  - `creditsSummaryClient` - Typed HTTP client for credits summary endpoint (discriminated union returns)
 - **Exports (utils/):**
   - `mapBackendStatus(status, errorCode)` - Maps backend status to UI phase/result
 - **Exports (public.ts):**

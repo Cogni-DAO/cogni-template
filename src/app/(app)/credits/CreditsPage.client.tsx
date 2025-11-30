@@ -13,13 +13,16 @@
 
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { useState } from "react";
 
 import { Button, UsdcPaymentFlow } from "@/components";
-import type { CreditsSummaryOutput } from "@/contracts/payments.credits.summary.v1.contract";
-import { CREDITS_PER_CENT, usePaymentFlow } from "@/features/payments/public";
+import {
+  CREDITS_PER_CENT,
+  useCreditsSummary,
+  usePaymentFlow,
+} from "@/features/payments/public";
 import {
   badge,
   card,
@@ -36,16 +39,6 @@ import {
 const PAYMENT_AMOUNTS = [100, 1000, 2500, 5000, 10000] as const;
 const DEFAULT_LEDGER_LIMIT = 10;
 
-async function fetchSummary(): Promise<CreditsSummaryOutput> {
-  const response = await fetch(
-    `/api/v1/payments/credits/summary?limit=${DEFAULT_LEDGER_LIMIT}`
-  );
-  if (!response.ok) {
-    throw new Error("Unable to load credits");
-  }
-  return (await response.json()) as CreditsSummaryOutput;
-}
-
 function formatCredits(amount: number): string {
   return amount.toLocaleString("en-US");
 }
@@ -60,15 +53,14 @@ export function CreditsPageClient(): ReactElement {
   );
   const queryClient = useQueryClient();
 
-  const summaryQuery = useQuery({
-    queryKey: ["payments-summary"],
-    queryFn: fetchSummary,
-  });
+  const summaryQuery = useCreditsSummary({ limit: DEFAULT_LEDGER_LIMIT });
 
   const paymentFlow = usePaymentFlow({
     amountUsdCents: selectedAmount, // Already in cents, pass as-is
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["payments-summary"] });
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["payments-summary", { limit: DEFAULT_LEDGER_LIMIT }],
+      });
     },
   });
 

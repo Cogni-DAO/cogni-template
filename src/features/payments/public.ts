@@ -21,4 +21,8 @@ export {
   mapPaymentPortErrorToFeature,
   PaymentNotFoundError,
 } from "./errors";
+export {
+  type UseCreditsSummaryOptions,
+  useCreditsSummary,
+} from "./hooks/useCreditsSummary";
 export { usePaymentFlow } from "./hooks/usePaymentFlow";
