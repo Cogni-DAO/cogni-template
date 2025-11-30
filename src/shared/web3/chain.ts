@@ -12,10 +12,13 @@
  * @public
  */
 
-import { base } from "wagmi/chains";
+import { sepolia } from "wagmi/chains";
 
 /** Wagmi chain object for Base mainnet. */
-export const CHAIN = base;
+// export const CHAIN = base;
+
+/** Wagmi chain object for Base mainnet. */
+export const CHAIN = sepolia;
 
 /** Base mainnet chain ID (8453). */
 export const CHAIN_ID = CHAIN.id;
@@ -32,7 +35,7 @@ export function getChainId(): number {
  * DePay blockchain identifier for the configured network.
  * "base" is the documented identifier for Base mainnet.
  */
-export const DEPAY_BLOCKCHAIN = "base";
+export const DEPAY_BLOCKCHAIN = "sepolia";
 
 /**
  * USDC token address on Base mainnet.
