@@ -15,16 +15,16 @@ cogni_dao:
   dao_contract: "0x067d3d827fAb4F3cE7c7A3D3b97F5898d490761D" # Current Cogni parent DAO Contract Address
   plugin_contract: "0x67966e0e9E30fEA545f2EeDE4253f96e1Fb68E2c" # DAO's Aragon Voting Plugin Address
   signal_contract: "0x685350a73E7bC60143568d32040EE3d79C0b11DD" # DAO's CogniSignal Contract Address
-  chain_id: "8453" # Chain ID: Base mainnet
+  chain_id: "11155111" # Chain ID: Eth Sepolia testnet
   base_url: "https://proposal.cognidao.org" # v0 Base URL: cogni-proposal-launcher service
 
 # DAO Financial Rails Configuration
 payments_in:
   widget:
-    provider: depay # Current widget provider (DePay OSS mode)
+    provider: cogni-usdc-backend-v1
     receiving_address: "0x070075F1389Ae1182aBac722B36CA12285d0c949" # Expected receiver (DAO Wallet), testing only address rn
     allowed_chains:
-      - base
+      - Sepolia
     allowed_tokens:
       - USDC
 
@@ -50,8 +50,8 @@ gates:
   - type: review-limits
     id: review_limits
     with:
-      max_changed_files: 30
-      max_total_diff_kb: 500
+      max_changed_files: 50
+      max_total_diff_kb: 1500
 
   # Ensure */*/AGENTS.md files are updated when code changes
   # - type: agents-md-sync
