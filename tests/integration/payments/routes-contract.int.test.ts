@@ -34,15 +34,18 @@ vi.mock("@/app/_lib/auth/session", () => ({
   getSessionUser: vi.fn(),
 }));
 
+import { makeTestCtx } from "@tests/_fakes";
 import { createPaymentIntentFacade } from "@/app/_facades/payments/attempts.server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { GET as getStatus } from "@/app/api/v1/payments/attempts/[id]/route";
 import { POST as submitTxHash } from "@/app/api/v1/payments/attempts/[id]/submit/route";
 import { POST as createIntent } from "@/app/api/v1/payments/intents/route";
+import type { RequestContext } from "@/shared/observability";
 
 describe("Payment Routes HTTP Contract Tests", () => {
   let testSessionUser: SessionUser;
   let testUserId: string;
+  let testCtx: RequestContext;
   const db = getDb();
   let walletCounter = 0;
 
@@ -55,6 +58,8 @@ describe("Payment Routes HTTP Contract Tests", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     resetTestOnChainVerifier();
+
+    testCtx = makeTestCtx();
 
     // Seed test user with billing account + virtual key (unique wallet per test)
     const seeded = await seedAuthenticatedUser(db, {
@@ -114,7 +119,7 @@ describe("Payment Routes HTTP Contract Tests", () => {
 
       expect(response.status).toBe(400);
       const data = await response.json();
-      expect(data).toHaveProperty("details"); // Zod validation details
+      expect(data).not.toHaveProperty("details"); // Security: no Zod details to clients
       expect(data.error).toMatch(/invalid/i);
     });
 
@@ -208,7 +213,7 @@ describe("Payment Routes HTTP Contract Tests", () => {
 
       expect(response.status).toBe(400);
       const data = await response.json();
-      expect(data).toHaveProperty("details"); // Zod validation details
+      expect(data).not.toHaveProperty("details"); // Security: no Zod details to clients
       expect(data.error).toMatch(/invalid/i);
     });
 
@@ -247,10 +252,13 @@ describe("Payment Routes HTTP Contract Tests", () => {
       });
 
       // Create first attempt and bind txHash
-      const intent1 = await createPaymentIntentFacade({
-        sessionUser: testSessionUser,
-        amountUsdCents: 500,
-      });
+      const intent1 = await createPaymentIntentFacade(
+        {
+          sessionUser: testSessionUser,
+          amountUsdCents: 500,
+        },
+        testCtx
+      );
 
       const req1 = new NextRequest(
         `http://localhost:3000/api/v1/payments/attempts/${intent1.attemptId}/submit`,
@@ -265,10 +273,13 @@ describe("Payment Routes HTTP Contract Tests", () => {
       });
 
       // Create second attempt and try same txHash
-      const intent2 = await createPaymentIntentFacade({
-        sessionUser: testSessionUser,
-        amountUsdCents: 500,
-      });
+      const intent2 = await createPaymentIntentFacade(
+        {
+          sessionUser: testSessionUser,
+          amountUsdCents: 500,
+        },
+        testCtx
+      );
 
       const req2 = new NextRequest(
         `http://localhost:3000/api/v1/payments/attempts/${intent2.attemptId}/submit`,
@@ -295,10 +306,13 @@ describe("Payment Routes HTTP Contract Tests", () => {
       const verifier = getTestOnChainVerifier();
       verifier.setPending(); // Will return PENDING_UNVERIFIED
 
-      const intent = await createPaymentIntentFacade({
-        sessionUser: testSessionUser,
-        amountUsdCents: 500,
-      });
+      const intent = await createPaymentIntentFacade(
+        {
+          sessionUser: testSessionUser,
+          amountUsdCents: 500,
+        },
+        testCtx
+      );
 
       const req = new NextRequest(
         `http://localhost:3000/api/v1/payments/attempts/${intent.attemptId}/submit`,
@@ -348,10 +362,13 @@ describe("Payment Routes HTTP Contract Tests", () => {
     it("returns 404 for not-owned attempt (cross-user access)", async () => {
       // Create attempt with user1
       vi.mocked(getSessionUser).mockResolvedValue(testSessionUser);
-      const intent = await createPaymentIntentFacade({
-        sessionUser: testSessionUser,
-        amountUsdCents: 500,
-      });
+      const intent = await createPaymentIntentFacade(
+        {
+          sessionUser: testSessionUser,
+          amountUsdCents: 500,
+        },
+        testCtx
+      );
 
       // Try to access with user2
       const user2 = await seedAuthenticatedUser(db, {
@@ -397,10 +414,13 @@ describe("Payment Routes HTTP Contract Tests", () => {
       const verifier = getTestOnChainVerifier();
       verifier.setPending();
 
-      const intent = await createPaymentIntentFacade({
-        sessionUser: testSessionUser,
-        amountUsdCents: 500,
-      });
+      const intent = await createPaymentIntentFacade(
+        {
+          sessionUser: testSessionUser,
+          amountUsdCents: 500,
+        },
+        testCtx
+      );
 
       const req = new NextRequest(
         `http://localhost:3000/api/v1/payments/attempts/${intent.attemptId}`,
@@ -436,10 +456,13 @@ describe("Payment Routes HTTP Contract Tests", () => {
       });
 
       // Create intent and submit (will be REJECTED)
-      const intent = await createPaymentIntentFacade({
-        sessionUser: testSessionUser,
-        amountUsdCents: 500,
-      });
+      const intent = await createPaymentIntentFacade(
+        {
+          sessionUser: testSessionUser,
+          amountUsdCents: 500,
+        },
+        testCtx
+      );
 
       const submitReq = new NextRequest(
         `http://localhost:3000/api/v1/payments/attempts/${intent.attemptId}/submit`,

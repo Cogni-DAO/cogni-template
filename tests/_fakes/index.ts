@@ -20,3 +20,4 @@ export { FakeClock } from "./fake-clock";
 export { FakeRng } from "./fake-rng";
 export { FakeTelemetry } from "./fake-telemetry";
 export * from "./payments/fakes";
+export { makeTestCtx, type TestCtxOptions } from "./test-context";

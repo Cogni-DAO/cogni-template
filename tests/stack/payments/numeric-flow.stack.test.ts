@@ -13,6 +13,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { makeTestCtx } from "@tests/_fakes";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
 import { asNumber } from "@tests/_fixtures/db-utils";
 import { eq } from "drizzle-orm";
@@ -70,6 +71,7 @@ describe("Payment Numeric Flow Validation", () => {
     it("correctly converts 100 cents → 1,000,000 raw USDC → 1,000 credits", async () => {
       // NOTE: DB uses BIGINT for amount columns; tests normalize via asNumber().
       // Safe because max values < 2^53 (JavaScript safe integer limit).
+      const ctx = makeTestCtx();
       const verifier = getTestOnChainVerifier();
       const amountUsdCents = 100; // $1.00
       const expectedAmountRaw = 1_000_000n; // 100 cents * 10,000
@@ -84,10 +86,13 @@ describe("Payment Numeric Flow Validation", () => {
       });
 
       // Step 1: Create intent
-      const intent = await createPaymentIntentFacade({
-        sessionUser,
-        amountUsdCents,
-      });
+      const intent = await createPaymentIntentFacade(
+        {
+          sessionUser,
+          amountUsdCents,
+        },
+        ctx
+      );
 
       expect(intent.attemptId).toBeDefined();
       expect(intent.amountUsdCents).toBe(amountUsdCents);
@@ -112,11 +117,14 @@ describe("Payment Numeric Flow Validation", () => {
       const balanceBefore = asNumber(accountBefore.balanceCredits);
 
       // Step 4: Submit txHash
-      const result = await submitPaymentTxHashFacade({
-        sessionUser,
-        attemptId: intent.attemptId,
-        txHash: "0x1dollar",
-      });
+      const result = await submitPaymentTxHashFacade(
+        {
+          sessionUser,
+          attemptId: intent.attemptId,
+          txHash: "0x1dollar",
+        },
+        ctx
+      );
 
       // Step 5: Verify payment CREDITED
       expect(result.status).toBe("CREDITED");
@@ -160,6 +168,7 @@ describe("Payment Numeric Flow Validation", () => {
 
   describe("$50 Payment Flow", () => {
     it("correctly converts 5000 cents → 50,000,000 raw USDC → 50,000 credits", async () => {
+      const ctx = makeTestCtx();
       const verifier = getTestOnChainVerifier();
       const amountUsdCents = 5000; // $50.00
       const expectedAmountRaw = 50_000_000n; // 5000 cents * 10,000
@@ -174,10 +183,13 @@ describe("Payment Numeric Flow Validation", () => {
       });
 
       // Step 1: Create intent
-      const intent = await createPaymentIntentFacade({
-        sessionUser,
-        amountUsdCents,
-      });
+      const intent = await createPaymentIntentFacade(
+        {
+          sessionUser,
+          amountUsdCents,
+        },
+        ctx
+      );
 
       expect(intent.attemptId).toBeDefined();
       expect(intent.amountUsdCents).toBe(amountUsdCents);
@@ -202,11 +214,14 @@ describe("Payment Numeric Flow Validation", () => {
       const balanceBefore = asNumber(accountBefore.balanceCredits);
 
       // Step 4: Submit txHash
-      const result = await submitPaymentTxHashFacade({
-        sessionUser,
-        attemptId: intent.attemptId,
-        txHash: "0x50dollars",
-      });
+      const result = await submitPaymentTxHashFacade(
+        {
+          sessionUser,
+          attemptId: intent.attemptId,
+          txHash: "0x50dollars",
+        },
+        ctx
+      );
 
       // Step 5: Verify payment CREDITED
       expect(result.status).toBe("CREDITED");

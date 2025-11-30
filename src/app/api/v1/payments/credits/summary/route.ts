@@ -12,56 +12,70 @@
  * @public
  */
 
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { getCreditsSummaryFacade } from "@/app/_facades/payments/credits.server";
 import { getSessionUser } from "@/app/_lib/auth/session";
+import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { creditsSummaryOperation } from "@/contracts/payments.credits.summary.v1.contract";
+import { logRequestWarn, type RequestContext } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: NextRequest): Promise<NextResponse> {
-  try {
-    const sessionUser = await getSessionUser();
-    if (!sessionUser) {
-      return NextResponse.json({ error: "Session required" }, { status: 401 });
-    }
+/**
+ * Local error handler for credits summary route.
+ * Maps domain errors to HTTP responses; returns null for unhandled errors.
+ */
+function handleRouteError(
+  ctx: RequestContext,
+  error: unknown
+): NextResponse | null {
+  // Zod validation errors
+  if (error && typeof error === "object" && "issues" in error) {
+    logRequestWarn(ctx.log, error, "VALIDATION_ERROR");
+    return NextResponse.json({ error: "Invalid query" }, { status: 400 });
+  }
 
-    const { searchParams } = new URL(request.url);
-    const parsedLimit = searchParams.get("limit");
-    const limit = parsedLimit ? Number(parsedLimit) : undefined;
-
-    const input = creditsSummaryOperation.input.parse({ limit });
-
-    const summary = await getCreditsSummaryFacade({
-      sessionUser,
-      limit: input.limit,
-    });
-
-    // Facade already returns contract-compliant shape (createdAt as ISO string)
-    return NextResponse.json(creditsSummaryOperation.output.parse(summary));
-  } catch (error) {
-    if (error && typeof error === "object" && "issues" in error) {
-      return NextResponse.json(
-        {
-          error: "Invalid query",
-          details: (error as { issues: unknown }).issues,
-        },
-        { status: 400 }
-      );
-    }
-
-    if (error instanceof Error && error.message === "AUTH_USER_NOT_FOUND") {
-      return NextResponse.json(
-        { error: "User not provisioned; please re-authenticate" },
-        { status: 401 }
-      );
-    }
-
-    console.error("Credits summary error", error);
+  // Auth errors
+  if (error instanceof Error && error.message === "AUTH_USER_NOT_FOUND") {
+    logRequestWarn(ctx.log, error, "AUTH_USER_NOT_FOUND");
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
+      { error: "User not provisioned; please re-authenticate" },
+      { status: 401 }
     );
   }
+
+  return null;
 }
+
+export const GET = wrapRouteHandlerWithLogging(
+  {
+    routeId: "payments.credits_summary",
+    auth: { mode: "required", getSessionUser },
+  },
+  async (ctx, request, sessionUser) => {
+    try {
+      const { searchParams } = new URL(request.url);
+      const parsedLimit = searchParams.get("limit");
+      const limit = parsedLimit ? Number(parsedLimit) : undefined;
+
+      const input = creditsSummaryOperation.input.parse({ limit });
+
+      if (!sessionUser) throw new Error("sessionUser required"); // Enforced by wrapper
+      const summary = await getCreditsSummaryFacade(
+        {
+          sessionUser,
+          limit: input.limit,
+        },
+        ctx
+      );
+
+      // Facade already returns contract-compliant shape (createdAt as ISO string)
+      return NextResponse.json(creditsSummaryOperation.output.parse(summary));
+    } catch (error) {
+      const errorResponse = handleRouteError(ctx, error);
+      if (errorResponse) return errorResponse;
+      throw error; // Unhandled - let wrapper catch
+    }
+  }
+);

@@ -13,6 +13,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { makeTestCtx } from "@tests/_fakes";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -89,6 +90,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
 
   describe("Scenario 1: Sender mismatch → REJECTED with SENDER_MISMATCH", () => {
     it("rejects payment when sender doesn't match session wallet", async () => {
+      const ctx = makeTestCtx();
       const verifier = getTestOnChainVerifier();
 
       // Configure verifier to return VERIFIED but with different sender
@@ -100,20 +102,26 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
       });
 
       // Create intent
-      const intent = await createPaymentIntentFacade({
-        sessionUser,
-        amountUsdCents: 500,
-      });
+      const intent = await createPaymentIntentFacade(
+        {
+          sessionUser,
+          amountUsdCents: 500,
+        },
+        ctx
+      );
 
       expect(intent.attemptId).toBeDefined();
       expect(intent.chainId).toBe(11155111);
 
       // Submit txHash - should be REJECTED due to sender mismatch
-      const result = await submitPaymentTxHashFacade({
-        sessionUser,
-        attemptId: intent.attemptId,
-        txHash: "0xabc123",
-      });
+      const result = await submitPaymentTxHashFacade(
+        {
+          sessionUser,
+          attemptId: intent.attemptId,
+          txHash: "0xabc123",
+        },
+        ctx
+      );
 
       // Assert response
       expect(result.status).toBe("REJECTED");
@@ -137,21 +145,28 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
 
   describe("Scenario 2: Wrong token/recipient/amount → REJECTED", () => {
     it("rejects payment with insufficient amount", async () => {
+      const ctx = makeTestCtx();
       const verifier = getTestOnChainVerifier();
 
       // Configure verifier to fail with INSUFFICIENT_AMOUNT
       verifier.setFailed("INSUFFICIENT_AMOUNT");
 
-      const intent = await createPaymentIntentFacade({
-        sessionUser,
-        amountUsdCents: 500,
-      });
+      const intent = await createPaymentIntentFacade(
+        {
+          sessionUser,
+          amountUsdCents: 500,
+        },
+        ctx
+      );
 
-      const result = await submitPaymentTxHashFacade({
-        sessionUser,
-        attemptId: intent.attemptId,
-        txHash: "0xdef456",
-      });
+      const result = await submitPaymentTxHashFacade(
+        {
+          sessionUser,
+          attemptId: intent.attemptId,
+          txHash: "0xdef456",
+        },
+        ctx
+      );
 
       // Assert REJECTED with error code
       expect(result.status).toBe("REJECTED");
@@ -165,19 +180,26 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
     });
 
     it("rejects payment with wrong token", async () => {
+      const ctx = makeTestCtx();
       const verifier = getTestOnChainVerifier();
       verifier.setFailed("INVALID_TOKEN");
 
-      const intent = await createPaymentIntentFacade({
-        sessionUser,
-        amountUsdCents: 500,
-      });
+      const intent = await createPaymentIntentFacade(
+        {
+          sessionUser,
+          amountUsdCents: 500,
+        },
+        ctx
+      );
 
-      const result = await submitPaymentTxHashFacade({
-        sessionUser,
-        attemptId: intent.attemptId,
-        txHash: "0x789abc",
-      });
+      const result = await submitPaymentTxHashFacade(
+        {
+          sessionUser,
+          attemptId: intent.attemptId,
+          txHash: "0x789abc",
+        },
+        ctx
+      );
 
       expect(result.status).toBe("REJECTED");
       expect(result.errorCode).toBe("INVALID_TOKEN");
@@ -186,50 +208,67 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
 
   describe("Scenario 3: Missing receipt → stays PENDING_UNVERIFIED", () => {
     it("stays PENDING_UNVERIFIED when receipt not found", async () => {
+      const ctx = makeTestCtx();
       const verifier = getTestOnChainVerifier();
 
       // Configure verifier to return PENDING (not indexed yet)
       verifier.setPending();
 
-      const intent = await createPaymentIntentFacade({
-        sessionUser,
-        amountUsdCents: 500,
-      });
+      const intent = await createPaymentIntentFacade(
+        {
+          sessionUser,
+          amountUsdCents: 500,
+        },
+        ctx
+      );
 
-      const result = await submitPaymentTxHashFacade({
-        sessionUser,
-        attemptId: intent.attemptId,
-        txHash: "0xpending123",
-      });
+      const result = await submitPaymentTxHashFacade(
+        {
+          sessionUser,
+          attemptId: intent.attemptId,
+          txHash: "0xpending123",
+        },
+        ctx
+      );
 
       // Assert PENDING_UNVERIFIED
       expect(result.status).toBe("PENDING_UNVERIFIED");
       expect(result.errorCode).toBeUndefined();
 
       // Verify stays PENDING on subsequent getStatus calls (within 24h)
-      const status = await getPaymentStatusFacade({
-        sessionUser,
-        attemptId: intent.attemptId,
-      });
+      const status = await getPaymentStatusFacade(
+        {
+          sessionUser,
+          attemptId: intent.attemptId,
+        },
+        ctx
+      );
       expect(status.status).toBe("PENDING_VERIFICATION"); // Client-visible status
     });
   });
 
   describe("Scenario 4: PENDING_UNVERIFIED timeout → FAILED with RECEIPT_NOT_FOUND", () => {
     it("transitions to FAILED after 24h timeout", async () => {
+      const ctx = makeTestCtx();
       const verifier = getTestOnChainVerifier();
       verifier.setPending();
 
-      const intent = await createPaymentIntentFacade({
-        sessionUser,
-        amountUsdCents: 500,
-      });
+      const intent = await createPaymentIntentFacade(
+        {
+          sessionUser,
+          amountUsdCents: 500,
+        },
+        ctx
+      );
 
-      const result = await submitPaymentTxHashFacade({
-        sessionUser,
-        attemptId: intent.attemptId,
-        txHash: "0xtimeout123",
-      });
+      const result = await submitPaymentTxHashFacade(
+        {
+          sessionUser,
+          attemptId: intent.attemptId,
+          txHash: "0xtimeout123",
+        },
+        ctx
+      );
 
       expect(result.status).toBe("PENDING_UNVERIFIED");
 
@@ -240,10 +279,13 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         .where(eq(paymentAttempts.id, intent.attemptId));
 
       // getStatus should detect timeout and transition to FAILED
-      const status = await getPaymentStatusFacade({
-        sessionUser,
-        attemptId: intent.attemptId,
-      });
+      const status = await getPaymentStatusFacade(
+        {
+          sessionUser,
+          attemptId: intent.attemptId,
+        },
+        ctx
+      );
 
       expect(status.status).toBe("FAILED"); // Client-visible status
       expect(status.errorCode).toBe("RECEIPT_NOT_FOUND");
@@ -259,6 +301,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
 
   describe("Scenario 5: Insufficient confirmations → PENDING then CREDITED", () => {
     it("stays PENDING_UNVERIFIED then transitions to CREDITED when verified", async () => {
+      const ctx = makeTestCtx();
       const verifier = getTestOnChainVerifier();
 
       // NOTE: Current MVP stub doesn't check confirmations - it always returns VERIFIED.
@@ -268,16 +311,22 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
       // First call: verifier returns PENDING (simulating insufficient confirmations)
       verifier.setPending();
 
-      const intent = await createPaymentIntentFacade({
-        sessionUser,
-        amountUsdCents: 500,
-      });
+      const intent = await createPaymentIntentFacade(
+        {
+          sessionUser,
+          amountUsdCents: 500,
+        },
+        ctx
+      );
 
-      const result1 = await submitPaymentTxHashFacade({
-        sessionUser,
-        attemptId: intent.attemptId,
-        txHash: "0xconfirm123",
-      });
+      const result1 = await submitPaymentTxHashFacade(
+        {
+          sessionUser,
+          attemptId: intent.attemptId,
+          txHash: "0xconfirm123",
+        },
+        ctx
+      );
 
       expect(result1.status).toBe("PENDING_UNVERIFIED");
 
@@ -289,10 +338,13 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         confirmations: 5,
       });
 
-      const result2 = await getPaymentStatusFacade({
-        sessionUser,
-        attemptId: intent.attemptId,
-      });
+      const result2 = await getPaymentStatusFacade(
+        {
+          sessionUser,
+          attemptId: intent.attemptId,
+        },
+        ctx
+      );
 
       expect(result2.status).toBe("CONFIRMED"); // Client-visible status for CREDITED
 
@@ -307,6 +359,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
 
   describe("Scenario 6: Duplicate submit (same attempt+hash) → 200 Idempotent", () => {
     it("returns existing status for duplicate submit (idempotent)", async () => {
+      const ctx = makeTestCtx();
       const verifier = getTestOnChainVerifier();
       verifier.setVerified({
         actualFrom: sessionUser.walletAddress,
@@ -315,24 +368,33 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         confirmations: 5,
       });
 
-      const intent = await createPaymentIntentFacade({
-        sessionUser,
-        amountUsdCents: 500,
-      });
+      const intent = await createPaymentIntentFacade(
+        {
+          sessionUser,
+          amountUsdCents: 500,
+        },
+        ctx
+      );
 
       // First submit
-      const result1 = await submitPaymentTxHashFacade({
-        sessionUser,
-        attemptId: intent.attemptId,
-        txHash: "0xidempotent123",
-      });
+      const result1 = await submitPaymentTxHashFacade(
+        {
+          sessionUser,
+          attemptId: intent.attemptId,
+          txHash: "0xidempotent123",
+        },
+        ctx
+      );
 
       // Second submit with SAME hash - should be idempotent
-      const result2 = await submitPaymentTxHashFacade({
-        sessionUser,
-        attemptId: intent.attemptId,
-        txHash: "0xidempotent123",
-      });
+      const result2 = await submitPaymentTxHashFacade(
+        {
+          sessionUser,
+          attemptId: intent.attemptId,
+          txHash: "0xidempotent123",
+        },
+        ctx
+      );
 
       expect(result2.status).toBe(result1.status);
       expect(result2.txHash).toBe(result1.txHash);
@@ -347,6 +409,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
 
   describe("Scenario 7: Same txHash different attempt → 409 Conflict", () => {
     it("rejects duplicate txHash on different attempt", async () => {
+      const ctx = makeTestCtx();
       const verifier = getTestOnChainVerifier();
       verifier.setVerified({
         actualFrom: sessionUser.walletAddress,
@@ -356,30 +419,42 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
       });
 
       // Create first attempt and bind hash
-      const intent1 = await createPaymentIntentFacade({
-        sessionUser,
-        amountUsdCents: 500,
-      });
+      const intent1 = await createPaymentIntentFacade(
+        {
+          sessionUser,
+          amountUsdCents: 500,
+        },
+        ctx
+      );
 
-      await submitPaymentTxHashFacade({
-        sessionUser,
-        attemptId: intent1.attemptId,
-        txHash: "0xduplicate123",
-      });
+      await submitPaymentTxHashFacade(
+        {
+          sessionUser,
+          attemptId: intent1.attemptId,
+          txHash: "0xduplicate123",
+        },
+        ctx
+      );
 
       // Create second attempt and try to use same hash
-      const intent2 = await createPaymentIntentFacade({
-        sessionUser,
-        amountUsdCents: 500,
-      });
+      const intent2 = await createPaymentIntentFacade(
+        {
+          sessionUser,
+          amountUsdCents: 500,
+        },
+        ctx
+      );
 
       // Should throw TxHashAlreadyBoundPortError
       await expect(
-        submitPaymentTxHashFacade({
-          sessionUser,
-          attemptId: intent2.attemptId,
-          txHash: "0xduplicate123",
-        })
+        submitPaymentTxHashFacade(
+          {
+            sessionUser,
+            attemptId: intent2.attemptId,
+            txHash: "0xduplicate123",
+          },
+          ctx
+        )
       ).rejects.toThrow();
 
       // Verify only one ledger entry exists (first attempt only)
@@ -392,6 +467,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
 
   describe("Scenario 8: Atomic settle → Bidirectional invariant (CREDITED ↔ ledger)", () => {
     it("ensures atomicity: CREDITED status always has matching ledger entry", async () => {
+      const ctx = makeTestCtx();
       const verifier = getTestOnChainVerifier();
       verifier.setVerified({
         actualFrom: sessionUser.walletAddress,
@@ -400,16 +476,22 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         confirmations: 5,
       });
 
-      const intent = await createPaymentIntentFacade({
-        sessionUser,
-        amountUsdCents: 500,
-      });
+      const intent = await createPaymentIntentFacade(
+        {
+          sessionUser,
+          amountUsdCents: 500,
+        },
+        ctx
+      );
 
-      await submitPaymentTxHashFacade({
-        sessionUser,
-        attemptId: intent.attemptId,
-        txHash: "0xatomic123",
-      });
+      await submitPaymentTxHashFacade(
+        {
+          sessionUser,
+          attemptId: intent.attemptId,
+          txHash: "0xatomic123",
+        },
+        ctx
+      );
 
       // Bidirectional invariant: CREDITED ↔ ledger entry
       const ledger = await db.query.creditLedger.findFirst({
@@ -432,6 +514,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
     });
 
     it("ensures atomicity: non-CREDITED attempts have no ledger entry", async () => {
+      const ctx = makeTestCtx();
       const verifier = getTestOnChainVerifier();
 
       // Configure verifier to reject (sender mismatch)
@@ -442,16 +525,22 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         confirmations: 5,
       });
 
-      const intent = await createPaymentIntentFacade({
-        sessionUser,
-        amountUsdCents: 500,
-      });
+      const intent = await createPaymentIntentFacade(
+        {
+          sessionUser,
+          amountUsdCents: 500,
+        },
+        ctx
+      );
 
-      const result = await submitPaymentTxHashFacade({
-        sessionUser,
-        attemptId: intent.attemptId,
-        txHash: "0xrejected456",
-      });
+      const result = await submitPaymentTxHashFacade(
+        {
+          sessionUser,
+          attemptId: intent.attemptId,
+          txHash: "0xrejected456",
+        },
+        ctx
+      );
 
       expect(result.status).toBe("REJECTED");
 
@@ -471,6 +560,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
 
   describe("Scenario 9: Ownership enforcement → not owned returns error", () => {
     it("enforces ownership: returns error for not-owned attempt", async () => {
+      const ctx = makeTestCtx();
       const verifier = getTestOnChainVerifier();
       verifier.setVerified({
         actualFrom: sessionUser.walletAddress,
@@ -480,26 +570,35 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
       });
 
       // Create attempt with user1
-      const intent = await createPaymentIntentFacade({
-        sessionUser,
-        amountUsdCents: 500,
-      });
+      const intent = await createPaymentIntentFacade(
+        {
+          sessionUser,
+          amountUsdCents: 500,
+        },
+        ctx
+      );
 
       // Try to access with user2 - should fail
       await expect(
-        getPaymentStatusFacade({
-          sessionUser: sessionUser2,
-          attemptId: intent.attemptId,
-        })
+        getPaymentStatusFacade(
+          {
+            sessionUser: sessionUser2,
+            attemptId: intent.attemptId,
+          },
+          ctx
+        )
       ).rejects.toThrow("not found");
 
       // Try to submit with user2 - should fail
       await expect(
-        submitPaymentTxHashFacade({
-          sessionUser: sessionUser2,
-          attemptId: intent.attemptId,
-          txHash: "0xownership123",
-        })
+        submitPaymentTxHashFacade(
+          {
+            sessionUser: sessionUser2,
+            attemptId: intent.attemptId,
+            txHash: "0xownership123",
+          },
+          ctx
+        )
       ).rejects.toThrow("not found");
     });
   });

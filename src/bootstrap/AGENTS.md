@@ -52,10 +52,11 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
   - `resetContainer()` - Reset singleton (tests only)
   - `Container` interface - Ports + logger
   - `resolveAiDeps()` - AI feature dependencies
+  - `wrapRouteHandlerWithLogging()` - Route logging wrapper (from `http/`)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none (uses `@/shared/env`)
-- **Files considered API:** `container.ts`
+- **Files considered API:** `container.ts`, `http/index.ts`
 
 ## Responsibilities
 
@@ -63,9 +64,11 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
   - Dependency injection wiring with singleton container
   - Environment-based adapter selection (APP_ENV=test → fakes, production → real)
   - Logger initialization (one per process)
+  - Route logging wrapper with type-safe auth config (envelope-only)
 - This directory **does not**:
   - System installation or platform configuration
   - Handle request-scoped context (see `@/shared/observability`)
+  - Map domain errors to HTTP responses (routes handle locally)
 
 ## Usage
 
