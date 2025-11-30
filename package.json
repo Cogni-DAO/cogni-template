@@ -76,6 +76,7 @@
     "e2e:report": "playwright show-report e2e/artifacts/report",
     "env:check": "tsx scripts/check-runtime-env.ts",
     "validate:chain": "tsx --no-cache scripts/validate-chain-config.ts",
+    "knip": "dotenv -e .env.local -- knip --include files,exports,dependencies",
     "prepare": "husky"
   },
   "engines": {
@@ -176,6 +177,7 @@
     "globals": "^16.5.0",
     "happy-dom": "^20.0.10",
     "husky": "^9.1.7",
+    "knip": "^5.70.2",
     "lint-staged": "^16.2.6",
     "pino-pretty": "^13.1.2",
     "postcss": "^8.5.6",

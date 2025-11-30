@@ -1,0 +1,223 @@
+{
+  "scan_date": "2025-01-01",
+  "scan_scope": [
+    "src/components/kit/**",
+    "src/components/vendor/**",
+    "src/app/**",
+    "src/features/**"
+  ],
+  "component_inventory": {
+    "kit": {
+      "count": 26,
+      "categories": {
+        "animation": 1,
+        "auth": 3,
+        "data-display": 4,
+        "feedback": 2,
+        "inputs": 3,
+        "layout": 2,
+        "navigation": 2,
+        "payments": 1,
+        "sections": 3,
+        "typography": 4
+      },
+      "no_duplicates": true
+    },
+    "features": {
+      "count": 7,
+      "by_feature": {
+        "home": 6,
+        "chat": 1
+      }
+    },
+    "vendor": {
+      "count": 2,
+      "files": [
+        "src/components/vendor/shadcn/alert.tsx",
+        "src/components/vendor/shadcn/progress.tsx"
+      ]
+    },
+    "barrel_exports": {
+      "count": 20,
+      "all_valid": true
+    }
+  },
+  "violations": {
+    "kit_layer": {
+      "raw_colors": {
+        "count": 1,
+        "files": [
+          {
+            "path": "src/components/kit/feedback/Alert.tsx",
+            "line": 30,
+            "violation": "success variant uses green-500/green-50/green-700 instead of semantic tokens"
+          }
+        ]
+      },
+      "raw_typography": {
+        "count": 4,
+        "files": [
+          {
+            "path": "src/components/kit/inputs/Input.tsx",
+            "line": 21,
+            "violation": "text-sm"
+          },
+          {
+            "path": "src/components/kit/feedback/Alert.tsx",
+            "line": 22,
+            "violation": "text-sm"
+          },
+          {
+            "path": "src/components/kit/data-display/GithubButton.tsx",
+            "line": 52,
+            "violation": "text-xs"
+          },
+          {
+            "path": "src/components/kit/data-display/GithubButton.tsx",
+            "line": 53,
+            "violation": "text-sm"
+          }
+        ]
+      },
+      "inline_cva": {
+        "count": 2,
+        "files": [
+          {
+            "path": "src/components/kit/inputs/Input.tsx",
+            "lines": "20-26",
+            "violation": "inputVariants defined inline, should be in src/styles/ui/inputs.ts"
+          },
+          {
+            "path": "src/components/kit/data-display/GithubButton.tsx",
+            "line": 419,
+            "violation": "exports githubButtonVariants, should be internal"
+          }
+        ]
+      }
+    },
+    "page_soup": {
+      "total_inline_classnames": 37,
+      "files": [
+        {
+          "path": "src/app/(app)/credits/CreditsPage.client.tsx",
+          "count": 15,
+          "severity": "CRITICAL",
+          "lines": [75, 87, 88, 104, 132, 136, 139, 165, 194, 208],
+          "longest_classname_chars": 87,
+          "recommended_factories": [
+            "ledgerGrid()",
+            "ledgerEntry()",
+            "ledgerRow()",
+            "statsBox()",
+            "ledgerTimestamp()"
+          ]
+        },
+        {
+          "path": "src/features/chat/components/Terminal.tsx",
+          "count": 9,
+          "severity": "HIGH",
+          "lines": [102, 103, 111, 121, 128, 134, 135, 141, 144],
+          "mobile_risk": "overflow-y-auto p-4 on line 103",
+          "recommended_factories": [
+            "chatContainer()",
+            "chatMessages()",
+            "chatMessage()",
+            "chatForm()",
+            "chatDivider()"
+          ]
+        },
+        {
+          "path": "src/features/home/components/HomeHeroSection.tsx",
+          "count": 3,
+          "severity": "MEDIUM",
+          "lines": [22, 37, 41],
+          "mobile_risk": "negative margins -mx-[...] on line 37"
+        },
+        {
+          "path": "src/features/home/components/KpiBadge.tsx",
+          "count": 4,
+          "severity": "MEDIUM",
+          "lines": [18, 20, 21, 22, 26, 31]
+        }
+      ]
+    },
+    "mobile_overflow_risks": {
+      "count": 3,
+      "files": [
+        {
+          "path": "src/features/chat/components/Terminal.tsx",
+          "line": 103,
+          "issue": "overflow-y-auto p-4 could clip on mobile"
+        },
+        {
+          "path": "src/app/(app)/chat/page.tsx",
+          "line": 27,
+          "issue": "max-w-[var(--size-container-lg)] without padding safeguard"
+        },
+        {
+          "path": "src/features/home/components/HomeHeroSection.tsx",
+          "line": 37,
+          "issue": "negative margins -mx-[var(--spacing-xl)] could overflow small screens"
+        }
+      ]
+    },
+    "eslint_config_bugs": {
+      "count": 5,
+      "bugs": [
+        {
+          "id": 1,
+          "line": 57,
+          "file": "eslint/ui-governance.config.mjs",
+          "issue": "Wrong allowlist syntax: rounded-[--radius] should be rounded-[var(--radius)]"
+        },
+        {
+          "id": 2,
+          "lines": "124-156",
+          "file": "eslint/ui-governance.config.mjs",
+          "issue": "Layer blocks override base no-restricted-imports (missing parent/vendor blocks)"
+        },
+        {
+          "id": 3,
+          "line": 290,
+          "file": "eslint/ui-governance.config.mjs",
+          "issue": "Malformed glob: e2e/**/*.{ts,spec.ts} should be e2e/**/*.ts"
+        },
+        {
+          "id": 4,
+          "lines": "60-65",
+          "file": "eslint/ui-governance.config.mjs",
+          "issue": "tailwindcss/prefer-theme-tokens overlaps custom no-raw-colors rule"
+        },
+        {
+          "id": 5,
+          "lines": "265-278",
+          "file": "eslint/ui-governance.config.mjs",
+          "issue": "document.documentElement scope too broad (**/*.{ts,tsx}), should be UI surfaces only"
+        }
+      ]
+    }
+  },
+  "clean_files": {
+    "no_violations": [
+      "src/features/home/components/FeaturesSection.tsx",
+      "src/features/home/components/HomeCtaSection.tsx",
+      "src/features/home/components/Terminal.tsx",
+      "src/features/home/components/HeroContent.tsx",
+      "src/app/layout.tsx",
+      "src/app/(app)/layout.tsx"
+    ],
+    "summary": {
+      "no_raw_colors_in_app_features": true,
+      "no_raw_typography_in_app_features": true,
+      "no_native_html_buttons_inputs": true
+    }
+  },
+  "summary": {
+    "total_violations": 52,
+    "kit_violations": 7,
+    "page_soup_violations": 37,
+    "mobile_risks": 3,
+    "eslint_bugs": 5,
+    "files_requiring_changes": 17
+  }
+}

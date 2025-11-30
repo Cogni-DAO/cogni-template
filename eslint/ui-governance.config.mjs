@@ -117,6 +117,51 @@ export default [
   },
 
   // ========================================
+  // FREEZE RULES: Block new components and UI library imports during cleanup
+  // ========================================
+
+  // Block new component files outside kit/ during cleanup phase
+  {
+    files: ["src/components/**/*.{ts,tsx}"],
+    ignores: [
+      "src/components/kit/**",
+      "src/components/vendor/**",
+      "src/components/index.ts",
+      "src/components/AGENTS.md",
+      "src/components/__arch_probes__/**",
+    ],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "Program",
+          message:
+            "New components must be added to kit/ or vendor/ during UI cleanup. See docs/UI_CLEANUP_PLAN.md Phase 0.",
+        },
+      ],
+    },
+  },
+
+  // Block new UI library imports during cleanup phase
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@headlessui/*", "react-aria/*", "react-aria-components"],
+              message:
+                "New UI library imports blocked during cleanup. Use existing kit components. See docs/UI_CLEANUP_PLAN.md Phase 0.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // ========================================
   // LAYER-SPECIFIC RESTRICTIONS
   // ========================================
 

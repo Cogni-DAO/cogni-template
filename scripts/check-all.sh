@@ -71,7 +71,7 @@ else
   run_check "format" "pnpm format:check"
 fi
 
-
+run_check "ui-tokens" "bash scripts/check-ui-tokens.sh"
 run_check "test" "pnpm test:unit"
 run_check "check:docs" "pnpm check:docs"
 run_check "check:root-layout" "pnpm check:root-layout"
