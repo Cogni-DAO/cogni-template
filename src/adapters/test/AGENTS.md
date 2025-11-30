@@ -5,8 +5,8 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-17
-- **Status:** draft
+- **Last reviewed:** 2025-11-30
+- **Status:** stable
 
 ## Purpose
 
@@ -30,16 +30,16 @@ Deterministic fake implementations of ports for CI and test environments. No ext
 
 ## Public Surface
 
-- **Exports:** Fake adapter implementations for bootstrap injection
+- **Exports:** FakeLlmAdapter, FakeOnChainVerifierAdapter, getTestOnChainVerifier(), resetTestOnChainVerifier()
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none (deterministic responses only)
-- **Files considered API:** index.ts barrel export
+- **Files considered API:** index.ts barrel export, test helper functions for configuring fakes
 
 ## Responsibilities
 
-- This directory **does**: Provide deterministic fake port implementations; enable CI testing without external dependencies
-- This directory **does not**: Make external calls; vary responses; contain configuration
+- This directory **does**: Provide deterministic fake port implementations; expose singleton accessors for test configuration; enable CI testing without external dependencies
+- This directory **does not**: Make external calls; persist state between test runs; contain production logic
 
 ## Usage
 
@@ -52,7 +52,9 @@ APP_ENV=test pnpm test:int
 
 ## Standards
 
-- All responses must be deterministic
+- All responses must be deterministic by default
+- Configurable via singleton accessors for stack tests (getTestOnChainVerifier)
+- Reset to defaults in test beforeEach/afterEach hooks
 - No external dependencies or network calls
 - Must implement same port interfaces as real adapters
 
@@ -69,6 +71,7 @@ APP_ENV=test pnpm test:int
 
 ## Notes
 
-- Only accessible from bootstrap layer (features/app cannot import test adapters)
-- Responses never vary - keeps CI predictable
+- Bootstrap layer injects via APP_ENV=test check in container
+- Stack tests import singleton accessors directly to configure behavior
+- Responses are deterministic by default but configurable for scenario testing
 - Account testing uses mock fixtures in tests/\_fakes instead of adapter implementations

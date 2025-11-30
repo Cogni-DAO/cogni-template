@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-11-07
+- **Last reviewed:** 2025-11-30
 - **Status:** draft
 
 ## Purpose
 
-Compile-time only support. TS utility types, branded types, ambient global.d.ts, Env interfaces, conditional types, literal unions. No Zod. No JSON-schema export. Never the source of truth for external IO.
+Bottom-of-tree type definitions. TS utility types, branded types, ambient global.d.ts, domain enums (canonical source), conditional types, literal unions. No runtime code.
 
 ## Pointers
 
@@ -39,9 +39,11 @@ Compile-time only support. TS utility types, branded types, ambient global.d.ts,
 
 ## Public Surface
 
-- **Exports:** TS utility types, branded types, global.d.ts, Env interfaces
-- **Routes (if any):** none
-- **CLI (if any):** none
+- **Exports:** TS utility types, branded types, global.d.ts, Env interfaces, domain enums
+  - `payments.ts` - PaymentFlowState, PaymentStatus, PaymentAttemptStatus, PaymentErrorCode (canonical source)
+  - `next-auth.d.ts` - NextAuth session extensions
+- **Routes:** none
+- **CLI:** none
 - **Env/Config keys:** none
 - **Files considered API:** **/\*.ts, **/\*.d.ts
 
@@ -53,8 +55,8 @@ Compile-time only support. TS utility types, branded types, ambient global.d.ts,
 
 ## Responsibilities
 
-- This directory **does**: provide compile-time type utilities, branded types, ambient declarations
-- This directory **does not**: contain Zod schemas, runtime validation, or external IO definitions
+- This directory **does**: provide compile-time type utilities, branded types, ambient declarations, canonical domain enums (single source of truth)
+- This directory **does not**: contain Zod schemas, runtime validation, external IO definitions, or functions
 
 ## Usage
 
@@ -81,5 +83,8 @@ pnpm -w typecheck
 
 ## Notes
 
+- Bottom layer - all other layers may import from here
+- Canonical source for cross-cutting domain enums (core/contracts/features import from here)
 - Never the source of truth for external IO - use `contracts/` for that
 - For runtime primitives, use `shared/schemas/`
+- payments.ts contains type-only exports; prevents circular dependencies between core/contracts/features

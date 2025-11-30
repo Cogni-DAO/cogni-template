@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-29
+- **Last reviewed:** 2025-11-30
 - **Status:** draft
 
 ## Purpose
@@ -41,6 +41,7 @@ Pure domain logic with entities, rules, and business invariants. No I/O, time, o
   - Account entities (Account, BillingAccount)
   - Payment entities (PaymentAttempt, PaymentAttemptStatus, ClientVisibleStatus, PaymentErrorCode)
   - Business rules (credit pricing, message validation, payment state transitions, amount bounds, TTLs)
+  - Payment constants (CREDITS_PER_CENT, MIN_PAYMENT_CENTS, MAX_PAYMENT_CENTS, PAYMENT_INTENT_TTL_MS, PENDING_UNVERIFIED_TTL_MS)
   - Domain errors (InsufficientCreditsError, PaymentIntentExpiredError, PaymentVerificationError, etc.)
   - Utilities (USDC conversion, message builders, payment state checkers)
 - **Routes:** none
@@ -92,4 +93,4 @@ pnpm typecheck
 - All credit calculations round up (Math.ceil) to ensure minimum 1 credit for non-zero costs
 - Payment state machine: CREATED_INTENT → PENDING_UNVERIFIED → CREDITED | REJECTED | FAILED
 - USDC conversions use 6 decimals (1 USDC = 1,000,000 raw units, 1 cent = 10,000 raw units)
-- Payment constants: MIN_PAYMENT_CENTS (100), MAX_PAYMENT_CENTS (1,000,000), PAYMENT_INTENT_TTL_MS (30min), PENDING_UNVERIFIED_TTL_MS (24h)
+- Payment constants: CREDITS_PER_CENT (10), MIN_PAYMENT_CENTS (100), MAX_PAYMENT_CENTS (1,000,000), PAYMENT_INTENT_TTL_MS (30min), PENDING_UNVERIFIED_TTL_MS (24h)

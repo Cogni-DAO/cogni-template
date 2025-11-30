@@ -110,6 +110,110 @@ describe("UI Governance Rules", () => {
     });
   });
 
+  describe("Non-color utility overloads", () => {
+    it("allows font-size utilities (text-sm, text-lg, etc.)", async () => {
+      const { errors } = await lintFixture(
+        "src/features/home/components/Test.tsx",
+        `export const Component = () => <div className="text-xs text-sm text-base text-lg text-xl text-2xl text-3xl" />;`,
+        focus
+      );
+
+      expect(errors).toBe(0);
+    });
+
+    it("allows shadow-size utilities (shadow-sm, shadow-md, etc.)", async () => {
+      const { errors } = await lintFixture(
+        "src/features/home/components/Test.tsx",
+        `export const Component = () => <div className="shadow-sm shadow-md shadow-lg shadow-xl shadow-2xl shadow-inner shadow-none" />;`,
+        focus
+      );
+
+      expect(errors).toBe(0);
+    });
+
+    it("allows border-width utilities (border-2, border-x-4, etc.)", async () => {
+      const { errors } = await lintFixture(
+        "src/features/home/components/Test.tsx",
+        `export const Component = () => <div className="border-0 border-2 border-4 border-8 border-t-2 border-x-4 border-b-0" />;`,
+        focus
+      );
+
+      expect(errors).toBe(0);
+    });
+
+    it("blocks text- with raw color suffixes (text-red-500, text-white)", async () => {
+      const { errors, messages } = await lintFixture(
+        "src/features/home/components/Test.tsx",
+        `export const Component = () => <div className="text-red-500 text-white text-gray-600" />;`,
+        focus
+      );
+
+      expect(errors).toBeGreaterThan(0);
+      expect(messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            ruleId: "ui-governance/no-raw-colors",
+            message: expect.stringContaining("Raw Tailwind color"),
+          }),
+        ])
+      );
+    });
+
+    it("blocks border- with raw color suffixes (border-red-500)", async () => {
+      const { errors, messages } = await lintFixture(
+        "src/features/home/components/Test.tsx",
+        `export const Component = () => <div className="border-red-500 border-zinc-900" />;`,
+        focus
+      );
+
+      expect(errors).toBeGreaterThan(0);
+      expect(messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            ruleId: "ui-governance/no-raw-colors",
+            message: expect.stringContaining("Raw Tailwind color"),
+          }),
+        ])
+      );
+    });
+
+    it("blocks shadow- with color suffixes (shadow-blue-500)", async () => {
+      const { errors, messages } = await lintFixture(
+        "src/features/home/components/Test.tsx",
+        `export const Component = () => <div className="shadow-blue-500" />;`,
+        focus
+      );
+
+      expect(errors).toBeGreaterThan(0);
+      expect(messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            ruleId: "ui-governance/no-raw-colors",
+            message: expect.stringContaining("Raw Tailwind color"),
+          }),
+        ])
+      );
+    });
+
+    it("blocks text-[#fff] but allows text-sm", async () => {
+      const { errors, messages } = await lintFixture(
+        "src/features/home/components/Test.tsx",
+        `export const Component = () => <div className="text-sm text-[#fff]" />;`,
+        focus
+      );
+
+      expect(errors).toBe(1); // Only text-[#fff] should error
+      expect(messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            ruleId: "ui-governance/no-arbitrary-non-token-values",
+            message: expect.stringContaining("text-[#fff]"),
+          }),
+        ])
+      );
+    });
+  });
+
   describe("Vendor imports", () => {
     it("blocks vendor imports outside kit", async () => {
       const { errors, messages } = await lintFixture(

@@ -44,6 +44,7 @@ export type {
   PaymentErrorCode,
 } from "./payments/public";
 export {
+  CREDITS_PER_CENT,
   InvalidStateTransitionError,
   isIntentExpired,
   isInvalidStateTransitionError,

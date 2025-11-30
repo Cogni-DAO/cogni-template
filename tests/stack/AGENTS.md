@@ -5,8 +5,8 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-18
-- **Status:** draft
+- **Last reviewed:** 2025-11-30
+- **Status:** stable
 
 ## Purpose
 
@@ -23,9 +23,9 @@ Full-stack HTTP API integration tests requiring running Docker Compose infrastru
 ```json
 {
   "layer": "tests",
-  "may_import": ["shared", "types"],
-  "must_not_import": ["app", "features", "core", "adapters", "ports"],
-  "database_access": "external_client_only"
+  "may_import": ["app", "adapters", "shared", "types"],
+  "must_not_import": ["features", "core", "ports"],
+  "database_access": "via_getDb_for_assertions"
 }
 ```
 
@@ -59,16 +59,19 @@ pnpm test:stack:dev  # or pnpm test:stack:docker
 
 ## Standards
 
-- **HTTP-first testing**: Stack tests MUST NOT import app DB clients, adapters, or server internals
-- Tests make real HTTP requests to TEST_BASE_URL as primary interface
-- Database inspection allowed via exposed ports (e.g., for verifying side effects)
+- **Facade-level testing**: Stack tests call facades directly with real DB and configured fake adapters (APP_ENV=test)
+- Tests use getDb() for direct DB assertions to verify side effects
 - Use .stack.test.ts extension
-- Focus on API contract compliance, not business logic
-- Database is reset automatically between test runs (no manual cleanup needed)
+- Focus on full vertical slice validation (facade → service → ports → DB)
+- Database is reset automatically between test runs via vitest.stack.config.mts
+- Configure fake adapters via exported test helpers (e.g., getTestOnChainVerifier)
+- Never hard-code wallet addresses: use `seedAuthenticatedUser()` from `@tests/_fixtures/auth/db-helpers` which auto-generates unique addresses
+- Fail fast: use explicit guards (`if (!record) throw`) instead of defensive `??` fallbacks in assertions
+- BigInt conversions: use `asNumber()` from `@tests/_fixtures/db-utils` when asserting DB values (safe for values < 2^53)
 
 ## Dependencies
 
-- **Internal:** shared/ (for utilities only)
+- **Internal:** app/\_facades/, adapters/server/db, adapters/test, shared/
 - **External:** Running Next.js app, PostgreSQL database
 
 ## Change Protocol

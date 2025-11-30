@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@app/api/v1/payments/intents`
+ * Purpose: HTTP endpoint to create payment intents with on-chain transfer parameters.
+ * Scope: Validates request/response with contract, enforces SIWE session, delegates to facade; does not perform database access directly.
+ * Invariants: Billing account derived from session only; amount bounds validated at contract level.
+ * Side-effects: IO (creates payment_attempts record and payment_events log via PaymentAttemptRepository port).
+ * Notes: Returns on-chain transfer params (chainId, token, to, amountRaw) for client to execute USDC transfer.
+ * Links: docs/PAYMENTS_DESIGN.md
+ * @public
+ */
+
+import { type NextRequest, NextResponse } from "next/server";
+
+import { createPaymentIntentFacade } from "@/app/_facades/payments/attempts.server";
+import { getSessionUser } from "@/app/_lib/auth/session";
+import { paymentIntentOperation } from "@/contracts/payments.intent.v1.contract";
+import { AuthUserNotFoundError } from "@/features/payments/errors";
+
+export const dynamic = "force-dynamic";
+
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  try {
+    // 1. Get session
+    const sessionUser = await getSessionUser();
+    if (!sessionUser) {
+      return NextResponse.json({ error: "Session required" }, { status: 401 });
+    }
+
+    // 2. Parse JSON body
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
+    // 3. Validate with contract
+    const input = paymentIntentOperation.input.parse(body);
+
+    // 4. Call facade
+    const result = await createPaymentIntentFacade({
+      sessionUser,
+      ...input,
+    });
+
+    // 5. Validate output and return
+    return NextResponse.json(paymentIntentOperation.output.parse(result));
+  } catch (error) {
+    // Zod validation errors
+    if (error && typeof error === "object" && "issues" in error) {
+      return NextResponse.json(
+        {
+          error: "Invalid input format",
+          details: (error as { issues: unknown }).issues,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Auth errors
+    if (error instanceof AuthUserNotFoundError) {
+      return NextResponse.json(
+        { error: "User not provisioned; please re-authenticate" },
+        { status: 401 }
+      );
+    }
+
+    // Generic errors
+    console.error("Payment intent creation error", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
+  }
+}

@@ -12,13 +12,17 @@
  * @internal
  */
 
+import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-
+import { getDb } from "@/adapters/server/db/client";
 import type {
   CreatePaymentAttemptParams,
   PaymentAttemptRepository,
 } from "@/ports";
 import { isTxHashAlreadyBoundPortError } from "@/ports";
+import { users } from "@/shared/db/schema.auth";
+import { billingAccounts } from "@/shared/db/schema.billing";
 
 import { dispose, makeHarness, type TestHarness } from "./factory";
 
@@ -32,20 +36,77 @@ export function registerPaymentAttemptRepositoryContract(
   describe("PaymentAttemptRepository Port Contract", () => {
     let h: TestHarness;
     let repo: PaymentAttemptRepository;
+    let testUserId: string;
+    let testBillingAccountId: string;
+    let testUser2Id: string;
+    let testBillingAccount2Id: string;
 
     beforeAll(async () => {
       h = await makeHarness();
       repo = await makeRepository(h);
+
+      // Create test users and billing accounts for FK constraints
+      const db = getDb();
+
+      // Create first user
+      testUserId = randomUUID();
+      await db.insert(users).values({
+        id: testUserId,
+        walletAddress: `0x${"1".repeat(40)}`,
+        name: "Test User 1",
+      });
+
+      // Create first billing account with explicit ID
+      const [billingAccount] = await db
+        .insert(billingAccounts)
+        .values({
+          id: randomUUID(),
+          ownerUserId: testUserId,
+          balanceCredits: 0n,
+        })
+        .returning({ id: billingAccounts.id });
+
+      if (!billingAccount) {
+        throw new Error("Failed to create test billing account");
+      }
+      testBillingAccountId = billingAccount.id;
+
+      // Create second user for ownership tests
+      testUser2Id = randomUUID();
+      await db.insert(users).values({
+        id: testUser2Id,
+        walletAddress: `0x${"2".repeat(40)}`,
+        name: "Test User 2",
+      });
+
+      // Create second billing account with explicit ID
+      const [billingAccount2] = await db
+        .insert(billingAccounts)
+        .values({
+          id: randomUUID(),
+          ownerUserId: testUser2Id,
+          balanceCredits: 0n,
+        })
+        .returning({ id: billingAccounts.id });
+
+      if (!billingAccount2) {
+        throw new Error("Failed to create second test billing account");
+      }
+      testBillingAccount2Id = billingAccount2.id;
     });
 
     afterAll(async () => {
+      // Cleanup cascades via FK
+      const db = getDb();
+      await db.delete(users).where(eq(users.id, testUserId));
+      await db.delete(users).where(eq(users.id, testUser2Id));
       await dispose(h);
     });
 
     describe("Repository Invariants", () => {
       it("create generates unique ID with CREATED_INTENT status", async () => {
         const params: CreatePaymentAttemptParams = {
-          billingAccountId: "test-account-1",
+          billingAccountId: testBillingAccountId,
           fromAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
           chainId: 11155111,
           token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
@@ -66,7 +127,7 @@ export function registerPaymentAttemptRepositoryContract(
 
       it("findById enforces ownership (returns null when not owned)", async () => {
         const params: CreatePaymentAttemptParams = {
-          billingAccountId: "account-1",
+          billingAccountId: testBillingAccountId,
           fromAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
           chainId: 11155111,
           token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
@@ -79,18 +140,18 @@ export function registerPaymentAttemptRepositoryContract(
         const attempt = await repo.create(params);
 
         // Owned query succeeds
-        const found = await repo.findById(attempt.id, "account-1");
+        const found = await repo.findById(attempt.id, testBillingAccountId);
         expect(found).not.toBeNull();
         expect(found?.id).toBe(attempt.id);
 
         // Not owned query returns null
-        const notFound = await repo.findById(attempt.id, "account-2");
+        const notFound = await repo.findById(attempt.id, testBillingAccount2Id);
         expect(notFound).toBeNull();
       });
 
       it("findByTxHash finds by composite key (chainId, txHash)", async () => {
         const params: CreatePaymentAttemptParams = {
-          billingAccountId: "test-account",
+          billingAccountId: testBillingAccountId,
           fromAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
           chainId: 11155111,
           token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
@@ -117,7 +178,7 @@ export function registerPaymentAttemptRepositoryContract(
 
       it("bindTxHash enforces uniqueness (throws TxHashAlreadyBoundPortError)", async () => {
         const params1: CreatePaymentAttemptParams = {
-          billingAccountId: "test-account",
+          billingAccountId: testBillingAccountId,
           fromAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
           chainId: 11155111,
           token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
@@ -146,7 +207,7 @@ export function registerPaymentAttemptRepositoryContract(
 
       it("recordVerificationAttempt updates lastVerifyAttemptAt and count", async () => {
         const params: CreatePaymentAttemptParams = {
-          billingAccountId: "test-account",
+          billingAccountId: testBillingAccountId,
           fromAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
           chainId: 11155111,
           token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
@@ -178,7 +239,7 @@ export function registerPaymentAttemptRepositoryContract(
 
       it("updateStatus persists changes correctly", async () => {
         const params: CreatePaymentAttemptParams = {
-          billingAccountId: "test-account",
+          billingAccountId: testBillingAccountId,
           fromAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
           chainId: 11155111,
           token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
@@ -210,7 +271,7 @@ export function registerPaymentAttemptRepositoryContract(
 
       it("logEvent appends to audit trail", async () => {
         const params: CreatePaymentAttemptParams = {
-          billingAccountId: "test-account",
+          billingAccountId: testBillingAccountId,
           fromAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
           chainId: 11155111,
           token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",

@@ -11,8 +11,9 @@
   - `@/adapters/server` → must use `index.ts` (blocks internal adapter files, exception: `auth.ts`)
   - `@/adapters/test` → must use `index.ts` (blocks internal test adapter files)
   - `@/features/*` → external code must use `services/` or `components/` (blocks `mappers/utils/constants/` from outside `src/features/`; cross-feature internals are a known gap below)
-- **Types Layer:** Leaf layer (can only import from itself)
-- **Contracts Layer:** Directional boundaries enforced (contracts→shared/types), no entry point rules yet (see gaps)
+- **Types Layer:** Leaf layer (imports nothing); canonical source for cross-cutting domain types
+- **Contracts Layer:** Directional boundaries enforced (contracts→types); imported by features/app layers; no entry point rules yet (see gaps)
+- **Types Canonical:** `src/types/payments.ts` is single source of truth for payment enums (core/contracts/features import from here)
 - **Config Hygiene:** Phantom layer detection tests prevent undefined layer drift
 
 ## ⚠️ Known Gaps

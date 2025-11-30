@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-21
+- **Last reviewed:** 2025-11-30
 - **Status:** draft
 
 ## Purpose
@@ -29,11 +29,11 @@ Static test data for consistent test scenarios across unit and integration tests
 
 ## Public Surface
 
-- **Exports:** JSON data files, wallet test data (test-data.ts), wallet HTTP helpers (api-helpers.ts)
+- **Exports:** JSON data files, auth helpers (db-helpers.ts, nextauth-http-helpers.ts, siwe-helpers.ts), wallet test data (test-data.ts), wallet HTTP helpers (api-helpers.ts), DB type utilities (db-utils.ts)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** all .json files, wallet/\*.ts
+- **Files considered API:** all .json files, auth/\*.ts, wallet/\*.ts, db-utils.ts
 
 ## Responsibilities
 
@@ -53,6 +53,8 @@ import proposals from "@tests/_fixtures/proposals.json"
 - TypeScript helpers allowed for DRY test utilities (api-helpers, test constants)
 - Keep data realistic but minimal
 - No business logic in fixtures
+- Never hard-code wallet addresses: use `generateTestWallet()` from auth/db-helpers.ts
+- DB values: use `asNumber()` from db-utils.ts for BigInt → number conversions in assertions (safe for values < 2^53)
 
 ## Dependencies
 

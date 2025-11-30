@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-10
+- **Last reviewed:** 2025-11-30
 - **Status:** draft
 
 ## Purpose
@@ -71,14 +71,18 @@ pnpm lint
 ```
 src/components/
   vendor/ui-primitives/  # vendored primitives. do not edit. do not export.
-    shadcn/              # shadcn/ui components
-  kit/                   # wrappers only. no className prop.
+    shadcn/              # shadcn/ui components (alert, progress)
+  kit/                   # wrappers only. className for layout only.
     layout/              # Container, Section, Grid
     inputs/              # Button, Input, Select, Switch
     data-display/        # Card(+parts), Badge, Avatar(+parts)
     navigation/          # Tabs, Breadcrumbs, Pagination
-    feedback/            # Alert, ToastPresenter
+    feedback/            # Alert, Progress, ToastPresenter
+    payments/            # UsdcPaymentFlow (3-state payment UI)
     typography/          # Heading, Paragraph
+    auth/                # WalletConnectButton
+    animation/           # Reveal
+    sections/            # Hero, CtaSection, FeaturesGrid
     mdx/                 # Prose, mdx components map
   icons/                 # app SVGs
   index.ts               # curated exports from kit only

@@ -22,6 +22,36 @@ const COLOR_PREFIXES = new Set([
 
 const COLOR_KEYWORD_ALLOW = new Set(["transparent", "current", "inherit"]);
 
+// Non-color utility suffixes that share prefixes with color utilities
+const FONT_SIZE_SUFFIXES = new Set([
+  "xs",
+  "sm",
+  "base",
+  "lg",
+  "xl",
+  "2xl",
+  "3xl",
+  "4xl",
+  "5xl",
+  "6xl",
+  "7xl",
+  "8xl",
+  "9xl",
+]);
+
+const SHADOW_SIZE_SUFFIXES = new Set([
+  "sm",
+  "md",
+  "lg",
+  "xl",
+  "2xl",
+  "inner",
+  "none",
+]);
+
+// Border width pattern: 0, 2, 4, 8, or directional like t-2, x-4, etc.
+const BORDER_WIDTH_PATTERN = /^(0|2|4|8|[trblxyse](-?(0|2|4|8))?)$/;
+
 const SEMANTIC_COLOR_SUFFIXES = [
   "background",
   "foreground",
@@ -101,6 +131,21 @@ function analyzeColorToken(prefix, suffix, raw) {
     return issues;
   }
 
+  // Check for non-color overloads: text-sm, border-2, shadow-md, etc.
+  const baseSuffix = suffix.split("/")[0];
+
+  if (prefix === "text" && FONT_SIZE_SUFFIXES.has(baseSuffix)) {
+    return issues; // text-sm, text-lg, etc. are font sizes, not colors
+  }
+
+  if (prefix === "shadow" && SHADOW_SIZE_SUFFIXES.has(baseSuffix)) {
+    return issues; // shadow-md, shadow-lg, etc. are shadow sizes, not colors
+  }
+
+  if (prefix === "border" && BORDER_WIDTH_PATTERN.test(baseSuffix)) {
+    return issues; // border-2, border-x-4, etc. are border widths, not colors
+  }
+
   if (suffix.startsWith("[")) {
     const inner = suffix.slice(1, -1);
     if (!/var\(--[a-z0-9-]+\)/i.test(inner)) {
@@ -115,8 +160,6 @@ function analyzeColorToken(prefix, suffix, raw) {
   if (GRADIENT_EXCEPTIONS.test(suffix)) {
     return issues;
   }
-
-  const baseSuffix = suffix.split("/")[0];
 
   if (RAW_COLOR_SUFFIX.test(baseSuffix)) {
     issues.push({

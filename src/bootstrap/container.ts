@@ -20,7 +20,7 @@ import {
   PonderOnChainVerifierAdapter,
   SystemClock,
 } from "@/adapters/server";
-import { FakeLlmAdapter, FakeOnChainVerifierAdapter } from "@/adapters/test";
+import { FakeLlmAdapter, getTestOnChainVerifier } from "@/adapters/test";
 import type {
   AccountService,
   Clock,
@@ -53,9 +53,9 @@ export function createContainer(): Container {
     ? new FakeLlmAdapter()
     : new LiteLlmAdapter();
 
-  // OnChainVerifier: test uses fake, production uses Ponder stub (real Ponder in Phase 3)
+  // OnChainVerifier: test uses singleton fake (configurable from tests), production uses Ponder stub (real Ponder in Phase 3)
   const onChainVerifier = env.isTestMode
-    ? new FakeOnChainVerifierAdapter()
+    ? getTestOnChainVerifier()
     : new PonderOnChainVerifierAdapter();
 
   // Always use real database adapters

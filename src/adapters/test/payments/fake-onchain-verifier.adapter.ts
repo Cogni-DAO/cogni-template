@@ -117,3 +117,37 @@ export class FakeOnChainVerifierAdapter implements OnChainVerifier {
     return this.response;
   }
 }
+
+// ============================================================================
+// Test Singleton Accessor (APP_ENV=test only)
+// ============================================================================
+
+/**
+ * Singleton instance for test mode
+ * Ensures all facades use the same FakeOnChainVerifierAdapter instance
+ * so tests can configure it via getTestOnChainVerifier()
+ */
+let _testInstance: FakeOnChainVerifierAdapter | null = null;
+
+/**
+ * Gets the singleton test instance
+ * Used by DI container in test mode and by tests to configure behavior
+ *
+ * @returns Singleton FakeOnChainVerifierAdapter instance
+ */
+export function getTestOnChainVerifier(): FakeOnChainVerifierAdapter {
+  if (!_testInstance) {
+    _testInstance = new FakeOnChainVerifierAdapter();
+  }
+  return _testInstance;
+}
+
+/**
+ * Resets the singleton instance to default state
+ * Should be called in test beforeEach/afterEach to ensure clean state
+ */
+export function resetTestOnChainVerifier(): void {
+  if (_testInstance) {
+    _testInstance.reset();
+  }
+}
