@@ -119,7 +119,7 @@ describe("Payment Routes HTTP Contract Tests", () => {
 
       expect(response.status).toBe(400);
       const data = await response.json();
-      expect(data).toHaveProperty("details"); // Zod validation details
+      expect(data).not.toHaveProperty("details"); // Security: no Zod details to clients
       expect(data.error).toMatch(/invalid/i);
     });
 
@@ -213,7 +213,7 @@ describe("Payment Routes HTTP Contract Tests", () => {
 
       expect(response.status).toBe(400);
       const data = await response.json();
-      expect(data).toHaveProperty("details"); // Zod validation details
+      expect(data).not.toHaveProperty("details"); // Security: no Zod details to clients
       expect(data.error).toMatch(/invalid/i);
     });
 
