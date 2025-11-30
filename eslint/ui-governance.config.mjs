@@ -16,18 +16,29 @@ import communityTailwind from "@poupe/eslint-plugin-tailwindcss";
 import noInlineStyles from "eslint-plugin-no-inline-styles";
 import uiGovernance from "../scripts/eslint/plugins/ui-governance.cjs";
 
+// Base restricted import patterns (DRY)
+const BASE_RESTRICTED_PATTERNS = [
+  {
+    group: ["../**"],
+    message: "Do not import from parent directories. Use aliases.",
+  },
+  {
+    group: ["@/components/vendor/**"],
+    message: "Use @/components/kit/* wrappers instead of direct vendor imports",
+  },
+];
+
 /** @type {import('eslint').Linter.Config[]} */
 export default [
   // ========================================
   // CUSTOM UI GOVERNANCE RULES (All UI surfaces)
   // ========================================
+  // NOTE: src/styles/** and src/theme/** excluded - they're definition files with separate rules (see lines 107-223)
   {
     files: [
       "src/app/**/*.{ts,tsx}",
       "src/components/**/*.{ts,tsx}",
       "src/features/**/*.{ts,tsx}",
-      "src/styles/**/*.{ts,tsx}",
-      "src/theme/**/*.{ts,tsx}", // Test fixtures
     ],
     plugins: {
       "ui-governance": uiGovernance,
@@ -54,15 +65,16 @@ export default [
         {
           maxPerFile: 10,
           maxPerRule: 3,
-          allowedUtilities: ["rounded-[--radius]", "shadow-[--shadow]"],
+          allowedUtilities: [
+            "rounded-[var(--radius)]",
+            "shadow-[var(--shadow)]",
+          ],
         },
       ],
-      "tailwindcss/prefer-theme-tokens": [
-        "warn",
-        {
-          categories: ["colors", "spacing"],
-        },
-      ],
+      // Disabled: creates noise with var(--token) patterns (reports them as non-theme values).
+      // Real enforcement via ui-governance/* rules (lines 55-58) + scripts/check-ui-tokens.sh.
+      // See docs/UI_CLEANUP_PLAN.md Phase 0 for token compliance architecture.
+      "tailwindcss/prefer-theme-tokens": "off",
       "tailwindcss/valid-theme-function": "error",
       "tailwindcss/valid-apply-directive": "error",
 
@@ -74,15 +86,7 @@ export default [
         "error",
         {
           patterns: [
-            {
-              group: ["../**"],
-              message: "Do not import from parent directories. Use aliases.",
-            },
-            {
-              group: ["@/components/vendor/**"],
-              message:
-                "Use @/components/kit/* wrappers instead of direct vendor imports",
-            },
+            ...BASE_RESTRICTED_PATTERNS,
             {
               group: ["@/styles/tailwind.css"],
               message:
@@ -207,12 +211,7 @@ export default [
       "no-restricted-imports": [
         "error",
         {
-          patterns: [
-            {
-              group: ["../**"],
-              message: "Do not import from parent directories. Use aliases.",
-            },
-          ],
+          patterns: [...BASE_RESTRICTED_PATTERNS],
         },
       ],
       // Ban inline variant maps inside cva(...) so authors must use typed `*Variants` consts
@@ -235,12 +234,7 @@ export default [
       "no-restricted-imports": [
         "error",
         {
-          patterns: [
-            {
-              group: ["../**"],
-              message: "Do not import from parent directories. Use aliases.",
-            },
-          ],
+          patterns: [...BASE_RESTRICTED_PATTERNS],
           paths: [
             {
               name: "tailwind-merge",
@@ -273,15 +267,7 @@ export default [
         "error",
         {
           patterns: [
-            {
-              group: ["../**"],
-              message: "Do not import from parent directories. Use aliases.",
-            },
-            {
-              group: ["@/components/vendor/**"],
-              message:
-                "Use @/components/kit/* wrappers instead of direct vendor imports",
-            },
+            ...BASE_RESTRICTED_PATTERNS,
             // NOTE: NO "@/styles/tailwind.css" pattern here - layout.tsx can import it
           ],
           paths: [
@@ -332,7 +318,7 @@ export default [
 
   // E2E tests: allow document.documentElement for theme testing
   {
-    files: ["e2e/**/*.{ts,spec.ts}"],
+    files: ["e2e/**/*.ts"],
     rules: {
       "no-restricted-properties": "off",
     },
