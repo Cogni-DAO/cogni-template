@@ -42,8 +42,10 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 ## Pointers
 
+- [Technical Roadmap](ROADMAP.md)
 - [Developer Setup](docs/SETUP.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Services Migration Guide](docs/SERVICES_MIGRATION.md)
 - [Environment & Stack Deployment Modes](docs/ENVIRONMENTS.md)
 - [Database & Migration Architecture](docs/DATABASES.md)
 - [Testing Strategy](docs/TESTING.md)

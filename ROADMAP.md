@@ -1,81 +1,372 @@
-Cogni Technical Vision – Monorepo Org-Factory, Thin Core, Cred-First
+# Cogni Technical Roadmap
 
-1. Mission + Shape
-   Cogni is a DAO-first “org factory”: a monorepo that ships one real Cogni node app (Next.js) plus a small set of headless AI/ops services and a cred engine, all optimized for forkability; federation and a separate “platform” repo only happen after: (a) at least one paid external AI service, and (b) at least one real payout executed using cred outputs.
+> DAO-first org factory: anyone can spawn a new DAO controlling a web2 application.
+> This repo ships one Cogni node app + headless AI/ops services + cred engine, optimized for forkability.
 
-2. Monorepo Layout + Boundaries (Apps, Services, Packages)
+## Phase Checklist
 
-apps/cogni-node: the current cogni-template evolved into the first product app (auth, crypto payments, billing, admin UI, public APIs).
+- [ ] **Phase 0**: Freeze Current Template
+- [ ] **Phase 1**: Services Layer + Smart Contracts
+- [ ] **Phase 2**: Git-Review Daemon Live
+- [ ] **Phase 3**: Cognicred MVP Live
+- [ ] **Phase 4**: Operational Readiness
+- [ ] **Phase 5**: Extract App Template Core
+- [ ] **Phase 6**: cogni-app-template Repo
+- [ ] **Phase 7**: cogni-platform Repo
+- [ ] **Phase 8**: Automated Template Updates
 
-services/git-review-daemon, services/git-admin-daemon, services/broadcast-cogni, services/cognicred: headless workers/HTTP APIs, no full UI shells; each owns its domain logic and persistence.
+---
 
-packages/core-primitives: logging, env parsing, tracing, HTTP client utils, basic DB wrappers (no business logic).
+## 1. Mission
 
-packages/contracts-public: versioned public API contracts (HTTP DTOs, Webhook payloads, .cogni manifest schema).
+Cogni is a DAO-first "org factory." Federation and a separate "platform" repo only happen after:
 
-packages/contracts-internal: faster-moving internal event schemas and service-to-service contracts.
-Dependency rules (enforced via dependency-cruiser): services only import packages/_; apps can import packages/_ and call services strictly via client packages; packages/core-primitives depends on nothing else.
+- (a) at least one paid external AI service
+- (b) at least one real payout executed using cred outputs
 
-3. .cogni Manifest as Contract, Not Config Dump
+## 2. Monorepo Layout
 
-Single file: .cogni/repo-spec.yml as manifest_version-tagged contract describing desired state for ONE Cogni node: repos/VCS providers, enabled services (git_review: true, cognicred: true), and high-level plan names (plan_tier: "pro"), but never secrets or mutable runtime account data.
+```
+src/                      → Cogni node app (Next.js) - stays here until Phase 5+
+  contracts/              → (LEGACY) Zod API contracts - migrate to packages/contracts-public
+services/
+  git-review-daemon/      → VCS integrations, code analysis, emits contribution_events
+  git-admin-daemon/       → High-privilege repo admin (separate credentials)
+  broadcast-cogni/        → Content generation, own pricing/rate limits
+  cognicred/              → Consumes events only, no VCS access
+packages/
+  contracts-public/       → Versioned public API contracts (HTTP DTOs, webhooks, manifest schema)
+  schemas-internal/       → Internal event schemas (pure types only)
+  clients-internal/       → Typed HTTP clients for service-to-service calls
+  core-primitives/        → Logging, env parsing, tracing, DB wrappers (see charter below)
+smart-contracts/          → Solidity DAO contracts + deploy scripts
+```
 
-JSON schema for manifest lives in packages/contracts-public, with strict validation, migration tooling, and compatibility guarantees; services treat it as untrusted input, validate on ingest, and store a normalized snapshot in their own DBs with explicit version and hash.
+**Dependency rules** (enforced via dependency-cruiser):
 
-4. Events, Backbone, and Cognicred MVP
+- `services/**` → imports only `packages/**`; never `src/**` or other `services/**`
+- `src/**` → imports `packages/**`; calls services via HTTP clients only
+- `packages/**` → no imports from `src/**` or `services/**`
+- `packages/core-primitives` → depends on nothing else
 
-Choose an explicit backbone: start with DB outbox tables + polling consumers (or Postgres listen/notify) before any Kafka/NATS; every cross-service event is a contribution_event row with deterministic event_id, source, actor, repo, action, timestamp, raw_payload, normalized_payload, schema_version.
+**Two conceptual distributions** in this repo today:
 
-services/cognicred ingests these events idempotently, builds a contribution graph, and runs v0 scoring: weighted sums + time-decay + caps per identity, no CredRank; all scoring runs are versioned and replayable.
+- **Operator stack**: `src/` + `services/*` + `smart-contracts/` (what Cogni-DAO runs for itself)
+- **Node template**: `src/` + `smart-contracts/` (what a spawned Cogni node would run; services are consumed remotely, not self-hosted by default)
 
-v0 cognicred interface (minimax): (1) score_per_participant, (2) breakdown/explanation per score, (3) payout suggestion set (who, how much, why), (4) signed snapshot hash for audit/replay; exported via simple HTTP JSON endpoints, not GraphQL.
+**Monorepo tooling**: Turborepo for task graph + caching across `src/`, `services/`, `packages/`, `smart-contracts/`. Dependency-cruiser for import boundary enforcement. CI must pass without Turborepo cache (`turbo --no-cache` or plain `pnpm`); Turborepo is an optimization, not a correctness requirement.
 
-5. AI Services: Git-Review, Git-Admin, Broadcast
+### core-primitives Charter
 
-services/git-review-daemon: owns VCS integrations (GitHub, later GitLab/etc.), code analysis pipelines, and emits contribution_events; exposed to apps/cogni-node via a typed client in packages/contracts-internal, while public API /api/v1/ai/git-review/\* is versioned per-product DTO in packages/contracts-public.
+`packages/core-primitives` is strictly infrastructure-only:
 
-services/git-admin-daemon: owns high-privilege repo admin operations (branch protection, app install status), completely separated from git-review’s least-privilege role; it also emits governance and maintenance events into the same backbone.
+- **Allowed**: logging, env parsing, tracing/telemetry, HTTP client utils, basic DB connection wrappers
+- **Forbidden**: domain concepts, DTOs, auth logic, billing logic, tenant logic, business rules
+- **Size budget**: If >20 exports or >2000 LOC, split into focused packages
+- **Review gate**: Any PR adding exports requires explicit justification
 
-services/broadcast-cogni: owns content generation (image/blog/snippet), with its own pricing plans and rate limits; it also emits contribution events (e.g., posts created, campaigns launched) into cognicred; no standalone UI until there is real usage—only minimal screens wired into apps/cogni-node.
+## 3. .cogni Manifest
 
-6. Identity, Billing, and Payouts (Outside Manifest, Inside Ledgers)
+Single file `.cogni/repo-spec.yml`: declarative desired state for ONE node.
 
-Identities live in DB tables with auditable provenance: identities (GitHub, wallet, email, internal user ID), identity_links (human-approved mappings), billing_accounts, credit_ledger, payout_ledger; none of this lives in git-controlled manifests.
+Contains: repos, VCS providers, enabled services (`git_review: true`), plan tier (`plan_tier: "pro"`).
 
-Payments and plans: manifest references symbolic plan tiers; real prices and entitlements live in DB/config with migration history; apps/cogni-node enforces crypto payments (USDC on-chain + Ponder gate) and credits, while services simply consume “you have X credits for product Y” from the ledger.
+Never contains: secrets, mutable runtime data, identity/billing info.
 
-Payouts: cred outputs are suggestions; payout execution is a separate job or workflow that writes to payout_ledger and, in v1, may be manually enacted (off-chain) but must be recorded as “payout happened”; later, this job can be moved on-chain.
+Services validate on ingest, store normalized snapshot with version + hash.
 
-7. Extraction Path: From Product App to Templates and Platform
+## 4. Events & Cognicred
 
-Phase 1 (now): consolidate logic in the monorepo, but keep strict boundaries; ship one paid AI service (git-review) via apps/cogni-node + Ponder-based crypto payments, and ship cognicred v0 producing real scores and at least one small real payout for that node.
+### DB Topology (v0)
 
-Phase 2: identify what’s truly generic across apps/cogni-node and services (auth primitives, billing accounts, AI adapter ports, logging, test harness) and extract into packages/app-template-core; mirror that into a new, separate cogni-app-template repo that external orgs can fork to build arbitrary Cogni-like apps.
+Single Postgres instance with per-service schemas + role-based isolation:
 
-Phase 3: once 2–3 external Cogni DAOs exist and use cred/payouts, create cogni-platform as a separate repo with: (a) multi-tenant operator dashboard, (b) Loki/log aggregation and tracing across nodes/services, (c) setup-cogni CLI that scaffolds from cogni-app-template and registers the new node using the manifest contract, and (d) cross-DAO governance helpers.
+- Each service owns a schema (`git_review`, `cognicred`, `billing`, etc.)
+- Each service connects with a role that has USAGE/SELECT/INSERT/UPDATE/DELETE only on its schema
+- Each service has its own outbox table (e.g., `git_review.outbox_events`)
+- No service writes to another service's tables
 
-8. Governance, Federation, and Non-Negotiable Guardrails
+### Outbox Table Schema
 
-Governance: until at least 5–10 DAOs are live and earning, keep “co-op federation” as narrative only; decisions remain within each node; cred is advisory, not absolute; no central authority silently changes payouts via config.
+Each service's outbox table (`{schema}.outbox_events`):
 
-Guardrails: no platform repo until one paid customer + one real cred-informed payout; no per-service standalone UIs without paying users; no jumping to complex cred algorithms; every cross-boundary call must be via an explicit, versioned contract, and packages/core-primitives must remain thin to avoid turning the monorepo into a soft monolith.
+| Column            | Type        | Description                                      |
+| ----------------- | ----------- | ------------------------------------------------ |
+| `event_id`        | UUID        | Deterministic idempotency key                    |
+| `node_id`         | VARCHAR     | Tenant identifier (canonical tenant key)         |
+| `payload`         | JSONB       | Full contribution_event envelope                 |
+| `status`          | ENUM        | `pending` / `in_flight` / `done` / `dead`        |
+| `attempts`        | INT         | Number of delivery attempts                      |
+| `next_attempt_at` | TIMESTAMPTZ | When to retry (exponential backoff)              |
+| `locked_until`    | TIMESTAMPTZ | Lease expiry for current worker                  |
+| `worker_id`       | VARCHAR     | ID of worker currently processing (if in_flight) |
+| `created_at`      | TIMESTAMPTZ | Event creation time                              |
 
-Appendix A: Daemon Isolation, Billing, and Security
+### Event Backbone
 
-Each daemon (git-review, git-admin, broadcast, cognicred, etc.) is a separate service with its own process, Docker image, env, and DB schema (or DB) and never writes to another service’s tables.
+**Backbone**: Per-service outbox tables + polling consumers (no Kafka/NATS for v0).
 
-Security: every daemon owns its own credentials (GitHub Apps, API keys, wallets); no credential is shared across daemons, and admin-capable tokens (e.g., git-admin) are never available in review/broadcast/cognicred codepaths.
+**Delivery**: At-least-once. Consumers MUST be idempotent. Dedupe by `event_id`.
 
-Ingress: each daemon exposes only a small, versioned HTTP surface (webhooks + /api/v1/...) and validates all calls (HMAC signatures for VCS, API keys/JWT for external clients, service-to-service tokens for internal calls).
+**contribution_event envelope** (stored in `payload` column):
 
-Billing: daemons never talk directly to the Next.js app; they call a shared Billing/Entitlements API (or read model) via a typed client to check can_consume(product, node_id, amount) and to report usage (record_usage(...)).
+| Field                | Description                              |
+| -------------------- | ---------------------------------------- |
+| `event_id`           | Deterministic idempotency key            |
+| `node_id`            | Tenant identifier (canonical tenant key) |
+| `source`             | Emitting service                         |
+| `actor`              | Who performed action                     |
+| `repo`               | Repository context                       |
+| `action`             | Event type                               |
+| `timestamp`          | When it occurred                         |
+| `value`              | Numeric weight (optional)                |
+| `raw_payload`        | Original event data                      |
+| `normalized_payload` | Standardized fields                      |
+| `schema_version`     | Schema version for evolution             |
 
-Multi-tenancy: every daemon stores node_id (and provider installation IDs) with all state and events, so a single deployment can serve many Cogni nodes while keeping data logically separated.
+### Cognicred v0 Interface
 
-Events: all daemons emit normalized contribution_events into the shared backbone using at-least-once delivery and idempotent event_id; cognicred consumes these without needing access to daemon-specific DBs.
+1. `score_per_participant` - weighted sums + time-decay + caps
+2. Breakdown/explanation per score
+3. Payout suggestion set (who, how much, why)
+4. Content hash for audit/replay (unsigned in v0; cryptographic signing deferred)
 
-Permissions: git-review runs with least-privilege repo read/comment scopes; git-admin runs with higher scopes in a distinct daemon; broadcast never sees admin tokens; cognicred has no VCS or admin permissions at all.
+Replay from `raw_payload` mandatory for scoring verification.
 
-Auditing: each daemon logs security-sensitive actions (auth decisions, admin operations, billing checks) with node_id, actor, and correlation IDs, and these logs are shipped to the shared Loki/observability stack.
+## 5. Identity, Billing, Payouts
 
-Extraction: if/when a daemon becomes its own product/org, you can lift its service directory and DB schema into a new repo without changing its external contracts, because billing, identity, and cred are already accessed via stable ports
+All in DB (never in manifest):
+
+- `identities` (GitHub, wallet, email, internal user ID)
+- `identity_links` (human-approved mappings)
+- `billing_accounts`, `credit_ledger`, `payout_ledger`
+
+**Payments**: Manifest references symbolic plan tiers; real prices in DB. Crypto payments via USDC on-chain + Ponder verification.
+
+**Payouts**: Cred outputs are suggestions. Execution writes to `payout_ledger`. v1 may be manual (off-chain) but recorded. Later moves on-chain.
+
+## 6. Non-Negotiable Guardrails
+
+- No platform repo until: one paid customer + one real cred-informed payout
+- No per-service standalone UIs without paying users
+- No complex cred algorithms until v0 proves value
+- Every cross-boundary call via explicit, versioned contract
+- `packages/core-primitives` stays thin (see charter above)
+- Federation is narrative-only until 5-10 DAOs are live and earning
+- **Same deploy path, different config**: preview and prod use identical Docker images/scripts; only env vars differ
+- **Canonical tenant key**: `node_id` everywhere (DB columns, event envelopes, headers, JWT claims); do not use tenant/org/account_id synonyms
+
+## 7. Versioning Policy
+
+**packages/contracts-public**:
+
+- Semver: MAJOR for breaking changes, MINOR for additions, PATCH for fixes
+- Breaking changes require: deprecation notice in prior minor, migration guide, 2-week window
+- Compatibility matrix maintained in `packages/contracts-public/COMPATIBILITY.md`
+
+**services**:
+
+- Each service declares supported `contracts-public` version range
+- CI validates compatibility before merge
+
+---
+
+## Detailed Phases
+
+### Phase 0: Freeze Current Template
+
+Lock current hex architecture and CI rules. Document what exists. Add dependency-cruiser rules for future `services/` boundaries.
+
+→ See: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+
+### Phase 1: Services Layer + Smart Contracts
+
+- Scaffold `services/git-review-daemon` + `services/cognicred`
+- Create `packages/{contracts-public, schemas-internal, clients-internal}`
+- Add `smart-contracts/` with DAO deploy scripts (Token, Governor/Safe, PaymentReceiver)
+- Enforce dependency rules via dependency-cruiser
+- Configure Turborepo for task caching
+- **Address books are environment-scoped** (see Appendix C)
+
+→ See: [docs/SERVICES_MIGRATION.md](docs/SERVICES_MIGRATION.md)
+
+### Phase 2: Git-Review Daemon Live
+
+- Wire GitHub App webhooks → git-review-daemon → LLM → PR comments
+- Add BillingPort client for usage tracking
+- Expose `/api/v1/git-review/*` and admin UI in `src/`
+- **Implement `/healthz` and `/readyz` endpoints** (required before Phase 4)
+
+### Phase 3: Cognicred MVP Live
+
+- Implement per-service outbox + ContributionEvent backbone
+- Build cognicred scorer + HTTP GET `/api/v1/cred/scores`
+- Display scores in `src/` + execute one real payout (ledger entry)
+- **Implement `/healthz` and `/readyz` endpoints** (required before Phase 4)
+
+### Phase 4: Operational Readiness
+
+- Add `/metrics` endpoints to all services
+- Graceful SIGTERM handling + drain timeout
+- Migration Jobs per service (see Appendix A)
+- Unified lint/test/build pipelines across `src/` + `services/`
+- K8s manifests or Helm charts (optional until >1 paid node)
+
+### Phase 5: Extract App Template Core
+
+- Carve `packages/app-template-core` (auth, billing, AI ports, UI shell)
+- Refactor `src/` to depend on it
+- Migrate `src/contracts/` → `packages/contracts-public`
+- No service-specific logic in core package
+
+### Phase 6: cogni-app-template Repo
+
+- New repo consuming `app-template-core`
+- Strip `services/*` (stays in platform)
+- Include `smart-contracts/` with DAO deploy scripts
+- Default config points to hosted endpoints
+- Publish `setup-cogni` CLI scaffold
+
+### Phase 7: cogni-platform Repo
+
+- Rename/split current repo
+- Host multi-tenant services, K8s manifests, Loki, Ponder
+- Operator's own cogni-node
+- Treat app-template as external dependency
+
+### Phase 8: Automated Template Updates
+
+- Release pipeline: typed SDK + changelog from `app-template-core`
+- Bot/Action opens PRs to downstream forks (opt-in)
+- Version bumps + migration notes
+
+---
+
+## Appendix A: K8s Readiness Contract
+
+Every service MUST expose (from Phase 2/3 onward):
+
+- `/healthz` — liveness probe (is process alive?)
+- `/readyz` — readiness probe (can accept traffic?)
+- `/metrics` — Prometheus metrics (Phase 4+)
+
+**Operational requirements**:
+
+- Graceful SIGTERM: stop accepting requests, drain in-flight, exit within N seconds
+- Statelessness: no local filesystem dependencies except ephemeral `/tmp`
+- No shared volumes between services
+- **Migrations are one-shot Jobs**: long-running services MUST NOT run migrations at startup
+
+## Appendix B: Service Auth & Tenant Scoping
+
+**Tenant key**: `node_id` is the canonical tenant identifier everywhere (headers, JWT claims, DB columns, event envelopes). Do not use synonyms like `tenant`, `org`, or `account_id`.
+
+**Internal service JWTs**:
+
+- Max TTL: 5–15 minutes
+- Clock skew tolerance: 60–120 seconds
+- Signed with rotating keys (key rotation policy TBD in Phase 4)
+- Services MUST reject expired tokens
+
+**Example internal JWT payload**:
+
+```json
+{
+  "iss": "cogni-platform",
+  "aud": "git-review-daemon",
+  "sub": "billing-service",
+  "node_id": "node_abc123",
+  "iat": 1700000000,
+  "exp": 1700000900
+}
+```
+
+**Headers**: Every internal API call requires `X-Node-ID` header matching JWT `node_id` claim.
+
+**mTLS**: Optional for later hardening. Never rely on network trust alone.
+
+## Appendix C: Smart Contract Ownership
+
+**Ownership**:
+
+- app-template owns: DAO contracts, deploy scripts, canonical address book
+- Platform contracts (registry/factory) are OPTIONAL; standalone deploy must work without platform
+
+**Directory structure**:
+
+```
+smart-contracts/
+  deploy/
+    config/
+      local.json      → Deploy params for local dev
+      sepolia.json    → Deploy params for testnet
+      base.json       → Deploy params for mainnet (no secrets)
+  addresses/
+    local.json        → Committed (dev deployed addresses)
+    sepolia.json      → Committed (testnet deployed addresses)
+    .gitignore        → Excludes prod files
+```
+
+**Separation of concerns**:
+
+- `deploy/config/*.json` — deployment parameters (gas, constructor args, etc.)
+- `addresses/*.json` — deployed contract addresses
+
+**Runtime address precedence** (highest to lowest):
+
+1. `ENV_OVERRIDE` (e.g., `CONTRACT_TOKEN_ADDRESS`)
+2. Secure prod config/secret (e.g., Vault, sealed secret)
+3. Committed dev/testnet file (`addresses/local.json`, `addresses/sepolia.json`)
+
+**Update/distribution for spawned DAOs**:
+
+- Versioned ABIs/types published as npm package
+- Semver releases with upgrade notes + migration steps
+- Bot/Action opens PRs to downstream forks (opt-in)
+
+**Anti-patterns (FORBIDDEN)**:
+
+- Platform checkout required to deploy a DAO
+- Cross-repo mega deploy scripts
+- Prod addresses only in platform (must also be in app runtime config)
+
+## Appendix D: Daemon Isolation & Security
+
+**Process isolation**: Each daemon has its own process, Docker image, env, and DB schema. Never writes to another service's tables.
+
+**DB topology**: Single Postgres, per-service schemas, role-based access. Each service owns its outbox table (`{schema}.outbox_events`). Services connect with least-privilege roles.
+
+**Outbox schema** (per service):
+
+```sql
+CREATE TABLE {schema}.outbox_events (
+  event_id       UUID PRIMARY KEY,
+  node_id        VARCHAR NOT NULL,
+  payload        JSONB NOT NULL,
+  status         VARCHAR NOT NULL DEFAULT 'pending',
+  attempts       INT NOT NULL DEFAULT 0,
+  next_attempt_at TIMESTAMPTZ,
+  locked_until   TIMESTAMPTZ,
+  worker_id      VARCHAR,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX ON {schema}.outbox_events (status, next_attempt_at);
+CREATE INDEX ON {schema}.outbox_events (node_id);
+```
+
+**Credential isolation**: Every daemon owns its own credentials (GitHub Apps, API keys, wallets). No credential sharing. Admin tokens (git-admin) never available in review/broadcast/cognicred codepaths.
+
+**Ingress**: Small versioned HTTP surface (webhooks + `/api/v1/...`). Validates all calls (HMAC for VCS, API keys/JWT for external, service tokens for internal).
+
+**Billing**: Daemons call shared Billing/Entitlements API via typed client. Never talk directly to Next.js app.
+
+**Multi-tenancy**: Every daemon stores `node_id` with all state and events. Single deployment serves many nodes with logical separation.
+
+**Permissions**:
+
+- git-review: least-privilege (repo read/comment)
+- git-admin: higher scopes, distinct daemon
+- broadcast: no admin tokens
+- cognicred: no VCS or admin permissions
+
+**Extraction**: Daemon can be lifted to its own repo without changing external contracts (billing, identity, cred accessed via stable ports).
