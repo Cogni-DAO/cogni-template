@@ -1,0 +1,191 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@app/_facades/payments/attempts.server`
+ * Purpose: App-layer wiring for payment attempts. Resolves dependencies, delegates to feature services, and maps port types to contract DTOs.
+ * Scope: Server-only facade. Handles billing account resolution from session user, maps Date to ISO string for contract compliance; does not perform direct persistence or HTTP handling.
+ * Invariants: Billing account from session identity only; return types use z.infer; Date fields map to ISO strings.
+ * Side-effects: IO (via PaymentAttemptRepository, AccountService, OnChainVerifier ports).
+ * Notes: Errors bubble to route handlers for HTTP mapping. Facades own DTO mapping (port types → contract types).
+ * Links: docs/PAYMENTS_DESIGN.md, src/contracts/AGENTS.md
+ * @public
+ */
+
+import { getAddress } from "viem";
+
+import { createContainer } from "@/bootstrap/container";
+import type { PaymentIntentOutput } from "@/contracts/payments.intent.v1.contract";
+import type { PaymentStatusOutput } from "@/contracts/payments.status.v1.contract";
+import type { PaymentSubmitOutput } from "@/contracts/payments.submit.v1.contract";
+import {
+  createIntent,
+  getStatus,
+  submitTxHash,
+} from "@/features/payments/services/paymentService";
+import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
+import type { SessionUser } from "@/shared/auth";
+
+/**
+ * Creates payment intent facade
+ * Resolves billing account from session, delegates to feature service
+ *
+ * @param params - Session user and payment amount
+ * @returns Payment intent with on-chain transfer parameters
+ * @throws Error if user not provisioned or amount invalid
+ */
+export async function createPaymentIntentFacade(params: {
+  sessionUser: SessionUser;
+  amountUsdCents: number;
+}): Promise<PaymentIntentOutput> {
+  const { accountService, paymentAttemptRepository, clock } = createContainer();
+
+  let billingAccount: Awaited<
+    ReturnType<typeof getOrCreateBillingAccountForUser>
+  >;
+  try {
+    billingAccount = await getOrCreateBillingAccountForUser(accountService, {
+      userId: params.sessionUser.id,
+      walletAddress: params.sessionUser.walletAddress,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes("billing_accounts_owner_user_id_users_id_fk")
+    ) {
+      throw new Error("AUTH_USER_NOT_FOUND");
+    }
+    throw error;
+  }
+
+  const fromAddress = getAddress(params.sessionUser.walletAddress);
+
+  const result = await createIntent(paymentAttemptRepository, clock, {
+    billingAccountId: billingAccount.id,
+    fromAddress,
+    amountUsdCents: params.amountUsdCents,
+  });
+
+  return {
+    attemptId: result.attemptId,
+    chainId: result.chainId,
+    token: result.token,
+    to: result.to,
+    amountRaw: result.amountRaw,
+    amountUsdCents: result.amountUsdCents,
+    expiresAt: result.expiresAt.toISOString(),
+  };
+}
+
+/**
+ * Submits payment transaction hash facade
+ * Resolves billing account from session, delegates to feature service
+ *
+ * @param params - Session user, attempt ID, and transaction hash
+ * @returns Payment status after submission and verification attempt
+ * @throws Error if attempt not found or not owned
+ */
+export async function submitPaymentTxHashFacade(params: {
+  sessionUser: SessionUser;
+  attemptId: string;
+  txHash: string;
+}): Promise<PaymentSubmitOutput> {
+  const { accountService, paymentAttemptRepository, onChainVerifier, clock } =
+    createContainer();
+
+  let billingAccount: Awaited<
+    ReturnType<typeof getOrCreateBillingAccountForUser>
+  >;
+  try {
+    billingAccount = await getOrCreateBillingAccountForUser(accountService, {
+      userId: params.sessionUser.id,
+      walletAddress: params.sessionUser.walletAddress,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes("billing_accounts_owner_user_id_users_id_fk")
+    ) {
+      throw new Error("AUTH_USER_NOT_FOUND");
+    }
+    throw error;
+  }
+
+  const result = await submitTxHash(
+    paymentAttemptRepository,
+    accountService,
+    onChainVerifier,
+    clock,
+    {
+      attemptId: params.attemptId,
+      billingAccountId: billingAccount.id,
+      txHash: params.txHash,
+    }
+  );
+
+  return {
+    attemptId: result.attemptId,
+    status: result.status,
+    txHash: result.txHash,
+    errorCode: result.errorCode,
+    errorMessage: result.errorMessage,
+  };
+}
+
+/**
+ * Gets payment status facade
+ * Resolves billing account from session, delegates to feature service
+ *
+ * @param params - Session user and attempt ID
+ * @returns Payment status with client-visible status mapping
+ * @throws Error if attempt not found or not owned
+ */
+export async function getPaymentStatusFacade(params: {
+  sessionUser: SessionUser;
+  attemptId: string;
+}): Promise<PaymentStatusOutput> {
+  const { accountService, paymentAttemptRepository, onChainVerifier, clock } =
+    createContainer();
+
+  let billingAccount: Awaited<
+    ReturnType<typeof getOrCreateBillingAccountForUser>
+  >;
+  try {
+    billingAccount = await getOrCreateBillingAccountForUser(accountService, {
+      userId: params.sessionUser.id,
+      walletAddress: params.sessionUser.walletAddress,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message.includes("billing_accounts_owner_user_id_users_id_fk")
+    ) {
+      throw new Error("AUTH_USER_NOT_FOUND");
+    }
+    throw error;
+  }
+
+  const result = await getStatus(
+    paymentAttemptRepository,
+    accountService,
+    onChainVerifier,
+    clock,
+    {
+      attemptId: params.attemptId,
+      billingAccountId: billingAccount.id,
+    }
+  );
+
+  // Map port types (Date) to contract types (ISO string)
+  return {
+    attemptId: result.attemptId,
+    status: result.clientStatus as
+      | "PENDING_VERIFICATION"
+      | "CONFIRMED"
+      | "FAILED",
+    txHash: result.txHash,
+    amountUsdCents: result.amountUsdCents,
+    errorCode: result.errorCode,
+    createdAt: result.createdAt.toISOString(),
+  };
+}

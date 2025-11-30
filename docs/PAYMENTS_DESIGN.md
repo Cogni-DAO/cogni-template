@@ -33,7 +33,7 @@
 - [x] Schema: Add partial unique index `payment_attempts_chain_tx_unique` on `(chain_id, tx_hash) WHERE tx_hash IS NOT NULL`
 - [x] Schema: Add unique index `credit_ledger_payment_ref_unique` on `(reference) WHERE reason = 'widget_payment'`
 - [x] Migration: Run `pnpm db:generate` to create migration file (0002_flimsy_microchip.sql)
-- [ ] Migration: Run `pnpm db:migrate` to apply migration (deferred until stack running)
+- [x] Migration: Run `pnpm db:migrate` to apply migration
 
 **Adapters:**
 
@@ -45,29 +45,29 @@
 
 **Feature Service:**
 
-- [ ] Create `features/payments/services/paymentService.ts`
-- [ ] `createIntent()` - captures from_address, validates bounds
-- [ ] `submitTxHash()` - checks expiration, sets expires_at = NULL, sets submitted_at = now(), verifies
-- [ ] `getStatus()` - checks PENDING_UNVERIFIED timeout (24h from submitted_at or N attempts), transitions to FAILED if exceeded
-- [ ] Ensure `confirmCreditsPayment()` owns CREDITED transition inside atomic transaction
-- [ ] Ensure payment_attempts remains PENDING_UNVERIFIED until credit transaction commits
+- [x] Create `features/payments/services/paymentService.ts`
+- [x] `createIntent()` - captures from_address, validates bounds
+- [x] `submitTxHash()` - checks expiration, sets expires_at = NULL, sets submitted_at = now(), verifies
+- [x] `getStatus()` - checks PENDING_UNVERIFIED timeout (24h from submitted_at or N attempts), transitions to FAILED if exceeded
+- [x] Ensure `confirmCreditsPayment()` owns CREDITED transition inside atomic transaction
+- [x] Ensure payment_attempts remains PENDING_UNVERIFIED until credit transaction commits
 
 **API Routes:**
 
-- [ ] Create `contracts/payments.intent.v1.contract.ts`
-- [ ] Create `contracts/payments.submit.v1.contract.ts`
-- [ ] Create `contracts/payments.status.v1.contract.ts`
-- [ ] Create `app/api/v1/payments/intents/route.ts`
-- [ ] Create `app/api/v1/payments/attempts/[id]/submit/route.ts`
-- [ ] Create `app/api/v1/payments/attempts/[id]/route.ts`
+- [x] Create `contracts/payments.intent.v1.contract.ts`
+- [x] Create `contracts/payments.submit.v1.contract.ts`
+- [x] Create `contracts/payments.status.v1.contract.ts`
+- [x] Create `app/api/v1/payments/intents/route.ts`
+- [x] Create `app/api/v1/payments/attempts/[id]/submit/route.ts`
+- [x] Create `app/api/v1/payments/attempts/[id]/route.ts`
 
 **Constants** (add to `src/shared/web3/chain.ts`):
 
-- `MIN_PAYMENT_CENTS = 100`, `MAX_PAYMENT_CENTS = 1_000_000`
-- `MIN_CONFIRMATIONS = 5`
-- `PAYMENT_INTENT_TTL_MS = 30 * 60 * 1000` (30 min for CREATED_INTENT)
-- `PENDING_UNVERIFIED_TTL_MS = 24 * 60 * 60 * 1000` (24h for stuck PENDING_UNVERIFIED)
-- `VERIFY_THROTTLE_SECONDS = 10` (GET polling throttle)
+- `MIN_PAYMENT_CENTS = 100`, `MAX_PAYMENT_CENTS = 1_000_000` (in core/payments/rules.ts)
+- [x] `MIN_CONFIRMATIONS = 5`
+- `PAYMENT_INTENT_TTL_MS = 30 * 60 * 1000` (in core/payments/rules.ts)
+- `PENDING_UNVERIFIED_TTL_MS = 24 * 60 * 60 * 1000` (in core/payments/rules.ts)
+- [x] `VERIFY_THROTTLE_SECONDS = 10` (GET polling throttle)
 
 **MVP Tests (9 critical scenarios):**
 
