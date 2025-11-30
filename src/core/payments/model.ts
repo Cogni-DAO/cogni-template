@@ -7,45 +7,19 @@
  * Scope: Pure domain types with no infrastructure dependencies. Does not handle persistence or external services.
  * Invariants: Status transitions are validated by rules module; amounts in USD cents and USDC raw units (6 decimals).
  * Side-effects: none (pure domain logic)
- * Notes: Client-visible states are simplified projections of internal states.
+ * Notes: Status enums and error codes imported from /types (canonical source).
  * Links: Used by ports and features, implemented by adapters
  * @public
  */
 
-/**
- * Internal payment attempt states
- * State machine: CREATED_INTENT → PENDING_UNVERIFIED → CREDITED | REJECTED | FAILED
- */
-export type PaymentAttemptStatus =
-  | "CREATED_INTENT"
-  | "PENDING_UNVERIFIED"
-  | "CREDITED"
-  | "REJECTED"
-  | "FAILED";
+import type {
+  PaymentStatus as ClientVisibleStatus,
+  PaymentAttemptStatus,
+  PaymentErrorCode,
+} from "@/types/payments";
 
-/**
- * Client-visible payment states
- * Simplified projection for UI: PENDING_VERIFICATION | CONFIRMED | FAILED
- */
-export type ClientVisibleStatus =
-  | "PENDING_VERIFICATION"
-  | "CONFIRMED"
-  | "FAILED";
-
-/**
- * Payment error codes for terminal failure states
- */
-export type PaymentErrorCode =
-  | "SENDER_MISMATCH"
-  | "INVALID_TOKEN"
-  | "INVALID_RECIPIENT"
-  | "INSUFFICIENT_AMOUNT"
-  | "INSUFFICIENT_CONFIRMATIONS"
-  | "TX_REVERTED"
-  | "RECEIPT_NOT_FOUND"
-  | "INTENT_EXPIRED"
-  | "VERIFICATION_TIMEOUT"
-  | "RPC_ERROR";
+// Re-export for backward compatibility
+export type { PaymentAttemptStatus, PaymentErrorCode, ClientVisibleStatus };
 
 /**
  * Payment attempt entity

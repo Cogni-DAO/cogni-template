@@ -5,7 +5,7 @@
  * Module: `@tests/arch/contracts-layer-boundaries`
  * Purpose: Validates contracts layer can only import from contracts, shared, and types.
  * Scope: Tests contracts layer boundaries via dependency-cruiser. Does NOT test other layer boundaries.
- * Invariants: Contracts may import from contracts/shared/types; not core/features/ports/adapters/app/components.
+ * Invariants: Contracts may import from contracts//types; not core/features/ports/adapters/app/components.
  * Side-effects: IO (spawns depcruise subprocess)
  * Notes: Uses arch probes in src/contracts/__arch_probes__/ to test boundary enforcement.
  * Links: .dependency-cruiser.cjs (contracts layer rules), docs/ARCHITECTURE.md

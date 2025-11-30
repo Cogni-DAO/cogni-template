@@ -7,12 +7,34 @@
  * Scope: Defines request/response schemas for POST /api/v1/payments/attempts/:id/submit; does not perform verification or settlement.
  * Invariants: txHash must be valid 32-byte hex string; idempotent on same hash for same attempt.
  * Side-effects: none
- * Notes: Ownership enforced server-side via session billing account; verification initiated asynchronously.
+ * Notes: Status enum imported from /types (canonical source).
  * Links: docs/PAYMENTS_DESIGN.md
  * @public
  */
 
 import { z } from "zod";
+import type { PaymentAttemptStatus, PaymentErrorCode } from "@/types/payments";
+
+// Zod enums from canonical types
+const paymentAttemptStatusEnum: z.ZodType<PaymentAttemptStatus> = z.enum([
+  "CREATED_INTENT",
+  "PENDING_UNVERIFIED",
+  "CREDITED",
+  "REJECTED",
+  "FAILED",
+]);
+
+const paymentErrorCodeEnum: z.ZodType<PaymentErrorCode> = z.enum([
+  "SENDER_MISMATCH",
+  "INVALID_TOKEN",
+  "INVALID_RECIPIENT",
+  "INSUFFICIENT_AMOUNT",
+  "INSUFFICIENT_CONFIRMATIONS",
+  "TX_REVERTED",
+  "RECEIPT_NOT_FOUND",
+  "INTENT_EXPIRED",
+  "RPC_ERROR",
+]);
 
 export const paymentSubmitOperation = {
   id: "payments.submit.v1",
@@ -29,15 +51,9 @@ export const paymentSubmitOperation = {
   }),
   output: z.object({
     attemptId: z.string().uuid(),
-    status: z.enum([
-      "CREATED_INTENT",
-      "PENDING_UNVERIFIED",
-      "CREDITED",
-      "REJECTED",
-      "FAILED",
-    ]),
+    status: paymentAttemptStatusEnum,
     txHash: z.string(),
-    errorCode: z.string().optional(),
+    errorCode: paymentErrorCodeEnum.optional(),
     errorMessage: z.string().optional(),
   }),
 } as const;

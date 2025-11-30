@@ -49,10 +49,10 @@ module.exports = {
   allowedSeverity: "error",
 
   allowed: [
-    // core → core only
+    // core → core, types
     {
       from: { path: layers.core },
-      to: { path: [layers.core] },
+      to: { path: [layers.core, layers.types] },
     },
 
     // ports → ports, core, types
@@ -61,7 +61,7 @@ module.exports = {
       to: { path: [layers.ports, layers.core, layers.types] },
     },
 
-    // features → features, ports, core, shared, types, components
+    // features → features, ports, core, shared, types, components, contracts
     {
       from: { path: layers.features },
       to: {
@@ -72,6 +72,7 @@ module.exports = {
           layers.shared,
           layers.types,
           layers.components,
+          layers.contracts,
         ],
       },
     },

@@ -7,12 +7,32 @@
  * Scope: Defines request/response schemas for GET /api/v1/payments/attempts/:id; does not perform verification.
  * Invariants: Returns client-visible status (PENDING_VERIFICATION | CONFIRMED | FAILED); verification throttled server-side.
  * Side-effects: none
- * Notes: Ownership enforced server-side via session billing account; polling endpoint with 10-second throttle.
+ * Notes: Status enum imported from /types (canonical source).
  * Links: docs/PAYMENTS_DESIGN.md
  * @public
  */
 
 import { z } from "zod";
+import type { PaymentErrorCode, PaymentStatus } from "@/types/payments";
+
+// Zod enum from canonical type
+const paymentStatusEnum: z.ZodType<PaymentStatus> = z.enum([
+  "PENDING_VERIFICATION",
+  "CONFIRMED",
+  "FAILED",
+]);
+
+const paymentErrorCodeEnum: z.ZodType<PaymentErrorCode> = z.enum([
+  "SENDER_MISMATCH",
+  "INVALID_TOKEN",
+  "INVALID_RECIPIENT",
+  "INSUFFICIENT_AMOUNT",
+  "INSUFFICIENT_CONFIRMATIONS",
+  "TX_REVERTED",
+  "RECEIPT_NOT_FOUND",
+  "INTENT_EXPIRED",
+  "RPC_ERROR",
+]);
 
 export const paymentStatusOperation = {
   id: "payments.status.v1",
@@ -22,10 +42,10 @@ export const paymentStatusOperation = {
   input: z.object({}), // No input body - attemptId from URL params
   output: z.object({
     attemptId: z.string().uuid(),
-    status: z.enum(["PENDING_VERIFICATION", "CONFIRMED", "FAILED"]), // Client-visible status
+    status: paymentStatusEnum,
     txHash: z.string().nullable(),
     amountUsdCents: z.number().int(),
-    errorCode: z.string().optional(),
+    errorCode: paymentErrorCodeEnum.optional(),
     createdAt: z.string().datetime(),
   }),
 } as const;
