@@ -34,6 +34,10 @@ async function handleResponse<T>(res: Response): Promise<ApiResult<T>> {
   const body = await res.json().catch(() => ({ error: "Invalid response" }));
 
   if (!res.ok) {
+    console.error("[paymentsClient] Request failed:", {
+      status: res.status,
+      body,
+    });
     return {
       ok: false,
       error: body.error ?? body.errorMessage ?? "Request failed",
