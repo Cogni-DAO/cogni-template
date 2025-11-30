@@ -5,7 +5,7 @@
  * Module: `@tests/arch/shared-layer-boundaries`
  * Purpose: Validates shared layer cannot import from features or other upper layers.
  * Scope: Tests shared layer boundaries via dependency-cruiser. Does NOT test other layer boundaries.
- * Invariants: Shared may only import from shared/types; any import from features/app must fail.
+ * Invariants: Shared may only import from /types; any import from features/app must fail.
  * Side-effects: IO (spawns depcruise subprocess)
  * Notes: Uses arch probes in src/shared/__arch_probes__/ to test boundary enforcement.
  * Links: .dependency-cruiser.cjs (shared layer rules), docs/ARCHITECTURE.md

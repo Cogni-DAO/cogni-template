@@ -12,6 +12,7 @@
  * @public
  */
 
+import { randomUUID } from "node:crypto";
 import type { Database } from "@/adapters/server/db/client";
 import type { SessionUser } from "@/shared/auth/session";
 import { billingAccounts, users, virtualKeys } from "@/shared/db/schema";
@@ -36,6 +37,21 @@ export interface SeededAuthData {
 }
 
 /**
+ * Generate a unique test wallet address from UUID
+ *
+ * IMPORTANT: All tests must use this helper; never hard-code wallet addresses like 0x111...
+ * to avoid cross-file collisions in the shared stack test database.
+ *
+ * @param label - Optional label for debugging (unused, reserved for future logging)
+ * @returns Ethereum-style address (0x + 40 hex chars) derived from UUID, padded with zeros
+ */
+export function generateTestWallet(_label?: string): string {
+  // UUID without dashes = 32 hex chars, need 40 for Ethereum address
+  const uuid = randomUUID().replace(/-/g, "");
+  return `0x${uuid}${"0".repeat(8)}`; // Pad with 8 zeros to reach 40 chars
+}
+
+/**
  * Seed a complete authenticated user with billing account and virtual key
  */
 export async function seedAuthenticatedUser(
@@ -43,8 +59,7 @@ export async function seedAuthenticatedUser(
   userParams: SeedUserParams = {},
   billingParams: SeedBillingParams = {}
 ): Promise<SeededAuthData> {
-  const walletAddress =
-    userParams.walletAddress ?? "0x1234567890abcdef1234567890abcdef12345678";
+  const walletAddress = userParams.walletAddress ?? generateTestWallet();
 
   // Create user
   const [user] = await db

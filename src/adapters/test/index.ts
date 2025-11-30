@@ -13,4 +13,8 @@
  */
 
 export { FakeLlmAdapter } from "./ai/fake-llm.adapter";
-export { FakeOnChainVerifierAdapter } from "./payments/fake-onchain-verifier.adapter";
+export {
+  FakeOnChainVerifierAdapter,
+  getTestOnChainVerifier,
+  resetTestOnChainVerifier,
+} from "./payments/fake-onchain-verifier.adapter";

@@ -5,7 +5,7 @@
  * Module: `@tests/arch/features-layer-boundaries`
  * Purpose: Validates features layer can import from features, ports, core, shared, types, components only.
  * Scope: Tests features layer boundaries via dependency-cruiser. Does NOT test other layer boundaries.
- * Invariants: Features may import from features/ports/core/shared/types/components; not adapters/bootstrap.
+ * Invariants: Features may import from features/ports/core//types/components; not adapters/bootstrap.
  * Side-effects: IO (spawns depcruise subprocess)
  * Notes: Uses arch probes in src/features/__arch_probes__/ to test boundary enforcement.
  * Links: .dependency-cruiser.cjs (features layer rules), docs/ARCHITECTURE.md

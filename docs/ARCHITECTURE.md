@@ -2,7 +2,7 @@
 
 **Core Mission**: A crypto-metered AI infrastructure loop where chat is just one client. DAO multi-sig → pays for GPU + OpenRouter/LiteLLM → users interact (chat/API) → users pay back in crypto → DAO multi-sig.
 
-This codebase uses a Clean Architecture, hex-inspired layering model with strict, enforced boundaries: `app → features → ports → core`, and `adapters` implementing `ports` from the outside. Domain logic and errors live in `core`, feature services expose stable, per-feature contracts (including error algebras), and the `app` layer only talks to features, never directly to core. Dependency-cruiser enforces these rules (e.g. no `app → core`, no `adapters → core`, `shared/types` remain domain-agnostic). See [.dependency-cruiser.cjs](../.dependency-cruiser.cjs) for boundary rules, [tests/arch/AGENTS.md](../tests/arch/AGENTS.md) for enforcement tests, and [ARCHITECTURE_ENFORCEMENT_GAPS.md](ARCHITECTURE_ENFORCEMENT_GAPS.md) for current enforcement status.
+This codebase uses a Clean Architecture, hex-inspired layering model with strict, enforced boundaries: `app → features → ports → core`, and `adapters` implementing `ports` from the outside. Domain logic and errors live in `core`, feature services expose stable, per-feature contracts (including error algebras), and the `app` layer only talks to features, never directly to core. Dependency-cruiser enforces these rules (e.g. no `app → core`, no `adapters → core`, `/types` remain domain-agnostic). See [.dependency-cruiser.cjs](../.dependency-cruiser.cjs) for boundary rules, [tests/arch/AGENTS.md](../tests/arch/AGENTS.md) for enforcement tests, and [ARCHITECTURE_ENFORCEMENT_GAPS.md](ARCHITECTURE_ENFORCEMENT_GAPS.md) for current enforcement status.
 
 Strict **Hexagonal (Ports & Adapters)** for a full-stack TypeScript app on **Next.js App Router**.  
 Purpose: a **metered AI backend** with per-request logging, credit accounting, and crypto billing.  
@@ -383,15 +383,26 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 
 ## Enforcement Rules
 
+- **Layer Boundaries:** All hexagonal layers enforce dependency direction (57 tests passing).
+- **Entry Points:**
+  - `@/ports` → must use `index.ts` (blocks internal port files)
+  - `@/core` → must use `public.ts` (blocks internal core files)
+  - `@/adapters/server` → must use `index.ts` (blocks internal adapter files, exception: `auth.ts`)
+  - `@/adapters/test` → must use `index.ts` (blocks internal test adapter files)
+  - `@/features/*` → external code must use `services/` or `components/` (blocks `mappers/utils/constants/` from outside `src/features/`; cross-feature internals still a known gap)
+- **Types Layer:** Bottom-of-tree, type-only; may only import from `@//types`, but _all other layers_ are allowed to import it.
+- **Contracts Layer:** API surface; `contracts` may import only `/types`, and are valid import targets for `features` (and adapters where needed), but **never** for `core` or `ports`.
+- **Config Hygiene:** Phantom layer detection tests prevent undefined layer drift.
 - **Imports**
-  - `core` → only `core` (standalone).
+  - `core` → `@/core`, `@/types`.
   - `ports` → `@/core`, `@/types`.
-  - `features` → `@/core|@/ports|@/shared|@/types|@/components` (never adapters|bootstrap|deep paths).
+  - `features` → `@/core|@/ports|@/shared|@/types|@/components|@/contracts`.
   - `app` → `@/features/*/services/*|@/bootstrap/container|@/contracts/*|@/shared|@/ports|@/styles` (never adapters|core).
-  - `adapters` → `@/ports|@/shared|@/types` (never `app|features|core`).
-  - `contracts` → `@/shared|@/types` only. Never imported by `features|ports|core`.
-  - `bootstrap` → `@/adapters/server|@/ports` (DI composition only).
-  - `mcp` → `@/contracts|@/bootstrap|@/features/*/services/*|@/ports` (never `app|components`).
+  - `adapters` → `@/ports|@/shared|@/types` (never `app|features|core|contracts`).
+  - `contracts` → `@/shared|@/types`.
+  - `types` → `@/types` only (bottom layer).
+  - `bootstrap` → `@/adapters/server|@/ports`.
+  - `mcp` → `@/contracts|@/bootstrap|@/features/*/services/*|@/ports`.
 - **ESLint**: flat config for UI governance and Tailwind rules.
 - **Dependency-cruiser**: enforces hexagonal architecture boundaries; CI gate for import violations. Arch probes in `src/**/__arch_probes__/` validate boundaries via tests; excluded from builds (tsconfig, .dockerignore).
 - **Contracts**: `tests/contract` must pass for any adapter.

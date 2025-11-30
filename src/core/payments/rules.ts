@@ -4,10 +4,10 @@
 /**
  * Module: `@core/payments/rules`
  * Purpose: Business rules for payment state machine and validation.
- * Scope: Pure validation functions with no side effects. Does not perform I/O or state mutations.
+ * Scope: Pure validation functions and constants with no side effects. Does not perform I/O or state mutations.
  * Invariants: State transitions follow allowed paths: CREATED_INTENT → PENDING_UNVERIFIED → CREDITED|REJECTED|FAILED
  * Side-effects: none (pure functions)
- * Notes: Amount bounds: min 100 cents ($1), max 1,000,000 cents ($10,000)
+ * Notes: Amount bounds: min 100 cents ($1), max 1,000,000 cents ($10,000); credits conversion: 1 cent = 10 credits (CREDITS_PER_CENT)
  * Links: Used by feature services for validation
  * @public
  */
@@ -23,6 +23,9 @@ export const MIN_PAYMENT_CENTS = 100;
 
 /** Maximum payment amount in USD cents ($10,000.00) */
 export const MAX_PAYMENT_CENTS = 1_000_000;
+
+/** Credits per USD cent (1 cent = 10 credits) */
+export const CREDITS_PER_CENT = 10;
 
 /** Payment intent TTL in milliseconds (30 minutes) */
 export const PAYMENT_INTENT_TTL_MS = 30 * 60 * 1000;

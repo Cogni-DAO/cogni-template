@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-10
+- **Last reviewed:** 2025-11-30
 - **Status:** draft
 
 ## Purpose
@@ -113,6 +113,7 @@ src/styles/
     layout.ts    # container, section, grid, row, pad factories
     typography.ts # heading, paragraph, prose, prompt factories
     overlays.ts  # terminal, icon, reveal factories
+    payments.ts  # payment flow status, container, step factories
 ```
 
 **Rules:** CVA-only, token classes only, no literals outside styles/. ESLint scope applies to `src/styles/ui/**/*.ts`. Individual ui/ domain modules manage their own growth - see ui/AGENTS.md for further splitting guidance.

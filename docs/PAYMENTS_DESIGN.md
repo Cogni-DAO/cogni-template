@@ -33,7 +33,7 @@
 - [x] Schema: Add partial unique index `payment_attempts_chain_tx_unique` on `(chain_id, tx_hash) WHERE tx_hash IS NOT NULL`
 - [x] Schema: Add unique index `credit_ledger_payment_ref_unique` on `(reference) WHERE reason = 'widget_payment'`
 - [x] Migration: Run `pnpm db:generate` to create migration file (0002_flimsy_microchip.sql)
-- [ ] Migration: Run `pnpm db:migrate` to apply migration (deferred until stack running)
+- [x] Migration: Run `pnpm db:migrate` to apply migration
 
 **Adapters:**
 
@@ -45,49 +45,49 @@
 
 **Feature Service:**
 
-- [ ] Create `features/payments/services/paymentService.ts`
-- [ ] `createIntent()` - captures from_address, validates bounds
-- [ ] `submitTxHash()` - checks expiration, sets expires_at = NULL, sets submitted_at = now(), verifies
-- [ ] `getStatus()` - checks PENDING_UNVERIFIED timeout (24h from submitted_at or N attempts), transitions to FAILED if exceeded
-- [ ] Ensure `confirmCreditsPayment()` owns CREDITED transition inside atomic transaction
-- [ ] Ensure payment_attempts remains PENDING_UNVERIFIED until credit transaction commits
+- [x] Create `features/payments/services/paymentService.ts`
+- [x] `createIntent()` - captures from_address, validates bounds
+- [x] `submitTxHash()` - checks expiration, sets expires_at = NULL, sets submitted_at = now(), verifies
+- [x] `getStatus()` - checks PENDING_UNVERIFIED timeout (24h from submitted_at or N attempts), transitions to FAILED if exceeded
+- [x] Ensure `confirmCreditsPayment()` owns CREDITED transition inside atomic transaction
+- [x] Ensure payment_attempts remains PENDING_UNVERIFIED until credit transaction commits
 
 **API Routes:**
 
-- [ ] Create `contracts/payments.intent.v1.contract.ts`
-- [ ] Create `contracts/payments.submit.v1.contract.ts`
-- [ ] Create `contracts/payments.status.v1.contract.ts`
-- [ ] Create `app/api/v1/payments/intents/route.ts`
-- [ ] Create `app/api/v1/payments/attempts/[id]/submit/route.ts`
-- [ ] Create `app/api/v1/payments/attempts/[id]/route.ts`
+- [x] Create `contracts/payments.intent.v1.contract.ts`
+- [x] Create `contracts/payments.submit.v1.contract.ts`
+- [x] Create `contracts/payments.status.v1.contract.ts`
+- [x] Create `app/api/v1/payments/intents/route.ts`
+- [x] Create `app/api/v1/payments/attempts/[id]/submit/route.ts`
+- [x] Create `app/api/v1/payments/attempts/[id]/route.ts`
 
 **Constants** (add to `src/shared/web3/chain.ts`):
 
-- `MIN_PAYMENT_CENTS = 100`, `MAX_PAYMENT_CENTS = 1_000_000`
-- `MIN_CONFIRMATIONS = 5`
-- `PAYMENT_INTENT_TTL_MS = 30 * 60 * 1000` (30 min for CREATED_INTENT)
-- `PENDING_UNVERIFIED_TTL_MS = 24 * 60 * 60 * 1000` (24h for stuck PENDING_UNVERIFIED)
-- `VERIFY_THROTTLE_SECONDS = 10` (GET polling throttle)
+- `MIN_PAYMENT_CENTS = 100`, `MAX_PAYMENT_CENTS = 1_000_000` (in core/payments/rules.ts)
+- [x] `MIN_CONFIRMATIONS = 5`
+- `PAYMENT_INTENT_TTL_MS = 30 * 60 * 1000` (in core/payments/rules.ts)
+- `PENDING_UNVERIFIED_TTL_MS = 24 * 60 * 60 * 1000` (in core/payments/rules.ts)
+- [x] `VERIFY_THROTTLE_SECONDS = 10` (GET polling throttle)
 
-**MVP Tests (9 critical scenarios):**
+**MVP Tests (9 critical scenarios):** ✅ COMPLETE
 
-- [ ] Sender mismatch → REJECTED with SENDER_MISMATCH
-- [ ] Wrong token/recipient/amount → REJECTED with appropriate code
-- [ ] Missing receipt → stays PENDING_UNVERIFIED (within 24h window)
-- [ ] PENDING_UNVERIFIED timeout → FAILED after 24h from submit with RECEIPT_NOT_FOUND
-- [ ] Insufficient confirmations → stays PENDING_UNVERIFIED
-- [ ] Duplicate submit (same attempt+hash) → 200 idempotent
-- [ ] Same txHash different attempt → 409
-- [ ] Atomic settle: verify no CREDITED without ledger entry (DB assertion)
-- [ ] Ownership: not owned → 404
+- [x] Sender mismatch → REJECTED with SENDER_MISMATCH
+- [x] Wrong token/recipient/amount → REJECTED with appropriate code
+- [x] Missing receipt → stays PENDING_UNVERIFIED (within 24h window)
+- [x] PENDING_UNVERIFIED timeout → FAILED after 24h from submit with RECEIPT_NOT_FOUND
+- [x] Insufficient confirmations → stays PENDING_UNVERIFIED then CREDITED when sufficient
+- [x] Duplicate submit (same attempt+hash) → 200 idempotent
+- [x] Same txHash different attempt → 409
+- [x] Atomic settle: verify no CREDITED without ledger entry (DB assertion)
+- [x] Ownership: not owned → 404
 
 ---
 
-### Phase 2: Frontend (MVP - Required)
+### Phase 2: Frontend (MVP - Required) ✅ COMPLETE
 
 **Feature Hook:**
 
-- [ ] Create `features/payments/hooks/usePaymentFlow.ts`
+- [x] Create `features/payments/hooks/usePaymentFlow.ts`
   - Calls backend endpoints (intent, submit, status)
   - Uses wagmi `useWriteContract` + `useWaitForTransactionReceipt` for USDC transfer
   - Derives 3-state UI projection (READY/PENDING/DONE) from backend status
@@ -95,14 +95,14 @@
 
 **Kit Component:**
 
-- [ ] Create `components/kit/payments/UsdcPaymentFlow.tsx`
+- [x] Create `components/kit/payments/UsdcPaymentFlow.tsx`
   - Presentational only: state prop + callbacks
   - 3 states: READY (show amount + button), PENDING (wallet + chain status), DONE (success/error)
   - NO business logic
 
 **App Integration:**
 
-- [ ] Update `app/(app)/credits/CreditsPage.client.tsx`
+- [x] Update `app/(app)/credits/CreditsPage.client.tsx`
   - Replace DePay widget with `UsdcPaymentFlow`
   - Use `usePaymentFlow` hook
   - Poll backend for status updates
@@ -110,9 +110,9 @@
 
 **DePay Removal:**
 
-- [ ] Delete `src/components/vendor/depay/` directory
-- [ ] Remove `@depay/widgets` from package.json
-- [ ] Remove DePay-specific code and imports
+- [x] Delete `src/components/vendor/depay/` directory
+- [x] Remove `@depay/widgets` from package.json
+- [x] Remove DePay-specific code and imports
 
 **Frontend Tests:**
 

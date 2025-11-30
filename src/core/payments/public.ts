@@ -35,6 +35,7 @@ export type {
 
 // Rules and validation
 export {
+  CREDITS_PER_CENT,
   isIntentExpired,
   isTerminalState,
   isValidPaymentAmount,

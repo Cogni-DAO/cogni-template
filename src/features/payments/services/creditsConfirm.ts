@@ -5,17 +5,16 @@
  * Module: `@features/payments/services/creditsConfirm`
  * Purpose: Confirm widget payments by crediting billing accounts via ledger writes.
  * Scope: Feature-layer orchestration for payment confirmations; does not expose HTTP handling or session resolution. Validates idempotency via ledger reference lookup.
- * Invariants: Credits are computed with integer math (1 cent = 10 credits); idempotent on clientPaymentId per billing account.
+ * Invariants: Credits computed with integer math using CREDITS_PER_CENT constant from core; idempotent on clientPaymentId per billing account.
  * Side-effects: IO (via AccountService port).
  * Notes: Billing account resolution occurs at app layer; this service assumes a valid billing account and default virtual key.
  * Links: docs/DEPAY_PAYMENTS.md
  * @public
  */
 
+import { CREDITS_PER_CENT } from "@/core";
 import type { AccountService } from "@/ports";
 import { WIDGET_PAYMENT_REASON } from "@/shared";
-
-const CREDITS_PER_CENT = 10;
 
 export interface CreditsConfirmInput {
   billingAccountId: string;
