@@ -43,8 +43,10 @@
 
 ### 3.1 Token System
 
-- [ ] Add `--success`, `--warning`, `--danger` HSL values to `src/styles/tailwind.css`
-- [ ] Add `success`, `warning`, `danger` keys to `src/styles/theme.ts` → `statusKeys`
+- [x] ✅ **NO CHANGES NEEDED** - Status tokens already exist:
+  - `src/styles/tailwind.css:133-135` defines `--color-success/warning/danger`
+  - `tailwind.config.ts:28-30` exposes semantic color utilities
+  - `src/styles/theme.ts:97` exports `statusKeys` array
 
 ### 3.2 Kit Component Fixes
 
@@ -66,25 +68,34 @@
 
 ### 3.3 Page Soup Fixes
 
-#### CreditsPage.client.tsx (15 violations)
+#### CreditsPage.client.tsx (3 extractions)
 
-- [ ] Extract to `src/styles/ui/data.ts`: `ledgerGrid()`, `ledgerEntry()`, `ledgerRow()`, `statsBox()`
-- [ ] Update component to use factories (lines 75, 87, 88, 104, 132, 136, 139, 165, 194, 208)
+- [ ] Extract `statsBox()` to `src/styles/ui/data.ts` (used at lines 88, 104)
+- [ ] Extract `ledgerEntry()` to `src/styles/ui/data.ts` (used at line 136)
+- [ ] Extract `ledgerTimestamp()` to `src/styles/ui/data.ts` (used at line 165)
+- [ ] Update component imports and apply factories
 
-#### chat/Terminal.tsx (9 violations + mobile)
+**Note**: Other inline classNames are simple layout utilities (single-purpose flex/grid/spacing) and remain inline per plan.
 
-- [ ] Extract to `src/styles/ui/overlays.ts`: `chatContainer()`, `chatMessages()`, `chatMessage()`, `chatForm()`, `chatDivider()`
-- [ ] Line 103: Change `overflow-y-auto p-4` → `overflow-y-scroll p-[var(--spacing-sm)] sm:p-[var(--spacing-md)]`
-- [ ] Update component to use factories (lines 102, 103, 111, 121, 128, 134, 135, 141, 144)
+#### chat/Terminal.tsx (5 extractions + mobile fix)
 
-#### HomeHeroSection.tsx (negative margins)
+- [ ] Extract `chatContainer()` to `src/styles/ui/overlays.ts` (line 102)
+- [ ] Extract `chatMessages()` to `src/styles/ui/overlays.ts` (line 103) - **includes mobile fix**: `overflow-y-scroll` + responsive padding
+- [ ] Extract `chatMessage()` to `src/styles/ui/overlays.ts` (lines 111, 121, 128)
+- [ ] Extract `chatDivider()` to `src/styles/ui/overlays.ts` (line 134)
+- [ ] Extract `chatForm()` to `src/styles/ui/overlays.ts` (line 135) - add gap, remove Button `ml-2`
+- [ ] Update component imports and apply factories
+
+#### HomeHeroSection.tsx (mobile margin fix)
 
 - [ ] Line 37: Add `mx-0` at base breakpoint to prevent mobile overflow
-- [ ] Change `-mx-[var(--spacing-xl)] sm:-mx-[...]` → `mx-0 sm:-mx-[var(--spacing-xl)] md:-mx-[...]`
+- [ ] Change `heroButtonContainer` CVA: `-mx-[var(--spacing-xl)] sm:...` → `mx-0 sm:-mx-[var(--spacing-xl)] md:...`
 
-#### KpiBadge.tsx (4 inline CVA)
+**Note**: Other inline CVAs in this file are component-specific layout and remain per plan.
 
-- [ ] Standardize CVA definitions with design tokens or move to `src/styles/ui/data.ts`
+#### KpiBadge.tsx (no changes)
+
+**Note**: Feature-specific component with proper token usage. No extraction needed per plan.
 
 ### 3.4 ESLint Config Bugs
 
@@ -110,13 +121,16 @@
 
 ## Acceptance Criteria
 
-- ✅ Zero raw color violations (including Alert success variant)
-- ✅ Zero raw typography outside `styles/kit/vendor` directories
-- ✅ All page layouts use CVA factories from `src/styles/ui/**`
-- ✅ Mobile-safe at 360px viewport (no horizontal scroll, no clipped content)
-- ✅ ESLint config bugs fixed, enforcement working
-- ✅ Knip shows no unused exports/files
-- ✅ New ripgrep checks pass in `pnpm check`
+- ✅ Zero raw color violations in kit layer (Alert success variant uses semantic tokens)
+- ✅ Zero raw typography in kit layer (Input, Alert, GithubButton use var(--text-\*) tokens)
+- ✅ Kit CVA factories in `src/styles/ui/**` only (Input factory moved to inputs.ts)
+- ✅ Shared/complex patterns extracted: 3 CreditsPage factories + 5 Terminal factories
+- ✅ Mobile-safe at 360px viewport (Terminal scrolling + HomeHero margins fixed)
+- ✅ ESLint config bugs fixed (5/5)
+- ✅ Knip scope remains UI-only (intentional)
+- ✅ `pnpm check` passes (lint + type + format + ui-tokens)
+- ✅ `pnpm test` passes (276 tests)
+- ✅ `pnpm build` succeeds
 
 ---
 

@@ -181,7 +181,7 @@ const brandTextToneVariants = {
   subdued: "text-muted-foreground",
   invert: "text-background",
   gradient:
-    "bg-gradient-to-r from-[var(--color-chart-2)] via-[var(--color-chart-1)] to-[var(--color-chart-4)] bg-clip-text text-transparent",
+    "bg-gradient-to-r from-[var(--color-syntax-operator)] via-[var(--color-syntax-property)] to-[var(--color-syntax-delimiter)] bg-clip-text text-transparent",
 } as const;
 
 /**
