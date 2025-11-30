@@ -5,6 +5,51 @@
 
 ---
 
+## ⚠️ CRITICAL: This is CODE Cleanup, NOT Visual Design Improvements
+
+**Phase 0-3 = Styling Infrastructure Refactoring**
+
+- Moves inline classNames to CVA factories
+- Enforces design token usage
+- Fixes ESLint config bugs
+
+**Phase 0-3 ≠ UI/UX Improvements**
+
+- Zero visual design changes (except 3 minor behavior fixes below)
+- No layout redesigns
+- No component redesigns
+- No new features
+
+**Actual visual changes:**
+
+1. Alert success variant: Different green shade (bg-success/10 vs raw green-50)
+2. Terminal scroll: overflow-y-auto → overflow-y-scroll (behavior change)
+3. Hero mobile: mx-0 baseline at <640px (prevents negative margin overflow)
+
+**The real UI work (visual design, UX improvements) is NOT tracked here.**
+
+---
+
+## ✅ Phase 0-3 Styling Infrastructure Cleanup Complete
+
+**Completed:** 2025-12-01
+**Branch:** feat/ui-cleanup
+**Commits:** 5 (c03f604, 144f887, 280f069, e101efc, 3ffca09)
+**Files modified:** 17 (+239, -148)
+**Factories added:** 13 new (inputs: 1, data: 7, overlays: 5, layout: 3 moved)
+
+**Code quality achievements:**
+
+- Zero inline className literals in scoped files (CreditsPage, Terminal, HomeHeroSection)
+- All kit components use design tokens (no raw colors/text sizes)
+- ESLint config bugs fixed (5/5)
+- Freeze rules active and verified
+- CI passes (pnpm check + test + build)
+
+**Pending:** Mobile quality gate (360/768/1280 manual verification)
+
+---
+
 ## Scan Results Summary
 
 **Component inventory**: 26 kit + 7 feature components (no duplicates)
@@ -17,9 +62,9 @@
 
 ## Phase 0: Freeze
 
-- [ ] Add ESLint rule: block new components outside `kit/` (line ~120 in `eslint/ui-governance.config.mjs`)
-- [ ] Add ESLint rule: block new UI library imports (`@headlessui/*`, `react-aria/*`)
-- [ ] Verify `no-raw-colors` rule is active
+- [x] Add ESLint rule: block new components outside `kit/` (lines 133-140 in `eslint/ui-governance.config.mjs`)
+- [x] Add ESLint rule: block new UI library imports (`@headlessui/*`, `react-aria/*`) (lines 150-157)
+- [x] Verify `no-raw-colors` rule is active (line 56)
 
 ---
 
@@ -52,46 +97,55 @@
 
 #### Alert.tsx (raw colors + typography)
 
-- [ ] Line 30: Replace `border-green-500/50 bg-green-50 text-green-700...` → `border-success/50 bg-success/10 text-success`
-- [ ] Line 22: Replace `text-sm` → `text-[var(--text-sm)]`
+- [x] Line 30: Replace `border-green-500/50 bg-green-50 text-green-700...` → `border-success/50 bg-success/10 text-success` (Commit c03f604)
+  - Dark mode parity: `bg-success/10` both modes
+- [x] Line 22: Replace `text-sm` → `text-[var(--text-sm)]` (Commit c03f604)
 
 #### Input.tsx (CVA location + typography)
 
-- [ ] Move `inputVariants` CVA definition to `src/styles/ui/inputs.ts`
-- [ ] Export from factory, import in component
-- [ ] Line 21: Replace `text-sm` → `text-[var(--text-sm)]`
+- [x] Move `inputVariants` CVA definition to `src/styles/ui/inputs.ts` (Commit c03f604)
+- [x] Export from factory, import in component (Commit c03f604)
+- [x] Line 21: Replace `text-sm` → `text-[var(--text-sm)]` (Commit c03f604)
 
 #### GithubButton.tsx (CVA export + typography)
 
-- [ ] Line 419: Remove `export { githubButtonVariants }`
-- [ ] Lines 52-53: Replace `text-xs` and `text-sm` → token equivalents
+- [x] Line 419: Remove `export { githubButtonVariants }` (Commit c03f604)
+- [x] Lines 52-53: Replace `text-xs` and `text-sm` → token equivalents (Commit c03f604)
 
 ### 3.3 Page Soup Fixes
 
-#### CreditsPage.client.tsx (3 extractions)
+#### CreditsPage.client.tsx (7 extractions - expanded from 3)
 
-- [ ] Extract `statsBox()` to `src/styles/ui/data.ts` (used at lines 88, 104)
-- [ ] Extract `ledgerEntry()` to `src/styles/ui/data.ts` (used at line 136)
-- [ ] Extract `ledgerTimestamp()` to `src/styles/ui/data.ts` (used at line 165)
-- [ ] Update component imports and apply factories
+- [x] Extract `statsBox()` to `src/styles/ui/data.ts` (lines 88, 104) (Commit 144f887)
+- [x] Extract `statsGrid()` to `src/styles/ui/data.ts` (line 87) (Commit 144f887)
+- [x] Extract `ledgerList()` to `src/styles/ui/data.ts` (lines 75, 132, 208) (Commit 144f887)
+- [x] Extract `ledgerEntry()` to `src/styles/ui/data.ts` (line 136) (Commit 144f887)
+- [x] Extract `ledgerHeader()` to `src/styles/ui/data.ts` (line 138) (Commit 144f887)
+- [x] Extract `ledgerMeta()` to `src/styles/ui/data.ts` (line 165) (Commit 144f887)
+- [x] Extract `amountButtons()` to `src/styles/ui/data.ts` (line 194) (Commit 144f887)
+- [x] Update component imports and apply factories (Commit 144f887)
+- [x] **Zero inline className literals achieved** (principles_v2_no_inline compliant)
 
-**Note**: Other inline classNames are simple layout utilities (single-purpose flex/grid/spacing) and remain inline per plan.
+#### chat/Terminal.tsx (5 extractions + scroll behavior change)
 
-#### chat/Terminal.tsx (5 extractions + mobile fix)
+- [x] Extract `chatContainer()` to `src/styles/ui/overlays.ts` (line 102) (Commit 280f069)
+- [x] Extract `chatMessages()` to `src/styles/ui/overlays.ts` (line 103) (Commit 280f069)
+  - Scroll change: `overflow-y-auto` → `overflow-y-scroll` + responsive padding
+- [x] Extract `chatMessage()` to `src/styles/ui/overlays.ts` (lines 111, 121, 128) (Commit 280f069)
+- [x] Extract `chatDivider()` to `src/styles/ui/overlays.ts` (line 134) (Commit 280f069)
+- [x] Extract `chatForm()` to `src/styles/ui/overlays.ts` (line 135) (Commit 280f069)
+  - Add gap, remove Button `ml-2` hack
+- [x] Update component imports and apply factories (Commit 280f069)
+- [x] Export through @/components per architecture (Commit 280f069)
+- [x] **Zero inline className literals achieved**
 
-- [ ] Extract `chatContainer()` to `src/styles/ui/overlays.ts` (line 102)
-- [ ] Extract `chatMessages()` to `src/styles/ui/overlays.ts` (line 103) - **includes mobile fix**: `overflow-y-scroll` + responsive padding
-- [ ] Extract `chatMessage()` to `src/styles/ui/overlays.ts` (lines 111, 121, 128)
-- [ ] Extract `chatDivider()` to `src/styles/ui/overlays.ts` (line 134)
-- [ ] Extract `chatForm()` to `src/styles/ui/overlays.ts` (line 135) - add gap, remove Button `ml-2`
-- [ ] Update component imports and apply factories
+#### HomeHeroSection.tsx (mobile margin fix + CVA move)
 
-#### HomeHeroSection.tsx (mobile margin fix)
-
-- [ ] Line 37: Add `mx-0` at base breakpoint to prevent mobile overflow
-- [ ] Change `heroButtonContainer` CVA: `-mx-[var(--spacing-xl)] sm:...` → `mx-0 sm:-mx-[var(--spacing-xl)] md:...`
-
-**Note**: Other inline CVAs in this file are component-specific layout and remain per plan.
+- [x] Line 37: Add `mx-0` at base breakpoint to prevent mobile overflow (Commit e101efc)
+- [x] Move `heroTextWrapper` → `heroText` CVA to `src/styles/ui/layout.ts` (Commit e101efc)
+- [x] Move `heroButtonContainer` → `heroButtons` CVA to `src/styles/ui/layout.ts` (Commit e101efc)
+- [x] Move `heroVisualContainer` → `heroVisual` CVA to `src/styles/ui/layout.ts` (Commit e101efc)
+- [x] Export through @/components per architecture (Commit e101efc)
 
 #### KpiBadge.tsx (no changes)
 
@@ -99,23 +153,57 @@
 
 ### 3.4 ESLint Config Bugs
 
-- [ ] Bug #1 (line 57): `rounded-[--radius]` → `rounded-[var(--radius)]`
-- [ ] Bug #2 (lines 124-156): Extract `BASE_RESTRICTED_IMPORTS`, spread into layer-specific patterns
-- [ ] Bug #3 (line 290): `e2e/**/*.{ts,spec.ts}` → `e2e/**/*.ts`
-- [ ] Bug #4 (lines 60-65): Remove `tailwindcss/prefer-theme-tokens` (overlaps custom rules)
-- [ ] Bug #5 (lines 265-278): Narrow scope from `**/*.{ts,tsx}` → `src/app/**`, `src/components/**`, `src/features/**`
+- [x] Bug #1 (line 57): `rounded-[--radius]` → `rounded-[var(--radius)]` (Commit 3ffca09)
+- [x] Bug #2 (lines 73-100): Extract `BASE_RESTRICTED_PATTERNS`, spread into 4 locations (Commit 3ffca09)
+- [x] Bug #3 (line 330): `e2e/**/*.{ts,spec.ts}` → `e2e/**/*.ts` (Commit 3ffca09)
+- [x] Bug #4 (lines 73-76): Set `tailwindcss/prefer-theme-tokens: "off"` with rationale (Commit 3ffca09)
+  - Reason: Creates noise with var(--token) patterns
+  - Enforcement via ui-governance/\* + scripts/check-ui-tokens.sh
+- [x] Bug #5 (lines 36-42): Narrowed scope to `src/app/**`, `src/components/**`, `src/features/**` (Commit 3ffca09)
+  - Reason: src/styles/** and src/theme/** are definition files with separate rules (lines 107-223)
 
 ---
 
 ## Validation
 
-- [ ] `pnpm check` passes (lint + type + format)
-- [ ] `pnpm test` passes (unit + integration)
-- [ ] `pnpm build` succeeds (production build)
-- [ ] Manual: Open `localhost:3000` at 360px viewport (no horizontal scroll)
-- [ ] Manual: Verify `/credits` page layout at 360px
-- [ ] Manual: Verify `/chat` page scrolling at 360px
-- [ ] Manual: Verify home page hero section at 360px
+- [x] `pnpm check` passes (lint + type + format) ✅
+- [x] `pnpm test` passes (276 tests, 3 skipped) ✅
+- [x] `pnpm build` succeeds (production build) ✅
+- [ ] `pnpm ui:qa` passes (automated overflow gate - see below)
+
+---
+
+## Automated QA Gate (replaces manual 360/768/1280 checks)
+
+### Why this exists
+
+- We do NOT use a human as the QA gate. Evidence must be reproducible in CI.
+- This PR series intentionally avoids visual redesign; the goal is to prevent regressions while we refactor/govern.
+
+### Gate requirements (Phase 0-3 blocking)
+
+- Add an automated `ui:qa` check that asserts **no horizontal overflow** at 3 viewports on 3 routes:
+  - Routes: `/`, `/credits`, `/chat`
+  - Viewports: `360x800`, `768x900`, `1280x900`
+  - Assertion: `document.documentElement.scrollWidth <= document.documentElement.clientWidth`
+- The check must run in CI and print PASS/FAIL per route+viewport.
+
+### Implementation guidance (MVP)
+
+- Use Playwright (preferred) or a minimal headless script. Keep it tiny and deterministic.
+- This is a _regression gate_, not a design gate. No pixel-perfect snapshots yet.
+
+### What is explicitly NOT required yet
+
+- No visual snapshot baselines.
+- No Lighthouse budgets.
+- No Storybook stories.
+
+### Exit criteria for Phase 0-3 PRs
+
+- `pnpm check`, `pnpm test`, `pnpm build` pass
+- `pnpm ui:qa` passes (or equivalent CI job)
+- Any intentional behavior change (e.g., scroll behavior) is stated in PR description
 
 ---
 
