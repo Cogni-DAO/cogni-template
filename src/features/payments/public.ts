@@ -14,6 +14,8 @@
 
 export type { PaymentsFeatureError } from "./errors";
 export {
+  AuthUserNotFoundError,
   isPaymentsFeatureError,
   mapPaymentPortErrorToFeature,
+  PaymentNotFoundError,
 } from "./errors";

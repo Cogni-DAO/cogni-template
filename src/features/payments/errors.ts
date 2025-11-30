@@ -17,6 +17,39 @@ import {
   isTxHashAlreadyBoundPortError,
 } from "@/ports";
 
+// ============================================================================
+// Typed Error Classes (for facades/routes)
+// ============================================================================
+
+/**
+ * Thrown when authenticated user not found in database
+ * Maps to 401 at HTTP layer
+ */
+export class AuthUserNotFoundError extends Error {
+  constructor(userId: string) {
+    super(`User ${userId} not provisioned in database`);
+    this.name = "AuthUserNotFoundError";
+  }
+}
+
+/**
+ * Thrown when payment attempt not found or not owned by user
+ * Maps to 404 at HTTP layer
+ */
+export class PaymentNotFoundError extends Error {
+  constructor(
+    public readonly attemptId: string,
+    public readonly billingAccountId?: string
+  ) {
+    super(`Payment attempt ${attemptId} not found or not owned by user`);
+    this.name = "PaymentNotFoundError";
+  }
+}
+
+// ============================================================================
+// Discriminated Union (for service layer)
+// ============================================================================
+
 /**
  * Discriminated union of payment feature errors
  * Used for type-safe error handling in feature layer
