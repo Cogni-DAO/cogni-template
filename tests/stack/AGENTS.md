@@ -65,6 +65,9 @@ pnpm test:stack:dev  # or pnpm test:stack:docker
 - Focus on full vertical slice validation (facade → service → ports → DB)
 - Database is reset automatically between test runs via vitest.stack.config.mts
 - Configure fake adapters via exported test helpers (e.g., getTestOnChainVerifier)
+- Never hard-code wallet addresses: use `seedAuthenticatedUser()` from `@tests/_fixtures/auth/db-helpers` which auto-generates unique addresses
+- Fail fast: use explicit guards (`if (!record) throw`) instead of defensive `??` fallbacks in assertions
+- BigInt conversions: use `asNumber()` from `@tests/_fixtures/db-utils` when asserting DB values (safe for values < 2^53)
 
 ## Dependencies
 
