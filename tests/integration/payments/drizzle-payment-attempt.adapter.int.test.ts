@@ -2,24 +2,24 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/ports/drizzle-payment-attempt.adapter`
- * Purpose: Verifies DrizzlePaymentAttemptRepository compliance with PaymentAttemptRepository port contract.
- * Scope: Tests adapter implementation against port invariants. Does NOT test business logic or service layer.
+ * Module: `@tests/integration/payments/drizzle-payment-attempt.adapter`
+ * Purpose: Integration tests for DrizzlePaymentAttemptRepository with real PostgreSQL database.
+ * Scope: Tests adapter implementation against port contract with testcontainers. Does NOT test business logic.
  * Invariants: Adapter passes all 7 port contract tests; ownership enforced; txHash uniqueness maintained; events logged.
- * Side-effects: IO (database operations via test harness)
- * Notes: Uses port harness for reusable contract tests; runs against testcontainers PostgreSQL.
+ * Side-effects: IO (database operations via testcontainers)
+ * Notes: Uses port harness for reusable contract tests; runs with testcontainers PostgreSQL via vitest.integration.config.
  * Links: PaymentAttemptRepository port, payment-attempt.port.harness.ts
  * @public
  */
 
 import { getDb } from "@/adapters/server/db/client";
 import { DrizzlePaymentAttemptRepository } from "@/adapters/server/payments/drizzle-payment-attempt.adapter";
-import type { TestHarness } from "./harness/factory";
-import { registerPaymentAttemptRepositoryContract } from "./harness/payment-attempt.port.harness";
+import type { TestHarness } from "../../ports/harness/factory";
+import { registerPaymentAttemptRepositoryContract } from "../../ports/harness/payment-attempt.port.harness";
 
 /**
  * Factory function that creates a DrizzlePaymentAttemptRepository for port contract testing.
- * Uses the database connection from the test harness.
+ * Uses the database connection from testcontainers setup.
  */
 async function makeDrizzleRepository(
   _harness: TestHarness
