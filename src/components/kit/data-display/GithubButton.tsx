@@ -291,7 +291,7 @@ function GithubButtonPrimitive({
         <div
           className={cn(
             "relative flex h-full items-center justify-center",
-            separator && "w-9 border-border border-r bg-muted/60" // eslint-disable-line ui-governance/token-classname-patterns
+            separator && "w-9 border-border border-r bg-muted/60"
           )}
         >
           <svg role="img" viewBox="0 0 24 24" fill="currentColor">
