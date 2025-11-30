@@ -24,7 +24,12 @@ export type {
   PaymentsStateTransitionEvent,
   PaymentsVerifiedEvent,
 } from "./events";
-export { logRequestEnd, logRequestError, logRequestStart } from "./helpers";
+export {
+  logRequestEnd,
+  logRequestError,
+  logRequestStart,
+  logRequestWarn,
+} from "./helpers";
 export type { Logger } from "./logger";
 export { makeLogger, makeNoopLogger } from "./logger";
 export { REDACT_PATHS } from "./redact";

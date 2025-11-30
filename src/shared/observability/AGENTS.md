@@ -35,7 +35,7 @@ Cross-cutting observability concerns: structured logging, request context, and e
   - `makeLogger(bindings?)` - Pino logger factory
   - `makeNoopLogger()` - Silent logger for tests
   - `createRequestContext({ baseLog, clock }, request, { routeId, session })` - Request context factory
-  - `logRequestStart/End/Error(log, ...)` - Standardized helpers
+  - `logRequestStart/End/Error/Warn(log, ...)` - Standardized helpers
   - `Logger`, `RequestContext`, `Clock` - Types
   - `AiLlmCallEvent`, `PaymentsEvent` - Event schemas
 - **Routes:** none
@@ -54,7 +54,7 @@ Cross-cutting observability concerns: structured logging, request context, and e
 - This directory **does**:
   - Provide Pino logger factory with env-based config (pretty/JSON/disabled)
   - Define RequestContext for request-scoped logging
-  - Provide standardized log helpers (start/end/error)
+  - Provide standardized log helpers (start/end/error/warn)
   - Define event schemas for AI and Payments domains
   - Validate reqId from `x-request-id` header (max 64 chars, alphanumeric + `_-`)
   - Redact sensitive fields (tokens, headers, wallet keys)

@@ -34,6 +34,7 @@ export {
   logRequestEnd,
   logRequestError,
   logRequestStart,
+  logRequestWarn,
   makeLogger,
   makeNoopLogger,
   REDACT_PATHS,

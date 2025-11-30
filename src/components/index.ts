@@ -19,11 +19,7 @@ export { Avatar, AvatarFallback, AvatarImage } from "./kit/data-display/Avatar";
 export { Badge } from "./kit/data-display/Badge";
 export { GithubButton } from "./kit/data-display/GithubButton";
 export { TerminalFrame } from "./kit/data-display/TerminalFrame";
-export {
-  Alert,
-  AlertDescription,
-  AlertTitle,
-} from "./kit/feedback/Alert";
+export { Alert, AlertDescription, AlertTitle } from "./kit/feedback/Alert";
 export { Progress } from "./kit/feedback/Progress";
 export { Button } from "./kit/inputs/Button";
 export { Input } from "./kit/inputs/Input";

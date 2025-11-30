@@ -12,62 +12,78 @@
  * @public
  */
 
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { getPaymentStatusFacade } from "@/app/_facades/payments/attempts.server";
 import { getSessionUser } from "@/app/_lib/auth/session";
+import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { paymentStatusOperation } from "@/contracts/payments.status.v1.contract";
 import {
   AuthUserNotFoundError,
   PaymentNotFoundError,
 } from "@/features/payments/errors";
+import { logRequestWarn, type RequestContext } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-): Promise<NextResponse> {
-  try {
-    // Extract attemptId from URL params
-    const { id: attemptId } = await params;
-
-    // 1. Get session
-    const sessionUser = await getSessionUser();
-    if (!sessionUser) {
-      return NextResponse.json({ error: "Session required" }, { status: 401 });
-    }
-
-    // 2. Call facade
-    const result = await getPaymentStatusFacade({
-      sessionUser,
-      attemptId,
-    });
-
-    // 3. Validate output and return
-    return NextResponse.json(paymentStatusOperation.output.parse(result));
-  } catch (error) {
-    // Auth errors
-    if (error instanceof AuthUserNotFoundError) {
-      return NextResponse.json(
-        { error: "User not provisioned; please re-authenticate" },
-        { status: 401 }
-      );
-    }
-
-    // Payment not found errors
-    if (error instanceof PaymentNotFoundError) {
-      return NextResponse.json(
-        { error: "Payment attempt not found or not owned by user" },
-        { status: 404 }
-      );
-    }
-
-    // Generic errors
-    console.error("Payment status retrieval error", error);
+/**
+ * Local error handler for payment status route.
+ * Maps domain errors to HTTP responses; returns null for unhandled errors.
+ */
+function handleRouteError(
+  ctx: RequestContext,
+  error: unknown
+): NextResponse | null {
+  // Auth errors
+  if (error instanceof AuthUserNotFoundError) {
+    logRequestWarn(ctx.log, error, "AUTH_USER_NOT_FOUND");
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
+      { error: "User not provisioned; please re-authenticate" },
+      { status: 401 }
     );
   }
+
+  // Payment not found errors
+  if (error instanceof PaymentNotFoundError) {
+    logRequestWarn(ctx.log, error, "PAYMENT_NOT_FOUND");
+    return NextResponse.json(
+      { error: "Payment attempt not found or not owned by user" },
+      { status: 404 }
+    );
+  }
+
+  return null;
 }
+
+export const GET = wrapRouteHandlerWithLogging<{
+  params: Promise<{ id: string }>;
+}>(
+  {
+    routeId: "payments.attempt_status",
+    auth: { mode: "required", getSessionUser },
+  },
+  async (ctx, _request, sessionUser, context) => {
+    try {
+      // Extract attemptId from URL params
+      if (!context) throw new Error("context required for dynamic routes");
+      const { id: attemptId } = await context.params;
+
+      // Call facade with context
+      if (!sessionUser) throw new Error("sessionUser required"); // Enforced by wrapper
+      const result = await getPaymentStatusFacade(
+        {
+          sessionUser,
+          attemptId,
+        },
+        ctx
+      );
+
+      // Validate output and return
+      return NextResponse.json(paymentStatusOperation.output.parse(result));
+    } catch (error) {
+      const errorResponse = handleRouteError(ctx, error);
+      if (errorResponse) return errorResponse;
+      throw error; // Unhandled - let wrapper catch
+    }
+  }
+);

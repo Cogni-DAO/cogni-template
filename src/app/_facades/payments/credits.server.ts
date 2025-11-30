@@ -19,13 +19,17 @@ import { confirmCreditsPayment } from "@/features/payments/services/creditsConfi
 import { getCreditsSummary } from "@/features/payments/services/creditsSummary";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { SessionUser } from "@/shared/auth";
+import type { RequestContext } from "@/shared/observability";
 
-export async function confirmCreditsPaymentFacade(params: {
-  sessionUser: SessionUser;
-  amountUsdCents: number;
-  clientPaymentId: string;
-  metadata?: Record<string, unknown> | undefined;
-}): Promise<CreditsConfirmOutput> {
+export async function confirmCreditsPaymentFacade(
+  params: {
+    sessionUser: SessionUser;
+    amountUsdCents: number;
+    clientPaymentId: string;
+    metadata?: Record<string, unknown> | undefined;
+  },
+  _ctx: RequestContext
+): Promise<CreditsConfirmOutput> {
   const { accountService } = getContainer();
 
   let billingAccount: Awaited<
@@ -60,10 +64,13 @@ export async function confirmCreditsPaymentFacade(params: {
   };
 }
 
-export async function getCreditsSummaryFacade(params: {
-  sessionUser: SessionUser;
-  limit?: number | undefined;
-}): Promise<CreditsSummaryOutput> {
+export async function getCreditsSummaryFacade(
+  params: {
+    sessionUser: SessionUser;
+    limit?: number | undefined;
+  },
+  _ctx: RequestContext
+): Promise<CreditsSummaryOutput> {
   const { accountService } = getContainer();
 
   let billingAccount: Awaited<

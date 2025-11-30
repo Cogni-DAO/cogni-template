@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-29
+- **Last reviewed:** 2025-12-01
 - **Status:** draft
 
 ## Purpose
@@ -42,10 +42,11 @@ Deterministic test doubles for unit tests with no I/O dependencies.
   - FakeLlmAdapter (deterministic LLM responses)
   - MockAccountService (account/credits test doubles)
   - Payment builders (createPaymentAttempt, createIntentAttempt, createPendingAttempt, createCreditedAttempt, createRejectedAttempt, createFailedAttempt, createExpiredIntent, createTimedOutPending)
+  - makeTestCtx (RequestContext factory for facade/service tests)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** index.ts, payments/fakes.ts, ai/fakes.ts
+- **Files considered API:** index.ts, payments/fakes.ts, ai/fakes.ts, test-context.ts
 
 ## Responsibilities
 
@@ -56,7 +57,7 @@ Deterministic test doubles for unit tests with no I/O dependencies.
 
 ```bash
 # Import in unit tests
-import { FakeClock, FakeRng, FakeTelemetry } from "@tests/_fakes"
+import { FakeClock, FakeRng, FakeTelemetry, makeTestCtx } from "@tests/_fakes"
 import { createMockAccountServiceWithDefaults } from "@tests/_fakes"
 import { createPaymentAttempt, createIntentAttempt } from "@tests/_fakes"
 ```

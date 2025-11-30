@@ -14,6 +14,7 @@
 
 import { randomUUID } from "node:crypto";
 
+import { makeTestCtx } from "@tests/_fakes";
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
@@ -24,6 +25,7 @@ import { billingAccounts, creditLedger } from "@/shared/db/schema.billing";
 
 describe("Credits confirm stack (idempotent on clientPaymentId)", () => {
   it("applies credits once per clientPaymentId and returns consistent balance", async () => {
+    const ctx = makeTestCtx();
     const db = getDb();
     const sessionUser = {
       id: randomUUID(), // Valid UUID v4 for testing
@@ -39,19 +41,25 @@ describe("Credits confirm stack (idempotent on clientPaymentId)", () => {
     const clientPaymentId = `stack-test-${randomUUID()}`;
 
     try {
-      const first = await confirmCreditsPaymentFacade({
-        sessionUser,
-        amountUsdCents: 10,
-        clientPaymentId,
-        metadata: { provider: "depay", test: true },
-      });
+      const first = await confirmCreditsPaymentFacade(
+        {
+          sessionUser,
+          amountUsdCents: 10,
+          clientPaymentId,
+          metadata: { provider: "depay", test: true },
+        },
+        ctx
+      );
 
-      const second = await confirmCreditsPaymentFacade({
-        sessionUser,
-        amountUsdCents: 10,
-        clientPaymentId,
-        metadata: { provider: "depay", test: true },
-      });
+      const second = await confirmCreditsPaymentFacade(
+        {
+          sessionUser,
+          amountUsdCents: 10,
+          clientPaymentId,
+          metadata: { provider: "depay", test: true },
+        },
+        ctx
+      );
 
       expect(second.balanceCredits).toBe(first.balanceCredits);
 

@@ -1,6 +1,6 @@
 # Observability: Structured Logging
 
-**Status:** V1 complete (AI completion instrumented), V2 deferred (log collection)
+**Status:** V1 complete (All routes instrumented), V2 deferred (log collection)
 
 **Purpose:** Centralized Pino logging with request context, stable event schemas, and stdout JSON for collector-based shipping.
 
@@ -41,21 +41,25 @@
 - [x] All tests use makeNoopLogger()
 - [x] Remove console.log from adapters (DB, LiteLLM, Fake)
 
-**Payments Routes (Deferred):**
+**Payments Routes (Phase 2 - Complete):**
 
-- [ ] `app/api/v1/payments/intents/route.ts` (routeId: "payments.intents")
-- [ ] `app/api/v1/payments/credits/summary/route.ts` (routeId: "payments.credits_summary")
-- [ ] `app/api/v1/payments/credits/confirm/route.ts` (routeId: "payments.credits_confirm")
-- [ ] `app/api/v1/payments/attempts/[id]/route.ts` (routeId: "payments.attempt_status")
-- [ ] `app/api/v1/payments/attempts/[id]/submit/route.ts` (routeId: "payments.attempt_submit")
+- [x] `bootstrap/http/wrapRouteHandlerWithLogging.ts` - Route logging wrapper (envelope only)
+- [x] `shared/observability/logging/helpers.ts` - Add logRequestWarn for 4xx errors
+- [x] `app/_facades/payments/attempts.server.ts` - Accept ctx parameter (ready for downstream context passing)
+- [x] `app/_facades/payments/credits.server.ts` - Accept ctx parameter (ready for downstream context passing)
+- [x] `app/api/v1/payments/intents/route.ts` (routeId: "payments.intents")
+- [x] `app/api/v1/payments/credits/summary/route.ts` (routeId: "payments.credits_summary")
+- [x] `app/api/v1/payments/credits/confirm/route.ts` (routeId: "payments.credits_confirm")
+- [x] `app/api/v1/payments/attempts/[id]/route.ts` (routeId: "payments.attempt_status")
+- [x] `app/api/v1/payments/attempts/[id]/submit/route.ts` (routeId: "payments.attempt_submit")
 
 ---
 
 ### V2: Log Collection (Deferred)
 
-- [ ] Wire Promtail scrape config for app container
+- [ ] Wire Grafana Alloy scrape config for app container (Promtail successor, LTS/EOL planned)
 - [ ] Configure Docker socket mounts + labels
-- [ ] Add JSON pipeline stages
+- [ ] Add JSON pipeline stages (Alloy supports Promtail config conversion)
 - [ ] Validate logs in Loki
 - [ ] Create Grafana dashboards
 - [ ] Add alerting rules
@@ -83,6 +87,13 @@
 - Routes call `getContainer()` for singleton
 - Pass `{ baseLog: container.log, clock: container.clock }` to createRequestContext
 
+**Route Envelope Logging:**
+
+- `bootstrap/http/wrapRouteHandlerWithLogging` - Wrapper for route logging boilerplate
+- Handles ctx creation, session check, timing, logRequestStart/End/Error
+- Routes use wrapper to eliminate manual boilerplate
+- Domain events (PaymentsEvent, AiEvent) stay in facades/features
+
 **Ports Stay Pure:**
 
 - No Logger in port interfaces (e.g., LlmService)
@@ -104,6 +115,7 @@
 **Container:**
 
 - `src/bootstrap/container.ts` - Singleton with logger
+- `src/bootstrap/http/wrapRouteHandlerWithLogging.ts` - Route logging wrapper
 
 **Instrumented Routes:**
 
@@ -186,14 +198,19 @@
 
 ---
 
-## 7. Known Issues
+## 7. Known Issues & Future Work
 
-**V1 Cleanup:**
+**Phase 2 Complete - Remaining V1 Work:**
 
-- [ ] Complete payment route instrumentation (5 routes)
+- [ ] Payment facades accept `_ctx` but don't yet use it; rename `_ctx` → `ctx` and use for:
+  - Child logger enrichment with `billingAccountId`
+  - Domain event logging (PaymentsIntentCreatedEvent, etc.)
+  - Requires feature services to accept RequestContext parameter (Phase 3)
+- [ ] Replace `throw new Error('AUTH_USER_NOT_FOUND')` with typed error class for reliable route mapping
+- [ ] AI completion route: migrate to `wrapRouteHandlerWithLogging` + local error mapper (consistent with payment routes)
 
 **V2 (Future PR):**
 
-- [ ] Wire Promtail scrape config
+- [ ] Wire Grafana Alloy scrape config (replace Promtail)
 - [ ] Validate Loki pipeline
 - [ ] Grafana dashboards + alerting

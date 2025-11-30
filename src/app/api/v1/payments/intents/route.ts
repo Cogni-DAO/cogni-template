@@ -12,67 +12,80 @@
  * @public
  */
 
-import { type NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 
 import { createPaymentIntentFacade } from "@/app/_facades/payments/attempts.server";
 import { getSessionUser } from "@/app/_lib/auth/session";
+import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { paymentIntentOperation } from "@/contracts/payments.intent.v1.contract";
 import { AuthUserNotFoundError } from "@/features/payments/errors";
+import { logRequestWarn, type RequestContext } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
-  try {
-    // 1. Get session
-    const sessionUser = await getSessionUser();
-    if (!sessionUser) {
-      return NextResponse.json({ error: "Session required" }, { status: 401 });
-    }
-
-    // 2. Parse JSON body
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-    }
-
-    // 3. Validate with contract
-    const input = paymentIntentOperation.input.parse(body);
-
-    // 4. Call facade
-    const result = await createPaymentIntentFacade({
-      sessionUser,
-      ...input,
-    });
-
-    // 5. Validate output and return
-    return NextResponse.json(paymentIntentOperation.output.parse(result));
-  } catch (error) {
-    // Zod validation errors
-    if (error && typeof error === "object" && "issues" in error) {
-      return NextResponse.json(
-        {
-          error: "Invalid input format",
-          details: (error as { issues: unknown }).issues,
-        },
-        { status: 400 }
-      );
-    }
-
-    // Auth errors
-    if (error instanceof AuthUserNotFoundError) {
-      return NextResponse.json(
-        { error: "User not provisioned; please re-authenticate" },
-        { status: 401 }
-      );
-    }
-
-    // Generic errors
-    console.error("Payment intent creation error", error);
+/**
+ * Local error handler for payment intent route.
+ * Maps domain errors to HTTP responses; returns null for unhandled errors.
+ */
+function handleRouteError(
+  ctx: RequestContext,
+  error: unknown
+): NextResponse | null {
+  // Zod validation errors
+  if (error && typeof error === "object" && "issues" in error) {
+    logRequestWarn(ctx.log, error, "VALIDATION_ERROR");
     return NextResponse.json(
-      { error: "Internal server error" },
-      { status: 500 }
+      { error: "Invalid input format" },
+      { status: 400 }
     );
   }
+
+  // Auth errors
+  if (error instanceof AuthUserNotFoundError) {
+    logRequestWarn(ctx.log, error, "AUTH_USER_NOT_FOUND");
+    return NextResponse.json(
+      { error: "User not provisioned; please re-authenticate" },
+      { status: 401 }
+    );
+  }
+
+  return null;
 }
+
+export const POST = wrapRouteHandlerWithLogging(
+  { routeId: "payments.intents", auth: { mode: "required", getSessionUser } },
+  async (ctx, request, sessionUser) => {
+    try {
+      // Parse JSON body
+      let body: unknown;
+      try {
+        body = await request.json();
+      } catch {
+        return NextResponse.json(
+          { error: "Invalid JSON body" },
+          { status: 400 }
+        );
+      }
+
+      // Validate with contract
+      const input = paymentIntentOperation.input.parse(body);
+
+      // Call facade with context
+      if (!sessionUser) throw new Error("sessionUser required"); // Enforced by wrapper
+      const result = await createPaymentIntentFacade(
+        {
+          sessionUser,
+          ...input,
+        },
+        ctx
+      );
+
+      // Validate output and return
+      return NextResponse.json(paymentIntentOperation.output.parse(result));
+    } catch (error) {
+      const errorResponse = handleRouteError(ctx, error);
+      if (errorResponse) return errorResponse;
+      throw error; // Unhandled - let wrapper catch
+    }
+  }
+);

@@ -25,6 +25,7 @@ export function logRequestStart(log: Logger): void {
 /**
  * Log request end with consistent fields.
  * Use at the end of every instrumented route handler (success or error).
+ * Always logs at info level - error/warn signals come from logRequestError/logRequestWarn.
  *
  * @param log - Request-scoped child logger (with routeId, reqId, method already bound)
  * @param meta - Response metadata
@@ -36,16 +37,31 @@ export function logRequestEnd(
     durationMs: number;
   }
 ): void {
-  const level =
-    meta.status >= 500 ? "error" : meta.status >= 400 ? "warn" : "info";
-  log[level](
+  log.info(
     { status: meta.status, durationMs: meta.durationMs },
     "request complete"
   );
 }
 
 /**
+ * Log warning with consistent fields: err, errorCode, routeId (already in ctx).
+ * Use for client errors (4xx) that are handled and don't indicate server issues.
+ *
+ * @param log - Request-scoped child logger (with routeId, reqId already bound)
+ * @param error - Error object
+ * @param errorCode - Stable app error code for classification
+ */
+export function logRequestWarn(
+  log: Logger,
+  error: unknown,
+  errorCode: string
+): void {
+  log.warn({ err: error, errorCode }, "request warning handled");
+}
+
+/**
  * Log error with consistent fields: err, errorCode, routeId (already in ctx).
+ * Use for server errors (5xx) that indicate internal failures.
  *
  * @param log - Request-scoped child logger (with routeId, reqId already bound)
  * @param error - Error object
