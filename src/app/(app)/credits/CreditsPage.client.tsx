@@ -3,26 +3,23 @@
 
 /**
  * Module: `@app/(app)/credits/CreditsPage.client`
- * Purpose: Client-side credits page UI handling balance display, ledger history, and DePay purchase flow.
- * Scope: Fetches credits data via React Query, renders DePay widget, and triggers payment confirmation. Does not manage server-side config or repo-spec access.
- * Invariants: Widget configuration is provided via server props (no env access); idempotency enforced via txHash.
- * Side-effects: IO (fetch API); global (localStorage idempotency keys); DOM (widget callbacks).
- * Links: docs/DEPAY_PAYMENTS.md
+ * Purpose: Client-side credits page UI handling balance display, ledger history, and USDC payment flow.
+ * Scope: Fetches credits data via React Query, renders native USDC payment flow, and refreshes balance on success. Does not manage server-side config or repo-spec access.
+ * Invariants: Widget configuration is provided via server props (no env access); backend handles verification and idempotency.
+ * Side-effects: IO (fetch API via React Query).
+ * Links: docs/PAYMENTS_FRONTEND_DESIGN.md
  * @public
  */
 
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactElement } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 
-import { Button } from "@/components";
-import { DePayWidget } from "@/components/vendor/depay";
-import type { CreditsConfirmInput } from "@/contracts/payments.credits.confirm.v1.contract";
+import { Button, UsdcPaymentFlow } from "@/components";
 import type { CreditsSummaryOutput } from "@/contracts/payments.credits.summary.v1.contract";
-import { buildConfirmPayload } from "@/features/payments/services/buildConfirmPayload";
-import type { WidgetConfig } from "@/shared/config";
+import { usePaymentFlow } from "@/features/payments/hooks/usePaymentFlow";
 import {
   badge,
   card,
@@ -48,33 +45,6 @@ async function fetchSummary(): Promise<CreditsSummaryOutput> {
   return (await response.json()) as CreditsSummaryOutput;
 }
 
-async function confirmPayment(payload: CreditsConfirmInput): Promise<{
-  billingAccountId: string;
-  balanceCredits: number;
-}> {
-  const response = await fetch("/api/v1/payments/credits/confirm", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.json().catch(() => ({}));
-    const message =
-      typeof errorBody.error === "string"
-        ? errorBody.error
-        : "Unable to confirm payment";
-    throw new Error(message);
-  }
-
-  return (await response.json()) as {
-    billingAccountId: string;
-    balanceCredits: number;
-  };
-}
-
 function formatCredits(amount: number): string {
   return amount.toLocaleString("en-US");
 }
@@ -83,17 +53,10 @@ function formatTimestamp(timestamp: string): string {
   return new Date(timestamp).toLocaleString();
 }
 
-interface CreditsPageClientProps {
-  widgetConfig: WidgetConfig;
-}
-
-export function CreditsPageClient({
-  widgetConfig,
-}: CreditsPageClientProps): ReactElement {
+export function CreditsPageClient(): ReactElement {
   const [selectedAmount, setSelectedAmount] = useState<number>(
     PAYMENT_AMOUNTS[1]
   );
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const summaryQuery = useQuery({
@@ -101,50 +64,12 @@ export function CreditsPageClient({
     queryFn: fetchSummary,
   });
 
-  const confirmMutation = useMutation({
-    mutationFn: confirmPayment,
+  const paymentFlow = usePaymentFlow({
+    amountUsdCents: selectedAmount * 100, // Convert dollars to cents
     onSuccess: async () => {
-      setStatusMessage("Credits added successfully");
       await queryClient.invalidateQueries({ queryKey: ["payments-summary"] });
     },
-    onError: (error: unknown) => {
-      const message =
-        error instanceof Error ? error.message : "Unable to confirm payment";
-      setStatusMessage(message);
-    },
   });
-
-  const walletAddress = useMemo(
-    () => widgetConfig.receivingAddress,
-    [widgetConfig.receivingAddress]
-  );
-
-  const handlePaymentSuccess = useCallback(
-    (txInfo: { txHash: string; blockchain: string; token: string }) => {
-      // Build confirm payload using shared helper
-      const payload = buildConfirmPayload(
-        txInfo,
-        selectedAmount,
-        widgetConfig.provider
-      );
-
-      // Store payment ID for reference (best-effort, no error if localStorage fails)
-      try {
-        localStorage.setItem("depay:lastPaymentId", payload.clientPaymentId);
-      } catch {
-        // Ignore storage errors
-      }
-
-      setStatusMessage(null);
-      confirmMutation.mutate(payload);
-    },
-    [selectedAmount, confirmMutation, widgetConfig.provider]
-  );
-
-  const handlePaymentFailure = useCallback((message: string) => {
-    setStatusMessage(message);
-    console.log("[Payment] Failed:", message);
-  }, []);
 
   const ledgerEntries = summaryQuery.data?.ledger ?? [];
 
@@ -163,7 +88,7 @@ export function CreditsPageClient({
                     spacing: "xs",
                   })}
                 >
-                  Powered by DePay. No auto top-up.
+                  Pay with USDC on Ethereum Sepolia. No auto top-up.
                 </div>
               </div>
               <div className="mt-[var(--spacing-sm)] grid gap-[var(--spacing-xs)] lg:grid-cols-2">
@@ -198,11 +123,6 @@ export function CreditsPageClient({
                   </div>
                 </div>
               </div>
-              {statusMessage ? (
-                <div className="rounded-md border border-border bg-accent/30 p-[var(--spacing-sm)] text-[var(--text-sm)] text-accent-foreground">
-                  {statusMessage}
-                </div>
-              ) : null}
             </div>
             <div className={cardContent()}>
               {summaryQuery.isLoading ? (
@@ -290,18 +210,16 @@ export function CreditsPageClient({
                 ))}
               </div>
               <div className="mt-[var(--spacing-lg)] space-y-[var(--spacing-sm)]">
-                <DePayWidget
-                  amountUsd={selectedAmount}
-                  chainId={widgetConfig.chainId}
-                  receiverAddress={walletAddress}
-                  disabled={confirmMutation.isPending}
-                  onSucceeded={handlePaymentSuccess}
-                  onFailed={handlePaymentFailure}
+                <UsdcPaymentFlow
+                  amountUsdCents={selectedAmount * 100}
+                  state={paymentFlow.state}
+                  onStartPayment={paymentFlow.startPayment}
+                  onReset={paymentFlow.reset}
+                  disabled={summaryQuery.isLoading}
                 />
                 <div className={paragraph({ size: "sm", tone: "subdued" })}>
-                  After payment completes, we call the confirm endpoint with
-                  your amount and an idempotent payment ID. Repeat submissions
-                  with the same ID will not double credit your balance.
+                  Connect your wallet, approve the USDC transfer, and we will
+                  credit your balance once the transaction is verified on-chain.
                 </div>
               </div>
             </div>

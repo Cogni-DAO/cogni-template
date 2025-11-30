@@ -3,22 +3,18 @@
 
 /**
  * Module: `@app/(app)/credits/page`
- * Purpose: Server entrypoint for the protected credits page; loads repo-spec widget config and passes it to the client UI.
- * Scope: Server component only; delegates all client-side behavior to CreditsPageClient; does not perform client-side data fetching or widget wiring directly.
- * Invariants: Widget configuration must come from .cogni/repo-spec.yaml via server helper; no env-based overrides.
+ * Purpose: Server entrypoint for the protected credits page; delegates to client component for USDC payment flow.
+ * Scope: Server component only; delegates all client-side behavior to CreditsPageClient; does not perform data fetching or payment wiring.
+ * Invariants: All payment configuration handled via backend intent endpoint (chain-agnostic).
  * Side-effects: none (server render only)
- * Links: docs/DEPAY_PAYMENTS.md
+ * Links: docs/PAYMENTS_FRONTEND_DESIGN.md
  * @public
  */
 
 import type { ReactElement } from "react";
 
-import { getWidgetConfig } from "@/shared/config";
-
 import { CreditsPageClient } from "./CreditsPage.client";
 
 export default function CreditsPage(): ReactElement {
-  const widgetConfig = getWidgetConfig();
-
-  return <CreditsPageClient widgetConfig={widgetConfig} />;
+  return <CreditsPageClient />;
 }
