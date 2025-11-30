@@ -26,6 +26,7 @@ import {
 import type { AccountService, Clock, LlmCaller, LlmService } from "@/ports";
 import { InsufficientCreditsPortError } from "@/ports";
 import { serverEnv } from "@/shared/env";
+import type { AiLlmCallEvent, RequestContext } from "@/shared/observability";
 
 const DEFAULT_MAX_COMPLETION_TOKENS = 2048;
 const CHARS_PER_TOKEN_ESTIMATE = 4;
@@ -46,8 +47,10 @@ export async function execute(
   llmService: LlmService,
   accountService: AccountService,
   clock: Clock,
-  caller: LlmCaller
+  caller: LlmCaller,
+  ctx: RequestContext
 ): Promise<{ message: Message; requestId: string }> {
+  const log = ctx.log.child({ feature: "ai.completion" });
   // Apply core business rules first
   const userMessages = filterSystemMessages(messages);
 
@@ -85,6 +88,9 @@ export async function execute(
   const requestId = randomUUID();
 
   // Delegate to port - caller constructed at auth boundary
+  log.debug({ messageCount: trimmedMessages.length }, "calling LLM");
+  const llmStart = Date.now();
+
   const result = await llmService.completion({
     messages: trimmedMessages,
     caller,
@@ -94,6 +100,19 @@ export async function execute(
   const providerMeta = (result.providerMeta ?? {}) as Record<string, unknown>;
   const modelId =
     typeof providerMeta.model === "string" ? providerMeta.model : "unknown";
+
+  // Log LLM call with structured event
+  const llmEvent: AiLlmCallEvent = {
+    event: "ai.llm_call",
+    routeId: ctx.log.bindings().route as string,
+    reqId: ctx.reqId,
+    billingAccountId: caller.billingAccountId,
+    model: modelId,
+    durationMs: Date.now() - llmStart,
+    tokensUsed: totalTokens,
+    providerCostUsd: result.providerCostUsd,
+  };
+  log.info(llmEvent, "LLM response received");
 
   const baseMetadata = {
     system: "ai_completion",
@@ -120,8 +139,13 @@ export async function execute(
 
       // Enforce profit margin invariant
       if (userPriceCredits < providerCostCredits) {
-        console.error(
-          `[CompletionService] Invariant violation: User price (${userPriceCredits}) < Provider cost (${providerCostCredits})`
+        log.error(
+          {
+            userPriceCredits,
+            providerCostCredits,
+            requestId,
+          },
+          "Invariant violation: User price < Provider cost"
         );
       }
 
@@ -156,24 +180,24 @@ export async function execute(
     // Post-call billing is best-effort - NEVER block user response after LLM succeeded
     if (error instanceof InsufficientCreditsPortError) {
       // Pre-flight passed but post-call failed - race condition or concurrent usage
-      console.warn(
-        "[CompletionService] Post-call insufficient credits (user got response for free)",
-        JSON.stringify({
+      log.warn(
+        {
           requestId,
           billingAccountId: caller.billingAccountId,
           required: error.cost,
           available: error.previousBalance,
-        })
+        },
+        "Post-call insufficient credits (user got response for free)"
       );
     } else {
       // Other errors (DB down, FK constraint, etc.) are operational issues
-      console.error(
-        "[CompletionService] CRITICAL: Post-call billing failed - user response NOT blocked",
-        JSON.stringify({
+      log.error(
+        {
+          err: error,
           requestId,
           billingAccountId: caller.billingAccountId,
-          error: error instanceof Error ? error.message : String(error),
-        })
+        },
+        "CRITICAL: Post-call billing failed - user response NOT blocked"
       );
     }
     // DO NOT RETHROW - user already got LLM response, must see it

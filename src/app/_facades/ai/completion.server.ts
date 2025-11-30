@@ -31,6 +31,7 @@ import {
   isVirtualKeyNotFoundPortError,
 } from "@/ports";
 import type { SessionUser } from "@/shared/auth";
+import type { RequestContext } from "@/shared/observability";
 
 interface CompletionInput {
   messages: MessageDto[];
@@ -41,7 +42,8 @@ interface CompletionInput {
 type CompletionOutput = z.infer<typeof aiCompletionOperation.output>;
 
 export async function completion(
-  input: CompletionInput
+  input: CompletionInput,
+  ctx: RequestContext
 ): Promise<CompletionOutput> {
   // Resolve dependencies from bootstrap (pure composition root)
   const { llmService, accountService, clock } = resolveAiDeps();
@@ -62,6 +64,15 @@ export async function completion(
     litellmVirtualKey: billingAccount.litellmVirtualKey,
   };
 
+  // Enrich context with business identifiers
+  const enrichedCtx: RequestContext = {
+    ...ctx,
+    log: ctx.log.child({
+      userId: input.sessionUser.id,
+      billingAccountId: billingAccount.id,
+    }),
+  };
+
   // Map DTOs to core types using feature mappers (no core imports here)
   const timestamp = clock.now();
   const coreMessages = toCoreMessages(input.messages, timestamp);
@@ -73,7 +84,8 @@ export async function completion(
       llmService,
       accountService,
       clock,
-      caller
+      caller,
+      enrichedCtx
     );
 
     // Map core result back to DTO
