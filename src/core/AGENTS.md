@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-28
+- **Last reviewed:** 2025-11-29
 - **Status:** draft
 
 ## Purpose
 
-Pure domain logic with entities, rules, and business invariants. No I/O, time, or RNG dependencies. Includes account models, credit pricing calculations, and chat message validation.
+Pure domain logic with entities, rules, and business invariants. No I/O, time, or RNG dependencies. Includes account models, credit pricing calculations, chat message validation, and payment attempt state machine for USDC credit top-ups.
 
 ## Pointers
 
@@ -37,11 +37,16 @@ Pure domain logic with entities, rules, and business invariants. No I/O, time, o
 
 ## Public Surface
 
-- **Exports:** Domain entities, business rules, invariants
-- **Routes (if any):** none
-- **CLI (if any):** none
+- **Exports:**
+  - Account entities (Account, BillingAccount)
+  - Payment entities (PaymentAttempt, PaymentAttemptStatus, ClientVisibleStatus, PaymentErrorCode)
+  - Business rules (credit pricing, message validation, payment state transitions, amount bounds, TTLs)
+  - Domain errors (InsufficientCreditsError, PaymentIntentExpiredError, PaymentVerificationError, etc.)
+  - Utilities (USDC conversion, message builders, payment state checkers)
+- **Routes:** none
+- **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** All exported entities and rules
+- **Files considered API:** public.ts, payments/public.ts, billing/public.ts, chat/public.ts, accounts/public.ts
 
 ## Ports (optional)
 
@@ -51,8 +56,8 @@ Pure domain logic with entities, rules, and business invariants. No I/O, time, o
 
 ## Responsibilities
 
-- This directory **does**: Define domain entities (Account, Message), business rules (credit sufficiency, message trimming), validation logic (message length, role normalization), pricing calculations (USD to credits with markup)
-- This directory **does not**: Perform I/O, access external services, handle UI concerns, read env vars
+- This directory **does**: Define domain entities (Account, Message, PaymentAttempt), business rules (credit sufficiency, message trimming, payment state machine), validation logic (message length, role normalization, amount bounds, TTL checks), pricing calculations (USD to credits with markup, USDC conversions)
+- This directory **does not**: Perform I/O, access external services, handle UI concerns, read env vars, persist data
 
 ## Usage
 
@@ -85,3 +90,6 @@ pnpm typecheck
 - Inject Clock/Rng via ports for deterministic testing
 - Pricing helpers use BigInt for credit amounts to prevent rounding errors
 - All credit calculations round up (Math.ceil) to ensure minimum 1 credit for non-zero costs
+- Payment state machine: CREATED_INTENT → PENDING_UNVERIFIED → CREDITED | REJECTED | FAILED
+- USDC conversions use 6 decimals (1 USDC = 1,000,000 raw units, 1 cent = 10,000 raw units)
+- Payment constants: MIN_PAYMENT_CENTS (100), MAX_PAYMENT_CENTS (1,000,000), PAYMENT_INTENT_TTL_MS (30min), PENDING_UNVERIFIED_TTL_MS (24h)

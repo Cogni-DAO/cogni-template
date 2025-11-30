@@ -14,38 +14,73 @@
 
 import {
   DrizzleAccountService,
+  DrizzlePaymentAttemptRepository,
   getDb,
   LiteLlmAdapter,
+  PonderOnChainVerifierAdapter,
   SystemClock,
 } from "@/adapters/server";
-import { FakeLlmAdapter } from "@/adapters/test";
-import type { AccountService, Clock, LlmService } from "@/ports";
+import { FakeLlmAdapter, FakeOnChainVerifierAdapter } from "@/adapters/test";
+import type {
+  AccountService,
+  Clock,
+  LlmService,
+  OnChainVerifier,
+  PaymentAttemptRepository,
+} from "@/ports";
 import { serverEnv } from "@/shared/env";
 
 export interface Container {
   llmService: LlmService;
   accountService: AccountService;
   clock: Clock;
+  paymentAttemptRepository: PaymentAttemptRepository;
+  onChainVerifier: OnChainVerifier;
 }
 
+// Feature-specific dependency types
+export type AiCompletionDeps = Pick<
+  Container,
+  "llmService" | "accountService" | "clock"
+>;
+
 export function createContainer(): Container {
+  const env = serverEnv();
+  const db = getDb();
+
   // Environment-based adapter wiring - single source of truth
-  const llmService = serverEnv().isTestMode
+  const llmService = env.isTestMode
     ? new FakeLlmAdapter()
     : new LiteLlmAdapter();
 
-  // Always use real database adapter for accounts
+  // OnChainVerifier: test uses fake, production uses Ponder stub (real Ponder in Phase 3)
+  const onChainVerifier = env.isTestMode
+    ? new FakeOnChainVerifierAdapter()
+    : new PonderOnChainVerifierAdapter();
+
+  // Always use real database adapters
   // Testing strategy: unit tests mock the port, integration tests use real DB
-  // This eliminates env complexity while maintaining proper test boundaries
-  const db = getDb();
   const accountService = new DrizzleAccountService(db);
+  const paymentAttemptRepository = new DrizzlePaymentAttemptRepository(db);
 
   return {
     llmService,
     accountService,
     clock: new SystemClock(),
+    paymentAttemptRepository,
+    onChainVerifier,
   };
 }
 
-// Alias for AI-specific dependency resolution
-export const resolveAiDeps = createContainer;
+/**
+ * Resolves dependencies for AI completion feature
+ * Returns subset of Container needed for AI operations
+ */
+export function resolveAiDeps(): AiCompletionDeps {
+  const container = createContainer();
+  return {
+    llmService: container.llmService,
+    accountService: container.accountService,
+    clock: container.clock,
+  };
+}

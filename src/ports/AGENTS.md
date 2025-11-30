@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-28
+- **Last reviewed:** 2025-11-29
 - **Status:** draft
 
 ## Purpose
@@ -39,9 +39,11 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
 - **Exports:**
   - AccountService (getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordLlmUsage, listCreditLedgerEntries, findCreditLedgerEntryByReference)
   - LlmService (completion with optional providerCostUsd)
+  - PaymentAttemptRepository (create, findById, findByTxHash, updateStatus, bindTxHash, recordVerificationAttempt, logEvent)
+  - OnChainVerifier (verify transaction against expected parameters)
   - Clock (now)
-  - Port-level errors (InsufficientCreditsPortError, BillingAccountNotFoundPortError, VirtualKeyNotFoundPortError)
-  - Types (BilledLlmUsageParams, NeedsReviewLlmUsageParams, LlmCaller, BillingAccount, CreditLedgerEntry)
+  - Port-level errors (InsufficientCreditsPortError, BillingAccountNotFoundPortError, VirtualKeyNotFoundPortError, PaymentAttemptNotFoundPortError, TxHashAlreadyBoundPortError)
+  - Types (BilledLlmUsageParams, NeedsReviewLlmUsageParams, LlmCaller, BillingAccount, CreditLedgerEntry, CreatePaymentAttemptParams, LogPaymentEventParams, VerificationResult, VerificationStatus)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config:** none
@@ -86,3 +88,6 @@ These tests are separate from edge tests for src/contracts/\*\*
 
 - Port tests are located in tests/ports/\*\* to validate adapter conformance
 - Ports define contracts for internal dependencies, separate from external API contracts
+- PaymentAttemptRepository enforces ownership (findById filters by billingAccountId)
+- OnChainVerifier is generic (no blockchain-specific types), returns VerificationResult with status (VERIFIED | PENDING | FAILED)
+- Port-level errors are thrown by adapters, caught and translated by feature layer

@@ -54,9 +54,11 @@ describe("app/_facades/payments/credits.server", () => {
 
     mockCreateContainer.mockReturnValue({
       accountService,
-      // Unused in this facade, but required by type
+      // Unused in this facade, but required by Container type
       llmService: {} as never,
       clock: {} as never,
+      paymentAttemptRepository: {} as never,
+      onChainVerifier: {} as never,
     });
   });
 

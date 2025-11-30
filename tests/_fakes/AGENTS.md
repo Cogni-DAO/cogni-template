@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-17
+- **Last reviewed:** 2025-11-29
 - **Status:** draft
 
 ## Purpose
@@ -35,11 +35,17 @@ Deterministic test doubles for unit tests with no I/O dependencies.
 
 ## Public Surface
 
-- **Exports:** fake implementations and mock fixtures of ports including accounts, AI, telemetry
+- **Exports:**
+  - FakeClock (controllable time for deterministic tests)
+  - FakeRng (controllable randomness)
+  - FakeTelemetry (no-op telemetry)
+  - FakeLlmAdapter (deterministic LLM responses)
+  - MockAccountService (account/credits test doubles)
+  - Payment builders (createPaymentAttempt, createIntentAttempt, createPendingAttempt, createCreditedAttempt, createRejectedAttempt, createFailedAttempt, createExpiredIntent, createTimedOutPending)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** all fake classes
+- **Files considered API:** index.ts, payments/fakes.ts, ai/fakes.ts
 
 ## Responsibilities
 
@@ -52,6 +58,7 @@ Deterministic test doubles for unit tests with no I/O dependencies.
 # Import in unit tests
 import { FakeClock, FakeRng, FakeTelemetry } from "@tests/_fakes"
 import { createMockAccountServiceWithDefaults } from "@tests/_fakes"
+import { createPaymentAttempt, createIntentAttempt } from "@tests/_fakes"
 ```
 
 ## Standards
@@ -73,3 +80,5 @@ import { createMockAccountServiceWithDefaults } from "@tests/_fakes"
 ## Notes
 
 - Keep fakes minimal and deterministic only
+- Payment builders provide 8 specialized functions for all PaymentAttempt states
+- FakeClock used in payment tests for time-based logic (expiration, timeouts)

@@ -27,3 +27,20 @@ export {
 } from "./accounts.port";
 export type { Clock } from "./clock.port";
 export type { LlmCaller, LlmService } from "./llm.port";
+export type {
+  OnChainVerifier,
+  VerificationResult,
+  VerificationStatus,
+} from "./onchain-verifier.port";
+export {
+  type CreatePaymentAttemptParams,
+  isPaymentAttemptNotFoundPortError,
+  isTxHashAlreadyBoundPortError,
+  type LogPaymentEventParams,
+  type PaymentAttempt,
+  PaymentAttemptNotFoundPortError,
+  type PaymentAttemptRepository,
+  type PaymentAttemptStatus,
+  type PaymentErrorCode,
+  TxHashAlreadyBoundPortError,
+} from "./payment-attempt.port";

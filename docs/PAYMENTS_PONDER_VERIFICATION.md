@@ -1,428 +1,551 @@
-# Payments On-Chain Verification (Ponder Integration)
+# Payments: Ponder-Backed Verification & Reconciliation
 
-**Status:** Post-MVP hardening. Not required for initial launch.
+**MVP Status:** Deferred to Phase 3+
+**Target Chain:** Base mainnet (8453)
+**Prerequisites:** MVP backend-verified payments system operational on Ethereum Sepolia
 
-**Purpose:** Introduce a Ponder-based on-chain indexer that provides an independent view of USDC transfers into the DAO wallet for reconciliation, observability, and future fraud prevention. This does NOT replace the widget confirm endpoint in MVP; it adds a second layer of truth.
+**Purpose:** Real on-chain verification via Ponder indexer for production use on Base mainnet. Provides independent blockchain event source for verification and reconciliation.
 
-**Related:**
+**Related Documentation:**
 
-- MVP payments flow: [DEPAY_PAYMENTS.md](DEPAY_PAYMENTS.md)
-- Billing layer: [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md)
-- Auth model: [SECURITY_AUTH_SPEC.md](SECURITY_AUTH_SPEC.md)
-
----
-
-## One Sentence Summary
-
-Ponder watches Base/Base Sepolia for USDC transfers into our DAO wallet, indexes them in a separate database, and exposes them via GraphQL/SQL for reconciliation jobs that compare on-chain transfers to our internal `credit_ledger`.
+- [PAYMENTS_DESIGN.md](PAYMENTS_DESIGN.md) - MVP payment system with stub verification
+- [PAYMENTS_TEST_DESIGN.md](PAYMENTS_TEST_DESIGN.md) - Testing strategy across phases
+- [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md) - Credit accounting system
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Hexagonal architecture patterns
 
 ---
 
-## MVP vs v2 Security Model
+## Implementation Checklist
 
-**MVP (Widget Confirm Only):**
+### Phase 3: Real Ponder Verification (Post-MVP)
 
-- Trust boundary: SIWE session + `/api/v1/payments/credits/confirm` endpoint
-- Credits granted based on widget success callback in browser (DePay `succeeded` event)
-- No on-chain verification in critical path
-- No tx hash captured or verified
+**Objective:** Wire real Ponder queries into PonderOnChainVerifierAdapter. Switch from stub to real blockchain verification.
 
-**v2 (Ponder Reconciliation, Phase 1):**
+**Ponder Indexer Setup:**
 
-- Ponder indexes on-chain transfers as independent data source
-- Periodic reconciliation job compares Ponder data vs `credit_ledger`
-- Discrepancies flagged for manual review (no automatic blocking)
-- Observability and fraud detection, not a hard gate
-
-**v2 (Ponder as Gate, Phase 2 - Future):**
-
-- For large payments or high-risk accounts, require matching on-chain transfer before marking credits as settled
-- Requires capturing tx hash on frontend (DePay widget provides this in success callback)
-- Hard gate for high-value transactions
-
----
-
-## Runtime Topology
-
-**Service Architecture:**
-
-- Ponder runs as a separate Docker service in the same network as the app and LiteLLM
-- Connects to Base/Base Sepolia RPC endpoints (via Alchemy/Infura or self-hosted node)
-- Maintains its own Postgres database (Ponder-managed schema, separate from app DB)
-- Exposes GraphQL and HTTP endpoints for querying indexed data
-- No public exposure; used only by backend reconciliation jobs or ops tooling
-
-**Environment Configuration:**
-
-- [ ] Add Ponder service to `docker-compose.yml` (dev/test/prod stacks)
-- [ ] Add RPC endpoint URLs to `.env.example`:
-  - `PONDER_RPC_BASE_MAINNET` - Base mainnet RPC
-  - `PONDER_RPC_BASE_SEPOLIA` - Base Sepolia testnet RPC
-- [ ] Add DAO wallet addresses (already in env from widget integration):
-  - `DAO_WALLET_ADDRESS_BASE`
-  - `DAO_WALLET_ADDRESS_BASE_SEPOLIA`
-- [ ] Add Ponder database connection string:
-  - `PONDER_DATABASE_URL` - Separate Postgres for Ponder schema
-
-**Files:**
-
-- `docker-compose.yml` - Add Ponder service
-- `.env.example` - RPC endpoints and configuration
-- `platform/ponder/` - Ponder configuration and indexing logic (new directory)
-
----
-
-## Indexing Specification
-
-**What to Index:**
-
-- ERC20 Transfer events for USDC on Base and Base Sepolia
-- Filter: `to` address matches DAO wallet address
-- Extract: `tx_hash`, `chain_id`, `from`, `to`, `token_contract`, `amount_raw`, `block_number`, `timestamp`
-
-**Confirmation Requirements:**
-
-- Minimum confirmations before marking transfer as "confirmed": 5–10 blocks (configurable)
-- Store `confirmations` count in indexed data
-- Only expose "confirmed" transfers to reconciliation jobs
-
-**Database Schema (Ponder-managed):**
-
-- Table: `onchain_payments`
-- Columns:
-  - `id` - Ponder-generated ID
-  - `tx_hash` - Ethereum transaction hash (unique per chain)
-  - `chain_id` - Chain identifier (8453 = Base, 84532 = Base Sepolia)
-  - `from_address` - Sender wallet
-  - `to_address` - DAO wallet (should always match our address)
-  - `token_contract` - USDC contract address
-  - `amount_raw` - Raw token amount (USDC has 6 decimals)
-  - `amount_usd` - USD equivalent (amount_raw / 1e6 for USDC)
-  - `block_number` - Block height
-  - `timestamp` - Block timestamp
-  - `confirmations` - Current confirmation count
-  - `status` - 'pending' | 'confirmed'
-
-**Implementation Checklist:**
-
-- [ ] Create `platform/ponder/ponder.config.ts` - Ponder configuration file
-- [ ] Configure RPC endpoints for Base mainnet and Base Sepolia
+- [ ] Create `platform/ponder/` directory structure
+- [ ] Create `platform/ponder/ponder.config.ts` - Ponder configuration
+- [ ] Configure RPC endpoints (Base mainnet + Sepolia)
 - [ ] Add USDC contract addresses for both chains
 - [ ] Define Transfer event ABI and indexing logic
 - [ ] Implement filter for DAO wallet address
-- [ ] Set minimum confirmation count (5–10 blocks)
-- [ ] Create `onchain_payments` table schema in Ponder
+- [ ] Set minimum confirmation count (5 blocks per PAYMENTS_DESIGN.md)
+- [ ] Create `onchain_transfers` table schema in Ponder
 - [ ] Add GraphQL schema for querying transfers
 - [ ] Test indexing on Base Sepolia testnet
 
-**Files:**
+**Adapter Implementation:**
 
-- `platform/ponder/ponder.config.ts` - Main Ponder config
-- `platform/ponder/src/index.ts` - Indexing event handlers
-- `platform/ponder/schema.graphql` - GraphQL schema for queries
-- `platform/ponder/abis/usdc.json` - USDC ERC20 ABI
+- [ ] Update `adapters/server/payments/ponder-onchain-verifier.adapter.ts`
+- [ ] Create Ponder GraphQL client adapter
+- [ ] Implement real `verify()` logic:
+  - Query Ponder for Transfer event matching txHash
+  - Validate sender matches attempt.from_address
+  - Validate recipient matches DAO wallet
+  - Validate token matches USDC address
+  - Validate amount >= attempt.amountRaw
+  - Check confirmations >= MIN_CONFIRMATIONS (5)
+- [ ] Handle verification statuses:
+  - Not indexed → return PENDING (stay PENDING_UNVERIFIED)
+  - Found + valid → return VERIFIED (proceed to settlement)
+  - Found + invalid → return FAILED with specific errorCode
+- [ ] Add error handling for RPC failures, reorgs
 
-**Reference:** [Ponder Documentation](https://ponder.sh/docs/) - Accounts & Transfers indexing
+**Configuration Updates:**
 
----
+- [ ] Update `.cogni/repo-spec.yaml` chain_id to Base mainnet (8453)
+- [ ] Add Ponder service to `docker-compose.yml`
+- [ ] Add RPC endpoint URLs to `.env.example`
+- [ ] Add Ponder database connection string
 
-## Integration with Cogni Billing
+**Testing:**
 
-### Phase 1: Reconciliation Only (Post-MVP)
-
-**Goal:** Compare on-chain transfers to `credit_ledger` entries for observability and fraud detection.
-
-**Behavior:**
-
-- Periodic reconciliation job (cron or background worker) runs every N hours
-- Query Ponder GraphQL endpoint for all confirmed transfers in the last period
-- Query app database for `credit_ledger` rows where `reason IN ('widget_payment', 'onchain_deposit')` in same period
-- Compare totals:
-  - Sum of on-chain `amount_usd` from Ponder
-  - Sum of credited amounts from `credit_ledger` (convert credits to USD: credits / 1000)
-- Flag discrepancies:
-  - On-chain > Credited: potential missed credits (user paid but wasn't credited)
-  - Credited > On-chain: potential fraud (user credited without payment)
-- Log discrepancies and surface to ops dashboard or Slack alerts
-- **No automatic blocking** - manual review required
-
-**Implementation Checklist:**
-
-- [ ] Create reconciliation service: `src/features/payments/services/ponder-reconciliation.ts`
-- [ ] Implement Ponder GraphQL client for querying `onchain_payments`
-- [ ] Add reconciliation job to background worker (BullMQ or similar)
-- [ ] Schedule job to run every 6–12 hours
-- [ ] Implement comparison logic:
-  - [ ] Query Ponder for confirmed transfers in time window
-  - [ ] Query `credit_ledger` for matching period
-  - [ ] Compare totals and individual transactions
-  - [ ] Generate discrepancy report
-- [ ] Add logging for all discrepancies (structured JSON logs)
-- [ ] Create ops dashboard or alert integration (Slack/email)
-- [ ] Add metrics: `ponder_reconciliation_discrepancies_total`, `ponder_reconciliation_last_run_timestamp`
-
-**Files:**
-
-- `src/features/payments/services/ponder-reconciliation.ts` - Reconciliation service
-- `src/adapters/server/ponder/graphql-client.ts` - Ponder GraphQL client
-- `src/workers/reconciliation-job.ts` - Background job scheduler
-- `tests/unit/features/payments/services/ponder-reconciliation.test.ts` - Unit tests
-- `tests/integration/ponder/reconciliation.int.test.ts` - Integration tests with Ponder
+- [ ] Unit tests for PonderOnChainVerifierAdapter with mocked Ponder responses
+- [ ] Integration tests with real Ponder instance on Sepolia
+- [ ] Verify all 9 MVP scenarios work with real verification
 
 ---
 
-### Phase 2: Stronger Guarantees (Future)
+### Phase 4: Reconciliation & Hardening (Post-MVP)
 
-**Goal:** For high-value or high-risk payments, require on-chain confirmation before marking credits as fully settled.
+**Objective:** Independent audit trail comparing payment_attempts vs on-chain transfers.
 
-**Prerequisites:**
+**Reconciliation Service:**
 
-- Capture transaction hash on frontend (DePay widget provides this in success callback)
-- Store `tx_hash` in `credit_ledger.reference` field or new `credit_ledger.tx_hash` column
-- Define thresholds for "high-value" (e.g., > $100 USD) or "high-risk" accounts
+- [ ] Create `features/payments/services/reconciliation.ts`
+- [ ] Implement Ponder GraphQL client for querying transfers
+- [ ] Query logic:
+  - Fetch CREDITED payment_attempts in time window
+  - Fetch Ponder-indexed transfers in same window
+  - Match by composite reference (chainId:txHash)
+- [ ] Discrepancy detection:
+  - Transfer found, no payment_attempt → missed credit opportunity
+  - Payment_attempt CREDITED, no transfer → potential fraud
+  - Amount mismatch → data integrity issue
+- [ ] Generate discrepancy reports (structured JSON logs)
+- [ ] Alert integration (Slack/email for ops team)
 
-**Behavior:**
+**Background Jobs:**
 
-- When user calls `/api/v1/payments/credits/confirm`, if payment exceeds threshold:
-  - Insert `credit_ledger` row with `status='pending'`
-  - Do NOT update `billing_accounts.balance_credits` yet
-  - Return response indicating payment is pending verification
-- Background job periodically checks Ponder for matching tx_hash:
-  - If found and confirmed: update `credit_ledger` status to 'confirmed', credit balance
-  - If not found after timeout (e.g., 1 hour): flag for manual review
-- For payments below threshold, continue with instant crediting (Phase 1 behavior)
+- [ ] Add reconciliation job to background worker (BullMQ or cron)
+- [ ] Schedule to run every 6-12 hours
+- [ ] Add job monitoring (last run timestamp, success/failure tracking)
 
-**Implementation Checklist:**
+**Monitoring & Alerts:**
 
-- [ ] Add `tx_hash` field to `/payments/credits/confirm` request schema (optional, provided by DePay widget)
-- [ ] Add `status` column to `credit_ledger` ('pending' | 'confirmed')
-- [ ] Implement threshold logic in confirm endpoint
-- [ ] Create verification job that queries Ponder by tx_hash
-- [ ] Add user-facing "pending" state in UI for unconfirmed credits
-- [ ] Define timeout and manual review process
+- [ ] Add Prometheus metrics:
+  - `ponder_transfers_indexed_total{chain, token}`
+  - `ponder_reconciliation_discrepancies{type}`
+  - `ponder_reconciliation_last_run_timestamp`
+  - `ponder_indexer_lag_blocks{chain}`
+- [ ] Create Grafana dashboard for Ponder metrics
+- [ ] Set up alerts:
+  - Ponder indexer stopped or lagging > 100 blocks
+  - Reconciliation discrepancies exceed threshold
+  - Reconciliation job hasn't run in expected interval
 
-**Files:**
+**Runbooks:**
 
-- `src/contracts/payments.credits.confirm.v1.contract.ts` - Add optional `tx_hash` field
-- `src/shared/db/migrations/*_add_credit_ledger_status.sql` - Add status column
-- `src/features/payments/services/creditsConfirm.ts` - Threshold logic
-- `src/workers/ponder-verification-job.ts` - Verification worker
-- `tests/unit/features/payments/services/creditsConfirm.test.ts` - Test pending flow
+- [ ] Create `platform/runbooks/PONDER_RECONCILIATION.md`
+  - Interpreting discrepancy reports
+  - Manual verification process (block explorer)
+  - Manually crediting missing payments
+  - Investigating suspected fraud
+- [ ] Create `platform/runbooks/PONDER_OPERATIONS.md`
+  - Restarting Ponder service
+  - Re-indexing from specific block
+  - Database backup and recovery
+  - RPC endpoint failover
 
-**Note:** Phase 2 requires frontend changes to capture tx_hash. DePay widget provides transaction hash in the `succeeded` callback, making this integration straightforward.
+**Cleanup:**
+
+- [ ] Clear stuck PENDING_UNVERIFIED attempts after verification timeout
+- [ ] Archive old payment_events (retention policy)
+
+---
+
+## Technical Specification
+
+### Ponder Indexing Scope
+
+**What to Index:**
+
+- ERC20 Transfer events for USDC on Base mainnet (8453) and Sepolia (84532)
+- Filter: `to` address matches DAO wallet from repo-spec.yaml
+- Extract fields: tx_hash, chain_id, from, to, token_contract, amount_raw, block_number, timestamp, confirmations
+
+**Ponder Schema (managed by Ponder):**
+
+Table: `onchain_transfers`
+
+Columns:
+
+- `id` - Ponder-generated ID
+- `tx_hash` - Transaction hash (unique per chain)
+- `chain_id` - Chain identifier (8453 or 84532)
+- `from_address` - Sender wallet (checksummed)
+- `to_address` - DAO wallet (checksummed)
+- `token_contract` - USDC contract address
+- `amount_raw` - Raw token amount (bigint, 6 decimals)
+- `block_number` - Block height
+- `timestamp` - Block timestamp
+- `confirmations` - Current confirmation count
+- `status` - 'pending' | 'confirmed'
+
+**Indexes:**
+
+- Unique: (chain_id, tx_hash)
+- Query: (to_address, timestamp)
+- Query: (status, timestamp)
+
+---
+
+**Phase 3 - PonderOnChainVerifierAdapter Behavior:**
+
+Queries Ponder for indexed Transfer event by (chainId, txHash):
+
+- Transfer not indexed → return PENDING status
+- Confirmations < MIN_CONFIRMATIONS (5) → return PENDING
+- Invalid recipient/token/amount → return FAILED with specific errorCode
+- All valid → return VERIFIED with actual transaction data
+
+Feature service compares `result.actualFrom` with `attempt.fromAddress` for SENDER_MISMATCH detection.
+
+**Phase 4 - Reconciliation Service:**
+
+Compares CREDITED payment_attempts vs Ponder-indexed transfers by composite reference (chainId:txHash). Detects discrepancies and generates reports.
+
+---
+
+## Migration from Stub to Real Verification
+
+**Current MVP (Ethereum Sepolia with Stub):**
+
+- PonderOnChainVerifierAdapter always returns VERIFIED
+- No Ponder deployment required
+- Fast development iteration
+
+**Phase 3 Cutover (Base Mainnet with Real Ponder):**
+
+1. Deploy Ponder indexer on Base mainnet
+2. Verify indexing works correctly
+3. Update PonderOnChainVerifierAdapter to use real queries (remove stub)
+4. Update repo-spec.yaml chain_id: 11155111 → 8453
+5. Deploy backend changes
+6. Monitor verification success rate
+7. If issues detected, can rollback to Sepolia + stub
+
+**Rollback Plan:**
+
+- Keep stub verification code path as fallback
+- Feature flag: `ENABLE_REAL_PONDER_VERIFICATION`
+- Can switch back to stub if Ponder indexer fails
 
 ---
 
 ## Security Model
 
-**Layered Defense:**
+**MVP (Stub Verification):**
 
-1. **Layer 1 (MVP):** SIWE session + widget confirm endpoint
-   - Primary gate: authenticated session resolves billing_account_id
-   - Trust assumption: widget success callback reflects real payment
-   - Mitigation: Rate limiting, idempotency, manual monitoring
+- Trust boundary: SIWE session + backend state machine
+- OnChainVerifier always approves (stub)
+- TxHash captured but not verified
+- Relies on: session ownership enforcement, database constraints, manual monitoring
 
-2. **Layer 2 (Phase 1):** Ponder reconciliation
-   - Independent view: on-chain data source separate from frontend
-   - Observability: flag discrepancies between claimed credits and on-chain transfers
-   - Detection: identify potential fraud patterns over time
-   - No blocking: manual review required
+**Phase 3 (Real Verification):**
 
-3. **Layer 3 (Phase 2):** Ponder as gate
-   - Hard requirement: large/risky payments must have matching on-chain tx
-   - Fraud prevention: cannot credit without proof of on-chain transfer
-   - Trade-off: slower UX (pending state until confirmed)
+- Independent verification: Ponder indexes blockchain independently
+- Sender validation: from_address must match session wallet
+- Amount validation: transfer amount must meet or exceed expected
+- Token/recipient validation: must match USDC and DAO wallet
+- Confirmation depth: minimum 5 blocks before approval
+
+**Phase 4 (Reconciliation):**
+
+- Defense in depth: periodic comparison of payment_attempts vs blockchain
+- Fraud detection: identifies credits without matching transfers
+- Audit trail: payment_events provides full history
+- Manual review: discrepancies flagged for ops team investigation
 
 **Threat Model:**
 
-- **MVP:** Malicious user could call `/confirm` without paying (mitigated by SIWE auth, rate limits, reconciliation)
-- **Phase 1:** Reconciliation detects fraud after the fact, requires manual intervention
-- **Phase 2:** On-chain gate prevents fraud in real-time for high-value transactions
-
-**Access Control:**
-
-- Ponder GraphQL/HTTP endpoints are internal-only (not exposed to public)
-- App backend queries Ponder via private network or localhost
-- All writes to `credit_ledger` still go through app business logic (Ponder is read-only data source)
+- **MVP:** Malicious user could submit invalid txHash (mitigated by ownership + eventual reconciliation)
+- **Phase 3:** Invalid txHash rejected immediately (real verification)
+- **Phase 4:** Reconciliation detects any slipped fraud after the fact
 
 ---
 
 ## Testing Strategy
 
-### Unit Tests
+### Phase 3 Tests (Ponder Integration):
 
-- [ ] Ponder reconciliation service logic (mock Ponder responses)
-- [ ] Discrepancy detection algorithm
-- [ ] Threshold logic for Phase 2 pending credits
+**Unit Tests:**
 
-### Integration Tests
+- [ ] PonderOnChainVerifierAdapter with mocked Ponder GraphQL responses
+- [ ] Verification logic for all error codes (SENDER_MISMATCH, INVALID_TOKEN, etc.)
+- [ ] Confirmation counting logic
+- [ ] RPC error handling
 
-- [ ] Query Ponder GraphQL endpoint in test environment
-- [ ] Insert test data in Ponder DB, verify query results
-- [ ] Test reconciliation job end-to-end with real Ponder instance
+**Integration Tests:**
 
-### Stack Tests
+- [ ] Real Ponder instance on Sepolia testnet
+- [ ] Index test USDC transfer, verify query returns correct data
+- [ ] Test OnChainVerifier.verify() with real Ponder backend
+- [ ] Verify adapter handles "not yet indexed" (PENDING status)
 
-- [ ] Deploy Ponder service in Docker test stack
-- [ ] Index test USDC transfers on Base Sepolia
-- [ ] Verify reconciliation job detects discrepancies
-- [ ] Test pending credit flow (Phase 2)
+**Stack Tests:**
 
-### Manual Testing
+- [ ] Deploy full stack with Ponder service
+- [ ] Execute payment flow end-to-end with real verification
+- [ ] Verify all 9 MVP scenarios work with Ponder-backed verification
 
-- [ ] Run Ponder indexer on Base Sepolia
-- [ ] Send test USDC transfer to DAO wallet
-- [ ] Verify transfer appears in `onchain_payments` after confirmations
-- [ ] Trigger reconciliation job and verify output
-- [ ] Test GraphQL queries via Ponder GraphiQL interface
+### Phase 4 Tests (Reconciliation):
 
-**Files:**
+**Unit Tests:**
 
-- `tests/unit/features/payments/services/ponder-reconciliation.test.ts`
-- `tests/integration/ponder/graphql-client.int.test.ts`
-- `tests/stack/ponder/reconciliation.stack.test.ts`
+- [ ] Reconciliation service logic with mocked Ponder data
+- [ ] Discrepancy detection algorithm (missing credits, missing transfers, amount mismatches)
+- [ ] Report generation format
+
+**Integration Tests:**
+
+- [ ] Reconciliation job with real Ponder and database
+- [ ] Seed synthetic discrepancies, verify detection
+- [ ] Test background job scheduler
 
 ---
 
 ## Operational Procedures
 
-### Monitoring
+### Monitoring Checklist
 
-- [ ] Add Prometheus metrics:
-  - `ponder_transfers_indexed_total{chain, token}` - Total transfers indexed
-  - `ponder_reconciliation_discrepancies{type}` - Discrepancies by type (missing credits, excess credits)
-  - `ponder_reconciliation_last_run_timestamp` - Last successful reconciliation
-  - `ponder_indexer_lag_blocks{chain}` - Indexer lag behind chain tip
-- [ ] Add Grafana dashboard for Ponder metrics
-- [ ] Set up alerts:
-  - Ponder indexer stopped or lagging > 100 blocks
-  - Reconciliation discrepancies exceed threshold
-  - Reconciliation job hasn't run in > 24 hours
+- [ ] Prometheus metrics exported
+- [ ] Grafana dashboard deployed
+- [ ] Alerts configured in alertmanager
+- [ ] On-call runbook procedures documented
 
-### Runbooks
+### Deployment Checklist
 
-- [ ] Create `platform/runbooks/PONDER_RECONCILIATION.md`
-  - How to interpret discrepancy reports
-  - Manual verification process (check block explorer)
-  - How to manually credit missing payments
-  - How to investigate suspected fraud
+**Phase 3A: Ponder Setup**
 
-- [ ] Create `platform/runbooks/PONDER_OPERATIONS.md`
-  - How to restart Ponder service
-  - How to re-index from specific block
-  - Database backup and recovery
-  - RPC endpoint failover
+- [ ] Deploy Ponder service to staging
+- [ ] Configure indexing for Base Sepolia
+- [ ] Verify transfers indexed correctly
+- [ ] Test GraphQL queries
+- [ ] Validate stability before production
 
-**Files:**
+**Phase 3B: Production Cutover**
 
-- `platform/runbooks/PONDER_RECONCILIATION.md`
-- `platform/runbooks/PONDER_OPERATIONS.md`
-- `platform/monitoring/grafana-dashboards/ponder.json`
+- [ ] Deploy Ponder to production
+- [ ] Configure Base mainnet indexing
+- [ ] Update PonderOnChainVerifierAdapter (remove stub)
+- [ ] Update repo-spec.yaml to Base mainnet
+- [ ] Deploy backend with real verification
+- [ ] Monitor verification success rate closely
+- [ ] Verify no payment failures due to indexer lag
+
+**Phase 4: Reconciliation Deployment**
+
+- [ ] Deploy reconciliation service
+- [ ] Enable background job scheduler
+- [ ] Test with synthetic discrepancies in staging
+- [ ] Deploy to production
+- [ ] Monitor and tune alert thresholds
 
 ---
 
-## Implementation Phases
+## Technical Details
 
-### Phase 1A: Ponder Setup (Post-MVP)
+### Ponder Configuration
 
-- [ ] Add Ponder service to Docker compose
-- [ ] Configure indexing for Base Sepolia testnet
-- [ ] Test indexing with manual USDC transfers
-- [ ] Verify GraphQL queries work
+**File Structure:**
 
-### Phase 1B: Reconciliation (Post-MVP)
+```
+platform/ponder/
+├── ponder.config.ts       # Main configuration
+├── src/
+│   └── index.ts          # Event handlers
+├── abis/
+│   └── usdc.json         # USDC ERC20 ABI
+└── schema.graphql        # GraphQL schema
+```
 
-- [ ] Build reconciliation service and GraphQL client
-- [ ] Add background job scheduler
-- [ ] Deploy to dev environment
-- [ ] Test with synthetic discrepancies
-- [ ] Add monitoring and alerts
+**Environment Variables:**
 
-### Phase 1C: Production (Post-MVP)
+```bash
+# RPC Endpoints
+PONDER_RPC_BASE_MAINNET=https://mainnet.base.org
+PONDER_RPC_BASE_SEPOLIA=https://sepolia.base.org
 
-- [ ] Configure Base mainnet indexing
-- [ ] Deploy Ponder to production infrastructure
-- [ ] Enable reconciliation job in production
-- [ ] Monitor for 2–4 weeks, tune thresholds
+# DAO Wallet (from repo-spec.yaml)
+DAO_WALLET_ADDRESS=0x... # From repoSpec.server.ts
 
-### Phase 2: On-Chain Gate (Future)
+# Ponder Database
+PONDER_DATABASE_URL=postgresql://user:pass@ponder-db:5432/ponder
+```
 
-- [ ] Capture tx_hash on frontend
-- [ ] Add pending credit state to backend
-- [ ] Implement verification worker
-- [ ] Test with high-value test transactions
-- [ ] Roll out to high-risk accounts first
-- [ ] Expand to all large transactions
+**Indexed Events:**
+
+```solidity
+event Transfer(address indexed from, address indexed to, uint256 value)
+```
+
+Filter: `to == DAO_WALLET_ADDRESS`
+
+---
+
+### OnChainVerifier Port Implementation
+
+**MVP Behavior (PonderOnChainVerifierAdapter - Stubbed):**
+
+Always returns VERIFIED status with expected values mirrored as actual values. No Ponder queries made.
+
+**Phase 3 Behavior (Real Ponder Queries):**
+
+Queries Ponder for indexed Transfer event, validates all parameters, returns actual transaction data.
+
+**Error Codes Returned:**
+
+- `SENDER_MISMATCH` - from_address doesn't match session wallet
+- `INVALID_RECIPIENT` - to_address doesn't match DAO wallet
+- `INVALID_TOKEN` - token_contract doesn't match USDC
+- `INSUFFICIENT_AMOUNT` - transfer amount less than expected
+- `INSUFFICIENT_CONFIRMATIONS` - confirmations < MIN_CONFIRMATIONS (5)
+- `TX_REVERTED` - transaction failed on-chain
+- `RECEIPT_NOT_FOUND` - transaction not indexed by Ponder
+
+---
+
+### Reconciliation Report Format
+
+**Discrepancy Types:**
+
+1. **CREDITED_NO_TRANSFER** - payment_attempt marked CREDITED but no matching on-chain transfer found
+2. **TRANSFER_NO_CREDIT** - on-chain transfer found but no matching payment_attempt or not CREDITED
+3. **AMOUNT_MISMATCH** - transfer amount less than credited amount
+
+**Report Structure:**
+
+```json
+{
+  "reconciliationId": "uuid",
+  "startTime": "ISO8601",
+  "endTime": "ISO8601",
+  "totalAttempts": 150,
+  "totalTransfers": 148,
+  "discrepancies": [
+    {
+      "type": "TRANSFER_NO_CREDIT",
+      "chainId": 8453,
+      "txHash": "0x...",
+      "fromAddress": "0x...",
+      "amountRaw": "5000000",
+      "blockNumber": 12345678,
+      "timestamp": "ISO8601",
+      "notes": "Transfer found but no matching payment_attempt"
+    },
+    {
+      "type": "CREDITED_NO_TRANSFER",
+      "attemptId": "uuid",
+      "expectedTxHash": "0x...",
+      "amountUsdCents": 500,
+      "creditedAt": "ISO8601",
+      "notes": "Payment marked CREDITED but transfer not found on-chain"
+    }
+  ],
+  "summary": {
+    "totalDiscrepancies": 2,
+    "creditedNoTransfer": 1,
+    "transferNoCredit": 1,
+    "amountMismatch": 0
+  }
+}
+```
+
+---
+
+## Why Ponder Over Alternatives
+
+**vs Custom Indexer:**
+
+- Battle-tested framework for EVM event indexing
+- Handles chain reorgs automatically
+- Built-in GraphQL API
+- Active maintenance and documentation
+- Faster to deploy than building custom solution
+
+**vs Direct RPC Queries:**
+
+- Ponder maintains persistent index (faster queries)
+- No repeated RPC calls for same data
+- Consistent view even during reorgs
+- Better performance for reconciliation jobs
+
+**vs Subgraph (The Graph):**
+
+- Ponder simpler to self-host (no graph-node complexity)
+- Direct SQL access to indexed data
+- Lower operational overhead
+- Better for internal-only use cases
+
+---
+
+## Deployment Sequence
+
+### Phase 3A: Ponder Setup
+
+- Deploy Ponder to staging with Base Sepolia
+- Index test transfers manually
+- Verify GraphQL queries work
+- Validate adapter integration in test environment
+
+### Phase 3B: Verification Testing
+
+- Run all 9 MVP test scenarios with real Ponder
+- Performance testing (verification latency)
+- Load testing (multiple concurrent verifications)
+- Edge case testing (reorgs, RPC failures)
+
+### Phase 3C: Production Cutover
+
+- Deploy Ponder to production with Base mainnet
+- Update repo-spec.yaml to Base mainnet (8453)
+- Update PonderOnChainVerifierAdapter (remove stub)
+- Deploy backend changes
+- Monitor verification success rate
+- Gradual rollout: 10% traffic → 50% → 100%
+
+### Phase 4: Reconciliation Deployment
+
+- Deploy reconciliation service to production
+- Run first manual reconciliation
+- Review discrepancies with ops team
+- Enable automated job (6-12 hour interval)
+- Tune alert thresholds based on real data
+- Document operational procedures
 
 ---
 
 ## Success Criteria
 
-**Phase 1A:**
+**Phase 3:**
 
-- [ ] Ponder successfully indexes USDC transfers on Base Sepolia within 30 seconds of confirmation
-- [ ] GraphQL queries return accurate transfer data
-- [ ] Service runs stably for 7 days with no crashes
+- [ ] Ponder indexes transfers on Base mainnet correctly
+- [ ] Valid payments verified correctly
+- [ ] Invalid payments rejected with correct error codes
+- [ ] Verification latency acceptable for UX
+- [ ] No false positives/negatives in monitoring period
 
-**Phase 1B:**
+**Phase 4:**
 
-- [ ] Reconciliation job detects 100% of synthetic discrepancies in tests
-- [ ] Job runs reliably every 6 hours with < 1% failure rate
-- [ ] Discrepancy reports are actionable and accurate
-
-**Phase 1C:**
-
-- [ ] Production reconciliation runs for 30 days with no false positives
-- [ ] All real discrepancies are explained (legitimate delays, test transactions, etc.)
+- [ ] Reconciliation job runs reliably
+- [ ] All discrepancies explained (no unexplained fraud)
 - [ ] Ops team comfortable with runbook procedures
-
-**Phase 2:**
-
-- [ ] 100% of high-value transactions verified on-chain before crediting
-- [ ] Pending state UX is clear to users
-- [ ] Average verification time < 2 minutes for normal network conditions
-- [ ] Zero fraudulent high-value credits slip through
+- [ ] Alert thresholds tuned to minimize noise
+- [ ] Operational stability validated
 
 ---
 
-## Key Design Decisions
+## Files Affected
 
-**Why Ponder over custom indexer?**
+**Ponder Infrastructure:**
 
-- Battle-tested open-source framework specifically for EVM event indexing
-- Handles chain reorgs, RPC failures, and state management automatically
-- GraphQL API out of the box
-- Active community and documentation
-- Faster to deploy than building custom indexer
+- `platform/ponder/ponder.config.ts`
+- `platform/ponder/src/index.ts`
+- `platform/ponder/schema.graphql`
+- `platform/ponder/abis/usdc.json`
 
-**Why separate database?**
+**Adapters:**
 
-- Ponder manages its own schema and migrations
-- Isolates indexer state from app state
-- Easier to wipe and re-index if needed
-- Clear separation of concerns
+- `src/adapters/server/payments/ponder-onchain-verifier.adapter.ts` (update from stub)
+- `src/adapters/server/ponder/graphql-client.ts` (new)
 
-**Why reconciliation before gate?**
+**Services:**
 
-- MVP needs fast user experience (instant credits)
-- Build confidence in Ponder accuracy before making it a hard requirement
-- Allows tuning of thresholds and detection logic with real data
-- Gradual rollout reduces risk
+- `src/features/payments/services/reconciliation.ts` (new)
 
-**Why not verify every payment on-chain?**
+**Configuration:**
 
-- DePay widget provides tx_hash in success callback, making this straightforward
-- Most payments are small; fraud risk is proportional to amount
-- On-chain verification adds latency (wait for confirmations)
-- Phase 1 catches fraud via reconciliation; Phase 2 prevents it for high-value only
+- `.cogni/repo-spec.yaml` (update chain_id in Phase 3)
+- `docker-compose.yml` (add Ponder service)
+- `.env.example` (add Ponder config)
+
+**Runbooks:**
+
+- `platform/runbooks/PONDER_RECONCILIATION.md` (new)
+- `platform/runbooks/PONDER_OPERATIONS.md` (new)
+
+**Tests:**
+
+- `tests/unit/adapters/server/payments/ponder-onchain-verifier.adapter.spec.ts` (update)
+- `tests/integration/ponder/graphql-client.spec.ts` (new)
+- `tests/integration/payments/reconciliation.spec.ts` (new)
 
 ---
 
 ## References
 
-- [Ponder Documentation](https://ponder.sh/docs/) - Official Ponder docs
-- [Ponder Indexing Guide](https://ponder.sh/docs/indexing/design-your-schema) - Schema and event handlers
-- [Base Network](https://base.org/) - Layer 2 network documentation
-- [USDC on Base](https://basescan.org/token/0x833589fcd6edb6e08f4c7c32d4f71b54bda02913) - USDC contract on Base mainnet
-- [DEPAY_PAYMENTS.md](DEPAY_PAYMENTS.md) - MVP payments flow (widget confirm endpoint)
-- [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md) - Credit accounting and dual-cost billing
+- [Ponder Documentation](https://ponder.sh/docs/) - Official docs
+- [Ponder Indexing Guide](https://ponder.sh/docs/indexing/design-your-schema) - Schema design
+- [Base Network](https://base.org/) - Layer 2 documentation
+- [USDC on Base](https://basescan.org/token/0x833589fcd6edb6e08f4c7c32d4f71b54bda02913) - Contract explorer

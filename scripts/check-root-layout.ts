@@ -97,6 +97,7 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   "LICENSE.md",
   "LICENSES",
   "README.md",
+  "ROADMAP.md",
   "REUSE.toml",
   "SECURITY.md",
   "biome",
