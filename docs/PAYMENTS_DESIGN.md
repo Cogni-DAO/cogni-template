@@ -83,11 +83,11 @@
 
 ---
 
-### Phase 2: Frontend (MVP - Required)
+### Phase 2: Frontend (MVP - Required) ✅ COMPLETE
 
 **Feature Hook:**
 
-- [ ] Create `features/payments/hooks/usePaymentFlow.ts`
+- [x] Create `features/payments/hooks/usePaymentFlow.ts`
   - Calls backend endpoints (intent, submit, status)
   - Uses wagmi `useWriteContract` + `useWaitForTransactionReceipt` for USDC transfer
   - Derives 3-state UI projection (READY/PENDING/DONE) from backend status
@@ -95,14 +95,14 @@
 
 **Kit Component:**
 
-- [ ] Create `components/kit/payments/UsdcPaymentFlow.tsx`
+- [x] Create `components/kit/payments/UsdcPaymentFlow.tsx`
   - Presentational only: state prop + callbacks
   - 3 states: READY (show amount + button), PENDING (wallet + chain status), DONE (success/error)
   - NO business logic
 
 **App Integration:**
 
-- [ ] Update `app/(app)/credits/CreditsPage.client.tsx`
+- [x] Update `app/(app)/credits/CreditsPage.client.tsx`
   - Replace DePay widget with `UsdcPaymentFlow`
   - Use `usePaymentFlow` hook
   - Poll backend for status updates
@@ -110,9 +110,9 @@
 
 **DePay Removal:**
 
-- [ ] Delete `src/components/vendor/depay/` directory
-- [ ] Remove `@depay/widgets` from package.json
-- [ ] Remove DePay-specific code and imports
+- [x] Delete `src/components/vendor/depay/` directory
+- [x] Remove `@depay/widgets` from package.json
+- [x] Remove DePay-specific code and imports
 
 **Frontend Tests:**
 

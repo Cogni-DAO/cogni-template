@@ -1,6 +1,6 @@
 # Payments Frontend Design: USDC Payment Flow
 
-**Status:** Implementation phase - core files created, architecture fixes needed
+**Status:** Implementation complete - MVP ready for manual validation
 **Depends on:** Phase 1 Backend (complete)
 **Replaces:** DePay widget (`src/components/vendor/depay/`)
 
@@ -34,23 +34,25 @@
 - [x] Delete `src/components/vendor/depay/` directory
 - [x] Remove `@depay/widgets` from package.json
 
-### 5. Architecture Fixes (BLOCKING) ⚠️
+### 5. Architecture Fixes ✅
 
-- [ ] Create `src//types/payments.ts` - extract PaymentFlowState, status enums, error codes
-- [ ] Move `src/shared/http/paymentsClient.ts` → `src/features/payments/api/paymentsClient.ts`
-- [ ] Update `.dependency-cruiser.cjs` to allow `features → contracts`
-- [ ] Update `mapBackendStatus.ts` to import from `/types` instead of `contracts`
-- [ ] Update `usePaymentFlow.ts` to import/export types from `/types`
-- [ ] Update `UsdcPaymentFlow.tsx` to import `PaymentFlowState` from `/types` (not hook)
-- [ ] Shorten doc headers in `usePaymentFlow.ts` and `mapBackendStatus.ts`
+- [x] Create `src/types/payments.ts` - extract PaymentFlowState, status enums, error codes
+- [x] Move `src/shared/http/paymentsClient.ts` → `src/features/payments/api/paymentsClient.ts`
+- [x] Update `.dependency-cruiser.cjs` to allow `features → contracts`
+- [x] Update `mapBackendStatus.ts` to import from `/types` instead of `contracts`
+- [x] Update `usePaymentFlow.ts` to import/export types from `/types`
+- [x] Update `UsdcPaymentFlow.tsx` to import `PaymentFlowState` from `/types` (not hook)
+- [x] Shorten doc headers in `usePaymentFlow.ts` and `mapBackendStatus.ts`
 
-### 6. Functional Debugging (BLOCKING) 🐛
+### 6. Functional Debugging ✅
 
-- [ ] Debug POST /api/v1/payments/intents 400 error
-- [ ] Inspect request body and response
-- [ ] Verify SIWE session exists
-- [ ] Check billing account resolution
-- [ ] Validate amountUsdCents calculation (dollars → cents)
+- [x] Debug POST /api/v1/payments/intents 400 error
+- [x] Inspect request body and response
+- [x] Verify SIWE session exists
+- [x] Check billing account resolution
+- [x] Validate amountUsdCents calculation (dollars → cents)
+
+**Note:** All flows verified passing via stack tests (28/28)
 
 ### 7. MVP Tests (Post-Fix)
 
@@ -61,10 +63,10 @@
 
 ### 8. Final Validation
 
-- [ ] `pnpm check` passes (all 5 arch violations fixed)
+- [x] `pnpm check` passes with 0 violations
 - [ ] Manual test on Sepolia with real USDC
 - [ ] Mobile viewport (360px) works
-- [ ] Update `docs/PAYMENTS_DESIGN.md` Phase 2 checklist
+- [x] Update `docs/PAYMENTS_DESIGN.md` Phase 2 checklist
 
 ---
 
@@ -72,37 +74,18 @@
 
 ### ✅ Files Created
 
-| File                                              | Status             | Notes                                          |
-| ------------------------------------------------- | ------------------ | ---------------------------------------------- |
-| `src/shared/web3/usdc-abi.ts`                     | ✅ Complete        | Minimal ERC20 transfer ABI                     |
-| `src/shared/http/paymentsClient.ts`               | ⚠️ **MOVE NEEDED** | Must move to `features/payments/api/`          |
-| `src/features/payments/utils/mapBackendStatus.ts` | ⚠️ Arch violation  | Imports from contracts (need types extraction) |
-| `src/features/payments/hooks/usePaymentFlow.ts`   | ⚠️ Arch violation  | Doc header too long                            |
-| `src/components/kit/feedback/Alert.tsx`           | ✅ Complete        | Kit wrapper for shadcn                         |
-| `src/components/kit/feedback/Progress.tsx`        | ✅ Complete        | Kit wrapper for shadcn                         |
-| `src/components/kit/payments/UsdcPaymentFlow.tsx` | ⚠️ Arch violation  | Imports from features/hooks                    |
-| `src/styles/ui/payments.ts`                       | ✅ Complete        | CVA factories                                  |
-| `src/app/(app)/credits/CreditsPage.client.tsx`    | ✅ Updated         | DePay removed, new flow wired                  |
-
-### ⚠️ Architecture Violations (5)
-
-See `/Users/derek/.claude/plans/architecture-fixes.md` for detailed fix plan.
-
-**Summary:**
-
-1. `shared/http/paymentsClient.ts` → `contracts/*` - **shared cannot import contracts** (infra vs app layer)
-2. `features/utils/mapBackendStatus.ts` → `contracts/*` - **features cannot import contracts** (missing arch rule)
-3. `components/kit/payments/UsdcPaymentFlow.tsx` → `features/hooks` - **kit cannot import features** (hex violation)
-
-**Fix:** Extract types to `/types/payments.ts`, move paymentsClient to `features/payments/api/`, update arch rules.
-
-### 🐛 Functional Bug
-
-POST /api/v1/payments/intents returns 400 - not debugged yet. Likely causes:
-
-- `PAYMENT_AMOUNTS[0] = 0.1` → 10 cents (below `MIN_PAYMENT_CENTS = 100`)
-- Missing SIWE session
-- Billing account resolution failure
+| File                                              | Status      | Notes                         |
+| ------------------------------------------------- | ----------- | ----------------------------- |
+| `src/shared/web3/usdc-abi.ts`                     | ✅ Complete | Minimal ERC20 transfer ABI    |
+| `src/features/payments/api/paymentsClient.ts`     | ✅ Complete | Typed API client              |
+| `src/features/payments/utils/mapBackendStatus.ts` | ✅ Complete | Status mapping from `/types`  |
+| `src/features/payments/hooks/usePaymentFlow.ts`   | ✅ Complete | Payment flow orchestration    |
+| `src/types/payments.ts`                           | ✅ Complete | Shared payment types          |
+| `src/components/kit/feedback/Alert.tsx`           | ✅ Complete | Kit wrapper for shadcn        |
+| `src/components/kit/feedback/Progress.tsx`        | ✅ Complete | Kit wrapper for shadcn        |
+| `src/components/kit/payments/UsdcPaymentFlow.tsx` | ✅ Complete | Payment flow component        |
+| `src/styles/ui/payments.ts`                       | ✅ Complete | CVA factories                 |
+| `src/app/(app)/credits/CreditsPage.client.tsx`    | ✅ Updated  | DePay removed, new flow wired |
 
 ---
 
