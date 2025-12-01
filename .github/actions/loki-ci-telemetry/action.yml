@@ -4,9 +4,9 @@
 name: CI Telemetry to Loki
 description: |
   Capture CI job telemetry and push to Grafana Cloud Loki.
-  - Always: writes compact summary (workflow/job/ref/sha/outcome)
-  - On failure: appends docker/compose context (logs, ps)
-  - Always: pushes to Loki with env=ci label
+  - Always: writes JSON summary (queryable via {env="ci"} | json)
+  - On failure: appends FAILCTX-prefixed docker/compose context
+  - Always: pushes to Loki with env=ci label and low-cardinality labels
 
 inputs:
   loki_url:
@@ -40,23 +40,46 @@ runs:
       if: always()
       shell: bash
       run: |
-        # Lightweight summary for all runs (success + failure)
+        # JSON summary for all runs (success + failure) - always first line (NDJSON)
         LOG_FILE="${{ runner.temp }}/ci-job.log"
-        cat >> "$LOG_FILE" << SUMMARY_EOF
-        === CI Run Summary ===
-        workflow: ${{ github.workflow }}
-        job: ${{ github.job }}
-        run_id: ${{ github.run_id }}
-        attempt: ${{ github.run_attempt }}
-        ref: ${{ github.ref_name }}
-        sha: ${{ github.sha }}
-        actor: ${{ github.actor }}
-        outcome: ${{ inputs.job_status }}
-        timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)
-        SUMMARY_EOF
+        SHA8="${{ github.sha }}"
+        SHA8="${SHA8:0:8}"
+
+        # Export SHA8 for use in labels (later step)
+        echo "CI_SHA8=$SHA8" >> $GITHUB_ENV
+
+        # Validate job_status input (composite actions can't access job.status directly)
+        # Allowed: success, failure, cancelled, skipped
+        STATUS="${{ inputs.job_status }}"
+        case "$STATUS" in
+          success|failure|cancelled|skipped) ;;
+          *) STATUS="unknown" ;;
+        esac
+
+        # Export validated status for labels
+        echo "CI_STATUS=$STATUS" >> $GITHUB_ENV
+
+        jq -nc \
+          --arg type "ci_run_summary" \
+          --arg status "$STATUS" \
+          --arg workflow "${{ github.workflow }}" \
+          --arg job "${{ github.job }}" \
+          --arg run_id "${{ github.run_id }}" \
+          --arg attempt "${{ github.run_attempt }}" \
+          --arg ref "${{ github.ref_name }}" \
+          --arg sha "${{ github.sha }}" \
+          --arg sha8 "$SHA8" \
+          --arg actor "${{ github.actor }}" \
+          --arg repo "${{ github.repository }}" \
+          --arg run_url "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+          --arg captured_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          '{type: $type, status: $status, workflow: $workflow, job: $job, run_id: $run_id, attempt: $attempt, ref: $ref, sha: $sha, sha8: $sha8, actor: $actor, repo: $repo, run_url: $run_url, captured_at: $captured_at}' \
+          >> "$LOG_FILE"
+
+        printf '\n' >> "$LOG_FILE"
 
     - name: Capture failure context
-      if: inputs.job_status == 'failure' && inputs.compose_file != ''
+      if: failure() && inputs.compose_file != ''
       shell: bash
       env:
         COMPOSE_FILE: ${{ inputs.compose_file }}
@@ -64,31 +87,43 @@ runs:
         TAIL_LINES: ${{ inputs.tail_lines }}
       run: |
         LOG_FILE="${{ runner.temp }}/ci-job.log"
+        MAX_FAILCTX_BYTES=524288  # 512KB cap for failure context
 
-        echo "" >> "$LOG_FILE"
-        echo "=== Failure Context ===" >> "$LOG_FILE"
-        echo "captured_at: $(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$LOG_FILE"
+        # Capture to temp file first, then prefix and append
+        TEMP_FAILCTX=$(mktemp)
+        trap "rm -f '$TEMP_FAILCTX'" EXIT
 
-        # Docker system state
-        echo "" >> "$LOG_FILE"
-        echo "=== docker ps ===" >> "$LOG_FILE"
-        docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" >> "$LOG_FILE" 2>&1 || echo "docker ps failed" >> "$LOG_FILE"
+        {
+          echo ""
+          echo "=== Failure Context ==="
+          echo "captured_at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-        # Compose state (if project exists)
-        if docker compose -f "$COMPOSE_FILE" ps --quiet 2>/dev/null; then
-          echo "" >> "$LOG_FILE"
-          echo "=== docker compose ps ===" >> "$LOG_FILE"
-          docker compose -f "$COMPOSE_FILE" ps >> "$LOG_FILE" 2>&1 || true
+          # Docker system state
+          echo ""
+          echo "=== docker ps ==="
+          docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>&1 || echo "docker ps failed"
 
-          # Capture logs for each service
-          for svc in $COMPOSE_SERVICES; do
-            echo "" >> "$LOG_FILE"
-            echo "=== logs: $svc (tail $TAIL_LINES) ===" >> "$LOG_FILE"
-            docker compose -f "$COMPOSE_FILE" logs --tail="$TAIL_LINES" "$svc" >> "$LOG_FILE" 2>&1 || echo "No logs for $svc" >> "$LOG_FILE"
-          done
-        else
-          echo "No compose project found for $COMPOSE_FILE" >> "$LOG_FILE"
-        fi
+          # Compose state (if project exists)
+          if docker compose -f "$COMPOSE_FILE" ps --quiet 2>/dev/null; then
+            echo ""
+            echo "=== docker compose ps ==="
+            docker compose -f "$COMPOSE_FILE" ps 2>&1 || true
+
+            # Capture logs for each service
+            for svc in $COMPOSE_SERVICES; do
+              echo ""
+              echo "=== logs: $svc (tail $TAIL_LINES) ==="
+              docker compose -f "$COMPOSE_FILE" logs --tail="$TAIL_LINES" "$svc" 2>&1 || echo "No logs for $svc"
+            done
+          else
+            echo "No compose project found for $COMPOSE_FILE"
+          fi
+        } > "$TEMP_FAILCTX"
+
+        # Cap size and prefix with FAILCTX:
+        # Note: byte-cap (head -c) can cut mid-line, producing messy output.
+        # MVP accepts this; future: use line-based cap (awk/perl) for cleaner truncation.
+        head -c "$MAX_FAILCTX_BYTES" "$TEMP_FAILCTX" | sed 's/^/FAILCTX: /' >> "$LOG_FILE"
 
     - name: Push to Loki
       if: always()
@@ -99,4 +134,4 @@ runs:
         loki_token: ${{ inputs.loki_token }}
         log_file: ${{ runner.temp }}/ci-job.log
         job_name: ${{ github.job }}
-        labels: workflow=${{ github.workflow }} ref=${{ github.ref_name }} run_id=${{ github.run_id }} attempt=${{ github.run_attempt }} sha8=${{ github.sha }} status=${{ inputs.job_status }}
+        labels: workflow=${{ github.workflow }} ref=${{ github.ref_name }} run_id=${{ github.run_id }} attempt=${{ github.run_attempt }} sha8=${{ env.CI_SHA8 }} status=${{ env.CI_STATUS }}

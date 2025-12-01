@@ -60,8 +60,8 @@ fi
 RESPONSE_FILE=$(mktemp -t loki-push.XXXXXX)
 trap "rm -f '$RESPONSE_FILE'" EXIT
 
-# Read log file (escape for JSON)
-LOG_CONTENT=$(cat "${LOG_FILE}" | jq -Rs .)
+# Read log file (will be JSON-encoded by jq later)
+LOG_CONTENT=$(cat "${LOG_FILE}")
 
 # Parse logfmt labels into JSON map
 # Input: "workflow=CI job=test ref=main sha8=abc123..."
@@ -139,10 +139,13 @@ STREAM_LABELS=$(jq -n \
 TIMESTAMP_NS=$(date +%s%N)
 
 # Construct Loki JSON payload
+# Note: --arg treats values as strings; jq handles JSON encoding
+# timestamp: string (per Loki API spec)
+# content: string (raw log content, jq will escape newlines/quotes)
 PAYLOAD=$(jq -n \
   --argjson labels "$STREAM_LABELS" \
   --arg timestamp "$TIMESTAMP_NS" \
-  --argjson content "$LOG_CONTENT" \
+  --arg content "$LOG_CONTENT" \
   '{
     streams: [
       {

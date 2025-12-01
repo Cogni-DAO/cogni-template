@@ -350,16 +350,17 @@ count_over_time({app="cogni-template"}[5m])
 
 ### Label Contract (Low-Cardinality)
 
-| Label      | Source                          | Cardinality | Notes                  |
-| ---------- | ------------------------------- | ----------- | ---------------------- |
-| `app`      | Static `cogni-template`         | 1           | Fixed                  |
-| `env`      | Static `ci`                     | 1           | Locked (R6)            |
-| `workflow` | `${{ github.workflow }}`        | ~10         | Workflow name          |
-| `job`      | `${{ github.job }}`             | ~20         | Job name               |
-| `ref`      | `${{ github.ref_name }}`        | Low         | Branch name            |
-| `run_id`   | `${{ github.run_id }}`          | **High**    | Necessary for grouping |
-| `attempt`  | `${{ github.run_attempt }}`     | 1-3         | Retry attempts         |
-| `sha8`     | `${{ github.sha }}` (truncated) | **High**    | 8-char commit SHA      |
+| Label      | Source                          | Cardinality | Notes                     |
+| ---------- | ------------------------------- | ----------- | ------------------------- |
+| `app`      | Static `cogni-template`         | 1           | Fixed                     |
+| `env`      | Static `ci`                     | 1           | Locked (R6)               |
+| `workflow` | `${{ github.workflow }}`        | ~10         | Workflow name             |
+| `job`      | `${{ github.job }}`             | ~20         | Job name                  |
+| `ref`      | `${{ github.ref_name }}`        | Low         | Branch name               |
+| `run_id`   | `${{ github.run_id }}`          | **High**    | Necessary for grouping    |
+| `attempt`  | `${{ github.run_attempt }}`     | 1-3         | Retry attempts            |
+| `sha8`     | `${{ github.sha }}` (truncated) | **High**    | 8-char commit SHA         |
+| `status`   | `${{ job.status }}`             | 3           | success/failure/cancelled |
 
 **⚠️ Cardinality Warning:**
 
@@ -387,6 +388,7 @@ All CI logs have these labels for filtering:
 - `run_id` - Unique GitHub run ID (e.g., `"12345678901"`)
 - `attempt` - Retry attempt number (e.g., `"1"`, `"2"`)
 - `sha8` - First 8 chars of commit SHA (e.g., `"42038a1f"`)
+- `status` - Job outcome (e.g., `"success"`, `"failure"`, `"cancelled"`)
 
 **Example queries:**
 
@@ -408,19 +410,20 @@ All CI logs have these labels for filtering:
 
 # Specific commit
 {app="cogni-template", env="ci", sha8="42038a1f"}
+
+# All failures
+{app="cogni-template", env="ci", status="failure"}
 ```
 
 ### Workflow Integration
 
-**Current Coverage (Phase 1):**
+**Current Coverage (All workflows):**
 
-- `ci.yaml` (stack-test job) - captures Docker Compose failures
-
-**Planned Coverage (Phase 2):**
-
-- `build-prod.yml` (build failures)
-- `staging-preview.yml` (build/deploy/e2e failures)
-- `deploy-production.yml` (deploy failures)
+- `ci.yaml` (`ci` + `stack-test` jobs) - lint, tests, Docker Compose failures
+- `sonar.yml` (`sonar` job) - SonarCloud analysis
+- `build-prod.yml` (`build-image` job) - production image build
+- `staging-preview.yml` (`build`, `deploy`, `e2e`, `promote` jobs) - staging pipeline
+- `deploy-production.yml` (`deploy-image` job) - production deployment
 
 **Pattern:**
 
@@ -526,8 +529,8 @@ Add to GitHub repository secrets (org or repo level):
 - [ ] Advanced filtering (drop health check logs, metrics endpoints)
 - [ ] Structured metadata extraction (high-cardinality fields)
 
-**CI Telemetry Hardening (Phase 2):**
+**CI Telemetry Hardening:**
 
-- [ ] N1: Validate logfmt labels (reject spaces in values or switch to shlex)
+- [x] N1: Validate logfmt labels (token-based validation, reject quotes)
 - [ ] N2: Split large logs into multiple Loki entries (chunk >500KB)
-- [ ] N3: Add jq dependency check (`command -v jq`)
+- [x] N3: Add jq dependency check (`command -v jq`)
