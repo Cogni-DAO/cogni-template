@@ -78,7 +78,7 @@ parse_logfmt_labels() {
       local value="${BASH_REMATCH[2]}"
 
       # Sanitize key (Loki requires [a-zA-Z0-9_])
-      key=$(echo "$key" | tr -c '[:alnum:]_' '_')
+      key=$(printf '%s' "$key" | tr -c '[:alnum:]_' '_')
 
       # Truncate sha8 to 8 chars (label cardinality control)
       if [[ "$key" == "sha8" ]] && [[ ${#value} -gt 8 ]]; then
@@ -91,8 +91,8 @@ parse_logfmt_labels() {
         json+=","
       fi
 
-      # Escape value for JSON
-      value=$(echo "$value" | jq -Rs .)
+      # Escape value for JSON (printf avoids trailing newline)
+      value=$(printf '%s' "$value" | jq -Rs .)
       json+="\"$key\":$value"
     fi
   done <<< "$(echo "$labels" | tr ' ' '\n')"
