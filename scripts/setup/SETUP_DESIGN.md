@@ -122,6 +122,11 @@ pnpm setup github --env production
      - `SONAR_TOKEN` (prompt user to create SonarCloud token)
      - `ACTIONS_AUTOMATION_BOT_PAT` (bot automation PAT, needs Contents:Write, Pull requests:Write, Actions:Read, Metadata:Read)
      - `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (optional from cloud.walletconnect.com; if missing, only injected wallets like MetaMask work)
+     - **Grafana Cloud (optional):** For log aggregation in preview/production
+       - `GRAFANA_CLOUD_LOKI_URL` (Loki push endpoint, e.g., https://logs-prod-020.grafana.net/loki/api/v1/push)
+       - `GRAFANA_CLOUD_LOKI_USER` (numeric user ID from Grafana Cloud)
+       - `GRAFANA_CLOUD_LOKI_API_KEY` (API key with logs:write permission)
+       - Get from: https://grafana.com/products/cloud/ → Connections → Data Sources → Loki
 
 For current manual process, see [DEPLOY.md](../../platform/runbooks/DEPLOY.md).
 

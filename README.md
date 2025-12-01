@@ -57,6 +57,7 @@ _We're working to automate more of this! Want to help? Contribute setup automati
 - Get [OpenRouter API key](https://openrouter.ai/keys) for AI features
 - Copy `.env.local.example` → `.env.local` and fill in values
 - `pnpm install` and `pnpm dev:stack`
+- **Observability:** Local Loki + Grafana on localhost:3001 (auto-configured). For MCP log queries, optionally set `GRAFANA_URL` + `GRAFANA_SERVICE_ACCOUNT_TOKEN` for Grafana Cloud access.
 
 **For Fork Owners (everything above, plus):**
 
@@ -74,6 +75,7 @@ _We're working to automate more of this! Want to help? Contribute setup automati
 - Set up GitHub environments and secrets manually
 - Configure branch protection rules (see docs/CI-CD.md)
 - **SonarCloud setup:** Generate token at [SonarCloud Security](https://sonarcloud.io/account/security) → Add as `SONAR_TOKEN` repository secret
+- **Grafana Cloud setup (optional):** Get Loki credentials from [Grafana Cloud](https://grafana.com/products/cloud/) → Add `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY` as **repository secrets** (shared across environments)
 
 **DAO Setup**
 

@@ -62,6 +62,7 @@ Unified serverEnv() provides all vars:
 
 - NODE_ENV (development|test|production, default development)
 - APP_ENV (test|production)
+- SERVICE_NAME (default: "app") - for observability service label
 - POSTGRES_USER
 - POSTGRES_PASSWORD
 - POSTGRES_DB

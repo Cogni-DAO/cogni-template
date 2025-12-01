@@ -84,16 +84,20 @@ docker compose run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'
 - Database security uses two-user model (root + app credentials)
 - Init scripts run only on first postgres container startup
 - `NEXTAUTH_URL` env var provided with shell fallback to `APP_BASE_URL`; Auth.js uses `trustHost: true` (safe behind Caddy)
-- Log collection: Alloy scrapes Docker containers, applies strict label cardinality (app, env, service, stream), sends to Grafana Cloud Loki
+- Log collection: Alloy scrapes Docker containers (JSON stdout), applies strict label cardinality (app, env, service, stream)
 - Alloy UI exposed at 127.0.0.1:12345 (internal only)
-- `APP_ENV` must be set (test|production) - used for log labeling
+- `DEPLOY_ENVIRONMENT` must be set (local|preview|production) - used for env label, fail-closed validation
+- Single parameterized Alloy config for all environments (no drift)
 
-**Grafana Cloud Setup:**
+**Local Dev (docker-compose.dev.yml):**
 
-1. Sign up at https://grafana.com/products/cloud/ (free tier available)
-2. Get Loki credentials: Grafana Cloud → Connections → Data Sources → Loki
-3. Set environment variables in deployment:
-   - `GRAFANA_CLOUD_LOKI_URL` - Push endpoint URL
-   - `GRAFANA_CLOUD_LOKI_USER` - Numeric user ID
-   - `GRAFANA_CLOUD_LOKI_API_KEY` - API key with logs:write permission
-4. Verify in Alloy UI (http://127.0.0.1:12345) after deployment
+- Includes local Loki + Grafana services
+- Alloy writes to local Loki (http://loki:3100)
+- Grafana on http://localhost:3001 (anonymous admin access)
+- No cloud credentials needed
+
+**Preview/Production (docker-compose.yml):**
+
+- Alloy writes to Grafana Cloud Loki
+- Environment variables: `DEPLOY_ENVIRONMENT`, `LOKI_WRITE_URL`, `LOKI_USERNAME`, `LOKI_PASSWORD`
+- Verify in Alloy UI (http://127.0.0.1:12345) and Grafana Cloud
