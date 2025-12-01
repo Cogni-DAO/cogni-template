@@ -41,8 +41,10 @@ if [[ -z "${LOKI_URL:-}" ]] || [[ -z "${LOKI_USER:-}" ]] || [[ -z "${LOKI_TOKEN:
   exit 0
 fi
 
-# Normalize URL (strip trailing slash to prevent double-slash)
+# Normalize URL: strip trailing slash and path if present, then build canonical push URL
 LOKI_URL="${LOKI_URL%/}"
+LOKI_URL="${LOKI_URL%/loki/api/v1/push}"
+PUSH_URL="${LOKI_URL}/loki/api/v1/push"
 
 if [[ -z "${LOG_FILE:-}" ]] || [[ ! -s "${LOG_FILE}" ]]; then
   echo "⚠️  Loki push skipped: LOG_FILE not found or empty"
@@ -99,13 +101,25 @@ parse_logfmt_labels() {
   echo "$json"
 }
 
-# N1: Validate LABELS format (Phase 1: strict no-spaces-in-values)
-# Reject if any value contains whitespace or quotes; use locked labels only on invalid input
+# N1: Validate LABELS format (Phase 1: space-delimited tokens; spaces in values not supported)
+# Tokenize and validate each k=v pair; allow slashes in values (e.g., ref=123/merge)
 CUSTOM_LABELS="{}"
 if [[ -n "${LABELS:-}" ]]; then
-  # Check for problematic characters in values (spaces, quotes within k=v pairs)
-  if echo "${LABELS}" | grep -qE '=[^ ]*[[:space:]]|="|\x27'; then
-    echo "⚠️  LABELS contains spaces/quotes in values; using locked labels only"
+  invalid=0
+  for pair in $LABELS; do
+    # Must match key=value format (key is alphanumeric/underscore, value is non-empty)
+    if [[ ! "$pair" =~ ^[A-Za-z0-9_]+=.+$ ]]; then
+      invalid=1
+      break
+    fi
+    # Reject quotes in values (security: prevent injection)
+    if [[ "$pair" == *\"* || "$pair" == *\'* ]]; then
+      invalid=1
+      break
+    fi
+  done
+  if [[ "$invalid" -eq 1 ]]; then
+    echo "⚠️  LABELS contains invalid format; using locked labels only"
   else
     CUSTOM_LABELS=$(parse_logfmt_labels "${LABELS}")
   fi
@@ -146,7 +160,7 @@ HTTP_CODE=$(curl -sS -w "%{http_code}" -o "$RESPONSE_FILE" \
   -u "${LOKI_USER}:${LOKI_TOKEN}" \
   -H "Content-Type: application/json" \
   --data-binary "$PAYLOAD" \
-  "${LOKI_URL}/loki/api/v1/push" || echo "000")
+  "${PUSH_URL}" || echo "000")
 
 if [[ "$HTTP_CODE" =~ ^2[0-9][0-9]$ ]]; then
   echo "✅ Pushed logs to Loki (HTTP $HTTP_CODE)"
