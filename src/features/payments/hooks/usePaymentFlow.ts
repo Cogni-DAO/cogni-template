@@ -373,7 +373,8 @@ export function usePaymentFlow(
   useEffect(() => {
     if (writeError && internalState.phase === "AWAITING_SIGNATURE") {
       const formatted = formatPaymentError(writeError);
-      console.error("[usePaymentFlow] Wallet write error:", formatted.debug);
+      // User rejection is expected behavior, not an error
+      console.warn("[usePaymentFlow] Wallet write error:", formatted.debug);
       dispatch({
         type: "INTENT_FAILED",
         error: formatted.userMessage,

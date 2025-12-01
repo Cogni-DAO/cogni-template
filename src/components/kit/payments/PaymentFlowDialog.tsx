@@ -15,7 +15,6 @@
 import { CheckCircle2, ExternalLink, Loader2, XCircle } from "lucide-react";
 import type { ReactElement } from "react";
 
-import { Alert, AlertDescription } from "@/components/kit/feedback/Alert";
 import { Button } from "@/components/kit/inputs/Button";
 import {
   Dialog,
@@ -220,37 +219,25 @@ export function PaymentFlowDialog({
           {/* ERROR state */}
           {isTerminal && result === "ERROR" && (
             <>
-              <Alert variant="destructive">
-                <XCircle className="h-4 w-4" />
-                <AlertDescription>
+              <div className="flex flex-col items-center gap-6 py-8">
+                <XCircle className="h-16 w-16 text-destructive" />
+                <p className="font-semibold text-foreground text-xl">
                   {errorMessage ?? "Payment failed"}
-                </AlertDescription>
-              </Alert>
-
-              <div className="flex flex-col gap-2">
-                <Button
-                  onClick={() => {
-                    onReset();
-                    onClose();
-                  }}
-                  size="lg"
-                >
-                  Try Again
-                </Button>
-
-                {/* Transaction link (if payment reached on-chain) */}
-                {txHash && explorerUrl && (
-                  <a
-                    href={explorerUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-1 text-primary text-sm hover:underline"
-                  >
-                    <span>View transaction</span>
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                )}
+                </p>
               </div>
+
+              {/* Transaction link (if payment reached on-chain) */}
+              {txHash && explorerUrl && (
+                <a
+                  href={explorerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1 text-primary text-sm hover:underline"
+                >
+                  <span>View transaction</span>
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+              )}
             </>
           )}
         </div>
