@@ -31,9 +31,9 @@ const codeTokenKindVariants = {
 
 const codeTokenSpacingRightVariants = {
   none: "",
-  xs: "pr-[var(--spacing-hero-xs)]",
-  xl: "pr-[var(--spacing-hero-xl)]",
-  rainbow: "pr-[var(--spacing-rainbow)]",
+  xs: "pr-[var(--hero-spacing-xs)]",
+  xl: "pr-[var(--hero-spacing-xl)]",
+  rainbow: "pr-[var(--hero-spacing-rainbow)]",
 } as const;
 
 /**
@@ -52,7 +52,7 @@ export const codeToken = cva("", {
 
 const heroCodeBlockSpacingVariants = {
   none: "",
-  normal: "pt-[var(--spacing-hero-xl)]",
+  normal: "pt-[var(--hero-spacing-xl)]",
 } as const;
 
 /**

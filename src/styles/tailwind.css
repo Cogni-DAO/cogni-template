@@ -170,17 +170,15 @@
 
   --size-dot: 0.75rem;
 
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
+  /* NOTE: Semantic spacing tokens removed - they override Tailwind v4's numeric scale.
+     Use Tailwind's built-in spacing: p-1 (0.25rem), p-2 (0.5rem), p-4 (1rem), p-6 (1.5rem), p-8 (2rem)
+     Or use arbitrary values: gap-[var(--custom-gap)] if semantic tokens are needed */
 
   --position-sm: 1rem;
 
-  --spacing-hero-xs: 0.3125rem;
-  --spacing-hero-xl: 1.25rem;
-  --spacing-rainbow: 8.4375rem;
+  --hero-spacing-xs: 0.3125rem;
+  --hero-spacing-xl: 1.25rem;
+  --hero-spacing-rainbow: 8.4375rem;
   --width-action-words: 11.6875rem;
 
   --text-xs: 0.75rem;

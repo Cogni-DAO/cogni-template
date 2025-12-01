@@ -4,7 +4,7 @@
 /**
  * Module: `@app/(app)/credits/CreditsPage.client`
  * Purpose: Client-side credits page UI handling balance display and USDC payment flow.
- * Scope: Fetches credits data via React Query, renders native USDC payment flow, and refreshes balance on success.
+ * Scope: Fetches credits data via React Query, renders native USDC payment flow, and refreshes balance on success. Does not handle backend payment verification or wallet connection.
  * Invariants: Payment amounts stored as integer cents (no float math).
  * Side-effects: IO (fetch API via React Query).
  * Links: docs/PAYMENTS_FRONTEND_DESIGN.md
@@ -14,14 +14,16 @@
 "use client";
 
 import { useQueryClient } from "@tanstack/react-query";
+import { Info } from "lucide-react";
 import type { ReactElement } from "react";
 import { useState } from "react";
 
 import {
   Card,
-  CardContent,
-  CardHeader,
-  Input,
+  HintText,
+  PageContainer,
+  SectionCard,
+  SplitInput,
   UsdcPaymentFlow,
 } from "@/components";
 import {
@@ -29,7 +31,6 @@ import {
   useCreditsSummary,
   usePaymentFlow,
 } from "@/features/payments/public";
-import { heading, paragraph } from "@/styles/ui";
 
 const MIN_AMOUNT_USD = 1;
 const MAX_AMOUNT_USD = 100000;
@@ -68,65 +69,44 @@ export function CreditsPageClient(): ReactElement {
     : formatDollars(summaryQuery.data?.balanceCredits ?? 0);
 
   return (
-    <div className="mx-auto w-full max-w-md space-y-6 px-4 py-6">
+    <PageContainer maxWidth="2xl">
       {/* Balance Card */}
-      <Card>
-        <CardContent className="py-6">
-          <p className={heading({ level: "h1" })}>$ {balanceDisplay}</p>
-        </CardContent>
+      <Card className="flex items-center justify-between p-6">
+        <span className="font-bold text-4xl">$ {balanceDisplay}</span>
       </Card>
 
-      {/* Buy Credits Card */}
-      <Card>
-        <CardHeader>
-          <p className={heading({ level: "h3" })}>Buy Credits</p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Amount Input */}
-          <div className="space-y-2">
-            <label
-              htmlFor="amount-input"
-              className={paragraph({ size: "sm", tone: "subdued" })}
-            >
-              Amount
-            </label>
-            <Input
-              id="amount-input"
-              type="number"
-              min={MIN_AMOUNT_USD}
-              max={MAX_AMOUNT_USD}
-              step="1"
-              placeholder={`${MIN_AMOUNT_USD} - ${MAX_AMOUNT_USD}`}
-              value={amountInput}
-              onChange={(e) => setAmountInput(e.target.value)}
-            />
-          </div>
+      {/* Buy Credits Section */}
+      <SectionCard title="Buy Credits">
+        <SplitInput
+          label="Amount"
+          value={amountInput}
+          onChange={(val) => setAmountInput(val.replace(/[^0-9]/g, ""))}
+          placeholder="1 - 100000"
+        />
 
-          {/* Payment Flow */}
-          {isValidAmount ? (
-            <UsdcPaymentFlow
-              amountUsdCents={amountCents}
-              state={paymentFlow.state}
-              onStartPayment={paymentFlow.startPayment}
-              onReset={paymentFlow.reset}
-              disabled={summaryQuery.isLoading}
-            />
-          ) : (
-            <button
-              type="button"
-              disabled
-              className="w-full cursor-not-allowed rounded-md bg-muted px-4 py-2 text-muted-foreground"
-            >
-              Invalid amount
-            </button>
-          )}
+        {/* Payment Flow */}
+        {isValidAmount ? (
+          <UsdcPaymentFlow
+            amountUsdCents={amountCents}
+            state={paymentFlow.state}
+            onStartPayment={paymentFlow.startPayment}
+            onReset={paymentFlow.reset}
+            disabled={summaryQuery.isLoading}
+          />
+        ) : (
+          <button
+            type="button"
+            disabled
+            className="w-full cursor-not-allowed rounded-md bg-muted px-4 py-2 text-muted-foreground"
+          >
+            Invalid amount
+          </button>
+        )}
 
-          {/* Helper text */}
-          <p className={paragraph({ size: "sm", tone: "subdued" })}>
-            Transactions may take many minutes to confirm.
-          </p>
-        </CardContent>
-      </Card>
-    </div>
+        <HintText icon={<Info size={16} />}>
+          Transactions may take many minutes to confirm
+        </HintText>
+      </SectionCard>
+    </PageContainer>
   );
 }

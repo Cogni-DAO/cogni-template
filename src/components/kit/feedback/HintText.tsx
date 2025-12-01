@@ -23,10 +23,15 @@ interface HintTextProps {
 export function HintText({ children, icon, className }: HintTextProps) {
   return (
     <div
-      className={cn("flex items-start gap-2 text-slate-600 text-sm", className)}
+      className={cn(
+        "flex items-start gap-2 text-muted-foreground text-sm",
+        className
+      )}
     >
       {icon && (
-        <span className="mt-0.5 flex-shrink-0 text-slate-700">{icon}</span>
+        <span className="mt-0.5 flex-shrink-0 text-muted-foreground">
+          {icon}
+        </span>
       )}
       <div>{children}</div>
     </div>

@@ -34,21 +34,22 @@ export function SplitInput({
   return (
     <div
       className={cn(
-        "flex h-16 overflow-hidden rounded-lg border border-slate-800",
+        "flex h-16 overflow-hidden rounded-lg border border-input",
         className
       )}
     >
       <div className="flex items-center bg-card px-6">
-        <span className="font-semibold text-white">{label}</span>
+        <span className="font-semibold text-card-foreground">{label}</span>
       </div>
-      <div className="relative flex flex-1 items-center bg-slate-800">
-        <span className="absolute left-6 text-slate-600 text-xl">$</span>
+      <div className="relative flex flex-1 items-center bg-muted">
+        <span className="absolute left-6 text-muted-foreground text-xl">$</span>
         <input
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="w-full bg-transparent px-12 text-center text-white text-xl placeholder-slate-600 focus:outline-none"
+          // eslint-disable-next-line ui-governance/token-classname-patterns -- text-center is alignment, not color
+          className="w-full bg-transparent px-12 text-center text-foreground text-xl placeholder-muted-foreground focus:outline-none"
           {...props}
         />
       </div>

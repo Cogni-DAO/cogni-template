@@ -29,7 +29,7 @@ interface SectionCardProps {
 export function SectionCard({ title, children, className }: SectionCardProps) {
   return (
     <Card className={cn("overflow-hidden", className)}>
-      <CardHeader className="border-slate-800 border-b px-6 py-4">
+      <CardHeader className="border-border border-b px-6 py-4">
         <CardTitle className="font-bold text-xl">{title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6 px-6 py-6">{children}</CardContent>

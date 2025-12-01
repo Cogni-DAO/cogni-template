@@ -22,7 +22,6 @@ import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
 
 import { Header, SkipLink } from "@/components";
-import { pageShell } from "@/styles/ui";
 
 import { AppProviders } from "./providers/app-providers.client";
 
@@ -45,7 +44,7 @@ export default function RootLayout({
       <head>
         <Script src="/theme-init.js" strategy="beforeInteractive" />
       </head>
-      <body className={pageShell()}>
+      <body className="min-h-dvh bg-background text-foreground antialiased">
         <SkipLink />
         <ThemeProvider
           attribute="class"

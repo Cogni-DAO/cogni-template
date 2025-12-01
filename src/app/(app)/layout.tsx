@@ -19,8 +19,6 @@ import { signOut, useSession } from "next-auth/react";
 import type { ReactNode } from "react";
 import { useEffect } from "react";
 
-import { container, section } from "@/components";
-
 export default function AppLayout({
   children,
 }: {
@@ -42,10 +40,8 @@ export default function AppLayout({
   // Loading state
   if (status === "loading") {
     return (
-      <div className={section()}>
-        <div className={container({ size: "lg" })}>
-          <div className="text-muted-foreground">Loading...</div>
-        </div>
+      <div className="mx-auto w-full max-w-2xl px-4 py-6 sm:px-6">
+        <div className="text-muted-foreground">Loading...</div>
       </div>
     );
   }
