@@ -45,9 +45,6 @@ runs:
         SHA8="${{ github.sha }}"
         SHA8="${SHA8:0:8}"
 
-        # Export SHA8 for use in labels (later step)
-        echo "CI_SHA8=$SHA8" >> $GITHUB_ENV
-
         # Validate job_status input (composite actions can't access job.status directly)
         # Allowed: success, failure, cancelled, skipped
         STATUS="${{ inputs.job_status }}"
@@ -55,9 +52,6 @@ runs:
           success|failure|cancelled|skipped) ;;
           *) STATUS="unknown" ;;
         esac
-
-        # Export validated status for labels
-        echo "CI_STATUS=$STATUS" >> $GITHUB_ENV
 
         jq -nc \
           --arg type "ci_run_summary" \
@@ -134,4 +128,4 @@ runs:
         loki_token: ${{ inputs.loki_token }}
         log_file: ${{ runner.temp }}/ci-job.log
         job_name: ${{ github.job }}
-        labels: workflow=${{ github.workflow }} ref=${{ github.ref_name }} run_id=${{ github.run_id }} attempt=${{ github.run_attempt }} sha8=${{ env.CI_SHA8 }} status=${{ env.CI_STATUS }}
+        labels: workflow=${{ github.workflow }} ref=${{ github.ref_name }} run_id=${{ github.run_id }} attempt=${{ github.run_attempt }} sha8=${{ github.sha }} status=${{ inputs.job_status }}
