@@ -3,11 +3,11 @@
 
 /**
  * Module: `@shared/observability/logging/logger`
- * Purpose: Pino logger factory with environment-based configuration.
+ * Purpose: Pino logger factory - JSON-only stdout emission.
  * Scope: Create configured pino loggers. Does not handle request-scoped logging.
- * Invariants: Development uses pino-pretty, production uses stdout JSON, tests disabled.
+ * Invariants: Always emits JSON to stdout; no worker transports; env label added by Alloy.
  * Side-effects: none
- * Notes: Use makeLogger for app logger; use makeNoopLogger for tests. Cross-cutting observability concern.
+ * Notes: Use makeLogger for app logger; use makeNoopLogger for tests. Formatting via external pipe (pino-pretty).
  * Links: Initializes redaction paths via REDACT_PATHS; used by container and route handlers.
  * @public
  */
@@ -21,7 +21,7 @@ import { REDACT_PATHS } from "./redact";
 export type { Logger } from "pino";
 
 export function makeLogger(bindings?: Record<string, unknown>): Logger {
-  // biome-ignore lint/style/noProcessEnv: Legitimate use for test tooling detection
+  // biome-ignore lint/style/noProcessEnv: Test-runner detection only (before serverEnv available)
   const isVitest = process.env.VITEST === "true";
   const env = serverEnv();
 
@@ -31,21 +31,25 @@ export function makeLogger(bindings?: Record<string, unknown>): Logger {
   const config = {
     level: env.PINO_LOG_LEVEL,
     enabled: !isTestTooling,
-    base: { app: "cogni-template", env: env.APP_ENV, ...bindings },
+    // Stable base: bindings first, then reserved keys (prevents overwrite)
+    // env label added by Alloy from DEPLOY_ENVIRONMENT, not in app logs
+    base: { ...bindings, app: "cogni-template", service: env.SERVICE_NAME },
     messageKey: "msg",
-    timestamp: pino.stdTimeFunctions.epochTime,
+    timestamp: pino.stdTimeFunctions.isoTime, // RFC3339 format (matches Alloy stage.timestamp)
     redact: { paths: REDACT_PATHS, censor: "[REDACTED]" },
   };
 
-  // Dev: pretty transport, Prod: stdout JSON
-  if (env.NODE_ENV === "development") {
-    return pino({
-      ...config,
-      transport: { target: "pino-pretty", options: { singleLine: true } },
-    });
-  }
-
-  return pino(config);
+  // Always emit JSON to stdout (fd 1)
+  // Sync in dev for immediate crash visibility, async in prod for performance
+  // Formatting happens externally (pipe to pino-pretty if desired)
+  return pino(
+    config,
+    pino.destination({
+      dest: 1,
+      sync: env.NODE_ENV !== "production",
+      minLength: 4096,
+    })
+  );
 }
 
 /**

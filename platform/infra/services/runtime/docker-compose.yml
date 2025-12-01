@@ -143,10 +143,10 @@ services:
       - --server.http.listen-addr=0.0.0.0:12345
       - --storage.path=/var/lib/alloy
     environment:
-      - APP_ENV=${APP_ENV}
-      - GRAFANA_CLOUD_LOKI_URL=${GRAFANA_CLOUD_LOKI_URL}
-      - GRAFANA_CLOUD_LOKI_USER=${GRAFANA_CLOUD_LOKI_USER}
-      - GRAFANA_CLOUD_LOKI_API_KEY=${GRAFANA_CLOUD_LOKI_API_KEY}
+      - DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
+      - LOKI_WRITE_URL=${LOKI_WRITE_URL}
+      - LOKI_USERNAME=${LOKI_USERNAME}
+      - LOKI_PASSWORD=${LOKI_PASSWORD}
 
 networks:
   web:

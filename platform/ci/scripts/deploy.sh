@@ -288,7 +288,7 @@ emit_deployment_event() {
     --arg event "$event" \
     --arg status "$status" \
     --arg msg "$message" \
-    --arg env "${APP_ENV:-unknown}" \
+    --arg env "${DEPLOY_ENVIRONMENT:-unknown}" \
     --arg commit "${COMMIT_SHA:-unknown}" \
     --arg actor "${DEPLOY_ACTOR:-unknown}" \
     --arg image "${APP_IMAGE:-unknown}" \
@@ -346,9 +346,10 @@ POSTGRES_ROOT_PASSWORD=${POSTGRES_ROOT_PASSWORD}
 APP_DB_USER=${APP_DB_USER}
 APP_DB_PASSWORD=${APP_DB_PASSWORD}
 APP_DB_NAME=${APP_DB_NAME}
-GRAFANA_CLOUD_LOKI_URL=${GRAFANA_CLOUD_LOKI_URL:-}
-GRAFANA_CLOUD_LOKI_USER=${GRAFANA_CLOUD_LOKI_USER:-}
-GRAFANA_CLOUD_LOKI_API_KEY=${GRAFANA_CLOUD_LOKI_API_KEY:-}
+DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
+LOKI_WRITE_URL=${GRAFANA_CLOUD_LOKI_URL:-}
+LOKI_USERNAME=${GRAFANA_CLOUD_LOKI_USER:-}
+LOKI_PASSWORD=${GRAFANA_CLOUD_LOKI_API_KEY:-}
 ENV_EOF
 
 log_info "Logging into GHCR for private image pulls..."

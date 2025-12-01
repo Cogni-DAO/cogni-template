@@ -103,6 +103,21 @@
 - Logging at feature layer before/after port calls
 - Adapters remain testable without mock loggers
 
+**Logging Pipeline (JSON-Only Architecture):**
+
+- **App emits:** JSON to stdout (always, all environments)
+- **No worker transports:** No pino-pretty in runtime (prevents worker thread crashes)
+- **Dev formatting:** Optional external pipe (`pnpm dev:pretty | pino-pretty -S`)
+- **Alloy scrapes:** JSON logs from Docker stdout
+- **Alloy labels:** Adds `env` label from `DEPLOY_ENVIRONMENT` (not in app logs)
+- **Fail-closed:** Alloy drops logs if `DEPLOY_ENVIRONMENT` ∉ {local, preview, production}
+
+**Invariants:**
+
+- App never conditionally formats logs (no transport switching)
+- `env` label is single source of truth (Alloy only, not app)
+- Tests stay silent (`enabled: false` when VITEST=true or NODE_ENV=test)
+
 ---
 
 ## 3. Key Files
@@ -141,18 +156,20 @@
 
 ## 4. Log Collection & Querying
 
-**Architecture:** Application → Docker → Alloy → Grafana Cloud Loki
+**Architecture:** Application (JSON stdout) → Docker → Alloy → Loki (local or cloud)
 
 **Components:**
 
-- **Grafana Alloy v1.9.2**: Scrapes Docker container logs via socket, applies label filtering, forwards to Grafana Cloud
-- **Grafana Cloud Loki**: Managed Loki service for log storage and querying
+- **Application**: Emits JSON-only logs to stdout (no conditional formatting)
+- **Grafana Alloy v1.9.2**: Scrapes Docker container logs, applies labels + validation, forwards to Loki
+- **Loki**: Local (dev) or Grafana Cloud (preview/prod) for log storage and querying
 - **Container Allowlist**: Only collects logs from `app|litellm|caddy` services
+- **Fail-Closed Validation**: Alloy drops logs if `DEPLOY_ENVIRONMENT` ∉ {local, preview, production}
 
 **Labels (indexed, low-cardinality):**
 
 - `app="cogni-template"` - Application identifier
-- `env="test"|"production"` - Environment from `APP_ENV`
+- `env="local"|"preview"|"production"` - Environment from `DEPLOY_ENVIRONMENT`
 - `service="app"|"litellm"|"caddy"` - Docker Compose service name
 - `stream="stdout"|"stderr"` - Log stream type
 
@@ -180,14 +197,44 @@ count_over_time({app="cogni-template"}[5m])
 
 **Configuration:**
 
-- `APP_ENV` must be set (`test` or `production`) - used for `env` label
-- `GRAFANA_CLOUD_LOKI_URL` - Grafana Cloud Loki push endpoint (e.g., `https://logs-prod-us-central1.grafana.net/loki/api/v1/push`)
-- `GRAFANA_CLOUD_LOKI_USER` - Grafana Cloud Loki user ID (numeric)
-- `GRAFANA_CLOUD_LOKI_API_KEY` - Grafana Cloud API key with logs:write permission
+**Environment Variables:**
+
+- `DEPLOY_ENVIRONMENT` - Deployment identity for observability labels (`local` | `preview` | `production`)
+- `APP_ENV` - Adapter selection for test fakes vs real implementations (`test` | `production`)
+- `LOKI_WRITE_URL` - Loki push endpoint
+  - Local dev: `http://loki:3100/loki/api/v1/push`
+  - Cloud: `https://logs-prod-*.grafana.net/loki/api/v1/push`
+- `LOKI_USERNAME` - Loki basic auth user (empty for local, numeric ID for cloud)
+- `LOKI_PASSWORD` - Loki basic auth password (empty for local, API key for cloud)
+
+**Infrastructure:**
+
 - Alloy listens on `0.0.0.0:12345` in-container, bound to `127.0.0.1` on host
 - Promtail deprecated (EOL March 2, 2026)
+- Single parameterized Alloy config for all environments (no config drift)
 
 **Setup Instructions:**
+
+### Local Development Setup
+
+1. **Start Dev Stack**:
+   - `pnpm dev:stack` - JSON logs (raw stdout)
+   - `pnpm dev:stack:pretty` - Pretty formatted logs (piped to pino-pretty)
+2. **Services Included**:
+   - Local Loki on http://localhost:3100
+   - Local Grafana on http://localhost:3001 (anonymous admin access enabled)
+   - Alloy writes to local Loki (no cloud credentials needed)
+3. **Query Logs**:
+   - Open Grafana: http://localhost:3001
+   - Navigate to Explore → Loki datasource
+   - Query: `{app="cogni-template", env="local"}`
+4. **MCP Access**: Use `grafana-local` MCP server (connects via Docker network)
+5. **Log Format**:
+   - App always emits JSON to stdout
+   - Use `pnpm dev:pretty` to pipe through pino-pretty for readable logs
+   - Use `pnpm dev` for raw JSON (better for debugging structured fields)
+
+### Preview/Production Setup (Grafana Cloud)
 
 1. **Create Grafana Cloud Account**: Sign up at https://grafana.com/products/cloud/ (free tier available)
 2. **Get Loki Credentials**:
@@ -197,11 +244,11 @@ count_over_time({app="cogni-template"}[5m])
    - Generate an API key with `logs:write` permission
 3. **Set Environment Variables**:
    - Add to deployment `.env` file or CI/CD secrets
-   - Required: `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY`
+   - Required: `DEPLOY_ENVIRONMENT`, `LOKI_WRITE_URL`, `LOKI_USERNAME`, `LOKI_PASSWORD`
 4. **Deploy Stack**: `docker compose up -d`
 5. **Verify**:
-   - Check Alloy UI: http://127.0.0.1:12345 → verify `grafana_cloud_loki` endpoint healthy
-   - Query logs in Grafana Cloud Explore: `{app="cogni-template"}`
+   - Check Alloy UI: http://127.0.0.1:12345 → verify `loki` endpoint healthy
+   - Query logs in Grafana Cloud Explore: `{app="cogni-template", env="preview"}` or `{app="cogni-template", env="production"}`
 
 **Benefits of Grafana Cloud:**
 

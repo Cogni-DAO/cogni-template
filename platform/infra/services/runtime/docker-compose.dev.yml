@@ -138,6 +138,35 @@ services:
       postgres:
         condition: service_healthy
 
+  loki:
+    image: grafana/loki:2.9.10
+    container_name: loki
+    restart: unless-stopped
+    networks:
+      - web
+    ports:
+      - "127.0.0.1:3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - loki_data:/loki
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: grafana
+    restart: unless-stopped
+    networks:
+      - web
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - ./configs/grafana-provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    depends_on:
+      - loki
+
   alloy:
     image: grafana/alloy:v1.9.2
     container_name: alloy
@@ -156,10 +185,12 @@ services:
       - --server.http.listen-addr=0.0.0.0:12345
       - --storage.path=/var/lib/alloy
     environment:
-      - APP_ENV=${APP_ENV:-production}
-      - GRAFANA_CLOUD_LOKI_URL=${GRAFANA_CLOUD_LOKI_URL}
-      - GRAFANA_CLOUD_LOKI_USER=${GRAFANA_CLOUD_LOKI_USER}
-      - GRAFANA_CLOUD_LOKI_API_KEY=${GRAFANA_CLOUD_LOKI_API_KEY}
+      - DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT:-local}
+      - LOKI_WRITE_URL=${LOKI_WRITE_URL:-http://loki:3100/loki/api/v1/push}
+      - LOKI_USERNAME=${LOKI_USERNAME:-}
+      - LOKI_PASSWORD=${LOKI_PASSWORD:-}
+    depends_on:
+      - loki
 
 networks:
   web:
@@ -175,3 +206,7 @@ volumes:
     name: postgres_data
   alloy_data:
     name: alloy_data
+  loki_data:
+    name: loki_data
+  grafana_data:
+    name: grafana_data

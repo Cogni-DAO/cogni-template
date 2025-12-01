@@ -44,7 +44,15 @@ discovery.relabel "docker_logs" {
 
   rule {
     target_label = "env"
-    replacement  = sys.env("APP_ENV")  // test | production
+    replacement  = sys.env("DEPLOY_ENVIRONMENT")  // local | preview | production
+  }
+
+  // Fail-closed: Drop logs if DEPLOY_ENVIRONMENT is not valid
+  // Prevents mislabeling if env var is unset or invalid
+  rule {
+    source_labels = ["env"]
+    regex         = "^(local|preview|production)$"
+    action        = "keep"
   }
 }
 
@@ -67,17 +75,17 @@ loki.process "docker_logs" {
     format = "RFC3339Nano"
   }
 
-  forward_to = [loki.write.grafana_cloud_loki.receiver]
+  forward_to = [loki.write.loki.receiver]
 }
 
-// Write logs to Grafana Cloud Loki
-loki.write "grafana_cloud_loki" {
+// Write logs to Loki (local or cloud, parameterized by env vars)
+loki.write "loki" {
   endpoint {
-    url = sys.env("GRAFANA_CLOUD_LOKI_URL")
+    url = sys.env("LOKI_WRITE_URL")
 
     basic_auth {
-      username = sys.env("GRAFANA_CLOUD_LOKI_USER")
-      password = sys.env("GRAFANA_CLOUD_LOKI_API_KEY")
+      username = sys.env("LOKI_USERNAME")
+      password = sys.env("LOKI_PASSWORD")
     }
   }
 }
