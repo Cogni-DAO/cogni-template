@@ -28,12 +28,13 @@ const semanticColors = {
   danger: "hsl(var(--color-danger))",
   warning: "hsl(var(--color-warning))",
   success: "hsl(var(--color-success))",
-  "chart-1": "hsl(var(--chart-1))",
-  "chart-2": "hsl(var(--chart-2))",
-  "chart-3": "hsl(var(--chart-3))",
-  "chart-4": "hsl(var(--chart-4))",
-  "chart-5": "hsl(var(--chart-5))",
-  "chart-6": "hsl(var(--chart-6))",
+  "syntax-property": "hsl(var(--syntax-property))",
+  "syntax-operator": "hsl(var(--syntax-operator))",
+  "syntax-punctuation": "hsl(var(--syntax-punctuation))",
+  "syntax-delimiter": "hsl(var(--syntax-delimiter))",
+  "syntax-string": "hsl(var(--syntax-string))",
+  "syntax-keyword": "hsl(var(--syntax-keyword))",
+  "accent-blue": "hsl(var(--accent-blue))",
 };
 
 export default {

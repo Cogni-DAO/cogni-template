@@ -17,6 +17,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { confirmCreditsPaymentFacade } from "@/app/_facades/payments/credits.server";
 import { getContainer } from "@/bootstrap/container";
+import { AuthUserNotFoundError } from "@/features/payments/errors";
 import { confirmCreditsPayment } from "@/features/payments/services/creditsConfirm";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { AccountService } from "@/ports";
@@ -115,7 +116,7 @@ describe("app/_facades/payments/credits.server", () => {
     });
   });
 
-  it("maps foreign key errors to AUTH_USER_NOT_FOUND", async () => {
+  it("maps foreign key errors to AuthUserNotFoundError", async () => {
     mockGetOrCreateBillingAccountForUser.mockRejectedValue(
       new Error("billing_accounts_owner_user_id_users_id_fk")
     );
@@ -129,6 +130,6 @@ describe("app/_facades/payments/credits.server", () => {
         },
         testCtx
       )
-    ).rejects.toThrow("AUTH_USER_NOT_FOUND");
+    ).rejects.toThrow(AuthUserNotFoundError);
   });
 });

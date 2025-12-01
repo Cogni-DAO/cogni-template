@@ -67,3 +67,12 @@ jobs:
           echo "- ✅ Container startup test passed" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Health endpoint test passed" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Docker healthcheck working" >> $GITHUB_STEP_SUMMARY
+
+      - name: CI Telemetry
+        if: always()
+        uses: ./.github/actions/loki-ci-telemetry
+        with:
+          loki_url: ${{ secrets.GRAFANA_CLOUD_LOKI_URL }}
+          loki_user: ${{ secrets.GRAFANA_CLOUD_LOKI_USER }}
+          loki_token: ${{ secrets.GRAFANA_CLOUD_LOKI_API_KEY }}
+          job_status: ${{ job.status }}

@@ -57,12 +57,18 @@
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
-    --chart-1: 12 76% 61%;
-    --chart-2: 173 58% 39%;
-    --chart-3: 197 37% 24%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --chart-6: 10 50% 50%;
+
+    /* Code syntax highlighting palette (light mode) */
+    --syntax-property: 12 76% 61%; /* teal - object properties */
+    --syntax-operator: 173 58% 39%; /* blue - operators like + = */
+    --syntax-punctuation: 197 37% 24%; /* dark teal - (), [], {} */
+    --syntax-delimiter: 43 74% 66%; /* yellow - delimiters */
+    --syntax-string: 27 87% 67%; /* orange/peach - strings & variables */
+    --syntax-keyword: 10 50% 50%; /* red/brown - keywords */
+
+    /* UI accent colors */
+    --accent-blue: 217 91% 60%; /* brand accent blue */
+
     --radius: 0.5rem;
   }
 
@@ -86,19 +92,17 @@
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
     --ring: 212.7 26.8% 83.9%;
-    --chart-1: 276 100% 70%; /* teal – property / "rules:" */
-    --chart-2: 160 40% 60%;
-    --chart-3: 30 80% 55%;
-    --chart-4: 280 80% 70%;
-    --chart-6: 220 100% 65%;
-    /*--chart-5: 340 75% 55%;
-    /* updated chart colors based on editor token colors */
 
-    /*--chart-2: 246 75% 78%; /* blue-violet – operators */
-    --chart-3: 32 100% 95%; /* magenta – extra accent */
-    /*--chart-4: 276 25% 59%; /* purple – delimiters like "{" */
-    --chart-5: 20 90% 80%; /* peach/orange – hero/action strings */
-    /* teal – property / "rules:" */
+    /* Code syntax highlighting palette (dark mode) */
+    --syntax-property: 276 100% 70%; /* teal - object properties */
+    --syntax-operator: 160 40% 60%; /* cyan - operators like + = */
+    --syntax-punctuation: 32 100% 95%; /* light orange - (), [], {} */
+    --syntax-delimiter: 280 80% 70%; /* purple - delimiters */
+    --syntax-string: 20 90% 80%; /* peach/orange - strings & variables */
+    --syntax-keyword: 220 100% 65%; /* blue - keywords */
+
+    /* UI accent colors */
+    --accent-blue: 220 100% 65%; /* brand accent blue */
   }
 }
 
@@ -122,17 +126,22 @@
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
-  --color-chart-1: hsl(var(--chart-1));
-  --color-chart-2: hsl(var(--chart-2));
-  --color-chart-3: hsl(var(--chart-3));
-  --color-chart-4: hsl(var(--chart-4));
-  --color-chart-5: hsl(var(--chart-5));
-  --color-chart-6: hsl(var(--chart-6));
+
+  /* Code syntax highlighting colors */
+  --color-syntax-property: hsl(var(--syntax-property));
+  --color-syntax-operator: hsl(var(--syntax-operator));
+  --color-syntax-punctuation: hsl(var(--syntax-punctuation));
+  --color-syntax-delimiter: hsl(var(--syntax-delimiter));
+  --color-syntax-string: hsl(var(--syntax-string));
+  --color-syntax-keyword: hsl(var(--syntax-keyword));
 
   /* Status colors */
   --color-danger: hsl(0 84.2% 60.2%);
   --color-warning: hsl(43 74% 66%);
   --color-success: hsl(142 71% 45%);
+
+  /* UI accent colors */
+  --color-accent-blue: hsl(var(--accent-blue));
 
   /* Icon sizes */
   --size-icon-sm: 1rem;

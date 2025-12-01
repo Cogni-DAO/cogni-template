@@ -52,6 +52,7 @@ describe("completion facade contract", () => {
     const testCtx: RequestContext = {
       log: makeNoopLogger(),
       reqId: "test-req-123",
+      routeId: "test.route",
       clock,
     };
 
@@ -94,6 +95,7 @@ describe("completion facade contract", () => {
     const testCtx: RequestContext = {
       log: makeNoopLogger(),
       reqId: "test-req-456",
+      routeId: "test.route",
       clock,
     };
 

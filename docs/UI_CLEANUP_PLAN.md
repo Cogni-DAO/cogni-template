@@ -6,13 +6,58 @@ Phased approach to consolidate UI before locking it down. Don't lock down trash.
 
 ---
 
+## ⚠️ CRITICAL: "Cleanup" = Code Refactoring, NOT Visual Design
+
+**What Phase 0-3 achieves:**
+
+- Styling code consolidation (inline className → CVA factories)
+- Design token enforcement (no raw colors/typography)
+- ESLint hygiene (fix config bugs, add freeze rules)
+
+**What Phase 0-3 does NOT do:**
+
+- Visual design improvements (colors, spacing, typography are unchanged)
+- UX enhancements (layouts, interactions, accessibility beyond basics)
+- New features or components
+
+**This is infrastructure work.** The site looks the same (except 3 minor behavior fixes).
+
+---
+
+## Status Update: Phase 0-3 Styling Infrastructure Complete
+
+**Date:** 2025-12-01
+**Branch:** feat/ui-cleanup
+**Commits:** c03f604, 144f887, 280f069, e101efc, 3ffca09
+
+**Completed (styling code only):**
+
+- Phase 0: Freeze rules active (ESLint blocks new components/imports) ✅
+- Phase 2: Knip scoped, dead code deleted, token checks in CI ✅
+- Phase 3: Kit token replacements + page inline className extractions (13 factories) ✅
+
+**Pending:**
+
+- Mobile QA: 360/768/1280 manual verification on /, /credits, /chat
+- Phase 4: Storybook + Playwright visual regression (separate PR)
+
+**Visual changes (3 only):**
+
+1. Alert success: bg-success/10 (semantic token vs raw green-50)
+2. Terminal: overflow-y-scroll (vs overflow-y-auto)
+3. Hero mobile: mx-0 baseline at <640px
+
+**See:** [UI_CLEANUP_CHECKLIST.md](UI_CLEANUP_CHECKLIST.md) for line-by-line status
+
+---
+
 ## Master TODO Checklist
 
 ### Phase 0: FREEZE (Day 1)
 
-- [ ] Add ESLint rule to block new files in `src/components/**` outside `kit/` → `eslint/ui-governance.config.mjs`
-- [ ] Add ESLint rule to block new UI lib imports (`@headlessui/*`, etc.) → `eslint/ui-governance.config.mjs`
-- [ ] Verify `no-raw-colors` rule is active → `eslint/ui-governance.config.mjs:45`
+- [x] Add ESLint rule to block new files in `src/components/**` outside `kit/` → `eslint/ui-governance.config.mjs:133-140` ✅
+- [x] Add ESLint rule to block new UI lib imports (`@headlessui/*`, etc.) → `eslint/ui-governance.config.mjs:150-157` ✅
+- [x] Verify `no-raw-colors` rule is active → `eslint/ui-governance.config.mjs:56` ✅
 
 ### Phase 1: INVENTORY (Day 1, 2 hours max)
 
@@ -26,14 +71,14 @@ Phased approach to consolidate UI before locking it down. Don't lock down trash.
 
 ### Phase 2: DELETE (Day 2)
 
-- [ ] Install Knip: `pnpm add -D knip`
-- [ ] Run `pnpm knip --include files,exports,dependencies`
-- [ ] Delete unused components in `src/features/*/components/` (kit is the survivor set)
-- [ ] Delete unused components in `src/components/app/`
-- [ ] Delete unused exports in `src/components/index.ts`
-- [ ] Create `scripts/check-ui-tokens.sh` with typography + arbitrary value checks
-- [ ] Wire script into `pnpm check` → `scripts/check-all.sh`
-- [ ] (Optional) Add to Lefthook pre-commit → `lefthook.yml`
+- [x] Install Knip: `pnpm add -D knip` ✅
+- [x] Run `pnpm knip --include files,exports,dependencies` ✅
+- [x] Delete unused components in `src/features/*/components/` (kit is the survivor set) ✅
+- [x] Delete unused components in `src/components/app/` ✅
+- [x] Delete unused exports in `src/components/index.ts` ✅
+- [x] Create `scripts/check-ui-tokens.sh` with typography + arbitrary value checks ✅
+- [x] Wire script into `pnpm check` → `scripts/check-all.sh` ✅
+- [ ] (Optional) Add to Lefthook pre-commit → `lefthook.yml` (deferred)
 
 ### Phase 3: CONSOLIDATE (Variable)
 
@@ -365,25 +410,64 @@ Manual edits first (3-page site). Codemods only if >10 instances of same migrati
 2. Lands canonical kit map (one component per category)
 3. Updates barrel exports to reflect final kit
 4. Fixes any token violations found in className scan
+5. Passes automated QA gate (see below)
 
 **Phase 4 does NOT start until this PR merges.**
 
+---
+
+## Automated QA Gate (Phase 0-3 exit criteria)
+
+### Why this exists
+
+- We do NOT use a human as the QA gate. Evidence must be reproducible in CI.
+- This PR series intentionally avoids visual redesign; the goal is to prevent regressions while we refactor/govern.
+
+### Gate requirements (Phase 0-3 blocking)
+
+- Add an automated `ui:qa` check that asserts **no horizontal overflow** at 3 viewports on 3 routes:
+  - Routes: `/`, `/credits`, `/chat`
+  - Viewports: `360x800`, `768x900`, `1280x900`
+  - Assertion: `document.documentElement.scrollWidth <= document.documentElement.clientWidth`
+- The check must run in CI and print PASS/FAIL per route+viewport.
+
+### Implementation guidance (MVP)
+
+- Use Playwright (preferred) or a minimal headless script. Keep it tiny and deterministic.
+- This is a _regression gate_, not a design gate. No pixel-perfect snapshots yet.
+
+### What is explicitly NOT required yet
+
+- No visual snapshot baselines.
+- No Lighthouse budgets.
+- No Storybook stories.
+
+### Exit criteria for Phase 0-3 PRs
+
+- `pnpm check`, `pnpm test`, `pnpm build` pass
+- `pnpm ui:qa` passes (or equivalent CI job)
+- Any intentional behavior change (e.g., scroll behavior) is stated in PR description
+
+---
+
 ### Code Cleanup (During Phase 3)
 
-See Master TODO Phase 3 for checkboxes:
-
-- `GithubButton.tsx:419` — Remove CVA variant export
-- `Input.tsx` — Move inline CVA to `@/styles/ui/inputs.ts`
+- [x] `GithubButton.tsx:419` — Remove CVA variant export (Commit c03f604) ✅
+- [x] `Input.tsx` — Move inline CVA to `@/styles/ui/inputs.ts` (Commit c03f604) ✅
+- [x] `Alert.tsx` — Replace raw green colors with semantic success tokens (Commit c03f604) ✅
+- [x] `CreditsPage.client.tsx` — Extract 7 inline className patterns to data factories (Commit 144f887) ✅
+- [x] `Terminal.tsx` — Extract 5 chat factories to overlays (Commit 280f069) ✅
+- [x] `HomeHeroSection.tsx` — Move 3 CVAs to layout.ts (Commit e101efc) ✅
 
 ### ESLint Config Bugs (Technical Debt)
 
-Fix these in `eslint/ui-governance.config.mjs` (see Master TODO Phase 3 for checkboxes):
+Fix these in `eslint/ui-governance.config.mjs`:
 
-- **Layer blocks override base rules** — Refactor to shared `BASE_RESTRICTED_IMPORTS` object
-- **Wrong allowlist syntax** — `rounded-[--radius]` → `rounded-[var(--radius)]`
-- **Malformed glob** — `e2e/**/*.{ts,spec.ts}` → `e2e/**/*.ts`
-- **Overlapping rules** — Remove/relax `tailwindcss/prefer-theme-tokens`
-- **Broad document.documentElement scope** — Narrow to app/client surfaces only
+- [x] **Layer blocks override base rules** — Refactored to `BASE_RESTRICTED_PATTERNS` constant (Commit 3ffca09) ✅
+- [x] **Wrong allowlist syntax** — `rounded-[--radius]` → `rounded-[var(--radius)]` (Commit 3ffca09) ✅
+- [x] **Malformed glob** — `e2e/**/*.{ts,spec.ts}` → `e2e/**/*.ts` (Commit 3ffca09) ✅
+- [x] **Overlapping rules** — Set `tailwindcss/prefer-theme-tokens: "off"` with rationale (Commit 3ffca09) ✅
+- [x] **Broad scope** — Narrowed to `src/app/**`, `src/components/**`, `src/features/**` (Commit 3ffca09) ✅
 
 ---
 

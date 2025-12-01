@@ -1,0 +1,41 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+name: Push Logs to Loki
+description: Best-effort push of CI job logs to Grafana Cloud Loki with env=ci label
+
+inputs:
+  loki_url:
+    description: "Grafana Cloud Loki push URL (e.g., https://logs-prod-us-central1.grafana.net)"
+    required: true
+  loki_user:
+    description: "Loki basic auth username (numeric user ID)"
+    required: true
+  loki_token:
+    description: "Loki basic auth API key (secret)"
+    required: true
+  log_file:
+    description: "Path to log file to push"
+    required: true
+  job_name:
+    description: "Job name for Loki stream label"
+    required: true
+  labels:
+    description: 'Space-delimited logfmt labels (e.g., "workflow=CI job=test ref=main")'
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Push logs to Loki
+      shell: bash
+      env:
+        LOKI_URL: ${{ inputs.loki_url }}
+        LOKI_USER: ${{ inputs.loki_user }}
+        LOKI_TOKEN: ${{ inputs.loki_token }}
+        LOG_FILE: ${{ inputs.log_file }}
+        JOB_NAME: ${{ inputs.job_name }}
+        LABELS: ${{ inputs.labels }}
+      run: |
+        # Best-effort push: never fails the job
+        platform/ci/scripts/loki_push.sh || true

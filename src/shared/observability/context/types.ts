@@ -28,6 +28,7 @@ export interface Clock {
 export interface RequestContext {
   log: Logger; // Child logger with reqId, route, method
   reqId: string; // Request correlation ID
+  routeId: string; // Route identifier (e.g., "payments.intents")
   session?: SessionUser | undefined; // Authenticated user (optional)
   clock: Clock; // Time provider for testability
 }

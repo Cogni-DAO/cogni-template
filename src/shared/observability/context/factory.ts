@@ -58,6 +58,7 @@ export function createRequestContext(
       method: request.method,
     }),
     reqId,
+    routeId: meta.routeId,
     session: meta.session,
     clock: deps.clock,
   };

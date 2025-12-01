@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-28
+- **Last reviewed:** 2025-12-01
 - **Status:** draft
 
 ## Purpose
@@ -62,6 +62,7 @@ Unified serverEnv() provides all vars:
 
 - NODE_ENV (development|test|production, default development)
 - APP_ENV (test|production)
+- SERVICE_NAME (default: "app") - for observability service label
 - POSTGRES_USER
 - POSTGRES_PASSWORD
 - POSTGRES_DB
@@ -133,7 +134,7 @@ When adding/removing keys, update:
 - schema in server.ts or client.ts,
 - buildDatabaseUrl function in @shared/db if DB-related,
 - Vars by layer list above,
-- .env.example,
+- .env.local.example,
 - tests touching env.
 
 Bump Last reviewed date. Ensure pnpm lint && pnpm typecheck pass.

@@ -18,6 +18,7 @@ import { FakeClock } from "./fake-clock";
 
 export interface TestCtxOptions {
   reqId?: string;
+  routeId?: string;
   session?: SessionUser;
   clockTime?: string;
 }
@@ -32,6 +33,7 @@ export function makeTestCtx(options: TestCtxOptions = {}): RequestContext {
   return {
     log: makeNoopLogger(),
     reqId: options.reqId ?? `test-req-${Date.now()}`,
+    routeId: options.routeId ?? "test.route",
     session: options.session,
     clock,
   };

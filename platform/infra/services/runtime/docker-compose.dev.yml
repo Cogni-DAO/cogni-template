@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 
-# Cogni Runtime Stack
-# Environment-agnostic container stack for app + litellm + caddy + promtail
-# Secrets and config come from environment variables set by CI
+# Cogni Dev Runtime Stack
+# Development container stack for app + litellm + caddy + alloy + loki
+# Secrets and config come from environment variables
 
 services:
   app:
@@ -138,18 +138,59 @@ services:
       postgres:
         condition: service_healthy
 
-  promtail:
-    image: grafana/promtail:2.9.0
-    container_name: promtail
-    restart: always
+  loki:
+    image: grafana/loki:2.9.10
+    container_name: loki
+    restart: unless-stopped
     networks:
       - web
+    ports:
+      - "127.0.0.1:3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
     volumes:
-      - ./configs/promtail-config.yaml:/etc/promtail/config.yaml:ro
-      - /var/lib/promtail:/var/lib/promtail
+      - loki_data:/loki
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    container_name: grafana
+    restart: unless-stopped
+    networks:
+      - web
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - ./configs/grafana-provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    depends_on:
+      - loki
+
+  alloy:
+    image: grafana/alloy:v1.9.2
+    container_name: alloy
+    restart: unless-stopped
+    networks:
+      - web
+    ports:
+      - "127.0.0.1:12345:12345"
+    volumes:
+      - ./configs/alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - alloy_data:/var/lib/alloy
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-    command: -config.file=/etc/promtail/config.yaml
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy
+    environment:
+      - DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT:-local}
+      - LOKI_WRITE_URL=${LOKI_WRITE_URL:-http://loki:3100/loki/api/v1/push}
+      - LOKI_USERNAME=${LOKI_USERNAME:-}
+      - LOKI_PASSWORD=${LOKI_PASSWORD:-}
+    depends_on:
+      - loki
 
 networks:
   web:
@@ -163,3 +204,9 @@ volumes:
     name: caddy_config
   postgres_data:
     name: postgres_data
+  alloy_data:
+    name: alloy_data
+  loki_data:
+    name: loki_data
+  grafana_data:
+    name: grafana_data

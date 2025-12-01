@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-28
+- **Last reviewed:** 2025-12-01
 - **Status:** draft
 
 ## Purpose
@@ -15,7 +15,6 @@ Service-specific configurations for supporting infrastructure like LLM routing, 
 ## Pointers
 
 - [runtime/](runtime/): **PROTECTED** Production runtime configuration (copied to VMs)
-- [loki-promtail/](loki-promtail/): Log aggregation and monitoring stack
 - [litellm/](litellm/): LLM model routing and budget configurations
 - [langfuse/](langfuse/): Observability and telemetry stack
 - [postgres/](postgres/): Database service configurations

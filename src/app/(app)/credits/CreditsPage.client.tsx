@@ -24,14 +24,22 @@ import {
   usePaymentFlow,
 } from "@/features/payments/public";
 import {
+  amountButtons,
   badge,
   card,
   cardContent,
   cardHeader,
   container,
   heading,
+  ledgerEntry,
+  ledgerHeader,
+  ledgerList,
+  ledgerMeta,
   paragraph,
+  row,
   section,
+  statsBox,
+  statsGrid,
   twoColumn,
 } from "@/styles/ui";
 
@@ -72,7 +80,7 @@ export function CreditsPageClient(): ReactElement {
         <div className={twoColumn({})}>
           <div className={card({ variant: "elevated" })}>
             <div className={cardHeader()}>
-              <div className="space-y-[var(--spacing-xs)]">
+              <div className={ledgerList({ gap: "xs" })}>
                 <div className={heading({ level: "h2" })}>Credits</div>
                 <div
                   className={paragraph({
@@ -84,8 +92,8 @@ export function CreditsPageClient(): ReactElement {
                   Pay with USDC on Ethereum Sepolia. No auto top-up.
                 </div>
               </div>
-              <div className="mt-[var(--spacing-sm)] grid gap-[var(--spacing-xs)] lg:grid-cols-2">
-                <div className="rounded-lg bg-muted p-[var(--spacing-md)]">
+              <div className={statsGrid()}>
+                <div className={statsBox()}>
                   <div
                     className={paragraph({
                       size: "sm",
@@ -101,7 +109,7 @@ export function CreditsPageClient(): ReactElement {
                       : `${formatCredits(summaryQuery.data?.balanceCredits ?? 0)} credits`}
                   </div>
                 </div>
-                <div className="rounded-lg bg-muted p-[var(--spacing-md)]">
+                <div className={statsBox()}>
                   <div
                     className={paragraph({
                       size: "sm",
@@ -129,14 +137,11 @@ export function CreditsPageClient(): ReactElement {
                   No ledger entries yet.
                 </div>
               ) : (
-                <div className="space-y-[var(--spacing-sm)]">
+                <div className={ledgerList()}>
                   {ledgerEntries.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className="flex flex-col gap-[var(--spacing-2xs)] rounded-md border border-border p-[var(--spacing-md)]"
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-[var(--spacing-sm)]">
+                    <div key={entry.id} className={ledgerEntry()}>
+                      <div className={ledgerHeader()}>
+                        <div className={row({ gap: "sm" })}>
                           <span
                             className={badge({
                               intent:
@@ -162,7 +167,7 @@ export function CreditsPageClient(): ReactElement {
                           {formatCredits(entry.amount)}
                         </div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-[var(--spacing-sm)] text-[var(--text-sm)] text-muted-foreground">
+                      <div className={ledgerMeta()}>
                         <span>
                           Balance after: {formatCredits(entry.balanceAfter)}
                         </span>
@@ -191,7 +196,7 @@ export function CreditsPageClient(): ReactElement {
               </div>
             </div>
             <div className={cardContent()}>
-              <div className="flex flex-wrap gap-[var(--spacing-sm)]">
+              <div className={amountButtons()}>
                 {PAYMENT_AMOUNTS.map((amountCents) => (
                   <Button
                     key={amountCents}
@@ -205,7 +210,7 @@ export function CreditsPageClient(): ReactElement {
                   </Button>
                 ))}
               </div>
-              <div className="mt-[var(--spacing-lg)] space-y-[var(--spacing-sm)]">
+              <div className={ledgerList({ mt: "lg" })}>
                 <UsdcPaymentFlow
                   amountUsdCents={selectedAmount}
                   state={paymentFlow.state}

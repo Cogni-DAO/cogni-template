@@ -40,7 +40,7 @@ Cross-cutting observability concerns: structured logging, request context, and e
   - `AiLlmCallEvent`, `PaymentsEvent` - Event schemas
 - **Routes:** none
 - **CLI:** none
-- **Env/Config keys:** Uses `PINO_LOG_LEVEL`, `NODE_ENV`, `APP_ENV` from serverEnv()
+- **Env/Config keys:** Uses `PINO_LOG_LEVEL`, `NODE_ENV`, `SERVICE_NAME` from serverEnv()
 - **Files considered API:** `index.ts`, `logging/index.ts`, `context/index.ts`
 
 ## Ports
@@ -52,12 +52,13 @@ Cross-cutting observability concerns: structured logging, request context, and e
 ## Responsibilities
 
 - This directory **does**:
-  - Provide Pino logger factory with env-based config (pretty/JSON/disabled)
+  - Provide Pino logger factory emitting JSON to stdout (no worker transports)
   - Define RequestContext for request-scoped logging
   - Provide standardized log helpers (start/end/error/warn)
   - Define event schemas for AI and Payments domains
   - Validate reqId from `x-request-id` header (max 64 chars, alphanumeric + `_-`)
   - Redact sensitive fields (tokens, headers, wallet keys)
+  - Set stable base fields (app, service) - env label added by Alloy
 
 - This directory **does not**:
   - Depend on Container or port interfaces
@@ -102,9 +103,11 @@ export async function execute(..., ctx: RequestContext) {
 ## Standards
 
 - All console.log/warn/error prohibited in src/ - use logger
+- JSON-only logs to stdout (formatting via external pipe: `pnpm dev:pretty`)
 - Test silence: makeLogger() checks `VITEST=true || NODE_ENV=test`
 - Security: reqId validation prevents injection attacks
 - Stable event schemas with typed fields
+- Bindings cannot override reserved keys (app, service)
 
 ## Dependencies
 
@@ -121,4 +124,5 @@ export async function execute(..., ctx: RequestContext) {
 
 - Structural Clock interface `{ now(): string }` - ports/Clock satisfies this
 - RequestContext decoupled from Container (takes `{ baseLog, clock }` only)
-- V2 (deferred): Promtail/Loki wiring, dashboards, alerting
+- V2 implementation: Alloy + local Loki (dev) + Grafana Cloud (preview/prod)
+- Logging architecture: JSON stdout → Alloy → Loki (env label from DEPLOY_ENVIRONMENT)

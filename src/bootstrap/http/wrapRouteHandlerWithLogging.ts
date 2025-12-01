@@ -115,24 +115,24 @@ export function wrapRouteHandlerWithLogging<TContext = unknown>(
     );
 
     logRequestStart(ctx.log);
-    const start = Date.now();
+    const start = performance.now();
 
     try {
       // Check session requirement before calling handler
       if (options.auth?.mode === "required" && !sessionUser) {
         const status = 401;
-        const durationMs = Date.now() - start;
+        const durationMs = performance.now() - start;
         logRequestEnd(ctx.log, { status, durationMs });
         return NextResponse.json({ error: "Session required" }, { status });
       }
 
       const response = await handler(ctx, request, sessionUser, context);
-      const durationMs = Date.now() - start;
+      const durationMs = performance.now() - start;
       logRequestEnd(ctx.log, { status: response.status, durationMs });
       return response;
     } catch (error) {
       // Wrapper only catches unhandled errors - route should handle domain errors
-      const durationMs = Date.now() - start;
+      const durationMs = performance.now() - start;
       const status = 500;
       logRequestError(ctx.log, error, "INTERNAL_SERVER_ERROR");
       logRequestEnd(ctx.log, { status, durationMs });

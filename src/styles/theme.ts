@@ -33,12 +33,13 @@ export const colorKeys = [
   "border",
   "input",
   "ring",
-  "chart-1",
-  "chart-2",
-  "chart-3",
-  "chart-4",
-  "chart-5",
-  "chart-6",
+  "syntax-property",
+  "syntax-operator",
+  "syntax-punctuation",
+  "syntax-delimiter",
+  "syntax-string",
+  "syntax-keyword",
+  "accent-blue",
 ] as const;
 
 // Radius token keys (semantic keys for CVA props - map to CSS vars)

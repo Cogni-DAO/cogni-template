@@ -89,7 +89,7 @@ export async function execute(
 
   // Delegate to port - caller constructed at auth boundary
   log.debug({ messageCount: trimmedMessages.length }, "calling LLM");
-  const llmStart = Date.now();
+  const llmStart = performance.now();
 
   const result = await llmService.completion({
     messages: trimmedMessages,
@@ -104,11 +104,11 @@ export async function execute(
   // Log LLM call with structured event
   const llmEvent: AiLlmCallEvent = {
     event: "ai.llm_call",
-    routeId: ctx.log.bindings().route as string,
+    routeId: ctx.routeId,
     reqId: ctx.reqId,
     billingAccountId: caller.billingAccountId,
     model: modelId,
-    durationMs: Date.now() - llmStart,
+    durationMs: performance.now() - llmStart,
     tokensUsed: totalTokens,
     providerCostUsd: result.providerCostUsd,
   };

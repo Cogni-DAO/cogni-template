@@ -273,5 +273,37 @@ export const header = cva("border-border border-b bg-background", {
   },
 });
 
+const heroTextWidthVariants = {
+  auto: "",
+  fixed: "[&>h1]:min-w-measure",
+} as const;
+
+/**
+ * Hero text wrapper with responsive alignment
+ */
+export const heroText = cva(
+  "sm:text-center md:mx-auto md:max-w-[var(--size-container-lg)] lg:col-span-12 lg:mb-[var(--spacing-xl)] lg:text-left",
+  {
+    variants: {
+      width: heroTextWidthVariants,
+    },
+    defaultVariants: { width: "auto" },
+  }
+);
+
+/**
+ * Hero button container - MOBILE FIX: mx-0 baseline
+ */
+export const heroButtons = cva(
+  "sm:-mx-[var(--spacing-4xl)] md:-mx-[var(--spacing-5xl)] mx-0 mt-[var(--spacing-xl)] text-center"
+);
+
+/**
+ * Hero visual container
+ */
+export const heroVisual = cva(
+  "relative mt-[var(--spacing-md-plus)] sm:mx-auto lg:col-span-12 lg:mx-auto lg:mt-0 lg:max-w-none"
+);
+
 // Export variant types for external use
 export type ContainerSize = VariantProps<typeof container>["size"];

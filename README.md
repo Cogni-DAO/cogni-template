@@ -18,7 +18,7 @@ _We love you! ❤️_
 ```bash
 git clone https://github.com/Cogni-DAO/cogni-template
 cd cogni-template
-pnpm setup local     # Automated setup TODO: lol sorry, cp .env.example .env
+pnpm setup local     # Automated setup TODO: lol sorry, cp .env.local.example .env.local
 pnpm dev:stack       # Start developing with full stack (DB + LiteLLM + Next.js)
 pnpm db:setup        # Migrate and Seed database, once dev stack is running
 pnpm docker:stack    # Full production simulation (https://localhost - browser cert warning expected)
@@ -55,8 +55,9 @@ _We're working to automate more of this! Want to help? Contribute setup automati
 **For Contributors:**
 
 - Get [OpenRouter API key](https://openrouter.ai/keys) for AI features
-- Copy `.env.example` → `.env.local` and fill in values
+- Copy `.env.local.example` → `.env.local` and fill in values
 - `pnpm install` and `pnpm dev:stack`
+- **Observability:** Local Loki + Grafana on localhost:3001 (auto-configured). For MCP log queries, optionally set `GRAFANA_URL` + `GRAFANA_SERVICE_ACCOUNT_TOKEN` for Grafana Cloud access.
 
 **For Fork Owners (everything above, plus):**
 
@@ -74,6 +75,7 @@ _We're working to automate more of this! Want to help? Contribute setup automati
 - Set up GitHub environments and secrets manually
 - Configure branch protection rules (see docs/CI-CD.md)
 - **SonarCloud setup:** Generate token at [SonarCloud Security](https://sonarcloud.io/account/security) → Add as `SONAR_TOKEN` repository secret
+- **Grafana Cloud setup (optional):** Get Loki credentials from [Grafana Cloud](https://grafana.com/products/cloud/) → Add `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY` as **repository secrets** (shared across environments)
 
 **DAO Setup**
 

@@ -55,6 +55,15 @@ jobs:
       - name: Integration tests (testcontainers)
         run: pnpm test:int
 
+      - name: CI Telemetry
+        if: always()
+        uses: ./.github/actions/loki-ci-telemetry
+        with:
+          loki_url: ${{ secrets.GRAFANA_CLOUD_LOKI_URL }}
+          loki_user: ${{ secrets.GRAFANA_CLOUD_LOKI_USER }}
+          loki_token: ${{ secrets.GRAFANA_CLOUD_LOKI_API_KEY }}
+          job_status: ${{ job.status }}
+
   stack-test:
     runs-on: ubuntu-latest
     needs: ci
@@ -113,6 +122,25 @@ jobs:
 
       - name: Run stack tests
         run: pnpm test:stack:docker
+
+      - name: CI Telemetry
+        if: always()
+        uses: ./.github/actions/loki-ci-telemetry
+        with:
+          loki_url: ${{ secrets.GRAFANA_CLOUD_LOKI_URL }}
+          loki_user: ${{ secrets.GRAFANA_CLOUD_LOKI_USER }}
+          loki_token: ${{ secrets.GRAFANA_CLOUD_LOKI_API_KEY }}
+          job_status: ${{ job.status }}
+          compose_file: platform/infra/services/runtime/docker-compose.dev.yml
+
+      - name: Upload failure context artifact
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: ci-failure-context-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/ci-job.log
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Teardown stack
         if: always()

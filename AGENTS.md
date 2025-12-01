@@ -30,7 +30,8 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 - **Framework:** Next.js (TypeScript, App Router)
 - **Infra:** Docker + OpenTofu → Spheron (managed Akash)
-- **Toolchain:** pnpm, ESLint, Prettier, Vitest, Playwright, SonarQube
+- **Toolchain:** pnpm, Biome, ESLint, Prettier, Vitest, Playwright, SonarQube
+- **Observability:** Pino JSON → Alloy → local Loki (dev) or Grafana Cloud (preview/prod). MCP via grafana-local/grafana.
 - **CI entrypoint:** `pnpm check`
 
 ## API Contracts are the Single Source of Truth
@@ -45,6 +46,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [Technical Roadmap](ROADMAP.md)
 - [Developer Setup](docs/SETUP.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Observability](docs/OBSERVABILITY.md)
 - [Services Migration Guide](docs/SERVICES_MIGRATION.md)
 - [Environment & Stack Deployment Modes](docs/ENVIRONMENTS.md)
 - [Database & Migration Architecture](docs/DATABASES.md)
