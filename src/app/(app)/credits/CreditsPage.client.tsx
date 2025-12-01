@@ -17,31 +17,20 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { useState } from "react";
 
-import { Button, UsdcPaymentFlow } from "@/components";
+import {
+  Badge,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  UsdcPaymentFlow,
+} from "@/components";
 import {
   CREDITS_PER_CENT,
   useCreditsSummary,
   usePaymentFlow,
 } from "@/features/payments/public";
-import {
-  amountButtons,
-  badge,
-  card,
-  cardContent,
-  cardHeader,
-  container,
-  heading,
-  ledgerEntry,
-  ledgerHeader,
-  ledgerList,
-  ledgerMeta,
-  paragraph,
-  row,
-  section,
-  statsBox,
-  statsGrid,
-  twoColumn,
-} from "@/styles/ui";
+import { container, heading, paragraph, section } from "@/styles/ui";
 
 // Payment amounts in USD cents (100 = $1.00, 1000 = $10.00, etc.)
 const PAYMENT_AMOUNTS = [100, 1000, 2500, 5000, 10000] as const;
@@ -77,12 +66,14 @@ export function CreditsPageClient(): ReactElement {
   return (
     <div className={section()}>
       <div className={container({ size: "lg", spacing: "xl" })}>
-        <div className={twoColumn({})}>
-          <div className={card({ variant: "elevated" })}>
-            <div className={cardHeader()}>
-              <div className={ledgerList({ gap: "xs" })}>
-                <div className={heading({ level: "h2" })}>Credits</div>
-                <div
+        {/* Mobile-first vertical stack, side-by-side on lg+ */}
+        <div className="flex flex-col gap-6 lg:grid lg:grid-cols-2">
+          {/* Balance & History Card */}
+          <Card className="shadow-lg">
+            <CardHeader>
+              <div className="space-y-2">
+                <h2 className={heading({ level: "h2" })}>Credits</h2>
+                <p
                   className={paragraph({
                     size: "md",
                     tone: "subdued",
@@ -90,11 +81,12 @@ export function CreditsPageClient(): ReactElement {
                   })}
                 >
                   Pay with USDC on Ethereum Sepolia. No auto top-up.
-                </div>
+                </p>
               </div>
-              <div className={statsGrid()}>
-                <div className={statsBox()}>
-                  <div
+              {/* Stats Grid */}
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <p
                     className={paragraph({
                       size: "sm",
                       tone: "subdued",
@@ -102,15 +94,15 @@ export function CreditsPageClient(): ReactElement {
                     })}
                   >
                     Balance
-                  </div>
-                  <div className={heading({ level: "h3" })}>
+                  </p>
+                  <h3 className={heading({ level: "h3" })}>
                     {summaryQuery.isLoading
                       ? "Loading..."
                       : `${formatCredits(summaryQuery.data?.balanceCredits ?? 0)} credits`}
-                  </div>
+                  </h3>
                 </div>
-                <div className={statsBox()}>
-                  <div
+                <div className="space-y-2">
+                  <p
                     className={paragraph({
                       size: "sm",
                       tone: "subdued",
@@ -118,40 +110,40 @@ export function CreditsPageClient(): ReactElement {
                     })}
                   >
                     Conversion
-                  </div>
-                  <div className={heading({ level: "h3" })}>
-                    1¢ = 10 credits
-                  </div>
+                  </p>
+                  <h3 className={heading({ level: "h3" })}>1¢ = 10 credits</h3>
                 </div>
               </div>
-            </div>
-            <div className={cardContent()}>
+            </CardHeader>
+            <CardContent>
               {summaryQuery.isLoading ? (
-                <div className={paragraph({})}>Loading recent activity...</div>
+                <p className={paragraph({})}>Loading recent activity...</p>
               ) : summaryQuery.isError ? (
-                <div className={paragraph({ tone: "default" })}>
+                <p className={paragraph({ tone: "default" })}>
                   Unable to load ledger entries. Please refresh or try again.
-                </div>
+                </p>
               ) : ledgerEntries.length === 0 ? (
-                <div className={paragraph({ tone: "default" })}>
+                <p className={paragraph({ tone: "default" })}>
                   No ledger entries yet.
-                </div>
+                </p>
               ) : (
-                <div className={ledgerList()}>
+                <div className="space-y-4">
                   {ledgerEntries.map((entry) => (
-                    <div key={entry.id} className={ledgerEntry()}>
-                      <div className={ledgerHeader()}>
-                        <div className={row({ gap: "sm" })}>
-                          <span
-                            className={badge({
-                              intent:
-                                entry.reason === "widget_payment"
-                                  ? "secondary"
-                                  : "outline",
-                            })}
+                    <div
+                      key={entry.id}
+                      className="space-y-2 border-b pb-4 last:border-0 last:pb-0"
+                    >
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge
+                            intent={
+                              entry.reason === "widget_payment"
+                                ? "secondary"
+                                : "outline"
+                            }
                           >
                             {entry.reason}
-                          </span>
+                          </Badge>
                           <span
                             className={paragraph({
                               size: "sm",
@@ -162,12 +154,12 @@ export function CreditsPageClient(): ReactElement {
                             {entry.reference ?? "No reference"}
                           </span>
                         </div>
-                        <div className={heading({ level: "h4" })}>
+                        <h4 className={heading({ level: "h4" })}>
                           {entry.amount >= 0 ? "+" : ""}
                           {formatCredits(entry.amount)}
-                        </div>
+                        </h4>
                       </div>
-                      <div className={ledgerMeta()}>
+                      <div className="flex items-center gap-2 text-muted-foreground text-sm">
                         <span>
                           Balance after: {formatCredits(entry.balanceAfter)}
                         </span>
@@ -178,13 +170,14 @@ export function CreditsPageClient(): ReactElement {
                   ))}
                 </div>
               )}
-            </div>
-          </div>
+            </CardContent>
+          </Card>
 
-          <div className={card({ variant: "default" })}>
-            <div className={cardHeader()}>
-              <div className={heading({ level: "h3" })}>Buy Credits</div>
-              <div
+          {/* Purchase Card */}
+          <Card>
+            <CardHeader>
+              <h3 className={heading({ level: "h3" })}>Buy Credits</h3>
+              <p
                 className={paragraph({
                   size: "sm",
                   tone: "subdued",
@@ -193,10 +186,11 @@ export function CreditsPageClient(): ReactElement {
               >
                 Choose an amount, complete the crypto payment, and we will
                 credit your balance once the transaction confirms.
-              </div>
-            </div>
-            <div className={cardContent()}>
-              <div className={amountButtons()}>
+              </p>
+            </CardHeader>
+            <CardContent>
+              {/* Amount selector grid */}
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {PAYMENT_AMOUNTS.map((amountCents) => (
                   <Button
                     key={amountCents}
@@ -204,13 +198,14 @@ export function CreditsPageClient(): ReactElement {
                       amountCents === selectedAmount ? "default" : "outline"
                     }
                     onClick={() => setSelectedAmount(amountCents)}
+                    className="text-sm"
                   >
                     ${(amountCents / 100).toFixed(2)} /{" "}
-                    {formatCredits(amountCents * CREDITS_PER_CENT)} credits
+                    {formatCredits(amountCents * CREDITS_PER_CENT)}
                   </Button>
                 ))}
               </div>
-              <div className={ledgerList({ mt: "lg" })}>
+              <div className="mt-6 space-y-4">
                 <UsdcPaymentFlow
                   amountUsdCents={selectedAmount}
                   state={paymentFlow.state}
@@ -218,13 +213,13 @@ export function CreditsPageClient(): ReactElement {
                   onReset={paymentFlow.reset}
                   disabled={summaryQuery.isLoading}
                 />
-                <div className={paragraph({ size: "sm", tone: "subdued" })}>
+                <p className={paragraph({ size: "sm", tone: "subdued" })}>
                   Connect your wallet, approve the USDC transfer, and we will
                   credit your balance once the transaction is verified on-chain.
-                </div>
+                </p>
               </div>
-            </div>
-          </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

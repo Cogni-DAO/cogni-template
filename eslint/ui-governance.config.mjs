@@ -16,15 +16,13 @@ import communityTailwind from "@poupe/eslint-plugin-tailwindcss";
 import noInlineStyles from "eslint-plugin-no-inline-styles";
 import uiGovernance from "../scripts/eslint/plugins/ui-governance.cjs";
 
-// Base restricted import patterns (DRY)
+// Base restricted import patterns (DRY) - applies to all layers
+// Note: Vendor imports (@/components/vendor/**) are restricted per-layer in app/features, not here.
+// This allows kit/ to import vendor/ for wrapping primitives.
 const BASE_RESTRICTED_PATTERNS = [
   {
     group: ["../**"],
     message: "Do not import from parent directories. Use aliases.",
-  },
-  {
-    group: ["@/components/vendor/**"],
-    message: "Use @/components/kit/* wrappers instead of direct vendor imports",
   },
 ];
 
@@ -189,7 +187,7 @@ export default [
     },
   },
 
-  // App layer: block direct adapter imports
+  // App layer: block direct adapter imports and vendor imports
   {
     files: ["src/app/**/*.{ts,tsx}"],
     rules: {
@@ -198,6 +196,7 @@ export default [
         {
           patterns: [
             "@/adapters/**", // app must not import adapters directly
+            "@/components/vendor/**", // app must use kit wrappers, not vendor
           ],
         },
       ],
