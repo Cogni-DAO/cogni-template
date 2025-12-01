@@ -6,7 +6,10 @@
   The default border color has changed to `currentColor` in Tailwind CSS v4,
   so we've added these compatibility styles to make sure everything still
   looks the same as it did with Tailwind CSS v3.
+
+  DISABLED FOR DEBUGGING - Step 1: Testing if this block causes layout collapse
 */
+/*
 @layer base {
   *,
   ::after,
@@ -25,6 +28,7 @@
     @apply border-border;
   }
 }
+*/
 
 @layer base {
   :root {
@@ -73,16 +77,16 @@
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
+    --background: 0 0% 0%;
     --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
+    --card: 0 0% 0%;
     --card-foreground: 210 40% 98%;
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
+    --primary: 217 71% 40%;
+    --primary-foreground: 0 0% 100%;
     --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 20%;
+    --secondary-foreground: 210 40% 98%;
     --muted: 217.2 32.6% 9%;
     --muted-foreground: 215 20.2% 76.1%;
     --accent: 217.2 32.6% 17.5%;
@@ -91,7 +95,7 @@
     --destructive-foreground: 210 40% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
+    --ring: 217 71% 40%;
 
     /* Code syntax highlighting palette (dark mode) */
     --syntax-property: 276 100% 70%; /* teal - object properties */
@@ -102,10 +106,11 @@
     --syntax-keyword: 220 100% 65%; /* blue - keywords */
 
     /* UI accent colors */
-    --accent-blue: 220 100% 65%; /* brand accent blue */
+    --accent-blue: 217 71% 40%; /* brand accent blue */
   }
 }
 
+/* DISABLED FOR DEBUGGING - Step 2: Testing if @theme inline causes layout collapse */
 @theme inline {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -127,7 +132,6 @@
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));
 
-  /* Code syntax highlighting colors */
   --color-syntax-property: hsl(var(--syntax-property));
   --color-syntax-operator: hsl(var(--syntax-operator));
   --color-syntax-punctuation: hsl(var(--syntax-punctuation));
@@ -135,15 +139,12 @@
   --color-syntax-string: hsl(var(--syntax-string));
   --color-syntax-keyword: hsl(var(--syntax-keyword));
 
-  /* Status colors */
   --color-danger: hsl(0 84.2% 60.2%);
   --color-warning: hsl(43 74% 66%);
   --color-success: hsl(142 71% 45%);
 
-  /* UI accent colors */
   --color-accent-blue: hsl(var(--accent-blue));
 
-  /* Icon sizes */
   --size-icon-sm: 1rem;
   --size-icon-md: 1.25rem;
   --size-icon-lg: 1.5rem;
@@ -152,13 +153,11 @@
   --size-icon-3xl: 4rem;
   --size-icon-4xl: 5rem;
 
-  /* Component widths */
   --size-dropdown-sm: 8rem;
   --size-dropdown-md: 9rem;
   --size-dropdown-lg: 10rem;
   --size-dropdown-xl: 12rem;
 
-  /* GitHub button palette */
   --github-button-bg: #09090b;
   --github-button-bg-hover: #18181b;
   --github-button-border: #27272a;
@@ -169,65 +168,45 @@
   --github-button-text-dark: #0a0a0a;
   --github-button-yellow: #fbbf24;
 
-  /* Terminal dots */
   --size-dot: 0.75rem;
 
-  /* Spacing scale */
   --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
   --spacing-md: 1rem;
   --spacing-lg: 1.5rem;
   --spacing-xl: 2rem;
 
-  /* Extended spacing scale */
-  --spacing-2xs: 0.125rem; /* 2px - py-1 */
-  --spacing-xs-plus: 0.5rem; /* 8px - mt-2 */
-  --spacing-md-plus: 0.75rem; /* 12px - mt-3 */
-  --spacing-lg-plus: 1.5rem; /* 24px - py-6, mt-6 */
-  --spacing-xl-plus: 1.25rem; /* 20px - mt-5 */
-  --spacing-2xl: 2.5rem; /* 40px - mt-10 */
-  --spacing-2xl-plus: 2rem; /* 32px - mt-8 */
-  --spacing-3xl: 3rem; /* 48px - py-12 */
-  --spacing-4xl: 4rem; /* 64px - py-16 */
-  --spacing-5xl: 5rem; /* 80px - py-20 */
+  --position-sm: 1rem;
 
-  /* Positioning tokens */
-  --position-sm: 1rem; /* 16px - top-4, left-4 */
+  --spacing-hero-xs: 0.3125rem;
+  --spacing-hero-xl: 1.25rem;
+  --spacing-rainbow: 8.4375rem;
+  --width-action-words: 11.6875rem;
 
-  /* Hero code syntax tokens */
-  --spacing-hero-xs: 0.3125rem; /* 5px - syntax element spacing */
-  --spacing-hero-xl: 1.25rem; /* 20px - syntax element spacing */
-  --spacing-rainbow: 8.4375rem; /* 135px - rainbow action words spacing */
-  --width-action-words: 11.6875rem; /* 187px - action words container width (10% wider) */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  --text-4xl: 2.25rem;
+  --text-5xl: 3rem;
+  --text-6xl: 3.75rem;
 
-  /* Typography scale */
-  --text-xs: 0.75rem; /* 12px */
-  --text-sm: 0.875rem; /* 14px */
-  --text-base: 1rem; /* 16px */
-  --text-lg: 1.125rem; /* 18px */
-  --text-xl: 1.25rem; /* 20px */
-  --text-2xl: 1.5rem; /* 24px */
-  --text-3xl: 1.875rem; /* 30px */
-  --text-4xl: 2.25rem; /* 36px */
-  --text-5xl: 3rem; /* 48px */
-  --text-6xl: 3.75rem; /* 60px */
+  --size-container-sm: 42rem;
+  --size-container-md: 48rem;
+  --size-container-lg: 56rem;
+  --size-container-xl: 64rem;
+  --size-container-2xl: 72rem;
+  --size-container-3xl: 80rem;
+  --size-container-screen: 1280px;
 
-  /* Container widths */
-  --size-container-sm: 42rem; /* max-w-2xl */
-  --size-container-md: 48rem; /* max-w-3xl */
-  --size-container-lg: 56rem; /* max-w-4xl */
-  --size-container-xl: 64rem; /* max-w-5xl */
-  --size-container-2xl: 72rem; /* max-w-6xl */
-  --size-container-3xl: 80rem; /* max-w-7xl */
-  --size-container-screen: 1280px; /* max-w-screen-xl */
-
-  /* Shadow system */
   --shadow-xs: 0 1px rgb(0 0 0 / 0.05);
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
   --shadow-lg:
     0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1);
 
-  /* Animation system */
   --opacity-hidden: 0;
   --opacity-half: 0.5;
   --opacity-visible: 1;
@@ -244,27 +223,22 @@
   --delay-normal: 300ms;
   --delay-slow: 450ms;
 
-  /* Typography utilities */
   --underline-offset: 4px;
-  --measure: 48ch; /* Typography measure for readable line lengths */
+  --measure: 48ch;
 
-  /* Prose system */
   --prose-xs: 0.75rem;
   --prose-sm: 0.875rem;
   --prose-base: 1rem;
   --prose-lg: 1.125rem;
   --prose-xl: 1.25rem;
 
-  /* Zero values for structural utilities */
   --flex-none: 0;
   --grow-none: 0;
   --shrink-none: 0;
 
-  /* Color system */
   --color-white: #ffffff;
   --color-transparent: transparent;
 
-  /* Alpha opacity variants for common percentages */
   --alpha-20: 0.2;
   --alpha-30: 0.3;
   --alpha-40: 0.4;
@@ -273,23 +247,18 @@
   --alpha-80: 0.8;
   --alpha-90: 0.9;
 
-  /* Ring/border widths */
   --ring-width-sm: 3px;
 
-  /* Ring offset width scale */
   --ring-offset-w-sm: 2px;
   --ring-offset-w-md: 4px;
 
-  /* Grid system */
   --grid-cols-2: repeat(2, minmax(0, 1fr));
   --grid-cols-3: repeat(3, minmax(0, 1fr));
   --grid-cols-4: repeat(4, minmax(0, 1fr));
   --grid-cols-12: repeat(12, minmax(0, 1fr));
 
-  /* Viewport dimensions */
   --height-screen-dvh: 100dvh;
 
-  /* Z-index layers (align with theme.ts zIndexKeys) */
   --z-base: 0;
   --z-overlay: 50;
   --z-modal: 100;

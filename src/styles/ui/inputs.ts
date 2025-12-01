@@ -17,30 +17,29 @@ import { cva, type VariantProps } from "class-variance-authority";
 import type { SizeKey } from "@/styles/theme";
 
 const buttonBase =
-  "inline-flex items-center justify-center gap-[var(--spacing-sm)] whitespace-nowrap rounded-md text-[var(--text-sm)] font-medium transition-all disabled:pointer-events-none disabled:opacity-[var(--opacity-50)] [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-[var(--size-icon-sm)] shrink-[var(--shrink-none)] [&_svg]:shrink-[var(--shrink-none)] outline-none focus-visible:border-ring focus-visible:ring-ring/[var(--alpha-50)] focus-visible:ring-[var(--ring-width-sm)] aria-invalid:ring-destructive/[var(--alpha-20)] dark:aria-invalid:ring-destructive/[var(--alpha-40)] aria-invalid:border-destructive";
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
 const buttonToneVariants = {
-  default:
-    "bg-primary text-primary-foreground shadow-[var(--shadow-xs)] hover:bg-primary/[var(--alpha-90)]",
+  default: "bg-primary text-primary-foreground shadow hover:bg-primary/90",
   destructive:
-    "bg-destructive text-[var(--color-white)] shadow-[var(--shadow-xs)] hover:bg-destructive/[var(--alpha-90)] focus-visible:ring-destructive/[var(--alpha-20)] dark:focus-visible:ring-destructive/[var(--alpha-40)] dark:bg-destructive/[var(--alpha-60)]",
+    "bg-destructive text-destructive-foreground shadow hover:bg-destructive/90",
   outline:
-    "border bg-background shadow-[var(--shadow-xs)] hover:bg-accent hover:text-accent-foreground dark:bg-input/[var(--alpha-30)] dark:border-input dark:hover:bg-input/[var(--alpha-50)]",
+    "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
   secondary:
-    "bg-secondary text-secondary-foreground shadow-[var(--shadow-xs)] hover:bg-secondary/[var(--alpha-80)]",
+    "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
   ghost: "hover:bg-accent hover:text-accent-foreground",
-  link: "text-primary underline-offset-[var(--underline-offset)] hover:underline",
+  link: "text-primary underline-offset-4 hover:underline",
 } as const;
 
 const buttonSizeVariants = {
-  sm: "h-[var(--size-icon-lg)] rounded-md gap-[var(--spacing-sm)] px-[var(--spacing-lg)] has-[>svg]:px-[var(--spacing-md)]",
-  md: "h-[var(--size-icon-xl)] px-[var(--spacing-xl)] py-[var(--spacing-sm)] has-[>svg]:px-[var(--spacing-lg)]",
-  lg: "h-[var(--size-icon-2xl)] rounded-md px-[var(--spacing-lg)] has-[>svg]:px-[var(--spacing-xl)]",
-  xl: "h-[var(--size-icon-3xl)] rounded-lg px-[var(--spacing-xl)] has-[>svg]:px-[var(--spacing-lg)]",
+  sm: "h-9 px-3",
+  md: "h-10 px-4 py-2",
+  lg: "h-11 px-8",
+  xl: "h-12 px-8",
 } satisfies Record<SizeKey, string>;
 
 const buttonIconVariants = {
-  true: "size-[var(--size-icon-xl)]",
+  true: "h-10 w-10",
   false: "",
 } as const;
 
@@ -57,19 +56,19 @@ export const button = cva(buttonBase, {
 });
 
 const modeToggleBase =
-  "inline-flex items-center justify-center rounded-md text-[var(--text-sm)] font-medium transition-all disabled:pointer-events-none disabled:opacity-[var(--opacity-50)] outline-none focus-visible:border-ring focus-visible:ring-ring/[var(--alpha-50)] focus-visible:ring-[var(--ring-width-sm)] [&_svg]:size-[var(--size-icon-sm)] [&_svg]:shrink-[var(--shrink-none)]";
+  "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
 const modeToggleToneVariants = {
   ghost: "hover:bg-accent hover:text-accent-foreground",
   outline:
-    "border bg-background shadow-[var(--shadow-xs)] hover:bg-accent hover:text-accent-foreground dark:bg-input/[var(--alpha-30)] dark:border-input dark:hover:bg-input/[var(--alpha-50)]",
+    "border border-input bg-background shadow-sm hover:bg-accent hover:text-accent-foreground",
 } as const;
 
 const modeToggleSizeVariants = {
-  sm: "h-[var(--size-icon-lg)] w-[var(--size-icon-lg)]",
-  md: "h-[var(--size-icon-xl)] w-[var(--size-icon-xl)]",
-  lg: "h-[var(--size-icon-2xl)] w-[var(--size-icon-2xl)]",
-  xl: "h-[var(--size-icon-3xl)] w-[var(--size-icon-3xl)]",
+  sm: "h-9 w-9",
+  md: "h-10 w-10",
+  lg: "h-11 w-11",
+  xl: "h-12 w-12",
 } satisfies Record<SizeKey, string>;
 
 /**
@@ -90,7 +89,7 @@ export const modeToggle = cva(modeToggleBase, {
  * Input component styling for text-based inputs
  */
 export const input = cva(
-  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-[var(--text-sm)] ring-offset-background file:border-0 file:bg-transparent file:font-medium file:text-[var(--text-sm)] placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+  "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:font-medium file:text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
 );
 
 // Export variant types for external use

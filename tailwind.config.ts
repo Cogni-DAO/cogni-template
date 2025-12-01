@@ -40,8 +40,8 @@ const semanticColors = {
 export default {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
   theme: {
-    colors: semanticColors,
     extend: {
+      colors: semanticColors,
       fontFamily: {
         sans: "var(--font-sans)",
         mono: "var(--font-mono)",
