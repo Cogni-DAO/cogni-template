@@ -125,18 +125,28 @@ services:
       postgres:
         condition: service_healthy
 
-  promtail:
-    image: grafana/promtail:2.9.0
-    container_name: promtail
-    restart: always
+  alloy:
+    image: grafana/alloy:v1.9.2
+    container_name: alloy
+    restart: unless-stopped
     networks:
       - web
+    ports:
+      - "127.0.0.1:12345:12345"
     volumes:
-      - ./configs/promtail-config.yaml:/etc/promtail/config.yaml:ro
-      - /var/lib/promtail:/var/lib/promtail
+      - ./configs/alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - alloy_data:/var/lib/alloy
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-    command: -config.file=/etc/promtail/config.yaml
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy
+    environment:
+      - APP_ENV=${APP_ENV}
+      - GRAFANA_CLOUD_LOKI_URL=${GRAFANA_CLOUD_LOKI_URL}
+      - GRAFANA_CLOUD_LOKI_USER=${GRAFANA_CLOUD_LOKI_USER}
+      - GRAFANA_CLOUD_LOKI_API_KEY=${GRAFANA_CLOUD_LOKI_API_KEY}
 
 networks:
   web:
@@ -150,3 +160,5 @@ volumes:
     name: caddy_config
   postgres_data:
     name: postgres_data
+  alloy_data:
+    name: alloy_data

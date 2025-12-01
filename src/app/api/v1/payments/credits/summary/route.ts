@@ -18,6 +18,7 @@ import { getCreditsSummaryFacade } from "@/app/_facades/payments/credits.server"
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { creditsSummaryOperation } from "@/contracts/payments.credits.summary.v1.contract";
+import { AuthUserNotFoundError } from "@/features/payments/errors";
 import { logRequestWarn, type RequestContext } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,7 @@ function handleRouteError(
   }
 
   // Auth errors
-  if (error instanceof Error && error.message === "AUTH_USER_NOT_FOUND") {
+  if (error instanceof AuthUserNotFoundError) {
     logRequestWarn(ctx.log, error, "AUTH_USER_NOT_FOUND");
     return NextResponse.json(
       { error: "User not provisioned; please re-authenticate" },

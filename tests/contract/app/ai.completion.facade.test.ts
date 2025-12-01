@@ -82,6 +82,7 @@ describe("app/_facades/ai/completion.server", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        routeId: "test.route",
         clock: fakeClock,
       };
 
@@ -154,6 +155,7 @@ describe("app/_facades/ai/completion.server", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        routeId: "test.route",
         clock: fakeClock,
       };
 
@@ -191,6 +193,7 @@ describe("app/_facades/ai/completion.server", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        routeId: "test.route",
         clock: fakeClock,
       };
 
@@ -235,6 +238,7 @@ describe("app/_facades/ai/completion.server", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        routeId: "test.route",
         clock: fakeClock,
       };
 
@@ -275,6 +279,7 @@ describe("app/_facades/ai/completion.server", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        routeId: "test.route",
         clock: fakeClock,
       };
 

@@ -27,6 +27,11 @@ import {
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { SessionUser } from "@/shared/auth";
 import type { RequestContext } from "@/shared/observability";
+import type {
+  PaymentsIntentCreatedEvent,
+  PaymentsStateTransitionEvent,
+  PaymentsStatusReadEvent,
+} from "@/shared/observability/logging/events";
 
 /**
  * Creates payment intent facade
@@ -42,8 +47,9 @@ export async function createPaymentIntentFacade(
     sessionUser: SessionUser;
     amountUsdCents: number;
   },
-  _ctx: RequestContext
+  ctx: RequestContext
 ): Promise<PaymentIntentOutput> {
+  const start = performance.now();
   const { accountService, paymentAttemptRepository, clock } = getContainer();
 
   let billingAccount: Awaited<
@@ -69,6 +75,15 @@ export async function createPaymentIntentFacade(
     throw error;
   }
 
+  // Enrich context with business identifiers
+  const enrichedCtx: RequestContext = {
+    ...ctx,
+    log: ctx.log.child({
+      userId: params.sessionUser.id,
+      billingAccountId: billingAccount.id,
+    }),
+  };
+
   const fromAddress = getAddress(params.sessionUser.walletAddress);
 
   const result = await createIntent(paymentAttemptRepository, clock, {
@@ -76,6 +91,18 @@ export async function createPaymentIntentFacade(
     fromAddress,
     amountUsdCents: params.amountUsdCents,
   });
+
+  // Log domain event
+  const event: PaymentsIntentCreatedEvent = {
+    event: "payments.intent_created",
+    routeId: ctx.routeId,
+    reqId: ctx.reqId,
+    billingAccountId: billingAccount.id,
+    paymentIntentId: result.attemptId,
+    chainId: result.chainId,
+    durationMs: performance.now() - start,
+  };
+  enrichedCtx.log.info(event, "payment intent created");
 
   return {
     attemptId: result.attemptId,
@@ -103,8 +130,9 @@ export async function submitPaymentTxHashFacade(
     attemptId: string;
     txHash: string;
   },
-  _ctx: RequestContext
+  ctx: RequestContext
 ): Promise<PaymentSubmitOutput> {
+  const start = performance.now();
   const { accountService, paymentAttemptRepository, onChainVerifier, clock } =
     getContainer();
 
@@ -131,6 +159,15 @@ export async function submitPaymentTxHashFacade(
     throw error;
   }
 
+  // Enrich context with business identifiers
+  const enrichedCtx: RequestContext = {
+    ...ctx,
+    log: ctx.log.child({
+      userId: params.sessionUser.id,
+      billingAccountId: billingAccount.id,
+    }),
+  };
+
   const result = await submitTxHash(
     paymentAttemptRepository,
     accountService,
@@ -143,6 +180,20 @@ export async function submitPaymentTxHashFacade(
       txHash: params.txHash,
     }
   );
+
+  // Log domain event (state transition)
+  const event: PaymentsStateTransitionEvent = {
+    event: "payments.state_transition",
+    routeId: ctx.routeId,
+    reqId: ctx.reqId,
+    billingAccountId: billingAccount.id,
+    paymentIntentId: result.attemptId,
+    toStatus: result.status,
+    chainId: 0, // TODO: retrieve chainId from payment attempt
+    txHash: result.txHash,
+    durationMs: performance.now() - start,
+  };
+  enrichedCtx.log.info(event, "payment state transition");
 
   return {
     attemptId: result.attemptId,
@@ -167,8 +218,9 @@ export async function getPaymentStatusFacade(
     sessionUser: SessionUser;
     attemptId: string;
   },
-  _ctx: RequestContext
+  ctx: RequestContext
 ): Promise<PaymentStatusOutput> {
+  const start = performance.now();
   const { accountService, paymentAttemptRepository, onChainVerifier, clock } =
     getContainer();
 
@@ -195,6 +247,15 @@ export async function getPaymentStatusFacade(
     throw error;
   }
 
+  // Enrich context with business identifiers
+  const enrichedCtx: RequestContext = {
+    ...ctx,
+    log: ctx.log.child({
+      userId: params.sessionUser.id,
+      billingAccountId: billingAccount.id,
+    }),
+  };
+
   const result = await getStatus(
     paymentAttemptRepository,
     accountService,
@@ -206,6 +267,18 @@ export async function getPaymentStatusFacade(
       defaultVirtualKeyId: billingAccount.defaultVirtualKeyId,
     }
   );
+
+  // Log domain event (read operation)
+  const event: PaymentsStatusReadEvent = {
+    event: "payments.status_read",
+    routeId: ctx.routeId,
+    reqId: ctx.reqId,
+    billingAccountId: billingAccount.id,
+    paymentIntentId: result.attemptId,
+    status: result.clientStatus,
+    durationMs: performance.now() - start,
+  };
+  enrichedCtx.log.info(event, "payment status read");
 
   // Map port types (Date) to contract types (ISO string)
   return {

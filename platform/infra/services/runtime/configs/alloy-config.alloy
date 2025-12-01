@@ -1,0 +1,83 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+//
+// Alloy configuration for Docker container log collection
+// Sends logs to Grafana Cloud Loki
+
+// Discover all Docker containers
+discovery.docker "containers" {
+  host             = "unix:///var/run/docker.sock"
+  refresh_interval = "10s"
+}
+
+// Relabel discovered containers with strict cardinality
+discovery.relabel "docker_logs" {
+  targets = discovery.docker.containers.targets
+
+  // ALLOWLIST: Only keep compose services we care about
+  // Drop containers that don't match our allowlist
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "(app|litellm|caddy)"
+    action        = "keep"
+  }
+
+  // Extract compose service name → "service" label
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
+    regex         = "(.*)"
+    replacement   = "${1}"
+    target_label  = "service"
+  }
+
+  // Extract log stream (stdout/stderr)
+  rule {
+    source_labels = ["__meta_docker_container_log_stream"]
+    target_label  = "stream"
+  }
+
+  // Add static labels (low cardinality)
+  rule {
+    target_label = "app"
+    replacement  = "cogni-template"
+  }
+
+  rule {
+    target_label = "env"
+    replacement  = sys.env("APP_ENV")  // test | production
+  }
+}
+
+// Collect logs from discovered containers
+loki.source.docker "default" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.relabel.docker_logs.output
+  forward_to    = [loki.process.docker_logs.receiver]
+  relabel_rules = discovery.relabel.docker_logs.rules
+}
+
+// Process logs (minimal - defer filtering to later PR)
+loki.process "docker_logs" {
+  // Parse Docker JSON wrapper
+  stage.docker {}
+
+  // Extract timestamp from Docker JSON
+  stage.timestamp {
+    source = "time"
+    format = "RFC3339Nano"
+  }
+
+  forward_to = [loki.write.grafana_cloud_loki.receiver]
+}
+
+// Write logs to Grafana Cloud Loki
+loki.write "grafana_cloud_loki" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_LOKI_URL")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_LOKI_USER")
+      password = sys.env("GRAFANA_CLOUD_LOKI_API_KEY")
+    }
+  }
+}

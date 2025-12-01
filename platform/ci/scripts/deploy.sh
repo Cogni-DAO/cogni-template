@@ -24,6 +24,8 @@ on_fail() {
   code=$?
   echo "[ERROR] deploy failed (exit $code), collecting debug info from VM..."
 
+  emit_deployment_event "deployment.failed" "failed" "Deployment failed with exit code $code"
+
   if [[ -n "${VM_HOST:-}" ]]; then
     ssh $SSH_OPTS root@"$VM_HOST" <<'EOF' || true
       echo "=== docker compose ps ==="
@@ -61,6 +63,59 @@ log_warn() {
 
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Emit deployment event to Grafana Cloud Loki
+emit_deployment_event() {
+  local event="$1"
+  local status="$2"
+  local message="$3"
+
+  # Skip if Grafana Cloud not configured
+  if [[ -z "${GRAFANA_CLOUD_LOKI_URL:-}" ]] || [[ -z "${GRAFANA_CLOUD_LOKI_USER:-}" ]] || [[ -z "${GRAFANA_CLOUD_LOKI_API_KEY:-}" ]]; then
+    return 0
+  fi
+
+  # Build structured event with low-cardinality labels
+  local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
+  local nanoseconds=$(date +%s)000000000
+
+  local event_payload=$(jq -n \
+    --arg ns "$nanoseconds" \
+    --arg event "$event" \
+    --arg status "$status" \
+    --arg msg "$message" \
+    --arg env "${DEPLOY_ENVIRONMENT:-unknown}" \
+    --arg commit "${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo 'unknown')}" \
+    --arg actor "${GITHUB_ACTOR:-$(whoami)}" \
+    --arg image "${APP_IMAGE:-unknown}" \
+    --arg timestamp "$timestamp" \
+    '{
+      streams: [{
+        stream: {
+          app: "cogni-template",
+          env: $env,
+          service: "deployment",
+          stream: "stdout"
+        },
+        values: [[$ns, ({
+          level: "info",
+          event: $event,
+          status: $status,
+          msg: $msg,
+          commit: $commit,
+          actor: $actor,
+          appImage: $image,
+          time: $timestamp
+        } | tostring)]]
+      }]
+    }')
+
+  # POST to Grafana Cloud Loki (suppress errors to not break deployment)
+  curl -s -X POST "$GRAFANA_CLOUD_LOKI_URL" \
+    -u "${GRAFANA_CLOUD_LOKI_USER}:${GRAFANA_CLOUD_LOKI_API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "$event_payload" &>/dev/null || true
 }
 
 # SSH configuration  
@@ -161,6 +216,20 @@ fi
 
 log_info "✅ All required secrets provided via environment variables"
 
+# Check optional secrets (warn if missing, don't fail)
+OPTIONAL_SECRETS=(
+    "GRAFANA_CLOUD_LOKI_URL"
+    "GRAFANA_CLOUD_LOKI_USER"
+    "GRAFANA_CLOUD_LOKI_API_KEY"
+)
+
+for secret in "${OPTIONAL_SECRETS[@]}"; do
+    if [[ -z "${!secret:-}" ]]; then
+        log_warn "Optional secret not set: $secret"
+        log_warn "  → Log forwarding to Grafana Cloud will be disabled"
+    fi
+done
+
 # Set artifact directory
 ARTIFACT_DIR="${RUNNER_TEMP:-/tmp}/deploy-${GITHUB_RUN_ID:-$$}"
 mkdir -p "$ARTIFACT_DIR"
@@ -171,6 +240,9 @@ log_info "Environment: $ENVIRONMENT"
 log_info "Domain: $DOMAIN"
 log_info "VM Host: $VM_HOST"
 log_info "Artifact directory: $ARTIFACT_DIR"
+
+# Emit deployment start event
+emit_deployment_event "deployment.started" "in_progress" "Deploying $APP_IMAGE to $ENVIRONMENT"
 
 # Deploy runtime stack via SSH + Docker Compose
 log_info "Connecting to VM and deploying containers..."
@@ -196,13 +268,63 @@ log_error() {
     echo -e "\033[0;31m[ERROR]\033[0m $1"
 }
 
+# Emit deployment event to Grafana Cloud Loki (remote script)
+emit_deployment_event() {
+  local event="$1"
+  local status="$2"
+  local message="$3"
+
+  # Skip if Grafana Cloud not configured
+  if [[ -z "${GRAFANA_CLOUD_LOKI_URL:-}" ]] || [[ -z "${GRAFANA_CLOUD_LOKI_USER:-}" ]] || [[ -z "${GRAFANA_CLOUD_LOKI_API_KEY:-}" ]]; then
+    return 0
+  fi
+
+  # Build structured event with low-cardinality labels
+  local timestamp=$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)
+  local nanoseconds=$(date +%s)000000000
+
+  local event_payload=$(jq -n \
+    --arg ns "$nanoseconds" \
+    --arg event "$event" \
+    --arg status "$status" \
+    --arg msg "$message" \
+    --arg env "${APP_ENV:-unknown}" \
+    --arg commit "${COMMIT_SHA:-unknown}" \
+    --arg actor "${DEPLOY_ACTOR:-unknown}" \
+    --arg image "${APP_IMAGE:-unknown}" \
+    --arg timestamp "$timestamp" \
+    '{
+      streams: [{
+        stream: {
+          app: "cogni-template",
+          env: $env,
+          service: "deployment",
+          stream: "stdout"
+        },
+        values: [[$ns, ({
+          level: "info",
+          event: $event,
+          status: $status,
+          msg: $msg,
+          commit: $commit,
+          actor: $actor,
+          appImage: $image,
+          time: $timestamp
+        } | tostring)]]
+      }]
+    }')
+
+  # POST to Grafana Cloud Loki (suppress errors to not break deployment)
+  curl -s -X POST "$GRAFANA_CLOUD_LOKI_URL" \
+    -u "${GRAFANA_CLOUD_LOKI_USER}:${GRAFANA_CLOUD_LOKI_API_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "$event_payload" &>/dev/null || true
+}
+
 log_info "Setting up runtime environment on VM..."
 
 # Set compose project name for consistent container naming
 export COMPOSE_PROJECT_NAME=cogni-template-runtime
-
-# Create required directories for data persistence
-sudo mkdir -p /var/lib/promtail
 
 # Change to runtime bundle directory
 cd /opt/cogni-template-runtime
@@ -224,6 +346,9 @@ POSTGRES_ROOT_PASSWORD=${POSTGRES_ROOT_PASSWORD}
 APP_DB_USER=${APP_DB_USER}
 APP_DB_PASSWORD=${APP_DB_PASSWORD}
 APP_DB_NAME=${APP_DB_NAME}
+GRAFANA_CLOUD_LOKI_URL=${GRAFANA_CLOUD_LOKI_URL:-}
+GRAFANA_CLOUD_LOKI_USER=${GRAFANA_CLOUD_LOKI_USER:-}
+GRAFANA_CLOUD_LOKI_API_KEY=${GRAFANA_CLOUD_LOKI_API_KEY:-}
 ENV_EOF
 
 log_info "Logging into GHCR for private image pulls..."
@@ -266,23 +391,31 @@ else
 fi
 
 log_info "[$(date -u +%H:%M:%S)] Pulling updated images..."
+emit_deployment_event "deployment.pull_started" "in_progress" "Pulling images from registry"
 docker compose pull
 log_info "[$(date -u +%H:%M:%S)] Pull complete"
+emit_deployment_event "deployment.pull_complete" "success" "Images pulled successfully"
 
 log_info "Bringing up postgres first..."
 docker compose up -d postgres
 
 log_info "[$(date -u +%H:%M:%S)] Running DB provisioning..."
+emit_deployment_event "deployment.db_provision_started" "in_progress" "Provisioning database users and schemas"
 docker compose --profile bootstrap run --rm db-provision
 log_info "[$(date -u +%H:%M:%S)] DB provisioning complete"
+emit_deployment_event "deployment.db_provision_complete" "success" "Database provisioned successfully"
 
 log_info "[$(date -u +%H:%M:%S)] Running database migrations..."
+emit_deployment_event "deployment.migration_started" "in_progress" "Running database migrations"
 docker compose run --rm --no-deps --entrypoint sh app -lc 'pnpm db:migrate:container'
 log_info "[$(date -u +%H:%M:%S)] Migrations complete"
+emit_deployment_event "deployment.migration_complete" "success" "Migrations applied successfully"
 
 log_info "[$(date -u +%H:%M:%S)] Starting runtime stack (rolling update)..."
+emit_deployment_event "deployment.stack_up_started" "in_progress" "Starting container stack"
 docker compose up -d --remove-orphans
 log_info "[$(date -u +%H:%M:%S)] Stack up complete"
+emit_deployment_event "deployment.stack_up_complete" "success" "All containers started"
 
 log_info "Waiting for containers to be ready..."
 sleep 10
@@ -290,6 +423,7 @@ sleep 10
 log_info "Checking container status..."
 docker compose ps
 
+emit_deployment_event "deployment.complete" "success" "Deployment completed successfully"
 log_info "✅ Deployment complete!"
 EOF
 
@@ -308,7 +442,7 @@ rsync -av -e "ssh $SSH_OPTS" \
 # Upload and execute deployment script
 scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
 ssh $SSH_OPTS root@"$VM_HOST" \
-    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' APP_IMAGE='$APP_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_NAME='$APP_DB_NAME' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' bash /tmp/deploy-remote.sh"
+    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' APP_IMAGE='$APP_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_NAME='$APP_DB_NAME' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-remote.sh"
 
 # Health validation
 log_info "Validating deployment health..."

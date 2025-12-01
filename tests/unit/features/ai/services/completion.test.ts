@@ -54,6 +54,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        routeId: "test.route",
         clock,
       };
 
@@ -89,6 +90,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        routeId: "test.route",
         clock,
       };
 
@@ -118,6 +120,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        routeId: "test.route",
         clock,
       };
 
@@ -143,6 +146,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        routeId: "test.route",
         clock,
       };
 
@@ -179,6 +183,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        routeId: "test.route",
         clock,
       };
 
@@ -207,6 +212,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        routeId: "test.route",
         clock,
       };
 
@@ -237,6 +243,7 @@ describe("features/ai/services/completion", () => {
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
         reqId: "test-req-123",
+        routeId: "test.route",
         clock,
       };
 

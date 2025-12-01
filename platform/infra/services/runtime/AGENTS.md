@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-24
+- **Last reviewed:** 2025-12-01
 - **Status:** draft
 
 ## Purpose
@@ -35,8 +35,8 @@ Production runtime configuration directory copied to VM hosts for container orch
 - **Exports:** none
 - **Routes (if any):** none
 - **CLI (if any):** docker-compose commands
-- **Env/Config keys:** `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, `DATABASE_URL`, `APP_BASE_URL`, `NEXTAUTH_URL`, `AUTH_SECRET`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `LITELLM_DATABASE_URL`
-- **Files considered API:** `docker-compose.yml`, `postgres-init/*.sh`
+- **Env/Config keys:** `APP_ENV`, `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, `DATABASE_URL`, `APP_BASE_URL`, `NEXTAUTH_URL`, `AUTH_SECRET`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `LITELLM_DATABASE_URL`, `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY`
+- **Files considered API:** `docker-compose.yml`, `postgres-init/*.sh`, `configs/alloy-config.alloy`
 
 ## Ports (optional)
 
@@ -84,3 +84,16 @@ docker compose run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'
 - Database security uses two-user model (root + app credentials)
 - Init scripts run only on first postgres container startup
 - `NEXTAUTH_URL` env var provided with shell fallback to `APP_BASE_URL`; Auth.js uses `trustHost: true` (safe behind Caddy)
+- Log collection: Alloy scrapes Docker containers, applies strict label cardinality (app, env, service, stream), sends to Grafana Cloud Loki
+- Alloy UI exposed at 127.0.0.1:12345 (internal only)
+- `APP_ENV` must be set (test|production) - used for log labeling
+
+**Grafana Cloud Setup:**
+
+1. Sign up at https://grafana.com/products/cloud/ (free tier available)
+2. Get Loki credentials: Grafana Cloud → Connections → Data Sources → Loki
+3. Set environment variables in deployment:
+   - `GRAFANA_CLOUD_LOKI_URL` - Push endpoint URL
+   - `GRAFANA_CLOUD_LOKI_USER` - Numeric user ID
+   - `GRAFANA_CLOUD_LOKI_API_KEY` - API key with logs:write permission
+4. Verify in Alloy UI (http://127.0.0.1:12345) after deployment

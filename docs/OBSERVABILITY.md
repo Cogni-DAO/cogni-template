@@ -1,8 +1,8 @@
-# Observability: Structured Logging
+# Observability: Structured Logging & Log Collection
 
-**Status:** V1 complete (All routes instrumented), V2 deferred (log collection)
+**Status:** V1 complete (structured logging), V2 complete (Alloy + Grafana Cloud Loki)
 
-**Purpose:** Centralized Pino logging with request context, stable event schemas, and stdout JSON for collector-based shipping.
+**Purpose:** Centralized Pino logging with request context, stable event schemas, and Grafana Alloy forwarding to Grafana Cloud Loki for log aggregation and querying.
 
 ---
 
@@ -55,14 +55,17 @@
 
 ---
 
-### V2: Log Collection (Deferred)
+### V2: Log Collection (Complete)
 
-- [ ] Wire Grafana Alloy scrape config for app container (Promtail successor, LTS/EOL planned)
-- [ ] Configure Docker socket mounts + labels
-- [ ] Add JSON pipeline stages (Alloy supports Promtail config conversion)
-- [ ] Validate logs in Loki
-- [ ] Create Grafana dashboards
-- [ ] Add alerting rules
+- [x] Wire Grafana Alloy scrape config for Docker containers (Promtail replacement)
+- [x] Configure Docker socket mounts + container allowlist
+- [x] Add JSON pipeline stages (Docker log parsing + timestamp extraction)
+- [x] Validate logs in Loki (smoke queries passed)
+- [x] Configure strict label cardinality (app, env, service, stream)
+- [ ] Create Grafana dashboards (deferred)
+- [ ] Add alerting rules (deferred)
+
+**Implementation:** See [ALLOY_LOKI_SETUP.md](ALLOY_LOKI_SETUP.md) for complete setup guide.
 
 ---
 
@@ -129,9 +132,88 @@
 - `tests/unit/features/ai/services/completion.test.ts` - Feature tests with ctx
 - `tests/setup.ts` - Sets `VITEST=true` to suppress logs
 
+**Log Collection Infrastructure:**
+
+- `platform/infra/services/runtime/configs/alloy-config.alloy` - Alloy log scraper config
+- `platform/infra/services/runtime/docker-compose.yml` - Alloy service (forwards to Grafana Cloud)
+
 ---
 
-## 4. Invariants
+## 4. Log Collection & Querying
+
+**Architecture:** Application → Docker → Alloy → Grafana Cloud Loki
+
+**Components:**
+
+- **Grafana Alloy v1.9.2**: Scrapes Docker container logs via socket, applies label filtering, forwards to Grafana Cloud
+- **Grafana Cloud Loki**: Managed Loki service for log storage and querying
+- **Container Allowlist**: Only collects logs from `app|litellm|caddy` services
+
+**Labels (indexed, low-cardinality):**
+
+- `app="cogni-template"` - Application identifier
+- `env="test"|"production"` - Environment from `APP_ENV`
+- `service="app"|"litellm"|"caddy"` - Docker Compose service name
+- `stream="stdout"|"stderr"` - Log stream type
+
+**High-cardinality fields** (in JSON body, not labels):
+
+- `reqId`, `userId`, `billingAccountId`, `attemptId`, `level`, `msg`, `time`
+
+**Access:**
+
+- **Alloy UI**: http://127.0.0.1:12345 (targets, component status)
+- **Grafana Cloud**: https://your-org.grafana.net (log browser, dashboards, alerts)
+
+**Example LogQL Queries (in Grafana Cloud):**
+
+```logql
+# Count all logs in last 5 minutes
+count_over_time({app="cogni-template"}[5m])
+
+# Query app logs with error level
+{service="app"} | json | level="error"
+
+# Trace specific request by reqId
+{service="app"} | json | reqId="abc123"
+```
+
+**Configuration:**
+
+- `APP_ENV` must be set (`test` or `production`) - used for `env` label
+- `GRAFANA_CLOUD_LOKI_URL` - Grafana Cloud Loki push endpoint (e.g., `https://logs-prod-us-central1.grafana.net/loki/api/v1/push`)
+- `GRAFANA_CLOUD_LOKI_USER` - Grafana Cloud Loki user ID (numeric)
+- `GRAFANA_CLOUD_LOKI_API_KEY` - Grafana Cloud API key with logs:write permission
+- Alloy listens on `0.0.0.0:12345` in-container, bound to `127.0.0.1` on host
+- Promtail deprecated (EOL March 2, 2026)
+
+**Setup Instructions:**
+
+1. **Create Grafana Cloud Account**: Sign up at https://grafana.com/products/cloud/ (free tier available)
+2. **Get Loki Credentials**:
+   - Navigate to: Grafana Cloud → Connections → Data Sources → Loki
+   - Copy the URL (e.g., `https://logs-prod-us-central1.grafana.net/loki/api/v1/push`)
+   - Copy your User ID (numeric value)
+   - Generate an API key with `logs:write` permission
+3. **Set Environment Variables**:
+   - Add to deployment `.env` file or CI/CD secrets
+   - Required: `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY`
+4. **Deploy Stack**: `docker compose up -d`
+5. **Verify**:
+   - Check Alloy UI: http://127.0.0.1:12345 → verify `grafana_cloud_loki` endpoint healthy
+   - Query logs in Grafana Cloud Explore: `{app="cogni-template"}`
+
+**Benefits of Grafana Cloud:**
+
+- **No infrastructure management**: Grafana handles storage, scaling, updates
+- **Built-in dashboards**: Grafana Cloud UI for log exploration and visualization
+- **Automatic updates**: Always latest Loki features without manual upgrades
+- **Reduced container footprint**: No self-hosted Loki service required
+- **Better reliability**: Managed service with SLA and automatic backups
+
+---
+
+## 5. Invariants
 
 **Boundary:**
 
@@ -161,7 +243,7 @@
 
 ---
 
-## 5. Event Schemas
+## 6. Event Schemas
 
 **HTTP Request Events:**
 
@@ -182,7 +264,7 @@
 
 ---
 
-## 6. Security
+## 7. Security
 
 **Redaction:**
 
@@ -198,7 +280,7 @@
 
 ---
 
-## 7. Known Issues & Future Work
+## 8. Known Issues & Future Work
 
 **Phase 2 Complete - Remaining V1 Work:**
 
@@ -209,8 +291,15 @@
 - [ ] Replace `throw new Error('AUTH_USER_NOT_FOUND')` with typed error class for reliable route mapping
 - [ ] AI completion route: migrate to `wrapRouteHandlerWithLogging` + local error mapper (consistent with payment routes)
 
-**V2 (Future PR):**
+**V2 Complete:**
 
-- [ ] Wire Grafana Alloy scrape config (replace Promtail)
-- [ ] Validate Loki pipeline
-- [ ] Grafana dashboards + alerting
+- [x] Wire Grafana Alloy scrape config (replace Promtail)
+- [x] Validate Loki pipeline
+- [x] Configure strict label cardinality
+
+**Future Enhancements:**
+
+- [ ] Grafana dashboards (query builder, log browser)
+- [ ] Alerting rules (error rate spikes, payment failures)
+- [ ] Advanced filtering (drop health check logs, metrics endpoints)
+- [ ] Structured metadata extraction (high-cardinality fields)

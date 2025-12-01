@@ -18,7 +18,7 @@ _We love you! ❤️_
 ```bash
 git clone https://github.com/Cogni-DAO/cogni-template
 cd cogni-template
-pnpm setup local     # Automated setup TODO: lol sorry, cp .env.example .env
+pnpm setup local     # Automated setup TODO: lol sorry, cp .env.local.example .env.local
 pnpm dev:stack       # Start developing with full stack (DB + LiteLLM + Next.js)
 pnpm db:setup        # Migrate and Seed database, once dev stack is running
 pnpm docker:stack    # Full production simulation (https://localhost - browser cert warning expected)
@@ -55,7 +55,7 @@ _We're working to automate more of this! Want to help? Contribute setup automati
 **For Contributors:**
 
 - Get [OpenRouter API key](https://openrouter.ai/keys) for AI features
-- Copy `.env.example` → `.env.local` and fill in values
+- Copy `.env.local.example` → `.env.local` and fill in values
 - `pnpm install` and `pnpm dev:stack`
 
 **For Fork Owners (everything above, plus):**

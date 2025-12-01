@@ -49,13 +49,15 @@ export type PaymentsEventType =
   | "payments.intent_created"
   | "payments.state_transition"
   | "payments.verified"
-  | "payments.confirmed";
+  | "payments.confirmed"
+  | "payments.status_read";
 
 export interface PaymentsIntentCreatedEvent {
   event: "payments.intent_created";
   routeId: string;
   reqId: string;
-  attemptId: string;
+  billingAccountId: string;
+  paymentIntentId: string;
   chainId: number;
   durationMs: number;
 }
@@ -64,7 +66,10 @@ export interface PaymentsStateTransitionEvent {
   event: "payments.state_transition";
   routeId: string;
   reqId: string;
-  attemptId: string;
+  billingAccountId: string;
+  paymentIntentId: string;
+  fromStatus?: string | undefined;
+  toStatus: string;
   chainId: number;
   txHash?: string | undefined;
   durationMs: number;
@@ -75,7 +80,8 @@ export interface PaymentsVerifiedEvent {
   event: "payments.verified";
   routeId: string;
   reqId: string;
-  attemptId: string;
+  billingAccountId: string;
+  paymentIntentId: string;
   chainId: number;
   txHash: string;
   durationMs: number;
@@ -85,9 +91,21 @@ export interface PaymentsConfirmedEvent {
   event: "payments.confirmed";
   routeId: string;
   reqId: string;
-  attemptId: string;
+  billingAccountId: string;
+  paymentIntentId: string;
   chainId: number;
   txHash: string;
+  creditsApplied?: number | undefined;
+  durationMs: number;
+}
+
+export interface PaymentsStatusReadEvent {
+  event: "payments.status_read";
+  routeId: string;
+  reqId: string;
+  billingAccountId: string;
+  paymentIntentId: string;
+  status: string;
   durationMs: number;
 }
 
@@ -95,4 +113,5 @@ export type PaymentsEvent =
   | PaymentsIntentCreatedEvent
   | PaymentsStateTransitionEvent
   | PaymentsVerifiedEvent
-  | PaymentsConfirmedEvent;
+  | PaymentsConfirmedEvent
+  | PaymentsStatusReadEvent;

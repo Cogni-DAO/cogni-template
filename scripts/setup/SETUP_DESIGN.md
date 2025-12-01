@@ -38,7 +38,7 @@ pnpm dev  # You're ready!
 
 **What it does:**
 
-1. Copy `.env.example` → `.env.local`
+1. Copy `.env.local.example` → `.env.local`
 2. Generate secure random values:
    - `LITELLM_MASTER_KEY` (sk-xxx format)
    - `DATABASE_URL` (postgresql://postgres:postgres@localhost:5432/cogni_template_dev)

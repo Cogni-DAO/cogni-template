@@ -15,11 +15,13 @@
 import { getContainer } from "@/bootstrap/container";
 import type { CreditsConfirmOutput } from "@/contracts/payments.credits.confirm.v1.contract";
 import type { CreditsSummaryOutput } from "@/contracts/payments.credits.summary.v1.contract";
+import { AuthUserNotFoundError } from "@/features/payments/errors";
 import { confirmCreditsPayment } from "@/features/payments/services/creditsConfirm";
 import { getCreditsSummary } from "@/features/payments/services/creditsSummary";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { SessionUser } from "@/shared/auth";
 import type { RequestContext } from "@/shared/observability";
+import type { PaymentsConfirmedEvent } from "@/shared/observability/logging/events";
 
 export async function confirmCreditsPaymentFacade(
   params: {
@@ -28,8 +30,9 @@ export async function confirmCreditsPaymentFacade(
     clientPaymentId: string;
     metadata?: Record<string, unknown> | undefined;
   },
-  _ctx: RequestContext
+  ctx: RequestContext
 ): Promise<CreditsConfirmOutput> {
+  const start = performance.now();
   const { accountService } = getContainer();
 
   let billingAccount: Awaited<
@@ -45,10 +48,19 @@ export async function confirmCreditsPaymentFacade(
       error instanceof Error &&
       error.message.includes("billing_accounts_owner_user_id_users_id_fk")
     ) {
-      throw new Error("AUTH_USER_NOT_FOUND");
+      throw new AuthUserNotFoundError(params.sessionUser.id);
     }
     throw error;
   }
+
+  // Enrich context with business identifiers
+  const enrichedCtx: RequestContext = {
+    ...ctx,
+    log: ctx.log.child({
+      userId: params.sessionUser.id,
+      billingAccountId: billingAccount.id,
+    }),
+  };
 
   const result = await confirmCreditsPayment(accountService, {
     billingAccountId: billingAccount.id,
@@ -57,6 +69,20 @@ export async function confirmCreditsPaymentFacade(
     clientPaymentId: params.clientPaymentId,
     metadata: params.metadata,
   });
+
+  // Log domain event (widget payment confirmed)
+  const event: PaymentsConfirmedEvent = {
+    event: "payments.confirmed",
+    routeId: ctx.routeId,
+    reqId: ctx.reqId,
+    billingAccountId: billingAccount.id,
+    paymentIntentId: params.clientPaymentId,
+    chainId: 0, // Widget payments are off-chain
+    txHash: "",
+    creditsApplied: params.amountUsdCents,
+    durationMs: performance.now() - start,
+  };
+  enrichedCtx.log.info(event, "widget payment confirmed");
 
   return {
     billingAccountId: result.billingAccountId,
@@ -86,7 +112,7 @@ export async function getCreditsSummaryFacade(
       error instanceof Error &&
       error.message.includes("billing_accounts_owner_user_id_users_id_fk")
     ) {
-      throw new Error("AUTH_USER_NOT_FOUND");
+      throw new AuthUserNotFoundError(params.sessionUser.id);
     }
     throw error;
   }
@@ -97,6 +123,8 @@ export async function getCreditsSummaryFacade(
   });
 
   // Map port types (Date) to contract types (ISO string)
+  // Note: No domain event emitted for this read operation (envelope logging only)
+  // Context enrichment intentionally skipped - no event logging needed
   return {
     billingAccountId: result.billingAccountId,
     balanceCredits: result.balanceCredits,

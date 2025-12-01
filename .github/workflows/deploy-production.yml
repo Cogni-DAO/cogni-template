@@ -98,6 +98,9 @@ jobs:
           VM_HOST: ${{ secrets.VM_HOST }}
           GHCR_DEPLOY_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
           GHCR_USERNAME: Cogni-1729
+          GRAFANA_CLOUD_LOKI_URL: ${{ secrets.GRAFANA_CLOUD_LOKI_URL }}
+          GRAFANA_CLOUD_LOKI_USER: ${{ secrets.GRAFANA_CLOUD_LOKI_USER }}
+          GRAFANA_CLOUD_LOKI_API_KEY: ${{ secrets.GRAFANA_CLOUD_LOKI_API_KEY }}
         run: platform/ci/scripts/deploy.sh
 
       - name: Upload deployment artifacts

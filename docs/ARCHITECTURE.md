@@ -94,8 +94,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 
 ## Directory & Boundary Specification
 
-[x] .env.example # sample env vars for all services
-[x] .env.local.example # local-only env template (never committed)
+[x] .env.local.example # local development env template (never commit .env.local)
 [x] .gitignore # standard git ignore list
 [x] .nvmrc # node version pin (e.g., v20)
 [x] .editorconfig # IDE whitespace/newline rules
