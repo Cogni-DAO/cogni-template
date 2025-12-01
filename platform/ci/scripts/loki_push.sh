@@ -10,14 +10,16 @@
 #   LOKI_URL - Loki push endpoint (e.g., https://logs-prod-us-central1.grafana.net)
 #   LOKI_USER - Basic auth username (numeric Grafana Cloud user ID)
 #   LOKI_TOKEN - Basic auth API key (secret)
-#   LOG_FILE - Path to log file to push
+#   LOG_FILE - Path to log file (NDJSON: JSON summary + optional FAILCTX lines)
 #   JOB_NAME - Job name for Loki stream label
 #   LABELS - Space-delimited logfmt labels (e.g., "workflow=CI job=test ref=main")
 # Outputs: Logs pushed to Loki with hardcoded env=ci label; HTTP status to stdout.
 # Invariants:
 #   - env=ci label locked (prevents accidental production labeling from CI)
 #   - sha8 label truncated to 8 chars for cardinality control
-#   - URL normalized (trailing slash stripped)
+#   - URL normalized (trailing slash and path stripped before appending)
+#   - LABELS validated (rejects quotes/invalid format; silently uses locked labels only)
+#   - Content single-encoded (--arg, not --argjson; jq handles escaping)
 #   - Temp files unique per run (mktemp with trap cleanup)
 #   - Never prints credentials
 # Side-effects: HTTP POST to LOKI_URL; creates/deletes temp file; reads LOG_FILE.
