@@ -31,9 +31,7 @@ import {
   useCreditsSummary,
   usePaymentFlow,
 } from "@/features/payments/public";
-
-const MIN_AMOUNT_USD = 1;
-const MAX_AMOUNT_USD = 100000;
+import { isValidAmountInput, parseDollarsToCents } from "@/shared/utils/money";
 
 function formatDollars(credits: number): string {
   const dollars = credits / (CREDITS_PER_CENT * 100);
@@ -49,20 +47,25 @@ export function CreditsPageClient(): ReactElement {
 
   const summaryQuery = useCreditsSummary({ limit: 1 });
 
-  const amountDollars = Number.parseFloat(amountInput) || 0;
-  const amountCents = Math.round(amountDollars * 100);
-  const isValidAmount =
-    amountDollars >= MIN_AMOUNT_USD && amountDollars <= MAX_AMOUNT_USD;
+  // Parse amount using string-to-cents utility (no float math)
+  const amountCents = parseDollarsToCents(amountInput);
+  const isValidAmount = amountCents !== null;
 
   const paymentFlow = usePaymentFlow({
-    amountUsdCents: amountCents,
+    amountUsdCents: amountCents ?? 100, // Default to $1.00 if invalid
     onSuccess: () => {
+      // Refetch balance but DON'T clear amount (would unmount dialog)
       void queryClient.invalidateQueries({
         queryKey: ["payments-summary", { limit: 1 }],
       });
-      setAmountInput("");
     },
   });
+
+  // Wrap reset to also clear amount (called from "Done" button)
+  const handleResetAndClear = () => {
+    paymentFlow.reset();
+    setAmountInput(""); // Clear after user acknowledges success
+  };
 
   const balanceDisplay = summaryQuery.isLoading
     ? "—"
@@ -80,8 +83,14 @@ export function CreditsPageClient(): ReactElement {
         <SplitInput
           label="Amount"
           value={amountInput}
-          onChange={(val) => setAmountInput(val.replace(/[^0-9]/g, ""))}
-          placeholder="1 - 100000"
+          onChange={(val) => {
+            // Allow typing: digits with optional decimal and up to 2 decimal places
+            if (isValidAmountInput(val)) {
+              setAmountInput(val);
+            }
+          }}
+          placeholder="1.00 - 100000.00"
+          disabled={paymentFlow.state.phase !== "READY"}
         />
 
         {/* Payment Flow */}
@@ -90,7 +99,7 @@ export function CreditsPageClient(): ReactElement {
             amountUsdCents={amountCents}
             state={paymentFlow.state}
             onStartPayment={paymentFlow.startPayment}
-            onReset={paymentFlow.reset}
+            onReset={handleResetAndClear}
             disabled={summaryQuery.isLoading}
           />
         ) : (

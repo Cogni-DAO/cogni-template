@@ -20,6 +20,7 @@ import { CREDITS_PER_CENT } from "@/core";
 import { USDC_ABI } from "@/shared/web3/usdc-abi";
 import type { PaymentFlowState } from "@/types/payments";
 import { paymentsClient } from "../api/paymentsClient";
+import { formatPaymentError } from "../utils/formatPaymentError";
 import { mapBackendStatus } from "../utils/mapBackendStatus";
 
 // Re-export types for convenience
@@ -49,11 +50,36 @@ type InternalState =
       to: string;
       amountRaw: string;
     }
-  | { phase: "AWAITING_CONFIRMATION"; attemptId: string; txHash: string }
-  | { phase: "SUBMITTING_HASH"; attemptId: string; txHash: string }
-  | { phase: "POLLING_VERIFICATION"; attemptId: string; txHash: string }
-  | { phase: "SUCCESS"; creditsAdded: number }
-  | { phase: "ERROR"; message: string };
+  | {
+      phase: "AWAITING_CONFIRMATION";
+      attemptId: string;
+      chainId: number;
+      txHash: string;
+    }
+  | {
+      phase: "SUBMITTING_HASH";
+      attemptId: string;
+      chainId: number;
+      txHash: string;
+    }
+  | {
+      phase: "POLLING_VERIFICATION";
+      attemptId: string;
+      chainId: number;
+      txHash: string;
+    }
+  | {
+      phase: "SUCCESS";
+      creditsAdded: number;
+      txHash: string | null;
+      chainId: number | null;
+    }
+  | {
+      phase: "ERROR";
+      message: string;
+      txHash: string | null;
+      chainId: number | null;
+    };
 
 type Action =
   | { type: "START_CREATE_INTENT" }
@@ -66,13 +92,28 @@ type Action =
       amountRaw: string;
     }
   | { type: "INTENT_FAILED"; error: string }
-  | { type: "TX_HASH_RECEIVED"; attemptId: string; txHash: string }
-  | { type: "TX_CONFIRMED"; attemptId: string; txHash: string }
+  | {
+      type: "TX_HASH_RECEIVED";
+      attemptId: string;
+      chainId: number;
+      txHash: string;
+    }
+  | { type: "TX_CONFIRMED"; attemptId: string; chainId: number; txHash: string }
   | { type: "SUBMIT_STARTED" }
   | { type: "SUBMIT_COMPLETED"; needsPolling: boolean }
   | { type: "SUBMIT_FAILED"; error: string }
-  | { type: "VERIFICATION_SUCCESS"; creditsAdded: number }
-  | { type: "VERIFICATION_FAILED"; error: string }
+  | {
+      type: "VERIFICATION_SUCCESS";
+      creditsAdded: number;
+      txHash: string | null;
+      chainId: number | null;
+    }
+  | {
+      type: "VERIFICATION_FAILED";
+      error: string;
+      txHash: string | null;
+      chainId: number | null;
+    }
   | { type: "RESET" };
 
 function reducer(state: InternalState, action: Action): InternalState {
@@ -91,12 +132,18 @@ function reducer(state: InternalState, action: Action): InternalState {
       };
 
     case "INTENT_FAILED":
-      return { phase: "ERROR", message: action.error };
+      return {
+        phase: "ERROR",
+        message: action.error,
+        txHash: null,
+        chainId: null,
+      };
 
     case "TX_HASH_RECEIVED":
       return {
         phase: "AWAITING_CONFIRMATION",
         attemptId: action.attemptId,
+        chainId: action.chainId,
         txHash: action.txHash,
       };
 
@@ -104,6 +151,7 @@ function reducer(state: InternalState, action: Action): InternalState {
       return {
         phase: "SUBMITTING_HASH",
         attemptId: action.attemptId,
+        chainId: action.chainId,
         txHash: action.txHash,
       };
 
@@ -116,6 +164,7 @@ function reducer(state: InternalState, action: Action): InternalState {
         return {
           phase: "POLLING_VERIFICATION",
           attemptId: state.attemptId,
+          chainId: state.chainId,
           txHash: state.txHash,
         };
       }
@@ -123,13 +172,37 @@ function reducer(state: InternalState, action: Action): InternalState {
       return state;
 
     case "SUBMIT_FAILED":
-      return { phase: "ERROR", message: action.error };
+      // Preserve txHash/chainId if we have them (for on-chain failures)
+      if ("txHash" in state && "chainId" in state) {
+        return {
+          phase: "ERROR",
+          message: action.error,
+          txHash: state.txHash,
+          chainId: state.chainId,
+        };
+      }
+      return {
+        phase: "ERROR",
+        message: action.error,
+        txHash: null,
+        chainId: null,
+      };
 
     case "VERIFICATION_SUCCESS":
-      return { phase: "SUCCESS", creditsAdded: action.creditsAdded };
+      return {
+        phase: "SUCCESS",
+        creditsAdded: action.creditsAdded,
+        txHash: action.txHash,
+        chainId: action.chainId,
+      };
 
     case "VERIFICATION_FAILED":
-      return { phase: "ERROR", message: action.error };
+      return {
+        phase: "ERROR",
+        message: action.error,
+        txHash: action.txHash,
+        chainId: action.chainId,
+      };
 
     case "RESET":
       return { phase: "READY" };
@@ -139,7 +212,33 @@ function reducer(state: InternalState, action: Action): InternalState {
   }
 }
 
+function getExplorerUrl(
+  txHash: string | null,
+  chainId: number | null
+): string | null {
+  if (!txHash || !chainId) return null;
+
+  switch (chainId) {
+    case 11155111: // Ethereum Sepolia
+      return `https://sepolia.etherscan.io/tx/${txHash}`;
+    case 8453: // Base mainnet
+      return `https://basescan.org/tx/${txHash}`;
+    case 1: // Ethereum mainnet
+      return `https://etherscan.io/tx/${txHash}`;
+    default:
+      // Unknown chain - return null so UI can offer "Copy tx hash" instead
+      return null;
+  }
+}
+
 function derivePublicState(internal: InternalState): PaymentFlowState {
+  const _isInFlight =
+    internal.phase === "CREATING_INTENT" ||
+    internal.phase === "AWAITING_SIGNATURE" ||
+    internal.phase === "AWAITING_CONFIRMATION" ||
+    internal.phase === "SUBMITTING_HASH" ||
+    internal.phase === "POLLING_VERIFICATION";
+
   switch (internal.phase) {
     case "READY":
       return {
@@ -147,6 +246,8 @@ function derivePublicState(internal: InternalState): PaymentFlowState {
         isCreatingIntent: false,
         walletStep: null,
         txHash: null,
+        explorerUrl: null,
+        isInFlight: false,
         result: null,
         errorMessage: null,
         creditsAdded: null,
@@ -158,6 +259,8 @@ function derivePublicState(internal: InternalState): PaymentFlowState {
         isCreatingIntent: true,
         walletStep: null,
         txHash: null,
+        explorerUrl: null,
+        isInFlight: true,
         result: null,
         errorMessage: null,
         creditsAdded: null,
@@ -169,65 +272,85 @@ function derivePublicState(internal: InternalState): PaymentFlowState {
         isCreatingIntent: false,
         walletStep: "SIGNING",
         txHash: null,
+        explorerUrl: null,
+        isInFlight: true,
         result: null,
         errorMessage: null,
         creditsAdded: null,
       };
 
-    case "AWAITING_CONFIRMATION":
+    case "AWAITING_CONFIRMATION": {
+      const { txHash, chainId } = internal;
       return {
         phase: "PENDING",
         isCreatingIntent: false,
         walletStep: "CONFIRMING",
-        txHash: internal.txHash,
+        txHash,
+        explorerUrl: getExplorerUrl(txHash, chainId),
+        isInFlight: true,
         result: null,
         errorMessage: null,
         creditsAdded: null,
       };
+    }
 
-    case "SUBMITTING_HASH":
+    case "SUBMITTING_HASH": {
+      const { txHash, chainId } = internal;
       return {
         phase: "PENDING",
         isCreatingIntent: false,
         walletStep: "SUBMITTING",
-        txHash: internal.txHash,
+        txHash,
+        explorerUrl: getExplorerUrl(txHash, chainId),
+        isInFlight: true,
         result: null,
         errorMessage: null,
         creditsAdded: null,
       };
+    }
 
-    case "POLLING_VERIFICATION":
+    case "POLLING_VERIFICATION": {
+      const { txHash, chainId } = internal;
       return {
         phase: "PENDING",
         isCreatingIntent: false,
         walletStep: "VERIFYING",
-        txHash: internal.txHash,
+        txHash,
+        explorerUrl: getExplorerUrl(txHash, chainId),
+        isInFlight: true,
         result: null,
         errorMessage: null,
         creditsAdded: null,
       };
+    }
 
-    case "SUCCESS":
+    case "SUCCESS": {
       return {
         phase: "DONE",
         isCreatingIntent: false,
         walletStep: null,
-        txHash: null,
+        txHash: internal.txHash,
+        explorerUrl: getExplorerUrl(internal.txHash, internal.chainId),
+        isInFlight: false,
         result: "SUCCESS",
         errorMessage: null,
         creditsAdded: internal.creditsAdded,
       };
+    }
 
-    case "ERROR":
+    case "ERROR": {
       return {
         phase: "DONE",
         isCreatingIntent: false,
         walletStep: null,
-        txHash: null,
+        txHash: internal.txHash,
+        explorerUrl: getExplorerUrl(internal.txHash, internal.chainId),
+        isInFlight: false,
         result: "ERROR",
         errorMessage: internal.message,
         creditsAdded: null,
       };
+    }
   }
 }
 
@@ -249,9 +372,11 @@ export function usePaymentFlow(
   // Handle wallet write errors
   useEffect(() => {
     if (writeError && internalState.phase === "AWAITING_SIGNATURE") {
+      const formatted = formatPaymentError(writeError);
+      console.error("[usePaymentFlow] Wallet write error:", formatted.debug);
       dispatch({
         type: "INTENT_FAILED",
-        error: writeError.message ?? "Wallet signature rejected",
+        error: formatted.userMessage,
       });
     }
   }, [writeError, internalState.phase]);
@@ -259,9 +384,11 @@ export function usePaymentFlow(
   // Handle receipt errors
   useEffect(() => {
     if (receiptError && internalState.phase === "AWAITING_CONFIRMATION") {
+      const formatted = formatPaymentError(receiptError);
+      console.error("[usePaymentFlow] Receipt error:", formatted.debug);
       dispatch({
         type: "SUBMIT_FAILED",
-        error: receiptError.message ?? "Transaction confirmation failed",
+        error: formatted.userMessage,
       });
     }
   }, [receiptError, internalState.phase]);
@@ -271,11 +398,13 @@ export function usePaymentFlow(
     if (
       txHash &&
       internalState.phase === "AWAITING_SIGNATURE" &&
-      "attemptId" in internalState
+      "attemptId" in internalState &&
+      "chainId" in internalState
     ) {
       dispatch({
         type: "TX_HASH_RECEIVED",
         attemptId: internalState.attemptId,
+        chainId: internalState.chainId,
         txHash,
       });
     }
@@ -287,11 +416,13 @@ export function usePaymentFlow(
       receipt &&
       internalState.phase === "AWAITING_CONFIRMATION" &&
       "attemptId" in internalState &&
+      "chainId" in internalState &&
       "txHash" in internalState
     ) {
       dispatch({
         type: "TX_CONFIRMED",
         attemptId: internalState.attemptId,
+        chainId: internalState.chainId,
         txHash: internalState.txHash,
       });
 
@@ -311,10 +442,14 @@ export function usePaymentFlow(
 
         // Check if backend immediately resolved (stub verifier case)
         // submitTxHash returns internal backend status (CREATED_INTENT | PENDING_UNVERIFIED | CREDITED | REJECTED | FAILED)
+        const { txHash, chainId } = internalState;
+
         if (result.data.status === "CREDITED") {
           dispatch({
             type: "VERIFICATION_SUCCESS",
             creditsAdded: amountUsdCents * CREDITS_PER_CENT,
+            txHash,
+            chainId,
           });
           dispatch({ type: "SUBMIT_COMPLETED", needsPolling: false });
         } else if (
@@ -324,6 +459,8 @@ export function usePaymentFlow(
           dispatch({
             type: "VERIFICATION_FAILED",
             error: result.data.errorMessage ?? "Verification failed",
+            txHash,
+            chainId,
           });
           dispatch({ type: "SUBMIT_COMPLETED", needsPolling: false });
         } else {
@@ -343,6 +480,8 @@ export function usePaymentFlow(
       return;
     }
 
+    const { txHash, chainId } = internalState;
+
     const pollInterval = setInterval(async () => {
       const result = await paymentsClient.getStatus(internalState.attemptId);
 
@@ -350,6 +489,8 @@ export function usePaymentFlow(
         dispatch({
           type: "VERIFICATION_FAILED",
           error: result.error,
+          txHash,
+          chainId,
         });
         return;
       }
@@ -364,11 +505,15 @@ export function usePaymentFlow(
           dispatch({
             type: "VERIFICATION_SUCCESS",
             creditsAdded: amountUsdCents * CREDITS_PER_CENT,
+            txHash,
+            chainId,
           });
         } else {
           dispatch({
             type: "VERIFICATION_FAILED",
             error: mapped.errorMessage ?? "Verification failed",
+            txHash,
+            chainId,
           });
         }
       }

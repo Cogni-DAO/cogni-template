@@ -35,6 +35,8 @@ export interface PaymentFlowState {
   // PENDING phase
   walletStep: "SIGNING" | "CONFIRMING" | "SUBMITTING" | "VERIFYING" | null;
   txHash: string | null;
+  explorerUrl: string | null;
+  isInFlight: boolean; // True only during PENDING phases (not TERMINAL)
 
   // DONE phase
   result: "SUCCESS" | "ERROR" | null;

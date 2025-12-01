@@ -3,29 +3,24 @@
 
 /**
  * Module: `@components/kit/payments/UsdcPaymentFlow`
- * Purpose: Presentational component for USDC payment flow with 3-state rendering (READY/PENDING/DONE).
- * Scope: Renders payment button, wallet/chain status, and success/error feedback. Does not contain business logic or API calls.
+ * Purpose: Composed payment flow UI with button, dialog, and status chip.
+ * Scope: Renders PaymentButton + PaymentFlowDialog + PaymentStatusChip. Does not contain business logic or API calls.
  * Invariants: State prop drives all rendering; callbacks are pure event handlers; className for layout only.
  * Side-effects: none
- * Notes: Consumes PaymentFlowState from usePaymentFlow hook; implements full PENDING substates for Phase 3 stability.
+ * Notes: Refactored to use new component architecture per ~/.claude/plans/floating-stirring-trinket.md
  * Links: docs/PAYMENTS_FRONTEND_DESIGN.md, docs/UI_IMPLEMENTATION_GUIDE.md
  * @public
  */
 
 "use client";
 
-import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 import type { ReactElement } from "react";
-import { Alert, AlertDescription } from "@/components/kit/feedback/Alert";
-import { Button } from "@/components/kit/inputs/Button";
+import { useEffect, useState } from "react";
 import { cn } from "@/shared/util";
-import {
-  paragraph,
-  paymentFlowContainer,
-  paymentFlowStatus,
-  paymentFlowStep,
-} from "@/styles/ui";
 import type { PaymentFlowState } from "@/types/payments";
+import { PaymentButton } from "./PaymentButton";
+import { PaymentFlowDialog } from "./PaymentFlowDialog";
+import { PaymentStatusChip } from "./PaymentStatusChip";
 
 export interface UsdcPaymentFlowProps {
   /** Amount in USD cents */
@@ -47,39 +42,6 @@ export interface UsdcPaymentFlowProps {
   className?: string;
 }
 
-function getStepMessage(
-  walletStep: PaymentFlowState["walletStep"]
-): string | null {
-  switch (walletStep) {
-    case "SIGNING":
-      return "Waiting for wallet signature...";
-    case "CONFIRMING":
-      return "Confirming transaction on-chain...";
-    case "SUBMITTING":
-      return "Submitting to backend...";
-    case "VERIFYING":
-      return "Verifying payment...";
-    default:
-      return null;
-  }
-}
-
-function formatCredits(amount: number): string {
-  return amount.toLocaleString("en-US");
-}
-
-function getExplorerUrl(txHash: string, chainId = 11155111): string {
-  // Ethereum Sepolia for MVP, will read from intent response in hook
-  if (chainId === 11155111) {
-    return `https://sepolia.etherscan.io/tx/${txHash}`;
-  }
-  // Base mainnet for Phase 3
-  if (chainId === 8453) {
-    return `https://basescan.org/tx/${txHash}`;
-  }
-  return `https://etherscan.io/tx/${txHash}`;
-}
-
 export function UsdcPaymentFlow({
   amountUsdCents,
   state,
@@ -88,125 +50,71 @@ export function UsdcPaymentFlow({
   disabled = false,
   className,
 }: UsdcPaymentFlowProps): ReactElement {
-  // READY state
-  if (state.phase === "READY") {
-    return (
-      <div className={cn(paymentFlowContainer(), className)}>
-        <Button
-          onClick={onStartPayment}
-          disabled={disabled || state.isCreatingIntent}
-          rightIcon={
-            state.isCreatingIntent ? (
-              <Loader2 className="animate-spin" />
-            ) : undefined
-          }
-        >
-          {state.isCreatingIntent
-            ? "Preparing..."
-            : `Pay $${(amountUsdCents / 100).toFixed(2)}`}
-        </Button>
-      </div>
-    );
-  }
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // PENDING state
-  if (state.phase === "PENDING") {
-    const stepMessage = getStepMessage(state.walletStep);
+  // Debug: Log component mount
+  useEffect(() => {
+    console.log("[UsdcPaymentFlow] MOUNTED");
+  }, []);
 
-    return (
-      <div className={cn(paymentFlowContainer(), className)}>
-        <div className={paymentFlowStatus()}>
-          <div className="mb-[var(--spacing-sm)] flex justify-center gap-[var(--spacing-md)]">
-            <div
-              className={paymentFlowStep({
-                state:
-                  state.walletStep === "SIGNING" ||
-                  state.walletStep === "CONFIRMING"
-                    ? "active"
-                    : state.walletStep === "SUBMITTING" ||
-                        state.walletStep === "VERIFYING"
-                      ? "complete"
-                      : "pending",
-              })}
-            >
-              <span>Wallet</span>
-            </div>
-            <div
-              className={paymentFlowStep({
-                state:
-                  state.walletStep === "CONFIRMING"
-                    ? "active"
-                    : state.walletStep === "SUBMITTING" ||
-                        state.walletStep === "VERIFYING"
-                      ? "complete"
-                      : "pending",
-              })}
-            >
-              <span>Chain</span>
-            </div>
-            <div
-              className={paymentFlowStep({
-                state:
-                  state.walletStep === "SUBMITTING" ||
-                  state.walletStep === "VERIFYING"
-                    ? "active"
-                    : "pending",
-              })}
-            >
-              <span>Verify</span>
-            </div>
-          </div>
+  // Auto-open dialog when payment is in-flight or has result
+  useEffect(() => {
+    console.log("[UsdcPaymentFlow] State changed:", {
+      phase: state.phase,
+      isInFlight: state.isInFlight,
+      result: state.result,
+      isDialogOpen,
+    });
 
-          {stepMessage && (
-            <p className={paragraph({ size: "sm", tone: "subdued" })}>
-              {stepMessage}
-            </p>
-          )}
+    if (state.isInFlight || state.result !== null) {
+      console.log("[UsdcPaymentFlow] Setting dialog open = true");
+      setIsDialogOpen(true);
+    }
+  }, [state.phase, state.isInFlight, state.result, isDialogOpen]);
 
-          {state.txHash && (
-            <a
-              href={getExplorerUrl(state.txHash)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-[var(--spacing-sm)] inline-block text-[var(--text-sm)] text-primary hover:underline"
-            >
-              View transaction →
-            </a>
-          )}
-        </div>
-      </div>
-    );
-  }
+  // Show status chip when dialog is closed but payment is in progress
+  const showStatusChip =
+    !isDialogOpen &&
+    state.isInFlight &&
+    state.txHash !== null &&
+    state.explorerUrl !== null;
 
-  // DONE state
-  if (state.phase === "DONE") {
-    return (
-      <div className={cn(paymentFlowContainer(), className)}>
-        {state.result === "SUCCESS" ? (
-          <Alert variant="success">
-            <CheckCircle2 className="h-4 w-4" />
-            <AlertDescription>
-              {state.creditsAdded != null
-                ? `Added ${formatCredits(state.creditsAdded)} credits`
-                : "Payment successful"}
-            </AlertDescription>
-          </Alert>
-        ) : (
-          <Alert variant="destructive">
-            <XCircle className="h-4 w-4" />
-            <AlertDescription>
-              {state.errorMessage ?? "Payment failed"}
-            </AlertDescription>
-          </Alert>
-        )}
+  return (
+    <div className={cn("flex flex-col gap-4", className)}>
+      {/* Payment Button */}
+      <PaymentButton
+        amountUsdCents={amountUsdCents}
+        isInFlight={state.isInFlight}
+        onClick={() => {
+          onStartPayment();
+          setIsDialogOpen(true);
+        }}
+        disabled={disabled}
+      />
 
-        <Button variant="outline" onClick={onReset} disabled={disabled}>
-          {state.result === "SUCCESS" ? "Make Another Payment" : "Try Again"}
-        </Button>
-      </div>
-    );
-  }
+      {/* Status Chip (when dialog closed but payment in progress) */}
+      {showStatusChip && state.txHash && state.explorerUrl && (
+        <PaymentStatusChip
+          txHash={state.txHash}
+          explorerUrl={state.explorerUrl}
+          onClick={() => setIsDialogOpen(true)}
+        />
+      )}
 
-  // Should never reach
-  return <div className={cn(paymentFlowContainer(), className)} />;
+      {/* Payment Flow Dialog */}
+      <PaymentFlowDialog
+        open={isDialogOpen}
+        phase={state.phase}
+        isInFlight={state.isInFlight}
+        walletStep={state.walletStep}
+        txHash={state.txHash}
+        explorerUrl={state.explorerUrl}
+        result={state.result}
+        errorMessage={state.errorMessage}
+        creditsAdded={state.creditsAdded}
+        onReset={onReset}
+        onClose={() => setIsDialogOpen(false)}
+      />
+    </div>
+  );
 }
