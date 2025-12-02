@@ -45,7 +45,7 @@ export function Header(): ReactElement {
               height={24}
               className="shrink-0"
             />
-            <span className="truncate bg-gradient-to-r from-primary to-accent-blue bg-clip-text font-bold text-transparent text-xl">
+            <span className="truncate font-bold text-gradient-accent text-xl">
               Cogni
             </span>
           </Link>
