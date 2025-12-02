@@ -22,7 +22,7 @@ export function NewHomeHero(): ReactElement {
   return (
     <>
       {/* eslint-disable-next-line ui-governance/no-arbitrary-non-token-values */}
-      <section className="dark relative flex h-[25rem] w-full flex-col items-center justify-center overflow-hidden bg-background md:h-[40rem]">
+      <section className="relative flex h-[25rem] w-full flex-col items-center justify-center overflow-hidden bg-background md:h-[40rem]">
         {/* Hero Title with Sparkles */}
         {/* eslint-disable-next-line ui-governance/token-classname-patterns */}
         <h1 className="relative z-20 whitespace-nowrap text-center font-bold text-2xl text-foreground md:text-5xl lg:text-6xl">
