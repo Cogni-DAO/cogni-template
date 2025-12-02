@@ -130,30 +130,36 @@ export const ModeToggle = forwardRef<HTMLButtonElement, ModeToggleProps>(
             onClick={() => setTheme("light")}
             className={dropdownMenuItem()}
           >
-            <Sun className={icon({ size: "sm" })} />
+            <Sun className={cn(icon({ size: "sm" }), "shrink-0")} />
             <span>Light</span>
             {theme === "light" && (
-              <Check className={dropdownMenuCheck({ size: "sm" })} />
+              <Check
+                className={cn(dropdownMenuCheck({ size: "sm" }), "shrink-0")}
+              />
             )}
           </DROPDOWN_MENU_ITEM>
           <DROPDOWN_MENU_ITEM
             onClick={() => setTheme("dark")}
             className={dropdownMenuItem()}
           >
-            <Moon className={icon({ size: "sm" })} />
+            <Moon className={cn(icon({ size: "sm" }), "shrink-0")} />
             <span>Dark</span>
             {theme === "dark" && (
-              <Check className={dropdownMenuCheck({ size: "sm" })} />
+              <Check
+                className={cn(dropdownMenuCheck({ size: "sm" }), "shrink-0")}
+              />
             )}
           </DROPDOWN_MENU_ITEM>
           <DROPDOWN_MENU_ITEM
             onClick={() => setTheme("system")}
             className={dropdownMenuItem()}
           >
-            <Monitor className={icon({ size: "sm" })} />
+            <Monitor className={cn(icon({ size: "sm" }), "shrink-0")} />
             <span>System</span>
             {theme === "system" && (
-              <Check className={dropdownMenuCheck({ size: "sm" })} />
+              <Check
+                className={cn(dropdownMenuCheck({ size: "sm" }), "shrink-0")}
+              />
             )}
           </DROPDOWN_MENU_ITEM>
         </DROPDOWN_MENU_CONTENT>

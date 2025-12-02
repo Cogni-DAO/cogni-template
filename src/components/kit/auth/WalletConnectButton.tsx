@@ -16,7 +16,7 @@
 
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import type React from "react";
-import { useDeferredValue, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 
 import { cn } from "@/shared/util";
@@ -53,14 +53,10 @@ export function WalletConnectButton({
 }: WalletConnectButtonProps = {}): React.JSX.Element {
   const isMounted = useIsMounted();
   const { status } = useAccount();
-  // Defer status updates to prevent hydration errors during theme changes
-  const deferredStatus = useDeferredValue(status);
 
   // Gate on both React mount AND wagmi reconnect to prevent intermediate disconnected flash
   const isWalletHydrating =
-    !isMounted ||
-    deferredStatus === "connecting" ||
-    deferredStatus === "reconnecting";
+    !isMounted || status === "connecting" || status === "reconnecting";
 
   // Fixed slot dimensions per variant (standardized on Connect-button size)
   const shellClass =
