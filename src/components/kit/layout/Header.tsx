@@ -7,7 +7,7 @@
  * Scope: Provides site chrome with logo, nav, wallet, theme toggle, and mobile menu. Does not handle routing or analytics.
  * Invariants: No horizontal overflow; min-w-0/truncate/shrink-0 guards; GitHub hidden <lg; theme hidden <md.
  * Side-effects: none
- * Notes: Desktop wallet in [data-wallet-slot="desktop"] for CSS (see tailwind.css). Mobile: px-2, gap-1; MobileNav has GitHub + theme.
+ * Notes: Desktop wallet in [data-wallet-slot="desktop"] for CSS (see tailwind.css). Mobile: px-4 + logo pl-4; logo 24px, text-xl; MobileNav has GitHub + theme.
  * Links: src/components/kit/auth/WalletConnectButton.tsx, src/components/kit/navigation/MobileNav.tsx, src/styles/tailwind.css
  * @public
  */
@@ -30,18 +30,21 @@ export function Header(): ReactElement {
   return (
     <header className="border-border border-b bg-background py-3">
       {/* Container: matches max-w-7xl pattern from Credits page */}
-      <div className="mx-auto w-full max-w-7xl px-2 sm:px-6">
+      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
         <div className="flex items-center justify-between gap-2 sm:gap-4">
           {/* Logo - min-w-0 prevents flex overflow */}
-          <Link href="/" className="flex min-w-0 items-center gap-2">
+          <Link
+            href="/"
+            className="flex min-w-0 items-center gap-2 pl-4 sm:pl-0"
+          >
             <Image
               src="/TransparentBrainOnly.png"
               alt="Cogni Brain Logo"
-              width={32}
-              height={32}
+              width={24}
+              height={24}
               className="shrink-0"
             />
-            <span className="truncate bg-gradient-to-r from-primary to-accent-blue bg-clip-text font-bold text-lg text-transparent">
+            <span className="truncate bg-gradient-to-r from-primary to-accent-blue bg-clip-text font-bold text-transparent text-xl">
               Cogni
             </span>
           </Link>
