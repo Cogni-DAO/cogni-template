@@ -24,9 +24,7 @@ const DynamicWalletConnectButton = dynamic(
   () => import("./WalletConnectButton").then((mod) => mod.WalletConnectButton),
   {
     ssr: false,
-    loading: () => (
-      <div className="h-10 w-36 animate-pulse rounded-xl bg-muted" />
-    ),
+    loading: () => null, // No placeholder to prevent duplicate flash
   }
 );
 

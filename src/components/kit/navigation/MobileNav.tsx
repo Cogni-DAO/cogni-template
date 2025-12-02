@@ -21,6 +21,7 @@ import { GithubButton, NavigationLink } from "@/components";
 import {
   Sheet,
   SheetContent,
+  SheetTitle,
   SheetTrigger,
 } from "@/components/vendor/shadcn/sheet";
 import { cn } from "@/shared/util";
@@ -47,6 +48,7 @@ export function MobileNav({ className }: MobileNavProps): ReactElement {
         </button>
       </SheetTrigger>
       <SheetContent>
+        <SheetTitle className="sr-only">Navigation menu</SheetTitle>
         <nav
           className="flex flex-col gap-4 py-4"
           aria-label="Mobile navigation"

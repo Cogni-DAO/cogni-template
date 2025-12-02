@@ -46,41 +46,44 @@ export function Header(): ReactElement {
             </span>
           </Link>
 
-          {/* Desktop nav - hidden on mobile */}
-          <nav
-            className="hidden items-center gap-4 md:flex"
-            aria-label="Primary"
-          >
-            <NavigationLink href="/chat">Chat</NavigationLink>
-            <NavigationLink href="/credits">Credits</NavigationLink>
-          </nav>
+          {/* Nav + Action buttons grouped together on right */}
+          <div className="flex shrink-0 items-center gap-4 sm:gap-6">
+            {/* Desktop nav - hidden on mobile */}
+            <nav
+              className="hidden items-center gap-4 md:flex"
+              aria-label="Primary"
+            >
+              <NavigationLink href="/chat">Chat</NavigationLink>
+              <NavigationLink href="/credits">Credits</NavigationLink>
+            </nav>
 
-          {/* Action buttons - responsive */}
-          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-            {/* GitHub: only visible lg+ in header (mobile users access via Sheet) */}
-            <div className="hidden lg:flex">
-              <GithubButton
-                username="cogni-DAO"
-                repo="cogni-template"
-                size="lg"
-                variant="default"
-                showGithubIcon={true}
-                showStarIcon={true}
-                initialStars={0}
-                targetStars={172900}
-                autoAnimate={true}
-                animationDuration={10}
-              />
+            {/* Action buttons - responsive */}
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+              {/* GitHub: only visible lg+ in header (mobile users access via Sheet) */}
+              <div className="hidden lg:flex">
+                <GithubButton
+                  username="cogni-DAO"
+                  repo="cogni-template"
+                  size="lg"
+                  variant="default"
+                  showGithubIcon={true}
+                  showStarIcon={true}
+                  initialStars={0}
+                  targetStars={172900}
+                  autoAnimate={true}
+                  animationDuration={10}
+                />
+              </div>
+
+              {/* Wallet: compact on mobile, full on sm+ */}
+              <WalletConnectButton variant="compact" className="sm:hidden" />
+              <WalletConnectButton className="hidden sm:flex" />
+
+              <ModeToggle />
+
+              {/* Mobile menu trigger - 44px touch target */}
+              <MobileNav className="md:hidden" />
             </div>
-
-            {/* Wallet: compact on mobile, full on sm+ */}
-            <WalletConnectButton variant="compact" className="sm:hidden" />
-            <WalletConnectButton className="hidden sm:flex" />
-
-            <ModeToggle />
-
-            {/* Mobile menu trigger - 44px touch target */}
-            <MobileNav className="md:hidden" />
           </div>
         </div>
       </div>
