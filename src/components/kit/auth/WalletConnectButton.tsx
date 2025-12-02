@@ -7,7 +7,7 @@
  * Scope: Client-side only. Used in header. Does not handle wallet selection UI or persistence.
  * Invariants: Fixed dimensions per variant; skeleton overlay prevents CLS; no layout shift.
  * Side-effects: none
- * Notes: Desktop: 8.5rem shell + address, CSS fill via [data-wallet-slot]. Mobile: avatar. Wagmi ssr:false. TODO: cookie SSR.
+ * Notes: Shell/Inner split gates wagmi hooks. Desktop: 8.5rem + address. Mobile: avatar. TODO: cookie SSR.
  * Links: docs/AUTHENTICATION.md, docs/HANDOFF_WALLET_BUTTON_STABILITY.md
  * @public
  */
@@ -47,22 +47,19 @@ function useIsMounted(): boolean {
   return mounted;
 }
 
-export function WalletConnectButton({
-  variant = "default",
-  className,
-}: WalletConnectButtonProps = {}): React.JSX.Element {
-  const isMounted = useIsMounted();
+/**
+ * Inner component that uses wagmi hooks.
+ * Only rendered after mount to prevent useAccount subscription during Hydrate render.
+ */
+function WalletConnectButtonInner({
+  variant,
+}: {
+  variant: "default" | "compact";
+}): React.JSX.Element {
   const { status } = useAccount();
 
-  // Gate on both React mount AND wagmi reconnect to prevent intermediate disconnected flash
-  const isWalletHydrating =
-    !isMounted || status === "connecting" || status === "reconnecting";
-
-  // Fixed slot dimensions per variant (standardized on Connect-button size)
-  const shellClass =
-    variant === "compact"
-      ? "h-11 w-[6.25rem] shrink-0" // Mobile: matches avatar button
-      : "h-11 w-[8.5rem] shrink-0"; // Desktop: fixed shell for address display
+  // Hide button during wagmi reconnect to prevent disconnected flash
+  const isReconnecting = status === "connecting" || status === "reconnecting";
 
   // Mobile: right-align intrinsic button width
   // Desktop: fill shell entirely (via data-wallet-slot CSS selector)
@@ -72,31 +69,52 @@ export function WalletConnectButton({
       : "flex h-full w-full items-center justify-center"; // Desktop: fill shell with centered content
 
   return (
+    <div
+      className={cn(
+        "transition-opacity duration-200",
+        buttonWrapperClass,
+        isReconnecting ? "pointer-events-none opacity-0" : "opacity-100"
+      )}
+    >
+      <ConnectButton
+        label="Connect"
+        accountStatus={variant === "compact" ? "avatar" : "address"}
+        showBalance={false}
+        chainStatus="none"
+      />
+    </div>
+  );
+}
+
+/**
+ * Shell component that renders fixed slot + skeleton.
+ * No wagmi hooks to prevent setState during Hydrate render.
+ */
+export function WalletConnectButton({
+  variant = "default",
+  className,
+}: WalletConnectButtonProps = {}): React.JSX.Element {
+  const mounted = useIsMounted();
+
+  // Fixed slot dimensions per variant (standardized on Connect-button size)
+  const shellClass =
+    variant === "compact"
+      ? "h-11 w-[6.25rem] shrink-0" // Mobile: matches avatar button
+      : "h-11 w-[8.5rem] shrink-0"; // Desktop: fixed shell for address display
+
+  return (
     <div className={cn("relative", shellClass, className)}>
-      {/* Skeleton overlay - matches fixed slot dimensions exactly */}
+      {/* Skeleton overlay - visible until mounted, no wagmi hooks */}
       <div
         className={cn(
           "absolute inset-0 rounded-xl bg-muted transition-opacity duration-200",
-          isWalletHydrating ? "opacity-100" : "pointer-events-none opacity-0"
+          !mounted ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         aria-hidden="true"
       />
 
-      {/* ConnectButton - mobile right-aligns, desktop fills */}
-      <div
-        className={cn(
-          "transition-opacity duration-200",
-          buttonWrapperClass,
-          isWalletHydrating ? "pointer-events-none opacity-0" : "opacity-100"
-        )}
-      >
-        <ConnectButton
-          label="Connect"
-          accountStatus={variant === "compact" ? "avatar" : "address"}
-          showBalance={false}
-          chainStatus="none"
-        />
-      </div>
+      {/* Inner with wagmi hooks - only render after mount to prevent Hydrate errors */}
+      {mounted && <WalletConnectButtonInner variant={variant} />}
     </div>
   );
 }
