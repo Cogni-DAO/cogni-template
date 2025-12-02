@@ -23,28 +23,25 @@ const terminalFrameSurfaceVariants = {
 } as const;
 
 const terminalFrameSizeVariants = {
-  sm: "text-[var(--text-xs)]",
-  md: "text-[var(--text-sm)]",
-  lg: "text-[var(--text-base)]",
-  xl: "text-[var(--text-lg)]",
+  sm: "text-xs",
+  md: "text-sm",
+  lg: "text-base",
+  xl: "text-lg",
 } satisfies Record<SizeKey, string>;
 
 /**
  * Terminal frame styling for code display and interactive terminals
  */
-export const terminalFrame = cva(
-  "rounded-lg font-mono shadow-[var(--shadow-lg)]",
-  {
-    variants: {
-      surface: terminalFrameSurfaceVariants,
-      size: terminalFrameSizeVariants,
-    },
-    defaultVariants: {
-      surface: "muted",
-      size: "md",
-    },
-  } as const
-);
+export const terminalFrame = cva("rounded-lg font-mono shadow-lg", {
+  variants: {
+    surface: terminalFrameSurfaceVariants,
+    size: terminalFrameSizeVariants,
+  },
+  defaultVariants: {
+    surface: "muted",
+    size: "md",
+  },
+} as const);
 
 const terminalDotColorVariants = {
   red: "bg-danger",
@@ -55,31 +52,24 @@ const terminalDotColorVariants = {
 /**
  * Terminal dot styling for window controls
  */
-export const terminalDot = cva(
-  "h-[var(--size-dot)] w-[var(--size-dot)] rounded-full",
-  {
-    variants: {
-      color: terminalDotColorVariants,
-    } as const,
-    defaultVariants: {
-      color: "red",
-    },
-  }
-);
+export const terminalDot = cva("h-3 w-3 rounded-full", {
+  variants: {
+    color: terminalDotColorVariants,
+  } as const,
+  defaultVariants: {
+    color: "red",
+  },
+});
 
 /**
  * Terminal header styling for window controls bar
  */
-export const terminalHeader = cva(
-  "mb-[var(--spacing-xs)] flex items-center justify-between p-[var(--spacing-md)]"
-);
+export const terminalHeader = cva("mb-2 flex items-center justify-between p-6");
 
 /**
  * Terminal body styling for content area
  */
-export const terminalBody = cva(
-  "space-y-[var(--spacing-sm)] p-[var(--spacing-md)]"
-);
+export const terminalBody = cva("space-y-4 p-6");
 
 /**
  * Icon button styling for interactive icons
@@ -96,10 +86,10 @@ const iconToneVariants = {
 } as const;
 
 const iconSizeVariants = {
-  sm: "h-[var(--size-icon-sm)] w-[var(--size-icon-sm)]",
-  md: "h-[var(--size-icon-md)] w-[var(--size-icon-md)]",
-  lg: "h-[var(--size-icon-lg)] w-[var(--size-icon-lg)]",
-  xl: "h-[var(--size-icon-xl)] w-[var(--size-icon-xl)]",
+  sm: "h-icon-sm w-icon-sm",
+  md: "h-icon-md w-icon-md",
+  lg: "h-icon-lg w-icon-lg",
+  xl: "h-icon-xl w-icon-xl",
 } satisfies Record<SizeKey, string>;
 
 /**
@@ -117,8 +107,8 @@ export const icon = cva("", {
 });
 
 const themeIconStateVariants = {
-  visible: "rotate-[var(--rotation-none)] scale-[var(--opacity-visible)]",
-  hidden: "rotate-[var(--rotation-quarter)] scale-[var(--flex-none)]",
+  visible: "rotate-0 scale-100",
+  hidden: "rotate-90 scale-0",
 } as const;
 
 /**
@@ -134,21 +124,21 @@ export const themeIcon = cva("transition-all", {
 });
 
 const revealStateVariants = {
-  hidden: "opacity-[var(--opacity-hidden)]",
-  visible: "opacity-[var(--opacity-visible)]",
+  hidden: "opacity-0",
+  visible: "opacity-100",
 } as const;
 
 const revealDurationVariants = {
-  fast: "duration-[var(--duration-fast)]",
-  normal: "duration-[var(--duration-normal)]",
-  slow: "duration-[var(--duration-slow)]",
+  fast: "duration-fast",
+  normal: "duration-normal",
+  slow: "duration-slow",
 } as const;
 
 const revealDelayVariants = {
   none: "",
-  d150: "delay-[var(--delay-fast)]",
-  d300: "delay-[var(--delay-normal)]",
-  d450: "delay-[var(--delay-slow)]",
+  d150: "delay-fast",
+  d300: "delay-normal",
+  d450: "delay-slow",
 } as const;
 
 /**
@@ -168,10 +158,10 @@ export const reveal = cva("transition-opacity", {
 });
 
 const navLinkSizeVariants = {
-  sm: "text-[var(--text-sm)] font-medium",
-  md: "text-[var(--text-base)] font-medium",
-  lg: "text-[var(--text-lg)] font-medium",
-  xl: "text-[var(--text-xl)] font-medium",
+  sm: "text-sm font-medium",
+  md: "text-base font-medium",
+  lg: "text-lg font-medium",
+  xl: "text-xl font-medium",
 } satisfies Record<SizeKey, string>;
 
 const navLinkStateVariants = {
@@ -195,17 +185,17 @@ export const navLink = cva("transition-colors", {
 });
 
 const dropdownContentSizeVariants = {
-  sm: "w-[var(--size-dropdown-sm)]",
-  md: "w-[var(--size-dropdown-md)]",
-  lg: "w-[var(--size-dropdown-lg)]",
-  xl: "w-[var(--size-dropdown-xl)]",
+  sm: "w-dropdown-sm",
+  md: "w-dropdown-md",
+  lg: "w-dropdown-lg",
+  xl: "w-dropdown-xl",
 } satisfies Record<SizeKey, string>;
 
 /**
  * Dropdown menu content styling for consistent surface + sizing
  */
 export const dropdownContent = cva(
-  "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-[var(--z-overlay)] origin-[var(--radix-dropdown-menu-content-transform-origin)] overflow-hidden rounded-[var(--radius-md)] border border-border bg-popover p-[var(--spacing-xs)] text-popover-foreground shadow-[var(--shadow-md)] data-[state=closed]:animate-out data-[state=open]:animate-in",
+  "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-overlay origin-[var(--radix-dropdown-menu-content-transform-origin)] overflow-hidden rounded-md border border-border bg-popover p-2 text-popover-foreground shadow-md data-[state=closed]:animate-out data-[state=open]:animate-in",
   {
     variants: {
       size: dropdownContentSizeVariants,
@@ -220,14 +210,14 @@ export const dropdownContent = cva(
  * Dropdown menu item styling with icon and text layout
  */
 export const dropdownMenuItem = cva(
-  "relative flex cursor-default select-none items-center gap-[var(--spacing-sm)] rounded-[var(--radius-sm)] px-[var(--spacing-sm)] py-[var(--spacing-md-plus)] text-[var(--text-sm)] outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
+  "relative flex cursor-default select-none items-center gap-4 rounded-sm px-4 py-1.5 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50"
 );
 
 const dropdownMenuCheckSizeVariants = {
-  sm: "h-[var(--size-icon-sm)] w-[var(--size-icon-sm)] ml-auto",
-  md: "h-[var(--size-icon-md)] w-[var(--size-icon-md)] ml-auto",
-  lg: "h-[var(--size-icon-lg)] w-[var(--size-icon-lg)] ml-auto",
-  xl: "h-[var(--size-icon-xl)] w-[var(--size-icon-xl)] ml-auto",
+  sm: "h-icon-sm w-icon-sm ml-auto",
+  md: "h-icon-md w-icon-md ml-auto",
+  lg: "h-icon-lg w-icon-lg ml-auto",
+  xl: "h-icon-xl w-icon-xl ml-auto",
 } satisfies Record<SizeKey, string>;
 
 /**
@@ -250,14 +240,12 @@ export const chatContainer = cva("flex h-full flex-col");
 /**
  * Chat messages area - mobile fix: overflow-y-scroll for iOS momentum scrolling
  */
-export const chatMessages = cva(
-  "flex-grow overflow-y-scroll p-[var(--spacing-md)] sm:p-[var(--spacing-lg)]"
-);
+export const chatMessages = cva("flex-grow overflow-y-scroll p-6 sm:p-8");
 
 /**
  * Individual chat message wrapper
  */
-export const chatMessage = cva("mb-[var(--spacing-sm)]");
+export const chatMessage = cva("mb-4");
 
 /**
  * Visual divider between messages and input
@@ -267,6 +255,4 @@ export const chatDivider = cva("h-px bg-border");
 /**
  * Chat input form container with gap
  */
-export const chatForm = cva(
-  "flex gap-[var(--spacing-sm)] p-[var(--spacing-md)] sm:p-[var(--spacing-lg)]"
-);
+export const chatForm = cva("flex gap-4 p-6 sm:p-8");

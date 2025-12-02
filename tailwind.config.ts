@@ -47,6 +47,47 @@ export default {
         mono: "var(--font-mono)",
         display: "var(--font-display)",
       },
+      spacing: {
+        // Icon sizes (used for h-icon-lg, w-icon-lg in CVA factories)
+        "icon-sm": "1rem", // 16px
+        "icon-md": "1.25rem", // 20px
+        "icon-lg": "1.5rem", // 24px
+        "icon-xl": "2rem", // 32px
+        "icon-2xl": "3rem", // 48px
+        "icon-3xl": "4rem", // 64px
+        "icon-4xl": "5rem", // 80px
+      },
+      width: {
+        // Dropdown widths (used for w-dropdown-md in overlays)
+        "dropdown-sm": "8rem",
+        "dropdown-md": "9rem",
+        "dropdown-lg": "10rem",
+        "dropdown-xl": "12rem",
+      },
+      maxWidth: {
+        // Container max-widths (used for max-w-container-lg in layout)
+        "container-sm": "42rem",
+        "container-md": "48rem",
+        "container-lg": "56rem",
+        "container-xl": "64rem",
+        "container-2xl": "72rem",
+        "container-3xl": "80rem",
+        "container-screen": "1280px",
+      },
+      zIndex: {
+        overlay: "50",
+        modal: "100",
+      },
+      transitionDuration: {
+        fast: "150ms",
+        normal: "300ms",
+        slow: "500ms",
+      },
+      transitionDelay: {
+        fast: "150ms",
+        normal: "300ms",
+        slow: "450ms",
+      },
     },
   },
   plugins: [

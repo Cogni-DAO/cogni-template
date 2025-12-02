@@ -26,20 +26,17 @@ const paymentFlowStepStateVariants = {
  * Container for payment flow UI states.
  * Layout only - children determine visual presentation.
  */
-export const paymentFlowContainer = cva(
-  "flex flex-col gap-[var(--spacing-md)]",
-  {
-    variants: {},
-    defaultVariants: {},
-  }
-);
+export const paymentFlowContainer = cva("flex flex-col gap-6", {
+  variants: {},
+  defaultVariants: {},
+});
 
 /**
  * Status card for PENDING phase displaying wallet/chain/verification steps.
  * Uses semantic tokens for background, border, padding, text alignment.
  */
 export const paymentFlowStatus = cva(
-  "rounded-lg border border-border bg-muted/50 p-[var(--spacing-md)] text-center",
+  "rounded-lg border border-border bg-muted/50 p-6 text-center",
   {
     variants: {},
     defaultVariants: {},
@@ -50,14 +47,11 @@ export const paymentFlowStatus = cva(
  * Individual step indicator within payment flow status.
  * Variants control visual state (pending/active/complete).
  */
-export const paymentFlowStep = cva(
-  "flex items-center gap-[var(--spacing-xs)]",
-  {
-    variants: {
-      state: paymentFlowStepStateVariants,
-    },
-    defaultVariants: {
-      state: "pending",
-    },
-  }
-);
+export const paymentFlowStep = cva("flex items-center gap-2", {
+  variants: {
+    state: paymentFlowStepStateVariants,
+  },
+  defaultVariants: {
+    state: "pending",
+  },
+});

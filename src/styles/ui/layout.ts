@@ -31,66 +31,63 @@ const flexJustifyVariants = {
 } as const;
 
 const containerAllSizeVariants = {
-  sm: "max-w-[var(--size-container-md)]",
-  md: "max-w-[var(--size-container-xl)]",
-  lg: "max-w-[var(--size-container-3xl)]",
-  xl: "max-w-[var(--size-container-screen)]",
+  sm: "max-w-container-md",
+  md: "max-w-container-xl",
+  lg: "max-w-container-3xl",
+  xl: "max-w-container-screen",
   full: "max-w-full",
 } as const;
 
 const spacingVariants = {
   none: "",
-  xs: "py-[var(--spacing-sm)]",
-  sm: "py-[var(--spacing-xl)]",
-  md: "py-[var(--spacing-3xl)]",
-  lg: "py-[var(--spacing-4xl)]",
-  xl: "py-[var(--spacing-5xl)]",
+  xs: "py-4",
+  sm: "py-10",
+  md: "py-16",
+  lg: "py-20",
+  xl: "py-24",
 } satisfies Record<BasicSpacingKey, string>;
 
 const gapVariants = {
   none: "",
-  xs: "gap-[var(--spacing-xs)]",
-  sm: "gap-[var(--spacing-xl)] lg:gap-[var(--spacing-lg)]",
-  md: "gap-[var(--spacing-lg)] lg:gap-[var(--spacing-xl)]",
-  lg: "gap-[var(--spacing-xl)] lg:gap-[var(--size-icon-xl)]",
-  xl: "gap-[var(--size-icon-xl)] lg:gap-[var(--size-icon-2xl)]",
+  xs: "gap-2",
+  sm: "gap-10 lg:gap-8",
+  md: "gap-8 lg:gap-10",
+  lg: "gap-10 lg:gap-icon-xl",
+  xl: "gap-icon-xl lg:gap-icon-2xl",
 } satisfies Record<BasicSpacingKey, string>;
 
 const paddingVariants = {
   none: "",
-  xs: "p-[var(--spacing-xs)]",
-  sm: "p-[var(--spacing-sm)]",
-  md: "p-[var(--spacing-md)]",
-  lg: "p-[var(--spacing-lg)]",
-  xl: "p-[var(--spacing-xl)]",
+  xs: "p-2",
+  sm: "p-4",
+  md: "p-6",
+  lg: "p-8",
+  xl: "p-10",
 } satisfies Record<BasicSpacingKey, string>;
 
 /**
  * Page shell styling for full-page body wrapper
  */
 export const pageShell = cva(
-  "min-h-[var(--height-screen-dvh)] bg-background text-foreground antialiased"
+  "min-h-dvh bg-background text-foreground antialiased"
 );
 
 const pageContainerMaxWidthVariants = {
-  sm: "max-w-[var(--size-container-sm)]",
-  md: "max-w-[var(--size-container-lg)]",
-  lg: "max-w-[var(--size-container-2xl)]",
-  xl: "max-w-[var(--size-container-3xl)]",
+  sm: "max-w-container-sm",
+  md: "max-w-container-lg",
+  lg: "max-w-container-2xl",
+  xl: "max-w-container-3xl",
 } satisfies Record<SizeKey, string>;
 
 /**
  * Page container styling for centered content with responsive max-width
  */
-export const pageContainer = cva(
-  "mx-auto w-full px-[var(--spacing-md)] sm:px-[var(--spacing-lg-plus)] lg:px-[var(--spacing-xl)]",
-  {
-    variants: {
-      maxWidth: pageContainerMaxWidthVariants,
-    },
-    defaultVariants: { maxWidth: "lg" },
-  }
-);
+export const pageContainer = cva("mx-auto w-full px-6 sm:px-9 lg:px-10", {
+  variants: {
+    maxWidth: pageContainerMaxWidthVariants,
+  },
+  defaultVariants: { maxWidth: "lg" },
+});
 
 const twoColumnReverseVariants = {
   false: "",
@@ -100,32 +97,26 @@ const twoColumnReverseVariants = {
 /**
  * Two-column responsive layout with optional reverse flow
  */
-export const twoColumn = cva(
-  "grid gap-[var(--spacing-xl)] lg:grid-cols-[var(--grid-cols-2)] lg:items-center",
-  {
-    variants: {
-      reverse: twoColumnReverseVariants,
-    },
-    defaultVariants: { reverse: false },
-  }
-);
+export const twoColumn = cva("grid gap-10 lg:grid-cols-2 lg:items-center", {
+  variants: {
+    reverse: twoColumnReverseVariants,
+  },
+  defaultVariants: { reverse: false },
+});
 
 /**
  * Container styling for responsive layout wrappers with width and padding variants
  */
-export const container = cva(
-  "mx-auto px-[var(--spacing-md)] sm:px-[var(--spacing-lg)] lg:px-[var(--spacing-xl)]",
-  {
-    variants: {
-      size: containerAllSizeVariants,
-      spacing: spacingVariants,
-    },
-    defaultVariants: {
-      size: "lg",
-      spacing: "none",
-    },
-  }
-);
+export const container = cva("mx-auto px-6 sm:px-8 lg:px-10", {
+  variants: {
+    size: containerAllSizeVariants,
+    spacing: spacingVariants,
+  },
+  defaultVariants: {
+    size: "lg",
+    spacing: "none",
+  },
+});
 
 const sectionSurfaceVariants = {
   default: "",
@@ -148,10 +139,10 @@ export const section = cva("w-full", {
 
 const gridColsVariants = {
   "1": "",
-  "2": "grid lg:grid-cols-[var(--grid-cols-2)]",
-  "3": "grid lg:grid-cols-[var(--grid-cols-3)]",
-  "4": "grid lg:grid-cols-[var(--grid-cols-4)]",
-  "12": "grid lg:grid-cols-[var(--grid-cols-12)]",
+  "2": "grid lg:grid-cols-2",
+  "3": "grid lg:grid-cols-3",
+  "4": "grid lg:grid-cols-4",
+  "12": "grid lg:grid-cols-12",
 } as const;
 
 const gridAlignVariants = {
@@ -176,11 +167,11 @@ export const grid = cva("", {
 // Row-specific gap variants (smaller scale than grid)
 const rowGapVariants = {
   none: "",
-  xs: "gap-[var(--spacing-sm)]",
-  sm: "gap-[var(--size-dot)]",
-  md: "gap-[var(--spacing-md)]",
-  lg: "gap-[var(--spacing-lg)]",
-  xl: "gap-[var(--spacing-xl)]",
+  xs: "gap-4",
+  sm: "gap-3",
+  md: "gap-6",
+  lg: "gap-8",
+  xl: "gap-10",
 } satisfies Record<BasicSpacingKey, string>;
 
 /**
@@ -224,11 +215,11 @@ const flexWrapVariants = {
 // Flex-specific spacing (margin-top instead of padding)
 const flexSpacingVariants = {
   none: "",
-  xs: "mt-[var(--spacing-sm)]",
-  sm: "mt-[var(--spacing-md)]",
-  md: "mt-[var(--spacing-lg-plus)]",
-  lg: "mt-[var(--spacing-xl)]",
-  xl: "mt-[var(--spacing-2xl)]",
+  xs: "mt-4",
+  sm: "mt-6",
+  md: "mt-9",
+  lg: "mt-10",
+  xl: "mt-12",
 } satisfies Record<BasicSpacingKey, string>;
 
 /**
@@ -254,11 +245,11 @@ export const flex = cva("flex", {
 // Header-specific padding variants (y-axis only)
 const headerPaddingVariants = {
   none: "",
-  xs: "py-[var(--spacing-2xs)]",
-  sm: "py-[var(--spacing-sm)]",
-  md: "py-[var(--spacing-md)]",
-  lg: "py-[var(--spacing-lg-plus)]",
-  xl: "py-[var(--spacing-xl)]",
+  xs: "py-1",
+  sm: "py-4",
+  md: "py-6",
+  lg: "py-9",
+  xl: "py-10",
 } satisfies Record<BasicSpacingKey, string>;
 
 /**
@@ -282,7 +273,7 @@ const heroTextWidthVariants = {
  * Hero text wrapper with responsive alignment
  */
 export const heroText = cva(
-  "sm:text-center md:mx-auto md:max-w-[var(--size-container-lg)] lg:col-span-12 lg:mb-[var(--spacing-xl)] lg:text-left",
+  "sm:text-center md:mx-auto md:max-w-container-lg lg:col-span-12 lg:mb-10 lg:text-left",
   {
     variants: {
       width: heroTextWidthVariants,
@@ -294,15 +285,13 @@ export const heroText = cva(
 /**
  * Hero button container - MOBILE FIX: mx-0 baseline
  */
-export const heroButtons = cva(
-  "sm:-mx-[var(--spacing-4xl)] md:-mx-[var(--spacing-5xl)] mx-0 mt-[var(--spacing-xl)] text-center"
-);
+export const heroButtons = cva("sm:-mx-20 md:-mx-24 mx-0 mt-10 text-center");
 
 /**
  * Hero visual container
  */
 export const heroVisual = cva(
-  "relative mt-[var(--spacing-md-plus)] sm:mx-auto lg:col-span-12 lg:mx-auto lg:mt-0 lg:max-w-none"
+  "relative mt-7 sm:mx-auto lg:col-span-12 lg:mx-auto lg:mt-0 lg:max-w-none"
 );
 
 // Export variant types for external use

@@ -15,18 +15,18 @@
 import { cva } from "class-variance-authority";
 
 const codeTokenKindVariants = {
-  keyword: "!text-[var(--color-syntax-keyword)]",
-  operator: "!text-[var(--color-syntax-operator)]",
-  variable: "!text-[var(--color-syntax-string)]",
+  keyword: "!text-syntax-keyword",
+  operator: "!text-syntax-operator",
+  variable: "!text-syntax-string",
   punctuation: "!text-muted-foreground",
-  parenthesis: "!text-[var(--color-syntax-punctuation)]",
-  property: "!text-[var(--color-syntax-property)]",
-  delimiter: "!text-[var(--color-syntax-delimiter)]",
+  parenthesis: "!text-syntax-punctuation",
+  property: "!text-syntax-property",
+  delimiter: "!text-syntax-delimiter",
   // Aliases for hero code components
   // Same as variable
-  identifier: "!text-[var(--color-syntax-string)]",
+  identifier: "!text-syntax-string",
   // Same as property
-  accent: "!text-[var(--color-syntax-property)]",
+  accent: "!text-syntax-property",
 } as const;
 
 const codeTokenSpacingRightVariants = {

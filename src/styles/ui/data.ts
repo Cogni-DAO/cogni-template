@@ -17,10 +17,10 @@ import { cva, type VariantProps } from "class-variance-authority";
 import type { SizeKey } from "@/styles/theme";
 
 const avatarSizeVariants = {
-  sm: "size-[var(--size-icon-sm)]",
-  md: "size-[var(--size-icon-lg)]",
-  lg: "size-[var(--size-icon-2xl)]",
-  xl: "size-[var(--size-icon-4xl)]",
+  sm: "size-icon-sm",
+  md: "size-icon-lg",
+  lg: "size-icon-2xl",
+  xl: "size-icon-4xl",
 } satisfies Record<SizeKey, string>;
 
 /**
@@ -52,7 +52,7 @@ export const avatarFallback = cva(
 
 const cardVariants = {
   default: "",
-  elevated: "shadow-[var(--shadow-lg)]",
+  elevated: "shadow-lg",
   interactive: "cursor-pointer transition-shadow hover:shadow-md",
 } as const;
 
@@ -60,7 +60,7 @@ const cardVariants = {
  * Card container styling with elevation variants
  */
 export const card = cva(
-  "rounded-lg border bg-card text-card-foreground shadow-[var(--shadow-sm)]",
+  "rounded-lg border bg-card text-card-foreground shadow-sm",
   {
     variants: {
       variant: cardVariants,
@@ -74,19 +74,17 @@ export const card = cva(
 /**
  * Card header styling for consistent spacing
  */
-export const cardHeader = cva(
-  "flex flex-col space-y-[var(--spacing-sm)] p-[var(--spacing-lg)]"
-);
+export const cardHeader = cva("flex flex-col space-y-4 p-8");
 
 /**
  * Card content styling with proper padding
  */
-export const cardContent = cva("p-[var(--spacing-lg)] pt-0");
+export const cardContent = cva("p-8 pt-0");
 
 /**
  * Card footer styling with border and spacing
  */
-export const cardFooter = cva("flex items-center p-[var(--spacing-lg)] pt-0");
+export const cardFooter = cva("flex items-center p-8 pt-0");
 
 const badgeIntentVariants = {
   default:
@@ -99,17 +97,17 @@ const badgeIntentVariants = {
 } as const;
 
 const badgeSizeVariants = {
-  sm: "px-[var(--spacing-sm)] py-[var(--spacing-xs)] text-[var(--text-xs)]",
-  md: "px-[var(--spacing-md)] py-[var(--spacing-xs)] text-[var(--text-xs)]",
-  lg: "px-[var(--spacing-lg)] py-[var(--spacing-sm)] text-[var(--text-sm)]",
-  xl: "px-[var(--spacing-xl)] py-[var(--spacing-sm)] text-[var(--text-base)]",
+  sm: "px-4 py-2 text-xs",
+  md: "px-6 py-2 text-xs",
+  lg: "px-8 py-4 text-sm",
+  xl: "px-10 py-4 text-base",
 } satisfies Record<SizeKey, string>;
 
 /**
  * Badge component styling for status indicators
  */
 export const badge = cva(
-  "inline-flex items-center rounded-md border px-[var(--spacing-md)] py-[var(--spacing-xs)] font-semibold text-[var(--text-xs)] transition-colors focus:outline-none focus:ring-[var(--ring-width-sm)] focus:ring-ring focus:ring-offset-[var(--ring-offset-w-sm)]",
+  "inline-flex items-center rounded-md border px-6 py-2 font-semibold text-xs transition-colors focus:outline-none focus:ring-[3px] focus:ring-ring focus:ring-offset-2",
   {
     variants: {
       intent: badgeIntentVariants,
@@ -123,10 +121,10 @@ export const badge = cva(
 );
 
 const iconBoxSizeVariants = {
-  sm: "h-[var(--size-icon-lg)] w-[var(--size-icon-lg)]",
-  md: "h-[var(--size-icon-xl)] w-[var(--size-icon-xl)]",
-  lg: "h-[var(--size-icon-2xl)] w-[var(--size-icon-2xl)]",
-  xl: "h-[var(--size-icon-3xl)] w-[var(--size-icon-3xl)]",
+  sm: "h-icon-lg w-icon-lg",
+  md: "h-icon-xl w-icon-xl",
+  lg: "h-icon-2xl w-icon-2xl",
+  xl: "h-icon-3xl w-icon-3xl",
 } satisfies Record<SizeKey, string>;
 
 const iconBoxColorVariants = {
@@ -140,7 +138,7 @@ const iconBoxColorVariants = {
  * Icon box styling for feature icons
  */
 export const iconBox = cva(
-  "flex items-center justify-center rounded-md text-[var(--color-white)]",
+  "flex items-center justify-center rounded-md text-white",
   {
     variants: {
       size: iconBoxSizeVariants,
@@ -153,29 +151,27 @@ export const iconBox = cva(
 /**
  * Stats display box for key metrics
  */
-export const statsBox = cva("rounded-lg bg-muted p-[var(--spacing-md)]");
+export const statsBox = cva("rounded-lg bg-muted p-6");
 
 /**
  * Stats grid - responsive 2-column layout with top margin
  */
-export const statsGrid = cva(
-  "mt-[var(--spacing-sm)] grid gap-[var(--spacing-xs)] lg:grid-cols-2"
-);
+export const statsGrid = cva("mt-4 grid gap-2 lg:grid-cols-2");
 
 const ledgerListGapVariants = {
-  xs: "space-y-[var(--spacing-xs)]",
-  sm: "space-y-[var(--spacing-sm)]",
+  xs: "space-y-2",
+  sm: "space-y-4",
 } as const;
 
 const ledgerListMtVariants = {
   none: "",
-  lg: "mt-[var(--spacing-lg)]",
+  lg: "mt-8",
 } as const;
 
 /**
  * Ledger list with vertical spacing and optional top margin
  */
-export const ledgerList = cva("space-y-[var(--spacing-sm)]", {
+export const ledgerList = cva("space-y-4", {
   variants: {
     gap: ledgerListGapVariants,
     mt: ledgerListMtVariants,
@@ -187,7 +183,7 @@ export const ledgerList = cva("space-y-[var(--spacing-sm)]", {
  * Ledger entry container for transaction history
  */
 export const ledgerEntry = cva(
-  "flex flex-col gap-[var(--spacing-2xs)] rounded-md border border-border p-[var(--spacing-md)]"
+  "flex flex-col gap-1 rounded-md border border-border p-6"
 );
 
 /**
@@ -199,13 +195,13 @@ export const ledgerHeader = cva("flex items-center justify-between");
  * Ledger metadata row with timestamp and balance info
  */
 export const ledgerMeta = cva(
-  "flex flex-wrap items-center gap-[var(--spacing-sm)] text-[var(--text-sm)] text-muted-foreground"
+  "flex flex-wrap items-center gap-4 text-muted-foreground text-sm"
 );
 
 /**
  * Amount button grid for payment selection
  */
-export const amountButtons = cva("flex flex-wrap gap-[var(--spacing-sm)]");
+export const amountButtons = cva("flex flex-wrap gap-4");
 
 // Export variant types for external use
 export type BadgeIntent = VariantProps<typeof badge>["intent"];

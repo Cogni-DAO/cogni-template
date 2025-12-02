@@ -1,34 +1,7 @@
 @import "tailwindcss";
+@config "../../tailwind.config.ts";
 @custom-variant dark (&:is(.dark *));
 @import "tw-animate-css";
-
-/*
-  The default border color has changed to `currentColor` in Tailwind CSS v4,
-  so we've added these compatibility styles to make sure everything still
-  looks the same as it did with Tailwind CSS v3.
-
-  DISABLED FOR DEBUGGING - Step 1: Testing if this block causes layout collapse
-*/
-/*
-@layer base {
-  *,
-  ::after,
-  ::before,
-  ::backdrop,
-  ::file-selector-button {
-    border-color: var(--color-gray-200, currentColor);
-  }
-
-  body {
-    font-family: var(--font-sans);
-    @apply bg-background text-foreground;
-  }
-
-  * {
-    @apply border-border;
-  }
-}
-*/
 
 @layer base {
   :root {
@@ -46,8 +19,8 @@
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%;
     --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 210 40% 96.1%;
+    --popover-foreground: 215.4 16.3% 20%;
     --primary: 222.2 47.4% 11.2%;
     --primary-foreground: 210 40% 98%;
     --secondary: 210 40% 96.1%;
@@ -73,6 +46,11 @@
     /* UI accent colors */
     --accent-blue: 217 91% 60%; /* brand accent blue */
 
+    /* Status colors */
+    --color-danger: 0 84.2% 60.2%;
+    --color-warning: 43 74% 66%;
+    --color-success: 142 71% 45%;
+
     --radius: 0.5rem;
   }
 
@@ -81,8 +59,8 @@
     --foreground: 210 40% 98%;
     --card: 0 0% 0%;
     --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 217.2 32.6% 9%;
+    --popover-foreground: 215 20.2% 76.1%;
     --primary: 217 71% 40%;
     --primary-foreground: 0 0% 100%;
     --secondary: 217.2 32.6% 17.5%;
@@ -108,161 +86,26 @@
     /* UI accent colors */
     --accent-blue: 217 71% 40%; /* brand accent blue */
   }
+
+  /* Hero animation tokens (isolated, code.ts only) */
+  :root {
+    --hero-spacing-xs: 0.3125rem;
+    --hero-spacing-xl: 1.25rem;
+    --hero-spacing-rainbow: 8.4375rem;
+    --width-action-words: 11.6875rem;
+  }
+
+  /* Apply base styles using CSS variables directly (Tailwind v4 compatibility) */
+  body {
+    font-family: var(--font-sans);
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+
+  * {
+    border-color: hsl(var(--border));
+  }
 }
 
-/* DISABLED FOR DEBUGGING - Step 2: Testing if @theme inline causes layout collapse */
-@theme inline {
-  --color-background: hsl(var(--background));
-  --color-foreground: hsl(var(--foreground));
-  --color-card: hsl(var(--card));
-  --color-card-foreground: hsl(var(--card-foreground));
-  --color-popover: hsl(var(--popover));
-  --color-popover-foreground: hsl(var(--popover-foreground));
-  --color-primary: hsl(var(--primary));
-  --color-primary-foreground: hsl(var(--primary-foreground));
-  --color-secondary: hsl(var(--secondary));
-  --color-secondary-foreground: hsl(var(--secondary-foreground));
-  --color-muted: hsl(var(--muted));
-  --color-muted-foreground: hsl(var(--muted-foreground));
-  --color-accent: hsl(var(--accent));
-  --color-accent-foreground: hsl(var(--accent-foreground));
-  --color-destructive: hsl(var(--destructive));
-  --color-destructive-foreground: hsl(var(--destructive-foreground));
-  --color-border: hsl(var(--border));
-  --color-input: hsl(var(--input));
-  --color-ring: hsl(var(--ring));
-
-  --color-syntax-property: hsl(var(--syntax-property));
-  --color-syntax-operator: hsl(var(--syntax-operator));
-  --color-syntax-punctuation: hsl(var(--syntax-punctuation));
-  --color-syntax-delimiter: hsl(var(--syntax-delimiter));
-  --color-syntax-string: hsl(var(--syntax-string));
-  --color-syntax-keyword: hsl(var(--syntax-keyword));
-
-  --color-danger: hsl(0 84.2% 60.2%);
-  --color-warning: hsl(43 74% 66%);
-  --color-success: hsl(142 71% 45%);
-
-  --color-accent-blue: hsl(var(--accent-blue));
-
-  --size-icon-sm: 1rem;
-  --size-icon-md: 1.25rem;
-  --size-icon-lg: 1.5rem;
-  --size-icon-xl: 2rem;
-  --size-icon-2xl: 3rem;
-  --size-icon-3xl: 4rem;
-  --size-icon-4xl: 5rem;
-
-  --size-dropdown-sm: 8rem;
-  --size-dropdown-md: 9rem;
-  --size-dropdown-lg: 10rem;
-  --size-dropdown-xl: 12rem;
-
-  --github-button-bg: #09090b;
-  --github-button-bg-hover: #18181b;
-  --github-button-border: #27272a;
-  --github-button-text: #fafafa;
-  --github-button-bg-dark: #fafafa;
-  --github-button-bg-dark-hover: #f4f4f5;
-  --github-button-border-dark: #d4d4d8;
-  --github-button-text-dark: #0a0a0a;
-  --github-button-yellow: #fbbf24;
-
-  --size-dot: 0.75rem;
-
-  /* NOTE: Semantic spacing tokens removed - they override Tailwind v4's numeric scale.
-     Use Tailwind's built-in spacing: p-1 (0.25rem), p-2 (0.5rem), p-4 (1rem), p-6 (1.5rem), p-8 (2rem)
-     Or use arbitrary values: gap-[var(--custom-gap)] if semantic tokens are needed */
-
-  --position-sm: 1rem;
-
-  --hero-spacing-xs: 0.3125rem;
-  --hero-spacing-xl: 1.25rem;
-  --hero-spacing-rainbow: 8.4375rem;
-  --width-action-words: 11.6875rem;
-
-  --text-xs: 0.75rem;
-  --text-sm: 0.875rem;
-  --text-base: 1rem;
-  --text-lg: 1.125rem;
-  --text-xl: 1.25rem;
-  --text-2xl: 1.5rem;
-  --text-3xl: 1.875rem;
-  --text-4xl: 2.25rem;
-  --text-5xl: 3rem;
-  --text-6xl: 3.75rem;
-
-  --size-container-sm: 42rem;
-  --size-container-md: 48rem;
-  --size-container-lg: 56rem;
-  --size-container-xl: 64rem;
-  --size-container-2xl: 72rem;
-  --size-container-3xl: 80rem;
-  --size-container-screen: 1280px;
-
-  --shadow-xs: 0 1px rgb(0 0 0 / 0.05);
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-lg:
-    0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -2px rgb(0 0 0 / 0.1);
-
-  --opacity-hidden: 0;
-  --opacity-half: 0.5;
-  --opacity-visible: 1;
-  --opacity-90: 0.9;
-  --opacity-80: 0.8;
-  --opacity-50: 0.5;
-  --opacity-30: 0.3;
-  --rotation-none: 0deg;
-  --rotation-quarter: 90deg;
-  --duration-fast: 150ms;
-  --duration-normal: 300ms;
-  --duration-slow: 500ms;
-  --delay-fast: 150ms;
-  --delay-normal: 300ms;
-  --delay-slow: 450ms;
-
-  --underline-offset: 4px;
-  --measure: 48ch;
-
-  --prose-xs: 0.75rem;
-  --prose-sm: 0.875rem;
-  --prose-base: 1rem;
-  --prose-lg: 1.125rem;
-  --prose-xl: 1.25rem;
-
-  --flex-none: 0;
-  --grow-none: 0;
-  --shrink-none: 0;
-
-  --color-white: #ffffff;
-  --color-transparent: transparent;
-
-  --alpha-20: 0.2;
-  --alpha-30: 0.3;
-  --alpha-40: 0.4;
-  --alpha-50: 0.5;
-  --alpha-60: 0.6;
-  --alpha-80: 0.8;
-  --alpha-90: 0.9;
-
-  --ring-width-sm: 3px;
-
-  --ring-offset-w-sm: 2px;
-  --ring-offset-w-md: 4px;
-
-  --grid-cols-2: repeat(2, minmax(0, 1fr));
-  --grid-cols-3: repeat(3, minmax(0, 1fr));
-  --grid-cols-4: repeat(4, minmax(0, 1fr));
-  --grid-cols-12: repeat(12, minmax(0, 1fr));
-
-  --height-screen-dvh: 100dvh;
-
-  --z-base: 0;
-  --z-overlay: 50;
-  --z-modal: 100;
-
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
-}
+/* @theme inline block deleted - tokens migrated to tailwind.config.ts */
+/* Keep hero animation vars above (isolated to code.ts) */

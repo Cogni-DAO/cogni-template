@@ -17,18 +17,18 @@ import type { ReactElement } from "react";
 
 const kpiBadgeToneVariants = {
   neutral: "bg-muted text-muted-foreground border-border",
-  success: "bg-success text-[var(--color-white)] border-transparent",
-  warning: "bg-warning text-[var(--color-white)] border-transparent",
-  danger: "bg-danger text-[var(--color-white)] border-transparent",
+  success: "bg-success text-white border-transparent",
+  warning: "bg-warning text-white border-transparent",
+  danger: "bg-danger text-white border-transparent",
 } as const;
 
 const kpiBadgeSizeVariants = {
-  sm: "text-[var(--text-xs)] px-[var(--spacing-sm)] py-[var(--spacing-xs)]",
-  md: "text-[var(--text-xs)] px-[var(--spacing-md)] py-[var(--spacing-xs)]",
+  sm: "text-xs px-4 py-2",
+  md: "text-xs px-6 py-2",
 } as const;
 
 const kpiBadge = cva(
-  "inline-flex items-center gap-[var(--spacing-xs)] rounded-full border font-medium transition-colors focus:outline-none focus:ring-[var(--ring-width-sm)] focus:ring-ring focus:ring-offset-[var(--ring-offset-w-sm)]",
+  "inline-flex items-center gap-2 rounded-full border font-medium transition-colors focus:outline-none focus:ring-[3px] focus:ring-ring focus:ring-offset-2",
   {
     variants: {
       tone: kpiBadgeToneVariants,
@@ -41,15 +41,11 @@ const kpiBadge = cva(
   }
 );
 
-const kpiBadgeRow = cva(
-  "flex flex-wrap items-center justify-center gap-[var(--spacing-sm)]"
-);
+const kpiBadgeRow = cva("flex flex-wrap items-center justify-center gap-4");
 
-const kpiBadgeImage = cva("h-[var(--size-icon-lg)] w-auto");
+const kpiBadgeImage = cva("h-icon-lg w-auto");
 
-const kpiBadgeLink = cva(
-  "inline-block transition-opacity hover:opacity-[var(--opacity-80)]"
-);
+const kpiBadgeLink = cva("inline-block transition-opacity hover:opacity-80");
 
 type KpiBadgeTone = VariantProps<typeof kpiBadge>["tone"];
 type KpiBadgeSize = VariantProps<typeof kpiBadge>["size"];

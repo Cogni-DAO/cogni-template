@@ -85,11 +85,11 @@ const paragraphFamilyVariants = {
 
 const paragraphSpacingVariants = {
   none: "",
-  xs: "mt-[var(--spacing-xs-plus)]",
-  sm: "mt-[var(--spacing-md-plus)]",
-  md: "mt-[var(--spacing-md-plus)]",
-  lg: "mt-[var(--spacing-xl-plus)]",
-  xl: "mt-[var(--spacing-2xl-plus)]",
+  xs: "mt-3",
+  sm: "mt-7",
+  md: "mt-7",
+  lg: "mt-11",
+  xl: "mt-14",
 } satisfies Record<BasicSpacingKey, string>;
 
 /**
@@ -181,7 +181,7 @@ const brandTextToneVariants = {
   subdued: "text-muted-foreground",
   invert: "text-background",
   gradient:
-    "bg-gradient-to-r from-[var(--color-syntax-operator)] via-[var(--color-syntax-property)] to-[var(--color-syntax-delimiter)] bg-clip-text text-transparent",
+    "bg-gradient-to-r from-syntax-operator via-syntax-property to-syntax-delimiter bg-clip-text text-transparent",
 } as const;
 
 /**
