@@ -1,7 +1,76 @@
 @import "tailwindcss";
-@config "../../tailwind.config.ts";
 @custom-variant dark (&:is(.dark *));
 @import "tw-animate-css";
+
+@theme inline {
+  /* Colors - map CSS vars to Tailwind color namespace */
+  --color-transparent: transparent;
+  --color-current: currentColor;
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-danger: hsl(var(--color-danger));
+  --color-warning: hsl(var(--color-warning));
+  --color-success: hsl(var(--color-success));
+  --color-syntax-property: hsl(var(--syntax-property));
+  --color-syntax-operator: hsl(var(--syntax-operator));
+  --color-syntax-punctuation: hsl(var(--syntax-punctuation));
+  --color-syntax-delimiter: hsl(var(--syntax-delimiter));
+  --color-syntax-string: hsl(var(--syntax-string));
+  --color-syntax-keyword: hsl(var(--syntax-keyword));
+  --color-accent-blue: hsl(var(--accent-blue));
+
+  /* Font families */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-display: var(--font-display);
+
+  /* Spacing - icon sizes */
+  --spacing-icon-sm: 1rem;
+  --spacing-icon-md: 1.25rem;
+  --spacing-icon-lg: 1.5rem;
+  --spacing-icon-xl: 2rem;
+  --spacing-icon-2xl: 3rem;
+  --spacing-icon-3xl: 4rem;
+  --spacing-icon-4xl: 5rem;
+
+  /* Container max-widths (generates max-w-container-* utilities) */
+  --max-width-container-sm: 42rem;
+  --max-width-container-md: 48rem;
+  --max-width-container-lg: 56rem;
+  --max-width-container-xl: 64rem;
+  --max-width-container-2xl: 72rem;
+  --max-width-container-3xl: 80rem;
+  --max-width-container-screen: 1280px;
+
+  /* Z-index layers */
+  --z-index-overlay: 50;
+  --z-index-modal: 100;
+}
+
+@utility min-w-measure {
+  min-width: min(100%, var(--measure));
+}
+
+@utility max-w-measure {
+  max-width: min(100%, var(--measure));
+}
 
 @layer base {
   :root {
@@ -14,6 +83,12 @@
       "Courier New", monospace;
     /* For now reuse sans; you can swap to a display font later */
     --font-display: var(--font-sans);
+
+    /* Dropdown widths - used with w-(--dropdown-sm) syntax */
+    --dropdown-sm: 8rem;
+    --dropdown-md: 9rem;
+    --dropdown-lg: 10rem;
+    --dropdown-xl: 12rem;
 
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;

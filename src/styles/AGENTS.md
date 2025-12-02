@@ -42,7 +42,7 @@ Design system with single token pipeline: colors in CSS vars, spacing/sizing in 
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none
-- **Files considered API:** tailwind.preset.ts, ui.ts, ui/index.ts, theme.ts
+- **Files considered API:** ui.ts, ui/index.ts, theme.ts
 
 ## Ports (optional)
 
@@ -65,9 +65,10 @@ pnpm typecheck
 
 ## Standards
 
-- **Token pipeline**: Colors + radius → CSS vars (:root/.dark) → Tailwind semantic classes; Spacing/size/z/duration → tailwind.config.ts extend → Tailwind utilities
-- **@config directive**: tailwind.css uses `@config "../../tailwind.config.ts"` to load Tailwind v4 config
-- CVA factories use Tailwind classes (gap-4, h-icon-lg, z-overlay) - no var() refs except approved hero animation tokens
+- **Token pipeline (CSS-first)**: Colors + fonts + spacing + z-index → `@theme inline` block → Tailwind utilities; Runtime theme vars (:root/.dark) mapped via `hsl(var(--name))` pattern
+- **Tailwind v4 CSS-first**: Uses `@theme inline`, `@utility`, `@custom-variant` directives; no JS config file
+- **Dropdown widths**: Use CSS custom property syntax `w-(--dropdown-sm)` instead of theme tokens
+- CVA factories use Tailwind classes (gap-4, h-icon-lg, z-overlay) - no var() refs except approved hero animation tokens and dropdown widths
 - theme.ts exports only token keys and types for CVA variant props
 - All component styling flows through ui.ts barrel (re-exports from ui/ domain modules)
 

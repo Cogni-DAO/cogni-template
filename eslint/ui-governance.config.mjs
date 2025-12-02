@@ -45,7 +45,6 @@ export default [
     },
     settings: {
       tailwindcss: {
-        config: "tailwind.config.ts",
         callees: ["clsx", "cn", "classnames"],
       },
     },

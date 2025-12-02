@@ -129,16 +129,16 @@ const revealStateVariants = {
 } as const;
 
 const revealDurationVariants = {
-  fast: "duration-fast",
-  normal: "duration-normal",
-  slow: "duration-slow",
+  fast: "duration-150",
+  normal: "duration-300",
+  slow: "duration-500",
 } as const;
 
 const revealDelayVariants = {
   none: "",
-  d150: "delay-fast",
-  d300: "delay-normal",
-  d450: "delay-slow",
+  d150: "delay-150",
+  d300: "delay-300",
+  d450: "delay-[450ms]",
 } as const;
 
 /**
@@ -185,10 +185,10 @@ export const navLink = cva("transition-colors", {
 });
 
 const dropdownContentSizeVariants = {
-  sm: "w-dropdown-sm",
-  md: "w-dropdown-md",
-  lg: "w-dropdown-lg",
-  xl: "w-dropdown-xl",
+  sm: "w-(--dropdown-sm)",
+  md: "w-(--dropdown-md)",
+  lg: "w-(--dropdown-lg)",
+  xl: "w-(--dropdown-xl)",
 } satisfies Record<SizeKey, string>;
 
 /**

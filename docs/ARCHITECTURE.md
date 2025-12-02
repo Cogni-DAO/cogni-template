@@ -103,7 +103,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] .prettierignore # exclude build/artifacts
 [x] eslint.config.mjs # eslint config (tailwind, UI governance, import rules)
 [x] commitlint.config.cjs # conventional commits enforcement
-[x] tailwind.config.ts # Tailwind theme + presets
+[x] src/styles/tailwind.css # Tailwind v4 CSS-first config (@theme, @utility, @custom-variant)
 [x] tsconfig.json # typescript + alias paths
 [x] tsconfig.eslint.json # eslint typescript config
 [x] package.json # deps, scripts, engines (db scripts added)
@@ -336,10 +336,9 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ └── index.ts
 [ ] │
 [x] ├── styles/
-[x] │ ├── tailwind.preset.ts
-[x] │ ├── tailwind.css
-[x] │ ├── theme.ts
-[x] │ └── ui/
+[x] │ ├── tailwind.css # v4 CSS-first config (@theme/@utility)
+[x] │ ├── theme.ts # token key types
+[x] │ └── ui/ # CVA styling factories
 [ ] │
 [ ] ├── types/
 [ ] │ ├── index.d.ts

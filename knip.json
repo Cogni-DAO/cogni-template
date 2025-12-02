@@ -5,8 +5,7 @@
     "src/features/**/*.{ts,tsx}!",
     "src/components/**/*.{ts,tsx}!",
     "src/styles/**/*.ts!",
-    "next.config.mjs",
-    "tailwind.config.ts"
+    "next.config.mjs"
   ],
   "project": [
     "src/app/**/*.{ts,tsx}",

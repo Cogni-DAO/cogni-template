@@ -498,8 +498,8 @@ Close behavior is phase-aware based on `txHash`:
 
 ```tsx
 <div className="flex flex-col items-center gap-4 py-6">
-  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-  <p className="text-center text-sm text-muted-foreground">
+  <Loader2 className="text-primary h-8 w-8 animate-spin" />
+  <p className="text-muted-foreground text-center text-sm">
     {getStepMessage(walletStep)}
   </p>
   {txHash && explorerUrl && (
@@ -528,7 +528,7 @@ Close behavior is phase-aware based on `txHash`:
 
 ```tsx
 <div className="flex flex-col items-center gap-6 py-8">
-  <XCircle className="h-16 w-16 text-destructive" />
+  <XCircle className="text-destructive h-16 w-16" />
   <p className="text-xl font-semibold">{errorMessage ?? "Payment failed"}</p>
 </div>
 ```
