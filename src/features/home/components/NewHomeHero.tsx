@@ -27,7 +27,7 @@ export function NewHomeHero(): ReactElement {
         {/* eslint-disable-next-line ui-governance/token-classname-patterns */}
         <h1 className="relative z-20 whitespace-nowrap text-center font-bold text-2xl text-foreground md:text-5xl lg:text-6xl">
           Build{" "}
-          <span className="relative inline-block text-primary">
+          <span className="relative inline-block text-gradient-accent">
             community-owned
             {/* Sparkles Effect Container */}
             <div className="absolute top-full left-0 h-28 w-full md:h-40">

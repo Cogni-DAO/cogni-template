@@ -21,6 +21,8 @@ const buttonBase =
 
 const buttonToneVariants = {
   default: "bg-primary text-primary-foreground shadow hover:bg-primary/90",
+  accent:
+    "bg-[linear-gradient(135deg,hsl(var(--accent-from)),hsl(var(--accent-to)))] text-white shadow transition-shadow hover:shadow-[0_0_20px_hsl(var(--accent-glow)/0.25)] focus-visible:shadow-[0_0_20px_hsl(var(--accent-glow)/0.25)]",
   destructive:
     "bg-destructive text-destructive-foreground shadow hover:bg-destructive/90",
   outline:
