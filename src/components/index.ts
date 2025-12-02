@@ -27,6 +27,7 @@ export {
 } from "@/styles/ui";
 export { Reveal } from "./kit/animation/Reveal";
 export { WalletConnectButton } from "./kit/auth/WalletConnectButton";
+export * from "./kit/chat";
 export { Avatar, AvatarFallback, AvatarImage } from "./kit/data-display/Avatar";
 export { Badge } from "./kit/data-display/Badge";
 export { GithubButton } from "./kit/data-display/GithubButton";
