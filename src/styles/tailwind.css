@@ -191,4 +191,46 @@
     width: 100%;
     height: 100%;
   }
+
+  /* Rainbow glowing border effect for Cards */
+  .cogni-neon {
+    position: relative;
+    isolation: isolate;
+    border-radius: 1.25rem;
+  }
+
+  .cogni-neon::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--primary) / 0.5),
+      hsl(var(--accent) / 0.5),
+      hsl(210 100% 60% / 0.5),
+      hsl(var(--primary) / 0.5)
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    filter: blur(0.2px);
+    opacity: 0.55;
+    pointer-events: none;
+  }
+
+  .cogni-neon::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    border-radius: inherit;
+    background: inherit;
+    filter: blur(18px);
+    opacity: 0.12;
+    z-index: -1;
+    pointer-events: none;
+  }
 }
