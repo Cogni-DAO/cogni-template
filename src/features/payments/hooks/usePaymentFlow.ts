@@ -378,6 +378,7 @@ export function usePaymentFlow(
     if (writeError && internalState.phase === "AWAITING_SIGNATURE") {
       const formatted = formatPaymentError(writeError);
       // User rejection is expected behavior, not an error
+      // biome-ignore lint/suspicious/noConsole: TODO: Replace with client-side logger once implemented
       console.warn("[usePaymentFlow] Wallet write error:", formatted.debug);
       dispatch({
         type: "INTENT_FAILED",
@@ -390,6 +391,7 @@ export function usePaymentFlow(
   useEffect(() => {
     if (receiptError && internalState.phase === "AWAITING_CONFIRMATION") {
       const formatted = formatPaymentError(receiptError);
+      // biome-ignore lint/suspicious/noConsole: TODO: Replace with client-side logger once implemented
       console.error("[usePaymentFlow] Receipt error:", formatted.debug);
       dispatch({
         type: "SUBMIT_FAILED",

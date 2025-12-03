@@ -86,7 +86,8 @@
         }
       },
       "suspicious": {
-        "noExplicitAny": "error"
+        "noExplicitAny": "error",
+        "noConsole": "error"
       }
     }
   },
@@ -139,6 +140,27 @@
         "rules": {
           "style": {
             "noProcessEnv": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "e2e/**/*.{ts,tsx}",
+        "playwright.config.ts",
+        "tests/**/*.{ts,tsx}",
+        "scripts/**/*.{ts,js,cjs,mjs}",
+        "**/*.config.ts",
+        "**/*.config.js",
+        "**/*.config.cjs",
+        "**/*.config.mts",
+        "drizzle.config.ts",
+        "src/shared/observability/logging/logger.ts"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
           }
         }
       }

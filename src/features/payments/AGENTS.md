@@ -33,8 +33,8 @@ Feature layer for USDC payment attempts with backend verification. Handles payme
 
 - **Exports (services/):**
   - `createIntent(repository, clock, input)` - Create payment intent with on-chain transfer params
-  - `submitTxHash(repository, accountService, verifier, clock, input)` - Submit txHash for verification
-  - `getStatus(repository, accountService, verifier, clock, input)` - Poll status with throttled verification
+  - `submitTxHash(repository, accountService, verifier, clock, log, input)` - Submit txHash for verification
+  - `getStatus(repository, accountService, verifier, clock, log, input)` - Poll status with throttled verification
   - `confirmCreditsPayment(accountService, input)` - Atomic credit settlement; idempotent on clientPaymentId
   - `getCreditsSummary(accountService, input)` - Fetch balance and recent ledger entries
 - **Exports (hooks/):**

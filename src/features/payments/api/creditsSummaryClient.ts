@@ -29,6 +29,7 @@ async function handleResponse<T>(res: Response): Promise<ApiResult<T>> {
   const body = await res.json().catch(() => ({ error: "Invalid response" }));
 
   if (!res.ok) {
+    // biome-ignore lint/suspicious/noConsole: TODO: Replace with client-side logger once implemented
     console.error("[creditsSummaryClient] Request failed:", {
       status: res.status,
       body,
@@ -65,6 +66,7 @@ export const creditsSummaryClient = {
       const res = await fetch(url);
       return handleResponse<CreditsSummaryOutput>(res);
     } catch (error) {
+      // biome-ignore lint/suspicious/noConsole: TODO: Replace with client-side logger once implemented
       console.error("[creditsSummaryClient] Network error:", error);
       return {
         ok: false,

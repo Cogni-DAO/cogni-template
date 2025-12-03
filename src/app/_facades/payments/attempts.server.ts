@@ -173,6 +173,7 @@ export async function submitPaymentTxHashFacade(
     accountService,
     onChainVerifier,
     clock,
+    enrichedCtx.log,
     {
       attemptId: params.attemptId,
       billingAccountId: billingAccount.id,
@@ -261,6 +262,7 @@ export async function getPaymentStatusFacade(
     accountService,
     onChainVerifier,
     clock,
+    enrichedCtx.log,
     {
       attemptId: params.attemptId,
       billingAccountId: billingAccount.id,

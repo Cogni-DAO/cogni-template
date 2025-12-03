@@ -120,6 +120,7 @@ export function ChatRuntimeProvider({
       }
       if (response.status === 409) {
         // UX-001: Invalid model, retry with defaultModelId
+        // biome-ignore lint/suspicious/noConsole: TODO: Replace with client-side logger once implemented
         console.warn(`Model "${selectedModel}" invalid, retrying with default`);
         const retryBody: ChatInput & { stream?: boolean } = {
           ...requestBody,
@@ -231,9 +232,11 @@ export function ChatRuntimeProvider({
       } else if (eventType === "message.completed") {
         queryClient.invalidateQueries({ queryKey: ["payments-summary"] });
       } else if (eventType === "error") {
+        // biome-ignore lint/suspicious/noConsole: TODO: Replace with client-side logger once implemented
         console.error("Stream error:", data.message);
       }
     } catch (e) {
+      // biome-ignore lint/suspicious/noConsole: TODO: Replace with client-side logger once implemented
       console.error("Error parsing SSE", e);
     }
   };

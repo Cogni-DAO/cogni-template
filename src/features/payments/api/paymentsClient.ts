@@ -34,6 +34,7 @@ async function handleResponse<T>(res: Response): Promise<ApiResult<T>> {
   const body = await res.json().catch(() => ({ error: "Invalid response" }));
 
   if (!res.ok) {
+    // biome-ignore lint/suspicious/noConsole: TODO: Replace with client-side logger once implemented
     console.error("[paymentsClient] Request failed:", {
       status: res.status,
       body,
