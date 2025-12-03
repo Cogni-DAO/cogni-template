@@ -33,6 +33,8 @@ export const aiCompletionOperation = {
   description: "Send messages to AI and receive completion response",
   input: z.object({
     messages: z.array(MessageDtoSchema),
+    /** Model ID (REQUIRED) - client resolves to defaultModelId if needed */
+    model: z.string(),
   }),
   output: z.object({
     message: MessageDtoSchema.omit({ timestamp: true }).extend({

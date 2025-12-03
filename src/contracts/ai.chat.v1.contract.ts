@@ -54,6 +54,8 @@ export const aiChatOperation = {
     clientRequestId: z.string().uuid(),
     /** Message history in assistant-ui format */
     messages: z.array(ChatMessageSchema),
+    /** Model ID (REQUIRED) - client resolves to defaultModelId if needed */
+    model: z.string(),
   }),
   output: z.object({
     /** Echo back threadId (v0: same as input, v2: from DB) */
