@@ -144,23 +144,17 @@ export function ModelPicker({
                       isSelected && "bg-accent"
                     )}
                   >
-                    <Icon className="size-4 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate font-medium text-sm">
-                        {model.name || model.id}
-                      </div>
-                      {model.name && (
-                        <div className="truncate text-muted-foreground text-xs">
-                          {model.id}
-                        </div>
-                      )}
+                    <Icon className="size-5 shrink-0 text-muted-foreground" />
+                    <div className="min-w-0 flex-1 truncate font-medium text-sm">
+                      {model.name || model.id}
                     </div>
                     {model.isFree && (
-                      <span className="shrink-0 text-success text-xs">
+                      <span className="flex shrink-0 items-center gap-1.5 font-medium text-sm text-success">
+                        {isSelected && <Check className="size-4" />}
                         Free
                       </span>
                     )}
-                    {isSelected && (
+                    {!model.isFree && isSelected && (
                       <Check className="size-4 shrink-0 text-primary" />
                     )}
                   </button>

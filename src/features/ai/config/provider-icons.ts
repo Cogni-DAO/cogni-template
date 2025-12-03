@@ -12,12 +12,18 @@
  * @internal
  */
 
-import { BrainCircuit, Zap } from "lucide-react";
+import { Zap } from "lucide-react";
 import type { ComponentType, SVGProps } from "react";
 
 import { AnthropicIcon } from "../icons/providers/AnthropicIcon";
+import { DeepSeekIcon } from "../icons/providers/DeepSeekIcon";
+import { GeminiIcon } from "../icons/providers/GeminiIcon";
+import { KimiIcon } from "../icons/providers/KimiIcon";
+import { MinimaxIcon } from "../icons/providers/MinimaxIcon";
+import { NovaIcon } from "../icons/providers/NovaIcon";
 import { OpenAIIcon } from "../icons/providers/OpenAIIcon";
 import { QwenIcon } from "../icons/providers/QwenIcon";
+import { XAIIcon } from "../icons/providers/XAIIcon";
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -26,10 +32,15 @@ type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
  * Keys match provider_key from LiteLLM model_info
  */
 const PROVIDER_ICONS = {
-  qwen: QwenIcon,
-  hermes: BrainCircuit, // Lucide fallback (no custom SVG)
-  openai: OpenAIIcon,
+  amazon: NovaIcon,
   anthropic: AnthropicIcon,
+  deepseek: DeepSeekIcon,
+  google: GeminiIcon,
+  kimi: KimiIcon,
+  minimax: MinimaxIcon,
+  openai: OpenAIIcon,
+  qwen: QwenIcon,
+  xai: XAIIcon,
   default: Zap,
 } as const satisfies Record<string, IconComponent>;
 

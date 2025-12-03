@@ -216,9 +216,15 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ ├── home/ # home page data
 [x] │ ├── ai/ # AI services
 [x] │ │ ├── services/ # completion service
-[x] │ │ └── chat/ # streaming chat (assistant-ui)
-[x] │ │ ├── providers/
-[x] │ │ └── components/
+[x] │ │ ├── chat/ # streaming chat (assistant-ui)
+[x] │ │ │ ├── providers/
+[x] │ │ │ └── components/
+[x] │ │ ├── components/ # ModelPicker, ChatComposerExtras
+[x] │ │ ├── config/ # provider icons registry
+[x] │ │ ├── hooks/ # useModels
+[x] │ │ ├── icons/ # provider SVG components
+[x] │ │ │ └── providers/
+[x] │ │ └── preferences/ # model localStorage
 [x] │ ├── accounts/ # account management feature
 [x] │ │ └── services/
 [x] │ ├── site-meta/ # meta services (health, routes)
