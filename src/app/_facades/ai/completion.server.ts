@@ -35,6 +35,7 @@ import type { RequestContext } from "@/shared/observability";
 
 interface CompletionInput {
   messages: MessageDto[];
+  model: string;
   sessionUser: SessionUser;
 }
 
@@ -81,6 +82,7 @@ export async function completion(
     // Execute pure feature with injected dependencies
     const result = await execute(
       coreMessages,
+      input.model,
       llmService,
       accountService,
       clock,

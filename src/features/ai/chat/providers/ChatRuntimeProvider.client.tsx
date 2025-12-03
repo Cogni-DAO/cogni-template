@@ -47,11 +47,15 @@ function createChatMessage(
 
 interface ChatRuntimeProviderProps {
   children: ReactNode;
+  selectedModel: string;
+  defaultModelId: string;
   onAuthExpired?: () => void;
 }
 
 export function ChatRuntimeProvider({
   children,
+  selectedModel,
+  defaultModelId,
   onAuthExpired,
 }: ChatRuntimeProviderProps) {
   // ChatMessage includes optional requestId - type matches stored objects
@@ -95,6 +99,7 @@ export function ChatRuntimeProvider({
         threadId, // client-generated, stable for session
         clientRequestId,
         messages: nextMessages,
+        model: selectedModel, // REQ-001: always present
       };
 
       const response = await fetch("/api/v1/ai/chat", {
@@ -111,6 +116,37 @@ export function ChatRuntimeProvider({
       }
       if (response.status === 402) {
         // TODO: show credits error in UI
+        return;
+      }
+      if (response.status === 409) {
+        // UX-001: Invalid model, retry with defaultModelId
+        console.warn(`Model "${selectedModel}" invalid, retrying with default`);
+        const retryBody: ChatInput = {
+          ...requestBody,
+          model: defaultModelId,
+        };
+        const retryResponse = await fetch("/api/v1/ai/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(retryBody),
+          signal: abortControllerRef.current.signal,
+        });
+        if (!retryResponse.ok) {
+          throw new Error(`API error after retry: ${retryResponse.status}`);
+        }
+        const retryRaw = await retryResponse.json();
+        const retryParseResult = aiChatOperation.output.safeParse(retryRaw);
+        if (!retryParseResult.success) {
+          throw new Error(
+            `Malformed retry response: ${retryParseResult.error.flatten().fieldErrors}`
+          );
+        }
+        const retryData = retryParseResult.data;
+        if (activeRequestIdRef.current !== clientRequestId) return;
+        const retryFinalMessages = [...messagesRef.current, retryData.message];
+        messagesRef.current = retryFinalMessages;
+        setMessages(retryFinalMessages);
+        queryClient.invalidateQueries({ queryKey: ["payments-summary"] });
         return;
       }
       if (!response.ok) {

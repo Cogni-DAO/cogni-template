@@ -159,13 +159,32 @@ export const POST = wrapRouteHandlerWithLogging(
       }
       const input = inputParseResult.data;
 
+      // Validate model against cached allowlist (MVP-004: PERF-001 fix)
+      const { isModelAllowed, getDefaultModelId } = await import(
+        "@/app/_lib/models-cache"
+      );
+      const modelIsValid = await isModelAllowed(input.model);
+
+      if (!modelIsValid) {
+        // Return 409 with defaultModelId for client retry (MVP-004: UX-001 fix)
+        const defaultModelId = await getDefaultModelId();
+        logRequestWarn(ctx.log, { model: input.model }, "INVALID_MODEL");
+        return NextResponse.json(
+          {
+            error: "Invalid model",
+            defaultModelId,
+          },
+          { status: 409 }
+        );
+      }
+
       // Transform wire → MessageDto format for facade
       const messageDtos = toMessageDtos(input.messages);
 
-      // Delegate to completion facade
+      // Delegate to completion facade with model parameter
       if (!sessionUser) throw new Error("sessionUser required"); // Enforced by wrapper
       const result = await completion(
-        { messages: messageDtos, sessionUser },
+        { messages: messageDtos, model: input.model, sessionUser },
         ctx
       );
 

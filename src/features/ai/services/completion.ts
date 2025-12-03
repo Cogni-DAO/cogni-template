@@ -44,6 +44,7 @@ function estimateTotalTokens(messages: Message[]): number {
 
 export async function execute(
   messages: Message[],
+  model: string,
   llmService: LlmService,
   accountService: AccountService,
   clock: Clock,
@@ -93,6 +94,7 @@ export async function execute(
 
   const result = await llmService.completion({
     messages: trimmedMessages,
+    model,
     caller,
   });
 
