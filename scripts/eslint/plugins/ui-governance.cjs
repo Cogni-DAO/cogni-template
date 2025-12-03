@@ -39,6 +39,15 @@ const FONT_SIZE_SUFFIXES = new Set([
   "9xl",
 ]);
 
+const TEXT_ALIGNMENT_SUFFIXES = new Set([
+  "left",
+  "center",
+  "right",
+  "justify",
+  "start",
+  "end",
+]);
+
 const SHADOW_SIZE_SUFFIXES = new Set([
   "sm",
   "md",
@@ -136,6 +145,10 @@ function analyzeColorToken(prefix, suffix, raw) {
 
   if (prefix === "text" && FONT_SIZE_SUFFIXES.has(baseSuffix)) {
     return issues; // text-sm, text-lg, etc. are font sizes, not colors
+  }
+
+  if (prefix === "text" && TEXT_ALIGNMENT_SUFFIXES.has(baseSuffix)) {
+    return issues; // text-left, text-center, etc. are alignment, not colors
   }
 
   if (prefix === "shadow" && SHADOW_SIZE_SUFFIXES.has(baseSuffix)) {

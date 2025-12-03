@@ -166,7 +166,8 @@ export default [
   // LAYER-SPECIFIC RESTRICTIONS
   // ========================================
 
-  // Features layer: enforce barrel imports, block cross-feature deps
+  // Features layer: block adapter/vendor/styles, allow same-feature imports
+  // Note: Cross-feature boundaries enforced by depcruiser (ARCHITECTURE_ENFORCEMENT_GAPS.md)
   {
     files: ["src/features/**/*.{ts,tsx}"],
     rules: {
@@ -174,7 +175,8 @@ export default [
         "error",
         {
           patterns: [
-            "@/features/**", // no cross-feature via alias
+            // Removed: "@/features/**" - too broad, blocks same-feature imports
+            // TODO: Add custom rule to block cross-feature only (e.g., ai/** cannot import payments/**)
             "@/components/vendor/**", // never touch vendor
             "@/styles/**", // never touch styles direct
             "@/adapters/**", // features may not import adapters

@@ -61,6 +61,16 @@
   /* Z-index layers */
   --z-index-overlay: 50;
   --z-index-modal: 100;
+
+  /* Composer-specific sizing */
+  --size-composer-icon-btn: 34px;
+  --size-composer-spacer: 42px;
+  --max-width-model-trigger: 120px;
+  --max-height-dialog: 80vh;
+
+  /* Positioning - centering transforms */
+  --center-50: 50%;
+  --center-neg-50: -50%;
 }
 
 @utility min-w-measure {
