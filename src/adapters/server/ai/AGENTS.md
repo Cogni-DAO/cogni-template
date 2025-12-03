@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-17
+- **Last reviewed:** 2025-12-04
 - **Status:** stable
 
 ## Purpose
 
-LiteLLM service implementations for AI completion operations.
+LiteLLM service implementations for AI completion and streaming operations.
 
 ## Pointers
 
@@ -34,6 +34,7 @@ LiteLLM service implementations for AI completion operations.
 - **CLI (if any):** none
 - **Env/Config keys:** LITELLM_BASE_URL, LITELLM_MASTER_KEY, DEFAULT_MODEL
 - **Files considered API:** litellm.adapter.ts
+- **Streaming:** completionStream() supports SSE streaming via eventsource-parser with robustness against malformed chunks
 
 ## Ports (optional)
 
@@ -43,7 +44,7 @@ LiteLLM service implementations for AI completion operations.
 
 ## Responsibilities
 
-- This directory **does**: Implement LlmService using LiteLLM proxy for AI completions
+- This directory **does**: Implement LlmService using LiteLLM proxy for AI completions and streaming with SSE
 - This directory **does not**: Handle authentication, rate limiting, or timestamps
 
 ## Usage
@@ -57,13 +58,15 @@ pnpm test tests/integration/ai/
 ## Standards
 
 - Never logs prompts or API keys for security
-- Enforces request timeouts
+- Enforces 15s connect timeout for streaming (fetch TTFB only)
 - Handles provider-specific response formatting
+- Streaming malformed SSE chunks logged as warnings without failing stream
+- Promise settlement guaranteed exactly once via defer helper
 
 ## Dependencies
 
-- **Internal:** ports, shared/env
-- **External:** LiteLLM service (external HTTP API)
+- **Internal:** ports, shared/env, shared/observability/logging
+- **External:** LiteLLM service (external HTTP API), eventsource-parser (npm)
 
 ## Change Protocol
 

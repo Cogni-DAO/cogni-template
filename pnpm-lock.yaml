@@ -89,6 +89,9 @@ importers:
       ethers:
         specifier: 5.7.2
         version: 5.7.2(bufferutil@4.0.9)(utf-8-validate@5.0.10)
+      eventsource-parser:
+        specifier: ^3.0.6
+        version: 3.0.6
       framer-motion:
         specifier: ^12.23.25
         version: 12.23.25(react-dom@19.0.0(react@19.0.0))(react@19.0.0)

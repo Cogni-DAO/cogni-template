@@ -23,6 +23,20 @@ export interface LlmCaller {
   litellmVirtualKey: string;
 }
 
+export interface CompletionStreamParams {
+  messages: Message[];
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  caller: LlmCaller;
+  abortSignal?: AbortSignal;
+}
+
+export type ChatDeltaEvent =
+  | { type: "text_delta"; delta: string }
+  | { type: "error"; error: string }
+  | { type: "done" };
+
 export interface LlmService {
   completion(params: {
     messages: Message[];
@@ -40,5 +54,25 @@ export interface LlmService {
     finishReason?: "stop" | "length" | "tool_calls" | "content_filter" | string;
     providerMeta?: Record<string, unknown>;
     providerCostUsd?: number;
+  }>;
+
+  completionStream(params: CompletionStreamParams): Promise<{
+    stream: AsyncIterable<ChatDeltaEvent>;
+    final: Promise<{
+      message: Message;
+      usage?: {
+        promptTokens: number;
+        completionTokens: number;
+        totalTokens: number;
+      };
+      finishReason?:
+        | "stop"
+        | "length"
+        | "tool_calls"
+        | "content_filter"
+        | string;
+      providerMeta?: Record<string, unknown>;
+      providerCostUsd?: number;
+    }>;
   }>;
 }
