@@ -63,6 +63,10 @@ export const Thread: FC<ThreadProps> = ({ welcomeMessage }) => {
       {/* Composer is sibling after Viewport - always pinned at bottom */}
       <div className="aui-thread-composer-container relative mx-auto w-full max-w-(--thread-max-width) shrink-0 px-4 pt-2 pb-4 md:pb-6">
         <ThreadScrollToBottom />
+        {/* Suggestions fixed above composer - only show when thread is empty */}
+        <ThreadPrimitive.If empty>
+          <ThreadSuggestions />
+        </ThreadPrimitive.If>
         <Composer />
       </div>
     </ThreadPrimitive.Root>
@@ -97,14 +101,13 @@ const ThreadWelcome: FC = () => {
           </div>
         </div>
       </div>
-      <ThreadSuggestions />
     </div>
   );
 };
 
 const ThreadSuggestions: FC = () => {
   return (
-    <div className="aui-thread-welcome-suggestions grid w-full @md:grid-cols-2 gap-2 pb-4">
+    <div className="aui-thread-welcome-suggestions grid w-full grid-cols-2 gap-2 pb-2">
       {[
         {
           title: "Help me start",
@@ -116,15 +119,10 @@ const ThreadSuggestions: FC = () => {
           label: "Cogni works in 30 seconds",
           action: "Explain how Cogni works in 30 seconds",
         },
-        {
-          title: "Is my idea legal?",
-          label: "What should I watch out for?",
-          action: "Is my idea legal? What should I watch out for?",
-        },
       ].map((suggestedAction, index) => (
         <div
           key={`suggested-action-${suggestedAction.title}-${index}`}
-          className="aui-thread-welcome-suggestion-display fade-in slide-in-from-bottom-4 @md:nth-[n+3]:block nth-[n+3]:hidden animate-in fill-mode-both duration-300 ease-out"
+          className="aui-thread-welcome-suggestion-display fade-in slide-in-from-bottom-4 animate-in fill-mode-both duration-300 ease-out"
           style={{ animationDelay: `${index * 50}ms` }}
         >
           <ThreadPrimitive.Suggestion
@@ -134,7 +132,7 @@ const ThreadSuggestions: FC = () => {
           >
             <Button
               variant="ghost"
-              className="aui-thread-welcome-suggestion h-auto w-full flex-1 @md:flex-col flex-wrap items-start justify-start gap-1 rounded-3xl border px-5 py-4 text-left text-sm dark:hover:bg-accent/60"
+              className="aui-thread-welcome-suggestion h-auto w-full flex-col items-start justify-start gap-1 rounded-3xl border px-5 py-4 text-left text-sm dark:hover:bg-accent/60"
               aria-label={suggestedAction.action}
             >
               <span className="aui-thread-welcome-suggestion-text-1 font-medium">
