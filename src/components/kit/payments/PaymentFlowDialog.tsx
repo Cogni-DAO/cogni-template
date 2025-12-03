@@ -133,7 +133,7 @@ export function PaymentFlowDialog({
           {isInFlight && (
             <div className="flex flex-col items-center gap-4 py-6">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
-              {/* eslint-disable-next-line ui-governance/token-classname-patterns -- text-center is alignment, not color */}
+              {}
               <p className="text-center text-muted-foreground text-sm">
                 {getStepMessage(walletStep)}
               </p>

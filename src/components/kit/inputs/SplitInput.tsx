@@ -48,7 +48,6 @@ export function SplitInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          // eslint-disable-next-line ui-governance/token-classname-patterns -- text-center is alignment, not color
           className="w-full bg-transparent px-12 text-center text-foreground text-xl placeholder-muted-foreground focus:outline-none"
           {...props}
         />

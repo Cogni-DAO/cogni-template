@@ -24,7 +24,7 @@ export function NewHomeHero(): ReactElement {
       {/* eslint-disable-next-line ui-governance/no-arbitrary-non-token-values */}
       <section className="relative flex h-[25rem] w-full flex-col items-center justify-center overflow-hidden bg-background md:h-[40rem]">
         {/* Hero Title with Sparkles */}
-        {/* eslint-disable-next-line ui-governance/token-classname-patterns */}
+        {}
         <h1 className="relative z-20 whitespace-nowrap text-center font-bold text-2xl text-foreground md:text-5xl lg:text-6xl">
           Build{" "}
           <span className="relative inline-block text-gradient-accent">
@@ -84,7 +84,7 @@ export function NewHomeHero(): ReactElement {
 
         {/* Content Below Sparkles */}
         <div className="relative z-20 mx-auto mt-20 max-w-7xl px-4 sm:px-6 md:mt-44">
-          {/* eslint-disable-next-line ui-governance/token-classname-patterns */}
+          {}
           <div className="flex flex-col items-center justify-center text-center">
             <div className="mt-6 flex flex-col gap-4 sm:flex-row">
               <Button size="lg" asChild>
