@@ -5,9 +5,11 @@
  * Module: `@app/providers/wallet.client`
  * Purpose: Wallet provider for EVM wallet connections using wagmi and RainbowKit.
  * Scope: Wraps app with WagmiProvider and RainbowKitProvider. Does not handle server-side rendering of wallet context.
- * Invariants: Config created in useEffect (browser-only); stable across theme changes; nested RainbowKitThemeProvider isolates theme from WagmiProvider.
- * Side-effects: none
+ * Invariants: Config created in useEffect (browser-only); stable across theme changes;
+ *        nested RainbowKitThemeProvider isolates theme from WagmiProvider; triggers session refresh after SIWE.
+ * Side-effects: IO (session update after SIWE verification)
  * Notes: Nested RainbowKitThemeProvider isolates theme changes from WagmiProvider to prevent React Query Hydrate warnings.
+ *        Session refresh ensures immediate navigation after auth.
  * Links: https://rainbowkit.com/docs/authentication
  * @public
  */

@@ -80,11 +80,20 @@ describe("features/ai/services/completion", () => {
       });
       expect(result.requestId).toBeDefined();
       expect(llmService.wasCalled()).toBe(true);
-      expect(llmService.getLastCall()?.messages).toHaveLength(2); // user + assistant
+
+      // Critical invariant: exactly one system message in LLM payload
+      const payload = llmService.getLastCall();
+      const systemMessages = payload?.messages.filter(
+        (m) => m.role === "system"
+      );
+      expect(systemMessages).toHaveLength(1);
+      expect(payload?.messages[0]?.role).toBe("system");
+      expect(payload?.messages[0]?.content).toContain("You are Cogni");
+
       expect(accountService.recordLlmUsage).toHaveBeenCalled();
     });
 
-    it("should filter system messages before calling LLM", async () => {
+    it("should strip malicious client system messages and inject baseline only", async () => {
       // Arrange
       const messages = createMixedRoleConversation(); // includes system messages
       const llmService = new FakeLlmService();
@@ -109,10 +118,18 @@ describe("features/ai/services/completion", () => {
         testCtx
       );
 
-      // Assert
-      const lastCall = llmService.getLastCall();
-      expect(lastCall?.messages).toHaveLength(3); // only user + assistant messages
-      expect(lastCall?.messages.every((m) => m.role !== "system")).toBe(true);
+      // Assert - Critical invariant: exactly one system message with baseline content
+      const payload = llmService.getLastCall();
+      const systemMessages = payload?.messages.filter(
+        (m) => m.role === "system"
+      );
+      expect(systemMessages).toHaveLength(1);
+      expect(payload?.messages[0]?.role).toBe("system");
+      expect(payload?.messages[0]?.content).toContain("You are Cogni");
+      // Verify no client system messages survived
+      expect(payload?.messages.slice(1).every((m) => m.role !== "system")).toBe(
+        true
+      );
     });
 
     it("should throw ChatValidationError for messages exceeding length limit", async () => {
@@ -175,15 +192,23 @@ describe("features/ai/services/completion", () => {
       );
 
       // Assert - should trim to fit MAX_MESSAGE_CHARS (4000)
-      const lastCall = llmService.getLastCall();
-      expect(lastCall?.messages.length).toBeLessThan(4);
+      const payload = llmService.getLastCall();
+      expect(payload?.messages.length).toBeLessThan(5); // system + fewer user/assistant messages
+
+      // Critical invariant: exactly one system message even after trimming
+      const systemMessages = payload?.messages.filter(
+        (m) => m.role === "system"
+      );
+      expect(systemMessages).toHaveLength(1);
+      expect(payload?.messages[0]?.role).toBe("system");
+      expect(payload?.messages[0]?.content).toContain("You are Cogni");
 
       // Calculate total length of passed messages
       const totalLength =
-        lastCall?.messages.reduce((sum, msg) => {
+        payload?.messages.reduce((sum, msg) => {
           return sum + Array.from(msg.content).length;
         }, 0) ?? 0;
-      expect(totalLength).toBeLessThanOrEqual(MAX_MESSAGE_CHARS);
+      expect(totalLength).toBeLessThanOrEqual(MAX_MESSAGE_CHARS + 500); // +buffer for system prompt
     });
 
     it("should not mutate original messages array", async () => {

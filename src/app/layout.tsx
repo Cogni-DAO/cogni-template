@@ -30,8 +30,8 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Cogni Template",
-  description: "Open-source foundation for autonomous AI-powered organizations",
+  title: "Cogni",
+  description: "Web3 Gov + Web2 AI",
 };
 
 export default function RootLayout({

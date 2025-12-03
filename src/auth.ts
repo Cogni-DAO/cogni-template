@@ -29,7 +29,8 @@ import { makeLogger } from "@/shared/observability/logging";
 export const authSecret =
   process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? "";
 
-const log = makeLogger({ module: "auth" });
+// Lazy logger initialization to avoid module-level env validation
+const getLog = () => makeLogger({ module: "auth" });
 
 /**
  * NextAuth configuration.
@@ -62,7 +63,7 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials, req) {
         try {
           if (!credentials?.message || !credentials?.signature) {
-            log.error("[SIWE] Missing credentials");
+            getLog().error("[SIWE] Missing credentials");
             return null;
           }
 
@@ -84,7 +85,7 @@ export const authOptions: NextAuthOptions = {
           // Verify domain, nonce, and signature
           const nonce = await getCsrfToken({ req: { headers } });
           if (!nonce) {
-            log.error("[SIWE] Failed to retrieve nonce");
+            getLog().error("[SIWE] Failed to retrieve nonce");
             return null;
           }
 
@@ -94,7 +95,7 @@ export const authOptions: NextAuthOptions = {
             .update(credentials.message as string)
             .digest("hex")
             .slice(0, 8);
-          log.info(
+          getLog().info(
             {
               nonce,
               address: new SiweMessage(credentials.message as string).address,
@@ -110,7 +111,10 @@ export const authOptions: NextAuthOptions = {
           });
 
           if (!result.success) {
-            log.error({ error: result.error }, "[SIWE] Verification failed");
+            getLog().error(
+              { error: result.error },
+              "[SIWE] Verification failed"
+            );
             return null;
           }
 
@@ -137,11 +141,11 @@ export const authOptions: NextAuthOptions = {
           }
 
           if (!user) {
-            log.error("[SIWE] Failed to create or retrieve user");
+            getLog().error("[SIWE] Failed to create or retrieve user");
             return null;
           }
 
-          log.info({ address: fields.address }, "[SIWE] Login success");
+          getLog().info({ address: fields.address }, "[SIWE] Login success");
 
           // Always use DB UUID as primary ID
           return {
@@ -149,7 +153,7 @@ export const authOptions: NextAuthOptions = {
             walletAddress: fields.address,
           };
         } catch (e) {
-          log.error({ error: e }, "[SIWE] Authorize error");
+          getLog().error({ error: e }, "[SIWE] Authorize error");
           return null;
         }
       },

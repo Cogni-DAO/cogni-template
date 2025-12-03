@@ -7,8 +7,10 @@
  * Scope: Homepage only. Does not handle global layout.
  * Invariants: None.
  * Side-effects: none
- * Links: src/components/vendor/shadcn-io/sparkles.tsx
+ * Links: src/components/vendor/shadcn-io/sparkles.tsx, src/features/home/hooks/useTryDemo.ts
  */
+
+"use client";
 
 import { ArrowRight, Github } from "lucide-react";
 import Link from "next/link";
@@ -18,7 +20,11 @@ import { Button } from "@/components";
 // eslint-disable-next-line no-restricted-imports
 import { SparklesCore } from "@/components/vendor/shadcn-io/sparkles";
 
+import { useTryDemo } from "../hooks/useTryDemo";
+
 export function NewHomeHero(): ReactElement {
+  const { handleTryDemo } = useTryDemo();
+
   return (
     <>
       {/* eslint-disable-next-line ui-governance/no-arbitrary-non-token-values */}
@@ -87,11 +93,9 @@ export function NewHomeHero(): ReactElement {
           {}
           <div className="flex flex-col items-center justify-center text-center">
             <div className="mt-6 flex flex-col gap-4 sm:flex-row">
-              <Button size="lg" asChild>
-                <Link href="/chat">
-                  Try the demo
-                  <ArrowRight className="ml-2 size-4" />
-                </Link>
+              <Button size="lg" onClick={handleTryDemo}>
+                Try the demo
+                <ArrowRight className="ml-2 size-4" />
               </Button>
               <Button variant="outline" size="lg" asChild>
                 <Link href="https://github.com/cogni-dao/cogni-template">

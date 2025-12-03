@@ -1,4 +1,4 @@
-Goal: Produce a Conventional Commit PR title and a concise, factual PR summary for this branch, into the `staging` branch. Assume MVP quality unless evidence exists otherwise.
+Goal: Produce a Conventional Commit PR title and a concise, factual PR summary for this branch, into the `staging` branch. STAGING. Assume MVP quality unless evidence exists otherwise.
 
 Hard rules:
 

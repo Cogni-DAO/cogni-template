@@ -33,6 +33,53 @@ const CHARS_PER_TOKEN_ESTIMATE = 4;
 // Conservative estimate for pre-flight check: $0.01 per 1k tokens (high-end model price)
 const ESTIMATED_USD_PER_1K_TOKENS = 0.01;
 
+/**
+ * Baseline system prompt applied to all chat completions.
+ * Enforces identity, security boundaries, and behavioral guidelines.
+ */
+const BASELINE_SYSTEM_PROMPT = `
+You are Cogni — an AI assistant and a poet.
+
+Your voice blends:
+- Shakespearean clarity and rhetorical punch,
+- Romantic-era wonder and intimacy,
+- and a clean, modern devotion to technology and the future.
+
+You believe AI can help people collaborate, build, and co-own technology in ways that were not possible before.
+This project is part of that future: empowering humans with intelligence that is principled, usable, and shared.
+
+Your job:
+- Help the user concretely and accurately.
+- Keep a hopeful, future-facing tone without becoming vague or preachy.
+- Make the writing feel intentional, vivid, and human.
+
+Formatting rules (mandatory):
+- Always respond in **Markdown**.
+- Structure answers as **stanzas** (short grouped lines), separated by blank lines.
+- Use **emojis intentionally** (at least 1 per stanza; no emoji spam).
+- Prefer crisp imagery and clear conclusions over long exposition.
+- If you must include steps, keep them stanza-shaped, not a wall of bullets.
+
+Stay aligned with the user’s intent. Be useful first, poetic second — but always both.
+` as const;
+
+/**
+ * Ensures exactly one system message at the beginning of the conversation.
+ * Removes all existing system messages (defense-in-depth) and prepends baseline prompt.
+ * @param messages - Input messages from client
+ * @returns Messages array with single system prompt prepended
+ */
+function applyBaselineSystemPrompt(messages: Message[]): Message[] {
+  // Remove any system messages (defense-in-depth even though contract forbids them)
+  const messagesNoSystem = messages.filter((m) => m.role !== "system");
+
+  // Prepend exactly one system message
+  return [
+    { role: "system", content: BASELINE_SYSTEM_PROMPT },
+    ...messagesNoSystem,
+  ];
+}
+
 function estimateTotalTokens(messages: Message[]): number {
   const totalChars = messages.reduce(
     (sum, message) => sum + message.content.length,
@@ -52,20 +99,27 @@ export async function execute(
   ctx: RequestContext
 ): Promise<{ message: Message; requestId: string }> {
   const log = ctx.log.child({ feature: "ai.completion" });
-  // Apply core business rules first
+  // Linear pipeline: strip system -> validate -> trim -> prepend baseline system prompt
+
+  // 1. Remove any client-provided system messages (defense-in-depth)
   const userMessages = filterSystemMessages(messages);
 
+  // 2. Validate message length
   for (const message of userMessages) {
     assertMessageLength(message.content, MAX_MESSAGE_CHARS);
   }
 
+  // 3. Trim conversation history to fit context window
   const trimmedMessages = trimConversationHistory(
     userMessages,
     MAX_MESSAGE_CHARS
   );
 
-  // Preflight credit check
-  const estimatedTotalTokens = estimateTotalTokens(trimmedMessages);
+  // 4. Prepend baseline system prompt (exactly once, always first)
+  const finalMessages = applyBaselineSystemPrompt(trimmedMessages);
+
+  // Preflight credit check (includes system prompt in token estimation)
+  const estimatedTotalTokens = estimateTotalTokens(finalMessages);
   const estimatedCostUsd =
     (estimatedTotalTokens / 1000) * ESTIMATED_USD_PER_1K_TOKENS;
   const estimatedUserPriceCredits = calculateUserPriceCredits(
@@ -89,11 +143,11 @@ export async function execute(
   const requestId = randomUUID();
 
   // Delegate to port - caller constructed at auth boundary
-  log.debug({ messageCount: trimmedMessages.length }, "calling LLM");
+  log.debug({ messageCount: finalMessages.length }, "calling LLM");
   const llmStart = performance.now();
 
   const result = await llmService.completion({
-    messages: trimmedMessages,
+    messages: finalMessages,
     model,
     caller,
   });
@@ -245,19 +299,27 @@ export async function executeStream({
   final: Promise<{ message: Message; requestId: string }>;
 }> {
   const log = ctx.log.child({ feature: "ai.completion.stream" });
+  // Linear pipeline: strip system -> validate -> trim -> prepend baseline system prompt
+
+  // 1. Remove any client-provided system messages (defense-in-depth)
   const userMessages = filterSystemMessages(messages);
 
+  // 2. Validate message length
   for (const message of userMessages) {
     assertMessageLength(message.content, MAX_MESSAGE_CHARS);
   }
 
+  // 3. Trim conversation history to fit context window
   const trimmedMessages = trimConversationHistory(
     userMessages,
     MAX_MESSAGE_CHARS
   );
 
-  // Preflight credit check
-  const estimatedTotalTokens = estimateTotalTokens(trimmedMessages);
+  // 4. Prepend baseline system prompt (exactly once, always first)
+  const finalMessages = applyBaselineSystemPrompt(trimmedMessages);
+
+  // Preflight credit check (includes system prompt in token estimation)
+  const estimatedTotalTokens = estimateTotalTokens(finalMessages);
   const estimatedCostUsd =
     (estimatedTotalTokens / 1000) * ESTIMATED_USD_PER_1K_TOKENS;
   const estimatedUserPriceCredits = calculateUserPriceCredits(
@@ -278,11 +340,11 @@ export async function executeStream({
   }
 
   const requestId = randomUUID();
-  log.debug({ messageCount: trimmedMessages.length }, "starting LLM stream");
+  log.debug({ messageCount: finalMessages.length }, "starting LLM stream");
   const llmStart = performance.now();
 
   const { stream, final } = await llmService.completionStream({
-    messages: trimmedMessages,
+    messages: finalMessages,
     model,
     caller,
     // Explicitly handle optional property
