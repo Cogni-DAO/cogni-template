@@ -15,15 +15,17 @@
 import { z } from "zod";
 
 /**
- * Model schema matching OpenAI /v1/models format with extensions
- * - id: Model identifier (e.g., "gpt-4o-mini", "qwen3-4b")
- * - name: Optional display name
- * - isFree: Whether the model is free tier (for homepage filtering)
+ * Model schema with metadata from LiteLLM model_info
+ * - id: Model identifier (model_name alias from config)
+ * - name: Optional display name from model_info.display_name
+ * - isFree: Tier classification from model_info.is_free
+ * - providerKey: Provider identifier for icon rendering (from model_info.provider_key)
  */
 export const ModelSchema = z.object({
   id: z.string(),
   name: z.string().optional(),
   isFree: z.boolean(),
+  providerKey: z.string().optional(),
 });
 
 /**
