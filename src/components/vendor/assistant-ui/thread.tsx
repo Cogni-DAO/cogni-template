@@ -38,14 +38,14 @@ export interface ThreadProps {
 export const Thread: FC<ThreadProps> = ({ welcomeMessage }) => {
   return (
     <ThreadPrimitive.Root
-      className="aui-root aui-thread-root @container flex h-full flex-col bg-background"
+      className="aui-root aui-thread-root @container flex h-full min-h-0 flex-col overflow-hidden bg-background"
       style={{
         ["--thread-max-width" as string]: "42rem",
       }}
     >
       <ThreadPrimitive.Viewport
         turnAnchor="top"
-        className="aui-thread-viewport relative flex flex-1 flex-col overflow-x-auto overflow-y-scroll scroll-smooth px-4 pt-4"
+        className="aui-thread-viewport min-h-0 flex-1 overflow-y-auto scroll-smooth px-4 pt-4"
       >
         <ThreadPrimitive.If empty>
           {welcomeMessage ?? <ThreadWelcome />}
@@ -58,12 +58,13 @@ export const Thread: FC<ThreadProps> = ({ welcomeMessage }) => {
             AssistantMessage,
           }}
         />
-
-        <ThreadPrimitive.ViewportFooter className="aui-thread-viewport-footer sticky bottom-0 mx-auto mt-4 flex w-full max-w-(--thread-max-width) flex-col gap-4 overflow-visible rounded-t-3xl bg-background pb-4 md:pb-6">
-          <ThreadScrollToBottom />
-          <Composer />
-        </ThreadPrimitive.ViewportFooter>
       </ThreadPrimitive.Viewport>
+
+      {/* Composer is sibling after Viewport - always pinned at bottom */}
+      <div className="aui-thread-composer-container relative mx-auto w-full max-w-(--thread-max-width) shrink-0 px-4 pt-2 pb-4 md:pb-6">
+        <ThreadScrollToBottom />
+        <Composer />
+      </div>
     </ThreadPrimitive.Root>
   );
 };
