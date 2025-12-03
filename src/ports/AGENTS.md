@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-29
+- **Last reviewed:** 2025-12-04
 - **Status:** draft
 
 ## Purpose
@@ -38,12 +38,13 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
 
 - **Exports:**
   - AccountService (getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordLlmUsage, listCreditLedgerEntries, findCreditLedgerEntryByReference)
-  - LlmService (completion with optional providerCostUsd)
+  - LlmService (completion, completionStream with CompletionStreamParams including abortSignal)
+  - ChatDeltaEvent (text_delta | error | done)
   - PaymentAttemptRepository (create, findById, findByTxHash, updateStatus, bindTxHash, recordVerificationAttempt, logEvent)
   - OnChainVerifier (verify transaction against expected parameters)
   - Clock (now)
   - Port-level errors (InsufficientCreditsPortError, BillingAccountNotFoundPortError, VirtualKeyNotFoundPortError, PaymentAttemptNotFoundPortError, TxHashAlreadyBoundPortError)
-  - Types (BilledLlmUsageParams, NeedsReviewLlmUsageParams, LlmCaller, BillingAccount, CreditLedgerEntry, CreatePaymentAttemptParams, LogPaymentEventParams, VerificationResult, VerificationStatus)
+  - Types (BilledLlmUsageParams, NeedsReviewLlmUsageParams, LlmCaller, BillingAccount, CreditLedgerEntry, CreatePaymentAttemptParams, LogPaymentEventParams, VerificationResult, VerificationStatus, CompletionStreamParams)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config:** none
