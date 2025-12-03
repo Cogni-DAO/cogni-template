@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @cogni-dao
-- **Last reviewed:** 2025-12-01
+- **Last reviewed:** 2025-12-04
 - **Status:** stable
 
 ## Purpose
@@ -32,8 +32,9 @@ Cross-cutting observability concerns: structured logging, request context, and e
 ## Public Surface
 
 - **Exports:**
-  - `makeLogger(bindings?)` - Pino logger factory
+  - `makeLogger(bindings?)` - Pino logger factory (server-side)
   - `makeNoopLogger()` - Silent logger for tests
+  - `clientLogger.debug/info/warn/error(event, meta?)` - Client-side logging (MVP, no telemetry pipeline)
   - `createRequestContext({ baseLog, clock }, request, { routeId, session })` - Request context factory
   - `logRequestStart/End/Error/Warn(log, ...)` - Standardized helpers
   - `Logger`, `RequestContext`, `Clock` - Types
@@ -41,7 +42,7 @@ Cross-cutting observability concerns: structured logging, request context, and e
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** Uses `PINO_LOG_LEVEL`, `NODE_ENV`, `SERVICE_NAME` from serverEnv()
-- **Files considered API:** `index.ts`, `logging/index.ts`, `context/index.ts`
+- **Files considered API:** `index.ts`, `logging/index.ts`, `context/index.ts`, `clientLogger.ts`
 
 ## Ports
 
@@ -52,12 +53,13 @@ Cross-cutting observability concerns: structured logging, request context, and e
 ## Responsibilities
 
 - This directory **does**:
-  - Provide Pino logger factory emitting JSON to stdout (no worker transports)
+  - Provide Pino logger factory emitting JSON to stdout (server-side, no worker transports)
+  - Provide clientLogger for browser-side structured logging (MVP, console-based, no telemetry pipeline)
   - Define RequestContext for request-scoped logging
   - Provide standardized log helpers (start/end/error/warn)
   - Define event schemas for AI and Payments domains
   - Validate reqId from `x-request-id` header (max 64 chars, alphanumeric + `_-`)
-  - Redact sensitive fields (tokens, headers, wallet keys)
+  - Redact/drop sensitive fields (tokens, headers, wallet keys, prompts, API keys)
   - Set stable base fields (app, service) - env label added by Alloy
 
 - This directory **does not**:
@@ -68,7 +70,7 @@ Cross-cutting observability concerns: structured logging, request context, and e
 
 ## Usage
 
-**Route handler:**
+**Server route handler:**
 
 ```typescript
 import { getContainer } from "@/bootstrap/container";
@@ -88,7 +90,7 @@ const ctx = createRequestContext(
 logRequestStart(ctx.log);
 ```
 
-**Feature service:**
+**Server feature service:**
 
 ```typescript
 import type { RequestContext, AiLlmCallEvent } from "@/shared/observability";
@@ -100,19 +102,33 @@ export async function execute(..., ctx: RequestContext) {
 }
 ```
 
+**Client-side component/hook:**
+
+```typescript
+import { clientLogger } from "@/shared/observability";
+
+export function MyComponent() {
+  const handleError = (error: Error) => {
+    clientLogger.error("COMPONENT_ERROR", { error: error.message });
+  };
+}
+```
+
 ## Standards
 
-- All console.log/warn/error prohibited in src/ - use logger
-- JSON-only logs to stdout (formatting via external pipe: `pnpm dev:pretty`)
+- All console.\* prohibited in src/ - server code uses Pino logger; client code uses clientLogger
+- Server: JSON-only logs to stdout (formatting via external pipe: `pnpm dev:pretty`)
+- Client: debug/info dev-only; warn/error always output; drops forbidden keys (prompt, messages, apiKey, etc.)
 - Test silence: makeLogger() checks `VITEST=true || NODE_ENV=test`
-- Security: reqId validation prevents injection attacks
+- Security: reqId validation prevents injection attacks; clientLogger drops sensitive keys
 - Stable event schemas with typed fields
 - Bindings cannot override reserved keys (app, service)
+- Lint enforcement: Biome suspicious/noConsole rule (tests/scripts/logger modules exempted)
 
 ## Dependencies
 
 - **Internal:** `@/shared/auth` (SessionUser), `@/shared/env` (serverEnv)
-- **External:** pino, pino-pretty (dev)
+- **External:** pino, pino-pretty (dev), fast-safe-stringify (client)
 
 ## Change Protocol
 

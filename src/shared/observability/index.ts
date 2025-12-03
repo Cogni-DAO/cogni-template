@@ -12,6 +12,8 @@
  * @public
  */
 
+// Logging (Client)
+export * as clientLogger from "./clientLogger";
 export type { Clock, RequestContext } from "./context";
 // Context
 export { createRequestContext } from "./context";
@@ -29,7 +31,7 @@ export type {
   PaymentsStateTransitionEvent,
   PaymentsVerifiedEvent,
 } from "./logging";
-// Logging
+// Logging (Server)
 export {
   logRequestEnd,
   logRequestError,

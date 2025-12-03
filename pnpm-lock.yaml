@@ -92,6 +92,9 @@ importers:
       eventsource-parser:
         specifier: ^3.0.6
         version: 3.0.6
+      fast-safe-stringify:
+        specifier: ^2.1.1
+        version: 2.1.1
       framer-motion:
         specifier: ^12.23.25
         version: 12.23.25(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
