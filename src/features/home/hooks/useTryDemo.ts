@@ -4,7 +4,7 @@
 /**
  * Module: `@features/home/hooks/useTryDemo`
  * Purpose: Handle "Try Demo" authentication flow before navigating to /chat.
- * Scope: Homepage only. Opens RainbowKit modals for auth, then navigates on success.
+ * Scope: Homepage only. Opens RainbowKit modals for auth, then navigates on success. Does not handle auth UI rendering.
  * Invariants: No navigation until authenticated; uses existing RainbowKit + SIWE flow; persists redirect intent in sessionStorage.
  * Side-effects: IO (opens modals, navigates via router, writes sessionStorage)
  * Notes: Prevents redirect loop by completing auth BEFORE pushing to /chat. Uses sessionStorage to survive SIWE redirects.
