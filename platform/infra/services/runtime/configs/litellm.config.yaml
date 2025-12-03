@@ -29,18 +29,17 @@ model_list:
       is_free: true
       provider_key: "openai"
 
-  # XAI (Grok)
-  - model_name: grok-4.1-fast
-    litellm_params:
-      model: openrouter/x-ai/grok-4.1-fast:free
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "Grok 4.1 Fast"
-      is_free: true
-      provider_key: "xai"
-
   # ===== PAID MODELS =====
   # OpenAI
+  - model_name: gpt-5-nano
+    litellm_params:
+      model: openrouter/openai/gpt-5-nano
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "GPT-5 Nano"
+      is_free: false
+      provider_key: "openai"
+
   - model_name: gpt-5
     litellm_params:
       model: openrouter/openai/gpt-5
@@ -127,6 +126,16 @@ model_list:
       display_name: "Qwen 3 VL 8B"
       is_free: false
       provider_key: "qwen"
+
+  # XAI (Grok)
+  - model_name: grok-4.1-fast
+    litellm_params:
+      model: openrouter/x-ai/grok-4.1-fast
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Grok 4.1 Fast"
+      is_free: false
+      provider_key: "xai"
 
 general_settings:
   master_key: "os.environ/LITELLM_MASTER_KEY"

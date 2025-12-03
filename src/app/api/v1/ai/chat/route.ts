@@ -56,7 +56,8 @@ function toMessageDtos(wireMessages: ChatInput["messages"]): MessageDto[] {
  */
 function handleRouteError(
   ctx: RequestContext,
-  error: unknown
+  error: unknown,
+  model?: string
 ): NextResponse | null {
   // Zod validation errors
   if (error && typeof error === "object" && "issues" in error) {
@@ -118,6 +119,16 @@ function handleRouteError(
         { status: 429 }
       );
     }
+    if (
+      error.message.includes("LiteLLM API error: 404") ||
+      error.message.includes("No endpoints found")
+    ) {
+      logRequestWarn(ctx.log, error, "MODEL_UNAVAILABLE");
+      return NextResponse.json(
+        { code: "MODEL_UNAVAILABLE", model },
+        { status: 409 }
+      );
+    }
     if (error.message.includes("LiteLLM")) {
       logRequestWarn(ctx.log, error, "LLM_SERVICE_UNAVAILABLE");
       return NextResponse.json(
@@ -133,6 +144,7 @@ function handleRouteError(
 export const POST = wrapRouteHandlerWithLogging(
   { routeId: "ai.chat", auth: { mode: "required", getSessionUser } },
   async (ctx, request, sessionUser) => {
+    let input: ChatInput | undefined;
     try {
       // Parse JSON body
       let body: unknown;
@@ -157,7 +169,7 @@ export const POST = wrapRouteHandlerWithLogging(
           { status: 400 }
         );
       }
-      const input = inputParseResult.data;
+      input = inputParseResult.data;
 
       // Validate model against cached allowlist (MVP-004: PERF-001 fix)
       const { isModelAllowed, getDefaultModelId } = await import(
@@ -217,7 +229,7 @@ export const POST = wrapRouteHandlerWithLogging(
                 encoder.encode(
                   `event: message.started\ndata: ${JSON.stringify({
                     messageId,
-                    threadId: input.threadId ?? randomUUID(),
+                    threadId: input?.threadId ?? randomUUID(),
                     role: "assistant",
                     createdAt: new Date().toISOString(),
                   })}\n\n`
@@ -324,7 +336,7 @@ export const POST = wrapRouteHandlerWithLogging(
 
       return NextResponse.json(outputParseResult.data);
     } catch (error) {
-      const errorResponse = handleRouteError(ctx, error);
+      const errorResponse = handleRouteError(ctx, error, input?.model);
       if (errorResponse) return errorResponse;
       throw error; // Unhandled → wrapper catches
     }
