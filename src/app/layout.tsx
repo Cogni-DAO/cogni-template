@@ -52,15 +52,8 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AppProviders>
-            <div className="flex h-dvh flex-col overflow-hidden">
-              <Header />
-              <main
-                id="main"
-                className="flex min-h-0 flex-1 flex-col overflow-hidden"
-              >
-                {children}
-              </main>
-            </div>
+            <Header />
+            <main id="main">{children}</main>
           </AppProviders>
         </ThemeProvider>
       </body>

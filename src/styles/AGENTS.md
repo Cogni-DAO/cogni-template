@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek
-- **Last reviewed:** 2025-12-02
+- **Last reviewed:** 2025-12-03
 - **Status:** stable
 
 ## Purpose
@@ -67,8 +67,9 @@ pnpm typecheck
 
 - **Token pipeline (CSS-first)**: Colors + fonts + spacing + z-index → `@theme inline` block → Tailwind utilities; Runtime theme vars (:root/.dark) mapped via `hsl(var(--name))` pattern
 - **Tailwind v4 CSS-first**: Uses `@theme inline`, `@utility`, `@custom-variant` directives; no JS config file
+- **Layout dimensions**: `--app-header-h` defines header height; `.chat-viewport` utility provides viewport height minus header
 - **Dropdown widths**: Use CSS custom property syntax `w-(--dropdown-sm)` instead of theme tokens
-- CVA factories use Tailwind classes (gap-4, h-icon-lg, z-overlay) - no var() refs except approved hero animation tokens and dropdown widths
+- CVA factories use Tailwind classes (gap-4, h-icon-lg, z-overlay) - no var() refs except approved hero animation tokens, dropdown widths, and layout dimensions
 - theme.ts exports only token keys and types for CVA variant props
 - All component styling flows through ui.ts barrel (re-exports from ui/ domain modules)
 

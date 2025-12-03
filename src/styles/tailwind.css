@@ -171,6 +171,9 @@
     --hero-spacing-xl: 1.25rem;
     --hero-spacing-rainbow: 8.4375rem;
     --width-action-words: 11.6875rem;
+
+    /* App layout dimensions - used by route-specific layouts for viewport height calculations */
+    --app-header-h: 4rem; /* Header.tsx py-3 + border = ~4rem total height */
   }
 
   /* Apply base styles using CSS variables directly (Tailwind v4 compatibility) */
@@ -206,5 +209,13 @@
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     text-shadow: 0 0 20px hsl(var(--accent-glow) / 0.15);
+  }
+
+  /* Chat-specific viewport height (full viewport minus header) */
+  /* Used by src/app/(app)/chat/layout.tsx to create fixed-height container for pinned composer */
+  .chat-viewport {
+    height: calc(
+      100dvh - var(--app-header-h)
+    ); /* Full viewport minus header = available chat area */
   }
 }
