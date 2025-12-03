@@ -16,37 +16,65 @@ model_list:
     litellm_params:
       model: openrouter/qwen/qwen3-4b:free
       api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Qwen 3 4B (Free)"
+      is_free: true
+      provider_key: "qwen"
 
   - model_name: qwen3-235b
     litellm_params:
       model: openrouter/qwen/qwen3-235b-a22b:free
       api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Qwen 3 235B (Free)"
+      is_free: true
+      provider_key: "qwen"
 
   - model_name: qwen3-coder
     litellm_params:
       model: openrouter/qwen/qwen3-coder:free
       api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Qwen 3 Coder (Free)"
+      is_free: true
+      provider_key: "qwen"
 
   - model_name: hermes-3-405b
     litellm_params:
       model: openrouter/nousresearch/hermes-3-llama-3.1-405b:free
       api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Hermes 3 405B (Free)"
+      is_free: true
+      provider_key: "hermes"
 
   - model_name: gpt-oss-20b
     litellm_params:
       model: openrouter/openai/gpt-oss-20b:free
       api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "GPT OSS 20B (Free)"
+      is_free: true
+      provider_key: "openai"
 
-  # Paid Models (for reference)
+  # Paid Models
   - model_name: gpt-4o-mini
     litellm_params:
       model: openrouter/openai/gpt-4o-mini
       api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "GPT-4O Mini"
+      is_free: false
+      provider_key: "openai"
 
   - model_name: claude-3-haiku
     litellm_params:
       model: openrouter/anthropic/claude-3-haiku
       api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Claude 3 Haiku"
+      is_free: false
+      provider_key: "anthropic"
 
 general_settings:
   master_key: "os.environ/LITELLM_MASTER_KEY"
