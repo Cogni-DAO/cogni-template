@@ -26,7 +26,12 @@ export {
   VirtualKeyNotFoundPortError,
 } from "./accounts.port";
 export type { Clock } from "./clock.port";
-export type { LlmCaller, LlmService } from "./llm.port";
+export type {
+  ChatDeltaEvent,
+  CompletionStreamParams,
+  LlmCaller,
+  LlmService,
+} from "./llm.port";
 export type {
   OnChainVerifier,
   VerificationResult,

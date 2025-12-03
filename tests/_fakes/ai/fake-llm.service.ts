@@ -112,6 +112,48 @@ export class FakeLlmService implements LlmService {
     return response;
   }
 
+  async completionStream(
+    params: Parameters<LlmService["completionStream"]>[0]
+  ): ReturnType<LlmService["completionStream"]> {
+    this.callLog.push(params);
+    if (this.options.shouldThrow) {
+      throw new Error(this.options.errorMessage ?? "Fake LLM error");
+    }
+
+    const content = this.options.responseContent ?? "Fake AI response";
+    const usage = this.options.usage ?? {
+      promptTokens: 10,
+      completionTokens: 10,
+      totalTokens: 20,
+    };
+    const providerCostUsd = 0.0002;
+
+    const stream = (async function* () {
+      yield { type: "text_delta", delta: content } as const;
+      yield { type: "done" } as const;
+    })();
+
+    return {
+      stream: stream as AsyncIterable<import("@/ports").ChatDeltaEvent>,
+      final: Promise.resolve({
+        message: {
+          role: "assistant",
+          content,
+        },
+        usage,
+        ...(this.options.finishReason
+          ? { finishReason: this.options.finishReason }
+          : {}),
+        providerMeta: {
+          model: params.model ?? "mock-model",
+          provider: "fake",
+          requestId: "fake-request-id",
+        },
+        providerCostUsd,
+      }),
+    };
+  }
+
   // Test utilities
   reset(): void {
     this.callLog = [];

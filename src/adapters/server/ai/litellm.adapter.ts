@@ -3,17 +3,50 @@
 
 /**
  * Module: `@adapters/server/ai/litellm`
- * Purpose: LiteLLM service implementation for AI completion with dynamic cost extraction from response headers.
- * Scope: Implements LlmService port, extracts cost from x-litellm-response-cost header. Does not handle authentication or rate limiting.
- * Invariants: Never sets timestamps; never logs prompts/keys; enforces timeouts; returns message when cost missing; null quarantined
+ * Purpose: LiteLLM service implementation for AI completion and streaming with dynamic cost extraction from response headers.
+ * Scope: Implements LlmService port (completion + completionStream), extracts cost from x-litellm-response-cost header. Does not handle authentication or rate limiting.
+ * Invariants: Never sets timestamps; never logs prompts/keys; 15s connect timeout (TTFB only); stream settles exactly once; null quarantined
  * Side-effects: IO (HTTP calls to LiteLLM)
- * Notes: Reads cost from HTTP headers (not JSON body), logs structured BILLING_NO_PROVIDER_COST warning when header absent
- * Links: Implements LlmService port, uses serverEnv configuration
+ * Notes: Uses eventsource-parser for SSE; logs malformed chunks as warnings; yields error events on provider errors
+ * Links: Implements LlmService port, uses serverEnv configuration, defer<T>() helper ensures promise settlement safety
  * @internal
  */
 
-import type { LlmService } from "@/ports";
+import {
+  createParser,
+  type EventSourceMessage,
+  type EventSourceParser,
+} from "eventsource-parser";
+import type { ChatDeltaEvent, LlmService } from "@/ports";
 import { serverEnv } from "@/shared/env";
+import { makeLogger } from "@/shared/observability/logging/logger";
+
+const logger = makeLogger({ component: "LiteLlmAdapter" });
+
+/**
+ * Create a deferred promise with resolve/reject callbacks.
+ * Ensures promise settles exactly once.
+ */
+function defer<T>() {
+  let settled = false;
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = (value) => {
+      if (!settled) {
+        settled = true;
+        res(value);
+      }
+    };
+    reject = (reason) => {
+      if (!settled) {
+        settled = true;
+        rej(reason);
+      }
+    };
+  });
+  return { promise, resolve, reject };
+}
 
 /**
  * Extract provider cost from LiteLLM response headers.
@@ -80,7 +113,11 @@ export class LiteLlmAdapter implements LlmService {
 
       const data = (await response.json()) as {
         choices: { message: { content: string }; finish_reason?: string }[];
-        usage: { prompt_tokens: number; completion_tokens: number };
+        usage: {
+          prompt_tokens: number;
+          completion_tokens: number;
+          total_tokens?: number;
+        };
       };
 
       if (
@@ -93,17 +130,21 @@ export class LiteLlmAdapter implements LlmService {
       }
 
       // Build result object conditionally to satisfy exactOptionalPropertyTypes
+      const promptTokens = Number(data.usage?.prompt_tokens) || 0;
+      const completionTokens = Number(data.usage?.completion_tokens) || 0;
+      const totalTokens = data.usage?.total_tokens
+        ? Number(data.usage.total_tokens)
+        : promptTokens + completionTokens;
+
       const result: Awaited<ReturnType<LlmService["completion"]>> = {
         message: {
           role: "assistant",
           content: data.choices[0].message.content,
         },
         usage: {
-          promptTokens: Number(data.usage?.prompt_tokens) || 0,
-          completionTokens: Number(data.usage?.completion_tokens) || 0,
-          totalTokens:
-            Number(data.usage?.prompt_tokens) +
-              Number(data.usage?.completion_tokens) || 0,
+          promptTokens,
+          completionTokens,
+          totalTokens,
         },
         providerMeta: data as unknown as Record<string, unknown>,
       };
@@ -127,5 +168,206 @@ export class LiteLlmAdapter implements LlmService {
       }
       throw new Error("LiteLLM completion failed: Unknown error");
     }
+  }
+
+  async completionStream(
+    params: Parameters<LlmService["completionStream"]>[0]
+  ): ReturnType<LlmService["completionStream"]> {
+    const model = params.model ?? serverEnv().DEFAULT_MODEL;
+    const temperature = params.temperature ?? 0.7;
+    const maxTokens = params.maxTokens ?? 2048;
+    const { billingAccountId: user, litellmVirtualKey } = params.caller;
+
+    const liteLlmMessages = params.messages.map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    }));
+
+    const requestBody = {
+      model,
+      messages: liteLlmMessages,
+      temperature,
+      max_tokens: maxTokens,
+      user,
+      stream: true,
+      stream_options: { include_usage: true }, // Request usage in stream if supported
+    };
+
+    let response: Response;
+    // Use short timeout for connection/TTFB only (not entire stream duration)
+    const connectCtl = new AbortController();
+    const connectTimer = setTimeout(() => connectCtl.abort(), 15000);
+    try {
+      const signal = params.abortSignal
+        ? AbortSignal.any([connectCtl.signal, params.abortSignal])
+        : connectCtl.signal;
+
+      response = await fetch(
+        `${serverEnv().LITELLM_BASE_URL}/v1/chat/completions`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${litellmVirtualKey}`,
+          },
+          body: JSON.stringify(requestBody),
+          signal,
+        }
+      );
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        throw error; // Propagate abort immediately
+      }
+      throw new Error(
+        `LiteLLM stream init failed: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+    } finally {
+      clearTimeout(connectTimer);
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        `LiteLLM API error: ${response.status} ${response.statusText}`
+      );
+    }
+
+    // Capture response.body to prove non-null to TypeScript
+    const body = response.body;
+    if (!body) {
+      throw new Error("LiteLLM response body is empty");
+    }
+
+    // Capture cost from headers if available immediately (unlikely for stream)
+    const providerCostUsd = getProviderCostFromHeaders(response);
+
+    // Create a deferred promise for the final result (matches completion() return type)
+    type CompletionResult = Awaited<ReturnType<LlmService["completion"]>>;
+    const deferred = defer<CompletionResult>();
+
+    const stream: AsyncIterable<ChatDeltaEvent> =
+      (async function* (): AsyncGenerator<ChatDeltaEvent> {
+        const reader = body.getReader();
+        const decoder = new TextDecoder();
+        let fullContent = "";
+        let finalUsage:
+          | {
+              promptTokens: number;
+              completionTokens: number;
+              totalTokens: number;
+            }
+          | undefined;
+        let finishReason: string | undefined;
+
+        // Queue for parsed events from eventsource-parser
+        const eventQueue: EventSourceMessage[] = [];
+
+        const parser: EventSourceParser = createParser({
+          onEvent(event: EventSourceMessage) {
+            eventQueue.push(event);
+          },
+        });
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            // Feed decoded chunk to eventsource-parser
+            const chunk = decoder.decode(value, { stream: true });
+            parser.feed(chunk);
+
+            // Process all queued events
+            while (eventQueue.length > 0) {
+              const event = eventQueue.shift();
+              if (!event) break;
+              const data = event.data;
+
+              if (data === "[DONE]") {
+                yield { type: "done" } as const;
+                continue;
+              }
+
+              try {
+                const json = JSON.parse(data);
+
+                // Check for provider error in response
+                if (json.error) {
+                  const errorMsg =
+                    typeof json.error === "string"
+                      ? json.error
+                      : json.error.message || "Provider error";
+                  const errorText = `LiteLLM stream error: ${errorMsg}`;
+                  yield { type: "error", error: errorText } as const;
+                  deferred.reject(new Error(errorText));
+                  return;
+                }
+
+                if (json.usage) {
+                  finalUsage = {
+                    promptTokens: json.usage.prompt_tokens,
+                    completionTokens: json.usage.completion_tokens,
+                    totalTokens: json.usage.total_tokens,
+                  };
+                }
+
+                const choice = json.choices?.[0];
+                if (choice) {
+                  if (choice.finish_reason) {
+                    finishReason = choice.finish_reason;
+                  }
+
+                  const content = choice.delta?.content;
+                  if (content) {
+                    fullContent += content;
+                    yield { type: "text_delta", delta: content } as const;
+                  }
+                }
+              } catch (parseError) {
+                // Log malformed JSON but continue streaming (transient SSE noise)
+                const errorMessage =
+                  parseError instanceof Error
+                    ? parseError.message
+                    : "JSON parse error";
+                logger.warn(
+                  { data: data.slice(0, 100) },
+                  `Malformed SSE data: ${errorMessage}`
+                );
+                // Do not yield error - continue processing remaining events
+              }
+            }
+          }
+        } catch (error: unknown) {
+          if (error instanceof Error && error.name === "AbortError") {
+            // Stream aborted - resolve final with partial content, no error yield
+          } else {
+            // Real stream failure
+            deferred.reject(error);
+            return;
+          }
+        } finally {
+          reader.releaseLock();
+          // Build result object conditionally to satisfy exactOptionalPropertyTypes
+          const result: CompletionResult = {
+            message: { role: "assistant", content: fullContent },
+          };
+          if (finalUsage) {
+            result.usage = finalUsage;
+          }
+          if (finishReason) {
+            result.finishReason = finishReason;
+          }
+          if (typeof providerCostUsd === "number") {
+            result.providerCostUsd = providerCostUsd;
+          }
+          deferred.resolve(result);
+        }
+      })();
+
+    return {
+      stream,
+      final: deferred.promise,
+    };
   }
 }

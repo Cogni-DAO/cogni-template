@@ -22,11 +22,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 
-import {
-  aiChatOperation,
-  type ChatInput,
-  type ChatMessage,
-} from "@/contracts/ai.chat.v1.contract";
+import type { ChatInput, ChatMessage } from "@/contracts/ai.chat.v1.contract";
 
 /**
  * Message builder using CONTRACT TYPES - never manual interfaces
@@ -95,16 +91,20 @@ export function ChatRuntimeProvider({
     abortControllerRef.current = new AbortController();
 
     try {
-      const requestBody: ChatInput = {
+      const requestBody: ChatInput & { stream?: boolean } = {
         threadId, // client-generated, stable for session
         clientRequestId,
         messages: nextMessages,
         model: selectedModel, // REQ-001: always present
+        stream: true,
       };
 
       const response = await fetch("/api/v1/ai/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
         body: JSON.stringify(requestBody),
         signal: abortControllerRef.current.signal,
       });
@@ -121,58 +121,30 @@ export function ChatRuntimeProvider({
       if (response.status === 409) {
         // UX-001: Invalid model, retry with defaultModelId
         console.warn(`Model "${selectedModel}" invalid, retrying with default`);
-        const retryBody: ChatInput = {
+        const retryBody: ChatInput & { stream?: boolean } = {
           ...requestBody,
           model: defaultModelId,
         };
         const retryResponse = await fetch("/api/v1/ai/chat", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
           body: JSON.stringify(retryBody),
           signal: abortControllerRef.current.signal,
         });
         if (!retryResponse.ok) {
           throw new Error(`API error after retry: ${retryResponse.status}`);
         }
-        const retryRaw = await retryResponse.json();
-        const retryParseResult = aiChatOperation.output.safeParse(retryRaw);
-        if (!retryParseResult.success) {
-          throw new Error(
-            `Malformed retry response: ${retryParseResult.error.flatten().fieldErrors}`
-          );
-        }
-        const retryData = retryParseResult.data;
-        if (activeRequestIdRef.current !== clientRequestId) return;
-        const retryFinalMessages = [...messagesRef.current, retryData.message];
-        messagesRef.current = retryFinalMessages;
-        setMessages(retryFinalMessages);
-        queryClient.invalidateQueries({ queryKey: ["payments-summary"] });
+        await processStream(retryResponse, clientRequestId);
         return;
       }
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
 
-      // 6. ZOD PARSE response - throws controlled error on malformed output
-      const raw = await response.json();
-      const parseResult = aiChatOperation.output.safeParse(raw);
-      if (!parseResult.success) {
-        throw new Error(
-          `Malformed response: ${parseResult.error.flatten().fieldErrors}`
-        );
-      }
-      const data = parseResult.data;
-
-      // 7. Check if this request is still active (ref-based, not stale)
-      if (activeRequestIdRef.current !== clientRequestId) return;
-
-      // 8. Append assistant message on SUCCESS only
-      const finalMessages = [...messagesRef.current, data.message];
-      messagesRef.current = finalMessages;
-      setMessages(finalMessages);
-
-      // Only invalidate credits on successful response
-      queryClient.invalidateQueries({ queryKey: ["payments-summary"] });
+      await processStream(response, clientRequestId);
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
         return; // cancelled - do NOT append
@@ -182,6 +154,100 @@ export function ChatRuntimeProvider({
       setIsRunning(false);
       activeRequestIdRef.current = null;
       abortControllerRef.current = null;
+    }
+  };
+
+  const processStream = async (response: Response, clientRequestId: string) => {
+    if (!response.body) throw new Error("No response body");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    const assistantMessageId = crypto.randomUUID();
+    let accumulatedContent = "";
+
+    // Create initial assistant message
+    const initialAssistantMessage = createChatMessage(
+      "assistant",
+      "",
+      assistantMessageId
+    );
+
+    // Optimistically add assistant message
+    if (activeRequestIdRef.current === clientRequestId) {
+      const msgs = [...messagesRef.current, initialAssistantMessage];
+      messagesRef.current = msgs;
+      setMessages(msgs);
+    }
+
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split("\n\n");
+      buffer = chunks.pop() ?? "";
+
+      for (const chunk of chunks) {
+        processSseChunk(
+          chunk,
+          clientRequestId,
+          accumulatedContent,
+          (content) => {
+            accumulatedContent = content;
+          }
+        );
+      }
+    }
+  };
+
+  const processSseChunk = (
+    chunk: string,
+    clientRequestId: string,
+    currentContent: string,
+    onContentUpdate: (content: string) => void
+  ) => {
+    const lines = chunk.split("\n");
+    let eventType = "";
+    let dataStr = "";
+
+    for (const line of lines) {
+      if (line.startsWith("event: ")) {
+        eventType = line.slice(7).trim();
+      } else if (line.startsWith("data: ")) {
+        dataStr = line.slice(6);
+      }
+    }
+
+    if (!dataStr) return;
+
+    try {
+      const data = JSON.parse(dataStr);
+      if (activeRequestIdRef.current !== clientRequestId) return;
+
+      if (eventType === "message.delta") {
+        const newContent = currentContent + data.delta;
+        onContentUpdate(newContent);
+        updateLastMessageContent(newContent);
+      } else if (eventType === "message.completed") {
+        queryClient.invalidateQueries({ queryKey: ["payments-summary"] });
+      } else if (eventType === "error") {
+        console.error("Stream error:", data.message);
+      }
+    } catch (e) {
+      console.error("Error parsing SSE", e);
+    }
+  };
+
+  const updateLastMessageContent = (newContent: string) => {
+    const currentMsgs = [...messagesRef.current];
+    const lastMsg = currentMsgs[currentMsgs.length - 1];
+    if (lastMsg && lastMsg.role === "assistant") {
+      currentMsgs[currentMsgs.length - 1] = {
+        ...lastMsg,
+        content: [{ type: "text", text: newContent }],
+      };
+      messagesRef.current = currentMsgs;
+      setMessages(currentMsgs);
     }
   };
 

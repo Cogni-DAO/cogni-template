@@ -39,7 +39,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - `getPreferredModelId`, `setPreferredModelId`, `validatePreferredModel` (localStorage preferences)
 - **Routes:**
   - `/api/v1/ai/completion` (POST) - text completion with credits metering
-  - `/api/v1/ai/chat` (POST) - chat endpoint (non-streaming in v0)
+  - `/api/v1/ai/chat` (POST) - chat endpoint (streaming support via SSE)
   - `/api/v1/ai/models` (GET) - list available models with tier info
 - **Env/Config keys:** `LITELLM_BASE_URL`, `DEFAULT_MODEL` (via serverEnv)
 - **Files considered API:** public.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
@@ -65,7 +65,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - Implement LLM adapters (owned by adapters/server/ai)
   - Manage credits/billing (owned by features/accounts)
   - Persist chat messages to database (planned for v2)
-  - Implement streaming (planned for v1)
+  - Implement streaming (supported in v1 via SSE)
 
 ## Usage
 
@@ -111,7 +111,7 @@ import { Thread } from "@/components/kit/chat";
 ## Notes
 
 - Model list currently hardcoded from litellm.config.yaml (TODO: fetch from LiteLLM API)
-- Chat is non-streaming in v0 (streaming planned for v1)
+- Chat supports streaming via SSE (v1)
 - Message persistence planned for v2 with smart windowing
 - Model validation implements UX-001 (graceful fallback to default)
 - Server cache implements PERF-001 (no per-request network calls)

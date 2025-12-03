@@ -112,3 +112,72 @@ export async function completion(
     throw error;
   }
 }
+
+export async function completionStream(
+  input: CompletionInput & { abortSignal?: AbortSignal },
+  ctx: RequestContext
+): Promise<{
+  stream: AsyncIterable<import("@/ports").ChatDeltaEvent>;
+  final: Promise<{ message: MessageDto; requestId: string }>;
+}> {
+  const { llmService, accountService, clock } = resolveAiDeps();
+
+  const billingAccount = await getOrCreateBillingAccountForUser(
+    accountService,
+    {
+      userId: input.sessionUser.id,
+      ...(input.sessionUser.walletAddress
+        ? { walletAddress: input.sessionUser.walletAddress }
+        : {}),
+    }
+  );
+
+  const caller: LlmCaller = {
+    billingAccountId: billingAccount.id,
+    virtualKeyId: billingAccount.defaultVirtualKeyId,
+    litellmVirtualKey: billingAccount.litellmVirtualKey,
+  };
+
+  const enrichedCtx: RequestContext = {
+    ...ctx,
+    log: ctx.log.child({
+      userId: input.sessionUser.id,
+      billingAccountId: billingAccount.id,
+    }),
+  };
+
+  const timestamp = clock.now();
+  const coreMessages = toCoreMessages(input.messages, timestamp);
+
+  try {
+    const { executeStream } = await import("@/features/ai/services/completion");
+    const { stream, final } = await executeStream({
+      messages: coreMessages,
+      model: input.model,
+      llmService,
+      accountService,
+      clock,
+      caller,
+      ctx: enrichedCtx,
+      // Explicitly handle optional property
+      ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
+    });
+
+    const wrappedFinal = final.then((result) => ({
+      message: fromCoreMessage(result.message),
+      requestId: result.requestId,
+    }));
+
+    return { stream, final: wrappedFinal };
+  } catch (error) {
+    if (
+      isInsufficientCreditsPortError(error) ||
+      isBillingAccountNotFoundPortError(error) ||
+      isVirtualKeyNotFoundPortError(error) ||
+      mapAccountsPortErrorToFeature(error).kind !== "GENERIC"
+    ) {
+      throw mapAccountsPortErrorToFeature(error);
+    }
+    throw error;
+  }
+}

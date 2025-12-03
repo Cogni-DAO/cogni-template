@@ -56,6 +56,8 @@ export const aiChatOperation = {
     messages: z.array(ChatMessageSchema),
     /** Model ID (REQUIRED) - client resolves to defaultModelId if needed */
     model: z.string(),
+    /** Enable streaming response via SSE (optional, defaults to false) */
+    stream: z.boolean().optional().default(false),
   }),
   output: z.object({
     /** Echo back threadId (v0: same as input, v2: from DB) */

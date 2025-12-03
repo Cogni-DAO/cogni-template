@@ -219,3 +219,191 @@ export async function execute(
     requestId,
   };
 }
+
+export interface ExecuteStreamParams {
+  messages: Message[];
+  model: string;
+  llmService: LlmService;
+  accountService: AccountService;
+  clock: Clock;
+  caller: LlmCaller;
+  ctx: RequestContext;
+  abortSignal?: AbortSignal;
+}
+
+export async function executeStream({
+  messages,
+  model,
+  llmService,
+  accountService,
+  clock,
+  caller,
+  ctx,
+  abortSignal,
+}: ExecuteStreamParams): Promise<{
+  stream: AsyncIterable<import("@/ports").ChatDeltaEvent>;
+  final: Promise<{ message: Message; requestId: string }>;
+}> {
+  const log = ctx.log.child({ feature: "ai.completion.stream" });
+  const userMessages = filterSystemMessages(messages);
+
+  for (const message of userMessages) {
+    assertMessageLength(message.content, MAX_MESSAGE_CHARS);
+  }
+
+  const trimmedMessages = trimConversationHistory(
+    userMessages,
+    MAX_MESSAGE_CHARS
+  );
+
+  // Preflight credit check
+  const estimatedTotalTokens = estimateTotalTokens(trimmedMessages);
+  const estimatedCostUsd =
+    (estimatedTotalTokens / 1000) * ESTIMATED_USD_PER_1K_TOKENS;
+  const estimatedUserPriceCredits = calculateUserPriceCredits(
+    usdToCredits(estimatedCostUsd, serverEnv().CREDITS_PER_USDC),
+    serverEnv().USER_PRICE_MARKUP_FACTOR
+  );
+
+  const currentBalance = await accountService.getBalance(
+    caller.billingAccountId
+  );
+
+  if (currentBalance < Number(estimatedUserPriceCredits)) {
+    throw new InsufficientCreditsPortError(
+      caller.billingAccountId,
+      Number(estimatedUserPriceCredits),
+      currentBalance
+    );
+  }
+
+  const requestId = randomUUID();
+  log.debug({ messageCount: trimmedMessages.length }, "starting LLM stream");
+  const llmStart = performance.now();
+
+  const { stream, final } = await llmService.completionStream({
+    messages: trimmedMessages,
+    model,
+    caller,
+    // Explicitly handle optional property
+    ...(abortSignal ? { abortSignal } : {}),
+  });
+
+  // Wrap final promise to handle billing
+  const wrappedFinal = final
+    .then(async (result) => {
+      const totalTokens = result.usage?.totalTokens ?? 0;
+      const providerMeta = (result.providerMeta ?? {}) as Record<
+        string,
+        unknown
+      >;
+      const modelId =
+        typeof providerMeta.model === "string" ? providerMeta.model : "unknown";
+
+      const llmEvent: AiLlmCallEvent = {
+        event: "ai.llm_call",
+        routeId: ctx.routeId,
+        reqId: ctx.reqId,
+        billingAccountId: caller.billingAccountId,
+        model: modelId,
+        durationMs: performance.now() - llmStart,
+        tokensUsed: totalTokens,
+        providerCostUsd: result.providerCostUsd,
+      };
+      log.info(llmEvent, "LLM stream completed");
+
+      const baseMetadata = {
+        system: "ai_completion_stream",
+        provider: providerMeta.provider,
+        llmRequestId: providerMeta.requestId,
+        totalTokens,
+        finishReason: result.finishReason,
+      };
+
+      try {
+        if (typeof result.providerCostUsd === "number") {
+          const markupFactor = serverEnv().USER_PRICE_MARKUP_FACTOR;
+          const providerCostCredits = usdToCredits(
+            result.providerCostUsd,
+            serverEnv().CREDITS_PER_USDC
+          );
+          const userPriceCredits = calculateUserPriceCredits(
+            providerCostCredits,
+            markupFactor
+          );
+
+          if (userPriceCredits < providerCostCredits) {
+            log.error(
+              { userPriceCredits, providerCostCredits, requestId },
+              "Invariant violation: User price < Provider cost"
+            );
+          }
+
+          await accountService.recordLlmUsage({
+            billingStatus: "billed",
+            billingAccountId: caller.billingAccountId,
+            virtualKeyId: caller.virtualKeyId,
+            requestId, // Idempotency key
+            model: modelId,
+            promptTokens: result.usage?.promptTokens ?? 0,
+            completionTokens: result.usage?.completionTokens ?? 0,
+            providerCostUsd: result.providerCostUsd,
+            providerCostCredits,
+            userPriceCredits,
+            markupFactorApplied: markupFactor,
+            metadata: baseMetadata,
+          });
+        } else {
+          await accountService.recordLlmUsage({
+            billingStatus: "needs_review",
+            billingAccountId: caller.billingAccountId,
+            virtualKeyId: caller.virtualKeyId,
+            requestId, // Idempotency key
+            model: modelId,
+            promptTokens: result.usage?.promptTokens ?? 0,
+            completionTokens: result.usage?.completionTokens ?? 0,
+            metadata: baseMetadata,
+          });
+        }
+      } catch (error) {
+        if (error instanceof InsufficientCreditsPortError) {
+          log.warn(
+            {
+              requestId,
+              billingAccountId: caller.billingAccountId,
+              required: error.cost,
+              available: error.previousBalance,
+            },
+            "Post-stream insufficient credits"
+          );
+        } else {
+          log.error(
+            {
+              err: error,
+              requestId,
+              billingAccountId: caller.billingAccountId,
+            },
+            "CRITICAL: Post-stream billing failed"
+          );
+        }
+        if (serverEnv().APP_ENV === "test") throw error;
+      }
+
+      return {
+        message: {
+          ...result.message,
+          timestamp: clock.now(),
+        },
+        requestId,
+      };
+    })
+    .catch((error) => {
+      // If stream fails/aborts, we still want to record partial usage if available
+      // But for now, we just log and rethrow.
+      // Ideally, we'd catch AbortError and record partials if LiteLLM gave us any.
+      log.error({ err: error, requestId }, "Stream execution failed");
+      throw error;
+    });
+
+  return { stream, final: wrappedFinal };
+}

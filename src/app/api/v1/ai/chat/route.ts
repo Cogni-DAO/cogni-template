@@ -178,6 +178,110 @@ export const POST = wrapRouteHandlerWithLogging(
         );
       }
 
+      // Check for streaming request (explicit flag or Accept header)
+      const accept = request.headers.get("accept") ?? "";
+      const isStreaming =
+        input.stream === true || accept.includes("text/event-stream");
+
+      if (isStreaming) {
+        const { completionStream } = await import(
+          "@/app/_facades/ai/completion.server"
+        );
+
+        // Transform wire format to DTO
+        const messageDtos = toMessageDtos(input.messages);
+
+        if (!sessionUser) throw new Error("sessionUser required");
+
+        const { stream: deltaStream, final } = await completionStream(
+          {
+            messages: messageDtos,
+            model: input.model,
+            sessionUser,
+            abortSignal: request.signal,
+          },
+          ctx
+        );
+
+        const encoder = new TextEncoder();
+        let messageId: string | undefined;
+
+        const readableStream = new ReadableStream({
+          async start(controller) {
+            try {
+              // Generate ID once for the stream
+              messageId = randomUUID();
+
+              // Emit message.started
+              controller.enqueue(
+                encoder.encode(
+                  `event: message.started\ndata: ${JSON.stringify({
+                    messageId,
+                    threadId: input.threadId ?? randomUUID(),
+                    role: "assistant",
+                    createdAt: new Date().toISOString(),
+                  })}\n\n`
+                )
+              );
+
+              for await (const event of deltaStream) {
+                if (event.type === "text_delta") {
+                  controller.enqueue(
+                    encoder.encode(
+                      `event: message.delta\ndata: ${JSON.stringify({
+                        messageId,
+                        delta: event.delta,
+                      })}\n\n`
+                    )
+                  );
+                } else if (event.type === "error") {
+                  controller.enqueue(
+                    encoder.encode(
+                      `event: error\ndata: ${JSON.stringify({
+                        message: event.error,
+                      })}\n\n`
+                    )
+                  );
+                }
+              }
+
+              // Wait for final result (billing)
+              await final;
+
+              // Emit message.completed
+              controller.enqueue(
+                encoder.encode(
+                  `event: message.completed\ndata: ${JSON.stringify({
+                    messageId,
+                    content: "", // Content already streamed via deltas
+                  })}\n\n`
+                )
+              );
+            } catch (error) {
+              ctx.log.error({ err: error }, "Stream error in route");
+              controller.enqueue(
+                encoder.encode(
+                  `event: error\ndata: ${JSON.stringify({
+                    message:
+                      error instanceof Error ? error.message : "Unknown error",
+                  })}\n\n`
+                )
+              );
+            } finally {
+              controller.close();
+            }
+          },
+        });
+
+        return new NextResponse(readableStream, {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache, no-transform",
+            Connection: "keep-alive",
+          },
+        });
+      }
+
       // Transform wire → MessageDto format for facade
       const messageDtos = toMessageDtos(input.messages);
 
