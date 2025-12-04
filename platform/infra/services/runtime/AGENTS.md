@@ -10,15 +10,16 @@
 
 ## Purpose
 
-Production runtime configuration directory copied to VM hosts for container orchestration and database initialization.
+Production runtime configuration directory copied to VM hosts for container orchestration and database initialization. Contains app + postgres + litellm + alloy services. Edge (Caddy) is in separate `../edge/` project.
 
 ## Pointers
 
-- [docker-compose.yml](docker-compose.yml): Production container stack
-- [docker-compose.dev.yml](docker-compose.dev.yml): Development container stack
+- [docker-compose.yml](docker-compose.yml): Production container stack (app, postgres, litellm, alloy)
+- [docker-compose.dev.yml](docker-compose.dev.yml): Development container stack (includes local loki, grafana)
 - [postgres-init/](postgres-init/): Database initialization scripts
-- [configs/](configs/): Service configuration templates
+- [configs/](configs/): Service configuration templates (litellm, alloy)
 - [docker-daemon.json](docker-daemon.json): Docker daemon log limits (reference only, applied via bootstrap.yaml)
+- [Edge stack](../edge/): TLS termination (Caddy) - separate compose project, never stopped during deploys
 
 ## Boundaries
 
@@ -46,19 +47,22 @@ Production runtime configuration directory copied to VM hosts for container orch
 
 ## Responsibilities
 
-- This directory **does**: Provide production runtime configuration copied to VM hosts for deployment (including LiteLLM networking + database wiring in dev stack)
-- This directory **does not**: Handle build-time configuration or development-only settings
+- This directory **does**: Provide production runtime configuration copied to VM hosts for deployment (app, postgres, litellm, alloy). Includes LiteLLM networking + database wiring in dev stack.
+- This directory **does not**: Handle TLS termination (see `../edge/`), build-time configuration, or development-only settings
 
 ## Usage
 
 **SECURITY WARNING**: This directory is copied to production VMs. Never commit secrets.
 
 ```bash
-# Production deployment (via deploy script)
-docker compose --env-file .env up -d --remove-orphans
+# Production deployment (via deploy script, uses explicit project name)
+docker compose --project-name cogni-runtime up -d --remove-orphans
 
 # Database migration (via deploy script, uses db-migrate service)
-docker compose --profile bootstrap run --rm db-migrate
+docker compose --project-name cogni-runtime --profile bootstrap run --rm db-migrate
+
+# View logs
+docker compose --project-name cogni-runtime logs -f app
 ```
 
 ## Standards
@@ -81,6 +85,8 @@ docker compose --profile bootstrap run --rm db-migrate
 ## Notes
 
 - **HIGHLY PROTECTED**: This directory is rsync'd to production VMs
+- **Edge split**: TLS termination (Caddy) is in separate `../edge/` project to prevent ERR_CONNECTION_RESET during deploys
+- **Shared network**: Runtime and edge share `cogni-edge` external network for service DNS resolution
 - Database security uses two-user model (root + app credentials)
 - Init scripts run only on first postgres container startup
 - `NEXTAUTH_URL` env var provided with shell fallback to `APP_BASE_URL`; Auth.js uses `trustHost: true` (safe behind Caddy)
@@ -93,13 +99,14 @@ docker compose --profile bootstrap run --rm db-migrate
 
 **Local Dev (docker-compose.dev.yml):**
 
-- Includes local Loki + Grafana services
+- Includes local Loki + Grafana + Caddy services (unified for simplicity)
 - Alloy writes to local Loki (http://loki:3100)
 - Grafana on http://localhost:3001 (anonymous admin access)
 - No cloud credentials needed
 
 **Preview/Production (docker-compose.yml):**
 
+- Caddy runs in separate edge project (see `../edge/`)
 - Alloy writes to Grafana Cloud Loki
 - Environment variables: `DEPLOY_ENVIRONMENT`, `LOKI_WRITE_URL`, `LOKI_USERNAME`, `LOKI_PASSWORD`
 - Verify in Alloy UI (http://127.0.0.1:12345) and Grafana Cloud

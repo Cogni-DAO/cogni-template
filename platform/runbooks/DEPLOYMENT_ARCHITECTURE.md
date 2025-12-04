@@ -8,7 +8,7 @@ Split between immutable infrastructure (OpenTofu) and mutable application deploy
 
 Build once. Push to GHCR. Deploy via GitHub Actions + Docker Compose to Cherry VMs. Gate on HTTPS health validation.
 
-## Two-Layer Architecture
+## Three-Layer Architecture
 
 ### Base Infrastructure (`platform/infra/providers/cherry/base/`)
 
@@ -16,13 +16,22 @@ Build once. Push to GHCR. Deploy via GitHub Actions + Docker Compose to Cherry V
 - **Environment separation**: `env.preview.tfvars`, `env.prod.tfvars`
 - **Creates**: `preview-cogni`, `production-cogni` VMs with SSH deploy keys
 - **Authentication**: SSH public keys only, VM host output to GitHub secrets
+- **Bootstrap**: Creates `cogni-edge` network, deployment directories
+
+### Edge Infrastructure (`platform/infra/services/edge/`)
+
+- **Purpose**: Always-on TLS termination layer (Caddy)
+- **Lifecycle**: Started once at bootstrap, rarely touched
+- **Deploys**: Caddy container only via separate compose project
+- **Key invariant**: **Never stopped during app deployments** - prevents ERR_CONNECTION_RESET
 
 ### App Deployment (`platform/infra/services/runtime/`)
 
-- **Purpose**: Docker Compose stack for container deployment to existing VMs
+- **Purpose**: Docker Compose stack for mutable app containers
 - **Environment separation**: GitHub Environment Secrets
-- **Deploys**: App + LiteLLM + Caddy + Promtail containers via `docker-compose.yml`
-- **Deployment**: SSH from GitHub Actions (no Terraform for app layer)
+- **Deploys**: App + Postgres + LiteLLM + Alloy containers via `docker-compose.yml`
+- **Deployment**: SSH from GitHub Actions, pull-while-running, no `compose down`
+- **Network**: Shares `cogni-edge` external network with edge stack
 
 ## File Structure
 
@@ -36,13 +45,17 @@ platform/infra/
 │   ├── variables.tf                # environment, vm_name_prefix, plan, region, public_key_path
 │   ├── env.preview.tfvars         # Preview VM config
 │   ├── env.prod.tfvars            # Production VM config
-│   └── bootstrap.yaml             # Cloud-init VM setup
-└── services/runtime/               # Container stack (Docker Compose)
-    ├── docker-compose.yml         # App + LiteLLM + Caddy + Promtail
-    └── configs/                   # Service configuration files
-        ├── Caddyfile.tmpl         # (mounted as ./configs/Caddyfile.tmpl)
-        ├── promtail-config.yaml   # (mounted as ./configs/promtail-config.yaml)
-        └── litellm.config.yaml    # (mounted as ./configs/litellm.config.yaml)
+│   └── bootstrap.yaml             # Cloud-init VM setup (creates cogni-edge network)
+└── services/
+    ├── edge/                       # TLS termination (immutable, rarely touched)
+    │   ├── docker-compose.yml     # Caddy only
+    │   └── configs/
+    │       └── Caddyfile.tmpl     # Caddy configuration
+    └── runtime/                    # Container stack (mutable, updated each deploy)
+        ├── docker-compose.yml     # App + Postgres + LiteLLM + Alloy
+        └── configs/               # Service configuration files
+            ├── litellm.config.yaml
+            └── alloy-config.alloy
 ```
 
 ## Container Stack
@@ -52,13 +65,18 @@ platform/infra/
 - App image: `preview-${GITHUB_SHA}` or `prod-${GITHUB_SHA}`
 - Migrator image: `preview-${GITHUB_SHA}-migrate` or `prod-${GITHUB_SHA}-migrate`
 
-**Runtime containers**:
+**Edge containers** (project: `cogni-edge`, rarely touched):
+
+- `caddy`: HTTPS termination and routing - **never stopped during app deploys**
+
+**Runtime containers** (project: `cogni-runtime`, updated each deploy):
 
 - `app`: Next.js application with environment-specific runtime config (lean, no migration tools)
-- `db-migrate`: Database migrations via dedicated migrator image (bootstrap profile)
+- `postgres`: Database server
 - `litellm`: AI proxy service
-- `caddy`: HTTPS termination and routing
 - `alloy`: Log collection and forwarding
+- `db-provision`: Database user/schema provisioning (bootstrap profile)
+- `db-migrate`: Database migrations via dedicated migrator image (bootstrap profile)
 
 **Registry Authentication**:
 

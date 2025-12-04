@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-01
+- **Last reviewed:** 2025-12-05
 - **Status:** draft
 
 ## Purpose
@@ -14,7 +14,8 @@ Service-specific configurations for supporting infrastructure like LLM routing, 
 
 ## Pointers
 
-- [runtime/](runtime/): **PROTECTED** Production runtime configuration (copied to VMs)
+- [edge/](edge/): **PROTECTED** Always-on TLS termination (Caddy) - immutable, rarely touched
+- [runtime/](runtime/): **PROTECTED** Production runtime configuration (copied to VMs) - mutable, updated each deploy
 - [litellm/](litellm/): LLM model routing and budget configurations
 - [langfuse/](langfuse/): Observability and telemetry stack
 - [postgres/](postgres/): Database service configurations
@@ -34,8 +35,8 @@ Service-specific configurations for supporting infrastructure like LLM routing, 
 - **Exports:** none
 - **Routes (if any):** none
 - **CLI (if any):** docker-compose commands
-- **Env/Config keys:** `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, service-specific environment variables
-- **Files considered API:** `runtime/docker-compose.yml`, `runtime/docker-compose.dev.yml`, `*/config.yaml`
+- **Env/Config keys:** `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, `DOMAIN`, service-specific environment variables
+- **Files considered API:** `edge/docker-compose.yml`, `runtime/docker-compose.yml`, `runtime/docker-compose.dev.yml`, `*/config.yaml`
 
 ## Ports (optional)
 

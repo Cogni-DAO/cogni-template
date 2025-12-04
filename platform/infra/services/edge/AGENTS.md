@@ -1,0 +1,95 @@
+# edge · AGENTS.md
+
+> Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
+
+## Metadata
+
+- **Owners:** @derekg1729
+- **Last reviewed:** 2025-12-05
+- **Status:** draft
+
+## Purpose
+
+Always-on TLS termination layer (Caddy). Isolated from app deployments to prevent ERR_CONNECTION_RESET during deploys. Started once at bootstrap, rarely touched.
+
+## Pointers
+
+- [docker-compose.yml](docker-compose.yml): Edge stack (Caddy only)
+- [configs/Caddyfile.tmpl](configs/Caddyfile.tmpl): Caddy configuration template
+- [Runtime stack](../runtime/): App + postgres + litellm + alloy (mutable, updated each deploy)
+
+## Boundaries
+
+```json
+{
+  "layer": "infra",
+  "may_import": [],
+  "must_not_import": ["*"]
+}
+```
+
+## Public Surface
+
+- **Exports:** none
+- **Routes (if any):** none
+- **CLI (if any):** `docker compose --project-name cogni-edge -f docker-compose.yml`
+- **Env/Config keys:** `DOMAIN`
+- **Files considered API:** `docker-compose.yml`, `configs/Caddyfile.tmpl`
+
+## Ports (optional)
+
+- **Uses ports:** 80 (HTTP), 443 (HTTPS)
+- **Implements ports:** none
+- **Contracts (required if implementing):** none
+
+## Responsibilities
+
+- This directory **does**: TLS termination, HTTP→HTTPS redirect, reverse proxy to app:3000
+- This directory **does not**: Handle app logic, database, observability, or any mutable services
+
+## Usage
+
+**INVARIANTS:**
+
+- **Never** run `docker compose down` on edge during app deploys
+- Only restart edge on Caddyfile changes or cert issues
+- Edge and runtime share `cogni-edge` external network
+
+```bash
+# Start edge (idempotent - safe to run multiple times)
+docker network create cogni-edge 2>/dev/null || true
+docker compose --project-name cogni-edge up -d
+
+# Check status
+docker compose --project-name cogni-edge ps
+
+# Reload Caddy config (no restart needed)
+docker compose --project-name cogni-edge exec caddy caddy reload --config /etc/caddy/Caddyfile
+
+# View logs
+docker compose --project-name cogni-edge logs -f caddy
+```
+
+## Standards
+
+- External network `cogni-edge` must exist before compose up
+- Caddy volumes (`caddy_data`, `caddy_config`) persist TLS certs - never prune
+- No `container_name` - let Compose namespace containers per project
+
+## Dependencies
+
+- **Internal:** Shared `cogni-edge` network with runtime stack
+- **External:** Docker, DNS pointing to VM
+
+## Change Protocol
+
+- Update this file when **edge configuration** changes
+- Bump **Last reviewed** date
+- Changes here rarely needed - edge is immutable infrastructure
+
+## Notes
+
+- Edge split from runtime to eliminate ERR_CONNECTION_RESET during deploys
+- Caddy auto-obtains TLS certs via ACME (Let's Encrypt)
+- App must be on `cogni-edge` network for Caddy to reverse_proxy to it
+- Deploy script handles checksum-gated Caddy reload on Caddyfile changes

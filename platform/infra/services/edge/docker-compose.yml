@@ -1,0 +1,44 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+# Cogni Edge Stack
+# Always-on TLS termination layer. Isolated from app deployments to prevent
+# connection resets during deploys. Started once at bootstrap, rarely touched.
+#
+# INVARIANTS:
+# - Never `docker compose down` this stack during app deployments
+# - Only restart on Caddyfile changes or cert issues
+# - Shares `cogni-edge` network with app stack for service DNS resolution
+
+services:
+  caddy:
+    image: caddy:2
+    restart: always
+    networks:
+      - cogni-edge
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN}
+    volumes:
+      - ./configs/Caddyfile.tmpl:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  cogni-edge:
+    name: cogni-edge
+    external: true
+
+volumes:
+  caddy_data:
+    name: cogni-edge_caddy_data
+  caddy_config:
+    name: cogni-edge_caddy_config

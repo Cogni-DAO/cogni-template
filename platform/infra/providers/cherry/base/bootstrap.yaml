@@ -26,6 +26,7 @@ write_files:
       }
 
 runcmd:
+  # Install Docker
   - install -m 0755 -d /etc/apt/keyrings
   - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
   - bash -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" > /etc/apt/sources.list.d/docker.list'
@@ -33,3 +34,10 @@ runcmd:
   - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   - systemctl enable docker
   - systemctl start docker
+  # Create cogni-edge network (shared between edge and runtime compose projects)
+  # Must exist before any docker compose up that references it as external
+  - docker network create cogni-edge || true
+  # Create deployment directories (rsync targets)
+  - mkdir -p /opt/cogni-template-edge /opt/cogni-template-runtime
+  # Create config hash directory for checksum-gated restarts
+  - mkdir -p /var/lib/cogni

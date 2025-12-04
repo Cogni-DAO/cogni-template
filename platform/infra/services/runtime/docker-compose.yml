@@ -2,7 +2,8 @@
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 # Cogni Runtime Stack
-# Environment-agnostic container stack for app + litellm + caddy + promtail
+# Environment-agnostic container stack for app + litellm + postgres + alloy
+# Edge (Caddy) runs in separate compose project to prevent connection resets during deploys
 # Secrets and config come from environment variables set by CI
 
 services:
@@ -11,10 +12,10 @@ services:
     build:
       context: ../../../..
       dockerfile: ./Dockerfile
-    container_name: app
     restart: always
     networks:
-      - web
+      - cogni-edge
+      - internal
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - APP_ENV=${APP_ENV}
@@ -42,10 +43,9 @@ services:
 
   litellm:
     image: ghcr.io/berriai/litellm:main-latest
-    container_name: litellm
     restart: unless-stopped
     networks:
-      - web
+      - internal
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
@@ -64,31 +64,11 @@ services:
       retries: 3
       start_period: 30s
 
-  caddy:
-    image: caddy:2
-    container_name: caddy
-    restart: always
-    networks:
-      - web
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      - DOMAIN=${DOMAIN}
-    volumes:
-      - ./configs/Caddyfile.tmpl:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    depends_on:
-      - app
-      - litellm
-
   postgres:
     image: postgres:15
-    container_name: postgres
     restart: unless-stopped
     networks:
-      - web
+      - internal
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: ${POSTGRES_ROOT_USER}
@@ -104,12 +84,11 @@ services:
 
   db-provision:
     image: postgres:15
-    container_name: db-provision
     profiles:
       - bootstrap
     restart: "no"
     networks:
-      - web
+      - internal
     environment:
       POSTGRES_USER: ${POSTGRES_ROOT_USER}
       POSTGRES_PASSWORD: ${POSTGRES_ROOT_PASSWORD}
@@ -128,12 +107,11 @@ services:
 
   db-migrate:
     image: ${MIGRATOR_IMAGE}
-    container_name: db-migrate
     profiles:
       - bootstrap
     restart: "no"
     networks:
-      - web
+      - internal
     environment:
       # Only DB env vars (least-secret exposure)
       - DATABASE_URL=${DATABASE_URL}
@@ -148,10 +126,9 @@ services:
 
   alloy:
     image: grafana/alloy:v1.9.2
-    container_name: alloy
     restart: unless-stopped
     networks:
-      - web
+      - internal
     ports:
       - "127.0.0.1:12345:12345"
     volumes:
@@ -170,15 +147,16 @@ services:
       - LOKI_PASSWORD=${LOKI_PASSWORD}
 
 networks:
-  web:
-    name: web
-    external: false
+  # External network shared with edge stack (Caddy)
+  # App must be on this network for Caddy to reverse_proxy to it
+  cogni-edge:
+    name: cogni-edge
+    external: true
+  # Internal network for app stack services (postgres, litellm, alloy)
+  # No explicit name - let Compose namespace it per project to avoid collisions
+  internal:
 
 volumes:
-  caddy_data:
-    name: caddy_data
-  caddy_config:
-    name: caddy_config
   postgres_data:
     name: postgres_data
   alloy_data:
