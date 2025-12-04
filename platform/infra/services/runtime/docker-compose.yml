@@ -125,6 +125,26 @@ services:
       postgres:
         condition: service_healthy
 
+  db-migrate:
+    image: ${MIGRATOR_IMAGE}
+    container_name: db-migrate
+    profiles:
+      - bootstrap
+    restart: "no"
+    networks:
+      - web
+    environment:
+      # Only DB env vars (least-secret exposure)
+      - DATABASE_URL=${DATABASE_URL}
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - POSTGRES_USER=${APP_DB_USER}
+      - POSTGRES_PASSWORD=${APP_DB_PASSWORD}
+      - POSTGRES_DB=${APP_DB_NAME}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   alloy:
     image: grafana/alloy:v1.9.2
     container_name: alloy
