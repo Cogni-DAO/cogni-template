@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-28
+- **Last reviewed:** 2025-12-05
 - **Status:** draft
 
 ## Purpose
@@ -29,11 +29,11 @@ PostgreSQL implementations of account service ports for credit accounting operat
 
 ## Public Surface
 
-- **Exports:** DrizzleAccountService implementation
+- **Exports:** DrizzleAccountService, DrizzleUsageAdapter
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** DATABASE_URL
-- **Files considered API:** drizzle.adapter.ts
+- **Files considered API:** drizzle.adapter.ts, drizzle.usage.adapter.ts
 
 ## Ports (optional)
 

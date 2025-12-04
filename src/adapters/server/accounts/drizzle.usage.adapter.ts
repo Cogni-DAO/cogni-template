@@ -4,11 +4,14 @@
 /**
  * Module: `@adapters/server/accounts/drizzle.usage`
  * Purpose: Drizzle implementation of UsageService port.
- * Scope: Implements getUsageStats (SQL aggregation) and listUsageLogs (keyset pagination).
+ * Scope: Implements getUsageStats (SQL aggregation) and listUsageLogs (keyset pagination). Does not handle auth.
  * Invariants:
- * - Buckets are zero-filled for the requested range.
+ * - Buckets are zero-filled using SQL generate_series.
+ * - Money is returned as decimal string (6 decimal places).
+ * - Totals are calculated via separate SQL query for precision.
  * - Cursor is opaque base64-encoded string.
- * - Money is returned as decimal string.
+ * Side-effects: IO
+ * Links: [UsageService](../../../../ports/usage.port.ts)
  * @internal
  */
 
@@ -32,22 +35,49 @@ export class DrizzleUsageAdapter implements UsageService {
   async getUsageStats(params: UsageStatsParams): Promise<UsageStatsResult> {
     const { billingAccountId, from, to, groupBy } = params;
 
-    // 1. Generate time series series in SQL or application
-    // Using application-side zero-filling for simplicity and portability
-    const buckets = this.generateBuckets(from, to, groupBy);
+    // 1. Generate time series and aggregate in SQL
+    // Using generate_series ensures we get all buckets including empty ones
+    // and handles timezones correctly within the database.
+    const interval = groupBy === "day" ? "1 day" : "1 hour";
 
-    // 2. Aggregate data in SQL
-    // Truncate to bucket size
-    const timeBucket =
-      groupBy === "day"
-        ? sql`date_trunc('day', ${llmUsage.createdAt} AT TIME ZONE 'UTC')`
-        : sql`date_trunc('hour', ${llmUsage.createdAt} AT TIME ZONE 'UTC')`;
+    // We need to cast the interval to interval type for generate_series
+    const seriesQuery = sql`
+      SELECT
+        series.bucket_start as "bucketStart",
+        COALESCE(SUM(${llmUsage.providerCostUsd}::numeric), 0)::decimal(10, 6)::text as spend,
+        COALESCE(SUM(${llmUsage.promptTokens} + ${llmUsage.completionTokens}), 0) as tokens,
+        COUNT(${llmUsage.id}) as requests
+      FROM generate_series(
+        date_trunc(${groupBy}, ${from.toISOString()}::timestamptz), 
+        date_trunc(${groupBy}, ${to.toISOString()}::timestamptz - interval '1 second'), 
+        ${interval}::interval
+      ) as series(bucket_start)
+      LEFT JOIN ${llmUsage} ON (
+        ${llmUsage.billingAccountId} = ${billingAccountId} AND
+        ${llmUsage.createdAt} >= ${from.toISOString()}::timestamp AND
+        ${llmUsage.createdAt} < ${to.toISOString()}::timestamp AND
+        date_trunc(${groupBy}, ${llmUsage.createdAt} AT TIME ZONE 'UTC') = series.bucket_start
+      )
+      GROUP BY series.bucket_start
+      ORDER BY series.bucket_start
+    `;
 
-    const rows = await this.db
+    const rows = await this.db.execute(seriesQuery);
+
+    // biome-ignore lint/suspicious/noExplicitAny: Raw SQL result
+    const series: UsageBucket[] = rows.map((row: any) => ({
+      bucketStart: new Date(row.bucketStart),
+      spend: row.spend, // Already string from SQL
+      tokens: Number(row.tokens),
+      requests: Number(row.requests),
+    }));
+
+    // 2. Calculate totals with a separate query to ensure precision
+    // and avoid summing floats in JS or relying on potentially incomplete bucket sums
+    const [totalsRow] = await this.db
       .select({
-        bucketStart: timeBucket,
-        spend: sql<string>`sum(${llmUsage.providerCostUsd})`,
-        tokens: sql<number>`sum(${llmUsage.promptTokens} + ${llmUsage.completionTokens})`,
+        spend: sql<string>`coalesce(sum(${llmUsage.providerCostUsd}::numeric), 0)::decimal(10, 6)::text`,
+        tokens: sql<number>`coalesce(sum(${llmUsage.promptTokens} + ${llmUsage.completionTokens}), 0)`,
         requests: sql<number>`count(*)`,
       })
       .from(llmUsage)
@@ -57,53 +87,14 @@ export class DrizzleUsageAdapter implements UsageService {
           gte(llmUsage.createdAt, from),
           lt(llmUsage.createdAt, to)
         )
-      )
-      .groupBy(timeBucket)
-      .orderBy(timeBucket);
-
-    // 3. Merge SQL results into zero-filled buckets
-    const bucketMap = new Map<string, UsageBucket>();
-    for (const row of rows) {
-      // Drizzle returns Date object for timestamp, but sometimes it might be a string depending on driver/query
-      const bucketStart = new Date(row.bucketStart as unknown as string | Date);
-      const dateStr = bucketStart.toISOString();
-      bucketMap.set(dateStr, {
-        bucketStart: bucketStart,
-        spend: row.spend ?? "0",
-        tokens: Number(row.tokens ?? 0),
-        requests: Number(row.requests ?? 0),
-      });
-    }
-
-    const series: UsageBucket[] = buckets.map((date) => {
-      const dateStr = date.toISOString();
-      return (
-        bucketMap.get(dateStr) ?? {
-          bucketStart: date,
-          spend: "0",
-          tokens: 0,
-          requests: 0,
-        }
       );
-    });
-
-    // 4. Calculate totals
-    let totalSpend = 0;
-    let totalTokens = 0;
-    let totalRequests = 0;
-
-    for (const bucket of series) {
-      totalSpend += Number.parseFloat(bucket.spend);
-      totalTokens += bucket.tokens;
-      totalRequests += bucket.requests;
-    }
 
     return {
       series,
       totals: {
-        spend: totalSpend.toFixed(6), // Keep precision
-        tokens: totalTokens,
-        requests: totalRequests,
+        spend: totalsRow?.spend ?? "0.000000",
+        tokens: Number(totalsRow?.tokens ?? 0),
+        requests: Number(totalsRow?.requests ?? 0),
       },
     };
   }
@@ -116,7 +107,7 @@ export class DrizzleUsageAdapter implements UsageService {
     const where = cursor
       ? and(
           eq(llmUsage.billingAccountId, billingAccountId),
-          sql`(${llmUsage.createdAt}, ${llmUsage.id}) < (${cursor.createdAt}, ${cursor.id})`
+          sql`(${llmUsage.createdAt}, ${llmUsage.id}) < (${cursor.createdAt.toISOString()}::timestamp, ${cursor.id})`
         )
       : eq(llmUsage.billingAccountId, billingAccountId);
 
@@ -160,35 +151,5 @@ export class DrizzleUsageAdapter implements UsageService {
       logs,
       ...(nextCursor ? { nextCursor } : {}),
     };
-  }
-
-  private generateBuckets(
-    from: Date,
-    to: Date,
-    groupBy: "day" | "hour"
-  ): Date[] {
-    const buckets: Date[] = [];
-    const current = new Date(from);
-
-    // Align start to bucket boundary
-    if (groupBy === "day") {
-      current.setUTCHours(0, 0, 0, 0);
-    } else {
-      current.setUTCMinutes(0, 0, 0);
-    }
-
-    while (current < to) {
-      if (current >= from) {
-        buckets.push(new Date(current));
-      }
-
-      if (groupBy === "day") {
-        current.setUTCDate(current.getUTCDate() + 1);
-      } else {
-        current.setUTCHours(current.getUTCHours() + 1);
-      }
-    }
-
-    return buckets;
   }
 }

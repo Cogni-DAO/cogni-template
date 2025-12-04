@@ -7,6 +7,7 @@
  * Scope: Defines interface for usage data retrieval. Does not implement storage.
  * Invariants:
  * - UsageStatsResult.series must be zero-filled.
+ * - Money fields are decimal strings (6 decimal places).
  * - UsageLogsResult.nextCursor is opaque.
  * Side-effects: none
  * Links: [DrizzleUsageAdapter](../adapters/server/accounts/drizzle.usage.adapter.ts)

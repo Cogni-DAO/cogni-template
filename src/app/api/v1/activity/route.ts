@@ -1,6 +1,20 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@app/api/v1/activity/route`
+ * Purpose: API endpoint for fetching activity data.
+ * Scope: Validates input via contract, delegates to ActivityFacade. Does not implement business logic.
+ * Invariants:
+ * - Requires authenticated user.
+ * - Returns 400 for invalid cursor or input.
+ * - Returns 400 for InvalidRangeError.
+ * - Returns 401 for unauthorized access.
+ * Side-effects: IO
+ * Links: [ActivityFacade](../../../_facades/ai/activity.server.ts)
+ * @public
+ */
+
 import { NextResponse } from "next/server";
 
 import { getActivity } from "@/app/_facades/ai/activity.server";
@@ -42,7 +56,18 @@ export async function GET(request: Request) {
     });
 
     return NextResponse.json(data);
-  } catch (_error) {
+  } catch (error) {
+    if (error instanceof Error && error.name === "InvalidCursorError") {
+      return NextResponse.json(
+        { error: "Invalid cursor", details: error.message },
+        { status: 400 }
+      );
+    }
+
+    if (error instanceof Error && error.name === "InvalidRangeError") {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
+
     return NextResponse.json(
       { error: "Internal Server Error" },
       { status: 500 }

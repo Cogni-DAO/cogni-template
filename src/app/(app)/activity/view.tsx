@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@app/(app)/activity/view`
+ * Purpose: Client-side view for Activity dashboard.
+ * Scope: Renders charts and table. Does not fetch data directly (receives initialData).
+ * Invariants: Uses shadcn components.
+ * Side-effects: none
+ * Links: [ActivityChart](../../../components/kit/data-display/ActivityChart.tsx)
+ * @public
+ */
+
 "use client";
 
 import type { z } from "zod";
@@ -53,7 +63,6 @@ export function ActivityView({ initialData }: ActivityViewProps) {
               color: "hsl(var(--chart-1))",
             },
           }}
-          dataKey="value"
           color="hsl(var(--chart-1))"
         />
         <ActivityChart
@@ -66,7 +75,6 @@ export function ActivityView({ initialData }: ActivityViewProps) {
               color: "hsl(var(--chart-2))",
             },
           }}
-          dataKey="value"
           color="hsl(var(--chart-2))"
         />
         <ActivityChart
@@ -79,7 +87,6 @@ export function ActivityView({ initialData }: ActivityViewProps) {
               color: "hsl(var(--chart-3))",
             },
           }}
-          dataKey="value"
           color="hsl(var(--chart-3))"
         />
       </div>

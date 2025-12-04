@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@components/kit/data-display/ActivityChart`
+ * Purpose: Reusable area chart component for activity metrics.
+ * Scope: Renders a single metric chart. Does not fetch data.
+ * Invariants: Uses Recharts and shadcn/chart.
+ * Side-effects: none
+ * Links: [ActivityView](../../../app/(app)/activity/view.tsx)
+ * @public
+ */
+
 "use client";
 
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
@@ -29,7 +39,6 @@ export interface ActivityChartProps {
     value: number;
   }[];
   config: ChartConfig;
-  dataKey: string;
   color?: string;
 }
 
@@ -60,7 +69,7 @@ export function ActivityChart({
           <AreaChart data={data}>
             <defs>
               <linearGradient
-                id={`fill${title.replace(/\s+/g, "")}`}
+                id={`fill${title.replaceAll(/\s+/g, "")}`}
                 x1="0"
                 y1="0"
                 x2="0"
@@ -102,7 +111,7 @@ export function ActivityChart({
             <Area
               dataKey="value"
               type="natural"
-              fill={`url(#fill${title.replace(/\s+/g, "")})`}
+              fill={`url(#fill${title.replaceAll(/\s+/g, "")})`}
               stroke={color}
               stackId="a"
             />
