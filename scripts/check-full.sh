@@ -86,15 +86,26 @@ check_port() {
   return 0
 }
 
-teardown_stack() {
+cleanup_and_exit() {
+  local exit_code=$?
+  set +e  # Disable fail-fast during cleanup to preserve original exit code
+
+  # Print result signal for automated parsing (on error only; success is handled in main flow)
+  if [ $exit_code -ne 0 ]; then
+    echo "CHECK_FULL_RESULT=FAIL"
+  fi
+
+  # Teardown infrastructure
   if [ "$STACK_STARTED" = true ]; then
     log_section "Tearing down test stack..."
     pnpm docker:test:stack:down || log_error "Failed to tear down stack (containers may still be running)"
   fi
+
+  exit $exit_code
 }
 
-# Always teardown on exit (success, failure, or interrupt)
-trap teardown_stack EXIT INT TERM
+# Always cleanup on exit (success, failure, or interrupt)
+trap cleanup_and_exit EXIT INT TERM
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Main Execution
@@ -220,4 +231,5 @@ log_section "SUMMARY"
 echo "✓ All tests passed (${total_duration}s total)"
 log_section ""
 
-echo "Note: Teardown will run automatically (trap ensures cleanup)"
+# Print result signal for automated parsing
+echo "CHECK_FULL_RESULT=PASS"
