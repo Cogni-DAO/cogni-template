@@ -41,9 +41,27 @@ export const GET = wrapRouteHandlerWithLogging(
         providerKey: m.providerKey,
       }));
 
+      const defaultModelId = serverEnv().DEFAULT_MODEL;
+
+      // Validate DEFAULT_MODEL exists in catalog (invariant)
+      const modelIds = contractModels.map((m) => m.id);
+      if (!modelIds.includes(defaultModelId)) {
+        logRequestWarn(
+          ctx.log,
+          new Error(
+            `DEFAULT_MODEL="${defaultModelId}" not found in catalog. Available: ${modelIds.join(", ")}`
+          ),
+          "INVALID_DEFAULT_MODEL"
+        );
+        return NextResponse.json(
+          { error: "Invalid models data" },
+          { status: 500 }
+        );
+      }
+
       const responseData = {
         models: contractModels,
-        defaultModelId: serverEnv().DEFAULT_MODEL,
+        defaultModelId,
       };
 
       // Validate output with contract
