@@ -121,12 +121,9 @@ describe("POST /api/v1/ai/chat - Paid Model Zero Credits", () => {
       }
 
       return {
-        stream: new ReadableStream({
-          start(controller) {
-            controller.enqueue({ type: "text_delta", delta: "AI response" });
-            controller.close();
-          },
-        }),
+        stream: (async function* () {
+          yield { type: "text_delta" as const, delta: "AI response" };
+        })(),
         final: Promise.resolve({
           message: {
             role: "assistant",
