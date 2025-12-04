@@ -129,9 +129,15 @@ POSTGRES_DB=${APP_DB_NAME}
 
 **Migration Commands:**
 
-- `pnpm db:migrate` - Run migrations via db-migrate service (dev environment)
-- `pnpm db:migrate:test` - Run migrations via db-migrate service (test environment)
+- `pnpm db:migrate` - Compose: db-migrate service (dev environment)
+- `pnpm db:migrate:test` - Compose: db-migrate service (test environment)
+- `pnpm db:migrate:direct` - Direct: drizzle-kit using DATABASE_URL (testcontainers, CI)
 - `docker compose --profile bootstrap run --rm db-migrate` - Direct compose invocation
+
+**Execution Contexts:**
+
+- **Compose** (`db:migrate`, `db:migrate:test`): Docker compose db-migrate service. Requires `.env.local`/`.env.test`. For local docker stack.
+- **Direct** (`db:migrate:direct`): Runs drizzle-kit directly using `DATABASE_URL` from environment. For testcontainers and CI where DATABASE_URL is set programmatically.
 
 ### 2.1 Local Development
 
