@@ -34,8 +34,10 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
 ENV DATABASE_URL="postgresql://build_user:build_pass@build-host.invalid:5432/build_db" \
     AUTH_SECRET="build-time-secret-min-32-chars-long-placeholder"
 
-RUN pnpm build
-
+# Persist Next's build cache across Docker builds (huge win for rebuilds)
+RUN --mount=type=cache,target=/app/.next/cache \
+    pnpm build
+    
 # 3) Migrator – minimal image for running database migrations via drizzle-kit
 FROM base AS migrator
 WORKDIR /app
