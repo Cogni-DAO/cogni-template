@@ -70,7 +70,7 @@ Unified serverEnv() provides all vars:
 - DB_PORT (default: 5432)
 - LITELLM_BASE_URL (url, auto-detects: localhost:4000 for dev, litellm:4000 for production)
 - LITELLM_MASTER_KEY
-- DEFAULT_MODEL (default: grok-4.1-fast)
+- DEFAULT_MODEL (default: gemini-2.5-flash)
 - PORT (default 3000)
 - PINO_LOG_LEVEL (trace|debug|info|warn|error, default info)
 

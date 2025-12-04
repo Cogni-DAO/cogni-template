@@ -356,6 +356,7 @@ APP_DB_USER=${APP_DB_USER}
 APP_DB_PASSWORD=${APP_DB_PASSWORD}
 APP_DB_NAME=${APP_DB_NAME}
 DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
+DEFAULT_MODEL=${DEFAULT_MODEL:-}
 LOKI_WRITE_URL=${GRAFANA_CLOUD_LOKI_URL:-}
 LOKI_USERNAME=${GRAFANA_CLOUD_LOKI_USER:-}
 LOKI_PASSWORD=${GRAFANA_CLOUD_LOKI_API_KEY:-}
@@ -428,6 +429,43 @@ emit_deployment_event "deployment.stack_up_started" "in_progress" "Starting cont
 docker compose up -d --remove-orphans
 log_info "[$(date -u +%H:%M:%S)] Stack up complete"
 emit_deployment_event "deployment.stack_up_complete" "success" "All containers started"
+
+# Checksum-gated restart for LiteLLM config changes
+# docker compose up -d won't restart containers for bind-mount content changes
+HASH_DIR="/var/lib/cogni"
+LITELLM_CONFIG="/opt/cogni-template-runtime/configs/litellm.config.yaml"
+LITELLM_HASH_FILE="$HASH_DIR/litellm-config.sha256"
+
+# Portable hash function (sha256sum on Linux, shasum on macOS)
+hash_file() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    log_warn "No sha256 tool available, skipping config hash check"
+    echo "no-hash-tool"
+  fi
+}
+
+if [[ ! -f "$LITELLM_CONFIG" ]]; then
+  log_warn "LiteLLM config missing at $LITELLM_CONFIG, skipping restart check"
+else
+  mkdir -p "$HASH_DIR"
+  NEW_HASH=$(hash_file "$LITELLM_CONFIG")
+  OLD_HASH=$(cat "$LITELLM_HASH_FILE" 2>/dev/null || echo "none")
+
+  if [[ "$NEW_HASH" != "$OLD_HASH" && "$NEW_HASH" != "no-hash-tool" ]]; then
+    log_info "LiteLLM config changed (hash: ${NEW_HASH:0:12}...), restarting container..."
+    emit_deployment_event "deployment.litellm_restart" "in_progress" "Restarting LiteLLM due to config change"
+    docker compose restart litellm
+    echo "$NEW_HASH" > "$LITELLM_HASH_FILE"
+    log_info "LiteLLM restarted with new config"
+    emit_deployment_event "deployment.litellm_restart_complete" "success" "LiteLLM restarted successfully"
+  else
+    log_info "LiteLLM config unchanged (hash: ${NEW_HASH:0:12}...), no restart needed"
+  fi
+fi
 
 log_info "Waiting for containers to be ready..."
 sleep 10
