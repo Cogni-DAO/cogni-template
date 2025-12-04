@@ -13,58 +13,134 @@
 
 import { createMockAccountServiceWithDefaults } from "@tests/_fakes";
 import { testApiHandler } from "next-test-api-route-handler";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as appHandler from "@/app/api/v1/ai/chat/route";
+
+// Mock bootstrap container to bypass environment validation
+vi.mock("@/bootstrap/container", () => ({
+  getContainer: vi.fn(() => ({
+    log: {
+      child: vi.fn(() => ({
+        info: vi.fn(),
+        error: vi.fn(),
+        warn: vi.fn(),
+      })),
+      info: vi.fn(),
+      error: vi.fn(),
+      warn: vi.fn(),
+    },
+    clock: {
+      now: vi.fn(() => new Date("2025-01-01T00:00:00Z")),
+    },
+  })),
+  resolveAiDeps: vi.fn(),
+}));
+
+// Mock session authentication
+vi.mock("@/app/_lib/auth/session", () => ({
+  getSessionUser: vi.fn(),
+}));
 
 // Mock facade to control error throwing directly
 vi.mock("@/app/_facades/ai/completion.server", () => ({
   completion: vi.fn(),
-  completionStream: vi.fn().mockImplementation(async (input) => {
-    // Simulate credit check logic
-    const isFree = input.model === "free-model";
+  completionStream: vi.fn(),
+}));
 
-    if (!isFree) {
-      // Throw the feature error directly, bypassing mapping complexity
-      const error = new Error("Insufficient credits");
-      Object.assign(error, {
-        kind: "INSUFFICIENT_CREDITS",
-        billingAccountId: "test-user",
-        required: 100,
-        available: 0,
-      });
-      throw error;
-    }
+// Mock model catalog
+vi.mock("@/shared/ai/model-catalog.server", () => ({
+  isModelAllowed: vi.fn(),
+  getDefaultModelId: vi.fn(),
+  isModelFree: vi.fn(),
+}));
 
-    return {
-      stream: new ReadableStream({
-        start(controller) {
-          controller.enqueue({ type: "text_delta", delta: "AI response" });
-          controller.close();
-        },
-      }),
-      final: Promise.resolve({
+import {
+  completion,
+  completionStream,
+} from "@/app/_facades/ai/completion.server";
+// Import after mocks
+import { getSessionUser } from "@/app/_lib/auth/session";
+import {
+  getDefaultModelId,
+  isModelAllowed,
+  isModelFree,
+} from "@/shared/ai/model-catalog.server";
+
+describe("POST /api/v1/ai/chat - Paid Model Zero Credits", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+
+    // Restore mock implementations after reset
+    vi.mocked(getSessionUser).mockResolvedValue({
+      id: "test-user",
+      walletAddress: "0xTestWallet123",
+    });
+
+    vi.mocked(isModelAllowed).mockResolvedValue(true);
+    vi.mocked(getDefaultModelId).mockReturnValue("gpt-4o-mini");
+    vi.mocked(isModelFree).mockImplementation(async (modelId: string) => {
+      return modelId === "free-model";
+    });
+
+    vi.mocked(completion).mockImplementation(async (input) => {
+      const isFree = input.model === "free-model";
+
+      if (!isFree) {
+        const error = new Error("Insufficient credits");
+        Object.assign(error, {
+          kind: "INSUFFICIENT_CREDITS",
+          billingAccountId: "test-user",
+          required: 100,
+          available: 0,
+        });
+        throw error;
+      }
+
+      return {
         message: {
           role: "assistant",
           content: "AI response",
           requestId: "req-123",
           timestamp: new Date().toISOString(),
         },
-        requestId: "req-123",
-      }),
-    };
-  }),
-}));
+      };
+    });
 
-// Mock model catalog
-vi.mock("@/shared/ai/model-catalog.server", () => ({
-  isModelAllowed: vi.fn().mockResolvedValue(true),
-  getDefaultModelId: vi.fn().mockReturnValue("gpt-4o-mini"),
-  isModelFree: vi.fn().mockImplementation(async (modelId: string) => {
-    return modelId === "free-model";
-  }),
-}));
+    vi.mocked(completionStream).mockImplementation(async (input) => {
+      const isFree = input.model === "free-model";
 
-describe("POST /api/v1/ai/chat - Paid Model Zero Credits", () => {
+      if (!isFree) {
+        const error = new Error("Insufficient credits");
+        Object.assign(error, {
+          kind: "INSUFFICIENT_CREDITS",
+          billingAccountId: "test-user",
+          required: 100,
+          available: 0,
+        });
+        throw error;
+      }
+
+      return {
+        stream: new ReadableStream({
+          start(controller) {
+            controller.enqueue({ type: "text_delta", delta: "AI response" });
+            controller.close();
+          },
+        }),
+        final: Promise.resolve({
+          message: {
+            role: "assistant",
+            content: "AI response",
+            requestId: "req-123",
+            timestamp: new Date().toISOString(),
+          },
+          requestId: "req-123",
+        }),
+      };
+    });
+  });
+
+  // Invariant: Paid model with zero balance must return 402 before attempting LLM call
   it("should block paid model execution with zero balance and NOT call LLM", async () => {
     const accountService = createMockAccountServiceWithDefaults();
     accountService.getBalance = vi.fn().mockResolvedValue(0);
@@ -82,8 +158,17 @@ describe("POST /api/v1/ai/chat - Paid Model Zero Credits", () => {
         const response = await fetch({
           method: "POST",
           body: JSON.stringify({
-            messages: [{ role: "user", content: "Hello" }],
-            modelId: "paid-model", // Not "free-model"
+            threadId: "test-thread",
+            clientRequestId: "00000000-0000-4000-8000-000000000003",
+            messages: [
+              {
+                id: "msg-1",
+                role: "user",
+                createdAt: new Date().toISOString(),
+                content: [{ type: "text", text: "Hello" }],
+              },
+            ],
+            model: "paid-model", // Not "free-model"
           }),
         });
 
