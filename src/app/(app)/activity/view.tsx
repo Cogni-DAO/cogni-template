@@ -51,7 +51,7 @@ export function ActivityView({ initialData }: ActivityViewProps) {
   }));
 
   return (
-    <div className="flex flex-col gap-8 p-8">
+    <div className="mx-auto flex max-w-[var(--max-width-container-screen)] flex-col gap-8 p-4 md:p-8 lg:px-16">
       <div className="flex items-center justify-between">
         <h1 className="font-bold text-3xl tracking-tight">Your Activity</h1>
         <TimeRangeSelector
