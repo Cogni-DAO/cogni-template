@@ -13,7 +13,9 @@
 
 "use client";
 
+import { useState } from "react";
 import type { z } from "zod";
+import { type TimeRange, TimeRangeSelector } from "@/components";
 import { ActivityChart } from "@/components/kit/data-display/ActivityChart";
 import { ActivityTable } from "@/components/kit/data-display/ActivityTable";
 import type { aiActivityOperation } from "@/contracts/ai.activity.v1.contract";
@@ -25,8 +27,11 @@ interface ActivityViewProps {
 }
 
 export function ActivityView({ initialData }: ActivityViewProps) {
+  const [timeRange, setTimeRange] = useState<TimeRange>("1d");
+
   // In a real implementation, we would use useQuery or similar to fetch data
   // based on selected time range. For now, we just display initialData.
+  // TODO: Implement data fetching based on timeRange
 
   const { chartSeries, totals, rows } = initialData;
 
@@ -49,7 +54,11 @@ export function ActivityView({ initialData }: ActivityViewProps) {
     <div className="flex flex-col gap-8 p-8">
       <div className="flex items-center justify-between">
         <h1 className="font-bold text-3xl tracking-tight">Your Activity</h1>
-        {/* Time range picker would go here */}
+        <TimeRangeSelector
+          value={timeRange}
+          onValueChange={setTimeRange}
+          className="w-40 rounded-lg"
+        />
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">

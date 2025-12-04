@@ -49,12 +49,6 @@ export function ActivityChart({
   config,
   color = "hsl(var(--chart-1))",
 }: ActivityChartProps) {
-  // Filter data based on timeRange if needed, or assume data is already filtered
-  // For this implementation, we'll assume the parent handles data fetching/filtering
-  // but we keep the UI control for future client-side filtering if needed.
-  // Actually, the requirement says "SQL Aggregation", so the parent should pass the correct data.
-  // We might want to expose an onTimeRangeChange prop.
-
   return (
     <Card>
       <CardHeader className="flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row">
@@ -62,7 +56,6 @@ export function ActivityChart({
           <CardTitle>{title}</CardTitle>
           <CardDescription>{description}</CardDescription>
         </div>
-        {/* Time range selector could go here if we want client-side control */}
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
         <ChartContainer config={config} className="aspect-auto h-64 w-full">
