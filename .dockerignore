@@ -42,6 +42,10 @@ lerna-debug.log*
 tests
 e2e
 playwright.config.ts
+vitest*.config.*
+test-results
+playwright-report
+tmp
 
 # Architecture test fixtures (never needed in any Docker stage)
 src/**/__arch_probes__
@@ -51,6 +55,10 @@ src/**/__arch_probes__
 .gitlab-ci.yml
 .travis.yml
 .circleci
+
+# Linting (not needed for build)
+eslint.config.mjs
+eslint/
 
 # Misc cache
 .cache

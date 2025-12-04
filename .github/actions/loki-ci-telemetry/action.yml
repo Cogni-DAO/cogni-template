@@ -28,7 +28,7 @@ inputs:
   compose_services:
     description: "Space-separated services to capture logs from"
     required: false
-    default: "app litellm caddy postgres alloy"
+    default: "app litellm caddy postgres alloy db-provision db-migrate"
   tail_lines:
     description: "Number of log lines to capture per service on failure"
     required: false

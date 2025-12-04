@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-01
+- **Last reviewed:** 2025-12-05
 - **Status:** draft
 
 ## Purpose
@@ -35,7 +35,7 @@ Production runtime configuration directory copied to VM hosts for container orch
 - **Exports:** none
 - **Routes (if any):** none
 - **CLI (if any):** docker-compose commands
-- **Env/Config keys:** `APP_ENV`, `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, `DATABASE_URL`, `APP_BASE_URL`, `NEXTAUTH_URL`, `AUTH_SECRET`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `LITELLM_DATABASE_URL`, `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY`
+- **Env/Config keys:** `APP_IMAGE`, `MIGRATOR_IMAGE`, `APP_ENV`, `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, `DATABASE_URL`, `APP_BASE_URL`, `NEXTAUTH_URL`, `AUTH_SECRET`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `LITELLM_DATABASE_URL`, `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY`
 - **Files considered API:** `docker-compose.yml`, `postgres-init/*.sh`, `configs/alloy-config.alloy`
 
 ## Ports (optional)
@@ -57,8 +57,8 @@ Production runtime configuration directory copied to VM hosts for container orch
 # Production deployment (via deploy script)
 docker compose --env-file .env up -d --remove-orphans
 
-# Database migration (via deploy script)
-docker compose run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'
+# Database migration (via deploy script, uses db-migrate service)
+docker compose --profile bootstrap run --rm db-migrate
 ```
 
 ## Standards
@@ -88,6 +88,8 @@ docker compose run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'
 - Alloy UI exposed at 127.0.0.1:12345 (internal only)
 - `DEPLOY_ENVIRONMENT` must be set (local|preview|production) - used for env label, fail-closed validation
 - Single parameterized Alloy config for all environments (no drift)
+- `db-migrate` service runs via `--profile bootstrap`, receives only DB env vars (least-secret exposure)
+- `MIGRATOR_IMAGE` required in production compose (no fallback), derived from APP_IMAGE with `-migrate` suffix
 
 **Local Dev (docker-compose.dev.yml):**
 

@@ -53,41 +53,7 @@ PRs **do not own** checks; commits do.
 
 ---
 
-## 3. Why Sonar was "working" but CI was not
-
-### sonar.yml:
-
-```yaml
-on:
-  push:
-    branches: [staging, main]
-  pull_request:
-    branches: [staging, main]
-```
-
-**Sonar runs on:**
-
-- PRs to staging/main and
-- Any push to staging or main.
-
-That means the commit often already has a Sonar check from push, so the PR shows it even if pull_request never fired.
-
-### ci.yml (old):
-
-```yaml
-on:
-  pull_request:
-```
-
-CI only ran when a pull_request event fired.
-
-Auto-created release/\* → main PRs didn't emit a usable pull_request event in practice.
-
-**Result:** branch protection expected ci, but no CI run was ever triggered.
-
----
-
-## 4. Required checks and names
+## 3. Required checks and names
 
 Branch protection uses check run names (format: **Workflow name / job name**), e.g.:
 
@@ -102,7 +68,7 @@ Stale names will sit as "Expected — waiting for status to be reported" forever
 
 ---
 
-## 5. Our CI trigger policy
+## 4. Our CI trigger policy
 
 **We want:**
 

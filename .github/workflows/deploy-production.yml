@@ -40,8 +40,12 @@ jobs:
             IMAGE_TAG="prod-${{ github.event.workflow_run.head_sha }}"
           fi
 
+          # Derive MIGRATOR_IMAGE from IMAGE_NAME + IMAGE_TAG (INV-COUPLED-TAGS-NO-GUESSING)
+          MIGRATOR_IMAGE="${IMAGE_NAME}:${IMAGE_TAG}-migrate"
+
           echo "IMAGE_NAME=${IMAGE_NAME}" >> $GITHUB_ENV
           echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
+          echo "MIGRATOR_IMAGE=${MIGRATOR_IMAGE}" >> $GITHUB_ENV
           echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
 
       - name: Setup SSH deploy key
@@ -85,6 +89,7 @@ jobs:
           DEPLOY_ENVIRONMENT: production
           APP_ENV: production
           APP_IMAGE: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          MIGRATOR_IMAGE: ${{ env.MIGRATOR_IMAGE }}
           DOMAIN: ${{ secrets.DOMAIN }}
           NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}

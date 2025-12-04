@@ -140,7 +140,14 @@ fi
 # Validate required environment variables
 if [[ -z "${APP_IMAGE:-}" ]]; then
     log_error "APP_IMAGE is required (dynamic variable from CI)"
-    log_error "Example: export APP_IMAGE=ghcr.io/cogni-dao/cogni-template:app-abc123"
+    log_error "Example: export APP_IMAGE=ghcr.io/cogni-dao/cogni-template:preview-abc123"
+    exit 1
+fi
+
+if [[ -z "${MIGRATOR_IMAGE:-}" ]]; then
+    log_error "MIGRATOR_IMAGE is required (dynamic variable from CI)"
+    log_error "Example: export MIGRATOR_IMAGE=ghcr.io/cogni-dao/cogni-template:preview-abc123-migrate"
+    log_error "Tag must match APP_IMAGE with '-migrate' suffix (INV-COUPLED-TAGS-NO-GUESSING)"
     exit 1
 fi
 
@@ -236,6 +243,7 @@ mkdir -p "$ARTIFACT_DIR"
 
 log_info "Deploying to Cherry Servers via Docker Compose..."
 log_info "App image: $APP_IMAGE"
+log_info "Migrator image: $MIGRATOR_IMAGE"
 log_info "Environment: $ENVIRONMENT"
 log_info "Domain: $DOMAIN"
 log_info "VM Host: $VM_HOST"
@@ -335,6 +343,7 @@ cat > .env << ENV_EOF
 DOMAIN=${DOMAIN}
 APP_ENV=${APP_ENV}
 APP_IMAGE=${APP_IMAGE}
+MIGRATOR_IMAGE=${MIGRATOR_IMAGE}
 APP_BASE_URL=https://${DOMAIN}
 NEXTAUTH_URL=https://${DOMAIN}
 DATABASE_URL=${DATABASE_URL}
@@ -356,9 +365,11 @@ log_info "Logging into GHCR for private image pulls..."
 echo "${GHCR_DEPLOY_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
 
 log_info "Validating required images are available..."
-if ! docker compose pull --dry-run; then
+# Pull both app and migrator images (dry-run validates they exist)
+if ! docker compose --profile bootstrap pull --dry-run; then
   log_error "❌ Required images not found in registry"
   log_error "Build workflow may have failed - check previous workflow run"
+  log_error "Expected: APP_IMAGE=${APP_IMAGE}, MIGRATOR_IMAGE=${MIGRATOR_IMAGE}"
   exit 1
 fi
 
@@ -393,7 +404,7 @@ fi
 
 log_info "[$(date -u +%H:%M:%S)] Pulling updated images..."
 emit_deployment_event "deployment.pull_started" "in_progress" "Pulling images from registry"
-docker compose pull
+docker compose --profile bootstrap pull
 log_info "[$(date -u +%H:%M:%S)] Pull complete"
 emit_deployment_event "deployment.pull_complete" "success" "Images pulled successfully"
 
@@ -408,7 +419,7 @@ emit_deployment_event "deployment.db_provision_complete" "success" "Database pro
 
 log_info "[$(date -u +%H:%M:%S)] Running database migrations..."
 emit_deployment_event "deployment.migration_started" "in_progress" "Running database migrations"
-docker compose run --rm --no-deps --entrypoint sh app -lc 'pnpm db:migrate:container'
+docker compose --profile bootstrap run --rm db-migrate
 log_info "[$(date -u +%H:%M:%S)] Migrations complete"
 emit_deployment_event "deployment.migration_complete" "success" "Migrations applied successfully"
 
@@ -443,7 +454,7 @@ rsync -av -e "ssh $SSH_OPTS" \
 # Upload and execute deployment script
 scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
 ssh $SSH_OPTS root@"$VM_HOST" \
-    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' APP_IMAGE='$APP_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_NAME='$APP_DB_NAME' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-remote.sh"
+    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' APP_IMAGE='$APP_IMAGE' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_NAME='$APP_DB_NAME' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-remote.sh"
 
 # Health validation
 log_info "Validating deployment health..."

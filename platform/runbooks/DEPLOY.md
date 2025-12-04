@@ -124,8 +124,8 @@ ssh -i ~/.ssh/cogni_template_preview_deploy root@your-vm-ip
 # Check database was created
 cd /opt/cogni-template-runtime && docker compose exec -T postgres psql -U postgres -d postgres -c "\l+"
 
-# Test migration works
-cd /opt/cogni-template-runtime && docker compose run --rm app pnpm db:migrate:container
+# Test migration works (uses db-migrate service with MIGRATOR_IMAGE)
+cd /opt/cogni-template-runtime && docker compose --profile bootstrap run --rm db-migrate
 ```
 
 Expected: Database `cogni_template_preview` exists owned by `cogni_app_preview`, migrations succeed without auth errors.

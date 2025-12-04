@@ -18,6 +18,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - **Delegate cleanly:** Use subagents with narrow scopes.
 - **Validate early:** Run `pnpm check` before proposing commits.
 - **Update docs:** Reflect any surface changes in AGENTS.md.
+- **Full Validation:** `pnpm check:full` is long running, but has CI parity. Use as last required feature validation gate.
 
 ## Agent Behavior
 
@@ -72,10 +73,13 @@ pnpm docker:test:stack:fast   # start all services containerized in test mode (s
 pnpm docker:stack             # start full production simulation locally (https://localhost - browser will warn about cert)
 pnpm docker:stack:fast        # start production simulation (skip build for speed)
 pnpm build                    # build for production
-pnpm check                    # lint + type + format validation
+pnpm check                    # lint + type + format validation (fast, no infra)
+pnpm check:full               # CI-parity gate: full docker build, stack launch + all test suites
+pnpm check:full:fast          # Same as check:full but skip Docker rebuild
 pnpm test                     # run unit/integration tests (no server required)
 pnpm test:ci                  # run tests with test coverage statistics
 pnpm test:int                 # Integration tests (testcontainers, no server)
+pnpm test:contract            # Contract tests (in-memory, no HTTP)
 pnpm test:stack:dev           # Full Stack tests (requires dev:stack:test running)
 pnpm test:stack:docker        # Full Stack tests (requires docker:test:stack running)
 pnpm format                   # prettier format fixes

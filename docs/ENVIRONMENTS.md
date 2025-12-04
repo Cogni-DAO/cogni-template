@@ -141,9 +141,9 @@ pnpm test:stack:dev           # Run stack tests against host app
 **Commands:**
 
 ```bash
-pnpm docker:dev:stack         # Start all containers
-pnpm docker:dev:stack:build   # Build and start
-pnpm docker:dev:stack:migrate # Run migrations in container
+pnpm docker:dev:stack         # Build and start all containers
+pnpm docker:dev:stack:fast    # Start containers without building
+pnpm db:migrate               # Run migrations via db-migrate service
 ```
 
 ### 5. Docker Dev Stack Test (`pnpm docker:test:stack` + `pnpm test:stack:docker`)
@@ -165,8 +165,8 @@ pnpm docker:dev:stack:migrate # Run migrations in container
 **Commands:**
 
 ```bash
-pnpm docker:test:stack:build    # Build and start containers in test mode
-pnpm docker:test:stack:migrate  # Run migrations in test container
+pnpm docker:test:stack          # Build and start containers in test mode
+pnpm db:migrate:test            # Run migrations via db-migrate service
 pnpm test:stack:docker          # Run tests against containerized app
 ```
 
@@ -193,9 +193,9 @@ DB_HOST=localhost DB_PORT=55432 TEST_BASE_URL=https://localhost/
 **Commands:**
 
 ```bash
-pnpm docker:stack         # Local production simulation
-pnpm docker:stack:build   # Build and start locally
-pnpm docker:stack:migrate # Run migrations locally
+pnpm docker:stack         # Build and start production simulation locally
+pnpm docker:stack:fast    # Start containers without building
+# Migrations: use db-migrate service via docker compose directly
 ```
 
 **Use Cases:**

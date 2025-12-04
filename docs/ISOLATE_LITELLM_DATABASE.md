@@ -21,7 +21,7 @@ Note: addressed now. Litellm db split from app db. Added drop protection.
   - `docker exec -e PGPASSWORD=password postgres psql -U user -d postgres -c "DROP DATABASE IF EXISTS cogni_template_dev WITH (FORCE);"`
   - `docker exec -e PGPASSWORD=password postgres psql -U user -d postgres -c "CREATE DATABASE cogni_template_dev;"`
   - `docker start litellm` (lets LiteLLM reapply its Prisma migrations)
-  - `pnpm dev:stack:db:migrate` (reapply app migrations)
+  - `pnpm db:migrate` (reapply app migrations)
 - Verified current state via `docker exec ... psql` that app tables and drizzle metadata exist alongside LiteLLM tables.
 
 ## Current state
@@ -42,7 +42,7 @@ Note: addressed now. Litellm db split from app db. Added drop protection.
   - Inside containers: services connect to Postgres on port `5432` via the Docker network name.
   - `.env.test` and stack scripts must derive DB_HOST/DB_PORT from one source of truth so tests cannot silently point at a different instance.
 - While LiteLLM still shares `cogni_template_dev`, treat this as a temporary workaround:
-  - After a full stack restart that recreates `cogni_template_dev`, re-run `pnpm dev:stack:db:migrate` once LiteLLM finishes booting.
+  - After a full stack restart that recreates `cogni_template_dev`, re-run `pnpm db:migrate` once LiteLLM finishes booting.
   - Remove this step once LiteLLM has its own isolated database.
 - CI must run migrations + a minimal table-existence check against the Docker Postgres instance to catch DB drift early.
 

@@ -439,8 +439,7 @@ All CI logs have these labels for filtering:
 
 **Current Coverage (All workflows):**
 
-- `ci.yaml` (`ci` + `stack-test` jobs) - lint, tests, Docker Compose failures
-- `sonar.yml` (`sonar` job) - SonarCloud analysis
+- `ci.yaml` (`ci` + `sonar` + `stack-test` jobs) - lint, tests, SonarCloud analysis, Docker Compose failures
 - `build-prod.yml` (`build-image` job) - production image build
 - `staging-preview.yml` (`build`, `deploy`, `e2e`, `promote` jobs) - staging pipeline
 - `deploy-production.yml` (`deploy-image` job) - production deployment

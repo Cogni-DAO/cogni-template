@@ -119,12 +119,25 @@ POSTGRES_DB=${APP_DB_NAME}
 
 ## 2. Migration Strategy
 
-**Core Principle:** For any environment, migrations run against the same `DATABASE_URL` the app uses in that environment.
+**Core Principle:** Migrations run via a dedicated `MIGRATOR_IMAGE` that contains only migration tooling. The app runtime image has no pnpm or migration capabilities.
+
+**Architecture:**
+
+- **MIGRATOR_IMAGE:** Separate Docker image (`IMAGE_NAME:IMAGE_TAG-migrate`) containing drizzle-kit and migrations
+- **db-migrate service:** Docker Compose service that runs migrations using the migrator image
+- **Runner image:** Lean production image (~80MB) with no migration tooling
 
 **Migration Commands:**
 
-- `pnpm dev:stack:db:migrate` - Host environments (uses dotenv to load env files)
-- `pnpm db:migrate:container` - Container environments (uses pre-loaded env vars)
+- `pnpm db:migrate` - Compose: db-migrate service (dev environment)
+- `pnpm db:migrate:test` - Compose: db-migrate service (test environment)
+- `pnpm db:migrate:direct` - Direct: drizzle-kit using DATABASE_URL (testcontainers, CI)
+- `docker compose --profile bootstrap run --rm db-migrate` - Direct compose invocation
+
+**Execution Contexts:**
+
+- **Compose** (`db:migrate`, `db:migrate:test`): Docker compose db-migrate service. Requires `.env.local`/`.env.test`. For local docker stack.
+- **Direct** (`db:migrate:direct`): Runs drizzle-kit directly using `DATABASE_URL` from environment. For testcontainers and CI where DATABASE_URL is set programmatically.
 
 ### 2.1 Local Development
 
@@ -135,7 +148,7 @@ POSTGRES_DB=${APP_DB_NAME}
 **Commands:**
 
 ```bash
-pnpm dev:stack:db:migrate    # Migrate dev database
+pnpm db:migrate              # Migrate dev database via db-migrate service
 pnpm dev:stack               # Start app using same database
 ```
 
@@ -174,14 +187,15 @@ pnpm docker:dev:stack:setup     # Complete: build stack, create DB, migrate
 # Manual steps (if needed)
 pnpm docker:dev:stack           # Start containers
 pnpm db:provision               # Create database
-pnpm docker:dev:stack:migrate   # Run migrations in container
+pnpm db:migrate                 # Run migrations via db-migrate service
 ```
 
 **Key Properties:**
 
 - Dev stack owns schema and migrations in shared `postgres_data` volume
-- Uses `docker-compose.dev.yml` with real adapters
+- Uses `docker-compose.dev.yml` with db-migrate service for migrations
 - Postgres exposed on `localhost:55432` for debugging
+- Migrations run via dedicated migrator image (not inside app container)
 
 ### 2.4 Docker Stack (Production Simulation)
 
@@ -217,30 +231,20 @@ pnpm docker:stack:setup         # Start production compose (assumes DB exists)
 
 ```bash
 # 1. Start Docker stack in test mode
-pnpm docker:test:stack:build    # Build and start containers with test env
+pnpm docker:test:stack          # Build and start containers with test env
 
-# 2. Run migrations INSIDE app container (same image + env as app)
-pnpm docker:test:stack:migrate
+# 2. Run migrations via db-migrate service
+pnpm db:migrate:test
 
 # 3. Run host tests against containerized app
 pnpm test:stack:docker
 ```
 
-**Package.json Configuration:**
-
-```json
-{
-  "docker:test:stack:build": "dotenv -e .env.test -e .env.local -- docker compose -f platform/infra/services/runtime/docker-compose.dev.yml up -d --build",
-  "docker:test:stack:migrate": "dotenv -e .env.test -e .env.local -- docker compose -f platform/infra/services/runtime/docker-compose.dev.yml run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'",
-  "test:stack:docker": "DB_HOST=localhost DB_PORT=55432 TEST_BASE_URL=https://localhost/ dotenv -e .env.test -e .env.local -- vitest run --config vitest.stack.config.mts"
-}
-```
-
 **Key Properties:**
 
-- Uses same Docker image for both app and migrations
+- Uses dedicated migrator image for migrations (not app container)
 - Environment variables passed via dotenv to Docker Compose
-- Migrations run **inside** the container with same environment as app
+- Migrations run via db-migrate service with `--profile bootstrap`
 - Tests run from host, connect to exposed postgres port (55432) and app via HTTPS
 
 ## 3. Production Deployments
@@ -273,7 +277,7 @@ env:
 - name: Run migrations
   run: |
     docker compose -f platform/infra/services/runtime/docker-compose.yml \
-      run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'
+      --profile bootstrap run --rm db-migrate
 
 - name: Start application
   run: |
@@ -284,15 +288,21 @@ env:
 **Benefits:**
 
 - Same `DATABASE_URL` for migrations and app
-- Same Docker image for migrations and app
-- Migrations as repeatable deployment step
-- No drift between migration and app environments
+- Dedicated migrator image with pinned drizzle-kit version
+- Migrations as repeatable deployment step (idempotent)
+- Lean runner image (~80MB) without migration tooling
+- db-migrate service receives only DB env vars (least-secret exposure)
 
 ## 4. Technical Implementation
 
-### 4.1 Dockerfile Runner Stage
+### 4.1 Docker Image Architecture
 
-The production image handles both app runtime and migrations:
+**Two-Image Strategy:**
+
+- **Runner image** (`IMAGE_NAME:IMAGE_TAG`): Lean production image (~80MB) for app runtime only
+- **Migrator image** (`IMAGE_NAME:IMAGE_TAG-migrate`): Contains drizzle-kit and migrations (~480MB)
+
+**Runner Stage (no migration tools):**
 
 ```dockerfile
 FROM node:20-alpine AS runner
@@ -302,22 +312,35 @@ RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs \
   && apk add --no-cache curl
 
-# Enable pnpm for migrations (pinned version for stability)
-RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
-
 ENV NODE_ENV=production
-ENV PATH="/usr/local/bin:${PATH}"
 
-# Copy runtime bundle AND migration tools
-COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts ./drizzle.config.ts
-COPY --from=builder --chown=nextjs:nodejs /app/src/adapters/server/db/migrations ./src/adapters/server/db/migrations
+# Copy runtime bundle only (no pnpm, no migrations)
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-# ... other files
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 
 USER nextjs
 CMD ["node", "server.js"]
+```
+
+**Migrator Stage:**
+
+```dockerfile
+FROM base AS migrator
+WORKDIR /app
+
+RUN apk add --no-cache g++ make python3
+
+# Install deps with drizzle-kit
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --prod=false
+
+# Copy migration files only
+COPY drizzle.config.ts ./
+COPY src/shared/db ./src/shared/db
+COPY src/adapters/server/db/migrations ./src/adapters/server/db/migrations
+
+CMD ["pnpm", "db:migrate:container"]
 ```
 
 ### 4.2 Drizzle Configuration
@@ -349,85 +372,48 @@ export default defineConfig({
 
 ### 5.1 Benefits
 
-**Same Image + Environment:**
+**Separation of Concerns:**
 
-- No "works locally but not in prod" due to mismatched dependencies
-- No migration image drift vs app image
-- Single source of truth: `pnpm db:migrate:container`
+- Runner image cannot mutate database schema (no pnpm, no drizzle-kit)
+- Migrator image has only DB env vars (least-secret exposure)
+- Clear security boundary between app runtime and migrations
 
-**Simple Mental Model:**
+**Lean Production Image:**
 
-- Whatever image runs the app can migrate the database
-- Repeatable deployment step (safe to re-run)
-- Common pattern for early-stage teams, viable in production
+- Runner image ~80MB (Next.js standalone only)
+- No dev dependencies in production runtime
+- Faster container pulls and startup
 
-**Development Workflow:**
+**Consistent Migration Tooling:**
 
-- Consistent migration tooling across all environments
-- Easy debugging (same environment for app and migrations)
+- Pinned drizzle-kit version in migrator image
+- Idempotent migrations (safe to re-run)
+- Same db-migrate service in dev and production
 
 ### 5.2 Trade-offs
 
-**Larger Runtime Image:**
+**Two Images to Build:**
 
-- Includes `node_modules` with dev tools like `drizzle-kit`
-- Heavier than truly minimal Next.js standalone runtime
-- Acceptable trade-off for current stage
+- CI builds both runner and migrator targets
+- Tag coupling: `IMAGE_NAME:IMAGE_TAG` and `IMAGE_NAME:IMAGE_TAG-migrate`
+- Both must be pushed and pulled during deployment
 
-**Extended Capabilities:**
+**Larger Migrator Image:**
 
-- Runtime image can mutate database schema (not just serve HTTP)
-- In strict environments, might prefer separate migration image
-- Currently, simplicity outweighs isolation concerns
+- Migrator includes full node_modules (~480MB)
+- Acceptable since it only runs during deployments, not at runtime
 
 ## 6. Future Improvements (If/When Needed)
 
-When the stack matures and you need tighter image optimization or security separation:
+### 6.1 Migrator Image Optimization
 
-### 6.1 Dedicated Migration Image
+The migrator image (~480MB) includes full node_modules. Potential optimizations:
 
-Build a separate migration-only image:
+- Use pnpm's `--filter` to install only drizzle-kit and dependencies
+- Multi-stage build to copy only required binaries
+- Consider distroless base image for smaller footprint
 
-```dockerfile
-FROM node:20-alpine AS migrate
-WORKDIR /app
-RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
-
-# Copy only migration essentials
-COPY package.json drizzle.config.ts ./
-COPY src/shared/db/schema.ts ./src/shared/db/schema.ts
-COPY src/adapters/server/db/migrations ./src/adapters/server/db/migrations
-
-# Install only migration dependencies
-RUN pnpm install --prod=false drizzle-kit
-
-CMD ["pnpm", "db:migrate:container"]
-```
-
-### 6.2 Migration Service in Compose
-
-Add dedicated migration service:
-
-```yaml
-services:
-  migrate:
-    image: <migration-image>
-    env_file: .env.docker
-    command: ["pnpm", "db:migrate:container"]
-    depends_on: [postgres]
-
-  app:
-    # ... app definition
-```
-
-**CI Usage:**
-
-```bash
-docker compose up migrate    # Run migrations first
-docker compose up -d app     # Then start app
-```
-
-### 6.3 Enhanced Environment Separation
+### 6.2 Enhanced Environment Separation
 
 **Stricter Test Isolation:**
 
@@ -437,18 +423,17 @@ docker compose up -d app     # Then start app
 
 **Production Pipeline:**
 
-- Dedicated migration pipeline stage
 - Blue/green deployments with migration gating
-- No ad-hoc migration commands in production
+- Automated migration rollback on failure
 
 ## 7. Summary
 
 **Environment Separation:** Host dev DB, host stack test DB, container stack DB are cleanly separated
 
-**Consistent Migration Strategy:** All environments use same `drizzle-kit` tooling with environment-appropriate commands
+**Two-Image Architecture:** Lean runner image (~80MB) + dedicated migrator image (~480MB) with clear security boundaries
 
-**Production-Ready Pattern:** Same image, same `DATABASE_URL`, migrations as first-class deployment step
+**Production-Ready Pattern:** Dedicated db-migrate service, same `DATABASE_URL`, migrations as first-class deployment step
 
-**Current Trade-off:** Slightly heavier image for simpler, more deterministic workflow - acceptable at current stage
+**Least-Secret Exposure:** db-migrate service receives only DB env vars, not app secrets
 
-**Future Path:** Can refactor to dedicated migration services when optimization becomes priority
+**Tag Coupling:** `APP_IMAGE=IMAGE_NAME:IMAGE_TAG`, `MIGRATOR_IMAGE=IMAGE_NAME:IMAGE_TAG-migrate`

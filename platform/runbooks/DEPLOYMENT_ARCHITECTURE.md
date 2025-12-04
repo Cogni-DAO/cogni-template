@@ -49,15 +49,16 @@ platform/infra/
 
 **Environment-specific image tags**: Same IMAGE_NAME, environment-aware tags:
 
-- Preview: `preview-${GITHUB_SHA}`
-- Production: `prod-${GITHUB_SHA}`
+- App image: `preview-${GITHUB_SHA}` or `prod-${GITHUB_SHA}`
+- Migrator image: `preview-${GITHUB_SHA}-migrate` or `prod-${GITHUB_SHA}-migrate`
 
 **Runtime containers**:
 
-- `app`: Next.js application with environment-specific runtime config
+- `app`: Next.js application with environment-specific runtime config (lean, no migration tools)
+- `db-migrate`: Database migrations via dedicated migrator image (bootstrap profile)
 - `litellm`: AI proxy service
 - `caddy`: HTTPS termination and routing
-- `promtail`: Log aggregation
+- `alloy`: Log collection and forwarding
 
 **Registry Authentication**:
 
@@ -102,6 +103,11 @@ For private GHCR images, VMs authenticate using bot account credentials:
 
 - **Repository secrets**: `GHCR_DEPLOY_TOKEN`, `CHERRY_AUTH_TOKEN`, `SONAR_TOKEN` (shared across environments)
 - **Environment secrets** (`preview`/`production`): `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, `DATABASE_URL`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `AUTH_SECRET`, `SSH_DEPLOY_KEY`, `VM_HOST`, `DOMAIN`
+
+**CI-Generated Variables**:
+
+- `APP_IMAGE`: Derived from `IMAGE_NAME:IMAGE_TAG`
+- `MIGRATOR_IMAGE`: Derived from `IMAGE_NAME:IMAGE_TAG-migrate` (tag coupling invariant)
 
 **Private Registry Access**: `GHCR_DEPLOY_TOKEN` enables pulling private images from GitHub Container Registry using `Cogni-1729` bot account.
 
