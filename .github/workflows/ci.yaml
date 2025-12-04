@@ -143,8 +143,9 @@ jobs:
       POSTGRES_DB: cogni_template_test
       DB_HOST: postgres
       DB_PORT: 55432
-      # Docker Compose environment variables
+      # Docker Compose environment variables (tag coupling: MIGRATOR_IMAGE = APP_IMAGE + '-migrate')
       APP_IMAGE: cogni-template-ci-${{ github.sha }}
+      MIGRATOR_IMAGE: cogni-template-ci-${{ github.sha }}-migrate
       DOMAIN: localhost
       LITELLM_MASTER_KEY: test-key
       OPENROUTER_API_KEY: test-key
@@ -169,11 +170,14 @@ jobs:
           # If build times take too long, consider a job step with buildx + type=gha cache
           docker compose -f platform/infra/services/runtime/docker-compose.dev.yml \
             up -d --build app postgres litellm caddy
+          # Build db-migrate service (migrator target, separate from app)
+          docker compose -f platform/infra/services/runtime/docker-compose.dev.yml \
+            build db-migrate
 
       - name: Run migrations
         run: |
           docker compose -f platform/infra/services/runtime/docker-compose.dev.yml \
-            run --rm --entrypoint sh app -lc 'pnpm db:migrate:container'
+            --profile bootstrap run --rm db-migrate
 
       - name: Wait for app healthcheck
         run: |
