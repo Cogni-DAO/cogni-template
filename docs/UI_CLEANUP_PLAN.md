@@ -89,7 +89,7 @@ Phased approach to consolidate UI before locking it down. Don't lock down trash.
 - [x] Delete unused components in `src/components/app/` ✅
 - [x] Delete unused exports in `src/components/index.ts` ✅
 - [x] Create `scripts/check-ui-tokens.sh` with typography + arbitrary value checks ✅
-- [x] Wire script into `pnpm check` → `scripts/check-all.sh` ✅
+- [x] Wire script into `pnpm check` → `scripts/check-fast.sh` ✅
 - [ ] (Optional) Add to Lefthook pre-commit → `lefthook.yml` (deferred)
 
 ### Phase 3: CONSOLIDATE (Variable)

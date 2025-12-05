@@ -80,7 +80,7 @@
   - TODO: Re-evaluate ignoreDependencies once scope expands
 - [ ] ~~Delete dead code~~ _SKIPPED - Knip scoped to UI only, no obvious UI dead code found_
 - [x] Create `scripts/check-ui-tokens.sh` (typography + arbitrary value regex checks)
-- [x] Wire into `scripts/check-all.sh`
+- [x] Wire into `scripts/check-fast.sh`
 
 ---
 

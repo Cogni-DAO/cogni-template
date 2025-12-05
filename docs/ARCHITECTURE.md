@@ -398,7 +398,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] scripts/
 [x] ├── validate-agents-md.mjs # validates AGENTS.md files
 [x] ├── validate-doc-headers.ts # validates doc headers
-[x] ├── check-all.sh # structured check workflow with auto-fix mode
+[x] ├── check-fast.sh # structured check workflow with auto-fix mode
 [x] ├── check-root-layout.ts # validates root directory structure
 [x] ├── setup/ # setup scripts
 [x] ├── eslint/ # custom ESLint plugins

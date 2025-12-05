@@ -5,8 +5,8 @@
   "packageManager": "pnpm@9.12.2",
   "scripts": {
     "start:stack": "pnpm dev:infra && pnpm start",
-    "check": "bash scripts/check-all.sh",
-    "check:fix": "bash scripts/check-all.sh --fix",
+    "check": "bash scripts/check-fast.sh",
+    "check:fix": "bash scripts/check-fast.sh --fix",
     "check:full": "bash scripts/check-full.sh",
     "check:full:fast": "bash scripts/check-full.sh --skip-build",
     "check:code": "pnpm typecheck && pnpm lint && pnpm format:check && pnpm test",

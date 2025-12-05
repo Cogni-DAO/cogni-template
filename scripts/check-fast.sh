@@ -2,13 +2,13 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 
-# Module: scripts/check-all.sh
+# Module: scripts/check-fast.sh
 # Purpose: Runs all quality checks (typecheck, lint, format, test, docs) to completion,
 #          never stopping at first failure. Provides structured output with timing,
 #          visual separation, and summary reporting optimized for AI developer workflows.
 # Usage: pnpm check      # Read-only validation
 #        pnpm check:fix  # Run with auto-fixers
-#        Direct: bash scripts/check-all.sh [--fix]
+#        Direct: bash scripts/check-fast.sh [--fix]
 # Exit: 0 if all checks pass, 1 if any check fails
 # Shell options:
 #   - set +e: Disables fail-fast to ensure all checks run
