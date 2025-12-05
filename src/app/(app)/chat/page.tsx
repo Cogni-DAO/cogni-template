@@ -208,7 +208,7 @@ export default function ChatPage(): ReactNode {
   }
 
   // Invariant: uiDefaultModelId must exist (server provides valid default)
-  // If this fails, server config is broken (DEFAULT_MODEL or free model missing)
+  // If this fails, server config is broken (catalog defaults missing)
   if (!uiDefaultModelId) {
     throw new Error(
       "INV-VIOLATION: server returned no valid default model for credit state"
