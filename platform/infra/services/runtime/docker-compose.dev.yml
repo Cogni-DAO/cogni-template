@@ -214,6 +214,11 @@ services:
       - LOKI_WRITE_URL=${LOKI_WRITE_URL:-http://loki:3100/loki/api/v1/push}
       - LOKI_USERNAME=${LOKI_USERNAME:-}
       - LOKI_PASSWORD=${LOKI_PASSWORD:-}
+      # Metrics scraping (Stage 9)
+      - METRICS_TOKEN=${METRICS_TOKEN:-dev-metrics-token}
+      - PROMETHEUS_REMOTE_WRITE_URL=${PROMETHEUS_REMOTE_WRITE_URL:-}
+      - PROMETHEUS_USERNAME=${PROMETHEUS_USERNAME:-}
+      - PROMETHEUS_PASSWORD=${PROMETHEUS_PASSWORD:-}
     depends_on:
       - loki
 

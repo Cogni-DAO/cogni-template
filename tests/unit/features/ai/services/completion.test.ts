@@ -36,6 +36,7 @@ vi.mock("@/shared/ai/model-catalog.server", () => ({
   isModelFree: vi.fn().mockImplementation(async (modelId: string) => {
     return modelId === "free-model";
   }),
+  getModelClass: vi.fn().mockResolvedValue("standard"),
 }));
 
 // Mock serverEnv

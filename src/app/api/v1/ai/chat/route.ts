@@ -24,7 +24,11 @@ import {
   type ChatOutput,
 } from "@/contracts/ai.chat.v1.contract";
 import { isAccountsFeatureError } from "@/features/accounts/public";
-import { logRequestWarn, type RequestContext } from "@/shared/observability";
+import {
+  aiChatStreamDurationMs,
+  logRequestWarn,
+  type RequestContext,
+} from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 
@@ -332,17 +336,21 @@ export const POST = wrapRouteHandlerWithLogging(
             } finally {
               controller.close();
 
-              // Always emit stream_closed
+              // Always emit stream_closed and record metrics
+              const streamMs = performance.now() - streamStartMs;
               ctx.log.info(
                 {
                   reqId: ctx.reqId,
-                  streamMs: performance.now() - streamStartMs,
+                  streamMs,
                   aborted: streamAborted,
                   abortReason,
                   terminalEventEmitted,
                 },
                 "ai.chat_stream_closed"
               );
+
+              // Record stream duration metric
+              aiChatStreamDurationMs.observe(streamMs);
             }
           },
 

@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 //
-// Alloy configuration for Docker container log collection
-// Sends logs to Grafana Cloud Loki
+// Alloy configuration for Docker container log collection and metrics scraping
+// Sends logs to Grafana Cloud Loki, metrics to Grafana Cloud Mimir (if configured)
 
 // Discover all Docker containers
 discovery.docker "containers" {
@@ -89,3 +89,35 @@ loki.write "loki" {
     }
   }
 }
+
+// =============================================================================
+// Prometheus Metrics Scraping (Stage 9) - DISABLED BY DEFAULT
+// =============================================================================
+//
+// To enable metrics shipping to Grafana Cloud Mimir:
+// 1. Deploy secrets: PROMETHEUS_REMOTE_WRITE_URL, PROMETHEUS_USERNAME, PROMETHEUS_PASSWORD, METRICS_TOKEN
+// 2. Uncomment the prometheus.scrape and prometheus.remote_write blocks below
+// 3. Restart Alloy
+//
+// The /api/metrics endpoint is always available for local curl testing with METRICS_TOKEN.
+// =============================================================================
+
+// prometheus.scrape "app_metrics" {
+//   targets = [
+//     {"__address__" = "app:3000"},
+//   ]
+//   forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+//   scrape_interval = "15s"
+//   metrics_path    = "/api/metrics"
+//   bearer_token    = sys.env("METRICS_TOKEN")
+// }
+
+// prometheus.remote_write "grafana_cloud" {
+//   endpoint {
+//     url = sys.env("PROMETHEUS_REMOTE_WRITE_URL")
+//     basic_auth {
+//       username = sys.env("PROMETHEUS_USERNAME")
+//       password = sys.env("PROMETHEUS_PASSWORD")
+//     }
+//   }
+// }

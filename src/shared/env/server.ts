@@ -83,6 +83,12 @@ const serverSchema = z.object({
   PINO_LOG_LEVEL: z
     .enum(["trace", "debug", "info", "warn", "error"])
     .default("info"),
+
+  // Metrics (Stage 9) - Prometheus scraping (min 32 chars to reduce weak-token risk)
+  METRICS_TOKEN: z.string().min(32).optional(),
+  PROMETHEUS_REMOTE_WRITE_URL: z.string().url().optional(),
+  PROMETHEUS_USERNAME: z.string().optional(),
+  PROMETHEUS_PASSWORD: z.string().optional(),
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {

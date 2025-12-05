@@ -13,7 +13,6 @@
  */
 
 import { randomUUID } from "node:crypto";
-
 import {
   applyBaselineSystemPrompt,
   assertMessageLength,
@@ -28,9 +27,17 @@ import {
 } from "@/core";
 import type { AccountService, Clock, LlmCaller, LlmService } from "@/ports";
 import { InsufficientCreditsPortError } from "@/ports";
-import { isModelFree } from "@/shared/ai/model-catalog.server";
+import { getModelClass, isModelFree } from "@/shared/ai/model-catalog.server";
 import { serverEnv } from "@/shared/env";
-import type { AiLlmCallEvent, RequestContext } from "@/shared/observability";
+import {
+  type AiLlmCallEvent,
+  aiLlmCallDurationMs,
+  aiLlmCostUsdTotal,
+  aiLlmErrorsTotal,
+  aiLlmTokensTotal,
+  classifyLlmError,
+  type RequestContext,
+} from "@/shared/observability";
 
 /**
  * Estimate cost in credits for a given model and token count.
@@ -130,11 +137,24 @@ export async function execute(
   log.debug({ messageCount: finalMessages.length }, "calling LLM");
   const llmStart = performance.now();
 
-  const result = await llmService.completion({
-    messages: finalMessages,
-    model,
-    caller,
-  });
+  let result: Awaited<ReturnType<LlmService["completion"]>>;
+  try {
+    result = await llmService.completion({
+      messages: finalMessages,
+      model,
+      caller,
+    });
+  } catch (error) {
+    // Record error metric before rethrowing
+    const errorCode = classifyLlmError(error);
+    const errorModelClass = await getModelClass(model);
+    aiLlmErrorsTotal.inc({
+      provider: "litellm",
+      code: errorCode,
+      model_class: errorModelClass,
+    });
+    throw error;
+  }
 
   const totalTokens = result.usage?.totalTokens ?? 0;
   const providerMeta = (result.providerMeta ?? {}) as Record<string, unknown>;
@@ -169,6 +189,25 @@ export async function execute(
     providerCostUsd: result.providerCostUsd,
   };
   log.info(llmEvent, "ai.llm_call_completed");
+
+  // Record LLM metrics
+  const modelClass = await getModelClass(modelId);
+  aiLlmCallDurationMs.observe(
+    { provider: "litellm", model_class: modelClass },
+    llmEvent.durationMs
+  );
+  if (llmEvent.tokensUsed) {
+    aiLlmTokensTotal.inc(
+      { provider: "litellm", model_class: modelClass },
+      llmEvent.tokensUsed
+    );
+  }
+  if (typeof llmEvent.providerCostUsd === "number") {
+    aiLlmCostUsdTotal.inc(
+      { provider: "litellm", model_class: modelClass },
+      llmEvent.providerCostUsd
+    );
+  }
 
   const baseMetadata = {
     system: "ai_completion",
@@ -373,6 +412,25 @@ export async function executeStream({
       };
       log.info(llmEvent, "ai.llm_call_completed");
 
+      // Record LLM metrics
+      const modelClass = await getModelClass(modelId);
+      aiLlmCallDurationMs.observe(
+        { provider: "litellm", model_class: modelClass },
+        llmEvent.durationMs
+      );
+      if (llmEvent.tokensUsed) {
+        aiLlmTokensTotal.inc(
+          { provider: "litellm", model_class: modelClass },
+          llmEvent.tokensUsed
+        );
+      }
+      if (typeof llmEvent.providerCostUsd === "number") {
+        aiLlmCostUsdTotal.inc(
+          { provider: "litellm", model_class: modelClass },
+          llmEvent.providerCostUsd
+        );
+      }
+
       const baseMetadata = {
         system: "ai_completion_stream",
         provider: providerMeta.provider,
@@ -476,11 +534,21 @@ export async function executeStream({
         requestId,
       };
     })
-    .catch((error) => {
+    .catch(async (error) => {
       // If stream fails/aborts, we still want to record partial usage if available
       // But for now, we just log and rethrow.
       // Ideally, we'd catch AbortError and record partials if LiteLLM gave us any.
       log.error({ err: error, requestId }, "Stream execution failed");
+
+      // Record error metric
+      const errorCode = classifyLlmError(error);
+      const errorModelClass = await getModelClass(model);
+      aiLlmErrorsTotal.inc({
+        provider: "litellm",
+        code: errorCode,
+        model_class: errorModelClass,
+      });
+
       throw error;
     });
 

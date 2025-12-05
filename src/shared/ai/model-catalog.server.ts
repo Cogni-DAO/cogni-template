@@ -236,3 +236,58 @@ export async function isModelFree(modelId: string): Promise<boolean> {
 export function getDefaultModelId(): string {
   return serverEnv().DEFAULT_MODEL;
 }
+
+/**
+ * Pricing class for metrics labels (low cardinality).
+ * Invariant: 'free' | 'standard' | 'premium' - exactly 3 values.
+ */
+export type ModelPricingClass = "free" | "standard" | "premium";
+
+/**
+ * Premium model patterns - expensive flagship models.
+ * Covers: GPT-4, Claude Opus/Sonnet, Gemini Pro/Ultra, etc.
+ */
+const PREMIUM_PATTERNS = [
+  /gpt-4(?!.*mini)/i, // GPT-4 but not GPT-4-mini
+  /claude.*opus/i,
+  /claude.*sonnet/i,
+  /gemini.*pro/i,
+  /gemini.*ultra/i,
+  /o1(?!.*mini)/i, // o1 reasoning models
+];
+
+/**
+ * Get model pricing class from catalog.
+ * Derives from authoritative isFree property + pattern heuristics for premium tier.
+ * Returns 'standard' for unknown models (safe default).
+ *
+ * @param modelId - The model identifier to classify
+ * @returns 'free' | 'standard' | 'premium' for metrics label
+ */
+export async function getModelClass(
+  modelId: string
+): Promise<ModelPricingClass> {
+  try {
+    const { models } = await getCachedModels();
+    const model = models.find((m) => m.id === modelId);
+
+    // Authoritative: free tier from catalog
+    if (model?.isFree) {
+      return "free";
+    }
+
+    // Pattern-based: premium tier for expensive flagship models
+    if (PREMIUM_PATTERNS.some((pattern) => pattern.test(modelId))) {
+      return "premium";
+    }
+
+    // Default: standard tier (flash variants, mini models, haiku, etc.)
+    return "standard";
+  } catch {
+    // Cache unavailable - use pattern matching only
+    if (PREMIUM_PATTERNS.some((pattern) => pattern.test(modelId))) {
+      return "premium";
+    }
+    return "standard";
+  }
+}

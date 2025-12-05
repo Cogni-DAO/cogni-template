@@ -21,4 +21,17 @@ export {
 export { logEvent } from "./logEvent";
 export type { Logger } from "./logger";
 export { makeLogger, makeNoopLogger } from "./logger";
+export {
+  aiChatStreamDurationMs,
+  aiLlmCallDurationMs,
+  aiLlmCostUsdTotal,
+  aiLlmErrorsTotal,
+  aiLlmTokensTotal,
+  classifyLlmError,
+  httpRequestDurationMs,
+  httpRequestsTotal,
+  type LlmErrorCode,
+  metricsRegistry,
+  statusBucket,
+} from "./metrics";
 export { REDACT_PATHS } from "./redact";
