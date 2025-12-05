@@ -68,10 +68,10 @@ describe("/api/v1/ai/models integration tests", () => {
     // Assert - Contract compliance
     const parsed = aiModelsOperation.output.parse(data);
 
-    // Assert - defaultModelId comes from env
-    expect(parsed.defaultModelId).toBe(defaultModelId);
+    // Assert - defaultPreferredModelId comes from env
+    expect(parsed.defaultPreferredModelId).toBe(defaultModelId);
 
-    // Assert - defaultModelId exists in returned models
+    // Assert - defaultPreferredModelId exists in returned models
     const modelIds = parsed.models.map((m) => m.id);
     expect(modelIds).toContain(defaultModelId);
   });

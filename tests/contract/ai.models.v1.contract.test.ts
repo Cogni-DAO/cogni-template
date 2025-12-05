@@ -31,10 +31,11 @@ describe("ai.models.v1 contract validation", () => {
 
     // Assert
     expect(fixture).toHaveProperty("models");
-    expect(fixture).toHaveProperty("defaultModelId");
-    expect(fixture.defaultModelId).toBeTruthy();
-    expect(typeof fixture.defaultModelId).toBe("string");
-    expect(fixture.defaultModelId.length).toBeGreaterThan(0);
+    expect(fixture).toHaveProperty("defaultPreferredModelId");
+    expect(fixture).toHaveProperty("defaultFreeModelId");
+    expect(fixture.defaultPreferredModelId).toBeTruthy();
+    expect(typeof fixture.defaultPreferredModelId).toBe("string");
+    expect(fixture.defaultPreferredModelId.length).toBeGreaterThan(0);
   });
 
   it("should have non-empty models array", () => {
@@ -72,12 +73,12 @@ describe("ai.models.v1 contract validation", () => {
     expect(hasPaidModel).toBe(true);
   });
 
-  it("should have defaultModelId that exists in models list", () => {
+  it("should have defaultPreferredModelId that exists in models list", () => {
     // Arrange
     const fixture = loadModelsFixture();
 
-    // Assert - defaultModelId is in the models array
+    // Assert - defaultPreferredModelId is in the models array
     const modelIds = fixture.models.map((m) => m.id);
-    expect(modelIds).toContain(fixture.defaultModelId);
+    expect(modelIds).toContain(fixture.defaultPreferredModelId);
   });
 });
