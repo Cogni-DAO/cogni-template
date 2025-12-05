@@ -212,6 +212,7 @@ jobs:
       OPENROUTER_API_KEY: test-key
       TEST_BASE_URL: https://localhost/
       AUTH_SECRET: tNf5lFM9yMhdgwS5yeQB8Y2kmigblBqobkvI2XN2brg=
+      METRICS_TOKEN: test-metrics-token-for-stack-tests
       # All fake keys: DO NOT expose any real keys here
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
