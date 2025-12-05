@@ -32,6 +32,9 @@ vi.mock("@/bootstrap/container", () => ({
     clock: {
       now: vi.fn(() => new Date("2025-01-01T00:00:00Z")),
     },
+    config: {
+      unhandledErrorPolicy: "rethrow",
+    },
   })),
   resolveAiDeps: vi.fn(),
 }));
