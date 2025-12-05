@@ -42,7 +42,7 @@ function parsePrometheusText(text: string): MetricSample[] {
     // Match: metric_name{label="value",...} value
     // Or: metric_name value
     const match = line.match(/^([a-zA-Z_:][a-zA-Z0-9_:]*)\{([^}]*)\}\s+(.+)$/);
-    if (match && match[1] && match[2] && match[3]) {
+    if (match?.[1] && match[2] && match[3]) {
       const name = match[1];
       const labelsStr = match[2];
       const valueStr = match[3];
@@ -62,7 +62,7 @@ function parsePrometheusText(text: string): MetricSample[] {
     } else {
       // No labels: metric_name value
       const simpleMatch = line.match(/^([a-zA-Z_:][a-zA-Z0-9_:]*)\s+(.+)$/);
-      if (simpleMatch && simpleMatch[1] && simpleMatch[2]) {
+      if (simpleMatch?.[1] && simpleMatch[2]) {
         const name = simpleMatch[1];
         const valueStr = simpleMatch[2];
         samples.push({ name, labels: {}, value: parseFloat(valueStr) });
