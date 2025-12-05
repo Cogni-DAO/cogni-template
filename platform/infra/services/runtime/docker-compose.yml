@@ -35,6 +35,7 @@ services:
       - AUTH_SECRET=${AUTH_SECRET}
       - PORT=${PORT:-3000}
       - PINO_LOG_LEVEL=${PINO_LOG_LEVEL:-info}
+      - METRICS_TOKEN=${METRICS_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy
@@ -132,7 +133,7 @@ services:
     ports:
       - "127.0.0.1:12345:12345"
     volumes:
-      - ./configs/alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - ./configs/alloy-config.metrics.alloy:/etc/alloy/config.alloy:ro
       - alloy_data:/var/lib/alloy
       - /var/run/docker.sock:/var/run/docker.sock:ro
     command:
@@ -145,6 +146,11 @@ services:
       - LOKI_WRITE_URL=${LOKI_WRITE_URL}
       - LOKI_USERNAME=${LOKI_USERNAME}
       - LOKI_PASSWORD=${LOKI_PASSWORD}
+      # Metrics scraping (Stage 9)
+      - METRICS_TOKEN=${METRICS_TOKEN:-}
+      - PROMETHEUS_REMOTE_WRITE_URL=${PROMETHEUS_REMOTE_WRITE_URL:-}
+      - PROMETHEUS_USERNAME=${PROMETHEUS_USERNAME:-}
+      - PROMETHEUS_PASSWORD=${PROMETHEUS_PASSWORD:-}
 
 networks:
   # External network shared with edge stack (Caddy)

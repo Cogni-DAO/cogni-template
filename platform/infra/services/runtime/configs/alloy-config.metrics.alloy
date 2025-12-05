@@ -1,28 +1,28 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 //
-// Alloy configuration for Docker container log collection and metrics scraping
-// Sends logs to Grafana Cloud Loki, metrics to Grafana Cloud Mimir (if configured)
+// Alloy configuration with logs + metrics shipping (preview/production only)
+// Requires: PROMETHEUS_REMOTE_WRITE_URL, PROMETHEUS_USERNAME, PROMETHEUS_PASSWORD, METRICS_TOKEN
+// Use alloy-config.alloy for logs-only (local dev)
 
-// Discover all Docker containers
+// =============================================================================
+// Docker Container Discovery & Log Collection (same as base config)
+// =============================================================================
+
 discovery.docker "containers" {
   host             = "unix:///var/run/docker.sock"
   refresh_interval = "10s"
 }
 
-// Relabel discovered containers with strict cardinality
 discovery.relabel "docker_logs" {
   targets = discovery.docker.containers.targets
 
-  // ALLOWLIST: Only keep compose services we care about
-  // Drop containers that don't match our allowlist
   rule {
     source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
     regex         = "(app|litellm|caddy)"
     action        = "keep"
   }
 
-  // Extract compose service name → "service" label
   rule {
     source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
     regex         = "(.*)"
@@ -30,13 +30,11 @@ discovery.relabel "docker_logs" {
     target_label  = "service"
   }
 
-  // Extract log stream (stdout/stderr)
   rule {
     source_labels = ["__meta_docker_container_log_stream"]
     target_label  = "stream"
   }
 
-  // Add static labels (low cardinality)
   rule {
     target_label = "app"
     replacement  = "cogni-template"
@@ -44,11 +42,9 @@ discovery.relabel "docker_logs" {
 
   rule {
     target_label = "env"
-    replacement  = sys.env("DEPLOY_ENVIRONMENT")  // local | preview | production
+    replacement  = sys.env("DEPLOY_ENVIRONMENT")
   }
 
-  // Fail-closed: Drop logs if DEPLOY_ENVIRONMENT is not valid
-  // Prevents mislabeling if env var is unset or invalid
   rule {
     source_labels = ["env"]
     regex         = "^(local|preview|production)$"
@@ -56,7 +52,6 @@ discovery.relabel "docker_logs" {
   }
 }
 
-// Collect logs from discovered containers
 loki.source.docker "default" {
   host          = "unix:///var/run/docker.sock"
   targets       = discovery.relabel.docker_logs.output
@@ -64,12 +59,9 @@ loki.source.docker "default" {
   relabel_rules = discovery.relabel.docker_logs.rules
 }
 
-// Process logs (minimal - defer filtering to later PR)
 loki.process "docker_logs" {
-  // Parse Docker JSON wrapper
   stage.docker {}
 
-  // Extract timestamp from Docker JSON
   stage.timestamp {
     source = "time"
     format = "RFC3339Nano"
@@ -78,7 +70,6 @@ loki.process "docker_logs" {
   forward_to = [loki.write.loki.receiver]
 }
 
-// Write logs to Loki (local or cloud, parameterized by env vars)
 loki.write "loki" {
   endpoint {
     url = sys.env("LOKI_WRITE_URL")
@@ -93,7 +84,26 @@ loki.write "loki" {
 // =============================================================================
 // Prometheus Metrics Scraping (Stage 9)
 // =============================================================================
-// For metrics shipping, use alloy-config.metrics.alloy instead (preview/prod only).
-// This base config is logs-only to avoid noisy errors when PROMETHEUS_* aren't set.
-// Local testing: curl http://localhost:3000/api/metrics -H "Authorization: Bearer $METRICS_TOKEN"
+// Scrapes /api/metrics from app and ships to Grafana Cloud Mimir.
+// Only use this config when PROMETHEUS_* and METRICS_TOKEN are deployed.
 // =============================================================================
+
+prometheus.scrape "app_metrics" {
+  targets = [
+    {"__address__" = "app:3000"},
+  ]
+  forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
+  scrape_interval = "15s"
+  metrics_path    = "/api/metrics"
+  bearer_token    = sys.env("METRICS_TOKEN")
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = sys.env("PROMETHEUS_REMOTE_WRITE_URL")
+    basic_auth {
+      username = sys.env("PROMETHEUS_USERNAME")
+      password = sys.env("PROMETHEUS_PASSWORD")
+    }
+  }
+}

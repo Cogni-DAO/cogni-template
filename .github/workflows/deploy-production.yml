@@ -107,6 +107,10 @@ jobs:
           GRAFANA_CLOUD_LOKI_URL: ${{ secrets.GRAFANA_CLOUD_LOKI_URL }}
           GRAFANA_CLOUD_LOKI_USER: ${{ secrets.GRAFANA_CLOUD_LOKI_USER }}
           GRAFANA_CLOUD_LOKI_API_KEY: ${{ secrets.GRAFANA_CLOUD_LOKI_API_KEY }}
+          METRICS_TOKEN: ${{ secrets.METRICS_TOKEN }}
+          PROMETHEUS_REMOTE_WRITE_URL: ${{ secrets.PROMETHEUS_REMOTE_WRITE_URL }}
+          PROMETHEUS_USERNAME: ${{ secrets.PROMETHEUS_USERNAME }}
+          PROMETHEUS_PASSWORD: ${{ secrets.PROMETHEUS_PASSWORD }}
         run: platform/ci/scripts/deploy.sh
 
       - name: Upload deployment artifacts

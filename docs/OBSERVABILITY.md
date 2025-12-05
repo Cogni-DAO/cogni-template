@@ -56,8 +56,10 @@ src/shared/observability/
 
 **Infrastructure:**
 
-- `platform/infra/services/runtime/configs/alloy-config.alloy` - Log scraper config
-- `platform/infra/services/runtime/docker-compose.yml` - Alloy + Loki services
+- `platform/infra/services/runtime/configs/alloy-config.alloy` - Logs only (local dev)
+- `platform/infra/services/runtime/configs/alloy-config.metrics.alloy` - Logs + metrics (preview/prod)
+- `platform/infra/services/runtime/docker-compose.yml` - Prod stack (uses metrics config)
+- `platform/infra/services/runtime/docker-compose.dev.yml` - Dev stack (uses logs-only config)
 - `.mcp.json` - Grafana MCP servers for log querying
 
 ---
@@ -145,9 +147,11 @@ clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, { messageId });
 
 **Purpose:** Alertable numeric signals (rates/latency/tokens/cost) complementary to logs.
 
-**Flow:** App (`GET /api/metrics`) → Alloy `prometheus.scrape` → Prometheus-compatible backend (Grafana Cloud Mimir or local Prometheus)
+**Flow:** App (`GET /api/metrics`) → Alloy `prometheus.scrape` → Grafana Cloud Mimir
 
-**Endpoint:** `GET /api/metrics` (Bearer auth via `METRICS_TOKEN` in non-dev)
+**Endpoint:** `GET /api/metrics` (Bearer auth required in production)
+
+**Config:** `alloy-config.metrics.alloy` (preview/prod); `alloy-config.alloy` (local dev, logs-only)
 
 **Registry:** `src/shared/observability/server/metrics.ts` - prom-client registry + metric definitions
 

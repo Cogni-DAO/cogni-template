@@ -32,6 +32,7 @@ services:
       - AUTH_SECRET=${AUTH_SECRET}
       - PORT=${PORT:-3000}
       - PINO_LOG_LEVEL=${PINO_LOG_LEVEL:-info}
+      - METRICS_TOKEN=${METRICS_TOKEN:-}
     depends_on:
       postgres:
         condition: service_healthy

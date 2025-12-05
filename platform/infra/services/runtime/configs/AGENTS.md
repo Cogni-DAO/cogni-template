@@ -34,7 +34,7 @@ Service configuration files for runtime stack services (LiteLLM proxy, Grafana A
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `LITELLM_DATABASE_URL`, `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY`, `METRICS_TOKEN`, `PROMETHEUS_REMOTE_WRITE_URL`, `PROMETHEUS_USERNAME`, `PROMETHEUS_PASSWORD`
-- **Files considered API:** litellm.config.yaml, alloy-config.alloy, grafana-provisioning/datasources/loki.yaml
+- **Files considered API:** litellm.config.yaml, alloy-config.alloy, alloy-config.metrics.alloy, grafana-provisioning/datasources/loki.yaml
 
 ## Ports (optional)
 
@@ -60,12 +60,12 @@ Mounted as volumes in docker-compose.yml.
 - Provider routing via `litellm_params.model` (OpenRouter format)
 - Env substitution: `os.environ/VAR_NAME`
 
-**Alloy Config** (`alloy-config.alloy`):
+**Alloy Config** (env-specific):
 
-- Scrapes JSON logs from Docker containers
-- Forwards to Loki (local or Grafana Cloud based on env)
-- Adds deployment labels
-- Prometheus scrape + remote*write blocks (disabled by default; uncomment when PROMETHEUS*\* creds deployed)
+- `alloy-config.alloy` - Logs only (local dev); scrapes Docker containers → Loki
+- `alloy-config.metrics.alloy` - Logs + metrics (preview/prod); adds prometheus.scrape → Mimir
+- docker-compose.dev.yml mounts `alloy-config.alloy`; docker-compose.yml mounts `alloy-config.metrics.alloy`
+- Treating "metrics config without creds" as deployment misconfig (not tolerated)
 
 ## Dependencies
 
