@@ -32,9 +32,10 @@ import { cn } from "@/shared/util/cn";
 // Allow customization of welcome message via children prop
 export interface ThreadProps {
   welcomeMessage?: ReactNode;
+  errorMessage?: ReactNode;
 }
 
-export const Thread: FC<ThreadProps> = ({ welcomeMessage }) => {
+export const Thread: FC<ThreadProps> = ({ welcomeMessage, errorMessage }) => {
   return (
     <ThreadPrimitive.Root
       className="aui-root aui-thread-root @container flex h-full min-h-0 flex-col overflow-hidden bg-background"
@@ -57,6 +58,12 @@ export const Thread: FC<ThreadProps> = ({ welcomeMessage }) => {
             AssistantMessage,
           }}
         />
+
+        {errorMessage && (
+          <div className="fade-in relative mx-auto w-full max-w-[var(--thread-max-width)] animate-in py-4 duration-150 ease-out">
+            {errorMessage}
+          </div>
+        )}
       </ThreadPrimitive.Viewport>
 
       {/* Composer is sibling after Viewport - always pinned at bottom */}

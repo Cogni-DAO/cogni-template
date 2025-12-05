@@ -27,13 +27,22 @@ export interface ThreadProps extends VendorThreadProps {
    * Use for model selection, voice controls, etc.
    */
   composerLeft?: ReactNode;
+  /**
+   * Optional error message rendered inline in the thread viewport
+   * Appears as a message-like element in the chat flow
+   */
+  errorMessage?: ReactNode;
 }
 
-export function Thread({ composerLeft, ...vendorProps }: ThreadProps) {
+export function Thread({
+  composerLeft,
+  errorMessage,
+  ...vendorProps
+}: ThreadProps) {
   return (
     <div className="relative h-full">
       {/* Vendor Thread (pristine) */}
-      <VendorThread {...vendorProps} />
+      <VendorThread {...vendorProps} errorMessage={errorMessage} />
 
       {/* Composer slot overlay - positioned in action bar next to attachment */}
       {composerLeft && (

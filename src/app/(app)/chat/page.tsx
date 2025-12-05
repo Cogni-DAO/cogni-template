@@ -15,11 +15,29 @@
 "use client";
 
 import { signOut } from "next-auth/react";
-import { type ReactNode, useEffect, useState } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
-import { Thread } from "@/components";
-import { ChatRuntimeProvider } from "@/features/ai/chat/providers/ChatRuntimeProvider.client";
-import { ChatComposerExtras, useModels } from "@/features/ai/public";
+import { ErrorAlert, Thread } from "@/components";
+import type { ChatError } from "@/contracts/error.chat.v1.contract";
+import {
+  ChatRuntimeProvider,
+  type ChatRuntimeRef,
+} from "@/features/ai/chat/providers/ChatRuntimeProvider.client";
+import { toErrorAlertProps } from "@/features/ai/chat/utils/toErrorAlertProps";
+import {
+  ChatComposerExtras,
+  ChatErrorBubble,
+  getPreferredModelId,
+  pickDefaultModel,
+  setPreferredModelId,
+  useModels,
+} from "@/features/ai/public";
 import { useCreditsSummary } from "@/features/payments/public";
 
 const ChatWelcomeWithHint = () => (
@@ -38,55 +56,197 @@ const ChatWelcomeWithHint = () => (
 
 export default function ChatPage(): ReactNode {
   const modelsQuery = useModels();
-
-  // Initialize with fallback, will be updated by Thread component from API
-  const [selectedModel, setSelectedModel] = useState("gpt-4o-mini");
-  const defaultModelId = modelsQuery.data?.defaultModelId ?? "gpt-4o-mini";
-
   const { data: creditsData, isLoading: isCreditsLoading } =
     useCreditsSummary();
   const balance = creditsData?.balanceCredits ?? 0;
 
-  // Update selected model when API data loads
-  useEffect(() => {
-    if (modelsQuery.data?.defaultModelId && selectedModel === "gpt-4o-mini") {
-      setSelectedModel(modelsQuery.data.defaultModelId);
-    }
-  }, [modelsQuery.data?.defaultModelId, selectedModel]);
+  // Refs for user intent tracking (prevent re-init after user selection)
+  const hasUserSelectedRef = useRef(false);
+  const hasInitializedRef = useRef(false);
+  const runtimeRef = useRef<ChatRuntimeRef>(null);
 
-  // Auto-select free model if balance is 0 and current model is paid
+  // State
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [chatError, setChatError] = useState<ChatError | null>(null);
+  const [isBlocked, setIsBlocked] = useState(false);
+
+  // Extract server-provided defaults (NO CLIENT INVENTION)
+  const models = modelsQuery.data?.models ?? [];
+  const defaultPreferredModelId =
+    modelsQuery.data?.defaultPreferredModelId ?? null;
+  const defaultFreeModelId = modelsQuery.data?.defaultFreeModelId ?? null;
+  const freeModelIds = models.filter((m) => m.isFree).map((m) => m.id);
+
+  // Single initialization effect
   useEffect(() => {
+    // Skip if user already selected or already initialized
+    if (hasInitializedRef.current || hasUserSelectedRef.current) return;
+    // Wait for both data sources
     if (isCreditsLoading || !modelsQuery.data) return;
 
-    const currentModel = modelsQuery.data.models.find(
-      (m) => m.id === selectedModel
-    );
-    const isPaid = currentModel && !currentModel.isFree;
+    const userChoice = getPreferredModelId();
 
-    if (balance <= 0 && isPaid) {
-      const firstFreeModel = modelsQuery.data.models.find((m) => m.isFree);
-      if (firstFreeModel) {
-        setSelectedModel(firstFreeModel.id);
-      }
+    // MF-6: Feature-layer validation - if zero credits, ensure userChoice is free
+    let validatedChoice = userChoice;
+    if (balance <= 0 && userChoice && !freeModelIds.includes(userChoice)) {
+      validatedChoice = null; // Invalidate paid model selection when out of credits
     }
-  }, [balance, isCreditsLoading, modelsQuery.data, selectedModel]);
+
+    const selected = pickDefaultModel({
+      balanceCredits: balance,
+      userChoice: validatedChoice,
+      defaultFreeModelId,
+      defaultPaidModelId: defaultPreferredModelId,
+    });
+
+    if (selected) {
+      setSelectedModel(selected);
+      setIsBlocked(false);
+    } else {
+      // No valid model: blocked state (zero credits + no free models)
+      setIsBlocked(true);
+      setChatError({
+        code: "NO_FREE_MODELS",
+        message: "No free models available. Add credits to continue chatting.",
+        retryable: false,
+        blocking: true,
+        suggestedAction: "add_credits",
+      });
+    }
+
+    hasInitializedRef.current = true;
+  }, [
+    isCreditsLoading,
+    balance,
+    modelsQuery.data,
+    freeModelIds,
+    defaultFreeModelId,
+    defaultPreferredModelId,
+  ]);
+  // NOTE: selectedModel intentionally NOT in deps to prevent re-init loop
+
+  // Model change handler - marks user intent
+  const handleModelChange = useCallback((modelId: string) => {
+    hasUserSelectedRef.current = true;
+    setSelectedModel(modelId);
+    setPreferredModelId(modelId);
+    setIsBlocked(false);
+    setChatError(null);
+  }, []);
+
+  // Error handler from provider
+  const handleError = useCallback((error: ChatError) => {
+    setChatError(error);
+  }, []);
+
+  // Switch to free model action
+  const handleSwitchFreeModel = useCallback(() => {
+    if (defaultFreeModelId) {
+      handleModelChange(defaultFreeModelId);
+    }
+  }, [defaultFreeModelId, handleModelChange]);
+
+  // Retry action
+  const handleRetry = useCallback(() => {
+    runtimeRef.current?.retryLastSend();
+    setChatError(null);
+  }, []);
+
+  // Add credits action (navigate to credits page)
+  const handleAddCredits = useCallback(() => {
+    window.location.href = "/credits";
+  }, []);
+
+  // Prepare error alert props
+  const errorAlertProps = chatError
+    ? toErrorAlertProps(chatError, !!defaultFreeModelId)
+    : null;
+
+  // INV-UI-NO-PAID-DEFAULT-WHEN-ZERO: Gate rendering until init completes
+  if (!hasInitializedRef.current) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
+        <div className="text-muted-foreground">Loading...</div>
+      </div>
+    );
+  }
+
+  // INV-NO-INTERACTION-BEFORE-READY: Blocked state shows error only, no chat
+  if (isBlocked && !selectedModel) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center">
+        <div className="mx-auto w-full max-w-[var(--size-container-sm)] px-4">
+          {errorAlertProps && (
+            <ErrorAlert
+              code={errorAlertProps.code}
+              message={errorAlertProps.message}
+              retryable={errorAlertProps.retryable}
+              showRetry={errorAlertProps.showRetry}
+              showSwitchFree={errorAlertProps.showSwitchFree}
+              showAddCredits={errorAlertProps.showAddCredits}
+              onRetry={handleRetry}
+              onSwitchFreeModel={handleSwitchFreeModel}
+              onAddCredits={handleAddCredits}
+            />
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Compute UI default model based on credits (NO HARDCODED FALLBACKS)
+  // INV-NO-CLIENT-INVENTED-MODEL-IDS: UI must NEVER invent model IDs
+  const uiDefaultModelId =
+    balance <= 0 ? defaultFreeModelId : defaultPreferredModelId;
+
+  // Invariant: selectedModel is guaranteed non-null after initialization gate
+  // If this assertion fails, initialization logic has a bug
+  if (!selectedModel) {
+    throw new Error(
+      "INV-VIOLATION: selectedModel is null after initialization gate"
+    );
+  }
+
+  // Invariant: uiDefaultModelId must exist (server provides valid default)
+  // If this fails, server config is broken (DEFAULT_MODEL or free model missing)
+  if (!uiDefaultModelId) {
+    throw new Error(
+      "INV-VIOLATION: server returned no valid default model for credit state"
+    );
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ChatRuntimeProvider
+        ref={runtimeRef}
         selectedModel={selectedModel}
-        defaultModelId={defaultModelId}
+        defaultModelId={uiDefaultModelId}
         onAuthExpired={() => signOut()}
+        onError={handleError}
+        disabled={isBlocked}
       >
         <Thread
           welcomeMessage={<ChatWelcomeWithHint />}
           composerLeft={
             <ChatComposerExtras
               selectedModel={selectedModel}
-              onModelChange={setSelectedModel}
-              defaultModelId={defaultModelId}
+              onModelChange={handleModelChange}
+              defaultModelId={uiDefaultModelId}
               balance={balance}
             />
+          }
+          errorMessage={
+            errorAlertProps ? (
+              <ChatErrorBubble
+                message={errorAlertProps.message}
+                showRetry={errorAlertProps.showRetry}
+                showSwitchFree={errorAlertProps.showSwitchFree}
+                showAddCredits={errorAlertProps.showAddCredits}
+                onRetry={handleRetry}
+                onSwitchFreeModel={handleSwitchFreeModel}
+                onAddCredits={handleAddCredits}
+              />
+            ) : undefined
           }
         />
       </ChatRuntimeProvider>
