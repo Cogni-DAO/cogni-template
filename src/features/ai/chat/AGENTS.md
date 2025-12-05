@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-12-03
+- **Last reviewed:** 2025-12-06
 - **Status:** draft
 - **Parent:** [features/ai](../AGENTS.md)
 
@@ -41,10 +41,10 @@ Chat subfeature of AI - provides assistant-ui integration for conversational AI 
 
 ## Public Surface
 
-- **Exports:** ChatRuntimeProvider, ChatCreditsHint
+- **Exports:** ChatRuntimeProvider, ChatCreditsHint, mapHttpError, toErrorAlertProps
 - **Routes:** /api/v1/ai/chat (POST) - routes to AI completion services
 - **Env/Config keys:** none
-- **Files considered API:** providers/ChatRuntimeProvider.client.tsx, components/ChatCreditsHint.tsx
+- **Files considered API:** providers/ChatRuntimeProvider.client.tsx, components/ChatCreditsHint.tsx, utils/mapHttpError.ts, utils/toErrorAlertProps.ts
 
 ## Ports
 

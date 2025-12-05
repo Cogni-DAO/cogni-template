@@ -7,7 +7,7 @@
  * Scope: Feature-local provider (v0 only wraps /chat route). Manages message state, API calls, abort control. Does not persist messages or handle streaming.
  * Invariants: All types from contract via z.infer; Zod parsing on response; ref-based state to avoid closures
  * Side-effects: IO (fetch to /api/v1/ai/chat, React Query invalidation)
- * Notes: Uses activeRequestIdRef for stale-response guard; AbortController for cancellation
+ * Notes: Uses activeRequestIdRef for stale-response guard; AbortController for cancellation; supports retry via ref
  * Links: Uses ai.chat.v1 contract, integrates with payments query
  * @public
  */
@@ -20,11 +20,28 @@ import {
   useExternalStoreRuntime,
 } from "@assistant-ui/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useRef, useState } from "react";
-
+import {
+  forwardRef,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react";
 import type { ChatInput, ChatMessage } from "@/contracts/ai.chat.v1.contract";
+import type { ChatError } from "@/contracts/error.chat.v1.contract";
 import * as clientLogger from "@/shared/observability/client";
 import { EVENT_NAMES } from "@/shared/observability/events";
+
+import { mapHttpError, mapNetworkError } from "../utils/mapHttpError";
+
+/**
+ * Ref handle for ChatRuntimeProvider
+ */
+export interface ChatRuntimeRef {
+  retryLastSend: () => void;
+}
 
 /**
  * Message builder using CONTRACT TYPES - never manual interfaces
@@ -48,14 +65,17 @@ interface ChatRuntimeProviderProps {
   selectedModel: string;
   defaultModelId: string;
   onAuthExpired?: () => void;
+  onError?: (error: ChatError) => void;
+  disabled?: boolean;
 }
 
-export function ChatRuntimeProvider({
-  children,
-  selectedModel,
-  defaultModelId,
-  onAuthExpired,
-}: ChatRuntimeProviderProps) {
+export const ChatRuntimeProvider = forwardRef<
+  ChatRuntimeRef,
+  ChatRuntimeProviderProps
+>(function ChatRuntimeProvider(
+  { children, selectedModel, defaultModelId, onAuthExpired, onError, disabled },
+  ref
+) {
   // ChatMessage includes optional requestId - type matches stored objects
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isRunning, setIsRunning] = useState(false);
@@ -65,6 +85,9 @@ export function ChatRuntimeProvider({
   const messagesRef = useRef<ChatMessage[]>([]);
   const activeRequestIdRef = useRef<string | null>(null); // REF not state!
   const abortControllerRef = useRef<AbortController | null>(null);
+  const lastRequestRef = useRef<(ChatInput & { stream?: boolean }) | null>(
+    null
+  );
   const queryClient = useQueryClient();
 
   // Keep ref in sync with state
@@ -72,7 +95,221 @@ export function ChatRuntimeProvider({
     messagesRef.current = messages;
   }, [messages]);
 
+  const updateLastMessageContent = useCallback((newContent: string) => {
+    const currentMsgs = [...messagesRef.current];
+    const lastMsg = currentMsgs[currentMsgs.length - 1];
+    if (lastMsg && lastMsg.role === "assistant") {
+      currentMsgs[currentMsgs.length - 1] = {
+        ...lastMsg,
+        content: [{ type: "text", text: newContent }],
+      };
+      messagesRef.current = currentMsgs;
+      setMessages(currentMsgs);
+    }
+  }, []);
+
+  const processSseChunk = useCallback(
+    (
+      chunk: string,
+      clientRequestId: string,
+      currentContent: string,
+      onContentUpdate: (content: string) => void
+    ) => {
+      const lines = chunk.split("\n");
+      let eventType = "";
+      let dataStr = "";
+
+      for (const line of lines) {
+        if (line.startsWith("event: ")) {
+          eventType = line.slice(7).trim();
+        } else if (line.startsWith("data: ")) {
+          dataStr = line.slice(6);
+        }
+      }
+
+      if (!dataStr) return;
+
+      try {
+        const data = JSON.parse(dataStr);
+        if (activeRequestIdRef.current !== clientRequestId) return;
+
+        if (eventType === "message.delta") {
+          const newContent = currentContent + data.delta;
+          onContentUpdate(newContent);
+          updateLastMessageContent(newContent);
+        } else if (eventType === "message.completed") {
+          queryClient.invalidateQueries({ queryKey: ["payments-summary"] });
+        } else if (eventType === "error") {
+          clientLogger.error(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, {
+            message: data.message,
+          });
+        }
+      } catch (e) {
+        clientLogger.error(EVENT_NAMES.CLIENT_CHAT_STREAM_CHUNK_PARSE_FAIL, {
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    },
+    [queryClient, updateLastMessageContent]
+  );
+
+  const processStream = useCallback(
+    async (response: Response, clientRequestId: string) => {
+      if (!response.body) throw new Error("No response body");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      const assistantMessageId = crypto.randomUUID();
+      let accumulatedContent = "";
+
+      // Create initial assistant message
+      const initialAssistantMessage = createChatMessage(
+        "assistant",
+        "",
+        assistantMessageId
+      );
+
+      // Optimistically add assistant message
+      if (activeRequestIdRef.current === clientRequestId) {
+        const msgs = [...messagesRef.current, initialAssistantMessage];
+        messagesRef.current = msgs;
+        setMessages(msgs);
+      }
+
+      let buffer = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const chunks = buffer.split("\n\n");
+        buffer = chunks.pop() ?? "";
+
+        for (const chunk of chunks) {
+          processSseChunk(
+            chunk,
+            clientRequestId,
+            accumulatedContent,
+            (content) => {
+              accumulatedContent = content;
+            }
+          );
+        }
+      }
+    },
+    [processSseChunk]
+  );
+
+  // Shared internal function for sending requests (used by onNew and retry)
+  const sendRequest = useCallback(
+    async (requestBody: ChatInput & { stream?: boolean }) => {
+      // Centralize setIsRunning - both onNew and retry call this
+      setIsRunning(true);
+      abortControllerRef.current = new AbortController();
+      activeRequestIdRef.current = requestBody.clientRequestId;
+
+      try {
+        // FIX 1: Send requestBody as-is, no clientRequestId override
+        const response = await fetch("/api/v1/ai/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
+          body: JSON.stringify(requestBody),
+          signal: abortControllerRef.current.signal,
+        });
+
+        // Handle errors WITHOUT appending assistant message
+        if (response.status === 401) {
+          onAuthExpired?.();
+          return;
+        }
+
+        if (response.status === 402) {
+          const body = await response.json().catch(() => ({}));
+          onError?.(mapHttpError(402, body, requestBody.clientRequestId));
+          return;
+        }
+
+        if (response.status === 409) {
+          // UX-001: Invalid model, silent retry with defaultModelId
+          clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_MODEL_INVALID_RETRY, {
+            model: requestBody.model,
+            defaultModelId,
+          });
+          const retryBody = { ...requestBody, model: defaultModelId };
+          const retryResponse = await fetch("/api/v1/ai/chat", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Accept: "text/event-stream",
+            },
+            body: JSON.stringify(retryBody),
+            signal: abortControllerRef.current.signal,
+          });
+          if (!retryResponse.ok) {
+            const body = await retryResponse.json().catch(() => ({}));
+            onError?.(
+              mapHttpError(
+                retryResponse.status,
+                body,
+                requestBody.clientRequestId
+              )
+            );
+            return;
+          }
+          await processStream(retryResponse, requestBody.clientRequestId);
+          return;
+        }
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}));
+          onError?.(
+            mapHttpError(response.status, body, requestBody.clientRequestId)
+          );
+          return;
+        }
+
+        await processStream(response, requestBody.clientRequestId);
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          return; // cancelled - not an error
+        }
+        // FIX 3: Use mapNetworkError for contract consistency
+        onError?.(mapNetworkError(requestBody.clientRequestId));
+      } finally {
+        setIsRunning(false);
+        activeRequestIdRef.current = null;
+        abortControllerRef.current = null;
+      }
+    },
+    [defaultModelId, onAuthExpired, onError, processStream]
+  );
+
+  // Expose retry via ref
+  useImperativeHandle(
+    ref,
+    () => ({
+      retryLastSend: () => {
+        // FIX 2: Check disabled and isRunning before retry
+        if (disabled || !lastRequestRef.current || isRunning) return;
+
+        // Generate new requestId for retry attempt
+        const retryBody = {
+          ...lastRequestRef.current,
+          clientRequestId: crypto.randomUUID(),
+        };
+        lastRequestRef.current = retryBody;
+        sendRequest(retryBody);
+      },
+    }),
+    [disabled, isRunning, sendRequest]
+  );
+
   const onNew = async (message: AppendMessage) => {
+    // MF-5: Honor disabled flag
+    if (disabled) return;
+
     if (message.content[0]?.type !== "text")
       throw new Error("Only text supported");
 
@@ -86,178 +323,19 @@ export function ChatRuntimeProvider({
     // 3. Update state + refs together
     messagesRef.current = nextMessages;
     setMessages(nextMessages);
-    setIsRunning(true);
-    activeRequestIdRef.current = clientRequestId; // REF assignment
 
-    // 4. Create AbortController for this request
-    abortControllerRef.current = new AbortController();
+    // 4. Build and store request body for potential retry
+    const requestBody: ChatInput & { stream?: boolean } = {
+      threadId,
+      clientRequestId,
+      messages: nextMessages,
+      model: selectedModel,
+      stream: true,
+    };
+    lastRequestRef.current = requestBody;
 
-    try {
-      const requestBody: ChatInput & { stream?: boolean } = {
-        threadId, // client-generated, stable for session
-        clientRequestId,
-        messages: nextMessages,
-        model: selectedModel, // REQ-001: always present
-        stream: true,
-      };
-
-      const response = await fetch("/api/v1/ai/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-        },
-        body: JSON.stringify(requestBody),
-        signal: abortControllerRef.current.signal,
-      });
-
-      // 5. Handle errors WITHOUT appending assistant message
-      if (response.status === 401) {
-        onAuthExpired?.();
-        return;
-      }
-      if (response.status === 402) {
-        // TODO: show credits error in UI
-        return;
-      }
-      if (response.status === 409) {
-        // UX-001: Invalid model, retry with defaultModelId
-        clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_MODEL_INVALID_RETRY, {
-          selectedModel,
-          defaultModelId,
-        });
-        const retryBody: ChatInput & { stream?: boolean } = {
-          ...requestBody,
-          model: defaultModelId,
-        };
-        const retryResponse = await fetch("/api/v1/ai/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "text/event-stream",
-          },
-          body: JSON.stringify(retryBody),
-          signal: abortControllerRef.current.signal,
-        });
-        if (!retryResponse.ok) {
-          throw new Error(`API error after retry: ${retryResponse.status}`);
-        }
-        await processStream(retryResponse, clientRequestId);
-        return;
-      }
-      if (!response.ok) {
-        throw new Error(`API error: ${response.status}`);
-      }
-
-      await processStream(response, clientRequestId);
-    } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") {
-        return; // cancelled - do NOT append
-      }
-      throw err;
-    } finally {
-      setIsRunning(false);
-      activeRequestIdRef.current = null;
-      abortControllerRef.current = null;
-    }
-  };
-
-  const processStream = async (response: Response, clientRequestId: string) => {
-    if (!response.body) throw new Error("No response body");
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    const assistantMessageId = crypto.randomUUID();
-    let accumulatedContent = "";
-
-    // Create initial assistant message
-    const initialAssistantMessage = createChatMessage(
-      "assistant",
-      "",
-      assistantMessageId
-    );
-
-    // Optimistically add assistant message
-    if (activeRequestIdRef.current === clientRequestId) {
-      const msgs = [...messagesRef.current, initialAssistantMessage];
-      messagesRef.current = msgs;
-      setMessages(msgs);
-    }
-
-    let buffer = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const chunks = buffer.split("\n\n");
-      buffer = chunks.pop() ?? "";
-
-      for (const chunk of chunks) {
-        processSseChunk(
-          chunk,
-          clientRequestId,
-          accumulatedContent,
-          (content) => {
-            accumulatedContent = content;
-          }
-        );
-      }
-    }
-  };
-
-  const processSseChunk = (
-    chunk: string,
-    clientRequestId: string,
-    currentContent: string,
-    onContentUpdate: (content: string) => void
-  ) => {
-    const lines = chunk.split("\n");
-    let eventType = "";
-    let dataStr = "";
-
-    for (const line of lines) {
-      if (line.startsWith("event: ")) {
-        eventType = line.slice(7).trim();
-      } else if (line.startsWith("data: ")) {
-        dataStr = line.slice(6);
-      }
-    }
-
-    if (!dataStr) return;
-
-    try {
-      const data = JSON.parse(dataStr);
-      if (activeRequestIdRef.current !== clientRequestId) return;
-
-      if (eventType === "message.delta") {
-        const newContent = currentContent + data.delta;
-        onContentUpdate(newContent);
-        updateLastMessageContent(newContent);
-      } else if (eventType === "message.completed") {
-        queryClient.invalidateQueries({ queryKey: ["payments-summary"] });
-      } else if (eventType === "error") {
-        clientLogger.error(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, {
-          message: data.message,
-        });
-      }
-    } catch (e) {
-      clientLogger.error(EVENT_NAMES.CLIENT_CHAT_STREAM_CHUNK_PARSE_FAIL, {
-        error: e instanceof Error ? e.message : String(e),
-      });
-    }
-  };
-
-  const updateLastMessageContent = (newContent: string) => {
-    const currentMsgs = [...messagesRef.current];
-    const lastMsg = currentMsgs[currentMsgs.length - 1];
-    if (lastMsg && lastMsg.role === "assistant") {
-      currentMsgs[currentMsgs.length - 1] = {
-        ...lastMsg,
-        content: [{ type: "text", text: newContent }],
-      };
-      messagesRef.current = currentMsgs;
-      setMessages(currentMsgs);
-    }
+    // 5. Send the request (setIsRunning happens inside sendRequest)
+    await sendRequest(requestBody);
   };
 
   // Stop handler for abort - works even in v0 non-streaming
@@ -283,4 +361,4 @@ export function ChatRuntimeProvider({
       {children}
     </AssistantRuntimeProvider>
   );
-}
+});

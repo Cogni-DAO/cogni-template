@@ -33,6 +33,11 @@ export { Badge } from "./kit/data-display/Badge";
 export { GithubButton } from "./kit/data-display/GithubButton";
 export { TerminalFrame } from "./kit/data-display/TerminalFrame";
 export { Alert, AlertDescription, AlertTitle } from "./kit/feedback/Alert";
+export {
+  ErrorAlert,
+  type ErrorAlertProps,
+  type ErrorAlertRef,
+} from "./kit/feedback/ErrorAlert";
 export { HintText } from "./kit/feedback/HintText";
 export { Progress } from "./kit/feedback/Progress";
 export { Button } from "./kit/inputs/Button";
