@@ -38,7 +38,7 @@ jobs:
           REVIEW_DECISION=$(echo "$PR_DATA" | jq -r '.reviewDecision')
 
           # Check required status checks
-          REQUIRED_CHECKS=("ci" "stack-test" "require-pinned-release-branch")
+          REQUIRED_CHECKS=("static" "integration" "unit" "stack-test" "require-pinned-release-branch")
           ALL_PASSED=true
 
           for check in "${REQUIRED_CHECKS[@]}"; do
