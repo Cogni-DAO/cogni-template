@@ -72,7 +72,8 @@ else
 fi
 
 run_check "ui-tokens" "bash scripts/check-ui-tokens.sh"
-run_check "test" "pnpm test:unit"
+run_check "test:unit" "pnpm test:unit"
+run_check "test:contract" "pnpm test:contract"
 run_check "check:docs" "pnpm check:docs"
 run_check "check:root-layout" "pnpm check:root-layout"
 run_check "arch:check" "pnpm arch:check"
