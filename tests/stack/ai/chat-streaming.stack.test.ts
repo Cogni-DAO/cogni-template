@@ -15,6 +15,7 @@
 import { randomUUID } from "node:crypto";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
 import { readSseEvents } from "@tests/helpers/sse";
+import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
 import { getDb } from "@/adapters/server/db/client";
@@ -22,6 +23,7 @@ import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as chatPOST } from "@/app/api/v1/ai/chat/route";
 import { GET as modelsGET } from "@/app/api/v1/ai/models/route";
 import type { SessionUser } from "@/shared/auth/session";
+import { billingAccounts, llmUsage } from "@/shared/db/schema.billing";
 
 // Mock session
 vi.mock("@/app/_lib/auth/session", () => ({
@@ -148,6 +150,86 @@ describe("Chat Streaming", () => {
     const lastTime = lastDelta?.t ?? 0;
     // At least some time difference between first and last delta
     expect(lastTime).toBeGreaterThanOrEqual(firstTime);
+  });
+
+  it("streaming completion includes providerMeta.model", async () => {
+    // Arrange - Seed authenticated user with credits
+    const db = getDb();
+    const { user } = await seedAuthenticatedUser(
+      db,
+      { id: randomUUID() },
+      { balanceCredits: 10000 }
+    );
+
+    if (!user.walletAddress) throw new Error("walletAddress required");
+
+    const mockSessionUser: SessionUser = {
+      id: user.id,
+      walletAddress: user.walletAddress,
+    };
+    vi.mocked(getSessionUser).mockResolvedValue(mockSessionUser);
+
+    // Fetch valid model ID from models endpoint
+    const modelsReq = new NextRequest("http://localhost:3000/api/v1/ai/models");
+    const modelsRes = await modelsGET(modelsReq);
+    expect(modelsRes.status).toBe(200);
+    const modelsData = await modelsRes.json();
+    const { defaultModelId } = modelsData;
+
+    // Act - Send streaming chat request
+    const req = new NextRequest("http://localhost:3000/api/v1/ai/chat", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        accept: "text/event-stream",
+      },
+      body: JSON.stringify({
+        threadId: randomUUID(),
+        clientRequestId: randomUUID(),
+        model: defaultModelId,
+        stream: true,
+        messages: [
+          {
+            id: randomUUID(),
+            role: "user",
+            createdAt: new Date().toISOString(),
+            content: [{ type: "text", text: "Hello" }],
+          },
+        ],
+      }),
+    });
+
+    const res = await chatPOST(req);
+
+    // Assert - Response is SSE stream
+    expect(res.status).toBe(200);
+
+    // Consume stream to trigger completion
+    for await (const e of readSseEvents(res)) {
+      if (e.event === "message.completed" || e.event === "done") break;
+    }
+
+    // Assert - Check database for LLM usage record with non-empty model
+    // First get the billing account
+    const billingAccount = await db.query.billingAccounts.findFirst({
+      where: eq(billingAccounts.ownerUserId, user.id),
+    });
+    expect(billingAccount).toBeTruthy();
+
+    if (!billingAccount) {
+      throw new Error("Billing account not found");
+    }
+
+    // Get the most recent LLM usage record
+    const usageRecord = await db.query.llmUsage.findFirst({
+      where: eq(llmUsage.billingAccountId, billingAccount.id),
+      orderBy: (llmUsage, { desc }) => [desc(llmUsage.createdAt)],
+    });
+
+    expect(usageRecord).toBeTruthy();
+    expect(usageRecord?.model).toBeTruthy();
+    expect(usageRecord?.model).not.toBe("unknown");
+    expect(typeof usageRecord?.model).toBe("string");
   });
 
   it("stops streaming when aborted", async () => {

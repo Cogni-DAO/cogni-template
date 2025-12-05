@@ -157,8 +157,18 @@ export class LiteLlmAdapter implements LlmService {
       if (typeof providerCostFromHeader === "number") {
         result.providerCostUsd = providerCostFromHeader;
       }
-      // Note: Missing cost header is handled at feature layer (completion.ts)
-      // No logging here - adapter stays pure
+
+      // Sanitized adapter log (no content, bounded fields only)
+      logger.info(
+        {
+          model,
+          tokensUsed: totalTokens,
+          finishReason: result.finishReason,
+          hasCost: typeof providerCostFromHeader === "number",
+          contentLength: data.choices[0].message.content.length,
+        },
+        "adapter.litellm.completion_result"
+      );
 
       return result;
     } catch (error) {
@@ -361,6 +371,33 @@ export class LiteLlmAdapter implements LlmService {
           if (typeof providerCostUsd === "number") {
             result.providerCostUsd = providerCostUsd;
           }
+
+          // ALWAYS include providerMeta with model (SSE doesn't return this, use request param)
+          result.providerMeta = {
+            model,
+            provider: "litellm",
+          };
+
+          // Invariant enforcement: model must be set
+          if (!result.providerMeta.model) {
+            logger.warn(
+              { model, hasUsage: !!finalUsage },
+              "inv_stream_missing_provider_meta: Stream result missing providerMeta.model"
+            );
+          }
+
+          // Sanitized adapter log (no content, bounded fields only)
+          logger.info(
+            {
+              model: result.providerMeta.model,
+              provider: result.providerMeta.provider,
+              tokensUsed: finalUsage?.totalTokens,
+              finishReason,
+              hasCost: typeof providerCostUsd === "number",
+              contentLength: fullContent.length,
+            },
+            "adapter.litellm.stream_result"
+          );
           deferred.resolve(result);
         }
       })();

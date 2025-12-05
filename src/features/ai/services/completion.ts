@@ -141,6 +141,22 @@ export async function execute(
   const modelId =
     typeof providerMeta.model === "string" ? providerMeta.model : "unknown";
 
+  // Invariant enforcement: log when model resolution fails
+  if (modelId === "unknown") {
+    log.warn(
+      {
+        requestId,
+        requestedModel: model,
+        streaming: false,
+        hasProviderMeta: !!result.providerMeta,
+        providerMetaKeys: result.providerMeta
+          ? Object.keys(result.providerMeta)
+          : [],
+      },
+      "inv_provider_meta_model_missing: Model name missing from LLM response"
+    );
+  }
+
   // Log LLM call with structured event
   const llmEvent: AiLlmCallEvent = {
     event: "ai.llm_call",
@@ -152,7 +168,7 @@ export async function execute(
     tokensUsed: totalTokens,
     providerCostUsd: result.providerCostUsd,
   };
-  log.info(llmEvent, "LLM response received");
+  log.info(llmEvent, "ai.llm_call_completed");
 
   const baseMetadata = {
     system: "ai_completion",
@@ -329,6 +345,22 @@ export async function executeStream({
       const modelId =
         typeof providerMeta.model === "string" ? providerMeta.model : "unknown";
 
+      // Invariant enforcement: log when model resolution fails
+      if (modelId === "unknown") {
+        log.warn(
+          {
+            requestId,
+            requestedModel: model,
+            streaming: true,
+            hasProviderMeta: !!result.providerMeta,
+            providerMetaKeys: result.providerMeta
+              ? Object.keys(result.providerMeta)
+              : [],
+          },
+          "inv_provider_meta_model_missing: Model name missing from LLM stream response"
+        );
+      }
+
       const llmEvent: AiLlmCallEvent = {
         event: "ai.llm_call",
         routeId: ctx.routeId,
@@ -339,7 +371,7 @@ export async function executeStream({
         tokensUsed: totalTokens,
         providerCostUsd: result.providerCostUsd,
       };
-      log.info(llmEvent, "LLM stream completed");
+      log.info(llmEvent, "ai.llm_call_completed");
 
       const baseMetadata = {
         system: "ai_completion_stream",

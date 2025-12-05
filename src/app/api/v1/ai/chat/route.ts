@@ -171,16 +171,28 @@ export const POST = wrapRouteHandlerWithLogging(
       }
       input = inputParseResult.data;
 
+      // Log request received (billingAccountId will be resolved in facade, log after validation)
+      const handlerStartMs = performance.now();
+
       // Validate model against cached allowlist (MVP-004: PERF-001 fix)
       const { isModelAllowed, getDefaultModelId } = await import(
         "@/shared/ai/model-catalog.server"
       );
       const modelIsValid = await isModelAllowed(input.model);
 
+      // Check for streaming request (explicit flag or Accept header)
+      const accept = request.headers.get("accept") ?? "";
+      const isStreaming =
+        input.stream === true || accept.includes("text/event-stream");
+
       if (!modelIsValid) {
         // Return 409 with defaultModelId for client retry (MVP-004: UX-001 fix)
         const defaultModelId = await getDefaultModelId();
-        logRequestWarn(ctx.log, { model: input.model }, "INVALID_MODEL");
+        logRequestWarn(
+          ctx.log,
+          { model: input.model, isStreaming, defaultModelId },
+          "model_validation_failed"
+        );
         return NextResponse.json(
           {
             error: "Invalid model",
@@ -190,10 +202,17 @@ export const POST = wrapRouteHandlerWithLogging(
         );
       }
 
-      // Check for streaming request (explicit flag or Accept header)
-      const accept = request.headers.get("accept") ?? "";
-      const isStreaming =
-        input.stream === true || accept.includes("text/event-stream");
+      // Log request received with validated inputs
+      ctx.log.info(
+        {
+          reqId: ctx.reqId,
+          userId: sessionUser?.id,
+          stream: isStreaming,
+          requestedModel: input.model,
+          messageCount: input.messages.length,
+        },
+        "ai.chat_received"
+      );
 
       if (isStreaming) {
         const { completionStream } = await import(
@@ -217,6 +236,10 @@ export const POST = wrapRouteHandlerWithLogging(
 
         const encoder = new TextEncoder();
         let messageId: string | undefined;
+        const streamStartMs = performance.now();
+        let terminalEventEmitted = false;
+        let streamAborted = false;
+        let abortReason: string | undefined;
 
         const readableStream = new ReadableStream({
           async start(controller) {
@@ -257,8 +280,27 @@ export const POST = wrapRouteHandlerWithLogging(
                 }
               }
 
-              // Wait for final result (billing)
-              await final;
+              // Wait for final result (billing) with 15s timeout
+              const finalTimeout = new Promise<{ timedOut: true }>((resolve) =>
+                setTimeout(() => resolve({ timedOut: true }), 15000)
+              );
+
+              const result = await Promise.race([
+                final.then(() => ({ timedOut: false })),
+                finalTimeout,
+              ]);
+
+              if (result.timedOut) {
+                // Deterministic terminal event: timeout (do NOT throw)
+                ctx.log.warn(
+                  { reqId: ctx.reqId, timeoutMs: 15000 },
+                  "ai.chat_stream_finalization_lost"
+                );
+                terminalEventEmitted = true;
+              } else {
+                // Terminal event: ai.llm_call_completed emitted in completion.ts
+                terminalEventEmitted = true;
+              }
 
               // Emit message.completed
               controller.enqueue(
@@ -270,20 +312,62 @@ export const POST = wrapRouteHandlerWithLogging(
                 )
               );
             } catch (error) {
-              ctx.log.error({ err: error }, "Stream error in route");
-              controller.enqueue(
-                encoder.encode(
-                  `event: error\ndata: ${JSON.stringify({
-                    message:
-                      error instanceof Error ? error.message : "Unknown error",
-                  })}\n\n`
-                )
-              );
+              if (error instanceof Error && error.name === "AbortError") {
+                streamAborted = true;
+                abortReason = "client_disconnect";
+              } else {
+                // Real stream failure
+                ctx.log.error({ err: error }, "Stream error in route");
+                controller.enqueue(
+                  encoder.encode(
+                    `event: error\ndata: ${JSON.stringify({
+                      message:
+                        error instanceof Error
+                          ? error.message
+                          : "Unknown error",
+                    })}\n\n`
+                  )
+                );
+              }
             } finally {
               controller.close();
+
+              // Always emit stream_closed
+              ctx.log.info(
+                {
+                  reqId: ctx.reqId,
+                  streamMs: performance.now() - streamStartMs,
+                  aborted: streamAborted,
+                  abortReason,
+                  terminalEventEmitted,
+                },
+                "ai.chat_stream_closed"
+              );
             }
           },
+
+          cancel(reason) {
+            // Client aborted - log once and stop upstream work
+            streamAborted = true;
+            abortReason = reason || "client_disconnect";
+            ctx.log.info(
+              { reqId: ctx.reqId, reason: abortReason },
+              "ai.chat_client_aborted"
+            );
+            // AbortSignal already wired to completionStream via request.signal
+          },
         });
+
+        // Log response started before returning
+        ctx.log.info(
+          {
+            reqId: ctx.reqId,
+            handlerMs: performance.now() - handlerStartMs,
+            resolvedModel: input.model,
+            stream: true,
+          },
+          "ai.chat_response_started"
+        );
 
         return new NextResponse(readableStream, {
           headers: {

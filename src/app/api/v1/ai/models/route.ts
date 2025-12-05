@@ -22,13 +22,13 @@ import {
   type ModelMeta,
 } from "@/shared/ai/model-catalog.server";
 import { serverEnv } from "@/shared/env";
-import { logRequestWarn } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 
 export const GET = wrapRouteHandlerWithLogging(
   { routeId: "ai.models", auth: { mode: "required", getSessionUser } },
   async (ctx, _request, _sessionUser) => {
+    const startMs = performance.now();
     try {
       // Fetch from cache (fast, no network call)
       const { models } = await getCachedModels();
@@ -46,15 +46,16 @@ export const GET = wrapRouteHandlerWithLogging(
       // Validate DEFAULT_MODEL exists in catalog (invariant)
       const modelIds = contractModels.map((m) => m.id);
       if (!modelIds.includes(defaultModelId)) {
-        logRequestWarn(
-          ctx.log,
-          new Error(
-            `DEFAULT_MODEL="${defaultModelId}" not found in catalog. Available: ${modelIds.join(", ")}`
-          ),
-          "INVALID_DEFAULT_MODEL"
+        ctx.log.error(
+          {
+            errCode: "inv_default_model_not_in_catalog",
+            defaultModelId,
+            catalogSize: modelIds.length,
+          },
+          "Default model not found in catalog"
         );
         return NextResponse.json(
-          { error: "Invalid models data" },
+          { error: "Server configuration error" },
           { status: 500 }
         );
       }
@@ -68,16 +69,49 @@ export const GET = wrapRouteHandlerWithLogging(
       const outputParseResult =
         aiModelsOperation.output.safeParse(responseData);
       if (!outputParseResult.success) {
-        logRequestWarn(ctx.log, outputParseResult.error, "INVALID_CACHE_DATA");
+        ctx.log.error(
+          {
+            errCode: "inv_models_contract_validation_failed",
+            catalogSize: contractModels.length,
+          },
+          "Model data failed contract validation"
+        );
         return NextResponse.json(
-          { error: "Invalid models data" },
+          { error: "Server error: invalid data format" },
           { status: 500 }
         );
       }
 
+      // ONE info log on success
+      ctx.log.info(
+        {
+          cacheHit: true,
+          modelCount: contractModels.length,
+          durationMs: performance.now() - startMs,
+        },
+        "ai.models_list_success"
+      );
+
       return NextResponse.json(outputParseResult.data, { status: 200 });
     } catch (error) {
-      logRequestWarn(ctx.log, error, "MODELS_FETCH_ERROR");
+      // ONE error log on failure (safe - no throwing in error path)
+      let sanitizedHost = "unknown";
+      try {
+        const litellmUrl = serverEnv().LITELLM_BASE_URL;
+        sanitizedHost = new URL(litellmUrl).hostname;
+      } catch {
+        // URL parsing failed, use fallback
+      }
+
+      ctx.log.error(
+        {
+          errCode: "ai.models_cache_fetch_failed",
+          litellmHost: sanitizedHost,
+          hasMasterKey: !!serverEnv().LITELLM_MASTER_KEY,
+          errorType: error instanceof Error ? error.name : "unknown",
+        },
+        "Failed to fetch models from cache"
+      );
       return NextResponse.json(
         { error: "Failed to fetch models" },
         { status: 503 }
