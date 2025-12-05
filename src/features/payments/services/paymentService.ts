@@ -33,7 +33,7 @@ import type {
   PaymentAttemptRepository,
 } from "@/ports";
 import { getWidgetConfig } from "@/shared/config/repoSpec.server";
-import type { Logger } from "@/shared/observability/logging";
+import type { Logger } from "@/shared/observability";
 import { USDC_TOKEN_ADDRESS, VERIFY_THROTTLE_SECONDS } from "@/shared/web3";
 import { PaymentNotFoundError } from "../errors";
 import { confirmCreditsPayment } from "./creditsConfirm";

@@ -16,7 +16,8 @@ import type {
   CreditsSummaryInput,
   CreditsSummaryOutput,
 } from "@/contracts/payments.credits.summary.v1.contract";
-import { clientLogger } from "@/shared/observability";
+import * as clientLogger from "@/shared/observability/client";
+import { EVENT_NAMES } from "@/shared/observability/events";
 
 type ApiSuccess<T> = { ok: true; data: T };
 type ApiError = { ok: false; error: string; errorCode?: string };
@@ -30,7 +31,7 @@ async function handleResponse<T>(res: Response): Promise<ApiResult<T>> {
   const body = await res.json().catch(() => ({ error: "Invalid response" }));
 
   if (!res.ok) {
-    clientLogger.error("CREDITS_SUMMARY_HTTP_ERROR", {
+    clientLogger.error(EVENT_NAMES.CLIENT_PAYMENTS_CREDITS_SUMMARY_HTTP_ERROR, {
       status: res.status,
       error: body.error ?? body.errorMessage ?? "Request failed",
       errorCode: body.errorCode,
@@ -67,9 +68,12 @@ export const creditsSummaryClient = {
       const res = await fetch(url);
       return handleResponse<CreditsSummaryOutput>(res);
     } catch (error) {
-      clientLogger.error("CREDITS_SUMMARY_NETWORK_ERROR", {
-        error: error instanceof Error ? error.message : String(error),
-      });
+      clientLogger.error(
+        EVENT_NAMES.CLIENT_PAYMENTS_CREDITS_SUMMARY_NETWORK_ERROR,
+        {
+          error: error instanceof Error ? error.message : String(error),
+        }
+      );
       return {
         ok: false,
         error:

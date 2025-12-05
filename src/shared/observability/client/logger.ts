@@ -2,17 +2,18 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@shared/observability/clientLogger`
- * Purpose: Provides client-side structured logging with safe defaults and environment-aware output.
- * Scope: Exports debug/info/warn/error functions for browser-side logging with scrubbing and truncation. Does not send logs to backend or implement telemetry pipeline.
- * Invariants: Drops forbidden keys (prompt, messages, apiKey, etc.); truncates large strings/arrays; serialization never throws (fail-closed).
- * Side-effects: IO
- * Notes: MVP implementation - no network shipping. Uses fast-safe-stringify for circular refs. Entire safeJson function wrapped in try-catch for defensive error handling.
- * Links: Replace all client-side console.* calls with this logger.
+ * Module: `@shared/observability/client/logger`
+ * Purpose: Client-side structured logging with event name registry enforcement.
+ * Scope: Browser-safe logging with scrubbing and truncation. Does not send logs to backend.
+ * Invariants: Drops forbidden keys; truncates large values; uses EVENT_NAMES registry.
+ * Side-effects: IO (console)
+ * Notes: MVP - no network shipping. Enforces same EventName registry as server.
+ * Links: Uses ../events.ts registry; called by client components.
  * @public
  */
 
 import safeStringify from "fast-safe-stringify";
+import type { EventName } from "../events";
 
 /** Forbidden keys to DROP from log metadata (lowercase for comparison) */
 const FORBIDDEN_KEYS = new Set([
@@ -68,23 +69,24 @@ function safeJson(meta: Record<string, unknown> | undefined): string {
 }
 
 /**
- * Determine if we're in development mode
+ * Check if in development mode (runtime check for tests, build-time inline for production)
  */
 function isDev(): boolean {
-  return (
-    typeof process !== "undefined" && process.env.NODE_ENV === "development"
-  );
+  // biome-ignore lint/style/noProcessEnv: Build-time constant inlined by bundler
+  return process.env.NODE_ENV === "development";
 }
 
 /**
  * Debug-level logging (verbose, dev-only)
  * In production: no-op
  * In development: outputs to console
+ * @param event - Event name from EVENT_NAMES registry
  */
-export function debug(event: string, meta?: Record<string, unknown>): void {
+export function debug(event: EventName, meta?: Record<string, unknown>): void {
   if (!isDev()) return;
 
   const metaStr = safeJson(meta);
+  // biome-ignore lint/suspicious/noConsole: Client logger intentionally uses console
   console.debug(`[CLIENT] DEBUG ${event}`, metaStr);
 }
 
@@ -92,11 +94,13 @@ export function debug(event: string, meta?: Record<string, unknown>): void {
  * Info-level logging (informational, dev-only)
  * In production: no-op
  * In development: outputs to console
+ * @param event - Event name from EVENT_NAMES registry
  */
-export function info(event: string, meta?: Record<string, unknown>): void {
+export function info(event: EventName, meta?: Record<string, unknown>): void {
   if (!isDev()) return;
 
   const metaStr = safeJson(meta);
+  // biome-ignore lint/suspicious/noConsole: Client logger intentionally uses console
   console.info(`[CLIENT] INFO ${event}`, metaStr);
 }
 
@@ -104,9 +108,11 @@ export function info(event: string, meta?: Record<string, unknown>): void {
  * Warning-level logging (non-critical issues)
  * In production: outputs to console
  * In development: outputs to console with structured format
+ * @param event - Event name from EVENT_NAMES registry
  */
-export function warn(event: string, meta?: Record<string, unknown>): void {
+export function warn(event: EventName, meta?: Record<string, unknown>): void {
   const metaStr = safeJson(meta);
+  // biome-ignore lint/suspicious/noConsole: Client logger intentionally uses console
   console.warn(`[CLIENT] WARN ${event}`, metaStr);
 }
 
@@ -114,8 +120,10 @@ export function warn(event: string, meta?: Record<string, unknown>): void {
  * Error-level logging (critical issues)
  * In production: outputs to console
  * In development: outputs to console with structured format
+ * @param event - Event name from EVENT_NAMES registry
  */
-export function error(event: string, meta?: Record<string, unknown>): void {
+export function error(event: EventName, meta?: Record<string, unknown>): void {
   const metaStr = safeJson(meta);
+  // biome-ignore lint/suspicious/noConsole: Client logger intentionally uses console
   console.error(`[CLIENT] ERROR ${event}`, metaStr);
 }

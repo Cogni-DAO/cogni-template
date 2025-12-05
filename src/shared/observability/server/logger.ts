@@ -45,14 +45,14 @@ export function makeLogger(bindings?: Record<string, unknown>): Logger {
   };
 
   // Always emit JSON to stdout (fd 1)
-  // Sync in dev for immediate crash visibility, async in prod for performance
+  // Sync mode + zero buffering until proven stable (prevents delayed/missing logs under SSE)
   // Formatting happens externally (pipe to pino-pretty if desired)
   return pino(
     config,
     pino.destination({
       dest: 1,
-      sync: nodeEnv !== "production",
-      minLength: 4096,
+      sync: true,
+      minLength: 0,
     })
   );
 }

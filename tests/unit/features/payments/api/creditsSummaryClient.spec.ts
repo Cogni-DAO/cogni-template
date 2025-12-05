@@ -116,7 +116,7 @@ describe("creditsSummaryClient", () => {
         errorCode: "AUTH_REQUIRED",
       });
       expect(console.error).toHaveBeenCalledWith(
-        "[CLIENT] ERROR CREDITS_SUMMARY_HTTP_ERROR",
+        "[CLIENT] ERROR client.payments.credits_summary_http_error",
         '{"status":401,"error":"Unauthorized","errorCode":"AUTH_REQUIRED"}'
       );
     });
@@ -149,7 +149,7 @@ describe("creditsSummaryClient", () => {
         error: "Network error",
       });
       expect(console.error).toHaveBeenCalledWith(
-        "[CLIENT] ERROR CREDITS_SUMMARY_NETWORK_ERROR",
+        "[CLIENT] ERROR client.payments.credits_summary_network_error",
         '{"error":"Network error"}'
       );
     });

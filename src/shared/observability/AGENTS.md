@@ -14,10 +14,11 @@ Cross-cutting observability concerns: structured logging, request context, and e
 
 ## Pointers
 
-- [OBSERVABILITY.md](../../../docs/OBSERVABILITY.md) - V1/V2 implementation plan
-- [Logger factory](logging/logger.ts) - Pino configuration
+- [OBSERVABILITY.md](../../../docs/OBSERVABILITY.md) - Observability system documentation
+- [Event Registry](events/index.ts) - EVENT_NAMES as const (single source of truth)
+- [Server Logger](server/logger.ts) - Pino factory with sync mode
+- [Client Logger](client/logger.ts) - Browser console logger with event registry
 - [RequestContext](context/types.ts) - Request-scoped context type
-- [Event schemas](logging/events.ts) - AI + Payments event types
 
 ## Boundaries
 
@@ -32,17 +33,20 @@ Cross-cutting observability concerns: structured logging, request context, and e
 ## Public Surface
 
 - **Exports:**
-  - `makeLogger(bindings?)` - Pino logger factory (server-side)
+  - `EVENT_NAMES` - Event name registry as const (prevents ad-hoc strings)
+  - `EventName`, `EventBase` - Registry-derived types
+  - `makeLogger(bindings?)` - Pino logger factory (sync mode, zero buffering)
   - `makeNoopLogger()` - Silent logger for tests
-  - `clientLogger.debug/info/warn/error(event, meta?)` - Client-side logging (MVP, no telemetry pipeline)
+  - `logEvent(logger, eventName, fields, message?)` - Type-safe event logger (enforces reqId)
+  - `clientLogger.debug/info/warn/error(event, meta?)` - Client-side console logger (no shipping)
   - `createRequestContext({ baseLog, clock }, request, { routeId, session })` - Request context factory
-  - `logRequestStart/End/Error/Warn(log, ...)` - Standardized helpers
+  - `logRequestStart/End/Error/Warn(log, ...)` - Request lifecycle helpers
   - `Logger`, `RequestContext`, `Clock` - Types
-  - `AiLlmCallEvent`, `PaymentsEvent` - Event schemas
+  - `AiLlmCallEvent`, `PaymentsConfirmedEvent`, etc. - Strict payload types (optional)
 - **Routes:** none
 - **CLI:** none
-- **Env/Config keys:** Uses `PINO_LOG_LEVEL`, `NODE_ENV`, `SERVICE_NAME` from serverEnv()
-- **Files considered API:** `index.ts`, `logging/index.ts`, `context/index.ts`, `clientLogger.ts`
+- **Env/Config keys:** `PINO_LOG_LEVEL`, `NODE_ENV`, `SERVICE_NAME`, `VITEST`
+- **Files considered API:** `index.ts`, `events/index.ts`, `server/index.ts`, `client/index.ts`
 
 ## Ports
 
@@ -53,20 +57,21 @@ Cross-cutting observability concerns: structured logging, request context, and e
 ## Responsibilities
 
 - This directory **does**:
-  - Provide Pino logger factory emitting JSON to stdout (server-side, no worker transports)
-  - Provide clientLogger for browser-side structured logging (MVP, console-based, no telemetry pipeline)
+  - Provide EVENT_NAMES registry (prevents ad-hoc event strings and schema drift)
+  - Provide logEvent() wrapper (enforces reqId presence, throws in CI/tests only)
+  - Provide Pino logger factory (sync mode, zero buffering, JSON stdout)
+  - Provide clientLogger for browser console (uses EVENT_NAMES, no shipping)
   - Define RequestContext for request-scoped logging
-  - Provide standardized log helpers (start/end/error/warn)
-  - Define event schemas for AI and Payments domains
-  - Validate reqId from `x-request-id` header (max 64 chars, alphanumeric + `_-`)
-  - Redact/drop sensitive fields (tokens, headers, wallet keys, prompts, API keys)
-  - Set stable base fields (app, service) - env label added by Alloy
+  - Provide request lifecycle helpers (logRequestStart/End/Error/Warn)
+  - Define strict payload types for high-value events (AiLlmCallEvent, PaymentsEvent)
+  - Validate reqId from header (max 64 chars, alphanumeric + `_-`)
+  - Redact sensitive fields (tokens, headers, keys, prompts)
 
 - This directory **does not**:
   - Depend on Container or port interfaces
-  - Implement log collection or aggregation
+  - Implement log collection or shipping
   - Define domain business logic
-  - Handle HTTP routing or responses
+  - Handle HTTP routing
 
 ## Usage
 
@@ -93,37 +98,47 @@ logRequestStart(ctx.log);
 **Server feature service:**
 
 ```typescript
-import type { RequestContext, AiLlmCallEvent } from "@/shared/observability";
+import { EVENT_NAMES, type AiLlmCallEvent } from "@/shared/observability";
 
 export async function execute(..., ctx: RequestContext) {
   const log = ctx.log.child({ feature: "ai.completion" });
-  const llmEvent: AiLlmCallEvent = { ... };
-  log.info(llmEvent, "LLM response received");
+  const llmEvent: AiLlmCallEvent = {
+    event: "ai.llm_call",
+    routeId: ctx.routeId,
+    reqId: ctx.reqId,
+    billingAccountId: caller.billingAccountId,
+    model,
+    durationMs,
+    tokensUsed,
+  };
+  log.info(llmEvent, EVENT_NAMES.AI_LLM_CALL_COMPLETED);
 }
 ```
 
-**Client-side component/hook:**
+**Client component:**
 
 ```typescript
-import { clientLogger } from "@/shared/observability";
+import { clientLogger, EVENT_NAMES } from "@/shared/observability";
 
 export function MyComponent() {
   const handleError = (error: Error) => {
-    clientLogger.error("COMPONENT_ERROR", { error: error.message });
+    clientLogger.error(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, {
+      error: error.message,
+    });
   };
 }
 ```
 
 ## Standards
 
-- All console.\* prohibited in src/ - server code uses Pino logger; client code uses clientLogger
-- Server: JSON-only logs to stdout (formatting via external pipe: `pnpm dev:pretty`)
-- Client: debug/info dev-only; warn/error always output; drops forbidden keys (prompt, messages, apiKey, etc.)
-- Test silence: makeLogger() checks `VITEST=true || NODE_ENV=test`
-- Security: reqId validation prevents injection attacks; clientLogger drops sensitive keys
-- Stable event schemas with typed fields
-- Bindings cannot override reserved keys (app, service)
-- Lint enforcement: Biome suspicious/noConsole rule (tests/scripts/logger modules exempted)
+- **Event registry enforcement:** All event names in EVENT_NAMES (no inline strings)
+- **Sync logging:** `pino.destination({ sync: true, minLength: 0 })` prevents buffering under SSE
+- **Fail-closed reqId:** logEvent() throws if reqId missing (VITEST=true only; logs error elsewhere)
+- All console.\* prohibited in src/ - use Pino (server) or clientLogger (browser)
+- Server: JSON-only to stdout; optional formatting via `pnpm dev:pretty`
+- Client: debug/info dev-only; warn/error always; drops forbidden keys
+- Security: reqId validation (max 64 chars, alphanumeric + `_-`); redaction paths
+- Test silence: VITEST=true or NODE_ENV=test
 
 ## Dependencies
 

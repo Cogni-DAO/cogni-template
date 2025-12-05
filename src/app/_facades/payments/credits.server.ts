@@ -20,8 +20,10 @@ import { confirmCreditsPayment } from "@/features/payments/services/creditsConfi
 import { getCreditsSummary } from "@/features/payments/services/creditsSummary";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { SessionUser } from "@/shared/auth";
-import type { RequestContext } from "@/shared/observability";
-import type { PaymentsConfirmedEvent } from "@/shared/observability/logging/events";
+import type {
+  PaymentsConfirmedEvent,
+  RequestContext,
+} from "@/shared/observability";
 
 export async function confirmCreditsPaymentFacade(
   params: {

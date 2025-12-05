@@ -15,7 +15,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // Import from package path
-import * as clientLogger from "@/shared/observability/clientLogger";
+import * as clientLogger from "@/shared/observability/client";
+import { EVENT_NAMES } from "@/shared/observability/events";
 
 describe("clientLogger", () => {
   // Store original console methods
@@ -44,7 +45,7 @@ describe("clientLogger", () => {
     it("should be no-op in production", () => {
       vi.stubEnv("NODE_ENV", "production");
 
-      clientLogger.debug("TEST_EVENT", { foo: "bar" });
+      clientLogger.debug(EVENT_NAMES.TEST_EVENT, { foo: "bar" });
 
       expect(console.debug).not.toHaveBeenCalled();
     });
@@ -52,7 +53,7 @@ describe("clientLogger", () => {
     it("should output to console in development", () => {
       vi.stubEnv("NODE_ENV", "development");
 
-      clientLogger.debug("TEST_EVENT", { foo: "bar" });
+      clientLogger.debug(EVENT_NAMES.TEST_EVENT, { foo: "bar" });
 
       expect(console.debug).toHaveBeenCalledWith(
         "[CLIENT] DEBUG TEST_EVENT",
@@ -63,7 +64,7 @@ describe("clientLogger", () => {
     it("should handle undefined meta", () => {
       vi.stubEnv("NODE_ENV", "development");
 
-      clientLogger.debug("TEST_EVENT");
+      clientLogger.debug(EVENT_NAMES.TEST_EVENT);
 
       expect(console.debug).toHaveBeenCalledWith(
         "[CLIENT] DEBUG TEST_EVENT",
@@ -76,7 +77,7 @@ describe("clientLogger", () => {
     it("should be no-op in production", () => {
       vi.stubEnv("NODE_ENV", "production");
 
-      clientLogger.info("TEST_EVENT", { foo: "bar" });
+      clientLogger.info(EVENT_NAMES.TEST_EVENT, { foo: "bar" });
 
       expect(console.info).not.toHaveBeenCalled();
     });
@@ -84,7 +85,7 @@ describe("clientLogger", () => {
     it("should output to console in development", () => {
       vi.stubEnv("NODE_ENV", "development");
 
-      clientLogger.info("TEST_EVENT", { foo: "bar" });
+      clientLogger.info(EVENT_NAMES.TEST_EVENT, { foo: "bar" });
 
       expect(console.info).toHaveBeenCalledWith(
         "[CLIENT] INFO TEST_EVENT",
@@ -97,7 +98,7 @@ describe("clientLogger", () => {
     it("should output to console in production", () => {
       vi.stubEnv("NODE_ENV", "production");
 
-      clientLogger.warn("TEST_EVENT", { foo: "bar" });
+      clientLogger.warn(EVENT_NAMES.TEST_EVENT, { foo: "bar" });
 
       expect(console.warn).toHaveBeenCalledWith(
         "[CLIENT] WARN TEST_EVENT",
@@ -108,7 +109,7 @@ describe("clientLogger", () => {
     it("should output to console in development", () => {
       vi.stubEnv("NODE_ENV", "development");
 
-      clientLogger.warn("TEST_EVENT", { foo: "bar" });
+      clientLogger.warn(EVENT_NAMES.TEST_EVENT, { foo: "bar" });
 
       expect(console.warn).toHaveBeenCalledWith(
         "[CLIENT] WARN TEST_EVENT",
@@ -121,7 +122,7 @@ describe("clientLogger", () => {
     it("should output to console in production", () => {
       vi.stubEnv("NODE_ENV", "production");
 
-      clientLogger.error("TEST_EVENT", { foo: "bar" });
+      clientLogger.error(EVENT_NAMES.TEST_EVENT, { foo: "bar" });
 
       expect(console.error).toHaveBeenCalledWith(
         "[CLIENT] ERROR TEST_EVENT",
@@ -132,7 +133,7 @@ describe("clientLogger", () => {
     it("should output to console in development", () => {
       vi.stubEnv("NODE_ENV", "development");
 
-      clientLogger.error("TEST_EVENT", { foo: "bar" });
+      clientLogger.error(EVENT_NAMES.TEST_EVENT, { foo: "bar" });
 
       expect(console.error).toHaveBeenCalledWith(
         "[CLIENT] ERROR TEST_EVENT",
@@ -145,7 +146,7 @@ describe("clientLogger", () => {
     it("should drop forbidden keys from metadata", () => {
       vi.stubEnv("NODE_ENV", "development");
 
-      clientLogger.warn("TEST_EVENT", {
+      clientLogger.warn(EVENT_NAMES.TEST_EVENT, {
         apiKey: "secret-key-123",
         authorization: "Bearer token",
         prompt: "secret prompt",
@@ -169,7 +170,7 @@ describe("clientLogger", () => {
     it("should drop forbidden keys case-insensitively", () => {
       vi.stubEnv("NODE_ENV", "development");
 
-      clientLogger.warn("TEST_EVENT", {
+      clientLogger.warn(EVENT_NAMES.TEST_EVENT, {
         ApiKey: "secret-1",
         AUTHORIZATION: "secret-2",
         Prompt: "secret-3",
@@ -199,7 +200,7 @@ describe("clientLogger", () => {
 
       const largeString = "x".repeat(3000);
 
-      clientLogger.warn("TEST_EVENT", { large: largeString });
+      clientLogger.warn(EVENT_NAMES.TEST_EVENT, { large: largeString });
 
       const call = (console.warn as ReturnType<typeof vi.fn>).mock.calls[0];
       if (!call) throw new Error("Expected console.warn to be called");
@@ -215,7 +216,7 @@ describe("clientLogger", () => {
 
       const largeArray = new Array(150).fill("item");
 
-      clientLogger.warn("TEST_EVENT", { items: largeArray });
+      clientLogger.warn(EVENT_NAMES.TEST_EVENT, { items: largeArray });
 
       const call = (console.warn as ReturnType<typeof vi.fn>).mock.calls[0];
       if (!call) throw new Error("Expected console.warn to be called");

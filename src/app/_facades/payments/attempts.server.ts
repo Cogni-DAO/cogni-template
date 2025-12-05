@@ -26,12 +26,12 @@ import {
 } from "@/features/payments/services/paymentService";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { SessionUser } from "@/shared/auth";
-import type { RequestContext } from "@/shared/observability";
 import type {
   PaymentsIntentCreatedEvent,
   PaymentsStateTransitionEvent,
   PaymentsStatusReadEvent,
-} from "@/shared/observability/logging/events";
+  RequestContext,
+} from "@/shared/observability";
 
 /**
  * Creates payment intent facade

@@ -17,7 +17,8 @@
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { CREDITS_PER_CENT } from "@/core";
-import { clientLogger } from "@/shared/observability";
+import * as clientLogger from "@/shared/observability/client";
+import { EVENT_NAMES } from "@/shared/observability/events";
 import { USDC_ABI } from "@/shared/web3/usdc-abi";
 import type { PaymentFlowState } from "@/types/payments";
 import { paymentsClient } from "../api/paymentsClient";
@@ -379,7 +380,7 @@ export function usePaymentFlow(
     if (writeError && internalState.phase === "AWAITING_SIGNATURE") {
       const formatted = formatPaymentError(writeError);
       // User rejection is expected behavior, not an error
-      clientLogger.warn("PAYMENT_FLOW_WALLET_WRITE_ERROR", {
+      clientLogger.warn(EVENT_NAMES.CLIENT_PAYMENTS_FLOW_WALLET_WRITE_ERROR, {
         phase: internalState.phase,
         error: formatted.debug,
       });
@@ -394,7 +395,7 @@ export function usePaymentFlow(
   useEffect(() => {
     if (receiptError && internalState.phase === "AWAITING_CONFIRMATION") {
       const formatted = formatPaymentError(receiptError);
-      clientLogger.error("PAYMENT_FLOW_RECEIPT_ERROR", {
+      clientLogger.error(EVENT_NAMES.CLIENT_PAYMENTS_FLOW_RECEIPT_ERROR, {
         phase: internalState.phase,
         error: formatted.debug,
       });

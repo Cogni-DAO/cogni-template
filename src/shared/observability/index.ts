@@ -3,41 +3,40 @@
 
 /**
  * Module: `@shared/observability`
- * Purpose: Cross-cutting observability concerns - logging, context, events.
- * Scope: Unified entry point for all observability utilities. Does not implement logging logic.
+ * Purpose: Cross-cutting observability - events, logging, context.
+ * Scope: Unified entry point for all observability utilities. Does not implement logic.
  * Invariants: No imports from bootstrap or ports (structural typing only).
  * Side-effects: none
- * Notes: This is the sanctioned cross-cutting layer for observability.
- * Links: Re-exports from context, logging; see submodules for implementation.
+ * Notes: Minimal public API - events registry + logEvent + context.
+ * Links: Delegates to events, server, client, context submodules.
  * @public
  */
 
-// Logging (Client)
-export * as clientLogger from "./clientLogger";
-export type { Clock, RequestContext } from "./context";
+// Client-side logging
+export * as clientLogger from "./client";
 // Context
+export type { Clock, RequestContext } from "./context";
 export { createRequestContext } from "./context";
-// Event Schemas
+export type { EventBase, EventName } from "./events";
+// Event Registry (shared by client and server)
+export { EVENT_NAMES } from "./events";
+// Type-only exports for domain event payloads (used by features)
+export type { AiLlmCallEvent } from "./events/ai";
 export type {
-  AiCompletionEvent,
-  AiEvent,
-  AiEventType,
-  AiLlmCallEvent,
-  Logger,
   PaymentsConfirmedEvent,
-  PaymentsEvent,
-  PaymentsEventType,
   PaymentsIntentCreatedEvent,
   PaymentsStateTransitionEvent,
+  PaymentsStatusReadEvent,
   PaymentsVerifiedEvent,
-} from "./logging";
-// Logging (Server)
+} from "./events/payments";
+export type { Logger } from "./server";
+// Server-side logging
 export {
+  logEvent,
   logRequestEnd,
   logRequestError,
   logRequestStart,
   logRequestWarn,
   makeLogger,
   makeNoopLogger,
-  REDACT_PATHS,
-} from "./logging";
+} from "./server";

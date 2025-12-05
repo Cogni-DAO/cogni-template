@@ -1,8 +1,12 @@
+# .gemini/commands/logging.toml
+description = "Observability guide for clean hexagonal architecture"
+prompt = """
 # Observability Guide (Clean Hex App)
 
 ## Goal
 
-Identify the current feature and files changed. Add _predictable, minimal, structured_ logging that helps debug production without polluting business logic. Read @docs/OBSERVABILITY.md an understanding of our observability system, then proceed to properly design and implement clean observability for this feature.
+Identify the current feature and files changed. Add _predictable, minimal, structured_ logging that helps debug production without polluting business logic. 
+Read @docs/OBSERVABILITY.md an understanding of our observability system, then proceed to properly design and implement clean observability for this feature.
 
 ## Cardinal Rules
 
@@ -79,12 +83,10 @@ Add as relevant: `userId`, `billingAccountId`, `stream`, `status`, `durationMs`,
 **Rule:** If you want to graph/alert it, it's a metric. Otherwise it's a log.
 
 **Use metrics for:**
-
 - Alertable signals: rates, error rates, p95/p99 latency, tokens, cost
 - Aggregatable counters/histograms across requests
 
 **Use logs for:**
-
 - Forensics and debugging specific requests (reqId-based traces)
 - Rare invariants and "should never happen" cases
 
@@ -105,7 +107,6 @@ Add as relevant: `userId`, `billingAccountId`, `stream`, `status`, `durationMs`,
    - Rate limit counters, provider-specific error rates
 
 **Label rules:**
-
 - Low-cardinality only: route, method, statusBucket (2xx/4xx/5xx), provider, model_class, error_code
 - NEVER use reqId/userId/modelId as labels (causes cardinality explosion)
 
@@ -117,3 +118,5 @@ Add as relevant: `userId`, `billingAccountId`, `stream`, `status`, `durationMs`,
 - [ ] Add adapter request/result/error logs (sanitized, bounded)
 - [ ] Add 0–2 invariant warns for "should never happen" cases
 - [ ] Add metrics for alertable signals (rates, latencies, costs)
+"""
+

@@ -19,7 +19,7 @@ import {
 } from "eventsource-parser";
 import type { ChatDeltaEvent, LlmService } from "@/ports";
 import { serverEnv } from "@/shared/env";
-import { makeLogger } from "@/shared/observability/logging/logger";
+import { makeLogger } from "@/shared/observability";
 
 const logger = makeLogger({ component: "LiteLlmAdapter" });
 

@@ -80,7 +80,7 @@ describe("model-preference localStorage utilities", () => {
       // Assert - No crash, returns null
       expect(result).toBeNull();
       expect(consoleSpy).toHaveBeenCalledWith(
-        "[CLIENT] WARN MODEL_PREF_READ_FAIL",
+        "[CLIENT] WARN client.ai.model_pref_read_fail",
         expect.stringContaining('"error"')
       );
 
@@ -95,7 +95,7 @@ describe("model-preference localStorage utilities", () => {
       // Act & Assert - No crash
       expect(() => setPreferredModelId("qwen3-4b")).not.toThrow();
       expect(consoleSpy).toHaveBeenCalledWith(
-        "[CLIENT] WARN MODEL_PREF_WRITE_FAIL",
+        "[CLIENT] WARN client.ai.model_pref_write_fail",
         expect.stringContaining('"error"')
       );
 
@@ -110,7 +110,7 @@ describe("model-preference localStorage utilities", () => {
       // Act & Assert - No crash
       expect(() => clearPreferredModelId()).not.toThrow();
       expect(consoleSpy).toHaveBeenCalledWith(
-        "[CLIENT] WARN MODEL_PREF_CLEAR_FAIL",
+        "[CLIENT] WARN client.ai.model_pref_clear_fail",
         expect.stringContaining('"error"')
       );
 
@@ -193,7 +193,7 @@ describe("model-preference localStorage utilities", () => {
 
       // Assert - Warning logged
       expect(consoleSpy).toHaveBeenCalledWith(
-        "[CLIENT] WARN MODEL_PREF_INVALID",
+        "[CLIENT] WARN client.ai.model_pref_invalid",
         expect.stringContaining('"storedModel":"removed-model"')
       );
 

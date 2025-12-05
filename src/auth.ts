@@ -24,7 +24,7 @@ import { SiweMessage } from "siwe";
 
 import { getDb } from "@/adapters/server/db/client";
 import { users } from "@/shared/db/schema.auth";
-import { makeLogger } from "@/shared/observability/logging";
+import { makeLogger } from "@/shared/observability";
 
 export const authSecret =
   process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET ?? "";
