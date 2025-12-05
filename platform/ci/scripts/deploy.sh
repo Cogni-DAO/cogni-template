@@ -442,21 +442,10 @@ log_info "Logging into GHCR for private image pulls..."
 echo "${GHCR_DEPLOY_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 4: Validate images exist (fail fast)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-log_info "Validating required images are available..."
-cd /opt/cogni-template-runtime
-if ! $RUNTIME_COMPOSE --dry-run --profile bootstrap pull; then
-  log_error "❌ Required images not found in registry"
-  log_error "Build workflow may have failed - check previous workflow run"
-  log_error "Expected: APP_IMAGE=${APP_IMAGE}, MIGRATOR_IMAGE=${MIGRATOR_IMAGE}"
-  exit 1
-fi
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 5: Tag running image for rollback (keep exactly 1 previous version)
+# Step 4: Tag running image for rollback (keep exactly 1 previous version)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "Tagging currently running app image for preservation..."
+cd /opt/cogni-template-runtime
 RUNNING_IMAGE="$($RUNTIME_COMPOSE ps -q app 2>/dev/null | xargs -r docker inspect --format '{{.Config.Image}}' 2>/dev/null || true)"
 if [[ -n "${RUNNING_IMAGE:-}" ]]; then
   docker image tag "$RUNNING_IMAGE" cogni-runtime:keep-last || true
@@ -466,22 +455,47 @@ else
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 6: Conditional disk cleanup (emergency only, excludes edge)
+# Step 5: Disk cleanup BEFORE pull (prevents extraction failures)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 DISK_USAGE=$(df / | tail -1 | awk '{print $5}' | sed 's/%//')
 if [[ "$DISK_USAGE" -ge 70 ]]; then
-  log_warn "Disk usage at ${DISK_USAGE}% (>= 70%) - pruning unused images..."
-  log_info "Disk before prune:"
-  df -h / || true
-  # Prune dangling images but NOT unused tagged images (keep-last must survive)
-  # Do NOT stop edge - only prune dangling images, not unused tagged ones
-  docker image prune -f || true
-  docker builder prune -af || true
-  log_info "Disk after prune:"
-  df -h / || true
-  log_info "Prune complete (edge untouched)"
+  log_warn "Disk usage at ${DISK_USAGE}% (>= 70%) - cleaning old images..."
+  log_info "Disk before cleanup:"
+  df -h / /var/lib/docker /var/lib/containerd 2>/dev/null || df -h /
+
+  # Protected IDs: running containers + keep-last (full sha256 format)
+  PROTECT_IDS=$(
+    {
+      docker ps -q | xargs -r docker inspect --format '{{.Image}}' 2>/dev/null
+      docker images --no-trunc --format '{{.ID}}' --filter 'reference=cogni-runtime:keep-last' 2>/dev/null
+    } | sort -u
+  )
+
+  # Remove unprotected ghcr.io/cogni-dao/cogni-template* images
+  comm -23 \
+    <(docker images --no-trunc --filter 'reference=ghcr.io/cogni-dao/cogni-template*' --format '{{.ID}}' | sort -u) \
+    <(echo "$PROTECT_IDS") \
+  | xargs -r docker rmi -f 2>/dev/null || true
+
+  docker container prune -f >/dev/null 2>&1 || true
+  docker builder prune -af >/dev/null 2>&1 || true
+
+  log_info "Disk after cleanup:"
+  df -h / /var/lib/docker /var/lib/containerd 2>/dev/null || df -h /
+  log_info "Cleanup complete"
 else
-  log_info "Disk usage at ${DISK_USAGE}% - no prune needed"
+  log_info "Disk usage at ${DISK_USAGE}% - no cleanup needed"
+fi
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 6: Validate images exist (fail fast)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+log_info "Validating required images are available..."
+if ! $RUNTIME_COMPOSE --dry-run --profile bootstrap pull; then
+  log_error "❌ Required images not found in registry"
+  log_error "Build workflow may have failed - check previous workflow run"
+  log_error "Expected: APP_IMAGE=${APP_IMAGE}, MIGRATOR_IMAGE=${MIGRATOR_IMAGE}"
+  exit 1
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
