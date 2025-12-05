@@ -113,3 +113,36 @@ export function normalizeMessageRole(role: string): MessageRole | null {
       return null;
   }
 }
+
+// ============================================================================
+// Model Selection Policy
+// ============================================================================
+
+/**
+ * Pure function: select default model based on credits.
+ *
+ * When balance <= 0: must return free model or null (blocked).
+ * When balance > 0: prefer user choice, then paid, then free.
+ *
+ * @returns Selected model ID, or null if no valid model available
+ */
+export function pickDefaultModel(input: {
+  balanceCredits: number;
+  userChoice: string | null;
+  defaultFreeModelId: string | null;
+  defaultPaidModelId: string | null;
+}): string | null {
+  const { balanceCredits, userChoice, defaultFreeModelId, defaultPaidModelId } =
+    input;
+
+  if (balanceCredits <= 0) {
+    // Zero credits: must use free model or block
+    if (userChoice && userChoice === defaultFreeModelId) {
+      return userChoice;
+    }
+    return defaultFreeModelId; // null if no free model exists
+  }
+
+  // Positive credits: prefer user choice, then paid, then free
+  return userChoice ?? defaultPaidModelId ?? defaultFreeModelId ?? null;
+}

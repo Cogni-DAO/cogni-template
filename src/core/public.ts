@@ -40,6 +40,7 @@ export {
   filterSystemMessages,
   MAX_MESSAGE_CHARS,
   normalizeMessageRole,
+  pickDefaultModel,
   trimConversationHistory,
 } from "./chat/rules";
 export type {

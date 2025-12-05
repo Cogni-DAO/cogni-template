@@ -20,5 +20,6 @@ export {
   filterSystemMessages,
   MAX_MESSAGE_CHARS,
   normalizeMessageRole,
+  pickDefaultModel,
   trimConversationHistory,
 } from "./rules";
