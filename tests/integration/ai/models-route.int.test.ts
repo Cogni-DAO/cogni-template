@@ -136,6 +136,6 @@ describe("/api/v1/ai/models integration tests", () => {
     // Assert - Must return 500 with typed error and structured log
     expect(response.status).toBe(500);
     expect(data).toHaveProperty("error");
-    expect(data.error).toBe("Invalid models data");
+    expect(data.error).toBe("Server configuration error");
   });
 });
