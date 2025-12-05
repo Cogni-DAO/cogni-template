@@ -5,9 +5,9 @@
  * Module: `@adapters/server/ai/litellm`
  * Purpose: Unit tests for LiteLLM adapter with mocked HTTP calls and error handling.
  * Scope: Tests adapter logic, parameter handling, response parsing, missing cost handling. Does NOT test real LiteLLM service.
- * Invariants: No real HTTP calls; deterministic responses; validates LlmService contract compliance; warns on missing cost
+ * Invariants: No real HTTP calls; deterministic responses; validates LlmService contract compliance; model param required (no env fallback)
  * Side-effects: none (mocked fetch)
- * Notes: Tests defaults, error handling, timeout enforcement, response mapping, console.warn spy for cost warnings
+ * Notes: Tests error handling, timeout enforcement, response mapping, missing model validation. No DEFAULT_MODEL - model must be explicitly provided.
  * Links: src/adapters/server/ai/litellm.adapter.ts, LlmService port
  * @public
  */
@@ -17,10 +17,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LiteLlmAdapter } from "@/adapters/server/ai/litellm.adapter";
 import type { LlmCaller, LlmService } from "@/ports";
 
-// Mock the serverEnv module
+// Mock the serverEnv module - only LITELLM_BASE_URL needed (model is always explicitly provided)
 vi.mock("@/shared/env", () => ({
   serverEnv: () => ({
-    DEFAULT_MODEL: "gpt-3.5-turbo",
     LITELLM_BASE_URL: "https://api.test-litellm.com",
   }),
 }));
@@ -44,6 +43,7 @@ describe("LiteLlmAdapter", () => {
 
   describe("completion method", () => {
     const basicParams = {
+      model: "gpt-3.5-turbo", // model is required (no env fallback)
       messages: [{ role: "user" as const, content: "Hello world" }],
       caller: testCaller,
     };
@@ -85,7 +85,7 @@ describe("LiteLlmAdapter", () => {
             Authorization: "Bearer test-api-key-456",
           },
           body: JSON.stringify({
-            model: "gpt-3.5-turbo", // default from env
+            model: "gpt-3.5-turbo", // explicitly provided (required)
             messages: [{ role: "user", content: "Hello world" }],
             temperature: 0.7, // default
             max_tokens: 2048, // default
@@ -283,6 +283,20 @@ describe("LiteLlmAdapter", () => {
       );
     });
 
+    it("throws error when model parameter is missing", async () => {
+      const paramsWithoutModel = {
+        messages: [{ role: "user" as const, content: "Hello" }],
+        caller: testCaller,
+      };
+
+      await expect(adapter.completion(paramsWithoutModel)).rejects.toThrow(
+        "LiteLLM completion requires model parameter"
+      );
+
+      // Verify fetch was never called
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
     it("handles different finish reasons", async () => {
       const responseWithFinishReason = {
         ...mockSuccessResponse,
@@ -374,6 +388,7 @@ describe("LiteLlmAdapter", () => {
       });
 
       const result = adapter.completion({
+        model: "test-model", // model is required
         messages: [{ role: "user", content: "test" }],
         caller: testCaller,
       });

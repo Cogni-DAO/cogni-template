@@ -5,9 +5,9 @@
  * Module: `@tests/_fixtures/ai/fixtures`
  * Purpose: Provides fixture loader for AI test data including models list response.
  * Scope: Loads and types static JSON fixtures for test consistency. Does not implement test logic or assertions.
- * Invariants: Returns typed data matching contract schemas. Fixtures are static; tests stub env vars.
+ * Invariants: Returns typed data matching contract schemas. Fixtures are static.
  * Side-effects: none
- * Notes: Single source of truth for models list in all tests. Use vi.stubEnv('DEFAULT_MODEL') in tests.
+ * Notes: Single source of truth for models list in all tests. Defaults computed from catalog metadata.cogni.* tags.
  * Links: models.response.json, @/contracts/ai.models.v1.contract
  * @internal
  */
@@ -28,13 +28,49 @@ export function loadModelsFixture(): ModelsOutput {
 }
 
 /**
- * Load models catalog for mocking getCachedModels
- * @returns ModelsCatalog with models array and defaultPreferredModelId
+ * Load models catalog for mocking getCachedModels (no defaults set - simulates untagged catalog)
+ * Uses deterministic fallback for defaults (first by id)
+ * @returns ModelsCatalog with models array and computed defaults
  */
 export function loadModelsCatalogFixture(): ModelsCatalog {
+  // Sort by id for deterministic fallback
+  const sorted = [...modelsFixture.models].sort((a, b) =>
+    a.id.localeCompare(b.id)
+  );
+  const paidModels = sorted.filter((m) => !m.isFree);
+  const freeModels = sorted.filter((m) => m.isFree);
+
   return {
     models: modelsFixture.models,
-    defaultModelId: modelsFixture.defaultPreferredModelId,
+    defaults: {
+      // Deterministic fallback: first paid or first overall
+      defaultPreferredModelId: paidModels[0]?.id ?? sorted[0]?.id ?? null,
+      // First free model
+      defaultFreeModelId: freeModels[0]?.id ?? null,
+    },
+  };
+}
+
+/**
+ * Load models catalog with explicit default tags (simulates properly configured catalog)
+ * @returns ModelsCatalog with models array and tagged defaults from fixture
+ */
+export function loadModelsCatalogWithDefaultsFixture(): ModelsCatalog {
+  return {
+    models: modelsFixture.models.map((m) => ({
+      ...m,
+      // Add cogni metadata for tagged defaults
+      cogni:
+        m.id === modelsFixture.defaultPreferredModelId
+          ? { defaultPreferred: true }
+          : m.id === modelsFixture.defaultFreeModelId
+            ? { defaultFree: true }
+            : undefined,
+    })),
+    defaults: {
+      defaultPreferredModelId: modelsFixture.defaultPreferredModelId,
+      defaultFreeModelId: modelsFixture.defaultFreeModelId,
+    },
   };
 }
 

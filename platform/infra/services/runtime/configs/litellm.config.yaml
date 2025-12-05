@@ -18,6 +18,9 @@ model_list:
       display_name: "Nova 2 Lite"
       is_free: true
       provider_key: "amazon"
+      metadata:
+        cogni:
+          default_free: true
 
   # OpenAI
   - model_name: gpt-oss-20b
@@ -87,6 +90,9 @@ model_list:
       display_name: "Gemini 2.5 Flash"
       is_free: false
       provider_key: "google"
+      metadata:
+        cogni:
+          default_preferred: true
 
   - model_name: gemini-3-pro
     litellm_params:

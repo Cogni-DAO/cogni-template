@@ -59,7 +59,6 @@ export const EVENT_NAMES = {
 
   // Invariant Warnings
   INV_PROVIDER_META_MODEL_MISSING: "inv_provider_meta_model_missing",
-  INV_DEFAULT_MODEL_NOT_IN_CATALOG: "inv_default_model_not_in_catalog",
   INV_MODELS_CONTRACT_VALIDATION_FAILED:
     "inv_models_contract_validation_failed",
 

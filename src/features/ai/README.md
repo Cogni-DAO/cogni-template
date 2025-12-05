@@ -212,12 +212,12 @@ import { serverEnv } from "@/shared/env/server";
 export class LiteLlmAdapter implements LlmService {
   async complete(params: {
     messages: Message[];
-    model?: string;
+    model: string; // Required - computed from LiteLLM catalog metadata
     temperature?: number;
     maxTokens?: number;
   }): Promise<Message> {
-    // Adapter provides defaults from env - feature stays pure
-    const model = params.model ?? serverEnv.DEFAULT_MODEL;
+    // Model is required - defaults computed from LiteLLM catalog metadata.cogni.* tags
+    const model = params.model;
     const temperature = params.temperature ?? 0.7;
     const maxTokens = params.maxTokens ?? 2048;
 

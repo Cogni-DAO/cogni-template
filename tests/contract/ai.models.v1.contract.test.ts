@@ -33,9 +33,12 @@ describe("ai.models.v1 contract validation", () => {
     expect(fixture).toHaveProperty("models");
     expect(fixture).toHaveProperty("defaultPreferredModelId");
     expect(fixture).toHaveProperty("defaultFreeModelId");
+    // Defaults are nullable - fixture has defaults from JSON
     expect(fixture.defaultPreferredModelId).toBeTruthy();
     expect(typeof fixture.defaultPreferredModelId).toBe("string");
-    expect(fixture.defaultPreferredModelId.length).toBeGreaterThan(0);
+    if (fixture.defaultPreferredModelId !== null) {
+      expect(fixture.defaultPreferredModelId.length).toBeGreaterThan(0);
+    }
   });
 
   it("should have non-empty models array", () => {

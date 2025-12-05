@@ -41,7 +41,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - `/api/v1/ai/completion` (POST) - text completion with credits metering
   - `/api/v1/ai/chat` (POST) - chat endpoint (streaming support via SSE)
   - `/api/v1/ai/models` (GET) - list available models with tier info
-- **Env/Config keys:** `LITELLM_BASE_URL`, `DEFAULT_MODEL` (via serverEnv)
+- **Env/Config keys:** `LITELLM_BASE_URL` (via serverEnv); model defaults computed from LiteLLM catalog metadata
 - **Files considered API:** public.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
 
 ## Ports

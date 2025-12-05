@@ -53,7 +53,7 @@ vi.mock("@/app/_facades/ai/completion.server", () => ({
 // Mock model catalog
 vi.mock("@/shared/ai/model-catalog.server", () => ({
   isModelAllowed: vi.fn(),
-  getDefaultModelId: vi.fn(),
+  getDefaults: vi.fn(),
   isModelFree: vi.fn(),
 }));
 
@@ -64,7 +64,7 @@ import {
 // Import after mocks
 import { getSessionUser } from "@/app/_lib/auth/session";
 import {
-  getDefaultModelId,
+  getDefaults,
   isModelAllowed,
   isModelFree,
 } from "@/shared/ai/model-catalog.server";
@@ -80,7 +80,10 @@ describe("POST /api/v1/ai/chat - Free Model Zero Credits", () => {
     });
 
     vi.mocked(isModelAllowed).mockResolvedValue(true);
-    vi.mocked(getDefaultModelId).mockReturnValue("gpt-4o-mini");
+    vi.mocked(getDefaults).mockResolvedValue({
+      defaultPreferredModelId: "gpt-4o-mini",
+      defaultFreeModelId: "free-model",
+    });
     vi.mocked(isModelFree).mockImplementation(async (modelId: string) => {
       return modelId === "free-model";
     });

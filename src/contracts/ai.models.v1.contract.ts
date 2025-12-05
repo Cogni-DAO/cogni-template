@@ -31,18 +31,18 @@ export const ModelSchema = z.object({
 /**
  * Models list response
  * - models: Array of available models
- * - defaultPreferredModelId: Server's preferred default model (from DEFAULT_MODEL env)
- * - defaultFreeModelId: Free model to use when user has zero credits (null if no free models exist)
+ * - defaultPreferredModelId: Server's preferred default model (from catalog metadata.cogni.default_preferred tag, null if catalog empty)
+ * - defaultFreeModelId: Free model to use when user has zero credits (from catalog metadata.cogni.default_free tag, null if no free models)
  */
 export const aiModelsOperation = {
   id: "ai.models.v1",
   summary: "List available AI models",
   description:
-    "Returns list of available LiteLLM models with tier information and default model IDs",
+    "Returns list of available LiteLLM models with tier information and default model IDs computed from catalog metadata",
   input: z.object({}), // No input, GET request
   output: z.object({
     models: z.array(ModelSchema),
-    defaultPreferredModelId: z.string(),
+    defaultPreferredModelId: z.string().nullable(),
     defaultFreeModelId: z.string().nullable(),
   }),
 } as const;

@@ -3,11 +3,11 @@
 
 /**
  * Module: `@shared/ai/model-catalog.server`
- * Purpose: Provides server-side cache for LiteLLM model metadata with long TTL and stale-while-revalidate.
- * Scope: Fetches from LiteLLM /model/info, caches results, validates model IDs. Does not modify model configuration or handle UI state.
- * Invariants: Cache refreshes in background (SWR), stale data served on errors, cold-start failure returns error (no hardcoded fallback).
- * Side-effects: global (module-scoped cache), IO (fetch to LiteLLM /model/info every 1h)
- * Notes: Derives all model metadata from LiteLLM model_info (no app-side hardcoding). Single source of truth: litellm.config.yaml.
+ * Purpose: Server-side cache for LiteLLM model metadata with computed defaults and SWR.
+ * Scope: Fetches /model/info, caches results, validates model IDs, computes defaults. Does not handle UI state.
+ * Invariants: SWR cache, stale on errors, cold-start returns error. Defaults: tagged || fallback || null.
+ * Side-effects: global (cache), IO (fetch every 1h)
+ * Notes: Defaults from metadata.cogni.default_preferred/default_free tags. No DEFAULT_MODEL env var.
  * Links: /api/v1/ai/models route, chat route validation
  * @internal
  */
@@ -20,6 +20,15 @@ const log = makeLogger({ module: "models-cache" });
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour (models change only on LiteLLM restart)
 
 /**
+ * Cogni-specific metadata for default model selection.
+ * Stored in LiteLLM config as model_info.metadata.cogni.*
+ */
+interface CogniMeta {
+  defaultPreferred?: boolean;
+  defaultFree?: boolean;
+}
+
+/**
  * Internal model definition for catalog.
  * Decoupled from API contract to avoid circular dependencies.
  */
@@ -28,11 +37,15 @@ export interface ModelMeta {
   name?: string | undefined;
   isFree: boolean;
   providerKey?: string | undefined;
+  cogni?: CogniMeta | undefined;
 }
 
 export interface ModelsCatalog {
   models: ModelMeta[];
-  defaultModelId: string;
+  defaults: {
+    defaultPreferredModelId: string | null;
+    defaultFreeModelId: string | null;
+  };
 }
 
 interface CacheEntry {
@@ -89,7 +102,23 @@ function transformModelInfoResponse(data: unknown): ModelMeta[] {
         display_name?: string;
         is_free?: boolean;
         provider_key?: string;
+        metadata?: {
+          cogni?: { default_preferred?: boolean; default_free?: boolean };
+        };
       };
+
+      // Parse cogni metadata for default selection (only include defined properties)
+      const cogniSource = modelInfo.metadata?.cogni;
+      const cogni: CogniMeta | undefined = cogniSource
+        ? {
+            ...(cogniSource.default_preferred !== undefined && {
+              defaultPreferred: cogniSource.default_preferred,
+            }),
+            ...(cogniSource.default_free !== undefined && {
+              defaultFree: cogniSource.default_free,
+            }),
+          }
+        : undefined;
 
       // Use model_info fields from LiteLLM config (no inference)
       return {
@@ -97,9 +126,72 @@ function transformModelInfoResponse(data: unknown): ModelMeta[] {
         name: modelInfo.display_name,
         isFree: modelInfo.is_free ?? false, // Default to paid if missing
         providerKey: modelInfo.provider_key,
+        cogni,
       };
     })
     .filter((item): item is ModelMeta => item !== null);
+}
+
+/**
+ * Compute default model IDs from catalog metadata tags.
+ * Selection order (per policy):
+ * - preferred: tagged_preferred || first_paid_by_id || first_by_id || null
+ * - free: tagged_free || first_free_by_id || null
+ *
+ * Invariant: If tags missing/duplicated, emit ERROR/WARN + use deterministic fallback. Never throws.
+ * Note: CI should enforce exactly one of each tag in litellm.config.yaml.
+ */
+function computeDefaults(models: ModelMeta[]): ModelsCatalog["defaults"] {
+  if (models.length === 0) {
+    log.error("Model catalog is empty, no defaults available");
+    return { defaultPreferredModelId: null, defaultFreeModelId: null };
+  }
+
+  // Sort by id for deterministic fallback
+  const sorted = [...models].sort((a, b) => a.id.localeCompare(b.id));
+  const paidModels = sorted.filter((m) => !m.isFree);
+  const freeModels = sorted.filter((m) => m.isFree);
+
+  // Find tagged models
+  const taggedPreferred = sorted.filter((m) => m.cogni?.defaultPreferred);
+  const taggedFree = sorted.filter((m) => m.cogni?.defaultFree);
+
+  // Emit ERROR if tags missing (CI should catch this, but runtime continues)
+  if (taggedPreferred.length === 0) {
+    log.error(
+      { catalogSize: models.length, modelIds: sorted.map((m) => m.id) },
+      "No model tagged as default_preferred - using fallback (check litellm.config.yaml)"
+    );
+  }
+  if (taggedFree.length === 0 && freeModels.length > 0) {
+    log.error(
+      { freeModelIds: freeModels.map((m) => m.id) },
+      "No model tagged as default_free - using fallback (check litellm.config.yaml)"
+    );
+  }
+
+  // Warn if multiple tags (but don't throw)
+  if (taggedPreferred.length > 1) {
+    log.warn(
+      { taggedIds: taggedPreferred.map((m) => m.id) },
+      "Multiple models tagged as default_preferred, using first by id"
+    );
+  }
+  if (taggedFree.length > 1) {
+    log.warn(
+      { taggedIds: taggedFree.map((m) => m.id) },
+      "Multiple models tagged as default_free, using first by id"
+    );
+  }
+
+  // Preferred: tagged || first_paid || first_by_id || null
+  const defaultPreferredModelId =
+    taggedPreferred[0]?.id ?? paidModels[0]?.id ?? sorted[0]?.id ?? null;
+
+  // Free: tagged || first_free || null
+  const defaultFreeModelId = taggedFree[0]?.id ?? freeModels[0]?.id ?? null;
+
+  return { defaultPreferredModelId, defaultFreeModelId };
 }
 
 /**
@@ -143,7 +235,7 @@ async function fetchModelsFromLiteLLM(): Promise<ModelsCatalog> {
 
     return {
       models,
-      defaultModelId: serverEnv().DEFAULT_MODEL,
+      defaults: computeDefaults(models),
     };
   } finally {
     clearTimeout(timeout);
@@ -205,10 +297,10 @@ export async function isModelAllowed(modelId: string): Promise<boolean> {
     // LOUD ERROR: Make allowlist failures observable
     log.error(
       { err: error, modelId },
-      "Model allowlist unavailable, allowing DEFAULT_MODEL only"
+      "Model allowlist unavailable, rejecting all models"
     );
-    // If cache unavailable, only allow DEFAULT_MODEL (fail-open for default only)
-    return modelId === serverEnv().DEFAULT_MODEL;
+    // If cache unavailable, reject all (fail-closed for security)
+    return false;
   }
 }
 
@@ -231,10 +323,17 @@ export async function isModelFree(modelId: string): Promise<boolean> {
 }
 
 /**
- * Get default model ID (from env, not cache)
+ * Get computed default model IDs from catalog (fast, cached).
+ * Returns null values if catalog unavailable.
  */
-export function getDefaultModelId(): string {
-  return serverEnv().DEFAULT_MODEL;
+export async function getDefaults(): Promise<ModelsCatalog["defaults"]> {
+  try {
+    const { defaults } = await getCachedModels();
+    return defaults;
+  } catch (error) {
+    log.error({ err: error }, "Model catalog unavailable for defaults");
+    return { defaultPreferredModelId: null, defaultFreeModelId: null };
+  }
 }
 
 /**

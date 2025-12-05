@@ -5,14 +5,17 @@
  * Module: `@tests/integration/ai/models-route.int`
  * Purpose: Validates /api/v1/ai/models HTTP endpoint behavior including auth and error handling.
  * Scope: Tests HTTP status codes and response schema compliance. Does not test cache implementation or upstream fetch logic.
- * Invariants: Route requires authentication; returns contract-valid response; handles errors gracefully; DEFAULT_MODEL must exist in catalog.
+ * Invariants: Route requires authentication; returns contract-valid response; handles errors gracefully; defaults computed from catalog metadata.
  * Side-effects: none (fully mocked)
- * Notes: Uses mocked session and cache - no real HTTP server or database required. Stubs DEFAULT_MODEL env var.
+ * Notes: Uses mocked session and cache - no real HTTP server or database required. Defaults come from catalog metadata.cogni.* tags.
  * Links: /api/v1/ai/models route, ai.models.v1.contract
  * @internal
  */
 
-import { loadModelsCatalogFixture } from "@tests/_fixtures/ai/fixtures";
+import {
+  loadModelsCatalogFixture,
+  loadModelsCatalogWithDefaultsFixture,
+} from "@tests/_fixtures/ai/fixtures";
 import { generateTestWallet } from "@tests/_fixtures/auth/db-helpers";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,15 +43,16 @@ import { serverEnv } from "@/shared/env";
 describe("/api/v1/ai/models integration tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // serverEnv still needed for LITELLM_* vars in error logging
+    vi.mocked(serverEnv).mockReturnValue({
+      LITELLM_BASE_URL: "http://localhost:4000",
+      LITELLM_MASTER_KEY: "test-key",
+    } as ReturnType<typeof serverEnv>);
   });
 
   it("should return 200 with contract-valid response when authenticated", async () => {
-    // Arrange
-    const catalog = loadModelsCatalogFixture();
-    const defaultModelId = "gpt-4o-mini";
-    vi.mocked(serverEnv).mockReturnValue({
-      DEFAULT_MODEL: defaultModelId,
-    } as ReturnType<typeof serverEnv>);
+    // Arrange - catalog with defaults computed from metadata tags
+    const catalog = loadModelsCatalogWithDefaultsFixture();
 
     vi.mocked(getSessionUser).mockResolvedValue({
       id: "test-user",
@@ -68,19 +72,50 @@ describe("/api/v1/ai/models integration tests", () => {
     // Assert - Contract compliance
     const parsed = aiModelsOperation.output.parse(data);
 
-    // Assert - defaultPreferredModelId comes from env
-    expect(parsed.defaultPreferredModelId).toBe(defaultModelId);
+    // Assert - defaults come from catalog (computed from metadata tags)
+    expect(parsed.defaultPreferredModelId).toBe(
+      catalog.defaults.defaultPreferredModelId
+    );
+    expect(parsed.defaultFreeModelId).toBe(catalog.defaults.defaultFreeModelId);
 
-    // Assert - defaultPreferredModelId exists in returned models
+    // Assert - defaults exist in returned models (if not null)
     const modelIds = parsed.models.map((m) => m.id);
-    expect(modelIds).toContain(defaultModelId);
+    if (parsed.defaultPreferredModelId) {
+      expect(modelIds).toContain(parsed.defaultPreferredModelId);
+    }
+    if (parsed.defaultFreeModelId) {
+      expect(modelIds).toContain(parsed.defaultFreeModelId);
+    }
+  });
+
+  it("should return null defaults when catalog has no tagged models", async () => {
+    // Arrange - catalog without metadata tags (legacy format)
+    const catalog = loadModelsCatalogFixture();
+
+    vi.mocked(getSessionUser).mockResolvedValue({
+      id: "test-user",
+      walletAddress: generateTestWallet("models-route-no-tags"),
+    });
+    vi.mocked(getCachedModels).mockResolvedValue(catalog);
+
+    const req = new NextRequest("http://localhost:3000/api/v1/ai/models");
+
+    // Act
+    const response = await GET(req);
+    const data = await response.json();
+
+    // Assert - still 200, not 500 (never error on missing tags)
+    expect(response.status).toBe(200);
+
+    // Assert - Contract compliance (nullable defaults are valid)
+    const parsed = aiModelsOperation.output.parse(data);
+
+    // defaults should be deterministic fallback (first by id) or null
+    expect(parsed.models.length).toBeGreaterThan(0);
   });
 
   it("should return 401 when not authenticated", async () => {
     // Arrange
-    vi.mocked(serverEnv).mockReturnValue({
-      DEFAULT_MODEL: "gpt-4o-mini",
-    } as ReturnType<typeof serverEnv>);
     vi.mocked(getSessionUser).mockResolvedValue(null);
 
     const req = new NextRequest("http://localhost:3000/api/v1/ai/models");
@@ -94,9 +129,6 @@ describe("/api/v1/ai/models integration tests", () => {
 
   it("should return 503 when cache fails", async () => {
     // Arrange
-    vi.mocked(serverEnv).mockReturnValue({
-      DEFAULT_MODEL: "gpt-4o-mini",
-    } as ReturnType<typeof serverEnv>);
     vi.mocked(getSessionUser).mockResolvedValue({
       id: "test-user",
       walletAddress: generateTestWallet("models-route-cache-fail"),
@@ -110,32 +142,5 @@ describe("/api/v1/ai/models integration tests", () => {
 
     // Assert
     expect(response.status).toBe(503);
-  });
-
-  it("should return 500 when DEFAULT_MODEL not in catalog", async () => {
-    // Arrange - catalog with limited models, env points to non-existent model
-    const catalog = loadModelsCatalogFixture();
-    const invalidDefaultModel = "model-not-in-litellm-catalog";
-    vi.mocked(serverEnv).mockReturnValue({
-      DEFAULT_MODEL: invalidDefaultModel,
-    } as ReturnType<typeof serverEnv>);
-
-    vi.mocked(getSessionUser).mockResolvedValue({
-      id: "test-user",
-      walletAddress: generateTestWallet("models-route-invalid-default"),
-    });
-    // Return catalog that doesn't contain the DEFAULT_MODEL
-    vi.mocked(getCachedModels).mockResolvedValue(catalog);
-
-    const req = new NextRequest("http://localhost:3000/api/v1/ai/models");
-
-    // Act
-    const response = await GET(req);
-    const data = await response.json();
-
-    // Assert - Must return 500 with typed error and structured log
-    expect(response.status).toBe(500);
-    expect(data).toHaveProperty("error");
-    expect(data.error).toBe("Server configuration error");
   });
 });

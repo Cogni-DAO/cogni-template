@@ -3,12 +3,12 @@
 
 /**
  * Module: `@adapters/server/ai/litellm`
- * Purpose: LiteLLM service implementation for AI completion and streaming with dynamic cost extraction from response headers.
- * Scope: Implements LlmService port (completion + completionStream), extracts cost from x-litellm-response-cost header. Does not handle authentication or rate limiting.
- * Invariants: Never sets timestamps; never logs prompts/keys; 15s connect timeout (TTFB only); stream settles exactly once; null quarantined
+ * Purpose: LiteLLM service implementation for AI completion and streaming with cost extraction.
+ * Scope: Implements LlmService port (completion + stream), extracts cost from headers. Does not handle auth or rate-limiting.
+ * Invariants: Never logs prompts/keys; 15s timeout; stream settles once; model param required.
  * Side-effects: IO (HTTP calls to LiteLLM)
- * Notes: Uses eventsource-parser for SSE; logs malformed chunks as warnings; yields error events on provider errors
- * Links: Implements LlmService port, uses serverEnv configuration, defer<T>() helper ensures promise settlement safety
+ * Notes: SSE via eventsource-parser; model required (no DEFAULT_MODEL fallback).
+ * Links: LlmService port, serverEnv, defer<T>() for promise settlement
  * @internal
  */
 
@@ -64,8 +64,11 @@ export class LiteLlmAdapter implements LlmService {
   async completion(
     params: Parameters<LlmService["completion"]>[0]
   ): ReturnType<LlmService["completion"]> {
-    // Adapter provides defaults from serverEnv
-    const model = params.model ?? serverEnv().DEFAULT_MODEL;
+    // Model must be provided by caller (route validates via contract)
+    if (!params.model) {
+      throw new Error("LiteLLM completion requires model parameter");
+    }
+    const model = params.model;
     const temperature = params.temperature ?? 0.7;
     const maxTokens = params.maxTokens ?? 2048;
 
@@ -183,7 +186,11 @@ export class LiteLlmAdapter implements LlmService {
   async completionStream(
     params: Parameters<LlmService["completionStream"]>[0]
   ): ReturnType<LlmService["completionStream"]> {
-    const model = params.model ?? serverEnv().DEFAULT_MODEL;
+    // Model must be provided by caller (route validates via contract)
+    if (!params.model) {
+      throw new Error("LiteLLM completionStream requires model parameter");
+    }
+    const model = params.model;
     const temperature = params.temperature ?? 0.7;
     const maxTokens = params.maxTokens ?? 2048;
     const { billingAccountId: user, litellmVirtualKey } = params.caller;

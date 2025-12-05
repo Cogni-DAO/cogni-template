@@ -179,7 +179,7 @@ export const POST = wrapRouteHandlerWithLogging(
       const handlerStartMs = performance.now();
 
       // Validate model against cached allowlist (MVP-004: PERF-001 fix)
-      const { isModelAllowed, getDefaultModelId } = await import(
+      const { isModelAllowed, getDefaults } = await import(
         "@/shared/ai/model-catalog.server"
       );
       const modelIsValid = await isModelAllowed(input.model);
@@ -191,16 +191,20 @@ export const POST = wrapRouteHandlerWithLogging(
 
       if (!modelIsValid) {
         // Return 409 with defaultModelId for client retry (MVP-004: UX-001 fix)
-        const defaultModelId = await getDefaultModelId();
+        const defaults = await getDefaults();
         logRequestWarn(
           ctx.log,
-          { model: input.model, isStreaming, defaultModelId },
+          {
+            model: input.model,
+            isStreaming,
+            defaultModelId: defaults.defaultPreferredModelId,
+          },
           "model_validation_failed"
         );
         return NextResponse.json(
           {
             error: "Invalid model",
-            defaultModelId,
+            defaultModelId: defaults.defaultPreferredModelId,
           },
           { status: 409 }
         );

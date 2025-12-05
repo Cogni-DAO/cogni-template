@@ -32,7 +32,7 @@ LiteLLM service implementations for AI completion and streaming operations.
 - **Exports:** LiteLlmAdapter implementation
 - **Routes (if any):** none
 - **CLI (if any):** none
-- **Env/Config keys:** LITELLM_BASE_URL, LITELLM_MASTER_KEY, DEFAULT_MODEL
+- **Env/Config keys:** LITELLM_BASE_URL, LITELLM_MASTER_KEY (model param required - no env fallback)
 - **Files considered API:** litellm.adapter.ts
 - **Streaming:** completionStream() supports SSE streaming via eventsource-parser with robustness against malformed chunks
 

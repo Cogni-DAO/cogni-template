@@ -608,8 +608,8 @@ Alert when model starts failing consistently:
 ```
 If MODEL_NOT_FOUND for same model > 10 times in 5 minutes:
   → Send Slack alert: "Model grok-4.1-fast appears to be sunset"
-  → Update DEFAULT_MODEL in env config
-  → Update client default
+  → Update LiteLLM metadata.cogni.default_preferred tag
+  → Update client default via catalog
 ```
 
 ---
