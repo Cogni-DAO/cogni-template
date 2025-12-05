@@ -74,7 +74,8 @@ emit_deployment_event() {
   local status="$2"
   local message="$3"
 
-  # Skip if Grafana Cloud not configured
+  # Skip if jq not available or Grafana Cloud not configured
+  command -v jq >/dev/null 2>&1 || { echo "[deploy] jq missing; skipping deployment event" >&2; return 0; }
   if [[ -z "${GRAFANA_CLOUD_LOKI_URL:-}" ]] || [[ -z "${GRAFANA_CLOUD_LOKI_USER:-}" ]] || [[ -z "${GRAFANA_CLOUD_LOKI_API_KEY:-}" ]]; then
     return 0
   fi
@@ -295,7 +296,8 @@ emit_deployment_event() {
   local status="$2"
   local message="$3"
 
-  # Skip if Grafana Cloud not configured
+  # Skip if jq not available or Grafana Cloud not configured
+  command -v jq >/dev/null 2>&1 || { echo "[deploy] jq missing; skipping deployment event" >&2; return 0; }
   if [[ -z "${GRAFANA_CLOUD_LOKI_URL:-}" ]] || [[ -z "${GRAFANA_CLOUD_LOKI_USER:-}" ]] || [[ -z "${GRAFANA_CLOUD_LOKI_API_KEY:-}" ]]; then
     return 0
   fi
