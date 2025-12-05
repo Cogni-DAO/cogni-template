@@ -65,14 +65,17 @@ describe("Chat Model Validation Stack Test", () => {
     // Mock session for all requests (models + chat)
     vi.mocked(getSessionUser).mockResolvedValue(mockSessionUser);
 
-    // Arrange - Fetch actual models list to get real defaultModelId
+    // Arrange - Fetch actual models list to get real defaultPreferredModelId
     const modelsReq = new NextRequest("http://localhost:3000/api/v1/ai/models");
     const modelsRes = await modelsGET(modelsReq);
     expect(modelsRes.status).toBe(200);
     const modelsData = await modelsRes.json();
-    const { defaultModelId, models } = modelsData;
-    expect(defaultModelId).toBeTruthy();
+    const { defaultPreferredModelId, models } = modelsData;
+    expect(defaultPreferredModelId).toBeTruthy();
     expect(models.length).toBeGreaterThan(0);
+
+    // Use as defaultModelId for test clarity (matches 409 response field)
+    const defaultModelId = defaultPreferredModelId;
 
     // Act - Send chat request with invalid model
     const invalidReq = new NextRequest("http://localhost:3000/api/v1/ai/chat", {

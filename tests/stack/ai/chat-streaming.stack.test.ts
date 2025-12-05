@@ -54,7 +54,7 @@ describe("Chat Streaming", () => {
     const modelsRes = await modelsGET(modelsReq);
     expect(modelsRes.status).toBe(200);
     const modelsData = await modelsRes.json();
-    const { defaultModelId } = modelsData;
+    const { defaultPreferredModelId: defaultModelId } = modelsData;
 
     // Act - Send streaming chat request with prompt that produces multiple tokens
     const req = new NextRequest("http://localhost:3000/api/v1/ai/chat", {
@@ -174,7 +174,7 @@ describe("Chat Streaming", () => {
     const modelsRes = await modelsGET(modelsReq);
     expect(modelsRes.status).toBe(200);
     const modelsData = await modelsRes.json();
-    const { defaultModelId } = modelsData;
+    const { defaultPreferredModelId: defaultModelId } = modelsData;
 
     // Act - Send streaming chat request
     const req = new NextRequest("http://localhost:3000/api/v1/ai/chat", {
@@ -255,7 +255,7 @@ describe("Chat Streaming", () => {
     const modelsRes = await modelsGET(modelsReq);
     expect(modelsRes.status).toBe(200);
     const modelsData = await modelsRes.json();
-    const { defaultModelId } = modelsData;
+    const { defaultPreferredModelId: defaultModelId } = modelsData;
 
     const ac = new AbortController();
 
