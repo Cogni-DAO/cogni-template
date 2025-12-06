@@ -42,6 +42,12 @@ on_fail() {
 
       echo "=== logs: litellm ==="
       docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs --tail 80 litellm || true
+
+      echo "=== sourcecred compose ps ==="
+      docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml ps || true
+
+      echo "=== logs: sourcecred ==="
+      docker compose --project-name cogni-sourcecred --env-file /opt/cogni-template-sourcecred/.env -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml logs --tail 200 sourcecred || true
 EOF
   fi
 
@@ -441,17 +447,7 @@ else
   fi
 fi
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 2.5: Start SourceCred stack (idempotent)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-log_info "Ensuring SourceCred stack is running..."
-SOURCECRED_RUNNING=$($SOURCECRED_COMPOSE ps -q sourcecred 2>/dev/null | wc -l || echo "0")
-if [[ "$SOURCECRED_RUNNING" -eq 0 ]]; then
-  log_info "Starting SourceCred stack..."
-  $SOURCECRED_COMPOSE up -d
-else
-  log_info "SourceCred stack already running"
-fi
+# (Step 2.5 removed - Moved to after Disk Cleanup)
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 3: Authenticate to GHCR
@@ -504,6 +500,79 @@ if [[ "$DISK_USAGE" -ge 70 ]]; then
 else
   log_info "Disk usage at ${DISK_USAGE}% - no cleanup needed"
 fi
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 5.5: Deploy SourceCred (After cleanup, before app pull)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+log_info "Deploying SourceCred stack..."
+
+# Pre-flight: Check Token
+token=$(sed -n 's/^SOURCECRED_GITHUB_TOKEN=//p' /opt/cogni-template-sourcecred/.env | head -n1)
+if [[ -z "${token:-}" ]]; then
+   log_error "SOURCECRED_GITHUB_TOKEN empty in /opt/cogni-template-sourcecred/.env"
+   exit 1
+fi
+
+# Pre-flight: Inspect Config (fail fast if config is obviously wrong)
+log_info "SourceCred Configuration:"
+grep -C 2 "repositories" /opt/cogni-template-sourcecred/instance/config/plugins/sourcecred/github/config.json || log_warn "Could not read GitHub config"
+
+# 2. Check if data needs loading (Idempotence based on state ONLY - SC-2)
+NEEDS_LOAD="false"
+if [[ ! -f /opt/cogni-template-sourcecred/instance/data/ledger.json ]]; then
+    log_warn "SourceCred ledger missing in instance/data - triggering initial load..."
+    NEEDS_LOAD="true"
+fi
+
+if [[ "$NEEDS_LOAD" == "true" ]]; then
+    log_info "Running SourceCred data load (yarn load)..."
+    # Runs in disposable container using the just-built image
+    $SOURCECRED_COMPOSE run --rm sourcecred yarn load || { 
+        log_error "SourceCred load failed - check token permissions or repo config"
+        $SOURCECRED_COMPOSE logs --tail=200 sourcecred || true
+        exit 1
+    }
+fi
+
+# 3. Start service
+log_info "Starting SourceCred container..."
+$SOURCECRED_COMPOSE up -d
+
+# 4. Verify readiness (fail-fast, check config availability - SC-3)
+log_info "Waiting for SourceCred readiness..."
+
+# SC-READINESS-CURL-PATH: Warn if network resolution is broken
+$EDGE_COMPOSE exec -T caddy sh -lc 'getent hosts sourcecred >/dev/null' || log_warn "Caddy cannot resolve 'sourcecred' hostname - probe may fail"
+
+deadline=$((SECONDS+30))
+while true; do
+    if (( SECONDS >= deadline )); then
+        log_error "SourceCred failed to become ready (timeout)"
+        $SOURCECRED_COMPOSE logs --tail=200 sourcecred || true
+        exit 1
+    fi
+
+    all_ready="true"
+    for config in currencyDetails.json weights.json grain.json; do
+        if ! $EDGE_COMPOSE exec -T caddy sh -lc "curl -sf http://sourcecred:6006/config/$config >/dev/null"; then
+            all_ready="false"
+            break
+        fi
+    done
+
+    if [[ "$all_ready" == "true" ]]; then
+        # Check stability: Must be running and NOT restarting
+        status=$($SOURCECRED_COMPOSE ps -q sourcecred | xargs -r docker inspect -f '{{.State.Status}} {{.State.Restarting}}' || echo "unknown true")
+        if [[ "$status" == "running false" ]]; then
+            log_info "SourceCred is ready and stable (all configs reachable)"
+            break
+        else
+             log_warn "SourceCred is unstable (Status: $status), waiting..."
+        fi
+    fi
+
+    sleep 1
+done
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 6: Validate images exist (fail fast)
