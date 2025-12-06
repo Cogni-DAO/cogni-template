@@ -16,3 +16,13 @@
 {"action":{"alias":{"address":"N\u0000sourcecred\u0000github\u0000USERLIKE\u0000BOT\u0000dependabot\u0000","description":"github/[@dependabot](https://github.com/apps/dependabot)"},"identityId":"emKG4qDAzdIgmwxFBMHKlg","type":"ADD_ALIAS"},"ledgerTimestamp":1765011998404,"uuid":"W9pJAkaF4qP6UVk5Wr139A","version":"1"}
 {"action":{"identity":{"address":"N\u0000sourcecred\u0000core\u0000IDENTITY\u0000jWmk2odmGA5biEbGqEqEpg\u0000","aliases":[],"id":"jWmk2odmGA5biEbGqEqEpg","name":"SourceCred","subtype":"PROJECT"},"type":"CREATE_IDENTITY"},"ledgerTimestamp":1765011998590,"uuid":"5ux3OG5kOsv4NK4NHYksPw","version":"1"}
 {"action":{"identityId":"jWmk2odmGA5biEbGqEqEpg","type":"TOGGLE_ACTIVATION"},"ledgerTimestamp":1765011998590,"uuid":"eOGRQHvVLRypmIMehxOiLw","version":"1"}
+{"action":{"identity":{"address":"N\u0000sourcecred\u0000core\u0000IDENTITY\u0000uADFaNRzMeWkcMznvcbrCQ\u0000","aliases":[],"id":"uADFaNRzMeWkcMznvcbrCQ","name":"bots","subtype":"USER"},"type":"CREATE_IDENTITY"},"ledgerTimestamp":1765049047587,"uuid":"H8PqdgxvR28m3iYIGXONPg","version":"1"}
+{"action":{"base":"uADFaNRzMeWkcMznvcbrCQ","target":"VTpdoNjViBNa3BuOl0vBjQ","type":"MERGE_IDENTITIES"},"ledgerTimestamp":1765049051215,"uuid":"E78beNxsABbJGEZkxzZgGA","version":"1"}
+{"action":{"base":"uADFaNRzMeWkcMznvcbrCQ","target":"gjYeDGqv9H2eE4gOb5Wm1A","type":"MERGE_IDENTITIES"},"ledgerTimestamp":1765049053223,"uuid":"Xknm0lHLQf18OAJZrQX8yg","version":"1"}
+{"action":{"base":"uADFaNRzMeWkcMznvcbrCQ","target":"7Vm2aIAiRumIqq81EIAmaQ","type":"MERGE_IDENTITIES"},"ledgerTimestamp":1765049054679,"uuid":"wk0EMumkOjkn4TroxVNZxQ","version":"1"}
+{"action":{"base":"uADFaNRzMeWkcMznvcbrCQ","target":"bDsgVLWo9viLNX1wPFJWuA","type":"MERGE_IDENTITIES"},"ledgerTimestamp":1765049056159,"uuid":"zHA1MJ4j4EMpNflWLDcpXw","version":"1"}
+{"action":{"base":"uADFaNRzMeWkcMznvcbrCQ","target":"czPXxeeGgPPk8Y2jxGoX2g","type":"MERGE_IDENTITIES"},"ledgerTimestamp":1765049058543,"uuid":"joe04lvrmvjXvvMFZqrryA","version":"1"}
+{"action":{"base":"uADFaNRzMeWkcMznvcbrCQ","target":"B6O2861lPDjgwfDiW3r4EA","type":"MERGE_IDENTITIES"},"ledgerTimestamp":1765049060512,"uuid":"nqASejxNBI5rTkntjrzGBw","version":"1"}
+{"action":{"base":"uADFaNRzMeWkcMznvcbrCQ","target":"emKG4qDAzdIgmwxFBMHKlg","type":"MERGE_IDENTITIES"},"ledgerTimestamp":1765049063193,"uuid":"JaO8Y0zrFJ2qNUBh1gOC4g","version":"1"}
+{"action":{"identityId":"IQyLeKLo8kDnLGqN0qaixQ","type":"TOGGLE_ACTIVATION"},"ledgerTimestamp":1765049101265,"uuid":"E9oKM8A5mk4U6HaCDOaMjw","version":"1"}
+{"action":{"identityId":"jWmk2odmGA5biEbGqEqEpg","type":"TOGGLE_ACTIVATION"},"ledgerTimestamp":1765049101822,"uuid":"wo5ijrj0CJyvu4z6B19Bgg","version":"1"}
