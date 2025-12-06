@@ -8,6 +8,15 @@ services:
     volumes:
       - ./instance/data:/site/data
       - ./instance/config:/site/config
-      - ./instance/cache:/site/cache
+      - sourcecred_cache:/site/cache
     environment:
       - SOURCECRED_GITHUB_TOKEN=${ACTIONS_AUTOMATION_BOT_PAT}
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
+
+volumes:
+  sourcecred_cache:

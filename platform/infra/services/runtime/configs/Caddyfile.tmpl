@@ -15,6 +15,9 @@ www.{$DOMAIN} {
 {$DOMAIN} {
   encode zstd gzip
   reverse_proxy app:3000
+  handle_path /cred/* {
+    reverse_proxy sourcecred:6006
+  }
   log {
     format json
     output file /data/logs/caddy/access.log
