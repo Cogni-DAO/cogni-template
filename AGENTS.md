@@ -70,8 +70,8 @@ pnpm docker:dev:stack         # start all services containerized (with build)
 pnpm docker:dev:stack:fast    # start all services containerized (skip build for speed)
 pnpm docker:test:stack        # start all services containerized in test mode (with build)
 pnpm docker:test:stack:fast   # start all services containerized in test mode (skip build)
-pnpm docker:stack             # start full production simulation locally (https://localhost - browser will warn about cert)
-pnpm docker:stack:fast        # start production simulation (skip build for speed)
+pnpm docker:stack             # start full stack locally (with build)
+pnpm docker:stack:fast        # start full stack locally (skip build)
 pnpm build                    # build for production
 pnpm check                    # lint + type + format validation (fast, no infra)
 pnpm check:full               # CI-parity gate: full docker build, stack launch + all test suites

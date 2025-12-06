@@ -109,14 +109,14 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] package.json # deps, scripts, engines (db scripts added)
 [x] drizzle.config.ts # database migrations config
 [x] Dockerfile # reproducible build
-[x] .dockerignore # ignore node_modules, artifacts, .env.\*
+[x] .dockerignore # ignore node*modules, artifacts, .env.\*
 [x] LICENSE # OSS license
 [x] CODEOWNERS # review ownership
 [x] SECURITY.md # disclosure policy
 [x] CONTRIBUTING.md # contribution standards
 [x] README.md # overview
 [ ] CHANGELOG.md # releases
-[x] src/proxy.ts # Auth proxy for /api/v1/ai/\* routes
+[x] src/proxy.ts # Auth proxy for /api/v1/* (except /api/v1/public/\_)
 [x] vitest.config.mts # unit/integration
 [x] vitest.api.config.mts # API integration tests
 [x] playwright.config.ts # UI/e2e
@@ -169,7 +169,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 
 [x] src/
 [x] ├── auth.ts # Auth.js configuration (SIWE credentials provider)
-[x] ├── proxy.ts # Auth proxy for /api/v1/ai/_ routes
+[x] ├── proxy.ts # Auth proxy for /api/v1/_ (except /api/v1/public/_)
 [x] ├── bootstrap/ # composition root (DI)
 [x] │ ├── container.ts # wires adapters → ports
 [ ] │ └── config.ts # Zod-validated env
@@ -182,7 +182,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ ├── payments.intent.v1.contract.ts # payment intent creation
 [x] │ ├── payments.submit.v1.contract.ts # payment submission
 [x] │ ├── payments.status.v1.contract.ts # payment status
-[x] │ ├── payments.credits._.v1.contract.ts # credits summary/confirm
+[x] │ ├── payments.credits.\_.v1.contract.ts # credits summary/confirm
 [x] │ └── meta.\*.v1.contract.ts # health, route-manifest
 [ ] │
 [x] ├── mcp/ # MCP host (future)
@@ -497,7 +497,8 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 
 - **Contracts are edge-only.** Inner layers never import `src/contracts/**`. Breaking change → new `...vN` id.
 - **Routes must validate IO.** Parse input before calling the use-case. Parse output before responding. Fail closed.
-- **Auth is centralized.** Use one `guard()` for session/API-key scopes, rate-limit, idempotency. No per-route ad-hoc checks.
+- **Auth is centralized.** `src/proxy.ts` enforces session auth on `/api/v1/*` except `/api/v1/public/*`. Public routes MUST use `wrapPublicRoute()` (auto-applies rate limiting + cache headers). No per-route ad-hoc auth.
+- **Public API namespace (`/api/v1/public/*`).** All routes here use `wrapPublicRoute()` for mandatory rate limiting (10 req/min/IP), cache headers, and metrics. CI enforcement via `tests/meta/public-route-enforcement.test.ts`. No sensitive data access allowed.
 - **Observability is mandatory.** Trace every call with `contractId`, `subject`, and cost/usage. Log denials.
 - **Adapters are pure infra.** No UI, no business rules. Implement ports only. Promote creeping helpers into ports or core.
 

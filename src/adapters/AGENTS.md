@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-17
+- **Last reviewed:** 2025-12-07
 - **Status:** draft
 
 ## Purpose
@@ -29,10 +29,10 @@ Infrastructure implementations of ports including server/, worker/, cli/, and te
 
 ## Public Surface
 
-- **Exports:** Port implementations for bootstrap injection, database client (db, Database)
+- **Exports:** Port implementations for bootstrap injection, database client (db, Database), MimirMetricsAdapter
 - **Routes (if any):** none
 - **CLI (if any):** cli/ adapter implementations
-- **Env/Config keys:** DATABASE_URL, LITELLM_BASE_URL, LITELLM_MASTER_KEY
+- **Env/Config keys:** DATABASE_URL, LITELLM_BASE_URL, LITELLM_MASTER_KEY, MIMIR_URL, MIMIR_USER, MIMIR_TOKEN, ANALYTICS_QUERY_TIMEOUT_MS
 - **Files considered API:** Port implementation exports, database client
 
 ## Ports (optional)

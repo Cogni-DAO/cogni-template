@@ -15,6 +15,10 @@
 export { DrizzleAccountService } from "./accounts/drizzle.adapter";
 export { LiteLlmAdapter } from "./ai/litellm.adapter";
 export { type Database, getDb } from "./db/client";
+export {
+  type MimirAdapterConfig,
+  MimirMetricsAdapter,
+} from "./metrics/mimir.adapter";
 export { DrizzlePaymentAttemptRepository } from "./payments/drizzle-payment-attempt.adapter";
 export { PonderOnChainVerifierAdapter } from "./payments/ponder-onchain-verifier.adapter";
 export { SystemClock } from "./time/system.adapter";

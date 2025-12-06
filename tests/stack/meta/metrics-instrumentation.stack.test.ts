@@ -75,6 +75,7 @@ function parsePrometheusText(text: string): MetricSample[] {
 
 /**
  * Find a metric sample by name and exact label match.
+ * Filters out default labels (app, env) that are added automatically.
  */
 function findSample(
   samples: MetricSample[],
@@ -83,7 +84,10 @@ function findSample(
 ): MetricSample | undefined {
   return samples.find((s) => {
     if (s.name !== name) return false;
-    const sampleLabelKeys = Object.keys(s.labels).filter((k) => k !== "app");
+    // Filter out default labels when comparing
+    const sampleLabelKeys = Object.keys(s.labels).filter(
+      (k) => k !== "app" && k !== "env"
+    );
     const targetLabelKeys = Object.keys(labels);
     if (sampleLabelKeys.length !== targetLabelKeys.length) return false;
     return targetLabelKeys.every((k) => s.labels[k] === labels[k]);
@@ -118,9 +122,10 @@ async function fetchMetrics(): Promise<MetricSample[]> {
 
 describe("HTTP Metrics Instrumentation", () => {
   it("increments http_requests_total and http_request_duration_ms on wrapped route", async () => {
-    // Test using /api/metrics itself - it's wrapped with wrapRouteHandlerWithLogging
-    // and lives outside /api/v1/* so it's not blocked by proxy auth.
-    const testRoute = "meta.metrics";
+    // Test using /api/v1/public/analytics/summary - it's wrapped with wrapRouteHandlerWithLogging,
+    // public (no auth required), and NOT excluded from metrics recording (unlike meta.metrics).
+    const testRoute = "analytics.summary";
+    const testUrl = "/api/v1/public/analytics/summary?window=7d";
 
     // 1. Get baseline metrics (first fetch)
     const baseline = await fetchMetrics();
@@ -147,13 +152,15 @@ describe("HTTP Metrics Instrumentation", () => {
     );
     const baseDurationCount = baselineDuration?.value ?? 0;
 
-    // 2. Hit /api/metrics again (second fetch increments the counter)
-    const response = await fetch(baseUrl("/api/metrics"), {
-      headers: { Authorization: `Bearer ${METRICS_TOKEN}` },
-    });
+    // 2. Hit /api/v1/public/analytics/summary (increments the counter)
+    // Use file-scoped unique IP to avoid rate limit bucket collision with other test files
+    const response = await fetchWithIp(
+      baseUrl(testUrl),
+      METRICS_INSTRUMENTATION_TEST_IP
+    );
     expect(response.status).toBe(200);
 
-    // 3. Get metrics again (third fetch to read the incremented values)
+    // 3. Get metrics again (second fetch to read the incremented values)
     const after = await fetchMetrics();
 
     const afterCounters = after.filter(
@@ -173,11 +180,11 @@ describe("HTTP Metrics Instrumentation", () => {
     );
     const afterDurationCount = afterDuration?.value ?? 0;
 
-    // 4. Assert increments by exactly 1 (second fetch incremented, third fetch reads)
-    // Note: baseline includes first fetch, "after" includes first + second + third fetch
-    // So we expect +2 total (second and third fetches)
-    expect(afterCounterTotal).toBe(baseCounterTotal + 2);
-    expect(afterDurationCount).toBe(baseDurationCount + 2);
+    // 4. Assert increments by at least 1 (analytics request in step 2)
+    // Note: meta.metrics fetches are excluded from recording.
+    // Concurrent tests may also hit this endpoint, so we verify >= 1 increment.
+    expect(afterCounterTotal).toBeGreaterThanOrEqual(baseCounterTotal + 1);
+    expect(afterDurationCount).toBeGreaterThanOrEqual(baseDurationCount + 1);
   });
 });
 
@@ -192,12 +199,19 @@ vi.mock("@/app/_lib/auth/session", () => ({
 
 // Import after mock
 import { TEST_MODEL_ID } from "@tests/_fakes";
+import {
+  fetchWithIp,
+  generateUniqueTestIp,
+} from "@tests/_fixtures/http/rate-limit-helpers";
 import { getDb } from "@/adapters/server/db/client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as completionPOST } from "@/app/api/v1/ai/completion/route";
 import type { SessionUser } from "@/shared/auth";
 import { billingAccounts, users, virtualKeys } from "@/shared/db/schema";
 import { metricsRegistry } from "@/shared/observability";
+
+// Generate unique IP once for this test file (reuse for all requests to avoid bucket collisions)
+const METRICS_INSTRUMENTATION_TEST_IP = generateUniqueTestIp();
 
 describe("LLM Metrics Instrumentation", () => {
   it("increments ai_llm_call_duration_ms and ai_llm_tokens_total on successful completion", async () => {

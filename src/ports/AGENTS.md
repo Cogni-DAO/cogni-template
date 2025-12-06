@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-04
+- **Last reviewed:** 2025-12-07
 - **Status:** draft
 
 ## Purpose
@@ -42,9 +42,10 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
   - ChatDeltaEvent (text_delta | error | done)
   - PaymentAttemptRepository (create, findById, findByTxHash, updateStatus, bindTxHash, recordVerificationAttempt, logEvent)
   - OnChainVerifier (verify transaction against expected parameters)
+  - MetricsQueryPort (queryRange, queryInstant for Prometheus-compatible backends)
   - Clock (now)
   - Port-level errors (InsufficientCreditsPortError, BillingAccountNotFoundPortError, VirtualKeyNotFoundPortError, PaymentAttemptNotFoundPortError, TxHashAlreadyBoundPortError)
-  - Types (BilledLlmUsageParams, NeedsReviewLlmUsageParams, LlmCaller, BillingAccount, CreditLedgerEntry, CreatePaymentAttemptParams, LogPaymentEventParams, VerificationResult, VerificationStatus, CompletionStreamParams)
+  - Types (BilledLlmUsageParams, NeedsReviewLlmUsageParams, LlmCaller, BillingAccount, CreditLedgerEntry, CreatePaymentAttemptParams, LogPaymentEventParams, VerificationResult, VerificationStatus, CompletionStreamParams, PrometheusRangeResult, PrometheusInstantResult, RangeQueryParams, InstantQueryParams)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config:** none

@@ -32,6 +32,7 @@ export {
   httpRequestsTotal,
   type LlmErrorCode,
   metricsRegistry,
+  publicRateLimitExceededTotal,
   statusBucket,
 } from "./metrics";
 export { REDACT_PATHS } from "./redact";

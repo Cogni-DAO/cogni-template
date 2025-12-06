@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-06
+- **Last reviewed:** 2025-12-07
 - **Status:** draft
 
 ## Purpose
@@ -63,6 +63,7 @@ Unified serverEnv() provides all vars:
 - NODE_ENV (development|test|production, default development)
 - APP_ENV (test|production)
 - SERVICE_NAME (default: "app") - for observability service label
+- DEPLOY_ENVIRONMENT - deployment env label for metrics and analytics filtering
 - POSTGRES_USER
 - POSTGRES_PASSWORD
 - POSTGRES_DB
@@ -83,6 +84,11 @@ Optional:
 - OPENROUTER_API_KEY (for LiteLLM providers)
 - AUTH_SECRET (≥32 chars) - TODO: when session management added
 - METRICS*TOKEN (≥32 chars) - Bearer auth for /api/metrics endpoint (PROMETHEUS*\* are Alloy-only; not in app)
+- MIMIR_URL (url) - Grafana Cloud Mimir endpoint for analytics queries
+- MIMIR_USER - Basic auth username for Mimir
+- MIMIR_TOKEN - Basic auth password/token for Mimir
+- ANALYTICS_K_THRESHOLD (int, default 50) - K-anonymity threshold for public analytics
+- ANALYTICS_QUERY_TIMEOUT_MS (int, default 5000) - Mimir query timeout
 
 **Public client (client.ts)**
 
