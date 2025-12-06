@@ -149,6 +149,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ │ └── akash/ # Akash provider configs
 [x] │ ├── services/
 [x] │ │ ├── runtime/ # Docker Compose for local dev (postgres, litellm)
+[x] │ │ ├── sourcecred/ # SourceCred instance (cred analysis)
 [x] │ │ └── loki-promtail/ # Log aggregation stack
 [ ] │ ├── stacks/
 [ ] │ │ └── local-compose/ # Local development stack

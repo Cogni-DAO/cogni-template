@@ -1,0 +1,22 @@
+services:
+  sourcecred:
+    build:
+      context: .
+      dockerfile: Dockerfile.sourcecred
+    ports:
+      - "6006:6006"
+    volumes:
+      - ./instance/data:/site/data
+      - ./instance/config:/site/config
+      - sourcecred_cache:/site/cache
+    environment:
+      - SOURCECRED_GITHUB_TOKEN=${SOURCECRED_GITHUB_TOKEN:-${ACTIONS_AUTOMATION_BOT_PAT}}
+    networks:
+      - cogni-edge
+
+networks:
+  cogni-edge:
+    external: true
+
+volumes:
+  sourcecred_cache:

@@ -183,6 +183,7 @@ REQUIRED_SECRETS=(
     "APP_DB_USER"
     "APP_DB_PASSWORD"
     "APP_DB_NAME"
+    "SOURCECRED_GITHUB_TOKEN"
 )
 
 # Check required environment variables (not secrets)
@@ -281,6 +282,7 @@ set -euo pipefail
 # Compose shortcuts (explicit project names, no global export)
 EDGE_COMPOSE="docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml"
 RUNTIME_COMPOSE="docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml"
+SOURCECRED_COMPOSE="docker compose --project-name cogni-sourcecred -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml"
 
 log_info() {
     echo -e "\033[0;32m[INFO]\033[0m $1"
@@ -405,6 +407,11 @@ PROMETHEUS_USERNAME=${PROMETHEUS_USERNAME:-}
 PROMETHEUS_PASSWORD=${PROMETHEUS_PASSWORD:-}
 ENV_EOF
 
+# SourceCred env
+cat > /opt/cogni-template-sourcecred/.env << ENV_EOF
+SOURCECRED_GITHUB_TOKEN=${SOURCECRED_GITHUB_TOKEN}
+ENV_EOF
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 2: Start edge stack (idempotent - only starts if not running)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -432,6 +439,18 @@ else
       log_info "Caddy reloaded with new config"
     fi
   fi
+fi
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 2.5: Start SourceCred stack (idempotent)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+log_info "Ensuring SourceCred stack is running..."
+SOURCECRED_RUNNING=$($SOURCECRED_COMPOSE ps -q sourcecred 2>/dev/null | wc -l || echo "0")
+if [[ "$SOURCECRED_RUNNING" -eq 0 ]]; then
+  log_info "Starting SourceCred stack..."
+  $SOURCECRED_COMPOSE up -d
+else
+  log_info "SourceCred stack already running"
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -573,6 +592,8 @@ echo "=== Edge stack ==="
 $EDGE_COMPOSE ps
 echo "=== Runtime stack ==="
 $RUNTIME_COMPOSE ps
+echo "=== SourceCred stack ==="
+$SOURCECRED_COMPOSE ps
 
 emit_deployment_event "deployment.complete" "success" "Deployment completed successfully"
 log_info "✅ Deployment complete!"
@@ -583,7 +604,7 @@ chmod +x "$ARTIFACT_DIR/deploy-remote.sh"
 
 # Deploy bundles to VM via rsync
 log_info "Deploying edge and runtime bundles to VM..."
-ssh $SSH_OPTS root@"$VM_HOST" "mkdir -p /opt/cogni-template-edge /opt/cogni-template-runtime"
+ssh $SSH_OPTS root@"$VM_HOST" "mkdir -p /opt/cogni-template-edge /opt/cogni-template-runtime /opt/cogni-template-sourcecred"
 
 # Upload edge bundle (rarely changes - Caddy config only)
 rsync -av -e "ssh $SSH_OPTS" \
@@ -595,10 +616,15 @@ rsync -av -e "ssh $SSH_OPTS" \
   "$REPO_ROOT/platform/infra/services/runtime/" \
   root@"$VM_HOST":/opt/cogni-template-runtime/
 
+# Upload sourcecred bundle
+rsync -av -e "ssh $SSH_OPTS" \
+  "$REPO_ROOT/platform/infra/services/sourcecred/" \
+  root@"$VM_HOST":/opt/cogni-template-sourcecred/
+
 # Upload and execute deployment script
 scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
 ssh $SSH_OPTS root@"$VM_HOST" \
-    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' APP_IMAGE='$APP_IMAGE' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_NAME='$APP_DB_NAME' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-remote.sh"
+    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' APP_IMAGE='$APP_IMAGE' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_NAME='$APP_DB_NAME' SOURCECRED_GITHUB_TOKEN='$SOURCECRED_GITHUB_TOKEN' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-remote.sh"
 
 # Health validation
 log_info "Validating deployment health..."
@@ -653,4 +679,5 @@ log_info ""
 log_info "🔧 Deployment management:"
 log_info "  - SSH access: ssh root@$VM_HOST"
 log_info "  - Edge logs: docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml logs"
-log_info "  - Runtime logs: docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs"
+log_info "  - Runtime logs: docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml logs
+  - SourceCred logs: docker compose --project-name cogni-sourcecred -f /opt/cogni-template-sourcecred/docker-compose.sourcecred.yml logs"
