@@ -118,9 +118,10 @@ async function fetchMetrics(): Promise<MetricSample[]> {
 
 describe("HTTP Metrics Instrumentation", () => {
   it("increments http_requests_total and http_request_duration_ms on wrapped route", async () => {
-    // Test using /api/metrics itself - it's wrapped with wrapRouteHandlerWithLogging
-    // and lives outside /api/v1/* so it's not blocked by proxy auth.
-    const testRoute = "meta.metrics";
+    // Test using /api/v1/analytics/summary - it's wrapped with wrapRouteHandlerWithLogging,
+    // public (no auth required), and NOT excluded from metrics recording (unlike meta.metrics).
+    const testRoute = "analytics.summary";
+    const testUrl = "/api/v1/analytics/summary?window=7d";
 
     // 1. Get baseline metrics (first fetch)
     const baseline = await fetchMetrics();
@@ -147,13 +148,11 @@ describe("HTTP Metrics Instrumentation", () => {
     );
     const baseDurationCount = baselineDuration?.value ?? 0;
 
-    // 2. Hit /api/metrics again (second fetch increments the counter)
-    const response = await fetch(baseUrl("/api/metrics"), {
-      headers: { Authorization: `Bearer ${METRICS_TOKEN}` },
-    });
+    // 2. Hit /api/v1/analytics/summary (increments the counter)
+    const response = await fetch(baseUrl(testUrl));
     expect(response.status).toBe(200);
 
-    // 3. Get metrics again (third fetch to read the incremented values)
+    // 3. Get metrics again (second fetch to read the incremented values)
     const after = await fetchMetrics();
 
     const afterCounters = after.filter(
@@ -173,11 +172,11 @@ describe("HTTP Metrics Instrumentation", () => {
     );
     const afterDurationCount = afterDuration?.value ?? 0;
 
-    // 4. Assert increments by exactly 1 (second fetch incremented, third fetch reads)
-    // Note: baseline includes first fetch, "after" includes first + second + third fetch
-    // So we expect +2 total (second and third fetches)
-    expect(afterCounterTotal).toBe(baseCounterTotal + 2);
-    expect(afterDurationCount).toBe(baseDurationCount + 2);
+    // 4. Assert increments by exactly 1 (analytics request in step 2)
+    // Note: meta.metrics fetches are excluded from recording, so only the analytics
+    // request increments the counter.
+    expect(afterCounterTotal).toBe(baseCounterTotal + 1);
+    expect(afterDurationCount).toBe(baseDurationCount + 1);
   });
 });
 

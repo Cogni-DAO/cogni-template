@@ -28,7 +28,11 @@ if (!globalForMetrics.metricsInitialized) {
   globalForMetrics.metricsRegistry = metricsRegistry;
   globalForMetrics.metricsInitialized = true;
 
-  metricsRegistry.setDefaultLabels({ app: "cogni-template" });
+  metricsRegistry.setDefaultLabels({
+    app: "cogni-template",
+    // biome-ignore lint/style/noProcessEnv: Module-level init runs before serverEnv() available
+    env: process.env.DEPLOY_ENVIRONMENT ?? "local",
+  });
   client.collectDefaultMetrics({ register: metricsRegistry });
 }
 
