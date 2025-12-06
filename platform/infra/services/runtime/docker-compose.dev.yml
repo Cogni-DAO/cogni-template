@@ -14,7 +14,8 @@ services:
     container_name: app
     restart: always
     networks:
-      - web
+      - cogni-edge
+      - internal
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - APP_ENV=${APP_ENV}
@@ -43,7 +44,7 @@ services:
     container_name: litellm
     restart: unless-stopped
     networks:
-      - web
+      - cogni-edge
     ports:
       - "4000:4000"
     environment:
@@ -69,7 +70,7 @@ services:
     container_name: caddy
     restart: always
     networks:
-      - web
+      - cogni-edge
     ports:
       - "80:80"
       - "443:443"
@@ -88,7 +89,7 @@ services:
     container_name: postgres
     restart: unless-stopped
     networks:
-      - web
+      - cogni-edge
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-cogni_template_dev}
       POSTGRES_USER: ${POSTGRES_USER:-user}
@@ -122,7 +123,7 @@ services:
       - bootstrap
     restart: "no"
     networks:
-      - web
+      - cogni-edge
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
@@ -150,7 +151,7 @@ services:
       - bootstrap
     restart: "no"
     networks:
-      - web
+      - cogni-edge
     environment:
       # Env contract matches runtime compose (DATABASE_URL + component vars)
       - DATABASE_URL=${DATABASE_URL:-postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}}
@@ -168,7 +169,7 @@ services:
     container_name: loki
     restart: unless-stopped
     networks:
-      - web
+      - cogni-edge
     ports:
       - "127.0.0.1:3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
@@ -180,7 +181,7 @@ services:
     container_name: grafana
     restart: unless-stopped
     networks:
-      - web
+      - cogni-edge
     ports:
       - "127.0.0.1:3001:3000"
     volumes:
@@ -197,7 +198,7 @@ services:
     container_name: alloy
     restart: unless-stopped
     networks:
-      - web
+      - cogni-edge
     ports:
       - "127.0.0.1:12345:12345"
     volumes:
@@ -223,8 +224,11 @@ services:
       - loki
 
 networks:
-  web:
-    name: web
+  cogni-edge:
+    name: cogni-edge
+    external: true
+  internal:
+    name: internal
     external: false
 
 volumes:

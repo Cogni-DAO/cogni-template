@@ -1,0 +1,18 @@
+{
+  "nodeWeights": {
+    "sourcecred/github": {
+      "ISSUE": 2,
+      "PULL": 10,
+      "REVIEW": 4,
+      "COMMENT": 0.5
+    }
+  },
+  "edgeWeights": {
+    "sourcecred/github": {
+      "REACTS": {
+        "backwards": 0,
+        "forwards": 0
+      }
+    }
+  }
+}

@@ -56,6 +56,9 @@ platform/infra/
         └── configs/               # Service configuration files
             ├── litellm.config.yaml
             └── alloy-config.alloy
+    └── sourcecred/                 # SourceCred instance
+        ├── docker-compose.sourcecred.yml
+        └── instance/               # SourceCred configuration and data
 ```
 
 ## Container Stack
@@ -77,6 +80,7 @@ platform/infra/
 - `alloy`: Log collection and forwarding
 - `db-provision`: Database user/schema provisioning (bootstrap profile)
 - `db-migrate`: Database migrations via dedicated migrator image (bootstrap profile)
+- `sourcecred`: Cred analysis and UI (separate compose project, shares network)
 
 **Registry Authentication**:
 

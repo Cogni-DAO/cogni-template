@@ -258,6 +258,7 @@ jobs:
 
       - name: Start app + DB stack
         run: |
+          docker network create cogni-edge || true
           # Images pre-built with GHA cache; no --build needed
           docker compose -f platform/infra/services/runtime/docker-compose.dev.yml \
             up -d app postgres litellm caddy

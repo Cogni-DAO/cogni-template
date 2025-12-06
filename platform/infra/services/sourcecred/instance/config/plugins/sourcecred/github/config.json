@@ -1,0 +1,7 @@
+{
+  "repositories": [
+    "Cogni-DAO/cogni-template"
+  ],
+  "includeDevelopers": true,
+  "excludeBots": true
+}
