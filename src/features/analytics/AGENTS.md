@@ -31,11 +31,12 @@ Public analytics backend service providing privacy-preserving aggregated platfor
 ## Public Surface
 
 - **Exports:** `getAnalyticsSummary` service function
-- **Routes (if any):** none (used by `/api/v1/analytics/summary` via facade)
+- **Routes (if any):** none (used by `/api/v1/public/analytics/summary` via facade)
 - **CLI (if any):** none
 - **Env/Config keys:**
   - `ANALYTICS_K_THRESHOLD` (default: 50)
   - `ANALYTICS_QUERY_TIMEOUT_MS` (default: 5000)
+  - `DEPLOY_ENVIRONMENT` (for env filter in queries)
 - **Files considered API:** `services/analytics.ts`
 
 ## Ports
