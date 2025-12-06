@@ -10,7 +10,7 @@ services:
       - ./instance/config:/site/config
       - sourcecred_cache:/site/cache
     environment:
-      - SOURCECRED_GITHUB_TOKEN=${ACTIONS_AUTOMATION_BOT_PAT}
+      - SOURCECRED_GITHUB_TOKEN=${SOURCECRED_GITHUB_TOKEN:-${ACTIONS_AUTOMATION_BOT_PAT}}
     networks:
       - cogni-edge
 
