@@ -1,0 +1,54 @@
+[
+  {
+    "type": "sourcecred/weights",
+    "version": "0.2.0"
+  },
+  {
+    "edgeWeights": {
+      "E\u0000sourcecred\u0000github\u0000AUTHORS\u0000": {
+        "backwards": 1,
+        "forwards": 1
+      },
+      "E\u0000sourcecred\u0000github\u0000CORRESPONDS_TO_COMMIT_TYPE\u0000": {
+        "backwards": 1,
+        "forwards": 1
+      },
+      "E\u0000sourcecred\u0000github\u0000HAS_PARENT\u0000": {
+        "backwards": 0,
+        "forwards": 0
+      },
+      "E\u0000sourcecred\u0000github\u0000MERGED_AS\u0000": {
+        "backwards": 0,
+        "forwards": 0
+      },
+      "E\u0000sourcecred\u0000github\u0000REACTS\u0000HEART\u0000": {
+        "backwards": 0,
+        "forwards": 0
+      },
+      "E\u0000sourcecred\u0000github\u0000REACTS\u0000HOORAY\u0000": {
+        "backwards": 0,
+        "forwards": 0
+      },
+      "E\u0000sourcecred\u0000github\u0000REACTS\u0000ROCKET\u0000": {
+        "backwards": 0,
+        "forwards": 0
+      },
+      "E\u0000sourcecred\u0000github\u0000REACTS\u0000THUMBS_UP\u0000": {
+        "backwards": 0,
+        "forwards": 0
+      },
+      "E\u0000sourcecred\u0000github\u0000REFERENCES\u0000": {
+        "backwards": 0,
+        "forwards": 0
+      }
+    },
+    "nodeWeights": {
+      "N\u0000sourcecred\u0000github\u0000COMMENT\u0000": 0.5,
+      "N\u0000sourcecred\u0000github\u0000COMMIT\u0000": 1,
+      "N\u0000sourcecred\u0000github\u0000ISSUE\u0000": 1,
+      "N\u0000sourcecred\u0000github\u0000PULL\u0000": 8,
+      "N\u0000sourcecred\u0000github\u0000REPO\u0000": 0,
+      "N\u0000sourcecred\u0000github\u0000REVIEW\u0000": 2
+    }
+  }
+]

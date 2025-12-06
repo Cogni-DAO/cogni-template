@@ -59,6 +59,7 @@ export function Header(): ReactElement {
             >
               <NavigationLink href="/chat">Chat</NavigationLink>
               <NavigationLink href="/credits">Credits</NavigationLink>
+              <NavigationLink href="/sourcecred/">SourceCred</NavigationLink>
             </nav>
 
             {/* Action buttons - responsive */}

@@ -8,15 +8,12 @@
   },
   "files": {
     "includes": [
-      "**/*.ts",
-      "**/*.tsx",
-      "**/*.js",
-      "**/*.jsx",
-      "**/*.mjs",
-      "**/*.cjs",
-      "**/*.mts",
-      "**/*.cts",
-      "**/*.json"
+      "src/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts,json}",
+      "tests/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts,json}",
+      "scripts/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts,json}",
+      "platform/ci/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts,json}",
+      "platform/infra/services/runtime/**/*.{ts,tsx,js,jsx,mjs,cjs,mts,cts,json}",
+      "*.{ts,tsx,js,jsx,mjs,cjs,mts,cts,json}"
     ],
     "ignoreUnknown": false
   },

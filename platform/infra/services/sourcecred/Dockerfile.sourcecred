@@ -1,0 +1,27 @@
+# platform/infra/services/sourcecred/Dockerfile.sourcecred
+
+# Use Debian-based image (easier for native modules than Alpine)
+FROM node:18-bullseye
+
+# Install build tools needed for better-sqlite3 (node-gyp)
+RUN apt-get update && \
+    apt-get install -y python3 make g++ git && \
+    rm -rf /var/lib/apt/lists/*
+
+# App directory
+WORKDIR /site
+
+# Copy only manifest first for better cache
+COPY instance/package.json instance/yarn.lock ./
+
+# Install dependencies (this is where better-sqlite3 builds)
+RUN yarn install
+
+# Now copy the rest of the SourceCred instance
+COPY instance/. .
+
+# SourceCred UI listens on 6006
+EXPOSE 6006
+
+# Default: start SourceCred UI (after you've run `yarn load`)
+CMD ["yarn", "start"]
