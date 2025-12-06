@@ -33,6 +33,16 @@ export type {
   LlmService,
 } from "./llm.port";
 export type {
+  InstantQueryParams,
+  MetricsQueryPort,
+  PrometheusDataPoint,
+  PrometheusInstantResult,
+  PrometheusInstantValue,
+  PrometheusRangeResult,
+  PrometheusTimeSeries,
+  RangeQueryParams,
+} from "./metrics-query.port";
+export type {
   OnChainVerifier,
   VerificationResult,
   VerificationStatus,

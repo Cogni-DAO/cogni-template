@@ -19,14 +19,21 @@ import {
   DrizzlePaymentAttemptRepository,
   getDb,
   LiteLlmAdapter,
+  type MimirAdapterConfig,
+  MimirMetricsAdapter,
   PonderOnChainVerifierAdapter,
   SystemClock,
 } from "@/adapters/server";
-import { FakeLlmAdapter, getTestOnChainVerifier } from "@/adapters/test";
+import {
+  FakeLlmAdapter,
+  FakeMetricsAdapter,
+  getTestOnChainVerifier,
+} from "@/adapters/test";
 import type {
   AccountService,
   Clock,
   LlmService,
+  MetricsQueryPort,
   OnChainVerifier,
   PaymentAttemptRepository,
 } from "@/ports";
@@ -48,6 +55,7 @@ export interface Container {
   clock: Clock;
   paymentAttemptRepository: PaymentAttemptRepository;
   onChainVerifier: OnChainVerifier;
+  metricsQuery: MetricsQueryPort;
 }
 
 // Feature-specific dependency types
@@ -103,6 +111,27 @@ function createContainer(): Container {
     ? getTestOnChainVerifier()
     : new PonderOnChainVerifierAdapter();
 
+  // MetricsQuery: test uses fake adapter, production uses Mimir
+  const metricsQuery: MetricsQueryPort = env.isTestMode
+    ? new FakeMetricsAdapter()
+    : (() => {
+        // Mimir config is optional - only required when analytics feature is enabled
+        if (!env.MIMIR_URL || !env.MIMIR_USER || !env.MIMIR_TOKEN) {
+          // Return fake adapter if Mimir not configured (graceful degradation)
+          log.warn(
+            "MIMIR_URL/USER/TOKEN not configured; analytics queries will return empty results"
+          );
+          return new FakeMetricsAdapter();
+        }
+        const mimirConfig: MimirAdapterConfig = {
+          url: env.MIMIR_URL,
+          username: env.MIMIR_USER,
+          password: env.MIMIR_TOKEN,
+          timeoutMs: env.ANALYTICS_QUERY_TIMEOUT_MS,
+        };
+        return new MimirMetricsAdapter(mimirConfig);
+      })();
+
   // Always use real database adapters
   // Testing strategy: unit tests mock the port, integration tests use real DB
   const accountService = new DrizzleAccountService(db);
@@ -121,6 +150,7 @@ function createContainer(): Container {
     clock: new SystemClock(),
     paymentAttemptRepository,
     onChainVerifier,
+    metricsQuery,
   };
 }
 
