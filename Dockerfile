@@ -45,22 +45,11 @@ RUN --mount=type=cache,id=next-cache,target=/app/.next/cache,sharing=locked \
 FROM base AS migrator
 WORKDIR /app
 
-# Install build tools for native dependencies
-RUN apk add --no-cache g++ make python3
+# Ensure pnpm is available (inherited from base, but make explicit for CMD)
+RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
 
-# Ensure pnpm is non-interactive and available
-ENV PATH="/usr/local/bin:${PATH}"
-ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
-# Use official node dist to avoid unofficial-builds.nodejs.org flakiness
-ENV npm_config_disturl=https://nodejs.org/dist
-
-# Install deps from lockfile (pinned versions, includes drizzle-kit)
-COPY package.json pnpm-lock.yaml ./
-RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
-    pnpm fetch --frozen-lockfile
-
-RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
-    pnpm install --frozen-lockfile --offline --prod=false
+# Reuse node_modules from deps stage (includes drizzle-kit and all dependencies)
+COPY --from=deps /app/node_modules ./node_modules
 
 # Copy only files required by drizzle.config.ts and migrate command
 COPY drizzle.config.ts ./
