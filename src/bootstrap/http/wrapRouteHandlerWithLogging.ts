@@ -162,15 +162,18 @@ export function wrapRouteHandlerWithLogging<TContext = unknown>(
 
       logRequestEnd(ctx.log, { status: responseStatus, durationMs });
 
-      httpRequestsTotal.inc({
-        route: options.routeId,
-        method: request.method,
-        status: statusBucket(responseStatus),
-      });
-      httpRequestDurationMs.observe(
-        { route: options.routeId, method: request.method },
-        durationMs
-      );
+      // Skip metrics recording for scraper endpoint to avoid polluting user traffic metrics
+      if (options.routeId !== "meta.metrics") {
+        httpRequestsTotal.inc({
+          route: options.routeId,
+          method: request.method,
+          status: statusBucket(responseStatus),
+        });
+        httpRequestDurationMs.observe(
+          { route: options.routeId, method: request.method },
+          durationMs
+        );
+      }
     }
   };
 }

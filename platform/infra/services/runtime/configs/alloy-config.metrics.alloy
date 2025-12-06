@@ -94,6 +94,7 @@ prometheus.scrape "app_metrics" {
   ]
   forward_to      = [prometheus.remote_write.grafana_cloud.receiver]
   scrape_interval = "15s"
+  scrape_timeout  = "10s"
   metrics_path    = "/api/metrics"
   bearer_token    = sys.env("METRICS_TOKEN")
 }

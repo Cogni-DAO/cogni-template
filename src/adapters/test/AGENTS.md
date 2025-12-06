@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-30
+- **Last reviewed:** 2025-12-07
 - **Status:** stable
 
 ## Purpose
@@ -30,7 +30,7 @@ Deterministic fake implementations of ports for CI and test environments. No ext
 
 ## Public Surface
 
-- **Exports:** FakeLlmAdapter, FakeOnChainVerifierAdapter, getTestOnChainVerifier(), resetTestOnChainVerifier()
+- **Exports:** FakeLlmAdapter, FakeMetricsAdapter, FakeOnChainVerifierAdapter, getTestOnChainVerifier(), resetTestOnChainVerifier()
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none (deterministic responses only)

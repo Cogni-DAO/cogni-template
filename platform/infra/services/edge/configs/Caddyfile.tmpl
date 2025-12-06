@@ -14,11 +14,28 @@ www.{$DOMAIN} {
 # Canonical domain
 {$DOMAIN} {
   encode zstd gzip
-  reverse_proxy app:3000
+
+  # Public API namespace - rate limited, no auth required
+  # Security: Set X-Real-IP from TCP connection source (non-spoofable by client)
+  # Rate limiting enforced app-side, keyed on X-Real-IP
+  handle_path /api/v1/public/* {
+    reverse_proxy app:3000 {
+      # Enforce strict timeout to prevent resource exhaustion
+      timeout 10s
+      # Set X-Real-IP from actual TCP source (cannot be spoofed by HTTP headers)
+      header_up X-Real-IP {remote_host}
+    }
+  }
+
+  # SourceCred public UI
   redir /sourcecred /sourcecred/
   handle_path /sourcecred/* {
     reverse_proxy sourcecred:6006
   }
+
+  # All other requests (including /api/* non-public routes)
+  reverse_proxy app:3000
+
   log {
     format json
     output file /data/logs/caddy/access.log

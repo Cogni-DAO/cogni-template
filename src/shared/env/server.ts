@@ -44,6 +44,9 @@ const serverSchema = z.object({
   APP_BASE_URL: z.string().url().optional(),
   DOMAIN: z.string().optional(),
 
+  // Deployment environment (for observability labels and analytics filtering)
+  DEPLOY_ENVIRONMENT: z.string().optional(),
+
   // Service identity for observability (multi-service deployments)
   SERVICE_NAME: z.string().default("app"),
 
@@ -86,6 +89,14 @@ const serverSchema = z.object({
   // Metrics (Stage 9) - Prometheus scraping (min 32 chars to reduce weak-token risk)
   // Note: PROMETHEUS_* vars are Alloy-only (infra); app only needs the scrape token.
   METRICS_TOKEN: z.string().min(32).optional(),
+
+  // Public Analytics (Stage 9.5) - Mimir queries for public /analytics page
+  // Optional: only required when analytics feature is enabled
+  MIMIR_URL: z.string().url().optional(),
+  MIMIR_USER: z.string().min(1).optional(),
+  MIMIR_TOKEN: z.string().min(1).optional(),
+  ANALYTICS_K_THRESHOLD: z.coerce.number().int().positive().default(50),
+  ANALYTICS_QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {

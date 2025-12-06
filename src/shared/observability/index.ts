@@ -48,5 +48,6 @@ export {
   makeLogger,
   makeNoopLogger,
   metricsRegistry,
+  publicRateLimitExceededTotal,
   statusBucket,
 } from "./server";
