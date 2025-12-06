@@ -145,6 +145,16 @@ export const aiLlmErrorsTotal = getOrCreateCounter(
 );
 
 // =============================================================================
+// Public API Metrics
+// =============================================================================
+
+export const publicRateLimitExceededTotal = getOrCreateCounter(
+  "public_rate_limit_exceeded_total",
+  "Public API rate limit violations (aggregated, no PII)",
+  ["route", "env"] as const
+);
+
+// =============================================================================
 // Helpers
 // =============================================================================
 
