@@ -41,6 +41,7 @@ jobs:
 
       - name: Build image
         env:
+          DOCKER_BUILDKIT: "1"
           PLATFORM: linux/amd64
         run: platform/ci/scripts/build.sh
 

@@ -10,6 +10,9 @@
 
 set -euo pipefail
 
+# Ensure BuildKit is enabled for cache mount support
+export DOCKER_BUILDKIT=1
+
 # Error trap
 trap 'code=$?; echo "[ERROR] build failed"; exit $code' ERR
 

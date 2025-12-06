@@ -527,7 +527,7 @@ fi
 if [[ "$NEEDS_LOAD" == "true" ]]; then
     log_info "Running SourceCred data load (yarn load)..."
     # Runs in disposable container using the just-built image
-    $SOURCECRED_COMPOSE run --rm sourcecred yarn load || { 
+    $SOURCECRED_COMPOSE run --rm sourcecred yarn load || {
         log_error "SourceCred load failed - check token permissions or repo config"
         $SOURCECRED_COMPOSE logs --tail=200 sourcecred || true
         exit 1

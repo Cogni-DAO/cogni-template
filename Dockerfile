@@ -12,8 +12,11 @@ RUN apk add --no-cache g++ make python3
 COPY package.json pnpm-lock.yaml ./
 # Use official node dist to avoid unofficial-builds.nodejs.org flakiness
 ENV npm_config_disturl=https://nodejs.org/dist
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
+    pnpm fetch --frozen-lockfile
+
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile --offline
 
 # 2) Build – reuse node_modules from deps
 FROM base AS builder
@@ -35,7 +38,7 @@ ENV DATABASE_URL="postgresql://build_user:build_pass@build-host.invalid:5432/bui
     AUTH_SECRET="build-time-secret-min-32-chars-long-placeholder"
 
 # Persist Next's build cache across Docker builds (huge win for rebuilds)
-RUN --mount=type=cache,target=/app/.next/cache \
+RUN --mount=type=cache,id=next-cache,target=/app/.next/cache,sharing=locked \
     pnpm build
     
 # 3) Migrator – minimal image for running database migrations via drizzle-kit
@@ -53,8 +56,11 @@ ENV npm_config_disturl=https://nodejs.org/dist
 
 # Install deps from lockfile (pinned versions, includes drizzle-kit)
 COPY package.json pnpm-lock.yaml ./
-RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
-    pnpm install --frozen-lockfile --prod=false
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
+    pnpm fetch --frozen-lockfile
+
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
+    pnpm install --frozen-lockfile --offline --prod=false
 
 # Copy only files required by drizzle.config.ts and migrate command
 COPY drizzle.config.ts ./
