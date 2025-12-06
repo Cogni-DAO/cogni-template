@@ -41,7 +41,7 @@
     "docker:dev:stack": "DB_PORT=5432 docker compose --env-file .env.local -f platform/infra/services/runtime/docker-compose.dev.yml up -d --build && pnpm sourcecred:up",
     "docker:dev:stack:fast": "docker network create cogni-edge || true && DB_PORT=5432 docker compose --env-file .env.local -f platform/infra/services/runtime/docker-compose.dev.yml up -d",
     "docker:dev:stack:setup": "pnpm docker:dev:stack:fast && pnpm db:setup",
-    "docker:test:stack": "DB_PORT=5432 docker compose --env-file .env.test -f platform/infra/services/runtime/docker-compose.dev.yml up -d --build",
+    "docker:test:stack": "docker network create cogni-edge || true && DB_PORT=5432 docker compose --env-file .env.test -f platform/infra/services/runtime/docker-compose.dev.yml up -d --build",
     "docker:test:stack:fast": "docker network create cogni-edge || true && DB_PORT=5432 docker compose --env-file .env.test -f platform/infra/services/runtime/docker-compose.dev.yml up -d",
     "docker:test:stack:down": "docker compose --env-file .env.test -f platform/infra/services/runtime/docker-compose.dev.yml down",
     "docker:test:stack:setup": "pnpm docker:test:stack:fast && pnpm db:setup:test",
