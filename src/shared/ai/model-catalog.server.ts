@@ -7,8 +7,8 @@
  * Scope: Fetches /model/info, caches results, validates model IDs, computes defaults. Does not handle UI state.
  * Invariants: SWR cache, stale on errors, cold-start returns error. Defaults: tagged || fallback || null.
  * Side-effects: global (cache), IO (fetch every 1h)
- * Notes: Defaults from metadata.cogni.default_preferred/default_free tags. No DEFAULT_MODEL env var.
- * Links: /api/v1/ai/models route, chat route validation
+ * Notes: Defaults from metadata.cogni tags. Extracts isFree, isZdr (Zero Data Retention) from model_info.
+ * Links: /api/v1/ai/models route, chat route validation, https://openrouter.ai/docs/guides/features/zdr
  * @internal
  */
 
@@ -36,6 +36,7 @@ export interface ModelMeta {
   id: string;
   name?: string | undefined;
   isFree: boolean;
+  isZdr: boolean;
   providerKey?: string | undefined;
   cogni?: CogniMeta | undefined;
 }
@@ -101,6 +102,7 @@ function transformModelInfoResponse(data: unknown): ModelMeta[] {
         {}) as {
         display_name?: string;
         is_free?: boolean;
+        is_zdr?: boolean;
         provider_key?: string;
         metadata?: {
           cogni?: { default_preferred?: boolean; default_free?: boolean };
@@ -125,6 +127,7 @@ function transformModelInfoResponse(data: unknown): ModelMeta[] {
         id,
         name: modelInfo.display_name,
         isFree: modelInfo.is_free ?? false, // Default to paid if missing
+        isZdr: modelInfo.is_zdr ?? false, // Default to non-ZDR if missing
         providerKey: modelInfo.provider_key,
         cogni,
       };

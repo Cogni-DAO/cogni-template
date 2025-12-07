@@ -1,12 +1,53 @@
 {
   "models": [
-    { "id": "qwen3-4b", "name": "Qwen 3 4B (Free)", "isFree": true },
-    { "id": "qwen3-235b", "name": "Qwen 3 235B (Free)", "isFree": true },
-    { "id": "qwen3-coder", "name": "Qwen 3 Coder (Free)", "isFree": true },
-    { "id": "hermes-3-405b", "name": "Hermes 3 405B (Free)", "isFree": true },
-    { "id": "gpt-oss-20b", "name": "GPT OSS 20B (Free)", "isFree": true },
-    { "id": "gpt-4o-mini", "name": "GPT-4O Mini", "isFree": false },
-    { "id": "claude-3-haiku", "name": "Claude 3 Haiku", "isFree": false }
+    {
+      "id": "qwen3-4b",
+      "name": "Qwen 3 4B (Free)",
+      "isFree": true,
+      "isZdr": false
+    },
+    {
+      "id": "qwen3-235b",
+      "name": "Qwen 3 235B (Free)",
+      "isFree": true,
+      "isZdr": false
+    },
+    {
+      "id": "qwen3-coder",
+      "name": "Qwen 3 Coder (Free)",
+      "isFree": true,
+      "isZdr": false
+    },
+    {
+      "id": "hermes-3-405b",
+      "name": "Hermes 3 405B (Free)",
+      "isFree": true,
+      "isZdr": false
+    },
+    {
+      "id": "gpt-oss-20b",
+      "name": "GPT OSS 20B (Free)",
+      "isFree": true,
+      "isZdr": false
+    },
+    {
+      "id": "gpt-4o-mini",
+      "name": "GPT-4O Mini",
+      "isFree": false,
+      "isZdr": false
+    },
+    {
+      "id": "claude-3-haiku",
+      "name": "Claude 3 Haiku",
+      "isFree": false,
+      "isZdr": true
+    },
+    {
+      "id": "gemini-2.5-flash",
+      "name": "Gemini 2.5 Flash",
+      "isFree": false,
+      "isZdr": true
+    }
   ],
   "defaultPreferredModelId": "gpt-4o-mini",
   "defaultFreeModelId": "qwen3-4b"
