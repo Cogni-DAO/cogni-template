@@ -130,7 +130,6 @@ export async function getActivity(
     totals,
     rows,
     nextCursor,
-    telemetrySource: stats.telemetrySource,
   };
 
   // Log completion event
@@ -140,7 +139,7 @@ export async function getActivity(
     routeId: "ai.activity.v1",
     scope: "user",
     billingAccountId: billingAccount.id,
-    telemetrySource: stats.telemetrySource,
+    telemetrySource: "litellm", // P1: LiteLLM is the only source
     groupBy: input.groupBy,
     durationMs: performance.now() - startTime,
     resultCount: rows.length,

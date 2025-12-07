@@ -7,20 +7,14 @@
  * Scope: Defines interface for usage data retrieval. Does not implement storage.
  * Invariants:
  * - UsageStatsResult.series must be zero-filled.
- * - Money fields are decimal strings (6 decimal places).
+ * - Money fields (spend/cost) are decimal strings (6 decimal places).
  * - UsageLogsResult.nextCursor is opaque.
- * - telemetrySource indicates data origin: "litellm" (P1) or "fallback" (local receipts).
+ * - P1: LiteLLM is the single telemetry source. No fallback, no telemetrySource field.
+ * - Spend = our billing (charged_credits), telemetry = LiteLLM (model/tokens/timestamps).
  * Side-effects: none
- * Links: [DrizzleUsageAdapter](../adapters/server/accounts/drizzle.usage.adapter.ts), docs/ACTIVITY_METRICS.md
+ * Links: [LiteLlmUsageAdapter](../adapters/server/ai/litellm.usage.adapter.ts), docs/ACTIVITY_METRICS.md
  * @public
  */
-
-/**
- * Indicates the source of telemetry data.
- * - "litellm": Data from LiteLLM spend logs (canonical, P1)
- * - "fallback": Data from local charge receipts (degraded, no model/tokens)
- */
-export type TelemetrySource = "litellm" | "fallback";
 
 export interface UsageStatsParams {
   billingAccountId: string;
@@ -43,8 +37,6 @@ export interface UsageStatsResult {
     tokens: number;
     requests: number;
   };
-  /** Source of telemetry data */
-  telemetrySource: TelemetrySource;
 }
 
 export interface UsageLogsParams {
@@ -72,11 +64,73 @@ export interface UsageLogsResult {
     createdAt: Date;
     id: string;
   };
-  /** Source of telemetry data */
-  telemetrySource: TelemetrySource;
 }
 
 export interface UsageService {
   getUsageStats(params: UsageStatsParams): Promise<UsageStatsResult>;
   listUsageLogs(params: UsageLogsParams): Promise<UsageLogsResult>;
+}
+
+/**
+ * LiteLLM usage adapter port - read-only telemetry from /spend/logs.
+ * P1: Single source for model, tokens, timestamps. Never writes to DB.
+ * Spend (cost to user) comes from local charged_credits, not this adapter.
+ */
+export interface LiteLlmUsagePort {
+  /**
+   * Query LiteLLM /spend/logs with bounded pagination.
+   * @param billingAccountId - Server-derived identity (never client-provided)
+   * @param params - Time range and pagination params
+   * @throws LiteLlmUnavailableError if LiteLLM is down/unreachable
+   */
+  getSpendLogs(
+    billingAccountId: string,
+    params: {
+      from: Date;
+      to: Date;
+      limit?: number; // Max 100, enforced by adapter
+      cursor?: string; // Opaque pagination token
+    }
+  ): Promise<{
+    logs: Array<{
+      /** LiteLLM call ID for forensic correlation */
+      callId: string;
+      /** Timestamp of the request */
+      timestamp: Date;
+      /** Model name from LiteLLM (pass-through) */
+      model: string;
+      /** Input tokens from LiteLLM (pass-through) */
+      tokensIn: number;
+      /** Output tokens from LiteLLM (pass-through) */
+      tokensOut: number;
+      /** Provider cost in USD from LiteLLM (observational, not user-facing spend) */
+      providerCostUsd: string;
+    }>;
+    nextCursor?: string;
+    /** Warns if pagination was capped at MAX_PAGES */
+    paginationCapped?: boolean;
+  }>;
+
+  /**
+   * Query LiteLLM /spend/logs with daily aggregation.
+   * @param billingAccountId - Server-derived identity
+   * @param params - Time range and grouping
+   * @throws LiteLlmUnavailableError if LiteLLM is down/unreachable
+   */
+  getSpendChart(
+    billingAccountId: string,
+    params: {
+      from: Date;
+      to: Date;
+      groupBy: "day" | "hour";
+    }
+  ): Promise<{
+    buckets: Array<{
+      bucketStart: Date;
+      /** Provider cost from LiteLLM (not user-facing spend) */
+      providerCostUsd: string;
+      tokens: number;
+      requests: number;
+    }>;
+  }>;
 }

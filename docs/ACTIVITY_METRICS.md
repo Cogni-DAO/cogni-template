@@ -35,6 +35,9 @@
 
 ### P1: Implement LiteLLM Usage Adapter (Hard Dependency)
 
+- [x] Add `LiteLlmUsagePort` interface to `src/ports/usage.port.ts`
+- [x] Remove `TelemetrySource` type (single source in P1)
+- [x] Remove `telemetrySource` field from `UsageStatsResult` and `UsageLogsResult`
 - [ ] Create `src/adapters/server/ai/litellm.usage.adapter.ts` (read-only adapter)
 - [ ] Chart: `GET /spend/logs?user_id=X&group_by=day` for daily aggregates
 - [ ] Table: `GET /spend/logs?user_id=X&limit=100` (paginated logs)
@@ -44,11 +47,12 @@
 
 ### P1: Wire Activity Service (No Fallback)
 
+- [x] Remove `telemetrySource` from contract (only one source in P1)
+- [x] Mark DrizzleUsageAdapter as deprecated (billing/reconciliation only)
+- [x] Update activity facade to hardcode `telemetrySource: "litellm"` in observability event
 - [ ] ActivityService depends ONLY on `LiteLlmUsagePort` — do NOT inject DrizzleUsageAdapter
 - [ ] Error handling: if LiteLLM returns 4xx/5xx/timeout, propagate `LiteLlmUnavailableError`
 - [ ] HTTP layer returns 503 with `{ code: "LITELLM_UNAVAILABLE" }`
-- [ ] Remove `telemetrySource` from contract (only one source in P1)
-- [ ] Re-scope DrizzleUsageAdapter to billing/reconciliation only (not called from Activity endpoint)
 
 ### P2/P3: Future Considerations
 

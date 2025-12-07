@@ -234,7 +234,6 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       expect(result.totals.requests).toBe(5);
       expect(result.totals.tokens).toBe(0); // Fallback mode - no tokens
       expect(Number.parseFloat(result.totals.spend)).toBeCloseTo(0.051, 5);
-      expect(result.telemetrySource).toBe("fallback");
 
       // Verify no Account B data leaked (B has much higher costs: 0.35 total)
       expect(Number.parseFloat(result.totals.spend)).toBeLessThan(0.1);
@@ -257,7 +256,6 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       expect(result.totals.requests).toBe(3);
       expect(result.totals.tokens).toBe(0); // Fallback mode - no tokens
       expect(Number.parseFloat(result.totals.spend)).toBeCloseTo(0.35, 5);
-      expect(result.telemetrySource).toBe("fallback");
 
       // Verify no Account A data leaked
       expect(Number.parseFloat(result.totals.spend)).toBeGreaterThan(0.3);
@@ -270,7 +268,6 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       });
 
       expect(result.logs).toHaveLength(5);
-      expect(result.telemetrySource).toBe("fallback");
 
       // In fallback mode, model = "unavailable" (LiteLLM is canonical)
       const models = result.logs.map((l) => l.model);
@@ -284,7 +281,6 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       });
 
       expect(result.logs).toHaveLength(3);
-      expect(result.telemetrySource).toBe("fallback");
 
       // In fallback mode, model = "unavailable" (LiteLLM is canonical)
       const models = result.logs.map((l) => l.model);
@@ -338,7 +334,6 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       // but billingAccountId scoping is ALWAYS applied
       // In fallback mode, all models are "unavailable" - we verify isolation by count
       expect(crossAccountAttempt.logs.length).toBeLessThanOrEqual(3); // Account B has 3 records
-      expect(crossAccountAttempt.telemetrySource).toBe("fallback");
     });
 
     it("Pagination returns stable ordering across pages", async () => {

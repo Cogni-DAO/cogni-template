@@ -3,17 +3,18 @@
 
 /**
  * Module: `@adapters/server/accounts/drizzle.usage`
- * Purpose: Drizzle implementation of UsageService port (fallback mode).
- * Scope: Implements getUsageStats (SQL aggregation) and listUsageLogs (keyset pagination). Does not handle auth.
+ * Purpose: DEPRECATED - To be removed in P1. Re-scoped to billing/reconciliation only.
+ * Scope: Queries local charge_receipt table. NOT used for activity dashboard (LiteLLM is canonical).
  * Invariants:
  * - Buckets are zero-filled using SQL generate_series.
  * - Money is returned as decimal string (6 decimal places).
  * - Totals are calculated via separate SQL query for precision.
  * - Cursor is opaque base64-encoded string.
- * - Returns telemetrySource: "fallback" (local charge receipts, no model/tokens per ACTIVITY_METRICS.md)
+ * - P1: DO NOT call from ActivityService. Use LiteLlmUsagePort instead.
  * Side-effects: IO
  * Links: [UsageService](../../../../ports/usage.port.ts), docs/ACTIVITY_METRICS.md
  * @internal
+ * @deprecated P1: Use LiteLlmUsagePort for activity. This adapter is for billing/reconciliation only.
  */
 
 import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
@@ -93,10 +94,9 @@ export class DrizzleUsageAdapter implements UsageService {
       series,
       totals: {
         spend: totalsRow?.spend ?? "0.000000",
-        tokens: 0, // Not available in fallback mode
+        tokens: 0, // Not available in local receipts
         requests: Number(totalsRow?.requests ?? 0),
       },
-      telemetrySource: "fallback",
     };
   }
 
@@ -147,7 +147,6 @@ export class DrizzleUsageAdapter implements UsageService {
 
     return {
       logs,
-      telemetrySource: "fallback",
       ...(nextCursor ? { nextCursor } : {}),
     };
   }

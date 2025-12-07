@@ -97,6 +97,5 @@ describe("Activity Facade", () => {
     expect(result.totals.spend.total).toBe("10.50");
     expect(result.rows).toHaveLength(1);
     expect(result.nextCursor).toBeDefined();
-    expect(result.telemetrySource).toBe("fallback"); // P0: local receipts mode
   });
 });
