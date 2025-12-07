@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-07
+- **Last reviewed:** 2025-12-08
 - **Status:** draft
 
 ## Purpose
@@ -37,15 +37,16 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
 ## Public Surface
 
 - **Exports:**
-  - AccountService (getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordLlmUsage, listCreditLedgerEntries, findCreditLedgerEntryByReference)
-  - LlmService (completion, completionStream with CompletionStreamParams including abortSignal)
+  - AccountService (getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordChargeReceipt, listCreditLedgerEntries, findCreditLedgerEntryByReference)
+  - LlmService (completion, completionStream with CompletionStreamParams including abortSignal; returns providerCostUsd, litellmCallId)
+  - UsageService (getUsageStats, listUsageLogs with telemetrySource)
   - ChatDeltaEvent (text_delta | error | done)
   - PaymentAttemptRepository (create, findById, findByTxHash, updateStatus, bindTxHash, recordVerificationAttempt, logEvent)
   - OnChainVerifier (verify transaction against expected parameters)
   - MetricsQueryPort (queryRange, queryInstant for Prometheus-compatible backends)
   - Clock (now)
   - Port-level errors (InsufficientCreditsPortError, BillingAccountNotFoundPortError, VirtualKeyNotFoundPortError, PaymentAttemptNotFoundPortError, TxHashAlreadyBoundPortError)
-  - Types (BilledLlmUsageParams, NeedsReviewLlmUsageParams, LlmCaller, BillingAccount, CreditLedgerEntry, CreatePaymentAttemptParams, LogPaymentEventParams, VerificationResult, VerificationStatus, CompletionStreamParams, PrometheusRangeResult, PrometheusInstantResult, RangeQueryParams, InstantQueryParams)
+  - Types (ChargeReceiptParams, ChargeReceiptProvenance, LlmCaller, BillingAccount, CreditLedgerEntry, CreatePaymentAttemptParams, LogPaymentEventParams, VerificationResult, VerificationStatus, CompletionStreamParams, TelemetrySource)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config:** none
@@ -93,3 +94,5 @@ These tests are separate from edge tests for src/contracts/\*\*
 - PaymentAttemptRepository enforces ownership (findById filters by billingAccountId)
 - OnChainVerifier is generic (no blockchain-specific types), returns VerificationResult with status (VERIFIED | PENDING | FAILED)
 - Port-level errors are thrown by adapters, caught and translated by feature layer
+- recordChargeReceipt is non-blocking (never throws InsufficientCredits post-call per ACTIVITY_METRICS.md)
+- UsageService returns telemetrySource to indicate data origin ("litellm" or "fallback")

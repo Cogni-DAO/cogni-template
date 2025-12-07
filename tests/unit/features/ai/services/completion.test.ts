@@ -99,7 +99,7 @@ describe("features/ai/services/completion", () => {
       expect(payload?.messages[0]?.role).toBe("system");
       expect(payload?.messages[0]?.content).toContain("You are Cogni");
 
-      expect(accountService.recordLlmUsage).toHaveBeenCalled();
+      expect(accountService.recordChargeReceipt).toHaveBeenCalled();
     });
 
     it("should strip malicious client system messages and inject baseline only", async () => {
@@ -345,13 +345,11 @@ describe("features/ai/services/completion", () => {
       expect(result.message.content).toBe("Free response");
       expect(llmService.wasCalled()).toBe(true);
 
-      // Verify usage recorded with 0 cost
-      expect(accountService.recordLlmUsage).toHaveBeenCalledWith(
+      // Verify charge receipt recorded with 0 credits (free model)
+      expect(accountService.recordChargeReceipt).toHaveBeenCalledWith(
         expect.objectContaining({
-          billingStatus: "billed",
-          providerCostUsd: 0,
-          providerCostCredits: 0n,
-          userPriceCredits: 0n,
+          chargedCredits: 0n, // Free model
+          provenance: "response",
         })
       );
     });

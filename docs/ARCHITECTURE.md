@@ -324,7 +324,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ │ ├── AGENTS.md
 [x] │ │ ├── schema.ts # schema exports
 [x] │ │ ├── schema.auth.ts # auth tables
-[x] │ │ ├── schema.billing.ts # billing tables (billing_accounts, credit_ledger, llm_usage)
+[x] │ │ ├── schema.billing.ts # billing tables (billing_accounts, credit_ledger, llm_usage/charge_receipts)
 [x] │ │ └── index.ts
 [x] │ ├── constants/
 [x] │ │ └── index.ts

@@ -143,7 +143,7 @@ pnpm test:stack:dev           # Run stack tests against host app
 ```bash
 pnpm docker:dev:stack         # Build and start all containers
 pnpm docker:dev:stack:fast    # Start containers without building
-pnpm db:migrate               # Run migrations via db-migrate service
+pnpm db:migrate               # Run migrations with drizzle-kit (.env.local)
 ```
 
 ### 5. Docker Dev Stack Test (`pnpm docker:test:stack` + `pnpm test:stack:docker`)
@@ -166,7 +166,7 @@ pnpm db:migrate               # Run migrations via db-migrate service
 
 ```bash
 pnpm docker:test:stack          # Build and start containers in test mode
-pnpm db:migrate:test            # Run migrations via db-migrate service
+pnpm db:migrate:test            # Run migrations with drizzle-kit (.env.test)
 pnpm test:stack:docker          # Run tests against containerized app
 ```
 

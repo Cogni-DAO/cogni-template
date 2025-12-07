@@ -53,6 +53,7 @@ export function MobileNav({ className }: MobileNavProps): ReactElement {
           aria-label="Mobile navigation"
         >
           <NavigationLink href="/chat">Chat</NavigationLink>
+          <NavigationLink href="/activity">Activity</NavigationLink>
           <NavigationLink href="/credits">Credits</NavigationLink>
           <a
             href="https://github.com/cogni-DAO/cogni-template"

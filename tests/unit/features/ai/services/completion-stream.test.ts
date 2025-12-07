@@ -86,18 +86,16 @@ describe("features/ai/services/completion (stream)", () => {
     });
     expect(result.requestId).toBeDefined();
 
-    // Verify billing call
-    expect(accountService.recordLlmUsage).toHaveBeenCalledTimes(1);
-    const mockCalls = vi.mocked(accountService.recordLlmUsage).mock.calls;
+    // Verify charge receipt recorded (per ACTIVITY_METRICS.md)
+    expect(accountService.recordChargeReceipt).toHaveBeenCalledTimes(1);
+    const mockCalls = vi.mocked(accountService.recordChargeReceipt).mock.calls;
     expect(mockCalls.length).toBeGreaterThan(0);
     const billingCall = mockCalls[0]?.[0];
     expect(billingCall).toBeDefined();
     expect(billingCall).toMatchObject({
       billingAccountId: "billing-test-user",
       requestId: result.requestId, // Idempotency check
-      metadata: {
-        system: "ai_completion_stream",
-      },
+      provenance: "stream", // Streaming completion
     });
   });
 });

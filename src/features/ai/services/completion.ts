@@ -209,108 +209,54 @@ export async function execute(
     );
   }
 
-  const baseMetadata = {
-    system: "ai_completion",
-    provider: providerMeta.provider,
-    llmRequestId: providerMeta.requestId,
-    totalTokens,
-  };
-
-  // Branch based on whether provider cost is available
+  // Post-call billing: Calculate charged credits and record receipt
+  // Per ACTIVITY_METRICS.md: post-call is NEVER blocking
   try {
     const isFree = await isModelFree(modelId);
+    let chargedCredits = 0n;
 
-    if (isFree) {
-      // Free model - record as billed with 0 cost
-      await accountService.recordLlmUsage({
-        billingStatus: "billed",
-        billingAccountId: caller.billingAccountId,
-        virtualKeyId: caller.virtualKeyId,
-        requestId,
-        model: modelId,
-        promptTokens: result.usage?.promptTokens ?? 0,
-        completionTokens: result.usage?.completionTokens ?? 0,
-        providerCostUsd: 0,
-        providerCostCredits: 0n,
-        userPriceCredits: 0n,
-        markupFactorApplied: serverEnv().USER_PRICE_MARKUP_FACTOR,
-        metadata: baseMetadata,
-      });
-    } else if (typeof result.providerCostUsd === "number") {
-      // Cost available - calculate markup and bill user
+    if (!isFree && typeof result.providerCostUsd === "number") {
+      // Cost available - calculate markup
       const markupFactor = serverEnv().USER_PRICE_MARKUP_FACTOR;
       const providerCostCredits = usdToCredits(
         result.providerCostUsd,
         serverEnv().CREDITS_PER_USDC
       );
-      const userPriceCredits = calculateUserPriceCredits(
+      chargedCredits = calculateUserPriceCredits(
         providerCostCredits,
         markupFactor
       );
 
-      // Enforce profit margin invariant
-      if (userPriceCredits < providerCostCredits) {
+      // Enforce profit margin invariant (log only, never block)
+      if (chargedCredits < providerCostCredits) {
         log.error(
-          {
-            userPriceCredits,
-            providerCostCredits,
-            requestId,
-          },
+          { chargedCredits, providerCostCredits, requestId },
           "Invariant violation: User price < Provider cost"
         );
       }
+    }
+    // If no cost available or free model: chargedCredits stays 0n
 
-      await accountService.recordLlmUsage({
-        billingStatus: "billed",
-        billingAccountId: caller.billingAccountId,
-        virtualKeyId: caller.virtualKeyId,
-        requestId,
-        model: modelId,
-        promptTokens: result.usage?.promptTokens ?? 0,
-        completionTokens: result.usage?.completionTokens ?? 0,
-        providerCostUsd: result.providerCostUsd,
-        providerCostCredits,
-        userPriceCredits,
-        markupFactorApplied: markupFactor,
-        metadata: baseMetadata,
-      });
-    } else {
-      // No cost available - record usage but don't bill
-      await accountService.recordLlmUsage({
-        billingStatus: "needs_review",
-        billingAccountId: caller.billingAccountId,
-        virtualKeyId: caller.virtualKeyId,
-        requestId,
-        model: modelId,
-        promptTokens: result.usage?.promptTokens ?? 0,
-        completionTokens: result.usage?.completionTokens ?? 0,
-        metadata: baseMetadata,
-      });
-    }
+    await accountService.recordChargeReceipt({
+      billingAccountId: caller.billingAccountId,
+      virtualKeyId: caller.virtualKeyId,
+      requestId,
+      chargedCredits,
+      responseCostUsd: result.providerCostUsd ?? null,
+      litellmCallId: result.litellmCallId ?? null,
+      provenance: "response",
+    });
   } catch (error) {
-    // Post-call billing is best-effort - NEVER block user response after LLM succeeded
-    if (error instanceof InsufficientCreditsPortError) {
-      // Pre-flight passed but post-call failed - race condition or concurrent usage
-      log.warn(
-        {
-          requestId,
-          billingAccountId: caller.billingAccountId,
-          required: error.cost,
-          available: error.previousBalance,
-        },
-        "Post-call insufficient credits (user got response for free)"
-      );
-    } else {
-      // Other errors (DB down, FK constraint, etc.) are operational issues
-      log.error(
-        {
-          err: error,
-          requestId,
-          billingAccountId: caller.billingAccountId,
-        },
-        "CRITICAL: Post-call billing failed - user response NOT blocked"
-      );
-    }
+    // Post-call billing is best-effort - NEVER block user response
+    // recordChargeReceipt should never throw InsufficientCreditsPortError per design
+    log.error(
+      {
+        err: error,
+        requestId,
+        billingAccountId: caller.billingAccountId,
+      },
+      "CRITICAL: Post-call billing failed - user response NOT blocked"
+    );
     // DO NOT RETHROW - user already got LLM response, must see it
     // EXCEPT in test environment where we need to catch these issues
     if (serverEnv().APP_ENV === "test") {
@@ -431,98 +377,51 @@ export async function executeStream({
         );
       }
 
-      const baseMetadata = {
-        system: "ai_completion_stream",
-        provider: providerMeta.provider,
-        llmRequestId: providerMeta.requestId,
-        totalTokens,
-        finishReason: result.finishReason,
-      };
-
+      // Post-call billing: Calculate charged credits and record receipt
+      // Per ACTIVITY_METRICS.md: post-call is NEVER blocking
       try {
         const isFree = await isModelFree(modelId);
+        let chargedCredits = 0n;
 
-        if (isFree) {
-          // Free model - record as billed with 0 cost
-          await accountService.recordLlmUsage({
-            billingStatus: "billed",
-            billingAccountId: caller.billingAccountId,
-            virtualKeyId: caller.virtualKeyId,
-            requestId, // Idempotency key
-            model: modelId,
-            promptTokens: result.usage?.promptTokens ?? 0,
-            completionTokens: result.usage?.completionTokens ?? 0,
-            providerCostUsd: 0,
-            providerCostCredits: 0n,
-            userPriceCredits: 0n,
-            markupFactorApplied: serverEnv().USER_PRICE_MARKUP_FACTOR,
-            metadata: baseMetadata,
-          });
-        } else if (typeof result.providerCostUsd === "number") {
+        if (!isFree && typeof result.providerCostUsd === "number") {
           const markupFactor = serverEnv().USER_PRICE_MARKUP_FACTOR;
           const providerCostCredits = usdToCredits(
             result.providerCostUsd,
             serverEnv().CREDITS_PER_USDC
           );
-          const userPriceCredits = calculateUserPriceCredits(
+          chargedCredits = calculateUserPriceCredits(
             providerCostCredits,
             markupFactor
           );
 
-          if (userPriceCredits < providerCostCredits) {
+          if (chargedCredits < providerCostCredits) {
             log.error(
-              { userPriceCredits, providerCostCredits, requestId },
+              { chargedCredits, providerCostCredits, requestId },
               "Invariant violation: User price < Provider cost"
             );
           }
+        }
+        // If no cost available or free model: chargedCredits stays 0n
 
-          await accountService.recordLlmUsage({
-            billingStatus: "billed",
-            billingAccountId: caller.billingAccountId,
-            virtualKeyId: caller.virtualKeyId,
-            requestId, // Idempotency key
-            model: modelId,
-            promptTokens: result.usage?.promptTokens ?? 0,
-            completionTokens: result.usage?.completionTokens ?? 0,
-            providerCostUsd: result.providerCostUsd,
-            providerCostCredits,
-            userPriceCredits,
-            markupFactorApplied: markupFactor,
-            metadata: baseMetadata,
-          });
-        } else {
-          await accountService.recordLlmUsage({
-            billingStatus: "needs_review",
-            billingAccountId: caller.billingAccountId,
-            virtualKeyId: caller.virtualKeyId,
-            requestId, // Idempotency key
-            model: modelId,
-            promptTokens: result.usage?.promptTokens ?? 0,
-            completionTokens: result.usage?.completionTokens ?? 0,
-            metadata: baseMetadata,
-          });
-        }
+        await accountService.recordChargeReceipt({
+          billingAccountId: caller.billingAccountId,
+          virtualKeyId: caller.virtualKeyId,
+          requestId,
+          chargedCredits,
+          responseCostUsd: result.providerCostUsd ?? null,
+          litellmCallId: result.litellmCallId ?? null,
+          provenance: "stream",
+        });
       } catch (error) {
-        if (error instanceof InsufficientCreditsPortError) {
-          log.warn(
-            {
-              requestId,
-              billingAccountId: caller.billingAccountId,
-              required: error.cost,
-              available: error.previousBalance,
-            },
-            "Post-stream insufficient credits"
-          );
-        } else {
-          log.error(
-            {
-              err: error,
-              requestId,
-              billingAccountId: caller.billingAccountId,
-            },
-            "CRITICAL: Post-stream billing failed"
-          );
-        }
+        // Post-call billing is best-effort - NEVER block user response
+        log.error(
+          {
+            err: error,
+            requestId,
+            billingAccountId: caller.billingAccountId,
+          },
+          "CRITICAL: Post-stream billing failed"
+        );
         if (serverEnv().APP_ENV === "test") throw error;
       }
 

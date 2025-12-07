@@ -22,7 +22,7 @@ Event name registry as single source of truth. Prevents ad-hoc event strings and
 ```json
 {
   "layer": "shared",
-  "may_import": [],
+  "may_import": ["types"],
   "must_not_import": [
     "app",
     "ports",

@@ -21,7 +21,10 @@ export type { EventBase, EventName } from "./events";
 // Event Registry (shared by client and server)
 export { EVENT_NAMES } from "./events";
 // Type-only exports for domain event payloads (used by features)
-export type { AiLlmCallEvent } from "./events/ai";
+export type {
+  AiActivityQueryCompletedEvent,
+  AiLlmCallEvent,
+} from "./events/ai";
 export type {
   PaymentsConfirmedEvent,
   PaymentsIntentCreatedEvent,

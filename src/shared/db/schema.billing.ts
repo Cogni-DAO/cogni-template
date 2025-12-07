@@ -3,15 +3,16 @@
 
 /**
  * Module: `@shared/db/schema.billing`
- * Purpose: Billing tables schema with nullable cost fields and billing status discrimination.
- * Scope: Defines billing_accounts, virtual_keys, credit_ledger, llm_usage, payment_attempts, payment_events. Does not include auth identity tables.
+ * Purpose: Billing tables schema with minimal charge_receipt for audit trail.
+ * Scope: Defines billing_accounts, virtual_keys, credit_ledger, llm_usage (charge receipts), payment_attempts, payment_events. Does not include auth identity tables.
  * Invariants:
  * - Credits are BIGINT.
  * - billing_accounts.owner_user_id FK → auth.users(id).
  * - payment_attempts has partial unique index on (chain_id, tx_hash) where tx_hash is not null.
  * - credit_ledger(reference) is unique for widget_payment.
+ * - llm_usage.request_id is idempotency key (unique)
  * Side-effects: none (schema definitions only)
- * Links: docs/PAYMENTS_DESIGN.md
+ * Links: docs/PAYMENTS_DESIGN.md, docs/ACTIVITY_METRICS.md
  * @public
  */
 
@@ -87,9 +88,18 @@ export const creditLedger = pgTable(
     paymentRefUnique: uniqueIndex("credit_ledger_payment_ref_unique")
       .on(table.reference)
       .where(sql`${table.reason} = 'widget_payment'`),
+    /** Idempotency guard for llm_usage charge receipts per ACTIVITY_METRICS.md */
+    llmUsageRefUnique: uniqueIndex("credit_ledger_llm_usage_ref_unique")
+      .on(table.reference)
+      .where(sql`${table.reason} = 'llm_usage'`),
   })
 );
 
+/**
+ * Charge receipts for LLM usage - minimal audit-focused table.
+ * LiteLLM is canonical for telemetry (model/tokens). We only store billing data.
+ * See docs/ACTIVITY_METRICS.md for design rationale.
+ */
 export const llmUsage = pgTable(
   "llm_usage",
   {
@@ -100,28 +110,36 @@ export const llmUsage = pgTable(
     virtualKeyId: uuid("virtual_key_id")
       .notNull()
       .references(() => virtualKeys.id, { onDelete: "cascade" }),
-    requestId: text("request_id"),
-    model: text("model"),
-    promptTokens: integer("prompt_tokens"),
-    completionTokens: integer("completion_tokens"),
-    providerCostUsd: numeric("provider_cost_usd"),
-    providerCostCredits: bigint("provider_cost_credits", {
-      mode: "bigint",
-    }),
-    userPriceCredits: bigint("user_price_credits", {
-      mode: "bigint",
-    }),
-    markupFactor: numeric("markup_factor"),
-    billingStatus: text("billing_status").notNull().default("needs_review"),
-    usage: jsonb("usage").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    /** Server-generated UUID, idempotency key */
+    requestId: text("request_id").notNull().unique(),
+    /** LiteLLM call ID for forensic correlation (x-litellm-call-id header) */
+    litellmCallId: text("litellm_call_id"),
+    /** Credits debited from user balance */
+    chargedCredits: bigint("charged_credits", { mode: "bigint" }).notNull(),
+    /** Observational USD cost from LiteLLM (header or usage.cost) */
+    responseCostUsd: numeric("response_cost_usd"),
+    /** How this receipt was generated: 'response' | 'stream' */
+    provenance: text("provenance").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => ({
     billingAccountIdx: index("llm_usage_billing_account_idx").on(
       table.billingAccountId
     ),
     virtualKeyIdx: index("llm_usage_virtual_key_idx").on(table.virtualKeyId),
-    requestIdx: index("llm_usage_request_idx").on(table.requestId),
+    // Index for aggregation: Filter by account + range scan on createdAt
+    aggregationIdx: index("llm_usage_aggregation_idx").on(
+      table.billingAccountId,
+      table.createdAt
+    ),
+    // Index for pagination: Filter by account + order by createdAt DESC, id DESC
+    paginationIdx: index("llm_usage_pagination_idx").on(
+      table.billingAccountId,
+      table.createdAt,
+      table.id
+    ),
   })
 );
 

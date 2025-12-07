@@ -17,6 +17,7 @@ import type { Logger } from "pino";
 import {
   DrizzleAccountService,
   DrizzlePaymentAttemptRepository,
+  DrizzleUsageAdapter,
   getDb,
   LiteLlmAdapter,
   type MimirAdapterConfig,
@@ -37,6 +38,7 @@ import type {
   MetricsQueryPort,
   OnChainVerifier,
   PaymentAttemptRepository,
+  UsageService,
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
@@ -57,6 +59,7 @@ export interface Container {
   config: ContainerConfig;
   llmService: LlmService;
   accountService: AccountService;
+  usageService: UsageService;
   clock: Clock;
   paymentAttemptRepository: PaymentAttemptRepository;
   onChainVerifier: OnChainVerifier;
@@ -68,6 +71,8 @@ export type AiCompletionDeps = Pick<
   Container,
   "llmService" | "accountService" | "clock"
 >;
+
+export type ActivityDeps = Pick<Container, "usageService" | "accountService">;
 
 // Module-level singleton
 let _container: Container | null = null;
@@ -140,6 +145,7 @@ function createContainer(): Container {
   // Always use real database adapters
   // Testing strategy: unit tests mock the port, integration tests use real DB
   const accountService = new DrizzleAccountService(db);
+  const usageService = new DrizzleUsageAdapter(db);
   const paymentAttemptRepository = new DrizzlePaymentAttemptRepository(db);
 
   // Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
@@ -161,6 +167,7 @@ function createContainer(): Container {
     config,
     llmService,
     accountService,
+    usageService,
     clock: new SystemClock(),
     paymentAttemptRepository,
     onChainVerifier,
@@ -178,5 +185,13 @@ export function resolveAiDeps(): AiCompletionDeps {
     llmService: container.llmService,
     accountService: container.accountService,
     clock: container.clock,
+  };
+}
+
+export function resolveActivityDeps(): ActivityDeps {
+  const container = getContainer();
+  return {
+    usageService: container.usageService,
+    accountService: container.accountService,
   };
 }

@@ -23,8 +23,8 @@ Hosts the legacy SourceCred instance for contribution tracking and cred distribu
 ```json
 {
   "layer": "infra",
-  "may_import": [],
-  "must_not_import": []
+  "may_import": ["infra"],
+  "must_not_import": ["*"]
 }
 ```
 

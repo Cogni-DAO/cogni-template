@@ -220,16 +220,17 @@ describe("Chat Streaming", () => {
       throw new Error("Billing account not found");
     }
 
-    // Get the most recent LLM usage record
-    const usageRecord = await db.query.llmUsage.findFirst({
+    // Get the most recent charge receipt
+    const receipt = await db.query.llmUsage.findFirst({
       where: eq(llmUsage.billingAccountId, billingAccount.id),
       orderBy: (llmUsage, { desc }) => [desc(llmUsage.createdAt)],
     });
 
-    expect(usageRecord).toBeTruthy();
-    expect(usageRecord?.model).toBeTruthy();
-    expect(usageRecord?.model).not.toBe("unknown");
-    expect(typeof usageRecord?.model).toBe("string");
+    // Per ACTIVITY_METRICS.md: charge_receipt has minimal fields, no model
+    // Model lives in LiteLLM (canonical source)
+    expect(receipt).toBeTruthy();
+    expect(receipt?.provenance).toBe("stream");
+    expect(receipt?.requestId).toBeTruthy();
   });
 
   it("stops streaming when aborted", async () => {

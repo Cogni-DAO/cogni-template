@@ -50,27 +50,23 @@ Credits increase via positive entries in credit_ledger (e.g., from the widget co
 
 ---
 
-### 6.5.2 Add llm_usage Table
+### 6.5.2 Add llm_usage Table (Charge Receipts)
 
-- [x] **Goal:** Track provider_cost_credits and user_price_credits per call for audit and profit verification.
+- [x] **Goal:** Minimal audit-focused charge receipt table. LiteLLM is canonical for telemetry.
 
-- **Schema:** id, billing_account_id (FK → billing_accounts.id), virtual_key_id (FK → virtual_keys.id), request_id, model, prompt_tokens, completion_tokens, provider_cost_usd (numeric), provider_cost_credits (BIGINT), user_price_credits (BIGINT), markup_factor (numeric), usage (jsonb), created_at
+- **Schema (Minimal):** id, billing_account_id, virtual_key_id, request_id (unique, idempotency key), litellm_call_id (forensic), charged_credits, response_cost_usd (observational), provenance, created_at
 
-**Cost Semantics:**
-
-- `provider_cost_credits = usdToCredits(LiteLLM_response_cost_usd)`
-- `user_price_credits = calculateUserPriceCredits(provider_cost_credits, USER_PRICE_MARKUP_FACTOR)`
-- Model and token fields are for audit/analysis only, not cost calculation
+**Design:** Per ACTIVITY_METRICS.md, no model/tokens/usage JSONB stored locally. Query LiteLLM /spend/logs for telemetry.
 
 - **Files:**
-  - [x] `src/adapters/server/db/migrations/0001_billing_evolution.sql` - Consolidated migration
-  - [x] `src/shared/db/schema.billing.ts` - Add llmUsage table definition
+  - [x] `src/adapters/server/db/migrations/0000_*.sql` - Consolidated migration (single squashed)
+  - [x] `src/shared/db/schema.billing.ts` - llmUsage as charge_receipt table
 
 **Notes:**
 
-- Mirrors credit_ledger by linking both billing_account_id and virtual_key_id
-- Enables tracking which specific virtual key generated each LLM call
-- LiteLLM maintains its own spend logs; llm_usage is our app-local mirror keyed by billing_account_id + request_id
+- `request_id` is PRIMARY KEY for idempotent inserts
+- `litellm_call_id` captures `x-litellm-call-id` header for forensic correlation
+- `provenance` indicates source: "response" | "stream"
 
 ---
 
@@ -109,74 +105,71 @@ Credits increase via positive entries in credit_ledger (e.g., from the widget co
 
 ---
 
-### 6.5.5 Atomic Billing Operation
+### 6.5.5 Atomic Billing Operation (Non-Blocking Post-Call)
 
-- [x] **Goal:** Single AccountService method that records llm_usage and debits user_price_credits in one transaction.
+- [x] **Goal:** Single AccountService method that records charge receipt and debits credits atomically, but NEVER blocks post-call.
 
-- [x] **New Port Method:** `recordLlmUsage(billingAccountId, virtualKeyId, requestId, model, promptTokens, completionTokens, providerCostUsd, providerCostCredits, userPriceCredits, markupFactorApplied)`
+- [x] **New Port Method:** `recordChargeReceipt(ChargeReceiptParams)` with minimal fields: billingAccountId, virtualKeyId, requestId, chargedCredits, responseCostUsd, litellmCallId, provenance
 
-**Parameters:** All cost values (providerCostCredits, userPriceCredits) are pre-computed by completion service using LiteLLM response cost and pricing helpers. No pricing logic in adapter.
+**Parameters:** `chargedCredits` is pre-computed by completion service using LiteLLM response cost and pricing helpers. No pricing logic in adapter.
 
 **Implementation:** Single DB transaction that:
 
-1. Inserts llm_usage row with all fields
-2. Inserts credit_ledger debit row (amount = -userPriceCredits, billing_account_id, virtual_key_id)
+1. Inserts llm_usage (charge receipt) row with idempotent ON CONFLICT DO NOTHING
+2. Inserts credit_ledger debit row (amount = -chargedCredits)
 3. Updates billing_accounts.balance_credits
-4. Checks if resulting balance would be negative
-5. If negative: throws InsufficientCreditsError and rolls back entire transaction (no llm_usage, no ledger entry, no balance change)
+4. Logs critical if balance goes negative but COMPLETES the write (no rollback)
 
-**Balance Invariant:** Balances remain non-negative. Insufficient credits are detected post-call but prevent transaction commit. The LLM call has already been made (token waste), but no billing records are persisted.
+**Key Invariant (per ACTIVITY_METRICS.md):** Post-call billing NEVER throws InsufficientCreditsPortError. Overage is handled in reconciliation, not by blocking user response.
 
 - **Files:**
-  - [x] `src/ports/accounts.port.ts` - Add recordLlmUsage interface
-  - [x] `src/adapters/server/accounts/drizzle.adapter.ts` - Implement atomic operation
+  - [x] `src/ports/accounts.port.ts` - recordChargeReceipt interface (ChargeReceiptParams)
+  - [x] `src/adapters/server/accounts/drizzle.adapter.ts` - Implement non-blocking atomic operation
   - [x] `tests/unit/adapters/server/accounts/drizzle.adapter.spec.ts` - Test transaction behavior
 
 **Notes:**
 
-- debitForUsage becomes internal helper or deprecated for LLM billing
-- Both llm_usage and credit_ledger get billing_account_id + virtual_key_id for consistent tracking
+- Pre-flight gating uses `getBalance` + estimate before LLM call
+- Post-call `recordChargeReceipt` is best-effort, never blocks response
 
 ---
 
-### 6.5.6 Wire Dual-Cost into Completion Flow
+### 6.5.6 Wire Charge Receipts into Completion Flow
 
-- [x] **Goal:** Update completion service to use pricing helpers and recordLlmUsage after LLM call.
+- [x] **Goal:** Update completion service to calculate chargedCredits and call recordChargeReceipt after LLM call.
 
 **Flow:**
 
-1. Call LiteLLM via LlmService
-2. Extract from LlmService response:
-   - modelId
-   - promptTokens, completionTokens
-   - providerCostUsd (from LiteLLM response cost)
-3. Convert USD to credits: `provider_cost_credits = usdToCredits(providerCostUsd, CREDITS_PER_USDC)`
-4. Apply markup: `user_price_credits = calculateUserPriceCredits(provider_cost_credits, markupFactor)`
-5. Assert `user_price_credits ≥ provider_cost_credits`
-6. Call `AccountService.recordLlmUsage` with all fields
+1. Pre-flight: estimate cost, check balance, DENY if insufficient (InsufficientCreditsPortError)
+2. Call LiteLLM via LlmService
+3. Extract from LlmService response:
+   - providerCostUsd (from `x-litellm-response-cost` header)
+   - litellmCallId (from `x-litellm-call-id` header for forensics)
+4. Calculate chargedCredits: `usdToCredits(providerCostUsd) × USER_PRICE_MARKUP_FACTOR`
+5. Call `AccountService.recordChargeReceipt` (non-blocking, never throws)
+6. Return response to user (NEVER blocked by post-call billing)
 
 - **Files:**
-  - [x] `src/ports/llm.port.ts` - Update LlmService response to include providerCostUsd
-  - [x] `src/adapters/server/ai/litellm.adapter.ts` - Extract cost from LiteLLM response
-  - [x] `src/features/ai/services/completion.ts` - Add dual-cost calculation
-  - [x] `tests/unit/features/ai/services/completion.test.ts` - Test profit invariant
+  - [x] `src/ports/llm.port.ts` - LlmService response includes providerCostUsd, litellmCallId
+  - [x] `src/adapters/server/ai/litellm.adapter.ts` - Extract cost + call ID from headers
+  - [x] `src/features/ai/services/completion.ts` - Preflight gating + non-blocking post-call billing
+  - [x] `tests/unit/features/ai/services/completion.test.ts` - Test non-blocking behavior
 
-**Current Guard (MVP+):** Pre-call balance check uses a conservative estimate (prompt chars ÷ 4 + max completion tokens) to block zero/low balances before contacting the provider. Post-call debit is best-effort and does not block the response if it fails for insufficient credits. Replace this heuristic with configurable, per-model pricing once provider costs are wired.
+**Design:** Pre-call uses conservative estimate. Post-call uses actual LiteLLM cost. See ACTIVITY_METRICS.md for full design.
 
 ---
 
-### 6.5.7 Minimal Documentation Updates
+### 6.5.7 Documentation Updates
 
-- [ ] **Goal:** Document dual-cost behavior concisely with pointers to implementation.
+- [x] **Goal:** Document charge receipt model and point to ACTIVITY_METRICS.md as canonical design.
 
 - **Updates:**
-  - [ ] `docs/ACCOUNTS_DESIGN.md` - Add brief Stage 6.5 section: credit unit standard, profit invariant, flow pointer to pricing module + recordLlmUsage
-  - [ ] `docs/ACCOUNTS_API_KEY_ENDPOINTS.md` - Update completion endpoint: mention dual-cost computation and llm_usage recording
+  - [x] `docs/ACTIVITY_METRICS.md` - Canonical design doc for minimal charge receipts, LiteLLM-as-canonical telemetry
+  - [x] `docs/BILLING_EVOLUTION.md` - Updated Stage 6.5 to reflect charge_receipt model
+  - [ ] `docs/ACCOUNTS_DESIGN.md` - Update Credits DOWN section to reference recordChargeReceipt
+  - [ ] `docs/ACCOUNTS_API_KEY_ENDPOINTS.md` - Update completion flow to mention recordChargeReceipt
 
-**Constraints:**
-
-- Keep brief, no pseudocode
-- Focus on pointers to files and high-level behavior
+**Canonical Reference:** See `docs/ACTIVITY_METRICS.md` for full design rationale and invariants.
 
 ---
 
@@ -213,9 +206,9 @@ Credits increase via positive entries in credit_ledger (e.g., from the widget co
 
 **Verification:**
 
-- Single SQL query against llm_usage shows provider_cost_credits and user_price_credits per request
-- Aggregate query computes total provider costs vs total user revenue over period
-- Code enforces user_price_credits ≥ provider_cost_credits on every call
+- Single SQL query against llm_usage (charge_receipt) shows chargedCredits per request
 - All credits stored as BIGINT with 1 credit = $0.001 invariant respected
-- Provider cost comes from LiteLLM's response cost, not from local model pricing map
-- llm_usage rows can be joined with LiteLLM logs by requestId to cross-check costs
+- Provider cost comes from LiteLLM's `x-litellm-response-cost` header
+- llm_usage rows can be joined with LiteLLM logs by requestId (litellm_call_id) for forensic correlation
+- Post-call billing NEVER blocks user response (non-blocking invariant)
+- LiteLLM `/spend/logs` is canonical source for usage telemetry (model, tokens, cost breakdown)

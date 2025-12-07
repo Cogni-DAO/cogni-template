@@ -58,6 +58,7 @@ export function Header(): ReactElement {
               aria-label="Primary"
             >
               <NavigationLink href="/chat">Chat</NavigationLink>
+              <NavigationLink href="/activity">Activity</NavigationLink>
               <NavigationLink href="/credits">Credits</NavigationLink>
               <NavigationLink href="/sourcecred/">SourceCred</NavigationLink>
             </nav>

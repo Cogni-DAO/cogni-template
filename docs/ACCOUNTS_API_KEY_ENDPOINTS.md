@@ -41,7 +41,7 @@ We run the LiteLLM Proxy with a Postgres DB and `LITELLM_MASTER_KEY` as describe
 - [x] **Auth:** `Authorization: Bearer <virtual_key>`
 - [x] **Docs:** [LiteLLM Getting Started](https://docs.litellm.ai/docs/), section "Make a successful /chat/completion call"
 
-Cogni-template calls this endpoint from our `LlmService` adapter using the `litellm_virtual_key` stored in `virtual_keys`. We read `usage.total_tokens` from the response to update our `credit_ledger`.
+Cogni-template calls this endpoint from our `LlmService` adapter using the `litellm_virtual_key` stored in `virtual_keys`. We extract `x-litellm-response-cost` and `x-litellm-call-id` headers for billing. LiteLLM is canonical for usage telemetry; we store only minimal charge receipts locally.
 
 ### 2. Virtual Key Generation (Control Plane)
 
@@ -117,11 +117,13 @@ From this point on, all LLM calls for this user go through the same `billing_acc
 - [x] **Flow:**
   1. Call `auth()` and require `session.user` (wallet login)
   2. Call `getOrCreateBillingAccountForUser(session.user)`
-  3. Load the default `virtual_keys` row for that billing account
+  3. Pre-flight: estimate cost, check balance via `getBalance`, DENY if insufficient
   4. Call LiteLLM `POST /chat/completions` with `Authorization: Bearer <litellm_virtual_key>`
-  5. Record usage in `credit_ledger` for `billing_account_id` + `virtual_key_id`
+  5. Extract `x-litellm-response-cost` and `x-litellm-call-id` headers
+  6. Call `recordChargeReceipt` (non-blocking, per [ACTIVITY_METRICS.md](ACTIVITY_METRICS.md))
+  7. Return response to user (NEVER blocked by post-call billing)
 
-Session-based credit top-ups now flow through the widget confirm endpoint below; there is still no public HTTP surface for admin key registration or manual balance edits.
+Session-based credit top-ups flow through the widget confirm endpoint below. Post-call billing failures are logged but do not block user responses.
 
 ### 2. `/api/v1/payments/credits/confirm` (Payments)
 

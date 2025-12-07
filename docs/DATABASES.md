@@ -129,15 +129,18 @@ POSTGRES_DB=${APP_DB_NAME}
 
 **Migration Commands:**
 
-- `pnpm db:migrate` - Compose: db-migrate service (dev environment)
-- `pnpm db:migrate:test` - Compose: db-migrate service (test environment)
-- `pnpm db:migrate:direct` - Direct: drizzle-kit using DATABASE_URL (testcontainers, CI)
-- `docker compose --profile bootstrap run --rm db-migrate` - Direct compose invocation
+- `pnpm db:migrate` - Alias for `db:migrate:dev` (default: dev environment)
+- `pnpm db:migrate:dev` - Direct: drizzle-kit with `.env.local` (dev database)
+- `pnpm db:migrate:test` - Direct: drizzle-kit with `.env.test` (test database)
+- `pnpm db:migrate:direct` - Direct: drizzle-kit using DATABASE_URL from current environment
+- `pnpm db:migrate:container` - Container-only: used inside migrator Docker image
 
 **Execution Contexts:**
 
-- **Compose** (`db:migrate`, `db:migrate:test`): Docker compose db-migrate service. Requires `.env.local`/`.env.test`. For local docker stack.
-- **Direct** (`db:migrate:direct`): Runs drizzle-kit directly using `DATABASE_URL` from environment. For testcontainers and CI where DATABASE_URL is set programmatically.
+- **Local Dev** (`db:migrate`, `db:migrate:dev`): Runs `drizzle-kit migrate` with `.env.local`. For daily development.
+- **Local Test** (`db:migrate:test`): Runs `drizzle-kit migrate` with `.env.test`. For test database setup.
+- **Direct** (`db:migrate:direct`): Runs `drizzle-kit migrate` using `DATABASE_URL` from environment. For testcontainers and CI.
+- **Container** (`db:migrate:container`): Internal command used by Docker migrator image. Not for direct use.
 
 ### 2.1 Local Development
 
@@ -148,7 +151,7 @@ POSTGRES_DB=${APP_DB_NAME}
 **Commands:**
 
 ```bash
-pnpm db:migrate              # Migrate dev database via db-migrate service
+pnpm db:migrate              # Migrate dev database directly with drizzle-kit
 pnpm dev:stack               # Start app using same database
 ```
 
@@ -187,7 +190,7 @@ pnpm docker:dev:stack:setup     # Complete: build stack, create DB, migrate
 # Manual steps (if needed)
 pnpm docker:dev:stack           # Start containers
 pnpm db:provision               # Create database
-pnpm db:migrate                 # Run migrations via db-migrate service
+pnpm db:migrate                 # Run migrations with drizzle-kit
 ```
 
 **Key Properties:**

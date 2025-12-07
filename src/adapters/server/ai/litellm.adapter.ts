@@ -60,6 +60,16 @@ function getProviderCostFromHeaders(response: Response): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+/**
+ * Extract LiteLLM call ID from response headers for forensic correlation.
+ * Returns undefined if header is absent or empty.
+ */
+function getLitellmCallIdFromHeaders(response: Response): string | undefined {
+  const raw = response.headers.get("x-litellm-call-id");
+  if (!raw || raw.trim().length === 0) return undefined;
+  return raw.trim();
+}
+
 export class LiteLlmAdapter implements LlmService {
   async completion(
     params: Parameters<LlmService["completion"]>[0]
@@ -111,8 +121,9 @@ export class LiteLlmAdapter implements LlmService {
         );
       }
 
-      // Read cost from response headers (LiteLLM returns cost in headers, not body)
+      // Read cost and call ID from response headers
       const providerCostFromHeader = getProviderCostFromHeaders(response);
+      const litellmCallId = getLitellmCallIdFromHeaders(response);
 
       const data = (await response.json()) as {
         choices: { message: { content: string }; finish_reason?: string }[];
@@ -161,6 +172,10 @@ export class LiteLlmAdapter implements LlmService {
         result.providerCostUsd = providerCostFromHeader;
       }
 
+      if (litellmCallId) {
+        result.litellmCallId = litellmCallId;
+      }
+
       // Sanitized adapter log (no content, bounded fields only)
       logger.info(
         {
@@ -168,6 +183,7 @@ export class LiteLlmAdapter implements LlmService {
           tokensUsed: totalTokens,
           finishReason: result.finishReason,
           hasCost: typeof providerCostFromHeader === "number",
+          hasCallId: !!litellmCallId,
           contentLength: data.choices[0].message.content.length,
         },
         "adapter.litellm.completion_result"
@@ -256,8 +272,9 @@ export class LiteLlmAdapter implements LlmService {
       throw new Error("LiteLLM response body is empty");
     }
 
-    // Capture cost from headers if available immediately (unlikely for stream)
+    // Capture cost and call ID from headers if available immediately (unlikely for stream)
     const providerCostUsd = getProviderCostFromHeaders(response);
+    const litellmCallId = getLitellmCallIdFromHeaders(response);
 
     // Create a deferred promise for the final result (matches completion() return type)
     type CompletionResult = Awaited<ReturnType<LlmService["completion"]>>;
@@ -379,6 +396,10 @@ export class LiteLlmAdapter implements LlmService {
             result.providerCostUsd = providerCostUsd;
           }
 
+          if (litellmCallId) {
+            result.litellmCallId = litellmCallId;
+          }
+
           // ALWAYS include providerMeta with model (SSE doesn't return this, use request param)
           result.providerMeta = {
             model,
@@ -401,6 +422,7 @@ export class LiteLlmAdapter implements LlmService {
               tokensUsed: finalUsage?.totalTokens,
               finishReason,
               hasCost: typeof providerCostUsd === "number",
+              hasCallId: !!litellmCallId,
               contentLength: fullContent.length,
             },
             "adapter.litellm.stream_result"

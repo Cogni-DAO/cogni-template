@@ -94,10 +94,14 @@ Session → user.id → billing_account → default virtual_key → LiteLLM API 
 
 **Credits DOWN (LLM Usage):**
 
-- After each LiteLLM call, compute `provider_cost_credits` + `user_price_credits`
-- Insert `llm_usage` row with token counts and cost breakdown
-- Insert negative `credit_ledger` row with `reason='ai_usage'`
+Per [ACTIVITY_METRICS.md](ACTIVITY_METRICS.md), LiteLLM is canonical for usage telemetry. Our DB stores minimal charge receipts:
+
+- After each LiteLLM call, extract `x-litellm-response-cost` header for actual cost
+- Calculate `chargedCredits` with markup, call `recordChargeReceipt` (non-blocking)
+- Insert `llm_usage` (charge receipt) row with `chargedCredits`, `responseCostUsd`, `litellmCallId`
+- Insert negative `credit_ledger` row with `reason='llm_usage'`
 - Update `billing_accounts.balance_credits`
+- **Invariant:** Post-call billing NEVER blocks user response
 
 **Dev/Test:** Seed scripts insert positive `credit_ledger` rows directly via database fixtures.
 
@@ -131,8 +135,16 @@ Session → user.id → billing_account → default virtual_key → LiteLLM API 
 - Append-only audit log (source of truth for balances)
 - Links to `billing_accounts` and `virtual_keys`
 - Fields: `amount` (signed integer, +/-), `balance_after`, `reason`, `reference`, `metadata`, `created_at`
+- Idempotency enforced via unique index on `reference` per reason type
 
-**File:** `src/shared/db/schema.ts`
+**`llm_usage` (Charge Receipts):**
+
+- Minimal audit table for LLM billing (LiteLLM is canonical for telemetry)
+- Fields: `request_id` (unique, idempotency key), `litellm_call_id`, `charged_credits`, `response_cost_usd`, `provenance`
+- No model/tokens/usage JSONB - query LiteLLM `/spend/logs` for telemetry
+- See [ACTIVITY_METRICS.md](ACTIVITY_METRICS.md) for design rationale
+
+**File:** `src/shared/db/schema.billing.ts`
 
 ---
 

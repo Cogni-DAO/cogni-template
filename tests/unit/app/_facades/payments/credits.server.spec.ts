@@ -70,6 +70,7 @@ describe("app/_facades/payments/credits.server", () => {
       clock: testCtx.clock as never,
       paymentAttemptRepository: {} as never,
       onChainVerifier: {} as never,
+      usageService: {} as never,
       metricsQuery: {} as never,
     });
   });

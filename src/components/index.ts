@@ -45,6 +45,10 @@ export { Input } from "./kit/inputs/Input";
 export { ModeToggle } from "./kit/inputs/ModeToggle";
 export { SplitInput } from "./kit/inputs/SplitInput";
 export {
+  type TimeRange,
+  TimeRangeSelector,
+} from "./kit/inputs/TimeRangeSelector";
+export {
   Card,
   CardContent,
   CardDescription,

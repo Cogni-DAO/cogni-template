@@ -22,3 +22,17 @@ export interface AiLlmCallEvent {
   tokensUsed?: number | undefined;
   providerCostUsd?: number | undefined;
 }
+
+export interface AiActivityQueryCompletedEvent {
+  event: "ai.activity.query_completed";
+  reqId: string;
+  routeId: string;
+  scope: "user" | "org" | "system";
+  billingAccountId: string;
+  orgId?: string | undefined;
+  telemetrySource: "litellm" | "fallback";
+  groupBy: "day" | "hour";
+  durationMs: number;
+  resultCount: number;
+  status: "success" | "error";
+}
