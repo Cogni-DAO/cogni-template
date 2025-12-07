@@ -1,6 +1,10 @@
 # SourceCred Service
 
-> **Mission**: Host the legacy SourceCred instance for contribution tracking.
+# Metadata
+
+- **Type**: Service
+- **Status**: Production
+- **Owner**: Platform Team
 
 ## Architecture
 
