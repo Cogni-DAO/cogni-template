@@ -39,6 +39,7 @@ export const GET = wrapRouteHandlerWithLogging(
         id: m.id,
         name: m.name,
         isFree: m.isFree,
+        isZdr: m.isZdr,
         providerKey: m.providerKey,
       }));
 

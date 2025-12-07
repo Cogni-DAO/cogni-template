@@ -61,7 +61,11 @@ describe("app/_facades/payments/credits.server", () => {
       accountService,
       // Unused in this facade, but required by Container type
       log: {} as never,
-      config: { unhandledErrorPolicy: "rethrow" },
+      config: {
+        unhandledErrorPolicy: "rethrow",
+        rateLimitBypass: { enabled: false, headerName: "", headerValue: "" },
+        DEPLOY_ENVIRONMENT: "test",
+      },
       llmService: {} as never,
       clock: testCtx.clock as never,
       paymentAttemptRepository: {} as never,

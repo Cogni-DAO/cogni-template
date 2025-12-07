@@ -14,7 +14,7 @@
 
 "use client";
 
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, ShieldCheck } from "lucide-react";
 import { useState } from "react";
 import { ScrollArea } from "@/components/kit/data-display/ScrollArea";
 import {
@@ -156,20 +156,31 @@ export function ModelPicker({
                     <div className="min-w-0 flex-1 truncate font-medium text-sm">
                       {model.name || model.id}
                     </div>
-                    {model.isFree && (
-                      <span className="flex shrink-0 items-center gap-1.5 font-medium text-sm text-success">
-                        {isSelected && <Check className="size-4" />}
-                        Free
-                      </span>
-                    )}
-                    {!model.isFree && isSelected && (
-                      <Check className="size-4 shrink-0 text-primary" />
-                    )}
-                    {isPaidAndNoBalance && (
-                      <span className="text-muted-foreground text-xs">
-                        (Credits required)
-                      </span>
-                    )}
+                    <div className="flex shrink-0 items-center gap-2">
+                      {model.isZdr && (
+                        <span className="flex items-center gap-1 font-medium text-primary text-xs">
+                          <ShieldCheck className="size-3" />
+                          Private (ZDR)
+                        </span>
+                      )}
+                      {model.isFree && (
+                        <span className="flex items-center gap-1.5 font-medium text-sm text-success">
+                          {isSelected && <Check className="size-4" />}
+                          Free
+                        </span>
+                      )}
+                      {!model.isFree && !model.isZdr && isSelected && (
+                        <Check className="size-4 text-primary" />
+                      )}
+                      {model.isZdr && isSelected && (
+                        <Check className="size-4 text-primary" />
+                      )}
+                      {isPaidAndNoBalance && (
+                        <span className="text-muted-foreground text-xs">
+                          (Credits required)
+                        </span>
+                      )}
+                    </div>
                   </button>
                 );
               })

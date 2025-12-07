@@ -52,23 +52,31 @@ model_list:
       is_free: false
       provider_key: "openai"
 
-  # Anthropic
+  # Anthropic (ZDR-enabled: Zero Data Retention - provider won't log/train on data)
   - model_name: claude-sonnet-4.5
     litellm_params:
       model: openrouter/anthropic/claude-sonnet-4.5
       api_key: "os.environ/OPENROUTER_API_KEY"
+      extra_body:
+        provider:
+          zdr: true
     model_info:
       display_name: "Claude Sonnet 4.5"
       is_free: false
+      is_zdr: true
       provider_key: "anthropic"
 
   - model_name: claude-opus-4.5
     litellm_params:
       model: openrouter/anthropic/claude-opus-4.5
       api_key: "os.environ/OPENROUTER_API_KEY"
+      extra_body:
+        provider:
+          zdr: true
     model_info:
       display_name: "Claude Opus 4.5"
       is_free: false
+      is_zdr: true
       provider_key: "anthropic"
 
   # DeepSeek
@@ -81,14 +89,18 @@ model_list:
       is_free: false
       provider_key: "deepseek"
 
-  # Google
+  # Google (ZDR-enabled: Zero Data Retention)
   - model_name: gemini-2.5-flash
     litellm_params:
       model: openrouter/google/gemini-2.5-flash
       api_key: "os.environ/OPENROUTER_API_KEY"
+      extra_body:
+        provider:
+          zdr: true
     model_info:
       display_name: "Gemini 2.5 Flash"
       is_free: false
+      is_zdr: true
       provider_key: "google"
       metadata:
         cogni:
@@ -98,9 +110,13 @@ model_list:
     litellm_params:
       model: openrouter/google/gemini-3-pro-preview
       api_key: "os.environ/OPENROUTER_API_KEY"
+      extra_body:
+        provider:
+          zdr: true
     model_info:
       display_name: "Gemini 3 Pro"
       is_free: false
+      is_zdr: true
       provider_key: "google"
 
   # Kimi (MoonshotAI)

@@ -81,8 +81,8 @@ export function loadModelsCatalogWithDefaultsFixture(): ModelsCatalog {
 export function createModelsWithFree(): ModelsOutput {
   return {
     models: [
-      { id: "free-model-123", name: "Free Model", isFree: true },
-      { id: "paid-model-456", name: "Paid Model", isFree: false },
+      { id: "free-model-123", name: "Free Model", isFree: true, isZdr: false },
+      { id: "paid-model-456", name: "Paid Model", isFree: false, isZdr: false },
     ],
     defaultPreferredModelId: "paid-model-456",
     defaultFreeModelId: "free-model-123",
@@ -95,7 +95,9 @@ export function createModelsWithFree(): ModelsOutput {
  */
 export function createModelsPaidOnly(): ModelsOutput {
   return {
-    models: [{ id: "gpt-5-nano", name: "GPT-5 Nano", isFree: false }],
+    models: [
+      { id: "gpt-5-nano", name: "GPT-5 Nano", isFree: false, isZdr: false },
+    ],
     defaultPreferredModelId: "gpt-5-nano",
     defaultFreeModelId: null,
   };
@@ -108,8 +110,18 @@ export function createModelsPaidOnly(): ModelsOutput {
 export function createModelsClaudeOnly(): ModelsOutput {
   return {
     models: [
-      { id: "claude-haiku-free", name: "Claude Haiku", isFree: true },
-      { id: "claude-sonnet-paid", name: "Claude Sonnet", isFree: false },
+      {
+        id: "claude-haiku-free",
+        name: "Claude Haiku",
+        isFree: true,
+        isZdr: false,
+      },
+      {
+        id: "claude-sonnet-paid",
+        name: "Claude Sonnet",
+        isFree: false,
+        isZdr: true,
+      },
     ],
     defaultPreferredModelId: "claude-sonnet-paid",
     defaultFreeModelId: "claude-haiku-free",
@@ -123,9 +135,9 @@ export function createModelsClaudeOnly(): ModelsOutput {
 export function createModelsMultipleFree(): ModelsOutput {
   return {
     models: [
-      { id: "gpt-4o-mini", name: "GPT-4o Mini", isFree: true },
-      { id: "claude-haiku", name: "Claude Haiku", isFree: true },
-      { id: "gpt-5-nano", name: "GPT-5 Nano", isFree: false },
+      { id: "gpt-4o-mini", name: "GPT-4o Mini", isFree: true, isZdr: false },
+      { id: "claude-haiku", name: "Claude Haiku", isFree: true, isZdr: false },
+      { id: "gpt-5-nano", name: "GPT-5 Nano", isFree: false, isZdr: false },
     ],
     defaultPreferredModelId: "gpt-5-nano",
     defaultFreeModelId: "gpt-4o-mini",

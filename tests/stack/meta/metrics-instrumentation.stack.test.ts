@@ -153,11 +153,8 @@ describe("HTTP Metrics Instrumentation", () => {
     const baseDurationCount = baselineDuration?.value ?? 0;
 
     // 2. Hit /api/v1/public/analytics/summary (increments the counter)
-    // Use file-scoped unique IP to avoid rate limit bucket collision with other test files
-    const response = await fetchWithIp(
-      baseUrl(testUrl),
-      METRICS_INSTRUMENTATION_TEST_IP
-    );
+    // Use fetchStackTest to bypass rate limiting (not testing rate limits here)
+    const response = await fetchStackTest(baseUrl(testUrl));
     expect(response.status).toBe(200);
 
     // 3. Get metrics again (second fetch to read the incremented values)
@@ -199,19 +196,13 @@ vi.mock("@/app/_lib/auth/session", () => ({
 
 // Import after mock
 import { TEST_MODEL_ID } from "@tests/_fakes";
-import {
-  fetchWithIp,
-  generateUniqueTestIp,
-} from "@tests/_fixtures/http/rate-limit-helpers";
+import { fetchStackTest } from "@tests/_fixtures/http/rate-limit-helpers";
 import { getDb } from "@/adapters/server/db/client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as completionPOST } from "@/app/api/v1/ai/completion/route";
 import type { SessionUser } from "@/shared/auth";
 import { billingAccounts, users, virtualKeys } from "@/shared/db/schema";
 import { metricsRegistry } from "@/shared/observability";
-
-// Generate unique IP once for this test file (reuse for all requests to avoid bucket collisions)
-const METRICS_INSTRUMENTATION_TEST_IP = generateUniqueTestIp();
 
 describe("LLM Metrics Instrumentation", () => {
   it("increments ai_llm_call_duration_ms and ai_llm_tokens_total on successful completion", async () => {

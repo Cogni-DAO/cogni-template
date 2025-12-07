@@ -22,12 +22,16 @@ www.{$DOMAIN} {
   # Public API namespace - rate limited, no auth required
   # Security: Set X-Real-IP from TCP connection source (non-spoofable by client)
   # Rate limiting enforced app-side, keyed on X-Real-IP
-  handle_path /api/v1/public/* {
+  # Note: Use handle (not handle_path) to preserve full path for app routing
+  @public path /api/v1/public/*
+  handle @public {
     reverse_proxy app:3000 {
-      # Enforce strict timeout to prevent resource exhaustion
-      timeout 10s
       # Set X-Real-IP from actual TCP source (cannot be spoofed by HTTP headers)
       header_up X-Real-IP {remote_host}
+      # Enforce strict timeout to prevent resource exhaustion
+      transport http {
+        response_header_timeout 10s
+      }
     }
   }
 

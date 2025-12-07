@@ -13,6 +13,7 @@ Automated staging→release→main workflow with fork-safe CI/CD and E2E-trigger
 
 **P1 - Optimization and Maintainability**:
 
+- [ ] **Edge routing CI validation**: Add CI job that starts full stack (including SourceCred) and validates edge Caddyfile routes via smoke tests: `/health`, `/api/v1/public/*`, `/sourcecred/`. Prevents edge config drift from breaking local/CI.
 - [ ] **Config as code validation**: Enforce env schema validation in CI (type-check + required keys), block deploy if invalid, surface staging/prod config diffs during release promotion.
 - [ ] **Refactor `deploy.sh`**: Split 600+ line monolith into composable modules (edge, runtime, sourcecred, cleanup functions).
 - [ ] **Complete migrator fingerprinting**:

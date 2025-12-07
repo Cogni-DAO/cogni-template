@@ -77,7 +77,7 @@ services:
     environment:
       - DOMAIN=${DOMAIN}
     volumes:
-      - ./configs/Caddyfile.tmpl:/etc/caddy/Caddyfile:ro
+      - ../edge/configs/Caddyfile.tmpl:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
     depends_on:

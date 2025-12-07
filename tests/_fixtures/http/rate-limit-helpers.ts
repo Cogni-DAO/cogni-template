@@ -41,6 +41,9 @@ export function generateUniqueTestIp(): string {
  *
  * Note: Caddy sets X-Real-IP from TCP source via header_up directive.
  * This helper simulates that for testing (real Caddy will overwrite client-supplied X-Real-IP).
+ *
+ * IMPORTANT: Does NOT include X-Stack-Test header - use for rate-limit testing only.
+ * For general stack tests, use fetchStackTest() instead.
  */
 export async function fetchWithIp(
   url: string,
@@ -52,6 +55,28 @@ export async function fetchWithIp(
     headers: {
       ...options?.headers,
       "X-Real-IP": ip,
+    },
+  });
+}
+
+/**
+ * Make HTTP request with X-Stack-Test header to bypass rate limiting.
+ * Use for stack tests that don't specifically test rate limiting behavior.
+ *
+ * The bypass only works when APP_ENV=test (container config controls this).
+ * Production builds ignore the header entirely.
+ *
+ * For tests that validate rate limiting, use fetchWithIp() instead (no bypass).
+ */
+export async function fetchStackTest(
+  url: string,
+  options?: RequestInit
+): Promise<Response> {
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...options?.headers,
+      "X-Stack-Test": "1",
     },
   });
 }
