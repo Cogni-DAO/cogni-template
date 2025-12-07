@@ -70,6 +70,7 @@ export DATABASE_URL="postgresql://cogni_app_preview:$APP_DB_PASSWORD_PREVIEW@pos
 export LITELLM_MASTER_KEY=sk-...
 export OPENROUTER_API_KEY=sk-...
 export AUTH_SECRET=your-session-secret
+export METRICS_TOKEN="$(openssl rand -base64 32)"
 export POSTGRES_ROOT_USER=postgres
 export POSTGRES_ROOT_PASSWORD=$POSTGRES_ROOT_PASSWORD_PREVIEW
 export APP_DB_USER=cogni_app_preview
