@@ -29,6 +29,7 @@ import {
   FakeMetricsAdapter,
   getTestOnChainVerifier,
 } from "@/adapters/test";
+import type { RateLimitBypassConfig } from "@/bootstrap/http/wrapPublicRoute";
 import type {
   AccountService,
   Clock,
@@ -41,19 +42,6 @@ import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
 
 export type UnhandledErrorPolicy = "rethrow" | "respond_500";
-
-/**
- * Config for rate limit bypass in test environments.
- * Security: Only enabled when APP_ENV=test; production builds ignore bypass header.
- */
-export interface RateLimitBypassConfig {
-  /** Whether bypass is enabled (only true when APP_ENV=test) */
-  enabled: boolean;
-  /** Header name to check for bypass (e.g., "x-stack-test") */
-  headerName: string;
-  /** Header value that triggers bypass (e.g., "1") */
-  headerValue: string;
-}
 
 export interface ContainerConfig {
   /** How to handle unhandled errors in route wrappers: rethrow for dev/test, respond_500 for production safety */

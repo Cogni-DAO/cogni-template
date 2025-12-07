@@ -13,7 +13,6 @@
  */
 
 import { type NextRequest, NextResponse } from "next/server";
-import type { RateLimitBypassConfig } from "@/bootstrap/container";
 import {
   logRequestWarn,
   publicRateLimitExceededTotal,
@@ -33,6 +32,16 @@ type PublicRouteHandler<TContext = unknown> = (
   request: NextRequest,
   context?: TContext
 ) => Promise<NextResponse>;
+
+/**
+ * Rate limit bypass config for test environments.
+ * Security: Only enabled when APP_ENV=test.
+ */
+export interface RateLimitBypassConfig {
+  enabled: boolean;
+  headerName: string;
+  headerValue: string;
+}
 
 /**
  * Dependencies for public route wrapper factory.
