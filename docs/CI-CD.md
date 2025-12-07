@@ -115,11 +115,13 @@ push to main → build-prod.yml (build → test → push) → deploy-production.
 - `prod-${GITHUB_SHA}-migrate` (deploy consumption, legacy)
 - `migrate-${FINGERPRINT}` (content-addressed, CI caching - partial implementation)
 
-**SourceCred** (manual release, not CI/CD integrated):
+**SourceCred** (manual image release, auto-deployed via deploy.sh):
 
 - Immutable image: `ghcr.io/cogni-dao/cogni-sourcecred-runner:sc0.11.2-node18-2025-12-07`
+- Image built from Dockerfile with `CMD ["yarn", "start"]` (invokes sourcecred via node_modules)
+- Deployed automatically during `deploy.sh` runs (not gated by app build workflow)
+- Image release process: `platform/infra/services/sourcecred/release.sh`
 - Version: v0 (prototype)
-- Release process: `platform/infra/services/sourcecred/release.sh`
 - Long-term: Planned deprecation
 
 ## Branch Management

@@ -51,7 +51,7 @@ To update the SourceCred runtime (e.g., Node version or SourceCred version):
 
 - **Invariants**:
   1.  **Immutable Runner**: DO NOT build on VM. Use `release.sh` to push immutable tags.
-  2.  **Command Override**: Must override command to `sourcecred go && sourcecred serve` to guarantee data load.
+  2.  **No Command Override**: Use Dockerfile's CMD (`yarn start`). Sourcecred CLI exists only in node_modules, not in PATH.
   3.  **Token Required**: `SOURCECRED_GITHUB_TOKEN` is mandatory.
 
 ## Dependencies

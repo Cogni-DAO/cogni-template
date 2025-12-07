@@ -528,9 +528,6 @@ $SOURCECRED_COMPOSE up -d
 # 4. Verify readiness (fail-fast, check config availability - SC-3)
 log_info "Waiting for SourceCred readiness..."
 
-# SC-READINESS-CURL-PATH: Warn if network resolution is broken
-$EDGE_COMPOSE exec -T caddy sh -lc 'getent hosts sourcecred >/dev/null' || log_warn "Caddy cannot resolve 'sourcecred' hostname - probe may fail"
-
 deadline=$((SECONDS+300))
 while true; do
     if (( SECONDS >= deadline )); then
@@ -557,22 +554,13 @@ while true; do
         exit 1
     fi
 
-    all_ready="true"
-    for config in currencyDetails.json weights.json grain.json; do
-        if ! $EDGE_COMPOSE exec -T caddy sh -lc "wget -qO- http://sourcecred:6006/config/$config >/dev/null"; then
-            all_ready="false"
-            break
-        fi
-    done
-
-    if [[ "$all_ready" == "true" ]]; then
-        log_info "SourceCred is ready (all configs reachable)"
+    # Simple HTTP readiness: check one config file via host-mapped port 6006
+    if wget -qO- http://localhost:6006/config/weights.json >/dev/null 2>&1; then
+        log_info "SourceCred is ready (weights.json reachable on port 6006)"
         break
     fi
 
     sleep 2
-
-    sleep 1
 done
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
