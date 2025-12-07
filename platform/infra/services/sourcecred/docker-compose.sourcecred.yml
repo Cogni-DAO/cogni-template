@@ -1,8 +1,7 @@
 services:
   sourcecred:
-    build:
-      context: .
-      dockerfile: Dockerfile.sourcecred
+    image: ghcr.io/cogni-dao/cogni-sourcecred-runner:sc0.11.2-node18-2025-12-07
+    command: sh -c "sourcecred go && sourcecred serve"
     ports:
       - "6006:6006"
     volumes:

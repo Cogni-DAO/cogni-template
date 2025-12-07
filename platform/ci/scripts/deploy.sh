@@ -517,24 +517,11 @@ fi
 log_info "SourceCred Configuration:"
 grep -C 2 "repositories" /opt/cogni-template-sourcecred/instance/config/plugins/sourcecred/github/config.json || log_warn "Could not read GitHub config"
 
-# 2. Check if data needs loading (Idempotence based on state ONLY - SC-2)
-NEEDS_LOAD="false"
-if [[ ! -f /opt/cogni-template-sourcecred/instance/data/ledger.json ]]; then
-    log_warn "SourceCred ledger missing in instance/data - triggering initial load..."
-    NEEDS_LOAD="true"
-fi
+# 3. Pull image (Immutable Artifact - SC-invariant-2)
+log_info "Pulling SourceCred image..."
+$SOURCECRED_COMPOSE pull sourcecred
 
-if [[ "$NEEDS_LOAD" == "true" ]]; then
-    log_info "Running SourceCred data load (yarn load)..."
-    # Runs in disposable container using the just-built image
-    $SOURCECRED_COMPOSE run --rm sourcecred yarn load || {
-        log_error "SourceCred load failed - check token permissions or repo config"
-        $SOURCECRED_COMPOSE logs --tail=200 sourcecred || true
-        exit 1
-    }
-fi
-
-# 3. Start service
+# 4. Start service
 log_info "Starting SourceCred container..."
 $SOURCECRED_COMPOSE up -d
 
@@ -544,7 +531,7 @@ log_info "Waiting for SourceCred readiness..."
 # SC-READINESS-CURL-PATH: Warn if network resolution is broken
 $EDGE_COMPOSE exec -T caddy sh -lc 'getent hosts sourcecred >/dev/null' || log_warn "Caddy cannot resolve 'sourcecred' hostname - probe may fail"
 
-deadline=$((SECONDS+30))
+deadline=$((SECONDS+300))
 while true; do
     if (( SECONDS >= deadline )); then
         log_error "SourceCred failed to become ready (timeout)"
