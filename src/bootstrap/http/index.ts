@@ -4,9 +4,9 @@
 /**
  * Module: `@bootstrap/http`
  * Purpose: HTTP route utilities for bootstrapping.
- * Scope: Bootstrap-layer exports; creates bound wrapPublicRoute singleton lazily.
+ * Scope: Bootstrap-layer exports; creates bound wrapPublicRoute singleton lazily. Does NOT handle request-scoped lifecycle or business logic.
  * Invariants: All /api/v1/public/** routes MUST use wrapPublicRoute(); enforced by CI test.
- * Side-effects: Lazy container init on first wrapPublicRoute call (not at module load)
+ * Side-effects: global (lazy container init on first wrapPublicRoute call)
  * Notes: wrapPublicRoute bound once on first use; routes get stable wrapper without triggering container init at import time.
  * Links: Re-exports from bootstrap/http/*; CI enforcement in tests/meta/public-route-enforcement.test.ts.
  * @public

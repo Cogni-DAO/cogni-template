@@ -56,7 +56,7 @@ vi.mock("@/shared/observability", async (importOriginal) => {
 
 describe("makeWrapPublicRoute - Rate Limit Bypass", () => {
   let limiter: TokenBucketRateLimiter;
-  let consumeSpy: ReturnType<typeof vi.spyOn>;
+  let consumeSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     limiter = new TokenBucketRateLimiter({
