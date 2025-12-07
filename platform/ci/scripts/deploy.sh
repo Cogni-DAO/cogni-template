@@ -539,6 +539,24 @@ while true; do
         exit 1
     fi
 
+    # Fail fast if container crashed (SC-invariant-3)
+    cid="$($SOURCECRED_COMPOSE ps -q sourcecred || true)"
+    if [[ -z "$cid" ]]; then
+        status="missing"
+        restarting="false"
+    else
+        container_info="$(docker inspect -f '{{.State.Status}} {{.State.Restarting}}' "$cid" 2>/dev/null || echo 'missing false')"
+        status="${container_info%% *}"
+        restarting="${container_info##* }"
+    fi
+
+    # Treat exited/dead/restarting/missing as failure; allow created/running to keep trying
+    if [[ "$status" == "exited" || "$status" == "dead" || "$status" == "missing" || "$restarting" == "true" ]]; then
+        log_error "SourceCred container failed early (State: $status, Restarting: $restarting)"
+        $SOURCECRED_COMPOSE logs --tail=200 sourcecred || true
+        exit 1
+    fi
+
     all_ready="true"
     for config in currencyDetails.json weights.json grain.json; do
         if ! $EDGE_COMPOSE exec -T caddy sh -lc "wget -qO- http://sourcecred:6006/config/$config >/dev/null"; then
@@ -548,15 +566,11 @@ while true; do
     done
 
     if [[ "$all_ready" == "true" ]]; then
-        # Check stability: Must be running and NOT restarting
-        status=$($SOURCECRED_COMPOSE ps -q sourcecred | xargs -r docker inspect -f '{{.State.Status}} {{.State.Restarting}}' || echo "unknown true")
-        if [[ "$status" == "running false" ]]; then
-            log_info "SourceCred is ready and stable (all configs reachable)"
-            break
-        else
-             log_warn "SourceCred is unstable (Status: $status), waiting..."
-        fi
+        log_info "SourceCred is ready (all configs reachable)"
+        break
     fi
+
+    sleep 2
 
     sleep 1
 done
