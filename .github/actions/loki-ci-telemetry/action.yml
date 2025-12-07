@@ -4,10 +4,11 @@
 name: CI Telemetry to Loki
 description: |
   Capture CI job telemetry and push to Grafana Cloud Loki.
-  - Always: writes JSON summary (queryable via {env="ci"} | json)
-  - On failure: appends generic failure context (job logs, metadata)
-  - On failure + compose_file: appends docker/compose logs
-  - Always: pushes to Loki with env=ci label and low-cardinality labels
+  - Always: writes JSON summary (queryable via {env="ci"} | json | type="ci_run_summary")
+  - Always + compose_file: emits structured compose_stack_state JSON + captures docker state
+  - On failure: detailed container inspection + logs for unhealthy/exited services
+  - On failure: generic failure context (job logs, toolchain, repo state)
+  - Always: pushes to Loki with env=ci, kind=<stack_failure|stack_state|ci_run> labels
 
 inputs:
   loki_url:
@@ -140,52 +141,166 @@ runs:
         # Cap size and prefix with FAILCTX:
         head -c "$MAX_GENERIC_BYTES" "$TEMP_GENERIC" | sed 's/^/FAILCTX: /' >> "$LOG_FILE"
 
-    - name: Capture docker-compose failure context
-      if: failure() && inputs.compose_file != ''
+    - name: Capture docker-compose stack state
+      if: always() && inputs.compose_file != ''
       shell: bash
       env:
         COMPOSE_FILE: ${{ inputs.compose_file }}
         COMPOSE_SERVICES: ${{ inputs.compose_services }}
         TAIL_LINES: ${{ inputs.tail_lines }}
+        JOB_STATUS: ${{ inputs.job_status }}
       run: |
         LOG_FILE="${{ runner.temp }}/ci-job.log"
-        MAX_FAILCTX_BYTES=524288  # 512KB cap for docker-compose context
+        MAX_BUNDLE_BYTES=524288  # 512KB total cap for all compose output
+        MAX_PER_SERVICE_LINES="${TAIL_LINES}"
 
-        # Capture to temp file first, then prefix and append
-        TEMP_FAILCTX=$(mktemp)
-        trap "rm -f '$TEMP_FAILCTX'" EXIT
+        # Track total bytes written
+        BUNDLE_TEMP=$(mktemp)
+        trap "rm -f '$BUNDLE_TEMP'" EXIT
 
+        # Emit structured JSON header for this bundle
+        jq -nc \
+          --arg type "compose_stack_state" \
+          --arg kind "$([[ "$JOB_STATUS" == "failure" ]] && echo "stack_failure" || echo "stack_state")" \
+          --arg status "$JOB_STATUS" \
+          --arg captured_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          --arg compose_file "$COMPOSE_FILE" \
+          '{type: $type, kind: $kind, status: $status, captured_at: $captured_at, compose_file: $compose_file}' \
+          >> "$LOG_FILE"
+
+        # NDJSON invariant: newline after JSON
+        printf '\n' >> "$LOG_FILE"
+
+        # Docker ps: compact on success, full on failure
         {
           echo ""
-          echo "=== Docker-Compose Failure Context ==="
-          echo "captured_at: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-          # Docker system state
-          echo ""
-          echo "=== docker ps ==="
-          docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>&1 || echo "docker ps failed"
-
-          # Compose state (if project exists)
-          if docker compose -f "$COMPOSE_FILE" ps --quiet 2>/dev/null; then
-            echo ""
-            echo "=== docker compose ps ==="
-            docker compose -f "$COMPOSE_FILE" ps 2>&1 || true
-
-            # Capture logs for each service
-            for svc in $COMPOSE_SERVICES; do
-              echo ""
-              echo "=== logs: $svc (tail $TAIL_LINES) ==="
-              docker compose -f "$COMPOSE_FILE" logs --tail="$TAIL_LINES" "$svc" 2>&1 || echo "No logs for $svc"
-            done
+          if [[ "$JOB_STATUS" == "failure" ]]; then
+            echo "=== docker ps -a (full) ==="
+            docker ps -a 2>&1 || echo "docker ps failed"
           else
-            echo "No compose project found for $COMPOSE_FILE"
+            echo "=== docker ps -a (compact) ==="
+            docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>&1 || echo "docker ps failed"
           fi
-        } > "$TEMP_FAILCTX"
+        } > "$BUNDLE_TEMP"
 
-        # Cap size and prefix with FAILCTX:
-        # Note: byte-cap (head -c) can cut mid-line, producing messy output.
-        # MVP accepts this; future: use line-based cap (awk/perl) for cleaner truncation.
-        head -c "$MAX_FAILCTX_BYTES" "$TEMP_FAILCTX" | sed 's/^/FAILCTX: /' >> "$LOG_FILE"
+        # Check if compose project has any containers
+        CID_LIST=$(docker compose -f "$COMPOSE_FILE" ps -q 2>/dev/null || true)
+        if [[ -z "$CID_LIST" ]]; then
+          echo "No compose project found for $COMPOSE_FILE" >> "$BUNDLE_TEMP"
+          head -c "$MAX_BUNDLE_BYTES" "$BUNDLE_TEMP" >> "$LOG_FILE"
+          exit 0
+        fi
+
+        # Compose state
+        {
+          echo ""
+          echo "=== docker compose ps ==="
+          docker compose -f "$COMPOSE_FILE" ps 2>&1 || true
+        } >> "$BUNDLE_TEMP"
+
+        # Container inspection: only unhealthy/exited or on failure
+        for svc in $COMPOSE_SERVICES; do
+          CONTAINER_ID=$(docker compose -f "$COMPOSE_FILE" ps -q "$svc" 2>/dev/null || true)
+          [[ -z "$CONTAINER_ID" ]] && continue
+
+          STATUS=$(docker inspect "$CONTAINER_ID" --format '{{.State.Status}}' 2>/dev/null || echo "unknown")
+          HEALTH=$(docker inspect "$CONTAINER_ID" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>/dev/null || echo "none")
+
+          # Capture detailed state if unhealthy/exited OR job failed
+          if [[ "$STATUS" == "exited" ]] || [[ "$HEALTH" == "unhealthy" ]] || [[ "$JOB_STATUS" == "failure" ]]; then
+            {
+              echo ""
+              echo "=== Inspect $svc (status=$STATUS, health=$HEALTH) ==="
+              # Safe minimal fields only
+              docker inspect "$CONTAINER_ID" --format '
+               Status: {{.State.Status}}
+               ExitCode: {{.State.ExitCode}}
+               Error: {{.State.Error}}
+               OOMKilled: {{.State.OOMKilled}}
+               FinishedAt: {{.State.FinishedAt}}
+               {{- if .State.Health}}
+               Health.Status: {{.State.Health.Status}}
+               Health.FailingStreak: {{.State.Health.FailingStreak}}
+               {{- range $i, $log := .State.Health.Log}}
+               Health.Log[{{$i}}].Start: {{$log.Start}}
+               Health.Log[{{$i}}].End: {{$log.End}}
+               Health.Log[{{$i}}].ExitCode: {{$log.ExitCode}}
+               Health.Log[{{$i}}].Output: {{$log.Output}}
+               {{- end}}
+               {{- end}}' 2>&1 || echo "Inspect failed for $svc"
+            } >> "$BUNDLE_TEMP"
+          fi
+        done
+
+        # Service logs: only for unhealthy/exited or on failure
+        for svc in $COMPOSE_SERVICES; do
+          CONTAINER_ID=$(docker compose -f "$COMPOSE_FILE" ps -q "$svc" 2>/dev/null || true)
+          [[ -z "$CONTAINER_ID" ]] && continue
+
+          STATUS=$(docker inspect "$CONTAINER_ID" --format '{{.State.Status}}' 2>/dev/null || echo "unknown")
+          HEALTH=$(docker inspect "$CONTAINER_ID" --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' 2>/dev/null || echo "none")
+
+          # Capture logs if unhealthy/exited OR job failed
+          if [[ "$STATUS" == "exited" ]] || [[ "$HEALTH" == "unhealthy" ]] || [[ "$JOB_STATUS" == "failure" ]]; then
+            {
+              echo ""
+              echo "=== logs: $svc (tail $MAX_PER_SERVICE_LINES, with timestamps) ==="
+              # Per-service tail, with line truncation to avoid mid-line cuts
+              docker compose -f "$COMPOSE_FILE" logs --timestamps --tail="$MAX_PER_SERVICE_LINES" "$svc" 2>&1 | head -n "$MAX_PER_SERVICE_LINES" || echo "No logs for $svc"
+            } >> "$BUNDLE_TEMP"
+          fi
+        done
+
+        # Enforce total bundle byte cap (truncate deterministically)
+        head -c "$MAX_BUNDLE_BYTES" "$BUNDLE_TEMP" >> "$LOG_FILE"
+
+    - name: Redact secrets from log bundle
+      if: always()
+      shell: bash
+      run: |
+        LOG_FILE="${{ runner.temp }}/ci-job.log"
+
+        # Only redact if log file exists and is non-empty
+        if [[ ! -s "$LOG_FILE" ]]; then
+          exit 0
+        fi
+
+        # Create redacted copy
+        REDACTED_TEMP=$(mktemp)
+        trap "rm -f '$REDACTED_TEMP'" EXIT
+
+        # Redact common secret patterns (preserve log structure)
+        # Matches: GITHUB_TOKEN=xxx, litellm_master_key: "xxx", password="xxx", Authorization: Bearer xxx
+        sed -E \
+          -e 's/([_A-Z]*TOKEN[_A-Z]*)=([^[:space:]"'\'']+)/\1=***REDACTED***/gi' \
+          -e 's/([_A-Z]*KEY[_A-Z]*)=([^[:space:]"'\'']+)/\1=***REDACTED***/gi' \
+          -e 's/([_A-Z]*SECRET[_A-Z]*)=([^[:space:]"'\'']+)/\1=***REDACTED***/gi' \
+          -e 's/(password[_A-Z]*)=([^[:space:]"'\'']+)/\1=***REDACTED***/gi' \
+          -e 's/(api[_-]?key[_A-Z]*)=([^[:space:]"'\'']+)/\1=***REDACTED***/gi' \
+          -e 's/([_a-z]*token[_a-z]*)[[:space:]]*[:=][[:space:]]*"([^"]+)"/\1: "***REDACTED***"/gi' \
+          -e 's/([_a-z]*key[_a-z]*)[[:space:]]*[:=][[:space:]]*"([^"]+)"/\1: "***REDACTED***"/gi' \
+          -e 's/([_a-z]*secret[_a-z]*)[[:space:]]*[:=][[:space:]]*"([^"]+)"/\1: "***REDACTED***"/gi' \
+          -e 's/(password[_a-z]*)[[:space:]]*[:=][[:space:]]*"([^"]+)"/\1: "***REDACTED***"/gi' \
+          -e 's/(api[_-]?key[_a-z]*)[[:space:]]*[:=][[:space:]]*"([^"]+)"/\1: "***REDACTED***"/gi' \
+          -e 's/(Authorization:[[:space:]]*Bearer)[[:space:]]+[^[:space:]]+/\1 ***REDACTED***/gi' \
+          "$LOG_FILE" > "$REDACTED_TEMP"
+
+        # Replace original with redacted version
+        mv "$REDACTED_TEMP" "$LOG_FILE"
+
+    - name: Determine kind label
+      if: always()
+      id: kind
+      shell: bash
+      run: |
+        # Compute kind based on compose_file presence and job_status
+        if [[ -n "${{ inputs.compose_file }}" ]] && [[ "${{ inputs.job_status }}" == "failure" ]]; then
+          echo "value=stack_failure" >> $GITHUB_OUTPUT
+        elif [[ -n "${{ inputs.compose_file }}" ]]; then
+          echo "value=stack_state" >> $GITHUB_OUTPUT
+        else
+          echo "value=ci_run" >> $GITHUB_OUTPUT
+        fi
 
     - name: Push to Loki
       if: always()
@@ -196,4 +311,4 @@ runs:
         loki_token: ${{ inputs.loki_token }}
         log_file: ${{ runner.temp }}/ci-job.log
         job_name: ${{ github.job }}
-        labels: workflow=${{ github.workflow }} ref=${{ github.ref_name }} run_id=${{ github.run_id }} attempt=${{ github.run_attempt }} sha8=${{ github.sha }} status=${{ inputs.job_status }}
+        labels: workflow=${{ github.workflow }} ref=${{ github.ref_name }} run_id=${{ github.run_id }} attempt=${{ github.run_attempt }} sha8=${{ github.sha }} status=${{ inputs.job_status }} kind=${{ steps.kind.outputs.value }}
