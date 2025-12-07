@@ -15,6 +15,28 @@ Use that path sparingly — voting is reserved for meaningful exceptions or gove
 platform/bootstrap/bootstrap  # installs Node, pnpm, OpenTofu, Docker + all project dependencies
 ```
 
+## Database Setup
+
+**First time after cloning:**
+
+```bash
+pnpm dev:infra              # Start postgres, litellm, etc.
+pnpm db:setup               # Create dev database + run migrations
+```
+
+**For test database:**
+
+```bash
+pnpm db:setup:test          # Create test database + run migrations
+```
+
+**Quick Reference:**
+
+- `pnpm db:migrate` - Run migrations on dev database
+- `pnpm db:migrate:dev` - Same as above (explicit)
+- `pnpm db:migrate:test` - Run migrations on test database
+- `pnpm db:generate` - Generate new migration from schema changes
+
 ## Workflow
 
 1. **Fork** the repo (default branch is `staging` — that's correct).
