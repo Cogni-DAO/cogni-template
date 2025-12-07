@@ -67,6 +67,7 @@ describe("app/_facades/payments/credits.server", () => {
       paymentAttemptRepository: {} as never,
       onChainVerifier: {} as never,
       usageService: {} as never,
+      metricsQuery: {} as never,
     });
   });
 

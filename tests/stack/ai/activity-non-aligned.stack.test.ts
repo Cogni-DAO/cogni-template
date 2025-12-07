@@ -71,7 +71,7 @@ describe("Activity Non-Aligned Timestamp Tests", () => {
       isDefault: true,
     });
 
-    // Seed usage at NON-ALIGNED times
+    // Seed charge receipts at NON-ALIGNED times (per ACTIVITY_METRICS.md)
     // These should appear in the first bucket when from=05:00, groupBy=day
     await db.insert(llmUsage).values([
       {
@@ -79,11 +79,10 @@ describe("Activity Non-Aligned Timestamp Tests", () => {
         billingAccountId: testBillingAccountId,
         virtualKeyId: testVirtualKeyId,
         requestId: "req-non-aligned-1",
-        model: "gpt-4",
-        promptTokens: 100,
-        completionTokens: 50,
-        providerCostUsd: "0.005000",
-        usage: { app: "test-non-aligned" },
+        litellmCallId: "call-nonaligned-1",
+        chargedCredits: 5000n,
+        responseCostUsd: "0.005000",
+        provenance: "response",
         createdAt: new Date("2024-06-15T06:30:00Z"), // Morning, not midnight
       },
       {
@@ -91,11 +90,10 @@ describe("Activity Non-Aligned Timestamp Tests", () => {
         billingAccountId: testBillingAccountId,
         virtualKeyId: testVirtualKeyId,
         requestId: "req-non-aligned-2",
-        model: "gpt-4",
-        promptTokens: 200,
-        completionTokens: 100,
-        providerCostUsd: "0.010000",
-        usage: { app: "test-non-aligned" },
+        litellmCallId: "call-nonaligned-2",
+        chargedCredits: 10000n,
+        responseCostUsd: "0.010000",
+        provenance: "response",
         createdAt: new Date("2024-06-15T14:15:00Z"), // Afternoon
       },
       {
@@ -103,11 +101,10 @@ describe("Activity Non-Aligned Timestamp Tests", () => {
         billingAccountId: testBillingAccountId,
         virtualKeyId: testVirtualKeyId,
         requestId: "req-non-aligned-3",
-        model: "gpt-4",
-        promptTokens: 300,
-        completionTokens: 150,
-        providerCostUsd: "0.015000",
-        usage: { app: "test-non-aligned" },
+        litellmCallId: "call-nonaligned-3",
+        chargedCredits: 15000n,
+        responseCostUsd: "0.015000",
+        provenance: "stream",
         createdAt: new Date("2024-06-16T09:45:00Z"), // Next day morning
       },
     ]);

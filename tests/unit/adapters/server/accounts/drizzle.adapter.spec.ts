@@ -4,15 +4,14 @@
 /**
  * Module: `@adapters/server/accounts/drizzle`
  * Purpose: Unit tests for DrizzleAccountService.
- * Scope: Verifies recordLlmUsage logic, including transaction handling and rollback. Does not test actual database connection.
- * Invariants: Transactions are rolled back on error; inputs are validated.
+ * Scope: Verifies recordChargeReceipt logic per ACTIVITY_METRICS.md. Does not test actual database connection.
+ * Invariants: Post-call never throws InsufficientCreditsPortError; idempotent by requestId
  * Side-effects: none (uses mocks)
- * Links: `src/adapters/server/accounts/drizzle.adapter.ts`
+ * Links: `src/adapters/server/accounts/drizzle.adapter.ts`, docs/ACTIVITY_METRICS.md
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
-import { InsufficientCreditsPortError } from "@/ports";
 
 // Mock the db module
 const mockTx = {
@@ -23,9 +22,13 @@ const mockTx = {
     virtualKeys: {
       findFirst: vi.fn(),
     },
+    llmUsage: {
+      findFirst: vi.fn(),
+    },
   },
   insert: vi.fn().mockReturnThis(),
   values: vi.fn().mockReturnThis(),
+  onConflictDoNothing: vi.fn().mockReturnThis(),
   returning: vi.fn(),
   update: vi.fn().mockReturnThis(),
   set: vi.fn().mockReturnThis(),
@@ -54,127 +57,114 @@ describe("DrizzleAccountService", () => {
     vi.clearAllMocks();
     mockTx.query.billingAccounts.findFirst.mockReset();
     mockTx.query.virtualKeys.findFirst.mockReset();
+    mockTx.query.llmUsage.findFirst.mockReset();
     mockTx.returning.mockReset();
-    // Re-setup default behavior if needed, but for now tests set specific values
+    mockTx.onConflictDoNothing.mockReset().mockReturnThis();
     service = new DrizzleAccountService(mockDb);
   });
 
-  describe("recordLlmUsage", () => {
+  describe("recordChargeReceipt", () => {
+    // Per ACTIVITY_METRICS.md: minimal charge_receipt fields
     const params = {
-      billingStatus: "billed" as const,
       billingAccountId: "acc-123",
       virtualKeyId: "vk-123",
       requestId: "req-123",
-      model: "gpt-3.5-turbo",
-      promptTokens: 10,
-      completionTokens: 10,
-      providerCostUsd: 0.001,
-      providerCostCredits: 1n,
-      userPriceCredits: 2n,
-      markupFactorApplied: 1.5,
-      metadata: { foo: "bar" },
+      chargedCredits: 2000n,
+      responseCostUsd: 0.002,
+      litellmCallId: "call-123",
+      provenance: "response" as const,
     };
 
-    it("successfully records usage and debits credits", async () => {
+    it("successfully records charge receipt and debits credits", async () => {
+      // Mock no existing receipt (new request)
+      mockTx.query.llmUsage.findFirst.mockResolvedValue(null);
+
       // Mock finding account with sufficient balance
       mockTx.query.billingAccounts.findFirst.mockResolvedValue({
         id: "acc-123",
-        balanceCredits: 100n,
+        balanceCredits: 100000n,
       });
 
-      // Mock finding virtual key
+      // Mock finding virtual key (required validation)
       mockTx.query.virtualKeys.findFirst.mockResolvedValue({
         id: "vk-123",
+        billingAccountId: "acc-123",
       });
 
-      // Mock insert returns
-      // llm_usage insert does not use returning()
-      mockTx.returning.mockResolvedValueOnce([{ balanceCredits: 98n }]); // billing_accounts update
-      // credit_ledger insert does not use returning()
+      // Mock update returning positive balance
+      mockTx.returning.mockResolvedValueOnce([{ balanceCredits: 98000n }]);
 
-      await service.recordLlmUsage(params);
+      await service.recordChargeReceipt(params);
 
       // Verify transaction started
       expect(mockDb.transaction).toHaveBeenCalled();
 
-      // Verify account lookup
-      expect(mockTx.query.billingAccounts.findFirst).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: expect.anything(), // eq(billingAccounts.id, accountId)
-        })
-      );
+      // Verify idempotency check ran
+      expect(mockTx.query.llmUsage.findFirst).toHaveBeenCalled();
 
-      // Verify llm usage insert
-      expect(mockTx.insert).toHaveBeenCalledWith(expect.anything()); // llmUsage
+      // Verify charge receipt insert
+      expect(mockTx.insert).toHaveBeenCalled();
       expect(mockTx.values).toHaveBeenCalledWith(
         expect.objectContaining({
           billingAccountId: "acc-123",
           virtualKeyId: "vk-123",
           requestId: "req-123",
-          model: "gpt-3.5-turbo",
-          promptTokens: 10,
-          completionTokens: 10,
-          providerCostUsd: "0.001",
-          providerCostCredits: 1n,
-          userPriceCredits: 2n,
-          markupFactor: "1.5",
-          usage: {
-            promptTokens: 10,
-            completionTokens: 10,
-            totalTokens: 20,
-          },
-        })
-      );
-
-      // Verify balance update
-      expect(mockTx.update).toHaveBeenCalledWith(expect.anything()); // billingAccounts
-      expect(mockTx.set).toHaveBeenCalledWith({
-        balanceCredits: expect.anything(), // sql`...`
-      });
-
-      // Verify credit ledger insert
-      expect(mockTx.insert).toHaveBeenCalledWith(expect.anything()); // creditLedger
-      expect(mockTx.values).toHaveBeenCalledWith(
-        expect.objectContaining({
-          billingAccountId: "acc-123",
-          virtualKeyId: "vk-123",
-          amount: -2n,
-          reason: "llm_usage",
-          reference: "req-123",
-          metadata: { foo: "bar" },
+          chargedCredits: 2000n,
+          provenance: "response",
         })
       );
     });
 
-    it("rolls back when credits are insufficient", async () => {
+    it("returns early without debiting if receipt already exists (idempotent)", async () => {
+      // Per ACTIVITY_METRICS.md: Idempotent receipts - request_id as PK
+      // Mock existing receipt found
+      mockTx.query.llmUsage.findFirst.mockResolvedValue({
+        id: "existing-uuid",
+        requestId: "req-123",
+        billingAccountId: "acc-123",
+      });
+
+      await service.recordChargeReceipt(params);
+
+      // Verify idempotency check ran
+      expect(mockTx.query.llmUsage.findFirst).toHaveBeenCalled();
+
+      // Should NOT proceed with account validation or inserts
+      expect(mockTx.query.billingAccounts.findFirst).not.toHaveBeenCalled();
+      expect(mockTx.update).not.toHaveBeenCalled();
+    });
+
+    it("does NOT throw when balance goes negative (post-call is non-blocking)", async () => {
+      // Per ACTIVITY_METRICS.md: recordChargeReceipt must NEVER throw InsufficientCreditsPortError
+      // Mock no existing receipt
+      mockTx.query.llmUsage.findFirst.mockResolvedValue(null);
+
       // Mock finding account with insufficient balance
       mockTx.query.billingAccounts.findFirst.mockResolvedValue({
         id: "acc-123",
-        balanceCredits: 1n, // Less than 2n required
+        balanceCredits: 1000n, // Less than 2000n charged
       });
 
-      // Mock finding virtual key
+      // Mock finding virtual key (required validation)
       mockTx.query.virtualKeys.findFirst.mockResolvedValue({
         id: "vk-123",
+        billingAccountId: "acc-123",
       });
 
       // Mock update returning negative balance
-      mockTx.returning.mockResolvedValueOnce([{ balanceCredits: -1n }]);
+      mockTx.returning.mockResolvedValueOnce([{ balanceCredits: -1000n }]);
 
-      await expect(service.recordLlmUsage(params)).rejects.toThrow(
-        InsufficientCreditsPortError
-      );
-
-      // Verify NO rollback call needed explicitly if we just throw error?
-      // Drizzle transaction usually rolls back on error.
-      // But here we throw InsufficientCreditsPortError manually.
-      // The test checks if it throws the correct error.
+      // Should NOT throw - post-call billing is non-blocking
+      await expect(service.recordChargeReceipt(params)).resolves.not.toThrow();
     });
 
     it("throws error if account not found", async () => {
+      // Mock no existing receipt
+      mockTx.query.llmUsage.findFirst.mockResolvedValue(null);
       mockTx.query.billingAccounts.findFirst.mockResolvedValue(null);
 
-      await expect(service.recordLlmUsage(params)).rejects.toThrow(
+      // Account not found is a hard error (not an insufficient credits case)
+      await expect(service.recordChargeReceipt(params)).rejects.toThrow(
         "Billing account not found"
       );
     });

@@ -102,14 +102,14 @@ describe("Billing E2E Stack Test", () => {
     const requestId = completionJson.message.requestId;
     expect(requestId).toBeDefined();
 
-    // 3. Verify DB Invariants (T3)
-    // Query llm_usage WHERE request_id=requestId
-    const usageByReq = await db.query.llmUsage.findFirst({
+    // 3. Verify DB Invariants (T3) - per ACTIVITY_METRICS.md
+    // Query charge_receipt (llm_usage) WHERE request_id=requestId
+    const receipt = await db.query.llmUsage.findFirst({
       where: eq(llmUsage.requestId, requestId),
     });
-    expect(usageByReq).toBeDefined();
-    expect(usageByReq?.billingAccountId).toBe(billingAccountId);
-    expect(usageByReq?.billingStatus).toBe("billed");
+    expect(receipt).toBeDefined();
+    expect(receipt?.billingAccountId).toBe(billingAccountId);
+    expect(receipt?.provenance).toBe("response"); // Non-streaming
 
     // Query credit_ledger WHERE reference=requestId
     const ledgerRows = await db.query.creditLedger.findMany({
@@ -119,11 +119,11 @@ describe("Billing E2E Stack Test", () => {
     const ledger = ledgerRows[0];
     if (!ledger) throw new Error("Ledger row not found");
 
-    // Assert amount === -usage.userPriceCredits using BigInt math
-    if (!usageByReq?.userPriceCredits) throw new Error("Usage price not found");
-    const price = usageByReq.userPriceCredits;
+    // Assert amount === -chargedCredits using BigInt math
+    if (!receipt?.chargedCredits) throw new Error("Charge receipt not found");
+    const chargedCredits = receipt.chargedCredits;
     const amount = ledger.amount;
-    expect(amount).toBe(-price);
+    expect(amount).toBe(-chargedCredits);
 
     // Check balance
     const account = await db.query.billingAccounts.findFirst({

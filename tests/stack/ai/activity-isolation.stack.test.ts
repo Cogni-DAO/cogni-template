@@ -87,18 +87,17 @@ describe("Activity Account Isolation Stack Tests", () => {
       isDefault: true,
     });
 
-    // Seed User A data (distinctive: gpt-4, low cost)
+    // Seed User A charge receipts (per ACTIVITY_METRICS.md: no model/tokens - LiteLLM canonical)
     await db.insert(llmUsage).values([
       {
         id: randomUUID(),
         billingAccountId: userA.billingAccountId,
         virtualKeyId: userA.virtualKeyId,
         requestId: "req-a-isolation-1",
-        model: "gpt-4",
-        promptTokens: 100,
-        completionTokens: 50,
-        providerCostUsd: "0.005000",
-        usage: { app: "app-a" },
+        litellmCallId: "call-a-1",
+        chargedCredits: 5000n,
+        responseCostUsd: "0.005000",
+        provenance: "response",
         createdAt: new Date("2024-06-15T10:00:00Z"),
       },
       {
@@ -106,11 +105,10 @@ describe("Activity Account Isolation Stack Tests", () => {
         billingAccountId: userA.billingAccountId,
         virtualKeyId: userA.virtualKeyId,
         requestId: "req-a-isolation-2",
-        model: "gpt-3.5-turbo",
-        promptTokens: 200,
-        completionTokens: 100,
-        providerCostUsd: "0.002000",
-        usage: { app: "app-a" },
+        litellmCallId: "call-a-2",
+        chargedCredits: 2000n,
+        responseCostUsd: "0.002000",
+        provenance: "response",
         createdAt: new Date("2024-06-15T11:00:00Z"),
       },
     ]);
@@ -146,18 +144,17 @@ describe("Activity Account Isolation Stack Tests", () => {
       isDefault: true,
     });
 
-    // Seed User B data (distinctive: claude, high cost)
+    // Seed User B charge receipts (per ACTIVITY_METRICS.md: no model/tokens - LiteLLM canonical)
     await db.insert(llmUsage).values([
       {
         id: randomUUID(),
         billingAccountId: userB.billingAccountId,
         virtualKeyId: userB.virtualKeyId,
         requestId: "req-b-isolation-1",
-        model: "claude-3-opus",
-        promptTokens: 1000,
-        completionTokens: 500,
-        providerCostUsd: "0.100000",
-        usage: { app: "app-b" },
+        litellmCallId: "call-b-1",
+        chargedCredits: 100000n,
+        responseCostUsd: "0.100000",
+        provenance: "response",
         createdAt: new Date("2024-06-15T10:00:00Z"),
       },
       {
@@ -165,11 +162,10 @@ describe("Activity Account Isolation Stack Tests", () => {
         billingAccountId: userB.billingAccountId,
         virtualKeyId: userB.virtualKeyId,
         requestId: "req-b-isolation-2",
-        model: "claude-3-sonnet",
-        promptTokens: 2000,
-        completionTokens: 1000,
-        providerCostUsd: "0.050000",
-        usage: { app: "app-b" },
+        litellmCallId: "call-b-2",
+        chargedCredits: 50000n,
+        responseCostUsd: "0.050000",
+        provenance: "response",
         createdAt: new Date("2024-06-15T11:00:00Z"),
       },
       {
@@ -177,11 +173,10 @@ describe("Activity Account Isolation Stack Tests", () => {
         billingAccountId: userB.billingAccountId,
         virtualKeyId: userB.virtualKeyId,
         requestId: "req-b-isolation-3",
-        model: "claude-3-haiku",
-        promptTokens: 500,
-        completionTokens: 250,
-        providerCostUsd: "0.010000",
-        usage: { app: "app-b" },
+        litellmCallId: "call-b-3",
+        chargedCredits: 10000n,
+        responseCostUsd: "0.010000",
+        provenance: "stream",
         createdAt: new Date("2024-06-15T12:00:00Z"),
       },
     ]);
@@ -215,11 +210,9 @@ describe("Activity Account Isolation Stack Tests", () => {
       // User A: 2 requests
       expect(json.totals.requests.total).toBe(2);
 
-      // Verify rows contain ONLY User A models
+      // Verify rows exist and are scoped to User A
+      // Note: model is "unavailable" in fallback mode per ACTIVITY_METRICS.md (LiteLLM is canonical)
       expect(json.rows.length).toBeGreaterThan(0);
-      const models = json.rows.map((r: { model: string }) => r.model);
-      expect(models.every((m: string) => m.startsWith("gpt"))).toBe(true);
-      expect(models.some((m: string) => m.includes("claude"))).toBe(false);
 
       // Verify request IDs are User A's
       const requestIds = json.rows.map((r: { id: string }) => r.id);
@@ -249,11 +242,9 @@ describe("Activity Account Isolation Stack Tests", () => {
       // User B: 3 requests
       expect(json.totals.requests.total).toBe(3);
 
-      // Verify rows contain ONLY User B models
+      // Verify rows exist and are scoped to User B
+      // Note: model is "unavailable" in fallback mode per ACTIVITY_METRICS.md (LiteLLM is canonical)
       expect(json.rows.length).toBeGreaterThan(0);
-      const models = json.rows.map((r: { model: string }) => r.model);
-      expect(models.every((m: string) => m.includes("claude"))).toBe(true);
-      expect(models.some((m: string) => m.startsWith("gpt"))).toBe(false);
 
       // Verify request IDs are User B's
       const requestIds = json.rows.map((r: { id: string }) => r.id);
@@ -316,9 +307,11 @@ describe("Activity Account Isolation Stack Tests", () => {
 
       // User B's response should still be scoped to User B
       // (cursor only affects ordering, not scoping)
+      // Note: model is "unavailable" in fallback mode per ACTIVITY_METRICS.md (LiteLLM is canonical)
       expect(jsonB.rows.length).toBeGreaterThan(0);
-      const models = jsonB.rows.map((r: { model: string }) => r.model);
-      expect(models.every((m: string) => m.includes("claude"))).toBe(true);
+      const requestIds = jsonB.rows.map((r: { id: string }) => r.id);
+      expect(requestIds).not.toContain("req-a-isolation-1");
+      expect(requestIds).not.toContain("req-a-isolation-2");
     });
 
     it("Chart buckets from User A reflect only User A data", async () => {

@@ -17,13 +17,15 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { DrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
 import { DrizzleUsageAdapter } from "@/adapters/server/accounts/drizzle.usage.adapter";
 import type { Database } from "@/adapters/server/db/client";
 import { getDb } from "@/adapters/server/db/client";
 import {
   billingAccounts,
+  creditLedger,
   llmUsage,
   users,
   virtualKeys,
@@ -106,7 +108,8 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       },
     ]);
 
-    // Seed usage data for Account A (5 records over 3 days)
+    // Seed charge receipts for Account A (5 records over 3 days)
+    // Per ACTIVITY_METRICS.md: no model/tokens/usage - LiteLLM is canonical
     const baseDate = new Date("2024-06-15T00:00:00Z");
     await db.insert(llmUsage).values([
       {
@@ -114,11 +117,10 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
         requestId: "req-a-1",
-        model: "gpt-4",
-        promptTokens: 100,
-        completionTokens: 50,
-        providerCostUsd: "0.005000",
-        usage: { app: "test-app-a" },
+        litellmCallId: "call-a-1",
+        chargedCredits: 5000n,
+        responseCostUsd: "0.005000",
+        provenance: "response",
         createdAt: new Date(baseDate.getTime()),
       },
       {
@@ -126,11 +128,10 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
         requestId: "req-a-2",
-        model: "gpt-4",
-        promptTokens: 200,
-        completionTokens: 100,
-        providerCostUsd: "0.010000",
-        usage: { app: "test-app-a" },
+        litellmCallId: "call-a-2",
+        chargedCredits: 10000n,
+        responseCostUsd: "0.010000",
+        provenance: "response",
         createdAt: new Date(baseDate.getTime() + 1000 * 60 * 60), // +1 hour
       },
       {
@@ -138,11 +139,10 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
         requestId: "req-a-3",
-        model: "gpt-3.5-turbo",
-        promptTokens: 50,
-        completionTokens: 25,
-        providerCostUsd: "0.001000",
-        usage: { app: "test-app-a" },
+        litellmCallId: "call-a-3",
+        chargedCredits: 1000n,
+        responseCostUsd: "0.001000",
+        provenance: "response",
         createdAt: new Date(baseDate.getTime() + 1000 * 60 * 60 * 24), // +1 day
       },
       {
@@ -150,11 +150,10 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
         requestId: "req-a-4",
-        model: "gpt-4",
-        promptTokens: 300,
-        completionTokens: 150,
-        providerCostUsd: "0.015000",
-        usage: { app: "test-app-a" },
+        litellmCallId: "call-a-4",
+        chargedCredits: 15000n,
+        responseCostUsd: "0.015000",
+        provenance: "stream",
         createdAt: new Date(baseDate.getTime() + 1000 * 60 * 60 * 24 * 2), // +2 days
       },
       {
@@ -162,29 +161,28 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
         requestId: "req-a-5",
-        model: "gpt-4",
-        promptTokens: 400,
-        completionTokens: 200,
-        providerCostUsd: "0.020000",
-        usage: { app: "test-app-a" },
+        litellmCallId: "call-a-5",
+        chargedCredits: 20000n,
+        responseCostUsd: "0.020000",
+        provenance: "stream",
         createdAt: new Date(
           baseDate.getTime() + 1000 * 60 * 60 * 24 * 2 + 1000
         ), // +2 days +1s
       },
     ]);
 
-    // Seed usage data for Account B (3 records, different amounts)
+    // Seed charge receipts for Account B (3 records, different amounts)
+    // Per ACTIVITY_METRICS.md: no model/tokens/usage - LiteLLM is canonical
     await db.insert(llmUsage).values([
       {
         id: randomUUID(),
         billingAccountId: accountB.billingAccountId,
         virtualKeyId: accountB.virtualKeyId,
         requestId: "req-b-1",
-        model: "claude-3",
-        promptTokens: 1000,
-        completionTokens: 500,
-        providerCostUsd: "0.100000",
-        usage: { app: "test-app-b" },
+        litellmCallId: "call-b-1",
+        chargedCredits: 100000n,
+        responseCostUsd: "0.100000",
+        provenance: "response",
         createdAt: new Date(baseDate.getTime()),
       },
       {
@@ -192,11 +190,10 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         billingAccountId: accountB.billingAccountId,
         virtualKeyId: accountB.virtualKeyId,
         requestId: "req-b-2",
-        model: "claude-3",
-        promptTokens: 2000,
-        completionTokens: 1000,
-        providerCostUsd: "0.200000",
-        usage: { app: "test-app-b" },
+        litellmCallId: "call-b-2",
+        chargedCredits: 200000n,
+        responseCostUsd: "0.200000",
+        provenance: "response",
         createdAt: new Date(baseDate.getTime() + 1000 * 60 * 60 * 24), // +1 day
       },
       {
@@ -204,11 +201,10 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         billingAccountId: accountB.billingAccountId,
         virtualKeyId: accountB.virtualKeyId,
         requestId: "req-b-3",
-        model: "claude-3",
-        promptTokens: 500,
-        completionTokens: 250,
-        providerCostUsd: "0.050000",
-        usage: { app: "test-app-b" },
+        litellmCallId: "call-b-3",
+        chargedCredits: 50000n,
+        responseCostUsd: "0.050000",
+        provenance: "stream",
         createdAt: new Date(baseDate.getTime() + 1000 * 60 * 60 * 24 * 2), // +2 days
       },
     ]);
@@ -233,11 +229,12 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       });
 
       // Account A has 5 records with total cost = 0.005 + 0.01 + 0.001 + 0.015 + 0.02 = 0.051
-      // Account A total tokens = (100+50) + (200+100) + (50+25) + (300+150) + (400+200) = 1575
       // Account A requests = 5
+      // NOTE: tokens = 0 in fallback mode (LiteLLM is canonical per ACTIVITY_METRICS.md)
       expect(result.totals.requests).toBe(5);
-      expect(result.totals.tokens).toBe(1575);
+      expect(result.totals.tokens).toBe(0); // Fallback mode - no tokens
       expect(Number.parseFloat(result.totals.spend)).toBeCloseTo(0.051, 5);
+      expect(result.telemetrySource).toBe("fallback");
 
       // Verify no Account B data leaked (B has much higher costs: 0.35 total)
       expect(Number.parseFloat(result.totals.spend)).toBeLessThan(0.1);
@@ -255,11 +252,12 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       });
 
       // Account B has 3 records with total cost = 0.1 + 0.2 + 0.05 = 0.35
-      // Account B total tokens = (1000+500) + (2000+1000) + (500+250) = 5250
       // Account B requests = 3
+      // NOTE: tokens = 0 in fallback mode (LiteLLM is canonical per ACTIVITY_METRICS.md)
       expect(result.totals.requests).toBe(3);
-      expect(result.totals.tokens).toBe(5250);
+      expect(result.totals.tokens).toBe(0); // Fallback mode - no tokens
       expect(Number.parseFloat(result.totals.spend)).toBeCloseTo(0.35, 5);
+      expect(result.telemetrySource).toBe("fallback");
 
       // Verify no Account A data leaked
       expect(Number.parseFloat(result.totals.spend)).toBeGreaterThan(0.3);
@@ -272,13 +270,11 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       });
 
       expect(result.logs).toHaveLength(5);
+      expect(result.telemetrySource).toBe("fallback");
 
-      // All records should be gpt-4 or gpt-3.5-turbo (Account A models)
+      // In fallback mode, model = "unavailable" (LiteLLM is canonical)
       const models = result.logs.map((l) => l.model);
-      expect(models.every((m) => m.startsWith("gpt"))).toBe(true);
-
-      // None should be claude (Account B model)
-      expect(models.some((m) => m.includes("claude"))).toBe(false);
+      expect(models.every((m) => m === "unavailable")).toBe(true);
     });
 
     it("Account B logs query returns ONLY Account B records", async () => {
@@ -288,13 +284,11 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       });
 
       expect(result.logs).toHaveLength(3);
+      expect(result.telemetrySource).toBe("fallback");
 
-      // All records should be claude (Account B model)
+      // In fallback mode, model = "unavailable" (LiteLLM is canonical)
       const models = result.logs.map((l) => l.model);
-      expect(models.every((m) => m.includes("claude"))).toBe(true);
-
-      // None should be gpt (Account A model)
-      expect(models.some((m) => m.startsWith("gpt"))).toBe(false);
+      expect(models.every((m) => m === "unavailable")).toBe(true);
     });
 
     it("Non-existent account returns empty results, not other accounts data", async () => {
@@ -342,9 +336,9 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
 
       // Should return Account B's logs only, cursor filters by (createdAt, id)
       // but billingAccountId scoping is ALWAYS applied
-      const models = crossAccountAttempt.logs.map((l) => l.model);
-      expect(models.every((m) => m.includes("claude"))).toBe(true);
-      expect(models.some((m) => m.startsWith("gpt"))).toBe(false);
+      // In fallback mode, all models are "unavailable" - we verify isolation by count
+      expect(crossAccountAttempt.logs.length).toBeLessThanOrEqual(3); // Account B has 3 records
+      expect(crossAccountAttempt.telemetrySource).toBe("fallback");
     });
 
     it("Pagination returns stable ordering across pages", async () => {
@@ -415,7 +409,7 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
 
     it("Aggregates correctly with non-aligned from date", async () => {
       const baseDate = new Date("2024-01-01T00:00:00Z");
-      // Create usage at 02:00 and 06:00 on day 1
+      // Create charge receipts at 02:00 and 06:00 on day 1
       const day1_0200 = new Date(baseDate.getTime() + 1000 * 60 * 60 * 2);
       const day1_0600 = new Date(baseDate.getTime() + 1000 * 60 * 60 * 6);
 
@@ -425,32 +419,29 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         .from(virtualKeys)
         .where(eq(virtualKeys.billingAccountId, accountA.billingAccountId))
         .limit(1);
+      if (!vk) throw new Error("Expected virtual key");
 
       await db.insert(llmUsage).values([
         {
           id: randomUUID(),
           billingAccountId: accountA.billingAccountId,
           virtualKeyId: vk.id,
-          provider: "openai",
-          model: "gpt-4",
-          tokensIn: 100,
-          tokensOut: 100,
-          costUsd: "0.010000",
-          providerCostUsd: "0.010000",
-          usage: { app: "test-app-a" },
+          requestId: `req-nonaligned-1-${randomUUID()}`,
+          litellmCallId: "call-nonaligned-1",
+          chargedCredits: 10000n,
+          responseCostUsd: "0.010000",
+          provenance: "response",
           createdAt: day1_0200,
         },
         {
           id: randomUUID(),
           billingAccountId: accountA.billingAccountId,
           virtualKeyId: vk.id,
-          provider: "openai",
-          model: "gpt-4",
-          tokensIn: 100,
-          tokensOut: 100,
-          costUsd: "0.010000",
-          providerCostUsd: "0.010000",
-          usage: { app: "test-app-a" },
+          requestId: `req-nonaligned-2-${randomUUID()}`,
+          litellmCallId: "call-nonaligned-2",
+          chargedCredits: 10000n,
+          responseCostUsd: "0.010000",
+          provenance: "response",
           createdAt: day1_0600,
         },
       ]);
@@ -467,13 +458,13 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       });
 
       // First bucket should be baseDate (00:00)
-      expect(result.series[0].bucketStart.toISOString()).toBe(
+      expect(result.series[0]?.bucketStart.toISOString()).toBe(
         baseDate.toISOString()
       );
 
       // Should only contain the 06:00 usage (0.01 cost), not the 02:00 usage
-      expect(result.series[0].spend).toBe("0.010000");
-      expect(result.series[0].requests).toBe(1);
+      expect(result.series[0]?.spend).toBe("0.010000");
+      expect(result.series[0]?.requests).toBe(1);
     });
 
     it("Empty range still produces correct bucket structure", async () => {
@@ -594,6 +585,124 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       for (const bucket of result.series) {
         expect(typeof bucket.spend).toBe("string");
       }
+    });
+  });
+
+  describe("inv_charge_receipt_idempotent (per ACTIVITY_METRICS.md)", () => {
+    let accountService: DrizzleAccountService;
+
+    beforeAll(() => {
+      accountService = new DrizzleAccountService(db);
+    });
+
+    it("recordChargeReceipt is idempotent - calling twice with same requestId creates exactly one receipt and one ledger entry", async () => {
+      const requestId = `idem-test-${randomUUID()}`;
+      const chargedCredits = 5000n;
+
+      // Get initial balance
+      const initialBalance = await accountService.getBalance(
+        accountA.billingAccountId
+      );
+
+      // Call recordChargeReceipt twice with same requestId
+      await accountService.recordChargeReceipt({
+        billingAccountId: accountA.billingAccountId,
+        virtualKeyId: accountA.virtualKeyId,
+        requestId,
+        chargedCredits,
+        responseCostUsd: 0.005,
+        litellmCallId: `call-${requestId}`,
+        provenance: "response",
+      });
+
+      await accountService.recordChargeReceipt({
+        billingAccountId: accountA.billingAccountId,
+        virtualKeyId: accountA.virtualKeyId,
+        requestId, // Same requestId - should be idempotent
+        chargedCredits,
+        responseCostUsd: 0.005,
+        litellmCallId: `call-${requestId}`,
+        provenance: "response",
+      });
+
+      // Verify exactly one charge receipt exists
+      const receipts = await db
+        .select()
+        .from(llmUsage)
+        .where(eq(llmUsage.requestId, requestId));
+      expect(receipts).toHaveLength(1);
+
+      // Verify exactly one ledger entry exists for this reference
+      const ledgerEntries = await db
+        .select()
+        .from(creditLedger)
+        .where(
+          and(
+            eq(creditLedger.reference, requestId),
+            eq(creditLedger.reason, "llm_usage")
+          )
+        );
+      expect(ledgerEntries).toHaveLength(1);
+
+      // Verify balance was only debited once
+      const finalBalance = await accountService.getBalance(
+        accountA.billingAccountId
+      );
+      expect(BigInt(initialBalance) - BigInt(finalBalance)).toBe(
+        chargedCredits
+      );
+    });
+
+    it("different requestIds create separate receipts and ledger entries", async () => {
+      const requestId1 = `diff-test-1-${randomUUID()}`;
+      const requestId2 = `diff-test-2-${randomUUID()}`;
+      const chargedCredits = 1000n;
+
+      // Get initial balance
+      const initialBalance = await accountService.getBalance(
+        accountA.billingAccountId
+      );
+
+      // Call with two different requestIds
+      await accountService.recordChargeReceipt({
+        billingAccountId: accountA.billingAccountId,
+        virtualKeyId: accountA.virtualKeyId,
+        requestId: requestId1,
+        chargedCredits,
+        responseCostUsd: 0.001,
+        litellmCallId: `call-${requestId1}`,
+        provenance: "response",
+      });
+
+      await accountService.recordChargeReceipt({
+        billingAccountId: accountA.billingAccountId,
+        virtualKeyId: accountA.virtualKeyId,
+        requestId: requestId2, // Different requestId
+        chargedCredits,
+        responseCostUsd: 0.001,
+        litellmCallId: `call-${requestId2}`,
+        provenance: "stream",
+      });
+
+      // Verify two charge receipts exist
+      const receipts1 = await db
+        .select()
+        .from(llmUsage)
+        .where(eq(llmUsage.requestId, requestId1));
+      const receipts2 = await db
+        .select()
+        .from(llmUsage)
+        .where(eq(llmUsage.requestId, requestId2));
+      expect(receipts1).toHaveLength(1);
+      expect(receipts2).toHaveLength(1);
+
+      // Verify balance was debited twice
+      const finalBalance = await accountService.getBalance(
+        accountA.billingAccountId
+      );
+      expect(BigInt(initialBalance) - BigInt(finalBalance)).toBe(
+        chargedCredits * 2n
+      );
     });
   });
 });
