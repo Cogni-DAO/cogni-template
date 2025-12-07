@@ -52,11 +52,14 @@ model_list:
       is_free: false
       provider_key: "openai"
 
-  # Anthropic
+  # Anthropic (ZDR-enabled: Zero Data Retention - provider won't log/train on data)
   - model_name: claude-sonnet-4.5
     litellm_params:
       model: openrouter/anthropic/claude-sonnet-4.5
       api_key: "os.environ/OPENROUTER_API_KEY"
+      extra_body:
+        provider:
+          zdr: true
     model_info:
       display_name: "Claude Sonnet 4.5"
       is_free: false
@@ -66,6 +69,9 @@ model_list:
     litellm_params:
       model: openrouter/anthropic/claude-opus-4.5
       api_key: "os.environ/OPENROUTER_API_KEY"
+      extra_body:
+        provider:
+          zdr: true
     model_info:
       display_name: "Claude Opus 4.5"
       is_free: false
