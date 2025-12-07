@@ -52,6 +52,7 @@
 - [x] Mark DrizzleUsageAdapter as deprecated (billing/reconciliation only)
 - [x] Remove `telemetrySource` from `AiActivityQueryCompletedEvent`
 - [x] Fix `UsageTelemetryUnavailableError` throwing (import as value, not type)
+- [x] Add unit tests for `LiteLlmUsageAdapter` (bounded pagination, identity, error handling, pass-through)
 - [ ] Wire ActivityService to use `UsageTelemetryPort` (no DrizzleUsageAdapter)
 - [ ] Add thin adapter to map UsageTelemetryPort DTOs → ActivityService DTOs
 - [ ] HTTP layer: catch `UsageTelemetryUnavailableError` → 503 with `{ code: "LITELLM_UNAVAILABLE" }`
