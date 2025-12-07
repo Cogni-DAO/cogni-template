@@ -36,6 +36,11 @@ jobs:
           echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
           echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
 
+      - name: Compute migrator fingerprint
+        run: |
+          FINGERPRINT=$(platform/ci/scripts/compute_migrator_fingerprint.sh)
+          echo "MIGRATOR_FINGERPRINT=$FINGERPRINT" >> $GITHUB_ENV
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -58,18 +63,50 @@ jobs:
       - name: Push to GHCR
         run: platform/ci/scripts/push.sh
 
+      - name: Tag and push fingerprinted migrator (if built)
+        run: |
+          # Dual tagging: keep coupled tag for deploy, add fingerprint tag for CI cache
+          COUPLED_TAG="${IMAGE_NAME}:${IMAGE_TAG}-migrate"
+          FINGERPRINT_TAG="${IMAGE_NAME}:migrate-${MIGRATOR_FINGERPRINT}"
+
+          if docker image inspect "$COUPLED_TAG" >/dev/null 2>&1; then
+            echo "Tagging migrator with fingerprint: ${FINGERPRINT_TAG}"
+            docker tag "$COUPLED_TAG" "$FINGERPRINT_TAG"
+            docker push "$FINGERPRINT_TAG"
+            echo "✅ Migrator available at both tags:"
+            echo "  - Coupled (deploy): $COUPLED_TAG"
+            echo "  - Fingerprint (CI cache): $FINGERPRINT_TAG"
+          else
+            echo "No migrator built in this run (unchanged). Skipping fingerprint tag/push."
+          fi
+
       - name: Build summary
         run: |
           echo "## ✅ Production Build & Test Complete" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**App Image:** \`${IMAGE_NAME}:${IMAGE_TAG}\`" >> $GITHUB_STEP_SUMMARY
-          echo "**Migrator Image:** \`${IMAGE_NAME}:${IMAGE_TAG}-migrate\`" >> $GITHUB_STEP_SUMMARY
+
+          # Only report migrator if it was actually built
+          COUPLED_TAG="${IMAGE_NAME}:${IMAGE_TAG}-migrate"
+          if docker image inspect "$COUPLED_TAG" >/dev/null 2>&1; then
+            echo "**Migrator Image:** \`${COUPLED_TAG}\`" >> $GITHUB_STEP_SUMMARY
+            echo "**Migrator Fingerprint:** \`migrate-${MIGRATOR_FINGERPRINT}\`" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "**Migrator Image:** Skipped (unchanged, fingerprint: \`${MIGRATOR_FINGERPRINT}\`)" >> $GITHUB_STEP_SUMMARY
+          fi
+
           echo "**Commit:** \`${GITHUB_SHA}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Platform:** linux/amd64" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Tests Passed" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ App container build successful" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Migrator container build successful" >> $GITHUB_STEP_SUMMARY
+
+          if docker image inspect "$COUPLED_TAG" >/dev/null 2>&1; then
+            echo "- ✅ Migrator container build successful" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- ⏭️  Migrator container build skipped (unchanged)" >> $GITHUB_STEP_SUMMARY
+          fi
+
           echo "- ✅ Container startup test passed" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Health endpoint test passed" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Docker healthcheck working" >> $GITHUB_STEP_SUMMARY

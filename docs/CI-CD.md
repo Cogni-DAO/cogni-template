@@ -4,6 +4,34 @@
 
 Automated staging→release→main workflow with fork-safe CI/CD and E2E-triggered promotions.
 
+## Critical TODOs
+
+**P0 - Production Reliability**:
+
+- [ ] **Post-deploy verification and rollback**: Add automated smoke tests to `deploy-production.yml` after deploy completes; on failure, automatically redeploy last known-good `prod-<sha>` and mark bad release as blocked. Current state: green pipeline means "deploy finished", not "prod is healthy".
+- [ ] **Image scanning and signing**: Integrate container scanning into `build-prod.yml` (fail on high/critical CVEs) and sign images (cosign or equivalent); `deploy-production.yml` must refuse unsigned/unverified images.
+
+**P1 - Optimization and Maintainability**:
+
+- [ ] **Config as code validation**: Enforce env schema validation in CI (type-check + required keys), block deploy if invalid, surface staging/prod config diffs during release promotion.
+- [ ] **Refactor `deploy.sh`**: Split 600+ line monolith into composable modules (edge, runtime, sourcecred, cleanup functions).
+- [ ] **Complete migrator fingerprinting**:
+  - [x] `compute_migrator_fingerprint.sh`: Generates stable 12-char content hash
+  - [x] `ci.yaml` (stack-test): Pull by fingerprint, build only if missing
+  - [x] `build-prod.yml`: Compute fingerprint, dual-tag and push migrator
+  - [ ] `staging-preview.yml`: Add fingerprint computation and dual tagging
+  - [ ] `deploy-production.yml`: Compute fingerprint, pass to deploy.sh
+  - [ ] `deploy.sh`: Pull `migrate-${FINGERPRINT}` instead of coupled tag
+  - [ ] Remove legacy coupled `-migrate` tags after all envs use fingerprints
+  - [ ] `build.sh`/`push.sh`: Optionally skip build/push if fingerprint exists remotely
+
+**Non-goals** (defer until needed):
+
+- Per-PR ephemeral environments for every feature branch (not mission-critical at current scale)
+- Full blue/green or traffic-split canaries (staging+release gating sufficient for now)
+
+---
+
 ## Branch Model
 
 - **Feature branches** (`feat/`, `fix/`, `chore/`, etc.) → `staging` (via PR)
@@ -75,6 +103,24 @@ push to main → build-prod.yml (build → test → push) → deploy-production.
 - **Enforced:** Workflow prevents bypass of staging gate
 - **Rollback-ready:** Any prod image can be redeployed
 - **History preservation:** Feature branches auto-archived as tags after merge
+
+## Image Tagging Strategy
+
+**App images**: Commit-based
+
+- `prod-${GITHUB_SHA}` or `preview-${GITHUB_SHA}`
+
+**Migrator images**: Dual-tagged for backward compatibility during transition
+
+- `prod-${GITHUB_SHA}-migrate` (deploy consumption, legacy)
+- `migrate-${FINGERPRINT}` (content-addressed, CI caching - partial implementation)
+
+**SourceCred** (manual release, not CI/CD integrated):
+
+- Immutable image: `ghcr.io/cogni-dao/cogni-sourcecred-runner:sc0.11.2-node18-2025-12-07`
+- Version: v0 (prototype)
+- Release process: `platform/infra/services/sourcecred/release.sh`
+- Long-term: Planned deprecation
 
 ## Branch Management
 
