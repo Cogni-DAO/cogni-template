@@ -33,7 +33,7 @@ inputs:
   tail_lines:
     description: "Number of log lines to capture per service on failure"
     required: false
-    default: "200"
+    default: "20"
 
 runs:
   using: composite
