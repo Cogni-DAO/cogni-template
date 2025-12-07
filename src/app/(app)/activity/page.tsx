@@ -15,6 +15,8 @@ import { redirect } from "next/navigation";
 
 import { getActivity } from "@/app/_facades/ai/activity.server";
 import { getServerSessionUser } from "@/lib/auth/server";
+import { isUsageTelemetryUnavailableError } from "@/ports";
+import { ActivityUnavailableView } from "./unavailable-view";
 import { ActivityView } from "./view";
 
 export const dynamic = "force-dynamic";
@@ -30,13 +32,21 @@ export default async function ActivityPage() {
   const from = new Date();
   from.setDate(from.getDate() - 30);
 
-  const data = await getActivity({
-    sessionUser: user,
-    from: from.toISOString(),
-    to: to.toISOString(),
-    groupBy: "day",
-    limit: 20,
-  });
+  try {
+    const data = await getActivity({
+      sessionUser: user,
+      from: from.toISOString(),
+      to: to.toISOString(),
+      groupBy: "day",
+      limit: 20,
+    });
 
-  return <ActivityView initialData={data} />;
+    return <ActivityView initialData={data} />;
+  } catch (error) {
+    // P1: LiteLLM is hard dependency - show explicit error state
+    if (error instanceof Error && isUsageTelemetryUnavailableError(error)) {
+      return <ActivityUnavailableView />;
+    }
+    throw error; // Let error boundary handle other errors
+  }
 }

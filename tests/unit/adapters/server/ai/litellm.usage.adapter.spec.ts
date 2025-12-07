@@ -42,7 +42,8 @@ describe("LiteLlmUsageAdapter", () => {
       limit: 50,
     };
 
-    it("always sends billingAccountId as user_id parameter (server-derived identity)", async () => {
+    it("always sends billingAccountId as end_user parameter (server-derived identity)", async () => {
+      // LiteLLM stores the `user` param from completions as `end_user` in spend logs
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ logs: [] }),
@@ -51,7 +52,7 @@ describe("LiteLlmUsageAdapter", () => {
       await adapter.getSpendLogs(billingAccountId, params);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining("user_id=acc-123"),
+        expect.stringContaining("end_user=acc-123"),
         expect.any(Object)
       );
     });
@@ -175,7 +176,8 @@ describe("LiteLlmUsageAdapter", () => {
       groupBy: "day" as const,
     };
 
-    it("always sends billingAccountId as user_id parameter", async () => {
+    it("always sends billingAccountId as end_user parameter", async () => {
+      // LiteLLM stores the `user` param from completions as `end_user` in spend logs
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({ buckets: [] }),
@@ -184,7 +186,7 @@ describe("LiteLlmUsageAdapter", () => {
       await adapter.getSpendChart(billingAccountId, params);
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining("user_id=acc-456"),
+        expect.stringContaining("end_user=acc-456"),
         expect.any(Object)
       );
     });

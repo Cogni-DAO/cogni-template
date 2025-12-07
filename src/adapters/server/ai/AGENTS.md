@@ -5,17 +5,19 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-04
+- **Last reviewed:** 2025-12-08
 - **Status:** stable
 
 ## Purpose
 
-LiteLLM service implementations for AI completion and streaming operations.
+LiteLLM service implementations for AI completion, streaming, and usage telemetry operations.
 
 ## Pointers
 
 - [LlmService port](../../../ports/llm.port.ts)
+- [UsageTelemetryPort](../../../ports/usage.port.ts)
 - [LiteLLM configuration](../../../../../platform/infra/services/litellm/)
+- [Activity Metrics Design](../../../../docs/ACTIVITY_METRICS.md)
 
 ## Boundaries
 
@@ -29,23 +31,23 @@ LiteLLM service implementations for AI completion and streaming operations.
 
 ## Public Surface
 
-- **Exports:** LiteLlmAdapter implementation
+- **Exports:** LiteLlmAdapter (LlmService), LiteLlmUsageAdapter (UsageTelemetryPort), LiteLlmUsageServiceAdapter (UsageService)
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** LITELLM_BASE_URL, LITELLM_MASTER_KEY (model param required - no env fallback)
-- **Files considered API:** litellm.adapter.ts
+- **Files considered API:** litellm.adapter.ts, litellm.usage.adapter.ts, litellm.usage-service.adapter.ts
 - **Streaming:** completionStream() supports SSE streaming via eventsource-parser with robustness against malformed chunks
 
 ## Ports (optional)
 
 - **Uses ports:** none
-- **Implements ports:** LlmService
-- **Contracts (required if implementing):** LlmService contract tests in tests/contract/
+- **Implements ports:** LlmService, UsageTelemetryPort, UsageService
+- **Contracts (required if implementing):** LlmService contract tests in tests/contract/, usage adapter tests in tests/unit/adapters/
 
 ## Responsibilities
 
-- This directory **does**: Implement LlmService using LiteLLM proxy for AI completions and streaming with SSE
-- This directory **does not**: Handle authentication, rate limiting, or timestamps
+- This directory **does**: Implement LlmService for AI completions and streaming; implement UsageTelemetryPort for LiteLLM usage telemetry (read-only); implement UsageService adapter mapping telemetry to usage stats
+- This directory **does not**: Handle authentication, rate limiting, timestamps, or write charge receipts to DB
 
 ## Usage
 
@@ -62,6 +64,8 @@ pnpm test tests/integration/ai/
 - Handles provider-specific response formatting
 - Streaming malformed SSE chunks logged as warnings without failing stream
 - Promise settlement guaranteed exactly once via defer helper
+- Usage telemetry: bounded pagination (MAX_PAGES=10, limit≤100), pass-through data from LiteLLM (no local recomputation)
+- Usage adapter throws UsageTelemetryUnavailableError on LiteLLM failures (never silent degradation)
 
 ## Dependencies
 

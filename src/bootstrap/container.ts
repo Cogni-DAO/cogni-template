@@ -17,9 +17,10 @@ import type { Logger } from "pino";
 import {
   DrizzleAccountService,
   DrizzlePaymentAttemptRepository,
-  DrizzleUsageAdapter,
   getDb,
   LiteLlmAdapter,
+  LiteLlmUsageAdapter,
+  LiteLlmUsageServiceAdapter,
   type MimirAdapterConfig,
   MimirMetricsAdapter,
   PonderOnChainVerifierAdapter,
@@ -145,8 +146,12 @@ function createContainer(): Container {
   // Always use real database adapters
   // Testing strategy: unit tests mock the port, integration tests use real DB
   const accountService = new DrizzleAccountService(db);
-  const usageService = new DrizzleUsageAdapter(db);
   const paymentAttemptRepository = new DrizzlePaymentAttemptRepository(db);
+
+  // UsageService: P1 - LiteLLM is canonical telemetry source (no fallback)
+  const usageService = new LiteLlmUsageServiceAdapter(
+    new LiteLlmUsageAdapter()
+  );
 
   // Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
   const config: ContainerConfig = {

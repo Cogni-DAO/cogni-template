@@ -6,7 +6,7 @@
  * Purpose: LiteLLM implementation of UsageTelemetryPort (read-only).
  * Scope: Queries LiteLLM /spend/logs API for usage telemetry. Does not write to any DB.
  * Invariants:
- * - Identity: billingAccountId is server-derived, passed as user_id to LiteLLM
+ * - Identity: billingAccountId is server-derived, passed as end_user to LiteLLM /spend/logs
  * - Bounded pagination: MAX_PAGES=10, limit≤100 enforced
  * - Pass-through: model, tokens, cost from LiteLLM as-is (no local recomputation)
  * - Read-only: never writes to DB or calls recordChargeReceipt
@@ -18,9 +18,21 @@
 import type { UsageTelemetryPort } from "@/ports";
 import { UsageTelemetryUnavailableError } from "@/ports";
 import { serverEnv } from "@/shared/env/server";
+import { EVENT_NAMES, makeLogger } from "@/shared/observability";
+
+const logger = makeLogger({ component: "LiteLlmUsageAdapter" });
 
 const MAX_PAGES = 10;
 const MAX_LIMIT = 100;
+
+/**
+ * Format Date to YYYY-MM-DD for LiteLLM API.
+ * LiteLLM /spend/logs expects simple date format, not ISO 8601.
+ */
+function formatDateForLiteLlm(date: Date): string {
+  const iso = date.toISOString();
+  return iso.slice(0, 10); // YYYY-MM-DD (always present in ISO string)
+}
 
 /**
  * LiteLLM usage adapter - read-only telemetry from /spend/logs.
@@ -62,10 +74,11 @@ export class LiteLlmUsageAdapter implements UsageTelemetryPort {
     const limit = Math.min(params.limit ?? 100, MAX_LIMIT);
     const url = new URL(`${this.baseUrl}/spend/logs`);
 
-    // Identity: server-derived billingAccountId as user_id
-    url.searchParams.set("user_id", billingAccountId);
-    url.searchParams.set("start_date", params.from.toISOString());
-    url.searchParams.set("end_date", params.to.toISOString());
+    // Identity: server-derived billingAccountId as end_user
+    // LiteLLM stores the `user` param from completion requests as `end_user` in spend logs
+    url.searchParams.set("end_user", billingAccountId);
+    url.searchParams.set("start_date", formatDateForLiteLlm(params.from));
+    url.searchParams.set("end_date", formatDateForLiteLlm(params.to));
     url.searchParams.set("limit", String(limit));
 
     if (params.cursor) {
@@ -97,6 +110,20 @@ export class LiteLlmUsageAdapter implements UsageTelemetryPort {
         });
 
         if (!response.ok) {
+          logger.error(
+            {
+              event: EVENT_NAMES.ADAPTER_LITELLM_USAGE_ERROR,
+              path: "/spend/logs",
+              method: "getSpendLogs",
+              userId: billingAccountId,
+              httpStatus: response.status,
+              httpStatusText: response.statusText,
+              limit,
+              page: pagesConsumed,
+            },
+            EVENT_NAMES.ADAPTER_LITELLM_USAGE_ERROR
+          );
+
           // Only treat infra-ish errors as 'unavailable' (503 to client)
           if ([502, 503, 504].includes(response.status)) {
             throw new UsageTelemetryUnavailableError(
@@ -139,6 +166,22 @@ export class LiteLlmUsageAdapter implements UsageTelemetryPort {
         if (error instanceof UsageTelemetryUnavailableError) {
           throw error;
         }
+
+        // Log network/parsing errors
+        logger.error(
+          {
+            event: EVENT_NAMES.ADAPTER_LITELLM_USAGE_ERROR,
+            path: "/spend/logs",
+            method: "getSpendLogs",
+            userId: billingAccountId,
+            errorType: error instanceof Error ? error.name : "unknown",
+            errorMessage:
+              error instanceof Error ? error.message : String(error),
+            limit,
+            page: pagesConsumed,
+          },
+          EVENT_NAMES.ADAPTER_LITELLM_USAGE_ERROR
+        );
         if (error instanceof Error && error.message.startsWith("LiteLLM")) {
           throw error; // Config/logic error, not infra
         }
@@ -180,10 +223,11 @@ export class LiteLlmUsageAdapter implements UsageTelemetryPort {
   }> {
     const url = new URL(`${this.baseUrl}/spend/logs`);
 
-    // Identity: server-derived billingAccountId as user_id
-    url.searchParams.set("user_id", billingAccountId);
-    url.searchParams.set("start_date", params.from.toISOString());
-    url.searchParams.set("end_date", params.to.toISOString());
+    // Identity: server-derived billingAccountId as end_user
+    // LiteLLM stores the `user` param from completion requests as `end_user` in spend logs
+    url.searchParams.set("end_user", billingAccountId);
+    url.searchParams.set("start_date", formatDateForLiteLlm(params.from));
+    url.searchParams.set("end_date", formatDateForLiteLlm(params.to));
     url.searchParams.set("group_by", params.groupBy);
 
     try {
@@ -196,6 +240,19 @@ export class LiteLlmUsageAdapter implements UsageTelemetryPort {
       });
 
       if (!response.ok) {
+        logger.error(
+          {
+            event: EVENT_NAMES.ADAPTER_LITELLM_USAGE_ERROR,
+            path: "/spend/logs",
+            method: "getSpendChart",
+            userId: billingAccountId,
+            httpStatus: response.status,
+            httpStatusText: response.statusText,
+            groupBy: params.groupBy,
+          },
+          EVENT_NAMES.ADAPTER_LITELLM_USAGE_ERROR
+        );
+
         // Only treat infra-ish errors as 'unavailable' (503 to client)
         if ([502, 503, 504].includes(response.status)) {
           throw new UsageTelemetryUnavailableError(
@@ -232,6 +289,21 @@ export class LiteLlmUsageAdapter implements UsageTelemetryPort {
       if (error instanceof Error && error.message.startsWith("LiteLLM")) {
         throw error; // Config/logic error, not infra
       }
+
+      // Log network/parsing errors
+      logger.error(
+        {
+          event: EVENT_NAMES.ADAPTER_LITELLM_USAGE_ERROR,
+          path: "/spend/logs",
+          method: "getSpendChart",
+          userId: billingAccountId,
+          errorType: error instanceof Error ? error.name : "unknown",
+          errorMessage: error instanceof Error ? error.message : String(error),
+          groupBy: params.groupBy,
+        },
+        EVENT_NAMES.ADAPTER_LITELLM_USAGE_ERROR
+      );
+
       // Network failures → wrap as unavailable
       throw new UsageTelemetryUnavailableError(
         `Failed to fetch usage chart from LiteLLM`,
