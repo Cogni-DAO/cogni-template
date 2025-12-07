@@ -29,7 +29,7 @@
 - [x] Simplify `llm_usage` schema to charge_receipt columns (drop model/tokens/usage)
 - [x] Reshape `recordLlmUsage` port → `recordChargeReceipt` (minimal fields)
 - [x] Update activity reads to return `telemetrySource: "fallback"` (prep for P1)
-- [x] Update mocks and tests for new schema
+- [ ] Update mocks and tests for new schema (40 type errors remaining)
 
 ### P1: Implement LiteLLM Usage Adapter
 
