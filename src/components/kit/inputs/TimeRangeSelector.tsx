@@ -4,7 +4,7 @@
 /**
  * Module: `@components/kit/inputs/TimeRangeSelector`
  * Purpose: Time range selector dropdown for filtering time-series data.
- * Scope: Reusable time range picker. Wraps shadcn Select.
+ * Scope: Reusable time range picker. Wraps shadcn Select. Does not fetch data or persist filter state.
  * Invariants: Uses shadcn Select component.
  * Side-effects: none
  * Links: [ActivityView](../../../app/(app)/activity/view.tsx)

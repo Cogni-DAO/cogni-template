@@ -3,11 +3,11 @@
 
 /**
  * Module: `@ports/accounts`
- * Purpose: Billing account service port interface with discriminated union types for LLM billing and port-level errors.
- * Scope: Defines contracts for billing account lifecycle, virtual key provisioning, and credit management with type-safe billing discrimination. Does not implement business logic.
- * Invariants: All operations atomic; billing accounts own virtual keys; ledger integrity preserved; billingStatus discriminates cost fields
+ * Purpose: Billing account service port interface with charge receipt recording and port-level errors.
+ * Scope: Defines contracts for billing account lifecycle, virtual key provisioning, and credit management. Does not implement business logic.
+ * Invariants: All operations atomic; billing accounts own virtual keys; ledger integrity preserved; charge receipts are idempotent by request_id
  * Side-effects: none (interface definition only)
- * Notes: Uses BilledLlmUsageParams and NeedsReviewLlmUsageParams for type-safe recordLlmUsage; implemented by database adapters
+ * Notes: recordChargeReceipt is non-blocking (never throws InsufficientCredits post-call per ACTIVITY_METRICS.md)
  * Links: Implemented by DrizzleAccountService, used by completion feature and auth mapping
  * @public
  */
@@ -104,35 +104,29 @@ export interface CreditLedgerEntry {
 }
 
 /**
- * LLM usage with cost data - billed to user account
+ * Provenance indicates how the charge receipt was generated.
+ * - 'response': Non-streaming completion response
+ * - 'stream': Streaming completion final result
  */
-export type BilledLlmUsageParams = {
-  billingStatus: "billed";
-  billingAccountId: string;
-  virtualKeyId: string;
-  requestId: string;
-  model: string;
-  promptTokens: number;
-  completionTokens: number;
-  providerCostUsd: number;
-  providerCostCredits: bigint;
-  userPriceCredits: bigint;
-  markupFactorApplied: number;
-  metadata?: Record<string, unknown>;
-};
+export type ChargeReceiptProvenance = "response" | "stream";
 
 /**
- * LLM usage without cost data - recorded but not billed
+ * Charge receipt params - minimal audit-focused fields per ACTIVITY_METRICS.md
+ * No model/tokens/usage JSONB - LiteLLM is canonical for telemetry
  */
-export type NeedsReviewLlmUsageParams = {
-  billingStatus: "needs_review";
+export type ChargeReceiptParams = {
   billingAccountId: string;
   virtualKeyId: string;
+  /** Server-generated UUID, idempotency key */
   requestId: string;
-  model: string;
-  promptTokens: number;
-  completionTokens: number;
-  metadata?: Record<string, unknown>;
+  /** Credits debited from user balance */
+  chargedCredits: bigint;
+  /** Observational USD cost from LiteLLM (header or usage.cost) - null if unavailable */
+  responseCostUsd: number | null;
+  /** LiteLLM call ID for forensic correlation (x-litellm-call-id header) */
+  litellmCallId: string | null;
+  /** How this receipt was generated */
+  provenance: ChargeReceiptProvenance;
 };
 
 export interface AccountService {
@@ -188,13 +182,15 @@ export interface AccountService {
   }): Promise<CreditLedgerEntry[]>;
 
   /**
-   * Records LLM usage with discriminated billing status.
-   * - billingStatus: "billed" → records usage + debits credits atomically (throws InsufficientCreditsPortError if insufficient)
-   * - billingStatus: "needs_review" → records usage only (no credit debit, no cost fields)
+   * Records a charge receipt for an LLM call.
+   * Atomic: writes charge_receipt + debits credit_ledger in transaction.
+   * Idempotent: request_id as PK prevents duplicate inserts.
+   *
+   * INVARIANT: This method must NEVER throw InsufficientCreditsPortError.
+   * Post-call billing is non-blocking per ACTIVITY_METRICS.md.
+   * If balance goes negative, log critical but complete the write.
    */
-  recordLlmUsage(
-    params: BilledLlmUsageParams | NeedsReviewLlmUsageParams
-  ): Promise<void>;
+  recordChargeReceipt(params: ChargeReceiptParams): Promise<void>;
 
   /**
    * Lookup a specific credit ledger entry by reference and reason for idempotency checks.

@@ -11,8 +11,9 @@
  * - Chart buckets are zero-filled for the requested range.
  * - Money is decimal string to avoid float precision issues.
  * - Cursor is opaque string.
+ * - telemetrySource indicates data origin: "litellm" (P1) or "fallback" (local receipts).
  * Side-effects: none
- * Links: [ActivityService](../../features/ai/services/activity.ts)
+ * Links: [ActivityService](../../features/ai/services/activity.ts), docs/ACTIVITY_METRICS.md
  * @public
  */
 
@@ -77,5 +78,7 @@ export const aiActivityOperation = {
       })
     ),
     nextCursor: z.string().nullable(),
+    /** Indicates data origin: "litellm" (canonical) or "fallback" (local receipts) */
+    telemetrySource: z.enum(["litellm", "fallback"]),
   }),
 } as const;

@@ -3,15 +3,16 @@
 
 /**
  * Module: `@adapters/server/accounts/drizzle.usage`
- * Purpose: Drizzle implementation of UsageService port.
+ * Purpose: Drizzle implementation of UsageService port (fallback mode).
  * Scope: Implements getUsageStats (SQL aggregation) and listUsageLogs (keyset pagination). Does not handle auth.
  * Invariants:
  * - Buckets are zero-filled using SQL generate_series.
  * - Money is returned as decimal string (6 decimal places).
  * - Totals are calculated via separate SQL query for precision.
  * - Cursor is opaque base64-encoded string.
+ * - Returns telemetrySource: "fallback" (local charge receipts, no model/tokens per ACTIVITY_METRICS.md)
  * Side-effects: IO
- * Links: [UsageService](../../../../ports/usage.port.ts)
+ * Links: [UsageService](../../../../ports/usage.port.ts), docs/ACTIVITY_METRICS.md
  * @internal
  */
 
@@ -38,18 +39,19 @@ export class DrizzleUsageAdapter implements UsageService {
     // 1. Generate time series and aggregate in SQL
     // Using generate_series ensures we get all buckets including empty ones
     // and handles timezones correctly within the database.
+    // NOTE: Fallback mode - no tokens available (LiteLLM is canonical per ACTIVITY_METRICS.md)
     const interval = groupBy === "day" ? "1 day" : "1 hour";
 
     // We need to cast the interval to interval type for generate_series
     const seriesQuery = sql`
       SELECT
         series.bucket_start as "bucketStart",
-        COALESCE(SUM(${llmUsage.providerCostUsd}::numeric), 0)::decimal(10, 6)::text as spend,
-        COALESCE(SUM(${llmUsage.promptTokens} + ${llmUsage.completionTokens}), 0) as tokens,
+        COALESCE(SUM(${llmUsage.responseCostUsd}::numeric), 0)::decimal(10, 6)::text as spend,
+        0 as tokens,
         COUNT(${llmUsage.id}) as requests
       FROM generate_series(
-        date_trunc(${groupBy}, ${from.toISOString()}::timestamptz), 
-        date_trunc(${groupBy}, ${to.toISOString()}::timestamptz - interval '1 second'), 
+        date_trunc(${groupBy}, ${from.toISOString()}::timestamptz),
+        date_trunc(${groupBy}, ${to.toISOString()}::timestamptz - interval '1 second'),
         ${interval}::interval
       ) as series(bucket_start)
       LEFT JOIN ${llmUsage} ON (
@@ -68,16 +70,14 @@ export class DrizzleUsageAdapter implements UsageService {
     const series: UsageBucket[] = rows.map((row: any) => ({
       bucketStart: new Date(row.bucketStart),
       spend: row.spend, // Already string from SQL
-      tokens: Number(row.tokens),
+      tokens: 0, // Not available in fallback mode
       requests: Number(row.requests),
     }));
 
     // 2. Calculate totals with a separate query to ensure precision
-    // and avoid summing floats in JS or relying on potentially incomplete bucket sums
     const [totalsRow] = await this.db
       .select({
-        spend: sql<string>`coalesce(sum(${llmUsage.providerCostUsd}::numeric), 0)::decimal(10, 6)::text`,
-        tokens: sql<number>`coalesce(sum(${llmUsage.promptTokens} + ${llmUsage.completionTokens}), 0)`,
+        spend: sql<string>`coalesce(sum(${llmUsage.responseCostUsd}::numeric), 0)::decimal(10, 6)::text`,
         requests: sql<number>`count(*)`,
       })
       .from(llmUsage)
@@ -93,9 +93,10 @@ export class DrizzleUsageAdapter implements UsageService {
       series,
       totals: {
         spend: totalsRow?.spend ?? "0.000000",
-        tokens: Number(totalsRow?.tokens ?? 0),
+        tokens: 0, // Not available in fallback mode
         requests: Number(totalsRow?.requests ?? 0),
       },
+      telemetrySource: "fallback",
     };
   }
 
@@ -104,6 +105,7 @@ export class DrizzleUsageAdapter implements UsageService {
 
     // Keyset pagination: (createdAt, id) < (cursorTime, cursorId)
     // Order: createdAt DESC, id DESC
+    // NOTE: Fallback mode - no model/tokens available (LiteLLM is canonical per ACTIVITY_METRICS.md)
     const where = cursor
       ? and(
           eq(llmUsage.billingAccountId, billingAccountId),
@@ -115,25 +117,21 @@ export class DrizzleUsageAdapter implements UsageService {
       .select({
         id: llmUsage.id,
         createdAt: llmUsage.createdAt,
-        model: llmUsage.model,
-        promptTokens: llmUsage.promptTokens,
-        completionTokens: llmUsage.completionTokens,
-        providerCostUsd: llmUsage.providerCostUsd,
-        metadata: llmUsage.usage, // Assuming usage column contains metadata/finish reason
+        responseCostUsd: llmUsage.responseCostUsd,
       })
       .from(llmUsage)
       .where(where)
       .orderBy(desc(llmUsage.createdAt), desc(llmUsage.id))
       .limit(limit);
 
+    // Return degraded log entries per ACTIVITY_METRICS.md fallback mode
     const logs: UsageLogEntry[] = rows.map((row) => ({
       id: row.id,
       timestamp: row.createdAt,
-      model: row.model ?? "unknown",
-      tokensIn: row.promptTokens ?? 0,
-      tokensOut: row.completionTokens ?? 0,
-      cost: row.providerCostUsd ?? "0",
-      metadata: row.metadata as Record<string, unknown>,
+      model: "unavailable", // Not stored in charge receipts
+      tokensIn: 0, // Not stored in charge receipts
+      tokensOut: 0, // Not stored in charge receipts
+      cost: row.responseCostUsd ?? "0",
     }));
 
     let nextCursor: { createdAt: Date; id: string } | undefined;
@@ -149,6 +147,7 @@ export class DrizzleUsageAdapter implements UsageService {
 
     return {
       logs,
+      telemetrySource: "fallback",
       ...(nextCursor ? { nextCursor } : {}),
     };
   }

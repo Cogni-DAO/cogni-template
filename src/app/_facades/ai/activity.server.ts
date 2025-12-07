@@ -118,5 +118,6 @@ export async function getActivity(
     totals,
     rows,
     nextCursor,
+    telemetrySource: stats.telemetrySource,
   };
 }

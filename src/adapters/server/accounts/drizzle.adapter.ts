@@ -3,12 +3,12 @@
 
 /**
  * Module: `@adapters/server/accounts/drizzle`
- * Purpose: DrizzleAccountService implementation for PostgreSQL billing account operations with discriminated billing flow.
- * Scope: Implements AccountService port with ledger-based credit accounting and virtual key management. Branches on billingStatus to debit or record. Does not compute pricing.
- * Invariants: Atomic ops; ledger source of truth; balance cached; UUID v4 validated; billed debits, needs_review skips
+ * Purpose: DrizzleAccountService implementation for PostgreSQL billing account operations with charge receipt recording.
+ * Scope: Implements AccountService port with ledger-based credit accounting and virtual key management. Does not compute pricing.
+ * Invariants: Atomic ops; ledger source of truth; balance cached; UUID v4 validated; request_id is idempotency key
  * Side-effects: IO (database operations)
- * Notes: Uses transactions for consistency, throws port errors for business rule violations, supports nullable cost fields in llm_usage
- * Links: Implements AccountService port, uses shared database schema
+ * Notes: Uses transactions for consistency; recordChargeReceipt is non-blocking (never throws InsufficientCredits per ACTIVITY_METRICS.md)
+ * Links: Implements AccountService port, uses shared database schema, docs/ACTIVITY_METRICS.md
  * @public
  */
 
@@ -19,12 +19,11 @@ import { and, eq, sql } from "drizzle-orm";
 import type { Database } from "@/adapters/server/db/client";
 import {
   type AccountService,
-  type BilledLlmUsageParams,
   type BillingAccount,
   BillingAccountNotFoundPortError,
+  type ChargeReceiptParams,
   type CreditLedgerEntry,
   InsufficientCreditsPortError,
-  type NeedsReviewLlmUsageParams,
   VirtualKeyNotFoundPortError,
 } from "@/ports";
 import {
@@ -35,7 +34,10 @@ import {
 } from "@/shared/db";
 
 import { serverEnv } from "@/shared/env";
+import { makeLogger } from "@/shared/observability";
 import { isValidUuid } from "@/shared/util";
+
+const logger = makeLogger({ component: "DrizzleAccountService" });
 
 interface QueryableDb extends Pick<Database, "query" | "insert"> {
   query: Database["query"];
@@ -178,10 +180,21 @@ export class DrizzleAccountService implements AccountService {
     });
   }
 
-  async recordLlmUsage(
-    params: BilledLlmUsageParams | NeedsReviewLlmUsageParams
-  ): Promise<void> {
+  async recordChargeReceipt(params: ChargeReceiptParams): Promise<void> {
     await this.db.transaction(async (tx) => {
+      // Idempotency check: if receipt already exists, return early
+      // This prevents double-debits on retries per ACTIVITY_METRICS.md
+      const existing = await tx.query.llmUsage.findFirst({
+        where: eq(llmUsage.requestId, params.requestId),
+      });
+      if (existing) {
+        logger.debug(
+          { requestId: params.requestId },
+          "recordChargeReceipt: idempotent return - receipt already exists"
+        );
+        return;
+      }
+
       await this.ensureBillingAccountExists(tx, params.billingAccountId);
       await this.ensureVirtualKeyExists(
         tx,
@@ -189,86 +202,57 @@ export class DrizzleAccountService implements AccountService {
         params.virtualKeyId
       );
 
-      if (params.billingStatus === "billed") {
-        // Insert usage record with cost data
-        await tx.insert(llmUsage).values({
-          billingAccountId: params.billingAccountId,
-          virtualKeyId: params.virtualKeyId,
-          requestId: params.requestId,
-          model: params.model,
-          promptTokens: params.promptTokens,
-          completionTokens: params.completionTokens,
-          providerCostUsd: params.providerCostUsd.toString(),
-          providerCostCredits: params.providerCostCredits,
-          userPriceCredits: params.userPriceCredits,
-          markupFactor: params.markupFactorApplied.toString(),
-          billingStatus: "billed",
-          usage: {
-            promptTokens: params.promptTokens,
-            completionTokens: params.completionTokens,
-            totalTokens: params.promptTokens + params.completionTokens,
+      // Insert charge receipt (unique constraint on request_id ensures no duplicates)
+      await tx.insert(llmUsage).values({
+        billingAccountId: params.billingAccountId,
+        virtualKeyId: params.virtualKeyId,
+        requestId: params.requestId,
+        litellmCallId: params.litellmCallId,
+        chargedCredits: params.chargedCredits,
+        responseCostUsd: params.responseCostUsd?.toString() ?? null,
+        provenance: params.provenance,
+      });
+
+      // Debit credits atomically (negative amount)
+      const debitAmount = -params.chargedCredits;
+
+      const [updatedAccount] = await tx
+        .update(billingAccounts)
+        .set({
+          balanceCredits: sql`${billingAccounts.balanceCredits} + ${debitAmount}`,
+        })
+        .where(eq(billingAccounts.id, params.billingAccountId))
+        .returning({ balanceCredits: billingAccounts.balanceCredits });
+
+      if (!updatedAccount) {
+        throw new BillingAccountNotFoundPortError(params.billingAccountId);
+      }
+
+      const newBalance = updatedAccount.balanceCredits;
+
+      // Insert ledger entry (unique partial index ensures no duplicates for llm_usage reason)
+      await tx.insert(creditLedger).values({
+        billingAccountId: params.billingAccountId,
+        virtualKeyId: params.virtualKeyId,
+        amount: debitAmount,
+        balanceAfter: newBalance,
+        reason: "llm_usage",
+        reference: params.requestId,
+        metadata: null,
+      });
+
+      // INVARIANT: Never throw InsufficientCreditsPortError in post-call path
+      // Log critical if balance goes negative, but complete the write
+      if (newBalance < 0n) {
+        logger.error(
+          {
+            billingAccountId: params.billingAccountId,
+            requestId: params.requestId,
+            chargedCredits: Number(params.chargedCredits),
+            newBalance: Number(newBalance),
           },
-        });
-
-        // Debit credits atomically
-        const debitAmount = -params.userPriceCredits;
-
-        const [updatedAccount] = await tx
-          .update(billingAccounts)
-          .set({
-            balanceCredits: sql`${billingAccounts.balanceCredits} + ${debitAmount}`,
-          })
-          .where(eq(billingAccounts.id, params.billingAccountId))
-          .returning({ balanceCredits: billingAccounts.balanceCredits });
-
-        if (!updatedAccount) {
-          throw new BillingAccountNotFoundPortError(params.billingAccountId);
-        }
-
-        const newBalance = updatedAccount.balanceCredits;
-
-        await tx.insert(creditLedger).values({
-          billingAccountId: params.billingAccountId,
-          virtualKeyId: params.virtualKeyId,
-          amount: debitAmount,
-          balanceAfter: newBalance,
-          reason: "llm_usage",
-          reference: params.requestId,
-          metadata: params.metadata ?? null,
-        });
-
-        // Check balance after debit
-        if (newBalance < 0n) {
-          const costNum = Number(params.userPriceCredits);
-          const balanceNum = Number(newBalance);
-          const previousBalance = balanceNum + costNum;
-
-          throw new InsufficientCreditsPortError(
-            params.billingAccountId,
-            costNum,
-            previousBalance < 0 ? 0 : previousBalance
-          );
-        }
-      } else {
-        // Insert usage record without cost data, no credit debit
-        await tx.insert(llmUsage).values({
-          billingAccountId: params.billingAccountId,
-          virtualKeyId: params.virtualKeyId,
-          requestId: params.requestId,
-          model: params.model,
-          promptTokens: params.promptTokens,
-          completionTokens: params.completionTokens,
-          providerCostUsd: null,
-          providerCostCredits: null,
-          userPriceCredits: null,
-          markupFactor: null,
-          billingStatus: "needs_review",
-          usage: {
-            promptTokens: params.promptTokens,
-            completionTokens: params.completionTokens,
-            totalTokens: params.promptTokens + params.completionTokens,
-          },
-        });
+          "inv_post_call_negative_balance: Charge receipt recorded with negative balance"
+        );
       }
     });
   }

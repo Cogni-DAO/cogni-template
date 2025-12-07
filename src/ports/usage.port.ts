@@ -9,10 +9,18 @@
  * - UsageStatsResult.series must be zero-filled.
  * - Money fields are decimal strings (6 decimal places).
  * - UsageLogsResult.nextCursor is opaque.
+ * - telemetrySource indicates data origin: "litellm" (P1) or "fallback" (local receipts).
  * Side-effects: none
- * Links: [DrizzleUsageAdapter](../adapters/server/accounts/drizzle.usage.adapter.ts)
+ * Links: [DrizzleUsageAdapter](../adapters/server/accounts/drizzle.usage.adapter.ts), docs/ACTIVITY_METRICS.md
  * @public
  */
+
+/**
+ * Indicates the source of telemetry data.
+ * - "litellm": Data from LiteLLM spend logs (canonical, P1)
+ * - "fallback": Data from local charge receipts (degraded, no model/tokens)
+ */
+export type TelemetrySource = "litellm" | "fallback";
 
 export interface UsageStatsParams {
   billingAccountId: string;
@@ -35,6 +43,8 @@ export interface UsageStatsResult {
     tokens: number;
     requests: number;
   };
+  /** Source of telemetry data */
+  telemetrySource: TelemetrySource;
 }
 
 export interface UsageLogsParams {
@@ -62,6 +72,8 @@ export interface UsageLogsResult {
     createdAt: Date;
     id: string;
   };
+  /** Source of telemetry data */
+  telemetrySource: TelemetrySource;
 }
 
 export interface UsageService {

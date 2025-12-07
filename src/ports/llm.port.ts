@@ -54,6 +54,8 @@ export interface LlmService {
     finishReason?: "stop" | "length" | "tool_calls" | "content_filter" | string;
     providerMeta?: Record<string, unknown>;
     providerCostUsd?: number;
+    /** LiteLLM call ID for forensic correlation (x-litellm-call-id header) */
+    litellmCallId?: string;
   }>;
 
   completionStream(params: CompletionStreamParams): Promise<{
@@ -73,6 +75,8 @@ export interface LlmService {
         | string;
       providerMeta?: Record<string, unknown>;
       providerCostUsd?: number;
+      /** LiteLLM call ID for forensic correlation (x-litellm-call-id header) */
+      litellmCallId?: string;
     }>;
   }>;
 }
