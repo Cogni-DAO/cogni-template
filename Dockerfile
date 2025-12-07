@@ -45,8 +45,8 @@ RUN --mount=type=cache,id=next-cache,target=/app/.next/cache,sharing=locked \
 FROM base AS migrator
 WORKDIR /app
 
-# Ensure pnpm is available (inherited from base, but make explicit for CMD)
-RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
+# Copy package manifest files (required for pnpm to work)
+COPY package.json pnpm-lock.yaml ./
 
 # Reuse node_modules from deps stage (includes drizzle-kit and all dependencies)
 COPY --from=deps /app/node_modules ./node_modules
