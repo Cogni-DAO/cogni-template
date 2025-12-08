@@ -126,6 +126,7 @@ export class LiteLlmAdapter implements LlmService {
       const litellmCallId = getLitellmCallIdFromHeaders(response);
 
       const data = (await response.json()) as {
+        id?: string;
         choices: { message: { content: string }; finish_reason?: string }[];
         usage: {
           prompt_tokens: number;
@@ -172,7 +173,10 @@ export class LiteLlmAdapter implements LlmService {
         result.providerCostUsd = providerCostFromHeader;
       }
 
-      if (litellmCallId) {
+      // Prefer response body id (gen-...) for join with /spend/logs
+      if (data.id) {
+        result.litellmCallId = data.id;
+      } else if (litellmCallId) {
         result.litellmCallId = litellmCallId;
       }
 
@@ -293,6 +297,8 @@ export class LiteLlmAdapter implements LlmService {
             }
           | undefined;
         let finishReason: string | undefined;
+        let usageCost: number | undefined; // Cost from stream usage event
+        let litellmRequestId: string | undefined; // LiteLLM's gen-... ID from response
 
         // Queue for parsed events from eventsource-parser
         const eventQueue: EventSourceMessage[] = [];
@@ -326,6 +332,11 @@ export class LiteLlmAdapter implements LlmService {
               try {
                 const json = JSON.parse(data);
 
+                // Capture LiteLLM request ID (gen-...) from first chunk for join with /spend/logs
+                if (json.id && !litellmRequestId) {
+                  litellmRequestId = json.id;
+                }
+
                 // Check for provider error in response
                 if (json.error) {
                   const errorMsg =
@@ -344,6 +355,18 @@ export class LiteLlmAdapter implements LlmService {
                     completionTokens: json.usage.completion_tokens,
                     totalTokens: json.usage.total_tokens,
                   };
+                  // Extract cost from usage event (stream_options: { include_usage: true })
+                  if (
+                    typeof json.usage.cost === "number" &&
+                    Number.isFinite(json.usage.cost)
+                  ) {
+                    usageCost = json.usage.cost;
+                  }
+                  // DEBUG: Log RAW usage event from LiteLLM
+                  logger.info(
+                    { rawUsageEvent: json.usage, fullChunk: json },
+                    "LiteLLM stream - RAW USAGE EVENT"
+                  );
                 }
 
                 const choice = json.choices?.[0];
@@ -392,13 +415,43 @@ export class LiteLlmAdapter implements LlmService {
           if (finishReason) {
             result.finishReason = finishReason;
           }
-          if (typeof providerCostUsd === "number") {
-            result.providerCostUsd = providerCostUsd;
+
+          // Cost derivation priority (ACTIVITY_METRICS.md §3):
+          // 1. Header (providerCostUsd from x-litellm-response-cost)
+          // 2. Usage event (usageCost from stream usage.cost)
+          // 3. Neither → undefined (will log CRITICAL in completion.ts)
+          const derivedCost =
+            typeof providerCostUsd === "number" ? providerCostUsd : usageCost;
+
+          if (typeof derivedCost === "number") {
+            result.providerCostUsd = derivedCost;
           }
 
-          if (litellmCallId) {
+          // DEBUG: Log cost derivation result
+          logger.debug(
+            {
+              model,
+              headerCost: providerCostUsd,
+              usageCost,
+              derivedCost,
+              litellmCallId,
+            },
+            "Stream cost derivation complete"
+          );
+
+          // Prefer response body id (gen-...) for join with /spend/logs
+          // Fall back to header UUID if response id not available
+          if (litellmRequestId) {
+            result.litellmCallId = litellmRequestId;
+          } else if (litellmCallId) {
             result.litellmCallId = litellmCallId;
           }
+
+          // DEBUG: Log entire result object from stream
+          logger.info(
+            { streamResult: result },
+            "LiteLLM stream completion - FULL RESULT"
+          );
 
           // ALWAYS include providerMeta with model (SSE doesn't return this, use request param)
           result.providerMeta = {
@@ -421,7 +474,7 @@ export class LiteLlmAdapter implements LlmService {
               provider: result.providerMeta.provider,
               tokensUsed: finalUsage?.totalTokens,
               finishReason,
-              hasCost: typeof providerCostUsd === "number",
+              hasCost: typeof derivedCost === "number",
               hasCallId: !!litellmCallId,
               contentLength: fullContent.length,
             },

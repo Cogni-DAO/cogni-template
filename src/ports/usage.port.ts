@@ -80,10 +80,13 @@ export interface UsageService {
  */
 export interface ActivityUsagePort {
   /**
-   * Query usage logs with bounded pagination.
+   * Query usage logs by date range.
    * @param billingAccountId - Server-derived identity (never client-provided)
-   * @param params - Time range and pagination params
+   * @param params - Time range and limit
    * @throws ActivityUsageUnavailableError if usage log system is down/unreachable
+   *
+   * Note: /spend/logs is deprecated and has no pagination.
+   * If pagination needed, migrate to /spend/logs/v2 with page/page_size params.
    */
   getSpendLogs(
     billingAccountId: string,
@@ -91,7 +94,6 @@ export interface ActivityUsagePort {
       from: Date;
       to: Date;
       limit?: number; // Max 100, enforced by adapter
-      cursor?: string; // Opaque pagination token
     }
   ): Promise<{
     logs: Array<{
@@ -108,9 +110,6 @@ export interface ActivityUsagePort {
       /** Provider cost in USD (observational, not user-facing spend) */
       providerCostUsd: string;
     }>;
-    nextCursor?: string;
-    /** Warns if pagination was capped at MAX_PAGES */
-    paginationCapped?: boolean;
   }>;
 
   /**

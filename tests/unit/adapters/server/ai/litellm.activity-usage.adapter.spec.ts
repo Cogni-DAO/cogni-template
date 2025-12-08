@@ -44,9 +44,10 @@ describe("LiteLlmActivityUsageAdapter", () => {
 
     it("always sends billingAccountId as end_user parameter (server-derived identity)", async () => {
       // LiteLLM stores the `user` param from completions as `end_user` in spend logs
+      // LiteLLM /spend/logs returns raw array, not {logs: [...]}
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ logs: [] }),
+        json: async () => [],
       });
 
       await adapter.getSpendLogs(billingAccountId, params);
@@ -57,39 +58,44 @@ describe("LiteLlmActivityUsageAdapter", () => {
       );
     });
 
-    it("enforces MAX_PAGES=10 and sets paginationCapped flag", async () => {
-      // Mock 11 pages worth of responses (should stop at page 10)
-      mockFetch.mockImplementation(() =>
-        Promise.resolve({
-          ok: true,
-          json: async () => ({
-            logs: [
-              {
-                request_id: "req-1",
-                startTime: "2025-01-01T00:00:00Z",
-                model: "gpt-4",
-                prompt_tokens: 100,
-                completion_tokens: 50,
-                spend: "0.002",
-              },
-            ],
-            next_cursor: "cursor-next", // Always has next page
-          }),
-        })
-      );
+    it("fetches logs in single request (LiteLLM has no cursor pagination)", async () => {
+      // LiteLLM /spend/logs returns raw array with no pagination cursor
+      // Pagination is controlled by date range and limit params
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => [
+          {
+            request_id: "req-1",
+            startTime: "2025-01-01T00:00:00Z",
+            model: "gpt-4",
+            prompt_tokens: 100,
+            completion_tokens: 50,
+            spend: "0.002",
+          },
+          {
+            request_id: "req-2",
+            startTime: "2025-01-01T01:00:00Z",
+            model: "gpt-4",
+            prompt_tokens: 200,
+            completion_tokens: 100,
+            spend: "0.004",
+          },
+        ],
+      });
 
       const result = await adapter.getSpendLogs(billingAccountId, params);
 
-      // Should stop at MAX_PAGES=10
-      expect(mockFetch).toHaveBeenCalledTimes(10);
-      expect(result.paginationCapped).toBe(true);
-      expect(result.logs.length).toBe(10); // 1 log per page × 10 pages
+      // Single fetch - no pagination loop
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(result.logs.length).toBe(2);
+      // No pagination - single fetch
     });
 
     it("enforces limit≤100 (caps at 100 even if higher requested)", async () => {
+      // LiteLLM returns raw array, not {logs: [...]}
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ logs: [] }),
+        json: async () => [],
       });
 
       await adapter.getSpendLogs(billingAccountId, {
@@ -104,20 +110,19 @@ describe("LiteLlmActivityUsageAdapter", () => {
     });
 
     it("maps LiteLLM response fields as-is without recomputing cost", async () => {
+      // LiteLLM returns raw array, not {logs: [...]}
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
-          logs: [
-            {
-              request_id: "req-1",
-              startTime: "2025-01-15T12:00:00Z",
-              model: "gpt-4-turbo",
-              prompt_tokens: 150,
-              completion_tokens: 75,
-              spend: "0.005", // Provider cost from LiteLLM
-            },
-          ],
-        }),
+        json: async () => [
+          {
+            request_id: "req-1",
+            startTime: "2025-01-15T12:00:00Z",
+            model: "gpt-4-turbo",
+            prompt_tokens: 150,
+            completion_tokens: 75,
+            spend: "0.005", // Provider cost from LiteLLM
+          },
+        ],
       });
 
       const result = await adapter.getSpendLogs(billingAccountId, params);
@@ -131,6 +136,49 @@ describe("LiteLlmActivityUsageAdapter", () => {
         tokensOut: 75,
         providerCostUsd: "0.005", // Pass-through, no recomputation
       });
+    });
+
+    it("throws ActivityUsageUnavailableError when response shape is invalid (wrapped object)", async () => {
+      // Old format {logs: [...]} should fail validation
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          logs: [
+            {
+              request_id: "req-1",
+              startTime: "2025-01-15T12:00:00Z",
+              model: "gpt-4",
+              prompt_tokens: 100,
+              completion_tokens: 50,
+              spend: "0.002",
+            },
+          ],
+        }),
+      });
+
+      await expect(
+        adapter.getSpendLogs(billingAccountId, params)
+      ).rejects.toThrow(ActivityUsageUnavailableError);
+    });
+
+    it("throws ActivityUsageUnavailableError when log entry missing required request_id", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => [
+          {
+            // Missing request_id
+            startTime: "2025-01-15T12:00:00Z",
+            model: "gpt-4",
+            prompt_tokens: 100,
+            completion_tokens: 50,
+            spend: "0.002",
+          },
+        ],
+      });
+
+      await expect(
+        adapter.getSpendLogs(billingAccountId, params)
+      ).rejects.toThrow(ActivityUsageUnavailableError);
     });
 
     it("throws ActivityUsageUnavailableError only for infra errors (502/503/504)", async () => {
@@ -178,9 +226,10 @@ describe("LiteLlmActivityUsageAdapter", () => {
 
     it("always sends billingAccountId as end_user parameter", async () => {
       // LiteLLM stores the `user` param from completions as `end_user` in spend logs
+      // LiteLLM returns raw array, not {buckets: [...]}
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ buckets: [] }),
+        json: async () => [],
       });
 
       await adapter.getSpendChart(billingAccountId, params);
@@ -192,26 +241,25 @@ describe("LiteLlmActivityUsageAdapter", () => {
     });
 
     it("maps aggregated buckets without recomputing cost", async () => {
+      // LiteLLM returns raw array, not {buckets: [...]}
       mockFetch.mockResolvedValueOnce({
         ok: true,
-        json: async () => ({
-          buckets: [
-            {
-              date: "2025-01-01",
-              spend: "0.150",
-              prompt_tokens: 1000,
-              completion_tokens: 500,
-              requests: 10,
-            },
-            {
-              date: "2025-01-02",
-              spend: "0.200",
-              prompt_tokens: 1500,
-              completion_tokens: 750,
-              requests: 15,
-            },
-          ],
-        }),
+        json: async () => [
+          {
+            date: "2025-01-01",
+            spend: "0.150",
+            prompt_tokens: 1000,
+            completion_tokens: 500,
+            requests: 10,
+          },
+          {
+            date: "2025-01-02",
+            spend: "0.200",
+            prompt_tokens: 1500,
+            completion_tokens: 750,
+            requests: 15,
+          },
+        ],
       });
 
       const result = await adapter.getSpendChart(billingAccountId, params);
@@ -223,6 +271,28 @@ describe("LiteLlmActivityUsageAdapter", () => {
         tokens: 1500, // Sum of prompt + completion
         requests: 10,
       });
+    });
+
+    it("throws ActivityUsageUnavailableError when response shape is invalid (wrapped object)", async () => {
+      // Old format {buckets: [...]} should fail validation
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          buckets: [
+            {
+              date: "2025-01-01",
+              spend: "0.150",
+              prompt_tokens: 1000,
+              completion_tokens: 500,
+              requests: 10,
+            },
+          ],
+        }),
+      });
+
+      await expect(
+        adapter.getSpendChart(billingAccountId, params)
+      ).rejects.toThrow(ActivityUsageUnavailableError);
     });
 
     it("throws regular Error (not ActivityUsageUnavailableError) for 4xx errors", async () => {

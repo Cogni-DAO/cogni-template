@@ -68,21 +68,9 @@ export class LiteLlmUsageServiceAdapter implements UsageService {
   }
 
   async listUsageLogs(params: UsageLogsParams): Promise<UsageLogsResult> {
-    const { billingAccountId, limit, cursor } = params;
+    const { billingAccountId, limit } = params;
 
-    // Convert UsageLogsParams cursor to UsageTelemetryPort cursor (opaque string)
-    let telemetryCursor: string | undefined;
-    if (cursor) {
-      // Encode cursor as opaque string for LiteLLM
-      telemetryCursor = Buffer.from(
-        JSON.stringify({
-          createdAt: cursor.createdAt.toISOString(),
-          id: cursor.id,
-        })
-      ).toString("base64");
-    }
-
-    // Need time range for LiteLLM - use generous default (90 days back)
+    // LiteLLM /spend/logs has no pagination - use date range filtering
     const now = new Date();
     const from = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
 
@@ -90,43 +78,17 @@ export class LiteLlmUsageServiceAdapter implements UsageService {
       from,
       to: now,
       limit,
-      ...(telemetryCursor ? { cursor: telemetryCursor } : {}),
     });
 
-    // Map UsageTelemetryPort logs → UsageLogsResult logs
     const logs = result.logs.map((log) => ({
       id: log.callId,
       timestamp: log.timestamp,
       model: log.model,
       tokensIn: log.tokensIn,
       tokensOut: log.tokensOut,
-      cost: log.providerCostUsd, // Pass-through (observational, not billing)
-      // metadata is optional, omit if not available
+      cost: log.providerCostUsd,
     }));
 
-    // Convert nextCursor back to UsageLogsResult format
-    let nextCursor: UsageLogsResult["nextCursor"];
-    if (result.nextCursor) {
-      try {
-        const decoded = JSON.parse(
-          Buffer.from(result.nextCursor, "base64").toString("utf-8")
-        ) as { createdAt: string; id: string };
-        nextCursor = {
-          createdAt: new Date(decoded.createdAt),
-          id: decoded.id,
-        };
-      } catch {
-        // If cursor format doesn't match, use last log as cursor
-        const lastLog = logs[logs.length - 1];
-        if (lastLog) {
-          nextCursor = {
-            createdAt: lastLog.timestamp,
-            id: lastLog.id,
-          };
-        }
-      }
-    }
-
-    return { logs, ...(nextCursor ? { nextCursor } : {}) };
+    return { logs };
   }
 }
