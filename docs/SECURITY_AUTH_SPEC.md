@@ -483,6 +483,10 @@ React components use Auth.js hooks:
 - Two-factor authentication
 - Organizations/roles/permissions (single-tenant billing for now)
 
+### Known Security Issues
+
+- [ ] **LiteLLM virtual keys exposed in plaintext.** Keys stored unencrypted in DB and returned from AccountService; high risk of leakage via API responses, JWTs, and logs. MVP fix: remove `litellmVirtualKey` from all client-facing returns; fetch/decrypt server-side only in LiteLLM adapter by `virtualKeyId`; add guard test/log-scan to prevent key exposure. Long-term: encrypt-at-rest with master key rotation.
+
 ---
 
 ## Migration Path
