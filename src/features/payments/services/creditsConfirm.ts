@@ -5,14 +5,14 @@
  * Module: `@features/payments/services/creditsConfirm`
  * Purpose: Confirm widget payments by crediting billing accounts via ledger writes.
  * Scope: Feature-layer orchestration for payment confirmations; does not expose HTTP handling or session resolution. Validates idempotency via ledger reference lookup.
- * Invariants: Credits computed with integer math using CREDITS_PER_CENT constant from core; idempotent on clientPaymentId per billing account.
+ * Invariants: Credits computed via usdCentsToCredits (integer-only math); idempotent on clientPaymentId per billing account.
  * Side-effects: IO (via AccountService port).
  * Notes: Billing account resolution occurs at app layer; this service assumes a valid billing account and default virtual key.
- * Links: docs/DEPAY_PAYMENTS.md
+ * Links: docs/DEPAY_PAYMENTS.md, src/core/billing/pricing.ts
  * @public
  */
 
-import { CREDITS_PER_CENT } from "@/core";
+import { usdCentsToCredits } from "@/core";
 import type { AccountService } from "@/ports";
 import { WIDGET_PAYMENT_REASON } from "@/shared";
 
@@ -52,7 +52,10 @@ export async function confirmCreditsPayment(
     throw new Error("amountUsdCents must be greater than zero");
   }
 
-  const credits = input.amountUsdCents * CREDITS_PER_CENT;
+  // Convert cents to credits using integer math (no float division)
+  const creditsAsBigInt = usdCentsToCredits(input.amountUsdCents);
+  // TODO: Move ledger ports to bigint; for now convert to number
+  const credits = Number(creditsAsBigInt);
   const metadata = {
     provider: "depay",
     amountUsdCents: input.amountUsdCents,

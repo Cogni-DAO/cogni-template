@@ -5,7 +5,7 @@
  * Module: `@features/payments/services/creditsConfirm`
  * Purpose: Verifies widget payment confirmation service logic.
  * Scope: Covers feature-layer credit calculations, idempotency checks, and validation with mocked AccountService port; does not test port implementations or HTTP layer.
- * Invariants: 1 cent = 10 credits; idempotent per clientPaymentId; validation on amountUsdCents.
+ * Invariants: 1 cent = 100,000 credits (CREDITS_PER_USD / 100); idempotent per clientPaymentId; validation on amountUsdCents.
  * Side-effects: none
  * Notes: Uses mocked AccountService with stub implementations.
  * Links: docs/DEPAY_PAYMENTS.md, src/features/payments/services/creditsConfirm.ts
@@ -47,8 +47,11 @@ describe("features/payments/services/creditsConfirm", () => {
   it("credits new payments and returns updated balance with merged metadata", async () => {
     const { accountService, findByReference, creditAccount } = createMocks();
 
+    // 1000 cents = $10 = 100,000,000 credits (at CREDITS_PER_USD = 10,000,000)
+    const expectedCredits = 100_000_000;
+
     findByReference.mockResolvedValue(null);
-    creditAccount.mockResolvedValue({ newBalance: 10_000 });
+    creditAccount.mockResolvedValue({ newBalance: expectedCredits });
 
     const result = await confirmCreditsPayment(accountService, {
       billingAccountId,
@@ -66,7 +69,7 @@ describe("features/payments/services/creditsConfirm", () => {
 
     expect(creditAccount).toHaveBeenCalledWith({
       billingAccountId,
-      amount: 10_000, // 1,000 cents * 10 credits/cent
+      amount: expectedCredits, // 1000 cents = $10 * 10_000_000 credits/USD
       reason: WIDGET_PAYMENT_REASON,
       reference: "payment-1",
       virtualKeyId: defaultVirtualKeyId,
@@ -79,8 +82,8 @@ describe("features/payments/services/creditsConfirm", () => {
 
     expect(result).toEqual({
       billingAccountId,
-      balanceCredits: 10_000,
-      creditsApplied: 10_000,
+      balanceCredits: expectedCredits,
+      creditsApplied: expectedCredits,
     });
   });
 

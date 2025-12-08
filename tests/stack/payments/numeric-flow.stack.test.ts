@@ -5,7 +5,7 @@
  * Module: `@tests/stack/payments/numeric-flow`
  * Purpose: Stack tests verifying numeric flow from UI cents → intent amount_usd_cents → amount_raw → ledger credits delta.
  * Scope: Tests complete numeric flow for $1 and $50 payments with exact conversions at each step. Does not test error cases or UI rendering.
- * Invariants: UI cents → backend cents → raw USDC → credits all match; no float math; CREDITS_PER_CENT = 10 constant holds.
+ * Invariants: UI cents → backend cents → raw USDC → credits all match; no float math; uses usdCentsToCredits().
  * Side-effects: IO (database writes, facade calls)
  * Notes: Validates conversion formulas: 1 cent = 10,000 raw USDC units; 1 cent = 10 credits.
  * Links: docs/PAYMENTS_DESIGN.md
@@ -27,7 +27,7 @@ import {
   createPaymentIntentFacade,
   submitPaymentTxHashFacade,
 } from "@/app/_facades/payments/attempts.server";
-import { CREDITS_PER_CENT } from "@/core";
+import { usdCentsToCredits } from "@/core";
 import type { SessionUser } from "@/shared/auth";
 import {
   billingAccounts,
@@ -156,12 +156,12 @@ describe("Payment Numeric Flow Validation", () => {
 
       // Step 8: Assert exact conversion formula
       expect(BigInt(amountUsdCents) * 10_000n).toBe(expectedAmountRaw);
-      expect(amountUsdCents * CREDITS_PER_CENT).toBe(expectedCredits);
+      expect(Number(usdCentsToCredits(amountUsdCents))).toBe(expectedCredits);
 
       // Step 9: Assert UI display formula matches backend constant
       // UI button text: "formatCredits(amountCents * CREDITS_PER_CENT) credits"
       // This ensures UI can never drift from backend conversion rate
-      const uiDisplayCredits = amountUsdCents * CREDITS_PER_CENT;
+      const uiDisplayCredits = Number(usdCentsToCredits(amountUsdCents));
       expect(uiDisplayCredits).toBe(expectedCredits);
     });
   });
@@ -253,12 +253,12 @@ describe("Payment Numeric Flow Validation", () => {
 
       // Step 8: Assert exact conversion formula
       expect(BigInt(amountUsdCents) * 10_000n).toBe(expectedAmountRaw);
-      expect(amountUsdCents * CREDITS_PER_CENT).toBe(expectedCredits);
+      expect(Number(usdCentsToCredits(amountUsdCents))).toBe(expectedCredits);
 
       // Step 9: Assert UI display formula matches backend constant
       // UI button text: "formatCredits(amountCents * CREDITS_PER_CENT) credits"
       // This ensures UI can never drift from backend conversion rate
-      const uiDisplayCredits = amountUsdCents * CREDITS_PER_CENT;
+      const uiDisplayCredits = Number(usdCentsToCredits(amountUsdCents));
       expect(uiDisplayCredits).toBe(expectedCredits);
     });
   });
