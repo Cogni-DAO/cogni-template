@@ -275,14 +275,16 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [ ] │ ├── wallet.port.ts # WalletService { verifySignature(...) }
 [ ] │ ├── auth.port.ts # AuthService { issueNonce, verifySiwe, session }
 [ ] │ ├── apikey.port.ts # ApiKeyRepo { create, revoke, findByHash }
-[ ] │ ├── usage.port.ts # UsageRepo { recordUsage, findByApiKey }
+[x] │ ├── usage.port.ts # UsageService, ActivityUsagePort (Activity dashboard)
 [ ] │ ├── telemetry.port.ts # Telemetry { trace, event, span }
 [ ] │ ├── ratelimit.port.ts # RateLimiter { take(key, points) }
 [ ] │ └── rng.port.ts # Rng { uuid(): string }
 [ ] │
 [x] ├── adapters/ # infrastructure implementations (no UI)
 [x] │ ├── server/
-[x] │ │ ├── ai/litellm.adapter.ts # LLM service impl
+[x] │ │ ├── ai/litellm.adapter.ts # LLM completion service
+[x] │ │ ├── ai/litellm.activity-usage.adapter.ts # Activity dashboard (LiteLLM /spend/logs)
+[x] │ │ ├── ai/litellm.usage-service.adapter.ts # UsageService bridge
 [x] │ │ ├── accounts/ # account service implementation
 [x] │ │ │ └── drizzle.adapter.ts # database-backed AccountService
 [x] │ │ ├── db/ # database client and connection
@@ -339,10 +341,8 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] │ ├── web3/ # chain config, USDC addresses
 [x] │ ├── config/ # repo-spec config helpers
 [x] │ └── index.ts
-[ ] │ ├── schemas/
-[ ] │ │ ├── api.ts # request/response DTOs
-[ ] │ │ ├── usage.ts # usage schema
-[ ] │ │ └── mappers.ts # DTO ↔ domain translators
+[x] │ ├── schemas/
+[x] │ │ └── litellm.spend-logs.schema.ts # Zod schemas for LiteLLM /spend/logs API
 [ ] │ └── crypto.ts
 [ ] │
 [x] ├── components/ # shared presentational UI
