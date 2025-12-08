@@ -179,11 +179,17 @@ UI shows explicit "Usage unavailable" state. No fallback to local receipts for t
 ## Known Issues
 
 - [x] **Spend shows provider cost, not user cost.** FIXED: Join receipts by `litellm_call_id`, display `response_cost_usd`.
-- [x] **LiteLLM request ID mismatch.** FIXED: Extract `json.id` from response body, not header UUID.
-- [ ] **Chart tokens/requests show zeros.** Bucket mapping needs `total_tokens` fallback and `requests`/`count` field handling.
-- [ ] **Total Spend card uses LiteLLM aggregation.** Should sum `response_cost_usd` from receipts (code ready, needs testing).
-- [ ] **Old rows show "$—".** Pre-fix rows have UUID in `litellm_call_id`, won't join. Acceptable for MVP.
-- [ ] **Table rename pending.** `llm_usage` → `charge_receipt` (migration needed)
+- [x] **LiteLLM request ID mismatch.** FIXED: Extract `json.id` from response body (gen-... format).
+- [x] **Chart tokens/requests show zeros.** FIXED: Aggregate from individual logs, not LiteLLM buckets.
+- [x] **Total Spend from receipts.** FIXED: Sum `response_cost_usd` from charge receipts.
+- [x] **Old rows show "$—".** Pre-fix rows have UUID in `litellm_call_id`, won't join. Acceptable for MVP.
+
+## TODO
+
+- [ ] **Hourly bucketing.** Currently only day-level aggregation. Need sub-day buckets for "Last Hour" view.
+- [ ] **FakeUsageAdapter for stack tests.** Need test double for ActivityUsagePort to avoid LiteLLM dependency in CI.
+- [ ] **Stack tests for Activity.** Integration tests for activity endpoint with real data flow.
+- [ ] **Table rename.** `llm_usage` → `charge_receipt` (migration needed).
 
 ---
 
