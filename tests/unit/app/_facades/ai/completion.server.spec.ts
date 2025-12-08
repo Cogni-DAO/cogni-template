@@ -24,7 +24,6 @@ import { makeNoopLogger } from "@/shared/observability";
 // Mock serverEnv (following pattern from completion.test.ts)
 vi.mock("@/shared/env", () => ({
   serverEnv: () => ({
-    CREDITS_PER_USDC: 1000,
     USER_PRICE_MARKUP_FACTOR: 1.5,
   }),
 }));

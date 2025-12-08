@@ -42,7 +42,6 @@ vi.mock("@/shared/ai/model-catalog.server", () => ({
 // Mock serverEnv
 vi.mock("@/shared/env", () => ({
   serverEnv: () => ({
-    CREDITS_PER_USDC: 1000, // 1 credit = $0.001
     USER_PRICE_MARKUP_FACTOR: 1.5,
   }),
 }));

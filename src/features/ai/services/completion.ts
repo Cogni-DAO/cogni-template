@@ -16,14 +16,12 @@ import { randomUUID } from "node:crypto";
 import {
   applyBaselineSystemPrompt,
   assertMessageLength,
-  calculateUserPriceCredits,
   ESTIMATED_USD_PER_1K_TOKENS,
   estimateTotalTokens,
   filterSystemMessages,
   MAX_MESSAGE_CHARS,
   type Message,
   trimConversationHistory,
-  usdToCredits,
 } from "@/core";
 import type { AccountService, Clock, LlmCaller, LlmService } from "@/ports";
 import { InsufficientCreditsPortError } from "@/ports";
@@ -38,10 +36,19 @@ import {
   classifyLlmError,
   type RequestContext,
 } from "@/shared/observability";
+import { calculateDefaultLlmCharge } from "./llmPricingPolicy";
 
 /**
- * Estimate cost in credits for a given model and token count.
- * Invariant: Free models MUST return 0n. Paid models return >0n.
+ * Estimate cost in credits for pre-flight gating.
+ *
+ * Uses ESTIMATED_USD_PER_1K_TOKENS as upper-bound estimate.
+ * Post-call billing uses actual LiteLLM cost; these may differ (expected).
+ *
+ * Invariants:
+ * - Free models MUST return 0n
+ * - Paid models return >0n
+ * - Uses same USD→credits pipeline as post-call (calculateDefaultLlmCharge)
+ * - Only difference: estimated vs actual USD input
  */
 async function estimateCostCredits(
   model: string,
@@ -51,12 +58,13 @@ async function estimateCostCredits(
     return 0n;
   }
 
+  // Preflight uses conservative upper-bound estimate
   const estimatedCostUsd =
     (estimatedTotalTokens / 1000) * ESTIMATED_USD_PER_1K_TOKENS;
-  return calculateUserPriceCredits(
-    usdToCredits(estimatedCostUsd, serverEnv().CREDITS_PER_USDC),
-    serverEnv().USER_PRICE_MARKUP_FACTOR
-  );
+
+  // Same pipeline as post-call: markup + ceil via calculateDefaultLlmCharge
+  const { chargedCredits } = calculateDefaultLlmCharge(estimatedCostUsd);
+  return chargedCredits;
 }
 
 /**
@@ -215,25 +223,47 @@ export async function execute(
     const isFree = await isModelFree(modelId);
     let chargedCredits = 0n;
 
-    if (!isFree && typeof result.providerCostUsd === "number") {
-      // Cost available - calculate markup
-      const markupFactor = serverEnv().USER_PRICE_MARKUP_FACTOR;
-      const providerCostCredits = usdToCredits(
-        result.providerCostUsd,
-        serverEnv().CREDITS_PER_USDC
-      );
-      chargedCredits = calculateUserPriceCredits(
-        providerCostCredits,
-        markupFactor
-      );
+    // DEBUG: Log cost data received from LiteLLM
+    log.debug(
+      {
+        requestId,
+        modelId,
+        isFree,
+        providerCostUsd: result.providerCostUsd,
+        litellmCallId: result.litellmCallId,
+        tokensUsed: result.usage?.totalTokens,
+      },
+      "Post-call billing: LiteLLM response data"
+    );
 
-      // Enforce profit margin invariant (log only, never block)
-      if (chargedCredits < providerCostCredits) {
-        log.error(
-          { chargedCredits, providerCostCredits, requestId },
-          "Invariant violation: User price < Provider cost"
-        );
-      }
+    let userCostUsd: number | null = null;
+
+    if (!isFree && typeof result.providerCostUsd === "number") {
+      // Use policy function for consistent calculation
+      const charge = calculateDefaultLlmCharge(result.providerCostUsd);
+      chargedCredits = charge.chargedCredits;
+      userCostUsd = charge.userCostUsd;
+
+      log.debug(
+        {
+          requestId,
+          providerCostUsd: result.providerCostUsd,
+          userCostUsd,
+          chargedCredits: chargedCredits.toString(),
+        },
+        "Cost calculation complete"
+      );
+    } else if (!isFree && typeof result.providerCostUsd !== "number") {
+      // CRITICAL: Non-free model but no cost data (degraded billing)
+      log.error(
+        {
+          requestId,
+          modelId,
+          litellmCallId: result.litellmCallId,
+          isFree,
+        },
+        "CRITICAL: LiteLLM response missing cost data - billing incomplete (degraded under-billing mode)"
+      );
     }
     // If no cost available or free model: chargedCredits stays 0n
 
@@ -242,7 +272,7 @@ export async function execute(
       virtualKeyId: caller.virtualKeyId,
       requestId,
       chargedCredits,
-      responseCostUsd: result.providerCostUsd ?? null,
+      responseCostUsd: userCostUsd,
       litellmCallId: result.litellmCallId ?? null,
       provenance: "response",
     });
@@ -382,24 +412,23 @@ export async function executeStream({
       try {
         const isFree = await isModelFree(modelId);
         let chargedCredits = 0n;
+        let userCostUsd: number | null = null;
 
         if (!isFree && typeof result.providerCostUsd === "number") {
-          const markupFactor = serverEnv().USER_PRICE_MARKUP_FACTOR;
-          const providerCostCredits = usdToCredits(
-            result.providerCostUsd,
-            serverEnv().CREDITS_PER_USDC
-          );
-          chargedCredits = calculateUserPriceCredits(
-            providerCostCredits,
-            markupFactor
-          );
+          // Use policy function for consistent calculation
+          const charge = calculateDefaultLlmCharge(result.providerCostUsd);
+          chargedCredits = charge.chargedCredits;
+          userCostUsd = charge.userCostUsd;
 
-          if (chargedCredits < providerCostCredits) {
-            log.error(
-              { chargedCredits, providerCostCredits, requestId },
-              "Invariant violation: User price < Provider cost"
-            );
-          }
+          log.debug(
+            {
+              requestId,
+              providerCostUsd: result.providerCostUsd,
+              userCostUsd,
+              chargedCredits: chargedCredits.toString(),
+            },
+            "Stream cost calculation complete"
+          );
         }
         // If no cost available or free model: chargedCredits stays 0n
 
@@ -408,7 +437,7 @@ export async function executeStream({
           virtualKeyId: caller.virtualKeyId,
           requestId,
           chargedCredits,
-          responseCostUsd: result.providerCostUsd ?? null,
+          responseCostUsd: userCostUsd,
           litellmCallId: result.litellmCallId ?? null,
           provenance: "stream",
         });
