@@ -27,11 +27,11 @@ interface ActivityViewProps {
 }
 
 export function ActivityView({ initialData }: ActivityViewProps) {
-  const [timeRange, setTimeRange] = useState<TimeRange>("1d");
+  const [timeRange, setTimeRange] = useState<TimeRange>("1m");
 
-  // In a real implementation, we would use useQuery or similar to fetch data
-  // based on selected time range. For now, we just display initialData.
-  // TODO: Implement data fetching based on timeRange
+  // TODO: Wire up useQuery to refetch based on timeRange
+  // For now, server loads 30 days and UI just displays it
+  // Changing selector doesn't refetch (known limitation)
 
   const { chartSeries, totals, rows } = initialData;
 

@@ -48,17 +48,15 @@ export function ActivityTable({ logs }: ActivityTableProps) {
           <TableRow>
             <TableHead>Timestamp</TableHead>
             <TableHead>Model</TableHead>
-            <TableHead>App</TableHead>
             <TableHead className="text-right">Tokens In</TableHead>
             <TableHead className="text-right">Tokens Out</TableHead>
             <TableHead className="text-right">Cost</TableHead>
-            <TableHead className="text-right">Speed (t/s)</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {logs.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="h-24 text-center">
+              <TableCell colSpan={5} className="h-24 text-center">
                 No activity found.
               </TableCell>
             </TableRow>
@@ -69,12 +67,12 @@ export function ActivityTable({ logs }: ActivityTableProps) {
                   {new Date(log.timestamp).toLocaleString()}
                 </TableCell>
                 <TableCell>{log.model}</TableCell>
-                <TableCell>{log.app || "Unknown"}</TableCell>
                 <TableCell className="text-right">{log.tokensIn}</TableCell>
                 <TableCell className="text-right">{log.tokensOut}</TableCell>
-                <TableCell className="text-right">${log.cost}</TableCell>
                 <TableCell className="text-right">
-                  {log.speed.toFixed(1)}
+                  {log.cost === "—"
+                    ? "—"
+                    : `$${Number.parseFloat(log.cost).toFixed(6)}`}
                 </TableCell>
               </TableRow>
             ))

@@ -38,7 +38,7 @@ export default async function ActivityPage() {
       from: from.toISOString(),
       to: to.toISOString(),
       groupBy: "day",
-      limit: 20,
+      limit: 100, // Higher limit to capture full month of data
     });
 
     return <ActivityView initialData={data} />;

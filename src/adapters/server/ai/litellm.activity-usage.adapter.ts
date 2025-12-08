@@ -7,9 +7,9 @@
  * Scope: Queries LiteLLM /spend/logs API for usage logs. Does not write to any DB.
  * Invariants:
  * - Identity: billingAccountId is server-derived, passed as end_user to LiteLLM /spend/logs
- * - Bounded pagination: MAX_PAGES=10, limit≤100 enforced
- * - Pass-through: model, tokens, cost from LiteLLM as-is (no local recomputation)
- * - Read-only: never writes to DB or calls recordChargeReceipt
+ * - No pagination: /spend/logs deprecated endpoint, use limit only (max 100)
+ * - Pass-through: model, tokens, timestamps from LiteLLM as-is (no local recomputation)
+ * - Read-only: never writes to DB; observational cost only (not user billing)
  * Side-effects: IO (HTTP requests to LiteLLM)
  * Links: [ActivityUsagePort](../../../../ports/usage.port.ts), docs/ACTIVITY_METRICS.md
  * Note: Distinct from observability/metrics telemetry; powers Activity dashboard only.

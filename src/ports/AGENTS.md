@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-08
+- **Last reviewed:** 2025-12-09
 - **Status:** stable
 
 ## Purpose
@@ -37,7 +37,7 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
 ## Public Surface
 
 - **Exports:**
-  - AccountService (getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordChargeReceipt, listCreditLedgerEntries, findCreditLedgerEntryByReference)
+  - AccountService (getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordChargeReceipt, listChargeReceipts, listCreditLedgerEntries, findCreditLedgerEntryByReference)
   - LlmService (completion, completionStream with CompletionStreamParams including abortSignal; returns providerCostUsd, litellmCallId)
   - UsageService (getUsageStats, listUsageLogs)
   - ActivityUsagePort (getSpendLogs, getSpendChart; read-only usage logs for Activity dashboard, distinct from observability telemetry)

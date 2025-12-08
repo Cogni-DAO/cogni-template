@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/vendor/shadcn/select";
 
-export type TimeRange = "1h" | "1d" | "1w" | "1m";
+export type TimeRange = "1d" | "1w" | "1m";
 
 export interface TimeRangeSelectorProps {
   value: TimeRange;
@@ -30,7 +30,6 @@ export interface TimeRangeSelectorProps {
 }
 
 const timeRangeLabels: Record<TimeRange, string> = {
-  "1h": "Last Hour",
   "1d": "Last Day",
   "1w": "Last Week",
   "1m": "Last Month",
@@ -47,9 +46,6 @@ export function TimeRangeSelector({
         <SelectValue placeholder={timeRangeLabels[value]} />
       </SelectTrigger>
       <SelectContent className="rounded-xl">
-        <SelectItem value="1h" className="rounded-lg">
-          Last Hour
-        </SelectItem>
         <SelectItem value="1d" className="rounded-lg">
           Last Day
         </SelectItem>
