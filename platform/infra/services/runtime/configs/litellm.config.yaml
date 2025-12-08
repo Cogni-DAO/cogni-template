@@ -159,6 +159,9 @@ model_list:
       is_free: false
       provider_key: "xai"
 
+litellm_settings:
+  include_cost_in_streaming_usage: true
+
 general_settings:
   master_key: "os.environ/LITELLM_MASTER_KEY"
   database_url: "os.environ/LITELLM_DATABASE_URL"
