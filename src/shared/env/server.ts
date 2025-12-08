@@ -67,7 +67,6 @@ const serverSchema = z.object({
 
   // Billing (Stage 6.5)
   USER_PRICE_MARKUP_FACTOR: z.coerce.number().min(1.0).default(2.0),
-  CREDITS_PER_USDC: z.coerce.number().int().positive().default(1000),
 
   // Database connection: either provide DATABASE_URL directly OR component pieces
   DATABASE_URL: z.string().url().optional(),
