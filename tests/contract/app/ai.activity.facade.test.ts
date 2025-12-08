@@ -59,6 +59,16 @@ vi.mock("@/bootstrap/container", () => ({
       getOrCreateBillingAccountForUser: vi.fn().mockResolvedValue({
         id: "billing-1",
       }),
+      // New: facade now joins LiteLLM logs with local charge receipts
+      listChargeReceipts: vi.fn().mockResolvedValue([
+        {
+          requestId: "req-1",
+          litellmCallId: "log-1", // Joins with logs[0].id
+          chargedCredits: 500000n,
+          responseCostUsd: "0.05", // User cost with markup
+          createdAt: new Date("2024-01-01T12:00:00Z"), // Required for bucket aggregation
+        },
+      ]),
     },
   }),
 }));
@@ -94,7 +104,9 @@ describe("Activity Facade", () => {
     }
 
     expect(result.chartSeries).toHaveLength(1);
-    expect(result.totals.spend.total).toBe("10.50");
+    // Spend is now computed from charge receipts, not usageService.getUsageStats
+    // Mock receipt has responseCostUsd: "0.05" → total = 0.050000
+    expect(result.totals.spend.total).toBe("0.050000");
     expect(result.rows).toHaveLength(1);
     expect(result.nextCursor).toBeDefined();
   });

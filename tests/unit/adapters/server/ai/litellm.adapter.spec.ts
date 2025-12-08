@@ -149,6 +149,7 @@ describe("LiteLlmAdapter", () => {
           totalTokens: 18,
         },
         providerCostUsd: 0.0002,
+        litellmCallId: "chatcmpl-test-123", // From response.id, used for joining with /spend/logs
       });
     });
 
