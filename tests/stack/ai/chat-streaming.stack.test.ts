@@ -23,7 +23,7 @@ import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as chatPOST } from "@/app/api/v1/ai/chat/route";
 import { GET as modelsGET } from "@/app/api/v1/ai/models/route";
 import type { SessionUser } from "@/shared/auth/session";
-import { billingAccounts, llmUsage } from "@/shared/db/schema.billing";
+import { billingAccounts, chargeReceipts } from "@/shared/db/schema.billing";
 
 // Mock session
 vi.mock("@/app/_lib/auth/session", () => ({
@@ -209,7 +209,7 @@ describe("Chat Streaming", () => {
       if (e.event === "message.completed" || e.event === "done") break;
     }
 
-    // Assert - Check database for LLM usage record with non-empty model
+    // Assert - Check database for charge receipt
     // First get the billing account
     const billingAccount = await db.query.billingAccounts.findFirst({
       where: eq(billingAccounts.ownerUserId, user.id),
@@ -221,9 +221,9 @@ describe("Chat Streaming", () => {
     }
 
     // Get the most recent charge receipt
-    const receipt = await db.query.llmUsage.findFirst({
-      where: eq(llmUsage.billingAccountId, billingAccount.id),
-      orderBy: (llmUsage, { desc }) => [desc(llmUsage.createdAt)],
+    const receipt = await db.query.chargeReceipts.findFirst({
+      where: eq(chargeReceipts.billingAccountId, billingAccount.id),
+      orderBy: (chargeReceipts, { desc }) => [desc(chargeReceipts.createdAt)],
     });
 
     // Per ACTIVITY_METRICS.md: charge_receipt has minimal fields, no model

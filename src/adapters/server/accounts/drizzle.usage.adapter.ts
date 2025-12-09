@@ -29,7 +29,7 @@ import type {
   UsageStatsParams,
   UsageStatsResult,
 } from "@/ports";
-import { llmUsage } from "@/shared/db";
+import { chargeReceipts } from "@/shared/db";
 
 export class DrizzleUsageAdapter implements UsageService {
   constructor(private readonly db: Database) {}
@@ -47,19 +47,19 @@ export class DrizzleUsageAdapter implements UsageService {
     const seriesQuery = sql`
       SELECT
         series.bucket_start as "bucketStart",
-        COALESCE(SUM(${llmUsage.responseCostUsd}::numeric), 0)::decimal(10, 6)::text as spend,
+        COALESCE(SUM(${chargeReceipts.responseCostUsd}::numeric), 0)::decimal(10, 6)::text as spend,
         0 as tokens,
-        COUNT(${llmUsage.id}) as requests
+        COUNT(${chargeReceipts.id}) as requests
       FROM generate_series(
         date_trunc(${groupBy}, ${from.toISOString()}::timestamptz),
         date_trunc(${groupBy}, ${to.toISOString()}::timestamptz - interval '1 second'),
         ${interval}::interval
       ) as series(bucket_start)
-      LEFT JOIN ${llmUsage} ON (
-        ${llmUsage.billingAccountId} = ${billingAccountId} AND
-        ${llmUsage.createdAt} >= ${from.toISOString()}::timestamp AND
-        ${llmUsage.createdAt} < ${to.toISOString()}::timestamp AND
-        date_trunc(${groupBy}, ${llmUsage.createdAt} AT TIME ZONE 'UTC') = series.bucket_start
+      LEFT JOIN ${chargeReceipts} ON (
+        ${chargeReceipts.billingAccountId} = ${billingAccountId} AND
+        ${chargeReceipts.createdAt} >= ${from.toISOString()}::timestamp AND
+        ${chargeReceipts.createdAt} < ${to.toISOString()}::timestamp AND
+        date_trunc(${groupBy}, ${chargeReceipts.createdAt} AT TIME ZONE 'UTC') = series.bucket_start
       )
       GROUP BY series.bucket_start
       ORDER BY series.bucket_start
@@ -78,15 +78,15 @@ export class DrizzleUsageAdapter implements UsageService {
     // 2. Calculate totals with a separate query to ensure precision
     const [totalsRow] = await this.db
       .select({
-        spend: sql<string>`coalesce(sum(${llmUsage.responseCostUsd}::numeric), 0)::decimal(10, 6)::text`,
+        spend: sql<string>`coalesce(sum(${chargeReceipts.responseCostUsd}::numeric), 0)::decimal(10, 6)::text`,
         requests: sql<number>`count(*)`,
       })
-      .from(llmUsage)
+      .from(chargeReceipts)
       .where(
         and(
-          eq(llmUsage.billingAccountId, billingAccountId),
-          gte(llmUsage.createdAt, from),
-          lt(llmUsage.createdAt, to)
+          eq(chargeReceipts.billingAccountId, billingAccountId),
+          gte(chargeReceipts.createdAt, from),
+          lt(chargeReceipts.createdAt, to)
         )
       );
 
@@ -108,20 +108,20 @@ export class DrizzleUsageAdapter implements UsageService {
     // NOTE: Fallback mode - no model/tokens available (LiteLLM is canonical per ACTIVITY_METRICS.md)
     const where = cursor
       ? and(
-          eq(llmUsage.billingAccountId, billingAccountId),
-          sql`(${llmUsage.createdAt}, ${llmUsage.id}) < (${cursor.createdAt.toISOString()}::timestamp, ${cursor.id})`
+          eq(chargeReceipts.billingAccountId, billingAccountId),
+          sql`(${chargeReceipts.createdAt}, ${chargeReceipts.id}) < (${cursor.createdAt.toISOString()}::timestamp, ${cursor.id})`
         )
-      : eq(llmUsage.billingAccountId, billingAccountId);
+      : eq(chargeReceipts.billingAccountId, billingAccountId);
 
     const rows = await this.db
       .select({
-        id: llmUsage.id,
-        createdAt: llmUsage.createdAt,
-        responseCostUsd: llmUsage.responseCostUsd,
+        id: chargeReceipts.id,
+        createdAt: chargeReceipts.createdAt,
+        responseCostUsd: chargeReceipts.responseCostUsd,
       })
-      .from(llmUsage)
+      .from(chargeReceipts)
       .where(where)
-      .orderBy(desc(llmUsage.createdAt), desc(llmUsage.id))
+      .orderBy(desc(chargeReceipts.createdAt), desc(chargeReceipts.id))
       .limit(limit);
 
     // Return degraded log entries per ACTIVITY_METRICS.md fallback mode

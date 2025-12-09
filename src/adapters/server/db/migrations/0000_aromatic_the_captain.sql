@@ -16,6 +16,22 @@ CREATE TABLE "billing_accounts" (
 	CONSTRAINT "billing_accounts_owner_user_id_unique" UNIQUE("owner_user_id")
 );
 --> statement-breakpoint
+CREATE TABLE "charge_receipts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"billing_account_id" text NOT NULL,
+	"virtual_key_id" uuid NOT NULL,
+	"request_id" text NOT NULL,
+	"litellm_call_id" text,
+	"charged_credits" bigint NOT NULL,
+	"response_cost_usd" numeric,
+	"provenance" text NOT NULL,
+	"charge_reason" text NOT NULL,
+	"source_system" text NOT NULL,
+	"source_reference" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "charge_receipts_request_id_unique" UNIQUE("request_id")
+);
+--> statement-breakpoint
 CREATE TABLE "credit_ledger" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"billing_account_id" text NOT NULL,
@@ -26,19 +42,6 @@ CREATE TABLE "credit_ledger" (
 	"reference" text,
 	"metadata" jsonb DEFAULT 'null'::jsonb,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
-);
---> statement-breakpoint
-CREATE TABLE "llm_usage" (
-	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-	"billing_account_id" text NOT NULL,
-	"virtual_key_id" uuid NOT NULL,
-	"request_id" text NOT NULL,
-	"litellm_call_id" text,
-	"charged_credits" bigint NOT NULL,
-	"response_cost_usd" numeric,
-	"provenance" text NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "llm_usage_request_id_unique" UNIQUE("request_id")
 );
 --> statement-breakpoint
 CREATE TABLE "payment_attempts" (
@@ -82,20 +85,21 @@ CREATE TABLE "virtual_keys" (
 );
 --> statement-breakpoint
 ALTER TABLE "billing_accounts" ADD CONSTRAINT "billing_accounts_owner_user_id_users_id_fk" FOREIGN KEY ("owner_user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "charge_receipts" ADD CONSTRAINT "charge_receipts_billing_account_id_billing_accounts_id_fk" FOREIGN KEY ("billing_account_id") REFERENCES "public"."billing_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "charge_receipts" ADD CONSTRAINT "charge_receipts_virtual_key_id_virtual_keys_id_fk" FOREIGN KEY ("virtual_key_id") REFERENCES "public"."virtual_keys"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "credit_ledger" ADD CONSTRAINT "credit_ledger_billing_account_id_billing_accounts_id_fk" FOREIGN KEY ("billing_account_id") REFERENCES "public"."billing_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "credit_ledger" ADD CONSTRAINT "credit_ledger_virtual_key_id_virtual_keys_id_fk" FOREIGN KEY ("virtual_key_id") REFERENCES "public"."virtual_keys"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "llm_usage" ADD CONSTRAINT "llm_usage_billing_account_id_billing_accounts_id_fk" FOREIGN KEY ("billing_account_id") REFERENCES "public"."billing_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "llm_usage" ADD CONSTRAINT "llm_usage_virtual_key_id_virtual_keys_id_fk" FOREIGN KEY ("virtual_key_id") REFERENCES "public"."virtual_keys"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payment_attempts" ADD CONSTRAINT "payment_attempts_billing_account_id_billing_accounts_id_fk" FOREIGN KEY ("billing_account_id") REFERENCES "public"."billing_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payment_events" ADD CONSTRAINT "payment_events_attempt_id_payment_attempts_id_fk" FOREIGN KEY ("attempt_id") REFERENCES "public"."payment_attempts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "virtual_keys" ADD CONSTRAINT "virtual_keys_billing_account_id_billing_accounts_id_fk" FOREIGN KEY ("billing_account_id") REFERENCES "public"."billing_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "charge_receipts_billing_account_idx" ON "charge_receipts" USING btree ("billing_account_id");--> statement-breakpoint
+CREATE INDEX "charge_receipts_virtual_key_idx" ON "charge_receipts" USING btree ("virtual_key_id");--> statement-breakpoint
+CREATE INDEX "charge_receipts_aggregation_idx" ON "charge_receipts" USING btree ("billing_account_id","created_at");--> statement-breakpoint
+CREATE INDEX "charge_receipts_pagination_idx" ON "charge_receipts" USING btree ("billing_account_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "charge_receipts_source_link_idx" ON "charge_receipts" USING btree ("source_system","source_reference");--> statement-breakpoint
 CREATE INDEX "credit_ledger_reference_reason_idx" ON "credit_ledger" USING btree ("reference","reason");--> statement-breakpoint
 CREATE UNIQUE INDEX "credit_ledger_payment_ref_unique" ON "credit_ledger" USING btree ("reference") WHERE "credit_ledger"."reason" = 'widget_payment';--> statement-breakpoint
-CREATE UNIQUE INDEX "credit_ledger_llm_usage_ref_unique" ON "credit_ledger" USING btree ("reference") WHERE "credit_ledger"."reason" = 'llm_usage';--> statement-breakpoint
-CREATE INDEX "llm_usage_billing_account_idx" ON "llm_usage" USING btree ("billing_account_id");--> statement-breakpoint
-CREATE INDEX "llm_usage_virtual_key_idx" ON "llm_usage" USING btree ("virtual_key_id");--> statement-breakpoint
-CREATE INDEX "llm_usage_aggregation_idx" ON "llm_usage" USING btree ("billing_account_id","created_at");--> statement-breakpoint
-CREATE INDEX "llm_usage_pagination_idx" ON "llm_usage" USING btree ("billing_account_id","created_at","id");--> statement-breakpoint
+CREATE UNIQUE INDEX "credit_ledger_charge_receipt_ref_unique" ON "credit_ledger" USING btree ("reference") WHERE "credit_ledger"."reason" = 'charge_receipt';--> statement-breakpoint
 CREATE UNIQUE INDEX "payment_attempts_chain_tx_unique" ON "payment_attempts" USING btree ("chain_id","tx_hash") WHERE "payment_attempts"."tx_hash" IS NOT NULL;--> statement-breakpoint
 CREATE INDEX "payment_attempts_billing_account_idx" ON "payment_attempts" USING btree ("billing_account_id","created_at");--> statement-breakpoint
 CREATE INDEX "payment_attempts_status_idx" ON "payment_attempts" USING btree ("status","created_at");--> statement-breakpoint

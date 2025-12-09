@@ -76,4 +76,4 @@ pnpm test tests/integration/
 - Implements ledger-based accounting with computed balance cache
 - Transaction semantics critical for credit integrity
 - recordChargeReceipt is idempotent (request_id as unique key) and non-blocking (never throws InsufficientCredits post-call)
-- llm_usage stores minimal charge receipt fields; telemetry lives in LiteLLM
+- charge_receipts stores minimal charge receipt fields; telemetry lives in LiteLLM

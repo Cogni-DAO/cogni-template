@@ -52,14 +52,14 @@ Single entry point: `calculateLlmUserCharge()` in `src/core/billing/pricing.ts`
 | ------------------------------------------------- | ---------------------------------------------------- |
 | `src/core/billing/pricing.ts`                     | Protocol constants, conversion helpers               |
 | `src/features/ai/services/llmPricingPolicy.ts`    | Markup policy layer (reads USER_PRICE_MARKUP_FACTOR) |
-| `src/shared/db/schema.billing.ts`                 | `llm_usage` table (charge receipts)                  |
+| `src/shared/db/schema.billing.ts`                 | `charge_receipts` table                              |
 | `src/ports/accounts.port.ts`                      | `recordChargeReceipt` interface                      |
 | `src/adapters/server/accounts/drizzle.adapter.ts` | Atomic charge receipt + ledger debit                 |
 | `src/features/ai/services/completion.ts`          | Preflight gating + non-blocking post-call billing    |
 
 ---
 
-## Charge Receipt Table (`llm_usage`)
+## Charge Receipt Table (`charge_receipts`)
 
 Minimal audit-focused table. LiteLLM is canonical for telemetry.
 
@@ -113,10 +113,10 @@ Protocol constant `CREDITS_PER_USD = 10_000_000` is NOT configurable (hardcoded)
 
 ## Known Issues
 
-- [ ] **Activity reporting shows zeros.** Activity metrics page shows zeros despite real usage. Need to join `charged_credits` from `llm_usage` with LiteLLM telemetry by `litellm_call_id`.
+- [ ] **Activity reporting shows zeros.** Activity metrics page shows zeros despite real usage. Need to join `charged_credits` from `charge_receipts` with LiteLLM telemetry by `litellm_call_id`.
 - [ ] **Cents sprawl across codebase.** 126+ references to "cents" in payment flows. Should standardize on USD only. Credits are canonical ledger unit; cents is unnecessary intermediate.
 - [ ] **Pre-call estimate too conservative.** Uses `ESTIMATED_USD_PER_1K_TOKENS = $0.002` as upper-bound. May reject valid requests with sufficient balance.
-- [ ] **Table rename pending.** `llm_usage` → `charge_receipt` (coordinated migration)
+- [x] **Table rename done.** `llm_usage` → `charge_receipts`
 
 ---
 
@@ -128,12 +128,12 @@ Protocol constant `CREDITS_PER_USD = 10_000_000` is NOT configurable (hardcoded)
 - `response_cost_usd` stores user cost (with markup), not provider cost
 - Single ceil at end: `chargedCredits = ceil(userCostUsd × CREDITS_PER_USD)`
 - Post-call billing NEVER blocks user response
-- `llm_usage.request_id` = `credit_ledger.reference` (1:1 linkage)
+- `charge_receipts.request_id` = `credit_ledger.reference` (1:1 linkage)
 
 **Verification:**
 
 ```sql
-SELECT charged_credits, response_cost_usd FROM llm_usage;
+SELECT charged_credits, response_cost_usd FROM charge_receipts;
 ```
 
 Cost source: LiteLLM `usage.cost` (stream) or `x-litellm-response-cost` header (non-stream).
