@@ -36,7 +36,12 @@ import {
 
 const logger = makeLogger({ component: "ActivityFacade" });
 
-type ActivityInput = z.infer<typeof aiActivityOperation.input> & {
+type ActivityInput = {
+  from: string;
+  to: string;
+  step?: z.infer<typeof aiActivityOperation.input>["step"];
+  cursor?: string;
+  limit?: number;
   sessionUser: SessionUser;
   /** Optional correlation ID - generated if not provided */
   reqId?: string;

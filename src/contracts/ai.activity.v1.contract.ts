@@ -54,26 +54,52 @@ export const MAX_RANGE_FOR_STEP: Record<ActivityStep, number> = {
  */
 export const MAX_RANGE_MS = 90 * 24 * 60 * 60 * 1000;
 
+/**
+ * Time range presets for rolling windows.
+ * Server derives from/to using server time for consistent results.
+ */
+export const TimeRangeSchema = z.enum(["1d", "1w", "1m"]);
+export type TimeRange = z.infer<typeof TimeRangeSchema>;
+
 export const aiActivityOperation = {
   id: "ai.activity.v1",
   summary: "Fetch AI activity statistics and logs",
   description:
     "Returns usage statistics (spend, tokens, requests) grouped by time, and a paginated list of usage logs. Server derives optimal bucket step from range size.",
-  input: z.object({
-    from: z.string().datetime().describe("Start time (inclusive, UTC ISO)"),
-    to: z.string().datetime().describe("End time (exclusive, UTC ISO)"),
-    step: ActivityStepSchema.optional().describe(
-      "Bucket granularity (server-derived if omitted)"
-    ),
-    cursor: z.string().optional().describe("Opaque cursor for pagination"),
-    limit: z
-      .number()
-      .int()
-      .positive()
-      .max(100)
-      .default(20)
-      .describe("Max logs to return"),
-  }),
+  input: z
+    .object({
+      range: TimeRangeSchema.optional().describe(
+        "Preset time range (1d/1w/1m). Server derives from/to using server time."
+      ),
+      from: z
+        .string()
+        .datetime()
+        .optional()
+        .describe(
+          "Start time (inclusive, UTC ISO). Use with 'to' for custom range."
+        ),
+      to: z
+        .string()
+        .datetime()
+        .optional()
+        .describe(
+          "End time (exclusive, UTC ISO). Use with 'from' for custom range."
+        ),
+      step: ActivityStepSchema.optional().describe(
+        "Bucket granularity (server-derived if omitted)"
+      ),
+      cursor: z.string().optional().describe("Opaque cursor for pagination"),
+      limit: z
+        .number()
+        .int()
+        .positive()
+        .max(100)
+        .default(20)
+        .describe("Max logs to return"),
+    })
+    .refine((data) => data.range || (data.from && data.to), {
+      message: "Either 'range' or both 'from' and 'to' must be provided",
+    }),
   output: z.object({
     effectiveStep: ActivityStepSchema.describe(
       "Actual step used (server-derived or validated)"
