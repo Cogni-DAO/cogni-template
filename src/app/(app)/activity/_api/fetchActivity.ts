@@ -41,6 +41,7 @@ export async function fetchActivity(
       "Content-Type": "application/json",
     },
     credentials: "same-origin",
+    cache: "no-store",
   });
 
   if (!response.ok) {

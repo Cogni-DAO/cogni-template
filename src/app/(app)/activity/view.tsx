@@ -70,7 +70,7 @@ export function ActivityView() {
     );
   }
 
-  const { chartSeries, totals, rows } = data;
+  const { chartSeries, totals, rows, effectiveStep } = data;
 
   const spendData = chartSeries.map((d) => ({
     date: d.bucketStart,
@@ -110,6 +110,7 @@ export function ActivityView() {
             },
           }}
           color="hsl(var(--chart-1))"
+          effectiveStep={effectiveStep}
         />
         <ActivityChart
           title="Total Tokens"
@@ -122,6 +123,7 @@ export function ActivityView() {
             },
           }}
           color="hsl(var(--chart-2))"
+          effectiveStep={effectiveStep}
         />
         <ActivityChart
           title="Total Requests"
@@ -134,6 +136,7 @@ export function ActivityView() {
             },
           }}
           color="hsl(var(--chart-3))"
+          effectiveStep={effectiveStep}
         />
       </div>
 
