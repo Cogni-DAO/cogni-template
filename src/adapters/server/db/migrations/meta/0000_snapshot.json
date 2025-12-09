@@ -1,5 +1,5 @@
 {
-  "id": "471be911-f6ee-42a0-8625-202116f1d48e",
+  "id": "ba566c58-e8b5-41d3-ab03-d8da58b601b4",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -166,6 +166,24 @@
           "primaryKey": false,
           "notNull": true
         },
+        "charge_reason": {
+          "name": "charge_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_system": {
+          "name": "source_system",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "source_reference": {
+          "name": "source_reference",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -243,6 +261,27 @@
             },
             {
               "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "charge_receipts_source_link_idx": {
+          "name": "charge_receipts_source_link_idx",
+          "columns": [
+            {
+              "expression": "source_system",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source_reference",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

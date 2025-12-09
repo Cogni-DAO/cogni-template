@@ -25,6 +25,9 @@ CREATE TABLE "charge_receipts" (
 	"charged_credits" bigint NOT NULL,
 	"response_cost_usd" numeric,
 	"provenance" text NOT NULL,
+	"charge_reason" text NOT NULL,
+	"source_system" text NOT NULL,
+	"source_reference" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "charge_receipts_request_id_unique" UNIQUE("request_id")
 );
@@ -93,6 +96,7 @@ CREATE INDEX "charge_receipts_billing_account_idx" ON "charge_receipts" USING bt
 CREATE INDEX "charge_receipts_virtual_key_idx" ON "charge_receipts" USING btree ("virtual_key_id");--> statement-breakpoint
 CREATE INDEX "charge_receipts_aggregation_idx" ON "charge_receipts" USING btree ("billing_account_id","created_at");--> statement-breakpoint
 CREATE INDEX "charge_receipts_pagination_idx" ON "charge_receipts" USING btree ("billing_account_id","created_at","id");--> statement-breakpoint
+CREATE INDEX "charge_receipts_source_link_idx" ON "charge_receipts" USING btree ("source_system","source_reference");--> statement-breakpoint
 CREATE INDEX "credit_ledger_reference_reason_idx" ON "credit_ledger" USING btree ("reference","reason");--> statement-breakpoint
 CREATE UNIQUE INDEX "credit_ledger_payment_ref_unique" ON "credit_ledger" USING btree ("reference") WHERE "credit_ledger"."reason" = 'widget_payment';--> statement-breakpoint
 CREATE UNIQUE INDEX "credit_ledger_charge_receipt_ref_unique" ON "credit_ledger" USING btree ("reference") WHERE "credit_ledger"."reason" = 'charge_receipt';--> statement-breakpoint
