@@ -1,281 +1,106 @@
 # Accounts & Credits System Design
 
-**Core Mission**: Crypto-metered AI infrastructure loop where DAO multi-sig → pays for GPU + OpenRouter/LiteLLM → users interact (chat/API) → users pay back in crypto → DAO multi-sig.
-
-**Related:**
-
-- Auth flow: [SECURITY_AUTH_SPEC.md](SECURITY_AUTH_SPEC.md)
-- System architecture: [ARCHITECTURE.md](ARCHITECTURE.md)
-- Wallet integration: [INTEGRATION_WALLETS_CREDITS.md](INTEGRATION_WALLETS_CREDITS.md)
-
----
-
 ## One Sentence Summary
 
-Auth.js manages identity via SIWE; our billing layer owns LiteLLM virtual keys and tracks credits in a ledger; sessions resolve to virtual keys server-side for LLM calls.
+Auth.js (SIWE) authenticates users; our billing layer owns a billing account per user and a credit ledger; product API keys (coming next) map 1:1 to LiteLLM virtual keys for per-key spend attribution.
 
 ---
 
-## Key Invariants
+## Key Invariants (Target System)
 
-- **Service-auth mode:** `LLM_AUTH_STRATEGY=service` with `LITELLM_MASTER_KEY` from env (MVP)
-- **`virtual_keys` is scope/FK handle only:** No secrets stored; just ID reference for `credit_ledger` and `charge_receipts`
-- All credit changes flow through `credit_ledger` (append-only audit log)
-- Each user has one billing account (MVP); that account owns one default virtual key (for FK integrity)
-- Token integration is additive (Postgres becomes cache, tokens become funding source)
+These are _design invariants_ we are building toward. If an invariant is not yet implemented, it must be stated under “Current State” as missing.
 
----
-
-### Future Migration: Multi-Wallet & OAuth
-
-> [!NOTE]
-> **Current State (MVP)**: 1 Wallet = 1 User. The `users` table enforces `UNIQUE(wallet_address)`.
->
-> **Future State**: When adding OAuth or multi-wallet support:
->
-> 1.  Introduce standard Auth.js `accounts` table.
-> 2.  Move uniqueness constraint to `(provider, providerAccountId)` in `accounts`.
-> 3.  Demote `users.walletAddress` to a "primary wallet" field or remove it in favor of the `accounts` link.
-> 4.  Migrate existing users by creating an `accounts` row for their current wallet.
-
-## 6. Security & Compliance
-
-## Identity & Billing Model
-
-### Three-Layer Identity System
-
-**1. Auth.js Identity (Login & Sessions)**
-
-- Tables: `users`, `accounts` (Auth.js provider accounts), `sessions`, `verification_tokens`
-- Purpose: Prove user owns wallet via SIWE
-- Managed by: Auth.js Drizzle adapter (automatic)
-
-**2. Billing Accounts (Tenants)**
-
-- Table: `billing_accounts` (renamed from `accounts` to avoid collision)
-- Purpose: Track credits, own LiteLLM virtual keys
-- Key columns: `id` (PK), `owner_user_id` (FK → `users.id`), `balance_credits`
-- File: `src/shared/db/schema.ts`
-
-**3. Virtual Keys (Scope/FK Handle)**
-
-- Table: `virtual_keys`
-- Purpose: Scope/FK handle for billing attribution in `credit_ledger` and `charge_receipts`
-- Key columns: `id` (PK), `billing_account_id` (FK), `label`, `is_default`, `active`
-- **Note:** No `litellm_virtual_key` column in MVP (service-auth mode via `LLM_AUTH_STRATEGY=service`)
-- When real API keys are introduced: key storage column will be added
-- File: `src/shared/db/schema.billing.ts`
-
-### LiteLLM Integration
-
-**How we use LiteLLM:**
-
-- Each `billing_accounts` row owns one or more LiteLLM virtual keys (stored in `virtual_keys` table)
-- LiteLLM Teams/Users are optional analytics labels (not used in MVP)
-- MVP: 1 Auth.js user → 1 billing account → 1+ virtual keys
-
-**Per-request flow:**
-
-```
-Session → user.id → billing_account → default virtual_key → LiteLLM API call → credit deduction
-```
-
-### Funding Path (MVP)
-
-**Credits UP (Real Users):**
-
-- User pays via payment widget (DePay, frontend-only SDK) in the browser
-- Widget fires success callback (e.g., `succeeded` event) client-side once payment is confirmed on-chain
-- Frontend calls `POST /api/v1/payments/credits/confirm` (session-authenticated)
-- Backend resolves `billing_account_id` from SIWE session (not from request body)
-- Inserts positive `credit_ledger` row with `reason='widget_payment'`
-- Updates `billing_accounts.balance_credits`
-
-**MVP Trust Model:** The SIWE session and widget success callback are the only gates; no on-chain verification in the critical path.
-
-**Post-MVP Hardening:** A Ponder-based on-chain indexer will watch the DAO wallet for USDC transfers and provide reconciliation/observability (not a hard gate initially). See `docs/PAYMENTS_PONDER_VERIFICATION.md`.
-
-**Credits DOWN (LLM Usage):**
-
-Per [ACTIVITY_METRICS.md](ACTIVITY_METRICS.md), LiteLLM is canonical for usage telemetry. Our DB stores minimal charge receipts:
-
-- After each LiteLLM call, extract `x-litellm-response-cost` header for actual cost
-- Calculate `chargedCredits` with markup, call `recordChargeReceipt` (non-blocking)
-- Insert `charge_receipts` row with `chargedCredits`, `responseCostUsd`, `litellmCallId`
-- Insert negative `credit_ledger` row with `reason='charge_receipt'`
-- Update `billing_accounts.balance_credits`
-- **Invariant:** Post-call billing NEVER blocks user response
-
-**Dev/Test:** Seed scripts insert positive `credit_ledger` rows directly via database fixtures.
+- **One user → exactly one billing_account:** `auth.users.id` maps 1:1 to `billing_accounts.owner_user_id`.
+- **One billing_account → many app_api_keys:** users can create/revoke multiple product API keys.
+- **1:1 mapping:** each `app_api_key` maps to exactly one **server-only** LiteLLM virtual key (for per-key spend tracking).
+- **No client access to LiteLLM keys:** LiteLLM key material never appears in browser storage, responses, or logs.
+- **Credits tracked per billing_account:** `credit_ledger` is append-only source of truth; balance is a shared pool.
+- **Spend attribution per key:** LLM spend is attributable per `app_api_key` (via its mapped LiteLLM virtual key + our receipts).
+- **No plaintext secrets stored:** app keys are stored hashed (show-once); LiteLLM key material is encrypted or stored as a reference, never plaintext.
 
 ---
 
-## Database Schema (New Architecture)
+## Current State (Service-Auth MVP)
 
-### Auth.js Tables (Identity)
+This is what exists _right now_ in code, not what we want later.
 
-- `users` - User records (wallet address from SIWE)
-- `accounts` - Auth.js provider accounts (not billing)
-- `sessions` - Active sessions
-- `verification_tokens` - Email verification (unused for SIWE)
+- Auth.js session-only auth for `/api/v1/*` (no app API keys yet).
+- Outbound LiteLLM calls use service auth (`LITELLM_MASTER_KEY`).
+- `virtual_keys` currently acts as an internal FK/scope handle for ledger/receipts (no per-key spend attribution yet).
+- Per-key attribution is **not implemented** until app_api_keys + 1:1 mapping exists.
 
-### Billing Tables (Our Layer)
+## Next Actions: App API Keys + 1:1 LiteLLM Key Mapping
 
-**`billing_accounts`:**
-
-- Billing tenants that own LiteLLM virtual keys
-- Links to Auth.js `users` via `owner_user_id`
-- Tracks `balance_credits` (computed from ledger)
-
-**`virtual_keys`:**
-
-- Scope/FK handle for billing attribution (no secrets stored in MVP)
-- Links to `billing_accounts` via `billing_account_id`
-- Fields: `label`, `is_default`, `active`, `created_at`
-- **Note:** No `litellm_virtual_key` column in MVP. When real API keys are introduced, key storage will be added.
-
-**`credit_ledger`:**
-
-- Append-only audit log (source of truth for balances)
-- Links to `billing_accounts` and `virtual_keys`
-- Fields: `amount` (signed integer, +/-), `balance_after`, `reason`, `reference`, `metadata`, `created_at`
-- Idempotency enforced via unique index on `reference` per reason type
-
-**`charge_receipts`:**
-
-- Minimal audit table for billing (LiteLLM is canonical for telemetry)
-- Fields: `request_id` (unique, idempotency key), `litellm_call_id`, `charged_credits`, `response_cost_usd`, `provenance`
-- No model/tokens/usage JSONB - query LiteLLM `/spend/logs` for telemetry
-- See [ACTIVITY_METRICS.md](ACTIVITY_METRICS.md) for design rationale
-
-**File:** `src/shared/db/schema.billing.ts`
+- Add `app_api_keys` (hash-only, show-once plaintext)
+- Add `app_api_key_id` FK to the LiteLLM mapping table (unique 1:1)
+- Add `app_api_key_id` FK to `credit_ledger` and `charge_receipts`
+- Add endpoints:
+  - `POST /api/v1/keys` create key (show-once plaintext) + create mapped LiteLLM virtual key
+  - `GET /api/v1/keys` list keys (no plaintext)
+  - `DELETE /api/v1/keys/:id` revoke key + revoke mapped LiteLLM virtual key
+- Add auth: `/api/v1/*` accepts session OR `Authorization: Bearer <app_api_key>`
+- Update LLM port: resolve `{billing_account_id, app_api_key_id}` → mapped LiteLLM virtual key → outbound call
 
 ---
 
-## Core Architecture
+## Model: Identity → Billing → Credentials
 
-### Ports (Interfaces)
+### 1) Auth.js Identity (Login)
 
-- `src/ports/accounts.port.ts` - AccountService interface for billing operations
-- `src/ports/llm.port.ts` - LlmService interface, defines LlmCaller type
+- Tables: `users`, `accounts`, `verification_tokens` (+ sessions table may exist but JWT strategy can bypass it).
+- Purpose: prove wallet ownership (SIWE) and manage browser sessions.
 
-### Adapters (Implementations)
+### 2) Billing Accounts (Credit Tenancy)
 
-- `src/adapters/server/accounts/drizzle.adapter.ts` - Database operations for billing_accounts, virtual_keys, credit_ledger
-- `src/adapters/server/ai/litellm.adapter.ts` - LiteLLM proxy integration
-- `src/adapters/server/db/client.ts` - Drizzle database connection
+- Table: `billing_accounts`
+- Purpose: tenancy anchor for credits + ledger + receipts.
+- Mapping: exactly one `users.id` → one `billing_accounts.owner_user_id`.
 
-### Domain Logic
+### 3) App API Keys (Product Auth) — NEXT PR
 
-- `src/core/accounts/model.ts` - Account domain types (credit validation)
-- `src/core/accounts/errors.ts` - InsufficientCreditsError
-- `src/core/billing/pricing.ts` - Token-to-credit conversion (MVP: flat rate)
+- Table: `app_api_keys`
+- Purpose: authenticate programmatic access to `/api/v1/*`.
+- Storage: hash-only; show-once plaintext at creation.
+- Many keys per billing account; independently revocable.
 
-### Feature Services
+### 4) LiteLLM Virtual Keys (Spend Attribution)
 
-- `src/features/ai/services/completion.ts` - Orchestrates LLM calls + credit deduction
-
-### Auth Utilities (New)
-
-- `src/lib/auth/mapping.ts` - Maps Auth.js user to billing_account + virtual_key
-- `src/lib/auth/helpers.ts` - Session lookup utilities
-
-### API Routes
-
-**Auth Policy:** All credit-impacting routes require user sessions. Provisioning and operations happen internally via scripts/database. See [SECURITY_AUTH_SPEC.md](SECURITY_AUTH_SPEC.md) "API Auth Policy (MVP)" for complete routing table.
-
-**User Routes (Session Required):**
-
-- `src/app/api/v1/ai/completion/route.ts` - Chat endpoint (session auth + credit deduction)
-
-**Auth Routes (Public):**
-
-- `/api/auth/*` - Auth.js routes (handled automatically)
-
-**Payment Routes (Session Required):**
-
-- `src/app/api/v1/payments/credits/confirm/route.ts` - Widget payment confirmation (top-up credits, session-authenticated)
-
-**Infrastructure Routes (Public, Unversioned):**
-
-- `/health` - Healthcheck
-- `/openapi.json` - API documentation
-- `/meta/route-manifest` - Route manifest for testing
+- Table: `litellm_key_refs` (rename from `virtual_keys` when implemented)
+- Purpose: store the 1:1 mapping from `app_api_key_id` → LiteLLM virtual key identity (and material/ref) for outbound calls and per-key spend.
+- Server-only: never returned to client.
 
 ---
 
-## Key Design Decisions
+## Request Auth & Resolution (Target)
 
-### 1. Ledger-Based Accounting
+### Browser (Session)
 
-- `credit_ledger` is source of truth for all balance changes
-- `billing_accounts.balance_credits` is computed/cached from ledger
-- Enables full audit trail and future on-chain reconciliation
-- All credit operations are atomic (wrapped in database transactions)
+`session cookie → users.id → billing_account_id → select default app_api_key_id → resolve mapped LiteLLM key → outbound LiteLLM call → charge receipt + ledger entry`
 
-### 2. LiteLLM Integration Strategy
+### Programmatic (API Key)
 
-- MVP uses service-auth mode: `LLM_AUTH_STRATEGY=service` with `LITELLM_MASTER_KEY` from environment
-- `virtual_keys` table serves as scope/FK handle for billing attribution only (no key storage in MVP)
-- No LiteLLM `/key/generate` endpoint in MVP - all LLM calls use the master key
-- User attribution passed via `metadata.cogni_billing_account_id` in LiteLLM requests
-- LiteLLM Teams/Users are optional analytics labels (not used in MVP)
-- When real API keys are introduced: key generation and storage will be added
-
-### 3. Credential Separation
-
-- API keys (LiteLLM virtual keys) are server-only secrets
-- Browser only holds Auth.js session cookie (HttpOnly)
-- Server resolves: session → billing_account → virtual_key on each request
-- Billing account + default virtual key are provisioned lazily on the first billable action (AI completion or payment/top-up) by calling `getOrCreateBillingAccountForUser(session.user)`; never accept `billing_account_id` from the client
-
-### 4. MVP Scope: Session-Only Auth
-
-- Protected routes use Auth.js sessions only
-- No Bearer token auth in initial implementation (post-MVP)
-- `/api/v1/wallet/link` removed (no longer needed)
-
-### 5. Token-Ready Design
-
-- Schema supports future on-chain payments
-- `credit_ledger.reason` can be "ai_usage" | "topup_manual" | "onchain_deposit"
-- `credit_ledger.reference` can store tx hashes
-- Postgres becomes real-time balance cache, tokens become funding source
+`Authorization: Bearer <app_api_key> → hash lookup → billing_account_id + app_api_key_id → resolve mapped LiteLLM key → outbound LiteLLM call → charge receipt + ledger entry`
 
 ---
 
-## Implementation Status
+## Tables (Target)
 
-### Phase 0: Database Reset
+- `billing_accounts(id, owner_user_id, balance_credits, created_at, updated_at)`
+- `app_api_keys(id, billing_account_id, key_hash, last4, label, active, created_at, revoked_at)`
+- `litellm_key_refs(id, billing_account_id, app_api_key_id UNIQUE, litellm_key_ref/material, label, active, created_at, revoked_at)`
+- `credit_ledger(id, billing_account_id, app_api_key_id?, amount, balance_after, reason, reference, metadata, created_at)`
+- `charge_receipts(id, billing_account_id, app_api_key_id?, litellm_call_id, charged_credits, response_cost_usd, provenance, source_system, source_reference, created_at)`
 
-- [x] Drop existing tables, delete migrations
-- [x] Update schema: `billing_accounts` + `virtual_keys` + `credit_ledger`
-- [x] Generate fresh migrations
-- [x] Let Auth.js adapter create identity tables
+---
 
-### Phase 1-2: Auth.js Setup
+## What This Doc Owns
 
-- [x] Install next-auth@beta, @auth/drizzle-adapter, siwe
-- [x] Create `src/auth.ts` with Credentials provider + SIWE verification
-- [ ] Wire RainbowKit to Auth.js signIn()
+- The _billing_ model (accounts, credits, receipts) and how credentials map to spend attribution.
+- It does **not** define SIWE/Auth.js mechanics in depth (see SECURITY_AUTH_SPEC.md).
 
-### Phase 3: Billing Integration
+### Future: Multi-Tenant & OAuth
 
-- [x] Implement `src/lib/auth/mapping.ts` (getOrCreateBillingAccountForUser)
-- [x] Create default virtual key as scope/FK handle (no LiteLLM `/key/generate` in MVP - service-auth mode)
-- [x] Update completion route to use session auth + virtual_keys lookup
-- [x] Remove `/api/v1/wallet/link` endpoint
-- [x] Add explicit `LLM_AUTH_STRATEGY=service` env var with fail-fast validation
-- [ ] Ensure billing account + default virtual key are created on session creation and any payment/top-up flows (invoke `getOrCreateBillingAccountForUser` outside AI facade)
-
-### Phase 4-5: Protection & Cleanup
-
-- [ ] Add middleware for route protection
-- [ ] Remove any localStorage apiKey code
-- [ ] Update all tests for new schema
-
-### Future: On-Chain Integration
-
-- [ ] Monitor wallet payments to DAO contract
-- [ ] Write `credit_ledger` entries with `reason="onchain_deposit"`
-- [ ] Build payment reconciliation system
+- [ ] Support multiple wallets per user (Auth.js `accounts` table)
+- [ ] Add OAuth providers (GitHub, Google)
+- [ ] Organization/team billing accounts
+- [ ] On-chain payment reconciliation (Ponder indexer)
