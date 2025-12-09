@@ -3,14 +3,14 @@
 
 /**
  * Module: `@shared/db/schema.billing`
- * Purpose: Billing tables schema with minimal charge_receipt for audit trail.
- * Scope: Defines billing_accounts, virtual_keys, credit_ledger, llm_usage (charge receipts), payment_attempts, payment_events. Does not include auth identity tables.
+ * Purpose: Billing tables schema with minimal charge_receipts for audit trail.
+ * Scope: Defines billing_accounts, virtual_keys, credit_ledger, charge_receipts, payment_attempts, payment_events. Does not include auth identity tables.
  * Invariants:
  * - Credits are BIGINT.
  * - billing_accounts.owner_user_id FK → auth.users(id).
  * - payment_attempts has partial unique index on (chain_id, tx_hash) where tx_hash is not null.
  * - credit_ledger(reference) is unique for widget_payment.
- * - llm_usage.request_id is idempotency key (unique)
+ * - charge_receipts.request_id is idempotency key (unique)
  * Side-effects: none (schema definitions only)
  * Links: docs/PAYMENTS_DESIGN.md, docs/ACTIVITY_METRICS.md
  * @public
@@ -88,20 +88,22 @@ export const creditLedger = pgTable(
     paymentRefUnique: uniqueIndex("credit_ledger_payment_ref_unique")
       .on(table.reference)
       .where(sql`${table.reason} = 'widget_payment'`),
-    /** Idempotency guard for llm_usage charge receipts per ACTIVITY_METRICS.md */
-    llmUsageRefUnique: uniqueIndex("credit_ledger_llm_usage_ref_unique")
+    /** Idempotency guard for charge_receipt entries per ACTIVITY_METRICS.md */
+    chargeReceiptRefUnique: uniqueIndex(
+      "credit_ledger_charge_receipt_ref_unique"
+    )
       .on(table.reference)
-      .where(sql`${table.reason} = 'llm_usage'`),
+      .where(sql`${table.reason} = 'charge_receipt'`),
   })
 );
 
 /**
- * Charge receipts for LLM usage - minimal audit-focused table.
+ * Charge receipts - minimal audit-focused table.
  * LiteLLM is canonical for telemetry (model/tokens). We only store billing data.
  * See docs/ACTIVITY_METRICS.md for design rationale.
  */
-export const llmUsage = pgTable(
-  "llm_usage",
+export const chargeReceipts = pgTable(
+  "charge_receipts",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     billingAccountId: text("billing_account_id")
@@ -125,17 +127,19 @@ export const llmUsage = pgTable(
       .notNull(),
   },
   (table) => ({
-    billingAccountIdx: index("llm_usage_billing_account_idx").on(
+    billingAccountIdx: index("charge_receipts_billing_account_idx").on(
       table.billingAccountId
     ),
-    virtualKeyIdx: index("llm_usage_virtual_key_idx").on(table.virtualKeyId),
+    virtualKeyIdx: index("charge_receipts_virtual_key_idx").on(
+      table.virtualKeyId
+    ),
     // Index for aggregation: Filter by account + range scan on createdAt
-    aggregationIdx: index("llm_usage_aggregation_idx").on(
+    aggregationIdx: index("charge_receipts_aggregation_idx").on(
       table.billingAccountId,
       table.createdAt
     ),
     // Index for pagination: Filter by account + order by createdAt DESC, id DESC
-    paginationIdx: index("llm_usage_pagination_idx").on(
+    paginationIdx: index("charge_receipts_pagination_idx").on(
       table.billingAccountId,
       table.createdAt,
       table.id

@@ -25,8 +25,8 @@ import type { Database } from "@/adapters/server/db/client";
 import { getDb } from "@/adapters/server/db/client";
 import {
   billingAccounts,
+  chargeReceipts,
   creditLedger,
-  llmUsage,
   users,
   virtualKeys,
 } from "@/shared/db/schema";
@@ -111,7 +111,7 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
     // Seed charge receipts for Account A (5 records over 3 days)
     // Per ACTIVITY_METRICS.md: no model/tokens/usage - LiteLLM is canonical
     const baseDate = new Date("2024-06-15T00:00:00Z");
-    await db.insert(llmUsage).values([
+    await db.insert(chargeReceipts).values([
       {
         id: randomUUID(),
         billingAccountId: accountA.billingAccountId,
@@ -173,7 +173,7 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
 
     // Seed charge receipts for Account B (3 records, different amounts)
     // Per ACTIVITY_METRICS.md: no model/tokens/usage - LiteLLM is canonical
-    await db.insert(llmUsage).values([
+    await db.insert(chargeReceipts).values([
       {
         id: randomUUID(),
         billingAccountId: accountB.billingAccountId,
@@ -416,7 +416,7 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         .limit(1);
       if (!vk) throw new Error("Expected virtual key");
 
-      await db.insert(llmUsage).values([
+      await db.insert(chargeReceipts).values([
         {
           id: randomUUID(),
           billingAccountId: accountA.billingAccountId,
@@ -623,8 +623,8 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       // Verify exactly one charge receipt exists
       const receipts = await db
         .select()
-        .from(llmUsage)
-        .where(eq(llmUsage.requestId, requestId));
+        .from(chargeReceipts)
+        .where(eq(chargeReceipts.requestId, requestId));
       expect(receipts).toHaveLength(1);
 
       // Verify exactly one ledger entry exists for this reference
@@ -634,7 +634,7 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         .where(
           and(
             eq(creditLedger.reference, requestId),
-            eq(creditLedger.reason, "llm_usage")
+            eq(creditLedger.reason, "charge_receipt")
           )
         );
       expect(ledgerEntries).toHaveLength(1);
@@ -682,12 +682,12 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       // Verify two charge receipts exist
       const receipts1 = await db
         .select()
-        .from(llmUsage)
-        .where(eq(llmUsage.requestId, requestId1));
+        .from(chargeReceipts)
+        .where(eq(chargeReceipts.requestId, requestId1));
       const receipts2 = await db
         .select()
-        .from(llmUsage)
-        .where(eq(llmUsage.requestId, requestId2));
+        .from(chargeReceipts)
+        .where(eq(chargeReceipts.requestId, requestId2));
       expect(receipts1).toHaveLength(1);
       expect(receipts2).toHaveLength(1);
 

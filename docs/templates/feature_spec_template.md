@@ -26,7 +26,7 @@
 - [x] Remove post-call blocking: `InsufficientCreditsPortError` is forbidden anywhere in the post-call path, including nested helpers
 - [x] Delete custom token-counting code from stream parsing. Only read LiteLLM's own usage payload (`include_usage: true`) as canonical telemetry; no independent token math
 - [x] Extract `x-litellm-call-id` header for forensic correlation
-- [x] Simplify `llm_usage` schema to charge_receipt columns (drop model/tokens/usage)
+- [x] Simplify `charge_receipts` schema to minimal columns (drop model/tokens/usage)
 - [x] Reshape `recordLlmUsage` port → `recordChargeReceipt` (minimal fields)
 - [x] Update activity reads to return `telemetrySource: "fallback"` (prep for P1)
 - [ ] Update mocks and tests for new schema (40 type errors remaining)
@@ -220,7 +220,7 @@ Canonical cost is determined in priority order:
 
 ### Phase 4: Cleanup
 
-1. Rename table: llm_usage → charge_receipt (coordinated migration)
+1. ~~Rename table: llm_usage → charge_receipts~~ (done)
 2. Archive historical telemetry data (model/tokens) if needed for analytics
 3. Update all references
 

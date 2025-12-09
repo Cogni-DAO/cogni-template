@@ -1,5 +1,5 @@
 {
-  "id": "51ce07cc-46ad-4c34-905b-2d7c4e978bc8",
+  "id": "471be911-f6ee-42a0-8625-202116f1d48e",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -113,6 +113,179 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
+    "public.charge_receipts": {
+      "name": "charge_receipts",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "billing_account_id": {
+          "name": "billing_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "virtual_key_id": {
+          "name": "virtual_key_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "litellm_call_id": {
+          "name": "litellm_call_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "charged_credits": {
+          "name": "charged_credits",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "response_cost_usd": {
+          "name": "response_cost_usd",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provenance": {
+          "name": "provenance",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "charge_receipts_billing_account_idx": {
+          "name": "charge_receipts_billing_account_idx",
+          "columns": [
+            {
+              "expression": "billing_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "charge_receipts_virtual_key_idx": {
+          "name": "charge_receipts_virtual_key_idx",
+          "columns": [
+            {
+              "expression": "virtual_key_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "charge_receipts_aggregation_idx": {
+          "name": "charge_receipts_aggregation_idx",
+          "columns": [
+            {
+              "expression": "billing_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "charge_receipts_pagination_idx": {
+          "name": "charge_receipts_pagination_idx",
+          "columns": [
+            {
+              "expression": "billing_account_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "charge_receipts_billing_account_id_billing_accounts_id_fk": {
+          "name": "charge_receipts_billing_account_id_billing_accounts_id_fk",
+          "tableFrom": "charge_receipts",
+          "tableTo": "billing_accounts",
+          "columnsFrom": ["billing_account_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "charge_receipts_virtual_key_id_virtual_keys_id_fk": {
+          "name": "charge_receipts_virtual_key_id_virtual_keys_id_fk",
+          "tableFrom": "charge_receipts",
+          "tableTo": "virtual_keys",
+          "columnsFrom": ["virtual_key_id"],
+          "columnsTo": ["id"],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "charge_receipts_request_id_unique": {
+          "name": "charge_receipts_request_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["request_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.credit_ledger": {
       "name": "credit_ledger",
       "schema": "",
@@ -213,8 +386,8 @@
           "method": "btree",
           "with": {}
         },
-        "credit_ledger_llm_usage_ref_unique": {
-          "name": "credit_ledger_llm_usage_ref_unique",
+        "credit_ledger_charge_receipt_ref_unique": {
+          "name": "credit_ledger_charge_receipt_ref_unique",
           "columns": [
             {
               "expression": "reference",
@@ -224,7 +397,7 @@
             }
           ],
           "isUnique": true,
-          "where": "\"credit_ledger\".\"reason\" = 'llm_usage'",
+          "where": "\"credit_ledger\".\"reason\" = 'charge_receipt'",
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -252,179 +425,6 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
-    "public.llm_usage": {
-      "name": "llm_usage",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "billing_account_id": {
-          "name": "billing_account_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "virtual_key_id": {
-          "name": "virtual_key_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "request_id": {
-          "name": "request_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "litellm_call_id": {
-          "name": "litellm_call_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "charged_credits": {
-          "name": "charged_credits",
-          "type": "bigint",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "response_cost_usd": {
-          "name": "response_cost_usd",
-          "type": "numeric",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "provenance": {
-          "name": "provenance",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {
-        "llm_usage_billing_account_idx": {
-          "name": "llm_usage_billing_account_idx",
-          "columns": [
-            {
-              "expression": "billing_account_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "llm_usage_virtual_key_idx": {
-          "name": "llm_usage_virtual_key_idx",
-          "columns": [
-            {
-              "expression": "virtual_key_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "llm_usage_aggregation_idx": {
-          "name": "llm_usage_aggregation_idx",
-          "columns": [
-            {
-              "expression": "billing_account_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "llm_usage_pagination_idx": {
-          "name": "llm_usage_pagination_idx",
-          "columns": [
-            {
-              "expression": "billing_account_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "created_at",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        }
-      },
-      "foreignKeys": {
-        "llm_usage_billing_account_id_billing_accounts_id_fk": {
-          "name": "llm_usage_billing_account_id_billing_accounts_id_fk",
-          "tableFrom": "llm_usage",
-          "tableTo": "billing_accounts",
-          "columnsFrom": ["billing_account_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "llm_usage_virtual_key_id_virtual_keys_id_fk": {
-          "name": "llm_usage_virtual_key_id_virtual_keys_id_fk",
-          "tableFrom": "llm_usage",
-          "tableTo": "virtual_keys",
-          "columnsFrom": ["virtual_key_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "llm_usage_request_id_unique": {
-          "name": "llm_usage_request_id_unique",
-          "nullsNotDistinct": false,
-          "columns": ["request_id"]
-        }
-      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

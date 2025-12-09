@@ -32,7 +32,7 @@
 │ ACTIVITY DASHBOARD                                                  │
 │ ─────────────────                                                   │
 │ Telemetry (model, tokens, timestamps) → LiteLLM /spend/logs         │
-│ Spend (what we charged user)          → llm_usage.charged_credits   │
+│ Spend (what we charged user)          → charge_receipts.charged_credits │
 │ Join key: litellm_call_id                                           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -43,7 +43,7 @@
 | ------------------------------- | ------------------- | --------------------- |
 | Usage telemetry (model, tokens) | LiteLLM spend logs  | None (query upstream) |
 | Credit entitlements             | credit_ledger table | Authoritative         |
-| Charge receipts                 | llm_usage table     | Immutable audit trail |
+| Charge receipts                 | charge_receipts     | Immutable audit trail |
 
 ---
 
@@ -189,7 +189,7 @@ UI shows explicit "Usage unavailable" state. No fallback to local receipts for t
 - [ ] **Hourly bucketing.** Currently only day-level aggregation. Need sub-day buckets for "Last Hour" view.
 - [ ] **FakeUsageAdapter for stack tests.** Need test double for ActivityUsagePort to avoid LiteLLM dependency in CI.
 - [ ] **Stack tests for Activity.** Integration tests for activity endpoint with real data flow.
-- [ ] **Table rename.** `llm_usage` → `charge_receipt` (migration needed).
+- [x] **Table rename.** `llm_usage` → `charge_receipts` (done).
 
 ---
 

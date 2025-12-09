@@ -43,7 +43,7 @@ Intent-based payment flow: create intent → user transfers USDC → submit txHa
 
 ### 4. Database Schema (Billing Layer) ✅
 
-Tables: `users`, `billing_accounts`, `virtual_keys`, `credit_ledger`, `llm_usage`, `payment_intents`, `payment_attempts`, `payment_events`
+Tables: `users`, `billing_accounts`, `virtual_keys`, `credit_ledger`, `charge_receipts`, `payment_intents`, `payment_attempts`, `payment_events`
 
 **Reference:** [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md), [BILLING_EVOLUTION.md](./BILLING_EVOLUTION.md)
 
@@ -86,7 +86,7 @@ Pino structured logging → Alloy → local Loki (dev) or Grafana Cloud (preview
 
 ### 10. Usage Tracking & History ⚠️
 
-- ✅ `llm_usage` table tracks every LLM call with costs
+- ✅ `charge_receipts` table tracks every LLM call with costs
 - ✅ `credit_ledger` provides audit trail
 - ❌ No user-facing usage history endpoint or analytics
 
