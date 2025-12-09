@@ -51,12 +51,6 @@ interface VirtualKeyRow {
   id: string;
 }
 
-/**
- * Sentinel value stored in virtual_keys.litellm_virtual_key when using master key mode.
- * NOT a real key - just preserves FK integrity. Never returned to callers.
- */
-const MASTER_KEY_MODE_SENTINEL = "[master-key-mode]";
-
 type CreditLedgerRow = typeof creditLedger.$inferSelect;
 
 export class DrizzleAccountService implements AccountService {
@@ -418,13 +412,11 @@ export class DrizzleAccountService implements AccountService {
     billingAccountId: string,
     params: { label?: string }
   ): Promise<VirtualKeyRow> {
-    // MVP: Use master key mode - no per-user virtual keys.
-    // Store sentinel value for FK integrity; real auth uses LITELLM_MASTER_KEY from env.
+    // MVP: virtual_keys is scope/FK handle only. Auth uses LITELLM_MASTER_KEY from env.
     const [created] = await tx
       .insert(virtualKeys)
       .values({
         billingAccountId,
-        litellmVirtualKey: MASTER_KEY_MODE_SENTINEL,
         label: params.label ?? "Default",
         isDefault: true,
         active: true,

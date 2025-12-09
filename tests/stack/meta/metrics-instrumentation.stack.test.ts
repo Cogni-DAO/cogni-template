@@ -239,7 +239,6 @@ describe("LLM Metrics Instrumentation", () => {
     await db.insert(virtualKeys).values({
       id: randomUUID(),
       billingAccountId,
-      litellmVirtualKey: "metrics-test-vk",
       isDefault: true,
     });
 

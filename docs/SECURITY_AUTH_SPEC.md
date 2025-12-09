@@ -117,12 +117,13 @@ User signs SIWE message via RainbowKit → Auth.js Credentials provider creates 
 - Used internally for credit ledger and LiteLLM routing
 - Optional client exposure for UX only (NOT for authorization)
 
-**LiteLLM Virtual Key (MVP: Master Key Mode)**
+**LiteLLM Virtual Key (MVP: Service-Auth Mode)**
 
-- MVP uses `LITELLM_MASTER_KEY` from environment for all LLM calls
-- `virtual_keys` table stores a sentinel value `[master-key-mode]` for referential integrity (not a real key)
+- MVP uses service-auth mode: `LLM_AUTH_STRATEGY=service` with `LITELLM_MASTER_KEY` from environment
+- `virtual_keys` table serves as scope/FK handle for billing attribution only (no key storage)
+- No `/key/generate` endpoint in MVP - all LLM calls use the master key
 - User attribution passed via `metadata.cogni_billing_account_id` in LiteLLM requests
-- Future: User-facing API keys will use `VirtualKeyManagementPort` to create real per-key LiteLLM virtual keys
+- When real API keys are introduced: `VirtualKeyManagementPort` will create real per-user LiteLLM virtual keys
 
 ---
 
@@ -301,13 +302,13 @@ React components use Auth.js hooks:
 
 **`virtual_keys` table:**
 
-- `id` (PK) - Virtual key identifier
+- `id` (PK) - Virtual key identifier (scope/FK handle for billing attribution)
 - `billing_account_id` (FK → `billing_accounts.id`) - Which billing account owns this key
-- `litellm_virtual_key` - Sentinel value `[master-key-mode]` in MVP (not a real key); future user API keys will store encrypted key references
 - `label` - Human-readable name (e.g., "Default", "Production API")
 - `is_default` - Boolean, marks the default key for this billing account
 - `active` - Boolean, whether key is enabled
-- Timestamps: `created_at`, `updated_at`
+- Timestamps: `created_at`
+- **Note:** No `litellm_virtual_key` column in MVP (service-auth mode). When real API keys are introduced, key storage will be added.
 
 **`credit_ledger` table:**
 
@@ -334,9 +335,9 @@ React components use Auth.js hooks:
 1. Auth.js manages `users` (identity, wallet address from SIWE)
 2. On first successful login for `user.id`, we create a `billing_accounts` row if none exists:
    - Set `owner_user_id = user.id`
-   - Create one default `virtual_keys` row with `is_default = true`, storing sentinel `[master-key-mode]`
-   - No LiteLLM `/key/generate` call in MVP - all calls use `LITELLM_MASTER_KEY`
-3. For MVP, each user has exactly one billing account and one virtual key (for referential integrity)
+   - Create one default `virtual_keys` row with `is_default = true` (scope/FK handle only)
+   - No LiteLLM `/key/generate` call in MVP - all calls use `LITELLM_MASTER_KEY` via `LLM_AUTH_STRATEGY=service`
+3. For MVP, each user has exactly one billing account and one virtual key (for FK integrity in ledger)
 4. This mapping logic lives in `src/lib/auth/mapping.ts` via `getOrCreateBillingAccountForUser(user)`
 
 ---
@@ -485,12 +486,14 @@ React components use Auth.js hooks:
 
 ### Known Security Issues
 
-- [x] **~~LiteLLM virtual keys exposed in plaintext.~~** ✅ **FIXED:** MVP uses master key mode:
+- [x] **~~LiteLLM virtual keys exposed in plaintext.~~** ✅ **FIXED:** MVP uses service-auth mode:
   - `litellmVirtualKey` removed from `BillingAccount` and `LlmCaller` interfaces
-  - `virtual_keys.litellm_virtual_key` stores sentinel `[master-key-mode]` (not a real key)
+  - `litellm_virtual_key` column dropped from `virtual_keys` table entirely (no sentinels)
+  - `virtual_keys` serves as scope/FK handle for billing attribution only
+  - Explicit `LLM_AUTH_STRATEGY=service` env var with fail-fast validation
   - LiteLLM adapter uses `LITELLM_MASTER_KEY` from env with `billingAccountId` in metadata for cost attribution
   - No secrets flow through application layers
-  - Future user API keys will use `VirtualKeyManagementPort` with show-once semantics
+  - When real API keys are introduced: `VirtualKeyManagementPort` with show-once semantics
 
 ---
 
@@ -598,7 +601,8 @@ Auth.js does NOT provide a built-in SIWE provider. We implement SIWE via:
 ## Key Invariants
 
 - **No per-user secrets in application layers:** `LlmCaller` contains only IDs; `LITELLM_MASTER_KEY` accessed only at adapter boundary
-- **`virtual_keys` stores sentinel, not secrets:** Value `[master-key-mode]` preserves FK integrity without storing real keys
+- **`virtual_keys` is scope/FK handle only:** No secrets stored; just ID reference for `credit_ledger` and `charge_receipts`
+- **Explicit auth strategy:** `LLM_AUTH_STRATEGY=service` required env var with fail-fast validation at startup
 - NextAuth manages all session operations (cookies, storage, expiry)
 - SIWE (via Credentials provider + `siwe` library) proves wallet ownership
 - Billing layer owns virtual key IDs for referential integrity (`billing_accounts` → `virtual_keys`)

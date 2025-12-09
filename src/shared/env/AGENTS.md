@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-07
+- **Last reviewed:** 2025-12-10
 - **Status:** draft
 
 ## Purpose
@@ -42,6 +42,7 @@ Single source of truth for environment variables. Lazy validation with Zod preve
 
 - `server.ts`: serverEnv() (unified lazy function)
 - `client.ts`: clientEnv (typed object)
+- `invariants.ts`: assertEnvInvariants() (cross-field validation)
 - `index.ts`: re-exports + getEnv, requireEnv
 
 **Files considered API:** server.ts, client.ts, index.ts
@@ -52,6 +53,7 @@ Single source of truth for environment variables. Lazy validation with Zod preve
 
 - `server.ts` → server-only vars via lazy serverEnv() function. Never import from client code.
 - `client.ts` → public, browser-safe vars (NEXT*PUBLIC*\* only).
+- `invariants.ts` → cross-field validation called after Zod parse (e.g., APP_ENV=production requires LITELLM_MASTER_KEY).
 - `index.ts` → re-exports and tiny helpers.
 
 ## Vars by layer

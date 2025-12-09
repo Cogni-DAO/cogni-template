@@ -16,6 +16,7 @@
 import { ZodError, z } from "zod";
 
 import { buildDatabaseUrl } from "@/shared/db";
+import { assertEnvInvariants } from "./invariants";
 
 export interface EnvValidationMeta {
   code: "INVALID_ENV";
@@ -34,7 +35,7 @@ export class EnvValidationError extends Error {
 }
 
 // Server schema with all environment variables
-const serverSchema = z.object({
+export const serverSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
     .default("development"),
@@ -116,6 +117,9 @@ export function serverEnv(): ServerEnv {
       const isTest = parsed.NODE_ENV === "test";
       const isProd = parsed.NODE_ENV === "production";
       const isTestMode = parsed.APP_ENV === "test";
+
+      // Cross-field invariants (beyond Zod schema)
+      assertEnvInvariants(parsed);
 
       // Handle DATABASE_URL: use provided URL or construct from component pieces
       let DATABASE_URL: string;

@@ -77,7 +77,6 @@ CREATE TABLE "payment_events" (
 CREATE TABLE "virtual_keys" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"billing_account_id" text NOT NULL,
-	"litellm_virtual_key" text NOT NULL,
 	"label" text DEFAULT 'Default',
 	"is_default" boolean DEFAULT false NOT NULL,
 	"active" boolean DEFAULT true NOT NULL,

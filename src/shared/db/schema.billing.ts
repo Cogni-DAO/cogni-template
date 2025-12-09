@@ -48,12 +48,16 @@ export const billingAccounts = pgTable("billing_accounts", {
     .defaultNow(),
 });
 
+/**
+ * Virtual keys table - scope/FK handle for billing attribution.
+ * MVP: service-auth only (no per-user keys). When real API keys are introduced,
+ * add key_hash column for hashed credentials.
+ */
 export const virtualKeys = pgTable("virtual_keys", {
   id: uuid("id").defaultRandom().primaryKey(),
   billingAccountId: text("billing_account_id")
     .notNull()
     .references(() => billingAccounts.id, { onDelete: "cascade" }),
-  litellmVirtualKey: text("litellm_virtual_key").notNull(),
   label: text("label").default("Default"),
   isDefault: boolean("is_default").notNull().default(false),
   active: boolean("active").notNull().default(true),

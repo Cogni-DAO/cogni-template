@@ -65,10 +65,9 @@ describe("Completion Billing Stack Test", () => {
       balanceCredits: initialBalance,
     });
 
-    // Seed virtual key
+    // Seed virtual key (scope/FK handle only)
     await db.insert(virtualKeys).values({
       billingAccountId,
-      litellmVirtualKey: "stack-test-billing-vk",
       isDefault: true,
     });
 
@@ -192,10 +191,9 @@ describe("Completion Billing Stack Test", () => {
       balanceCredits: 0n, // No credits
     });
 
-    // Seed virtual key
+    // Seed virtual key (scope/FK handle only)
     await db.insert(virtualKeys).values({
       billingAccountId,
-      litellmVirtualKey: "stack-test-insufficient-vk",
       isDefault: true,
     });
 

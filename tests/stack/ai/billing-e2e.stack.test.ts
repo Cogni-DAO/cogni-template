@@ -74,12 +74,11 @@ describe("Billing E2E Stack Test", () => {
       balanceCredits: 100_000_000n, // 100M credits = $10 (protocol scale)
     });
 
-    // Seed virtual key
+    // Seed virtual key (scope/FK handle only)
     const virtualKeyId = randomUUID();
     await db.insert(virtualKeys).values({
       id: virtualKeyId,
       billingAccountId,
-      litellmVirtualKey: "e2e-vk",
       isDefault: true,
     });
 

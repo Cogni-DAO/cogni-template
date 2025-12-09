@@ -61,10 +61,9 @@ describe("Auth Flow Stack Test", () => {
       balanceCredits: 100_000_000n, // 100M credits = $10 (protocol scale)
     });
 
-    // Seed virtual key
+    // Seed virtual key (scope/FK handle only)
     await db.insert(virtualKeys).values({
       billingAccountId,
-      litellmVirtualKey: "stack-test-vk",
       isDefault: true,
     });
 

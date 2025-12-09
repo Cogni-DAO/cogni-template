@@ -1,5 +1,5 @@
 {
-  "id": "ba566c58-e8b5-41d3-ab03-d8da58b601b4",
+  "id": "1f70dd95-61e5-4bad-ae53-dab93df187d6",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -763,12 +763,6 @@
         },
         "billing_account_id": {
           "name": "billing_account_id",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "litellm_virtual_key": {
-          "name": "litellm_virtual_key",
           "type": "text",
           "primaryKey": false,
           "notNull": true

@@ -90,12 +90,11 @@ export async function seedAuthenticatedUser(
     throw new Error("Failed to create test billing account");
   }
 
-  // Create virtual key with sentinel (MVP: no per-user LiteLLM keys)
+  // MVP: virtual_keys is scope/FK handle only. Auth uses LITELLM_MASTER_KEY from env.
   const [virtualKey] = await db
     .insert(virtualKeys)
     .values({
       billingAccountId: billingAccount.id,
-      litellmVirtualKey: "[master-key-mode]", // Sentinel - actual auth uses LITELLM_MASTER_KEY
       label: billingParams.virtualKeyLabel ?? "Test Default",
       isDefault: true,
       active: true,

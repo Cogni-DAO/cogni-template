@@ -18,9 +18,10 @@ Auth.js manages identity via SIWE; our billing layer owns LiteLLM virtual keys a
 
 ## Key Invariants
 
-- LiteLLM virtual keys never leave the server
+- **Service-auth mode:** `LLM_AUTH_STRATEGY=service` with `LITELLM_MASTER_KEY` from env (MVP)
+- **`virtual_keys` is scope/FK handle only:** No secrets stored; just ID reference for `credit_ledger` and `charge_receipts`
 - All credit changes flow through `credit_ledger` (append-only audit log)
-- Each user has one billing account (MVP); that account owns one default LiteLLM virtual key
+- Each user has one billing account (MVP); that account owns one default virtual key (for FK integrity)
 - Token integration is additive (Postgres becomes cache, tokens become funding source)
 
 ---
@@ -56,12 +57,14 @@ Auth.js manages identity via SIWE; our billing layer owns LiteLLM virtual keys a
 - Key columns: `id` (PK), `owner_user_id` (FK → `users.id`), `balance_credits`
 - File: `src/shared/db/schema.ts`
 
-**3. LiteLLM Virtual Keys (API Access)**
+**3. Virtual Keys (Scope/FK Handle)**
 
 - Table: `virtual_keys`
-- Purpose: Store LiteLLM virtual keys for API calls
-- Key columns: `id` (PK), `billing_account_id` (FK), `litellm_virtual_key`, `is_default`, `active`
-- File: `src/shared/db/schema.ts`
+- Purpose: Scope/FK handle for billing attribution in `credit_ledger` and `charge_receipts`
+- Key columns: `id` (PK), `billing_account_id` (FK), `label`, `is_default`, `active`
+- **Note:** No `litellm_virtual_key` column in MVP (service-auth mode via `LLM_AUTH_STRATEGY=service`)
+- When real API keys are introduced: key storage column will be added
+- File: `src/shared/db/schema.billing.ts`
 
 ### LiteLLM Integration
 
@@ -126,9 +129,10 @@ Per [ACTIVITY_METRICS.md](ACTIVITY_METRICS.md), LiteLLM is canonical for usage t
 
 **`virtual_keys`:**
 
-- LiteLLM virtual keys for API access
+- Scope/FK handle for billing attribution (no secrets stored in MVP)
 - Links to `billing_accounts` via `billing_account_id`
-- Fields: `litellm_virtual_key`, `label`, `is_default`, `active`
+- Fields: `label`, `is_default`, `active`, `created_at`
+- **Note:** No `litellm_virtual_key` column in MVP. When real API keys are introduced, key storage will be added.
 
 **`credit_ledger`:**
 
@@ -211,10 +215,12 @@ Per [ACTIVITY_METRICS.md](ACTIVITY_METRICS.md), LiteLLM is canonical for usage t
 
 ### 2. LiteLLM Integration Strategy
 
-- We don't reinvent billing — we use LiteLLM's virtual keys for API access
-- `virtual_keys.litellm_virtual_key` stores the actual LiteLLM key string
+- MVP uses service-auth mode: `LLM_AUTH_STRATEGY=service` with `LITELLM_MASTER_KEY` from environment
+- `virtual_keys` table serves as scope/FK handle for billing attribution only (no key storage in MVP)
+- No LiteLLM `/key/generate` endpoint in MVP - all LLM calls use the master key
+- User attribution passed via `metadata.cogni_billing_account_id` in LiteLLM requests
 - LiteLLM Teams/Users are optional analytics labels (not used in MVP)
-- Future: LiteLLM spend tracking can be reconciled with our credit ledger
+- When real API keys are introduced: key generation and storage will be added
 
 ### 3. Credential Separation
 
@@ -256,9 +262,10 @@ Per [ACTIVITY_METRICS.md](ACTIVITY_METRICS.md), LiteLLM is canonical for usage t
 ### Phase 3: Billing Integration
 
 - [x] Implement `src/lib/auth/mapping.ts` (getOrCreateBillingAccountForUser)
-- [x] Provision default virtual key on first login (call LiteLLM `/key/generate` with `LITELLM_MASTER_KEY`; may attach `metadata.cogni_billing_account_id`)
+- [x] Create default virtual key as scope/FK handle (no LiteLLM `/key/generate` in MVP - service-auth mode)
 - [x] Update completion route to use session auth + virtual_keys lookup
 - [x] Remove `/api/v1/wallet/link` endpoint
+- [x] Add explicit `LLM_AUTH_STRATEGY=service` env var with fail-fast validation
 - [ ] Ensure billing account + default virtual key are created on session creation and any payment/top-up flows (invoke `getOrCreateBillingAccountForUser` outside AI facade)
 
 ### Phase 4-5: Protection & Cleanup
