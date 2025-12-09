@@ -30,8 +30,13 @@ export interface AiActivityQueryCompletedEvent {
   scope: "user" | "org" | "system";
   billingAccountId: string;
   orgId?: string | undefined;
-  groupBy: "day" | "hour";
+  /** Effective bucket step used (server-derived or validated) */
+  effectiveStep: "5m" | "15m" | "1h" | "6h" | "1d";
   durationMs: number;
   resultCount: number;
+  /** Total logs fetched from LiteLLM for this range */
+  fetchedLogCount: number;
+  /** Logs without matching receipt (no spend data) */
+  unjoinedLogCount: number;
   status: "success" | "error";
 }

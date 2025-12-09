@@ -3,26 +3,33 @@
 
 /**
  * Module: `@adapters/server/ai/litellm.usage-service`
- * Purpose: Thin adapter mapping ActivityUsagePort → UsageService interface.
- * Scope: Allows ActivityService to consume LiteLLM usage logs via existing UsageService port. Does not write to DB.
+ * Purpose: Adapter mapping ActivityUsagePort → UsageService for Activity dashboard range queries.
+ * Scope: Delegates to LiteLLM adapter for range-complete log fetching. Does not write to DB.
  * Invariants:
- * - Pass-through data: model, tokens, timestamps from LiteLLM as-is
- * - cost field = providerCostUsd (observational, not user billing - see docs/ACTIVITY_METRICS.md)
+ * - listUsageLogsByRange fetches range-complete data (no silent truncation)
+ * - Enforces MAX_LOGS_PER_RANGE (5000) via TooManyLogsError (422)
+ * - cost field = providerCostUsd (observational, not user billing)
+ * - Pass-through: model, tokens, timestamps from LiteLLM as-is
  * - No local cost recomputation
  * Side-effects: IO (delegates to ActivityUsagePort)
- * Links: [ActivityUsagePort](../../../../ports/usage.port.ts), [UsageService](../../../../ports/usage.port.ts)
- * Note: Distinct from observability/metrics telemetry; powers Activity dashboard.
+ * Links: [ActivityUsagePort](../../../../ports/usage.port.ts), [UsageService](../../../../ports/usage.port.ts), docs/ACTIVITY_METRICS.md
  * @internal
  */
 
 import type {
   ActivityUsagePort,
+  UsageLogEntry,
+  UsageLogsByRangeParams,
   UsageLogsParams,
   UsageLogsResult,
   UsageService,
   UsageStatsParams,
   UsageStatsResult,
 } from "@/ports";
+import { MAX_LOGS_PER_RANGE, TooManyLogsError } from "@/shared/errors";
+import { makeLogger } from "@/shared/observability";
+
+const logger = makeLogger({ component: "LiteLlmUsageServiceAdapter" });
 
 /**
  * Adapter that wraps ActivityUsagePort to implement UsageService interface.
@@ -88,6 +95,63 @@ export class LiteLlmUsageServiceAdapter implements UsageService {
       tokensOut: log.tokensOut,
       cost: log.providerCostUsd,
     }));
+
+    return { logs };
+  }
+
+  /**
+   * Fetch ALL logs in date range (for charts/totals).
+   * Unlike listUsageLogs (cursor-based for table pagination),
+   * this fetches complete log set for [from, to).
+   *
+   * Invariant: Never silently truncate. Throws TooManyLogsError if exceeded.
+   */
+  async listUsageLogsByRange(
+    params: UsageLogsByRangeParams
+  ): Promise<{ logs: UsageLogEntry[] }> {
+    const { billingAccountId, from, to } = params;
+
+    // Fetch all logs in range (no limit = all logs)
+    const result = await this.activityUsagePort.getSpendLogs(billingAccountId, {
+      from,
+      to,
+      // No limit - get all logs in range
+    });
+
+    // Enforce MAX_LOGS_PER_RANGE - fail loud, never silently truncate
+    if (result.logs.length > MAX_LOGS_PER_RANGE) {
+      logger.warn(
+        {
+          event: "activity.too_many_logs",
+          billingAccountId,
+          logCount: result.logs.length,
+          maxAllowed: MAX_LOGS_PER_RANGE,
+          from: from.toISOString(),
+          to: to.toISOString(),
+        },
+        "Log count exceeds MAX_LOGS_PER_RANGE"
+      );
+      throw new TooManyLogsError(result.logs.length);
+    }
+
+    const logs: UsageLogEntry[] = result.logs.map((log) => ({
+      id: log.callId,
+      timestamp: log.timestamp,
+      model: log.model,
+      tokensIn: log.tokensIn,
+      tokensOut: log.tokensOut,
+      cost: log.providerCostUsd,
+    }));
+
+    logger.info(
+      {
+        billingAccountId,
+        fetchedLogCount: logs.length,
+        from: from.toISOString(),
+        to: to.toISOString(),
+      },
+      "Fetched logs by range"
+    );
 
     return { logs };
   }

@@ -39,8 +39,9 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
 - **Exports:**
   - AccountService (getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordChargeReceipt, listChargeReceipts, listCreditLedgerEntries, findCreditLedgerEntryByReference)
   - LlmService (completion, completionStream with CompletionStreamParams including abortSignal; returns providerCostUsd, litellmCallId)
-  - UsageService (getUsageStats, listUsageLogs)
-  - ActivityUsagePort (getSpendLogs, getSpendChart; read-only usage logs for Activity dashboard, distinct from observability telemetry)
+  - UsageService (getUsageStats, listUsageLogs; legacy aggregation interface)
+  - ActivityUsagePort (getSpendLogs, getSpendChart; LiteLLM-only telemetry for Activity dashboard)
+  - UsageLogEntry, UsageLogsByRangeParams (types for log fetching)
   - ChatDeltaEvent (text_delta | error | done)
   - PaymentAttemptRepository (create, findById, findByTxHash, updateStatus, bindTxHash, recordVerificationAttempt, logEvent)
   - OnChainVerifier (verify transaction against expected parameters)

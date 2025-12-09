@@ -3,22 +3,24 @@
 
 /**
  * Module: `@adapters/server/ai/litellm.activity-usage`
- * Purpose: LiteLLM implementation of ActivityUsagePort (read-only).
- * Scope: Queries LiteLLM /spend/logs API for usage logs. Does not write to any DB.
+ * Purpose: LiteLLM implementation of ActivityUsagePort with bounded range-scan for charts.
+ * Scope: Queries LiteLLM /spend/logs without date params (avoids aggregation), filters in-memory. Does not write to DB.
  * Invariants:
  * - Identity: billingAccountId is server-derived, passed as end_user to LiteLLM /spend/logs
- * - No pagination: /spend/logs deprecated endpoint, use limit only (max 100)
- * - Pass-through: model, tokens, timestamps from LiteLLM as-is (no local recomputation)
- * - Read-only: never writes to DB; observational cost only (not user billing)
- * Side-effects: IO (HTTP requests to LiteLLM)
+ * - No date params: start_date/end_date cause LiteLLM to aggregate, breaking receipt joins
+ * - Bounded scan: Fetch up to MAX_RANGE_LIMIT, filter to [from,to), validate completeness
+ * - Fail loud: Throws TooManyLogsError (422) if range exceeds MAX_LOGS_PER_RANGE
+ * - Pass-through: model, tokens, timestamps from LiteLLM as-is (no recomputation)
+ * - Read-only: observational cost only (not user billing)
+ * Side-effects: IO (HTTP to LiteLLM /spend/logs)
  * Links: [ActivityUsagePort](../../../../ports/usage.port.ts), docs/ACTIVITY_METRICS.md
- * Note: Distinct from observability/metrics telemetry; powers Activity dashboard only.
  * @internal
  */
 
 import type { ActivityUsagePort } from "@/ports";
 import { ActivityUsageUnavailableError } from "@/ports";
 import { serverEnv } from "@/shared/env/server";
+import { MAX_LOGS_PER_RANGE, TooManyLogsError } from "@/shared/errors";
 import { EVENT_NAMES, makeLogger } from "@/shared/observability";
 import {
   type LiteLlmSpendBucket,
@@ -29,7 +31,10 @@ import {
 
 const logger = makeLogger({ component: "LiteLlmActivityUsageAdapter" });
 
-const MAX_LIMIT = 100;
+// Max logs to fetch in a single request (for table pagination)
+const MAX_TABLE_LIMIT = 100;
+// Max logs for range queries (charts/totals) - aligned with MAX_LOGS_PER_RANGE
+const MAX_RANGE_LIMIT = MAX_LOGS_PER_RANGE;
 
 /**
  * Format Date to YYYY-MM-DD for LiteLLM API.
@@ -77,17 +82,34 @@ export class LiteLlmActivityUsageAdapter implements ActivityUsagePort {
       providerCostUsd: string;
     }>;
   }> {
-    const limit = Math.min(params.limit ?? 100, MAX_LIMIT);
-
-    // IMPORTANT: Do NOT pass start_date/end_date for individual logs.
-    // LiteLLM switches to aggregate mode when date params are present.
-    // Logs are fetched by end_user + limit only; filter by date in-memory if needed.
+    // CRITICAL: Do NOT use start_date/end_date params - they cause LiteLLM to return aggregated buckets
+    // (no request_id), which breaks receipt joins and per-log bucketing.
+    // Instead: Fetch individual logs (newest first) and filter by timestamp in-memory.
+    //
+    // Bounded scan strategy:
+    // 1. Fetch up to limit (or MAX_LIMIT for range queries)
+    // 2. Filter logs to [from, to) by timestamp
+    // 3. If fetched == limit AND oldest log > from → incomplete data (422)
+    // 4. If fetched < limit OR oldest log <= from → complete data
     const url = new URL(`${this.baseUrl}/spend/logs`);
     url.searchParams.set("end_user", billingAccountId);
-    url.searchParams.set("limit", String(limit));
+
+    // For range queries (charts/totals): use MAX_RANGE_LIMIT to ensure complete data
+    // For table pagination: use provided limit (recent-N), capped at MAX_TABLE_LIMIT
+    const fetchLimit = params.limit ?? MAX_RANGE_LIMIT;
+    const cappedLimit = params.limit
+      ? Math.min(fetchLimit, MAX_TABLE_LIMIT)
+      : fetchLimit;
+    url.searchParams.set("limit", String(cappedLimit));
 
     logger.info(
-      { billingAccountId, queryUrl: url.toString(), limit },
+      {
+        billingAccountId,
+        queryUrl: url.toString(),
+        from: params.from.toISOString(),
+        to: params.to.toISOString(),
+        fetchLimit,
+      },
       "LiteLLM activity query (logs)"
     );
 
@@ -147,7 +169,7 @@ export class LiteLlmActivityUsageAdapter implements ActivityUsagePort {
         );
       }
 
-      const logs = parseResult.data.map((log: LiteLlmSpendLog) => ({
+      const allLogs = parseResult.data.map((log: LiteLlmSpendLog) => ({
         callId: log.request_id,
         timestamp: new Date(log.startTime),
         model: log.model,
@@ -156,9 +178,27 @@ export class LiteLlmActivityUsageAdapter implements ActivityUsagePort {
         providerCostUsd: log.spend,
       }));
 
-      return { logs };
+      // Filter to [from, to) range
+      const logsInRange = allLogs.filter((log) => {
+        return log.timestamp >= params.from && log.timestamp < params.to;
+      });
+
+      // Bounded scan validation: Check if we have complete data for the range
+      // If we fetched exactly fetchLimit logs AND the oldest is still after 'from',
+      // we don't have all logs in [from, to) → fail loud with 422
+      if (allLogs.length === fetchLimit && allLogs.length > 0) {
+        const oldestFetched = allLogs[allLogs.length - 1];
+        if (oldestFetched && oldestFetched.timestamp > params.from) {
+          throw new TooManyLogsError(allLogs.length, fetchLimit);
+        }
+      }
+
+      return { logs: logsInRange };
     } catch (error) {
       if (error instanceof ActivityUsageUnavailableError) {
+        throw error;
+      }
+      if (error instanceof TooManyLogsError) {
         throw error;
       }
       if (error instanceof Error && error.message.startsWith("LiteLLM")) {
