@@ -9,10 +9,12 @@
  * - Credits are BIGINT.
  * - billing_accounts.owner_user_id FK → auth.users(id).
  * - payment_attempts has partial unique index on (chain_id, tx_hash) where tx_hash is not null.
- * - credit_ledger(reference) is unique for widget_payment.
+ * - credit_ledger(reference) is unique for widget_payment and charge_receipt.
  * - charge_receipts.request_id is idempotency key (unique)
+ * - charge_receipts has NOT NULL charge_reason, source_system, source_reference (no defaults, explicit values required)
+ * - charge_receipts uses (source_system, source_reference) for generic linking to external systems
  * Side-effects: none (schema definitions only)
- * Links: docs/PAYMENTS_DESIGN.md, docs/ACTIVITY_METRICS.md
+ * Links: docs/PAYMENTS_DESIGN.md, docs/ACTIVITY_METRICS.md, types/billing.ts (categorization enums)
  * @public
  */
 
@@ -31,6 +33,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import { CHARGE_REASONS, SOURCE_SYSTEMS } from "@/types/billing";
 import { users } from "./schema.auth";
 
 export const billingAccounts = pgTable("billing_accounts", {
@@ -122,6 +125,12 @@ export const chargeReceipts = pgTable(
     responseCostUsd: numeric("response_cost_usd"),
     /** How this receipt was generated: 'response' | 'stream' */
     provenance: text("provenance").notNull(),
+    /** Economic/billing category for accounting and analytics */
+    chargeReason: text("charge_reason", { enum: CHARGE_REASONS }).notNull(),
+    /** External system that originated this charge (e.g. 'litellm', 'stripe') */
+    sourceSystem: text("source_system", { enum: SOURCE_SYSTEMS }).notNull(),
+    /** Reference ID in the source system for generic linking */
+    sourceReference: text("source_reference").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -143,6 +152,11 @@ export const chargeReceipts = pgTable(
       table.billingAccountId,
       table.createdAt,
       table.id
+    ),
+    // Index for reverse joins: find charge by (source_system, source_reference)
+    sourceLinkIdx: index("charge_receipts_source_link_idx").on(
+      table.sourceSystem,
+      table.sourceReference
     ),
   })
 );

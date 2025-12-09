@@ -10,9 +10,10 @@
  * - inv_cursor_is_opaque_and_safe: Pagination is stable and scoped
  * - inv_zero_fill_is_deterministic: Buckets are deterministic for range
  * - inv_money_precision: Totals match sum of buckets
+ * - Test fixtures use testChargeReceiptDefaults for DRY charge categorization fields
  * Side-effects: IO (database operations via testcontainers)
  * Notes: These are invariant-locking tests - if these fail, the feature is broken.
- * Links: [DrizzleUsageAdapter](../../../src/adapters/server/accounts/drizzle.usage.adapter.ts)
+ * Links: [DrizzleUsageAdapter](../../../src/adapters/server/accounts/drizzle.usage.adapter.ts), types/billing.ts
  * @public
  */
 
@@ -30,6 +31,7 @@ import {
   users,
   virtualKeys,
 } from "@/shared/db/schema";
+import type { ChargeReason, SourceSystem } from "@/types/billing";
 
 // Test fixtures
 interface TestAccount {
@@ -37,6 +39,15 @@ interface TestAccount {
   billingAccountId: string;
   virtualKeyId: string;
 }
+
+/**
+ * Default test values for charge receipt fields (DRY helper).
+ * Apply via object spread: { ...testChargeReceiptDefaults, sourceReference: "unique-id", ...specificFields }
+ */
+const testChargeReceiptDefaults = {
+  chargeReason: "llm_usage" as ChargeReason,
+  sourceSystem: "litellm" as SourceSystem,
+};
 
 describe("DrizzleUsageAdapter Integration Tests", () => {
   let db: Database;
@@ -113,6 +124,7 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
     const baseDate = new Date("2024-06-15T00:00:00Z");
     await db.insert(chargeReceipts).values([
       {
+        ...testChargeReceiptDefaults,
         id: randomUUID(),
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
@@ -121,13 +133,16 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         chargedCredits: 5000n,
         responseCostUsd: "0.005000",
         provenance: "response",
+        sourceReference: "call-a-1",
         createdAt: new Date(baseDate.getTime()),
       },
       {
+        ...testChargeReceiptDefaults,
         id: randomUUID(),
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
         requestId: "req-a-2",
+        sourceReference: "req-a-2",
         litellmCallId: "call-a-2",
         chargedCredits: 10000n,
         responseCostUsd: "0.010000",
@@ -135,10 +150,12 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         createdAt: new Date(baseDate.getTime() + 1000 * 60 * 60), // +1 hour
       },
       {
+        ...testChargeReceiptDefaults,
         id: randomUUID(),
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
         requestId: "req-a-3",
+        sourceReference: "req-a-3",
         litellmCallId: "call-a-3",
         chargedCredits: 1000n,
         responseCostUsd: "0.001000",
@@ -146,10 +163,12 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         createdAt: new Date(baseDate.getTime() + 1000 * 60 * 60 * 24), // +1 day
       },
       {
+        ...testChargeReceiptDefaults,
         id: randomUUID(),
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
         requestId: "req-a-4",
+        sourceReference: "req-a-4",
         litellmCallId: "call-a-4",
         chargedCredits: 15000n,
         responseCostUsd: "0.015000",
@@ -157,10 +176,12 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         createdAt: new Date(baseDate.getTime() + 1000 * 60 * 60 * 24 * 2), // +2 days
       },
       {
+        ...testChargeReceiptDefaults,
         id: randomUUID(),
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
         requestId: "req-a-5",
+        sourceReference: "req-a-5",
         litellmCallId: "call-a-5",
         chargedCredits: 20000n,
         responseCostUsd: "0.020000",
@@ -175,10 +196,12 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
     // Per ACTIVITY_METRICS.md: no model/tokens/usage - LiteLLM is canonical
     await db.insert(chargeReceipts).values([
       {
+        ...testChargeReceiptDefaults,
         id: randomUUID(),
         billingAccountId: accountB.billingAccountId,
         virtualKeyId: accountB.virtualKeyId,
         requestId: "req-b-1",
+        sourceReference: "req-b-1",
         litellmCallId: "call-b-1",
         chargedCredits: 100000n,
         responseCostUsd: "0.100000",
@@ -186,10 +209,12 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         createdAt: new Date(baseDate.getTime()),
       },
       {
+        ...testChargeReceiptDefaults,
         id: randomUUID(),
         billingAccountId: accountB.billingAccountId,
         virtualKeyId: accountB.virtualKeyId,
         requestId: "req-b-2",
+        sourceReference: "req-b-2",
         litellmCallId: "call-b-2",
         chargedCredits: 200000n,
         responseCostUsd: "0.200000",
@@ -197,10 +222,12 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         createdAt: new Date(baseDate.getTime() + 1000 * 60 * 60 * 24), // +1 day
       },
       {
+        ...testChargeReceiptDefaults,
         id: randomUUID(),
         billingAccountId: accountB.billingAccountId,
         virtualKeyId: accountB.virtualKeyId,
         requestId: "req-b-3",
+        sourceReference: "req-b-3",
         litellmCallId: "call-b-3",
         chargedCredits: 50000n,
         responseCostUsd: "0.050000",
@@ -418,10 +445,12 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
 
       await db.insert(chargeReceipts).values([
         {
+          ...testChargeReceiptDefaults,
           id: randomUUID(),
           billingAccountId: accountA.billingAccountId,
           virtualKeyId: vk.id,
           requestId: `req-nonaligned-1-${randomUUID()}`,
+          sourceReference: `req-nonaligned-1-${randomUUID()}`,
           litellmCallId: "call-nonaligned-1",
           chargedCredits: 10000n,
           responseCostUsd: "0.010000",
@@ -429,10 +458,12 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
           createdAt: day1_0200,
         },
         {
+          ...testChargeReceiptDefaults,
           id: randomUUID(),
           billingAccountId: accountA.billingAccountId,
           virtualKeyId: vk.id,
           requestId: `req-nonaligned-2-${randomUUID()}`,
+          sourceReference: `req-nonaligned-2-${randomUUID()}`,
           litellmCallId: "call-nonaligned-2",
           chargedCredits: 10000n,
           responseCostUsd: "0.010000",
@@ -608,6 +639,9 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         responseCostUsd: 0.005,
         litellmCallId: `call-${requestId}`,
         provenance: "response",
+        chargeReason: "llm_usage",
+        sourceSystem: "litellm",
+        sourceReference: `call-${requestId}`,
       });
 
       await accountService.recordChargeReceipt({
@@ -618,6 +652,9 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         responseCostUsd: 0.005,
         litellmCallId: `call-${requestId}`,
         provenance: "response",
+        chargeReason: "llm_usage",
+        sourceSystem: "litellm",
+        sourceReference: `call-${requestId}`,
       });
 
       // Verify exactly one charge receipt exists
@@ -667,6 +704,9 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         responseCostUsd: 0.001,
         litellmCallId: `call-${requestId1}`,
         provenance: "response",
+        chargeReason: "llm_usage",
+        sourceSystem: "litellm",
+        sourceReference: `call-${requestId1}`,
       });
 
       await accountService.recordChargeReceipt({
@@ -677,6 +717,9 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         responseCostUsd: 0.001,
         litellmCallId: `call-${requestId2}`,
         provenance: "stream",
+        chargeReason: "llm_usage",
+        sourceSystem: "litellm",
+        sourceReference: `call-${requestId2}`,
       });
 
       // Verify two charge receipts exist

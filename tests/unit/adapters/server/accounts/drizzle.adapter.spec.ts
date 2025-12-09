@@ -5,9 +5,11 @@
  * Module: `@adapters/server/accounts/drizzle`
  * Purpose: Unit tests for DrizzleAccountService.
  * Scope: Verifies recordChargeReceipt logic per ACTIVITY_METRICS.md. Does not test actual database connection.
- * Invariants: Post-call never throws InsufficientCreditsPortError; idempotent by requestId
+ * Invariants:
+ * - Post-call never throws InsufficientCreditsPortError; idempotent by requestId
+ * - Test params include required chargeReason, sourceService, metadata fields
  * Side-effects: none (uses mocks)
- * Links: `src/adapters/server/accounts/drizzle.adapter.ts`, docs/ACTIVITY_METRICS.md
+ * Links: `src/adapters/server/accounts/drizzle.adapter.ts`, docs/ACTIVITY_METRICS.md, types/billing.ts
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -73,6 +75,9 @@ describe("DrizzleAccountService", () => {
       responseCostUsd: 0.002,
       litellmCallId: "call-123",
       provenance: "response" as const,
+      chargeReason: "llm_usage" as const,
+      sourceSystem: "litellm" as const,
+      sourceReference: "call-123",
     };
 
     it("successfully records charge receipt and debits credits", async () => {

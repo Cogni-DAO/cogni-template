@@ -5,10 +5,13 @@
  * Module: `@features/ai/services/completion`
  * Purpose: Use case orchestration for AI completion with dual-cost billing.
  * Scope: Coordinate core rules, port calls, set output timestamp, record usage. Does not handle authentication or rate limiting.
- * Invariants: Only imports core, ports, shared - never contracts or adapters; pre-call credit check enforced; post-call billing never blocks response
+ * Invariants:
+ * - Only imports core, ports, shared - never contracts or adapters
+ * - Pre-call credit check enforced; post-call billing never blocks response
+ * - Records chargeReason='llm_usage', sourceSystem='litellm', sourceReference=litellmCallId for all completions
  * Side-effects: IO (via ports)
- * Notes: Logs warnings when cost is zero; post-call billing errors swallowed to preserve UX
- * Links: Called by API routes, uses core domain and ports
+ * Notes: Logs warnings when cost is zero; post-call billing errors swallowed to preserve UX; logs error if litellmCallId missing
+ * Links: Called by API routes, uses core domain and ports, types/billing.ts (categorization)
  * @public
  */
 
@@ -267,6 +270,16 @@ export async function execute(
     }
     // If no cost available or free model: chargedCredits stays 0n
 
+    // INVARIANT: Always record charge receipt for billed calls
+    // sourceReference: litellmCallId (happy path) or requestId (forensic fallback)
+    const sourceReference = result.litellmCallId ?? requestId;
+    if (!result.litellmCallId) {
+      log.error(
+        { requestId, modelId, isFree },
+        "BUG: LiteLLM response missing call ID - recording charge_receipt without joinable usage reference"
+      );
+    }
+
     await accountService.recordChargeReceipt({
       billingAccountId: caller.billingAccountId,
       virtualKeyId: caller.virtualKeyId,
@@ -275,6 +288,9 @@ export async function execute(
       responseCostUsd: userCostUsd,
       litellmCallId: result.litellmCallId ?? null,
       provenance: "response",
+      chargeReason: "llm_usage",
+      sourceSystem: "litellm",
+      sourceReference,
     });
   } catch (error) {
     // Post-call billing is best-effort - NEVER block user response
@@ -432,6 +448,16 @@ export async function executeStream({
         }
         // If no cost available or free model: chargedCredits stays 0n
 
+        // INVARIANT: Always record charge receipt for billed calls
+        // sourceReference: litellmCallId (happy path) or requestId (forensic fallback)
+        const sourceReference = result.litellmCallId ?? requestId;
+        if (!result.litellmCallId) {
+          log.error(
+            { requestId, modelId: model, isFree },
+            "BUG: LiteLLM response missing call ID - recording charge_receipt without joinable usage reference"
+          );
+        }
+
         await accountService.recordChargeReceipt({
           billingAccountId: caller.billingAccountId,
           virtualKeyId: caller.virtualKeyId,
@@ -440,6 +466,9 @@ export async function executeStream({
           responseCostUsd: userCostUsd,
           litellmCallId: result.litellmCallId ?? null,
           provenance: "stream",
+          chargeReason: "llm_usage",
+          sourceSystem: "litellm",
+          sourceReference,
         });
       } catch (error) {
         // Post-call billing is best-effort - NEVER block user response

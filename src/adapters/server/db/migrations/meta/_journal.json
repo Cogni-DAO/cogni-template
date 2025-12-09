@@ -8,6 +8,13 @@
       "when": 1765294733316,
       "tag": "0000_mighty_mauler",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1765303678313,
+      "tag": "0001_rich_mystique",
+      "breakpoints": true
     }
   ]
 }

@@ -10,7 +10,7 @@
  * - Fetches ALL logs in [from, to) via listUsageLogsByRange (range-complete, no silent truncation).
  * - Uses epoch-based bucketing (UTC, DST-safe) with server-derived step.
  * - Zero-fills buckets across entire range for continuous charts.
- * - Joins receipts by litellm_call_id, then buckets spend by log.timestamp (not receipt.createdAt).
+ * - Joins receipts by litellm_call_id (LEFT JOIN), then buckets spend by log.timestamp (not receipt.createdAt).
  * - Logs fetchedLogCount and unjoinedLogCount for observability.
  * Side-effects: IO (via usageService, accountService)
  * Links: [validateActivityRange](../../../features/ai/services/activity.ts), [ai.activity.v1.contract](../../../contracts/ai.activity.v1.contract.ts)
@@ -122,31 +122,30 @@ export async function getActivity(
   const allLogs = logsResult.logs;
   const fetchedLogCount = allLogs.length;
 
-  // Build join map: litellmCallId → { userCost, receiptCreatedAt }
-  // We'll bucket spend by log.timestamp (not receipt.createdAt) after joining
-  const receiptMap = new Map<
-    string,
-    { userCost: string; receiptCreatedAt: Date }
-  >();
+  // Build join map: litellmCallId → chargedCredits
+  // Activity is usage-driven; charge_receipts adds cost via LEFT JOIN on litellmCallId
+  const chargeMap = new Map<string, string>(); // litellmCallId → chargedCredits
   for (const receipt of receipts) {
-    if (receipt.litellmCallId && receipt.responseCostUsd) {
-      receiptMap.set(receipt.litellmCallId, {
-        userCost: receipt.responseCostUsd,
-        receiptCreatedAt: receipt.createdAt,
-      });
+    // Only join LiteLLM-based receipts to LiteLLM usage logs
+    if (
+      receipt.sourceSystem === "litellm" &&
+      receipt.litellmCallId &&
+      receipt.responseCostUsd
+    ) {
+      chargeMap.set(receipt.litellmCallId, receipt.chargedCredits);
     }
   }
 
   // Track unjoined logs for observability
   let unjoinedLogCount = 0;
   for (const log of allLogs) {
-    if (!receiptMap.has(log.id)) {
+    if (!chargeMap.has(log.id)) {
       unjoinedLogCount++;
     }
   }
 
   // Aggregate logs into epoch buckets for tokens/requests
-  // Also aggregate spend by log.timestamp (joined from receipts)
+  // Also aggregate spend by log.timestamp (joined from receipts by litellmCallId)
   const buckets = new Map<
     number,
     { tokens: number; requests: number; spend: number }
@@ -160,9 +159,11 @@ export async function getActivity(
       spend: 0,
     };
 
-    // Get spend from joined receipt (if exists)
-    const receipt = receiptMap.get(log.id);
-    const logSpend = receipt ? Number.parseFloat(receipt.userCost) : 0;
+    // Get spend from joined receipt by litellmCallId (if exists)
+    const chargedCreditsStr = chargeMap.get(log.id);
+    const logSpend = chargedCreditsStr
+      ? Number.parseFloat(chargedCreditsStr)
+      : 0;
 
     buckets.set(bucketEpoch, {
       tokens: existing.tokens + log.tokensIn + log.tokensOut,
@@ -188,9 +189,9 @@ export async function getActivity(
   let totalTokens = 0;
   for (const log of allLogs) {
     totalTokens += log.tokensIn + log.tokensOut;
-    const receipt = receiptMap.get(log.id);
-    if (receipt) {
-      totalUserSpend += Number.parseFloat(receipt.userCost);
+    const chargedCreditsStr = chargeMap.get(log.id);
+    if (chargedCreditsStr) {
+      totalUserSpend += Number.parseFloat(chargedCreditsStr);
     }
   }
   const totalRequests = allLogs.length;
@@ -231,8 +232,8 @@ export async function getActivity(
     app: (log.metadata?.app as string) || "Unknown",
     tokensIn: log.tokensIn,
     tokensOut: log.tokensOut,
-    // Display user cost in USD (with markup), not provider cost
-    cost: receiptMap.get(log.id)?.userCost ?? "—",
+    // Display user cost from charge_receipts (LEFT JOIN by litellmCallId)
+    cost: chargeMap.get(log.id) ?? "—",
     speed: (log.metadata?.speed as number) || 0,
     finish: (log.metadata?.finishReason as string) || "unknown",
   }));

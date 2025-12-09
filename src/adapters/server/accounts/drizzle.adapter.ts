@@ -5,10 +5,13 @@
  * Module: `@adapters/server/accounts/drizzle`
  * Purpose: DrizzleAccountService implementation for PostgreSQL billing account operations with charge receipt recording.
  * Scope: Implements AccountService port with ledger-based credit accounting and virtual key management. Does not compute pricing.
- * Invariants: Atomic ops; ledger source of truth; balance cached; UUID v4 validated; request_id is idempotency key
+ * Invariants:
+ * - Atomic ops; ledger source of truth; balance cached; UUID v4 validated; request_id is idempotency key
+ * - Persists chargeReason, sourceService, metadata to charge_receipts (required fields)
+ * - listChargeReceipts returns sourceService for Activity UI join
  * Side-effects: IO (database operations)
  * Notes: Uses transactions for consistency; recordChargeReceipt is non-blocking (never throws InsufficientCredits per ACTIVITY_METRICS.md)
- * Links: Implements AccountService port, uses shared database schema, docs/ACTIVITY_METRICS.md
+ * Links: Implements AccountService port, uses shared database schema, docs/ACTIVITY_METRICS.md, types/billing.ts
  * @public
  */
 
@@ -32,10 +35,10 @@ import {
   creditLedger,
   virtualKeys,
 } from "@/shared/db";
-
 import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
 import { isValidUuid } from "@/shared/util";
+import type { SourceSystem } from "@/types/billing";
 
 const logger = makeLogger({ component: "DrizzleAccountService" });
 
@@ -211,6 +214,9 @@ export class DrizzleAccountService implements AccountService {
         chargedCredits: params.chargedCredits,
         responseCostUsd: params.responseCostUsd?.toString() ?? null,
         provenance: params.provenance,
+        chargeReason: params.chargeReason,
+        sourceSystem: params.sourceSystem,
+        sourceReference: params.sourceReference,
       });
 
       // Debit credits atomically (negative amount)
@@ -525,6 +531,7 @@ export class DrizzleAccountService implements AccountService {
       litellmCallId: string | null;
       chargedCredits: string;
       responseCostUsd: string | null;
+      sourceSystem: SourceSystem;
       createdAt: Date;
     }>
   > {
@@ -535,6 +542,7 @@ export class DrizzleAccountService implements AccountService {
         litellmCallId: chargeReceipts.litellmCallId,
         chargedCredits: chargeReceipts.chargedCredits,
         responseCostUsd: chargeReceipts.responseCostUsd,
+        sourceSystem: chargeReceipts.sourceSystem,
         createdAt: chargeReceipts.createdAt,
       })
       .from(chargeReceipts)
@@ -552,6 +560,7 @@ export class DrizzleAccountService implements AccountService {
       litellmCallId: r.litellmCallId,
       chargedCredits: String(r.chargedCredits),
       responseCostUsd: r.responseCostUsd ? String(r.responseCostUsd) : null,
+      sourceSystem: r.sourceSystem as SourceSystem,
       createdAt: r.createdAt,
     }));
   }
