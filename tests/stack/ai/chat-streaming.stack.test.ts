@@ -209,7 +209,7 @@ describe("Chat Streaming", () => {
       if (e.event === "message.completed" || e.event === "done") break;
     }
 
-    // Assert - Check database for LLM usage record with non-empty model
+    // Assert - Check database for charge receipt
     // First get the billing account
     const billingAccount = await db.query.billingAccounts.findFirst({
       where: eq(billingAccounts.ownerUserId, user.id),
