@@ -187,7 +187,7 @@ describe("Activity Feature Invariants", () => {
   });
 
   describe("inv_time_semantics_enforced (range limits)", () => {
-    it("Daily grouping with > 90 days throws error", async () => {
+    it("Range > 90 days throws error (overall max)", async () => {
       const usageService = createMockUsageService();
       const service = new ActivityService(usageService);
 
@@ -199,16 +199,14 @@ describe("Activity Feature Invariants", () => {
           billingAccountId: "test-account",
           from,
           to,
-          groupBy: "day",
         })
       ).rejects.toThrow(InvalidRangeError);
     });
 
-    it("Daily grouping with exactly 90 days passes", async () => {
+    it("Range exactly 90 days passes (server derives 1d step)", async () => {
       const usageService = createMockUsageService();
       const service = new ActivityService(usageService);
 
-      // 90 days exactly should pass
       const from90 = new Date("2024-01-01T00:00:00Z");
       const to90 = new Date("2024-03-31T00:00:00Z"); // 90 days
 
@@ -216,61 +214,63 @@ describe("Activity Feature Invariants", () => {
         billingAccountId: "test-account",
         from: from90,
         to: to90,
-        groupBy: "day",
       });
 
       expect(result).toBeDefined();
+      expect(result.effectiveStep).toBe("1d");
     });
 
-    it("Hourly grouping with > 7 days throws error", async () => {
+    it("1h step with > 10 days throws error (maxPoints constraint)", async () => {
       const usageService = createMockUsageService();
       const service = new ActivityService(usageService);
 
       const from = new Date("2024-01-01T00:00:00Z");
-      const to = new Date("2024-01-10T00:00:00Z"); // 9 days
+      const to = new Date("2024-01-15T00:00:00Z"); // 14 days
 
       await expect(
         service.getActivitySummary({
           billingAccountId: "test-account",
           from,
           to,
-          groupBy: "hour",
+          step: "1h",
         })
       ).rejects.toThrow(InvalidRangeError);
     });
 
-    it("Hourly grouping with exactly 7 days passes", async () => {
+    it("1h step with exactly 10 days passes", async () => {
       const usageService = createMockUsageService();
       const service = new ActivityService(usageService);
 
       const from = new Date("2024-01-01T00:00:00Z");
-      const to = new Date("2024-01-08T00:00:00Z"); // exactly 7 days
+      const to = new Date("2024-01-11T00:00:00Z"); // exactly 10 days
 
       const result = await service.getActivitySummary({
         billingAccountId: "test-account",
         from,
         to,
-        groupBy: "hour",
+        step: "1h",
       });
 
       expect(result).toBeDefined();
+      expect(result.effectiveStep).toBe("1h");
     });
 
-    it("Hourly grouping with 6 days passes", async () => {
+    it("Server derives appropriate step for 7-day range (6h or 1h)", async () => {
       const usageService = createMockUsageService();
       const service = new ActivityService(usageService);
 
       const from = new Date("2024-01-01T00:00:00Z");
-      const to = new Date("2024-01-07T00:00:00Z"); // 6 days
+      const to = new Date("2024-01-08T00:00:00Z"); // 7 days
 
       const result = await service.getActivitySummary({
         billingAccountId: "test-account",
         from,
         to,
-        groupBy: "hour",
       });
 
       expect(result).toBeDefined();
+      // 7 days = 168 hours, at 1h step = 168 buckets (< 240), should use 1h
+      expect(result.effectiveStep).toBe("1h");
     });
 
     it("Negative range (from > to) throws InvalidRangeError", async () => {
@@ -285,7 +285,6 @@ describe("Activity Feature Invariants", () => {
           billingAccountId: "test-account",
           from,
           to,
-          groupBy: "day",
         })
       ).rejects.toThrow(InvalidRangeError);
     });
@@ -341,7 +340,6 @@ describe("Activity Feature Invariants", () => {
           billingAccountId: "test-account",
           from: new Date("2024-01-01"),
           to: new Date("2024-01-02"),
-          groupBy: "day",
         })
       ).rejects.toThrow(ActivityUsageUnavailableError);
     });
@@ -375,7 +373,6 @@ describe("Activity Feature Invariants", () => {
         billingAccountId: "server-derived-acc-123",
         from: new Date("2024-01-01"),
         to: new Date("2024-01-02"),
-        groupBy: "day",
       });
 
       expect(usageService.getUsageStats).toHaveBeenCalledWith(

@@ -30,7 +30,6 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/vendor/shadcn/chart";
-
 export interface ActivityChartProps {
   title: string;
   description: string;
@@ -40,6 +39,8 @@ export interface ActivityChartProps {
   }[];
   config: ChartConfig;
   color?: string;
+  /** Bucket granularity: "5m" | "15m" | "1h" | "6h" | "1d" */
+  effectiveStep?: string;
 }
 
 export function ActivityChart({
@@ -48,7 +49,44 @@ export function ActivityChart({
   data,
   config,
   color = "hsl(var(--chart-1))",
+  effectiveStep,
 }: ActivityChartProps) {
+  // Format ticks based on granularity: show time for sub-day steps
+  const formatTick = (value: string) => {
+    const date = new Date(value);
+    // If step is sub-day (5m, 15m, 1h, 6h), show time
+    if (effectiveStep && effectiveStep !== "1d") {
+      return date.toLocaleTimeString("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+    }
+    // Otherwise show date
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  // Tooltip shows full date + time for sub-day, date only for daily
+  const formatTooltipLabel = (value: string) => {
+    const date = new Date(value);
+    if (effectiveStep && effectiveStep !== "1d") {
+      return date.toLocaleString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+    }
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+  };
+
   return (
     <Card>
       <CardHeader className="flex items-center gap-2 space-y-0 border-b py-5 sm:flex-row">
@@ -79,24 +117,13 @@ export function ActivityChart({
               axisLine={false}
               tickMargin={8}
               minTickGap={32}
-              tickFormatter={(value) => {
-                const date = new Date(value);
-                return date.toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                });
-              }}
+              tickFormatter={formatTick}
             />
             <ChartTooltip
               cursor={false}
               content={
                 <ChartTooltipContent
-                  labelFormatter={(value: string) => {
-                    return new Date(value).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    });
-                  }}
+                  labelFormatter={formatTooltipLabel}
                   indicator="dot"
                 />
               }

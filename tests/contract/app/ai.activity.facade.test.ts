@@ -54,6 +54,19 @@ vi.mock("@/bootstrap/container", () => ({
           id: "log-1",
         },
       }),
+      listUsageLogsByRange: vi.fn().mockResolvedValue({
+        logs: [
+          {
+            id: "log-1",
+            timestamp: new Date("2024-01-01T12:00:00Z"),
+            model: "gpt-4",
+            tokensIn: 10,
+            tokensOut: 20,
+            cost: "0.05",
+            metadata: { app: "test-app", speed: 100, finishReason: "stop" },
+          },
+        ],
+      }),
     },
     accountService: {
       getOrCreateBillingAccountForUser: vi.fn().mockResolvedValue({
@@ -89,7 +102,6 @@ describe("Activity Facade", () => {
     const input = {
       from: "2024-01-01T00:00:00Z",
       to: "2024-01-02T00:00:00Z",
-      groupBy: "day" as const,
       limit: 10,
       sessionUser,
     };
@@ -103,7 +115,11 @@ describe("Activity Facade", () => {
       console.error(parsed.error);
     }
 
-    expect(result.chartSeries).toHaveLength(1);
+    // Server derives optimal step for 1-day range (24 hours)
+    // At 15m step: 24h / 15m = 96 buckets (fits in ~240 max)
+    expect(result.effectiveStep).toBe("15m");
+    expect(result.chartSeries).toHaveLength(96); // Zero-filled buckets
+
     // Spend is now computed from charge receipts, not usageService.getUsageStats
     // Mock receipt has responseCostUsd: "0.05" → total = 0.050000
     expect(result.totals.spend.total).toBe("0.050000");

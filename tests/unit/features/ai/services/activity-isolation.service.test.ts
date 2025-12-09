@@ -64,7 +64,6 @@ describe("ActivityService Isolation (P1)", () => {
         billingAccountId: "user-a-billing",
         from: new Date("2024-06-15T00:00:00Z"),
         to: new Date("2024-06-16T00:00:00Z"),
-        groupBy: "day",
       });
 
       // Verify UsageService was called with User A's billingAccountId
@@ -134,7 +133,6 @@ describe("ActivityService Isolation (P1)", () => {
         billingAccountId: "user-b-billing",
         from: new Date("2024-06-15T00:00:00Z"),
         to: new Date("2024-06-16T00:00:00Z"),
-        groupBy: "day",
       });
 
       // Verify UsageService was called with User B's billingAccountId

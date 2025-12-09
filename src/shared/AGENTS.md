@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-01
+- **Last reviewed:** 2025-12-09
 - **Status:** stable
 
 ## Purpose
@@ -41,9 +41,11 @@ Low-level building blocks used across the repo. Primitives, DTO mappers, pure ut
   - Environment validation (`serverEnv`, `clientEnv`)
   - Database schemas (auth, billing)
   - Utilities (cn, uuid, accountId)
+  - Time utilities (TimeRange presets, deriveTimeRange)
   - Constants (payments, web3)
   - Observability (Logger, RequestContext, log helpers, event schemas)
   - AI model catalog (cache)
+  - Shared errors (`TooManyLogsError`, `MAX_LOGS_PER_RANGE`)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** `PINO_LOG_LEVEL`, `DATABASE_URL`, `LITELLM_*`, `APP_ENV`, `NODE_ENV`

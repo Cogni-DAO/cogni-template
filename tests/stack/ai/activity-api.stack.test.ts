@@ -78,7 +78,7 @@ describe("Activity API Stack Tests", () => {
       vi.mocked(getServerSessionUser).mockResolvedValue(null);
 
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z&groupBy=day"
+        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z"
       );
 
       const response = await GET(request);
@@ -100,7 +100,7 @@ describe("Activity API Stack Tests", () => {
       vi.mocked(getServerSessionUser).mockResolvedValue(mockUser);
 
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z&groupBy=day"
+        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z"
       );
 
       const response = await GET(request);
@@ -108,6 +108,7 @@ describe("Activity API Stack Tests", () => {
       expect(response.status).toBe(200);
 
       const json = await response.json();
+      expect(json).toHaveProperty("effectiveStep");
       expect(json).toHaveProperty("chartSeries");
       expect(json).toHaveProperty("totals");
       expect(json).toHaveProperty("rows");
@@ -126,7 +127,7 @@ describe("Activity API Stack Tests", () => {
     it("Returns 400 for missing required params", async () => {
       const request = new NextRequest(
         "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z"
-        // Missing 'to' and 'groupBy'
+        // Missing 'to' (step is optional)
       );
 
       const response = await GET(request);
@@ -139,7 +140,7 @@ describe("Activity API Stack Tests", () => {
 
     it("Returns 400 for invalid datetime format", async () => {
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=not-a-date&to=2024-01-02T00:00:00Z&groupBy=day"
+        "http://localhost:3000/api/v1/activity?from=not-a-date&to=2024-01-02T00:00:00Z"
       );
 
       const response = await GET(request);
@@ -150,9 +151,9 @@ describe("Activity API Stack Tests", () => {
       expect(json).toHaveProperty("error", "Invalid input");
     });
 
-    it("Returns 400 for invalid groupBy value", async () => {
+    it("Returns 400 for invalid step value", async () => {
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z&groupBy=week"
+        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z&step=invalid"
       );
 
       const response = await GET(request);
@@ -175,7 +176,7 @@ describe("Activity API Stack Tests", () => {
 
     it("Returns 400 for limit > 100", async () => {
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z&groupBy=day&limit=200"
+        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z&limit=200"
       );
 
       const response = await GET(request);
@@ -188,7 +189,7 @@ describe("Activity API Stack Tests", () => {
 
     it("Returns 400 for limit = 0", async () => {
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z&groupBy=day&limit=0"
+        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z&limit=0"
       );
 
       const response = await GET(request);
@@ -201,7 +202,7 @@ describe("Activity API Stack Tests", () => {
 
     it("Returns 400 for negative limit", async () => {
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z&groupBy=day&limit=-5"
+        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z&limit=-5"
       );
 
       const response = await GET(request);
@@ -214,7 +215,7 @@ describe("Activity API Stack Tests", () => {
 
     it("Accepts valid limit = 100", async () => {
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z&groupBy=day&limit=100"
+        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z&limit=100"
       );
 
       const response = await GET(request);
@@ -224,7 +225,7 @@ describe("Activity API Stack Tests", () => {
 
     it("Uses default limit when not provided", async () => {
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z&groupBy=day"
+        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z"
       );
 
       const response = await GET(request);
@@ -249,7 +250,7 @@ describe("Activity API Stack Tests", () => {
     it("CRITICAL: from >= to returns 400 (not 500)", async () => {
       // Reversed range (from after to)
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=2024-01-15T00:00:00Z&to=2024-01-10T00:00:00Z&groupBy=day"
+        "http://localhost:3000/api/v1/activity?from=2024-01-15T00:00:00Z&to=2024-01-10T00:00:00Z"
       );
 
       const response = await GET(request);
@@ -269,7 +270,7 @@ describe("Activity API Stack Tests", () => {
 
     it("CRITICAL: from === to returns 400 (not 500)", async () => {
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=2024-01-15T00:00:00Z&to=2024-01-15T00:00:00Z&groupBy=day"
+        "http://localhost:3000/api/v1/activity?from=2024-01-15T00:00:00Z&to=2024-01-15T00:00:00Z"
       );
 
       const response = await GET(request);
@@ -281,10 +282,10 @@ describe("Activity API Stack Tests", () => {
       expect(json).toHaveProperty("error");
     });
 
-    it("CRITICAL: groupBy=hour with >7 days returns 400 (not 500)", async () => {
-      // 30 days with hourly grouping (exceeds max)
+    it("CRITICAL: step=1h with >10 days returns 400 (not 500)", async () => {
+      // 14 days with 1h step (exceeds 10-day max for 1h)
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-31T00:00:00Z&groupBy=hour"
+        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-15T00:00:00Z&step=1h"
       );
 
       const response = await GET(request);
@@ -294,16 +295,16 @@ describe("Activity API Stack Tests", () => {
 
       const json = await response.json();
       expect(json).toHaveProperty("error");
-      expect(json.error).toMatch(/range|hour|day/i);
+      expect(json.error).toMatch(/range|10|day|1h|step/i);
 
       // Should not leak data
       expect(json).not.toHaveProperty("chartSeries");
     });
 
-    it("CRITICAL: groupBy=day with >90 days returns 400 (not 500)", async () => {
-      // 120 days with daily grouping (exceeds max)
+    it("CRITICAL: range >90 days returns 400 (not 500)", async () => {
+      // 120 days (exceeds overall 90-day max)
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-05-01T00:00:00Z&groupBy=day"
+        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-05-01T00:00:00Z"
       );
 
       const response = await GET(request);
@@ -319,9 +320,9 @@ describe("Activity API Stack Tests", () => {
       expect(json).not.toHaveProperty("chartSeries");
     });
 
-    it("groupBy=hour with exactly 7 days passes", async () => {
+    it("step=1h with exactly 10 days passes", async () => {
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-08T00:00:00Z&groupBy=hour"
+        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-11T00:00:00Z&step=1h"
       );
 
       const response = await GET(request);
@@ -330,22 +331,25 @@ describe("Activity API Stack Tests", () => {
       expect(response.status).toBe(200);
     });
 
-    it("groupBy=day with exactly 90 days passes", async () => {
+    it("Range exactly 90 days passes (server derives step=1d)", async () => {
       // Jan 1 to Mar 31 is exactly 90 days
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-03-31T00:00:00Z&groupBy=day"
+        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-03-31T00:00:00Z"
       );
 
       const response = await GET(request);
 
-      // Should succeed
+      // Should succeed with server-derived step
       expect(response.status).toBe(200);
+
+      const json = await response.json();
+      expect(json.effectiveStep).toBe("1d");
     });
 
     it("Error response has consistent shape across validation failures", async () => {
       const testCases = [
-        "?from=2024-01-15T00:00:00Z&to=2024-01-10T00:00:00Z&groupBy=day", // reversed
-        "?from=2024-01-01T00:00:00Z&to=2024-01-31T00:00:00Z&groupBy=hour", // too long
+        "?from=2024-01-15T00:00:00Z&to=2024-01-10T00:00:00Z", // reversed
+        "?from=2024-01-01T00:00:00Z&to=2024-01-15T00:00:00Z&step=1h", // too long for step
       ];
 
       for (const query of testCases) {
@@ -377,7 +381,7 @@ describe("Activity API Stack Tests", () => {
 
     it("Response matches contract shape", async () => {
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z&groupBy=day"
+        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-02T00:00:00Z"
       );
 
       const response = await GET(request);
@@ -386,10 +390,14 @@ describe("Activity API Stack Tests", () => {
       const json = await response.json();
 
       // Required fields
+      expect(json).toHaveProperty("effectiveStep");
       expect(json).toHaveProperty("chartSeries");
       expect(json).toHaveProperty("totals");
       expect(json).toHaveProperty("rows");
       expect(json).toHaveProperty("nextCursor");
+
+      // effectiveStep is valid enum value
+      expect(["5m", "15m", "1h", "6h", "1d"]).toContain(json.effectiveStep);
 
       // Totals shape
       expect(json.totals).toHaveProperty("spend");
@@ -413,7 +421,7 @@ describe("Activity API Stack Tests", () => {
 
     it("chartSeries buckets have correct shape", async () => {
       const request = new NextRequest(
-        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-03T00:00:00Z&groupBy=day"
+        "http://localhost:3000/api/v1/activity?from=2024-01-01T00:00:00Z&to=2024-01-03T00:00:00Z"
       );
 
       const response = await GET(request);

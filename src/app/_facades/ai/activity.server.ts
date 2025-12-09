@@ -3,11 +3,17 @@
 
 /**
  * Module: `@app/_facades/ai/activity.server`
- * Purpose: App-layer facade for Activity dashboard.
- * Scope: Resolves session user to billing account, delegates to Activity feature. Does not handle HTTP transport.
- * Invariants: Only app layer imports this; validates billing account.
- * Side-effects: IO
- * Links: [ActivityService](../../../features/ai/services/activity.ts)
+ * Purpose: App-layer facade for Activity dashboard with granular time bucketing.
+ * Scope: Resolves session user to billing account, fetches range-complete logs, aggregates into buckets. Does not handle HTTP transport.
+ * Invariants:
+ * - Only app layer imports this; validates billing account.
+ * - Fetches ALL logs in [from, to) via listUsageLogsByRange (range-complete, no silent truncation).
+ * - Uses epoch-based bucketing (UTC, DST-safe) with server-derived step.
+ * - Zero-fills buckets across entire range for continuous charts.
+ * - Joins receipts by litellm_call_id, then buckets spend by log.timestamp (not receipt.createdAt).
+ * - Logs fetchedLogCount and unjoinedLogCount for observability.
+ * Side-effects: IO (via usageService, accountService)
+ * Links: [validateActivityRange](../../../features/ai/services/activity.ts), [ai.activity.v1.contract](../../../contracts/ai.activity.v1.contract.ts)
  * @public
  */
 
@@ -15,11 +21,11 @@ import { randomUUID } from "node:crypto";
 import type { z } from "zod";
 
 import { resolveActivityDeps } from "@/bootstrap/container";
-import type { aiActivityOperation } from "@/contracts/ai.activity.v1.contract";
 import {
-  ActivityService,
-  validateActivityRange,
-} from "@/features/ai/services/activity";
+  type aiActivityOperation,
+  STEP_MS,
+} from "@/contracts/ai.activity.v1.contract";
+import { validateActivityRange } from "@/features/ai/services/activity";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { SessionUser } from "@/shared/auth";
 import {
@@ -30,7 +36,12 @@ import {
 
 const logger = makeLogger({ component: "ActivityFacade" });
 
-type ActivityInput = z.infer<typeof aiActivityOperation.input> & {
+type ActivityInput = {
+  from: string;
+  to: string;
+  step?: z.infer<typeof aiActivityOperation.input>["step"];
+  cursor?: string;
+  limit?: number;
   sessionUser: SessionUser;
   /** Optional correlation ID - generated if not provided */
   reqId?: string;
@@ -38,13 +49,37 @@ type ActivityInput = z.infer<typeof aiActivityOperation.input> & {
 
 type ActivityOutput = z.infer<typeof aiActivityOperation.output>;
 
+/**
+ * Compute epoch bucket key for a timestamp.
+ * Aligns to UTC boundaries (DST-safe).
+ */
+function toBucketEpoch(timestamp: Date, stepMs: number): number {
+  return Math.floor(timestamp.getTime() / stepMs) * stepMs;
+}
+
+/**
+ * Generate all bucket epochs in [from, to) range.
+ * Returns sorted array of epoch timestamps.
+ * Note: Range is [from, to) - inclusive start, exclusive end.
+ */
+function generateBucketRange(from: Date, to: Date, stepMs: number): number[] {
+  const buckets: number[] = [];
+  const startBucket = toBucketEpoch(from, stepMs);
+  const endBucket = toBucketEpoch(to, stepMs);
+
+  // Use < not <= since range is [from, to) - exclude end bucket
+  for (let epoch = startBucket; epoch < endBucket; epoch += stepMs) {
+    buckets.push(epoch);
+  }
+  return buckets;
+}
+
 export async function getActivity(
   input: ActivityInput
 ): Promise<ActivityOutput> {
   const startTime = performance.now();
   const effectiveReqId = input.reqId ?? randomUUID();
   const { usageService, accountService } = resolveActivityDeps();
-  const activityService = new ActivityService(usageService);
 
   const billingAccount = await getOrCreateBillingAccountForUser(
     accountService,
@@ -56,86 +91,110 @@ export async function getActivity(
     }
   );
 
-  // Parse dates once and validate range
+  // Parse dates once and validate range (derives step if not provided)
   const from = new Date(input.from);
   const to = new Date(input.to);
-  const { diffDays } = validateActivityRange({
+  const { effectiveStep, diffDays } = validateActivityRange({
     from,
     to,
-    groupBy: input.groupBy,
+    step: input.step,
   });
 
-  // Fetch raw logs (LiteLLM telemetry) + receipts (our billing)
-  const [logs, receipts] = await Promise.all([
-    activityService.getRecentActivity({
+  const stepMs = STEP_MS[effectiveStep];
+
+  // Fetch ALL logs in range for charts/totals (range-complete, no silent truncation)
+  // Also fetch receipts for spend join
+  const [logsResult, receipts] = await Promise.all([
+    usageService.listUsageLogsByRange({
       billingAccountId: billingAccount.id,
-      limit: input.limit ?? 100,
-      ...(input.cursor ? { cursor: input.cursor } : {}),
+      from,
+      to,
     }),
     accountService.listChargeReceipts({
       billingAccountId: billingAccount.id,
       from,
       to,
-      limit: input.limit ?? 100,
+      limit: 10000, // High limit for receipts (should match logs)
     }),
   ]);
 
-  // Build join map: litellmCallId → user cost (USD with markup)
-  const userCostMap = new Map<string, string>();
+  // All logs in range (already filtered by adapter)
+  const allLogs = logsResult.logs;
+  const fetchedLogCount = allLogs.length;
+
+  // Build join map: litellmCallId → { userCost, receiptCreatedAt }
+  // We'll bucket spend by log.timestamp (not receipt.createdAt) after joining
+  const receiptMap = new Map<
+    string,
+    { userCost: string; receiptCreatedAt: Date }
+  >();
   for (const receipt of receipts) {
     if (receipt.litellmCallId && receipt.responseCostUsd) {
-      userCostMap.set(receipt.litellmCallId, receipt.responseCostUsd);
+      receiptMap.set(receipt.litellmCallId, {
+        userCost: receipt.responseCostUsd,
+        receiptCreatedAt: receipt.createdAt,
+      });
     }
   }
 
-  // Aggregate logs into daily buckets for tokens/requests (LiteLLM telemetry)
-  const logBuckets = new Map<string, { tokens: number; requests: number }>();
-  for (const log of logs.logs) {
-    const dateKey = log.timestamp.toISOString().slice(0, 10); // YYYY-MM-DD
-    const existing = logBuckets.get(dateKey) ?? { tokens: 0, requests: 0 };
-    logBuckets.set(dateKey, {
+  // Track unjoined logs for observability
+  let unjoinedLogCount = 0;
+  for (const log of allLogs) {
+    if (!receiptMap.has(log.id)) {
+      unjoinedLogCount++;
+    }
+  }
+
+  // Aggregate logs into epoch buckets for tokens/requests
+  // Also aggregate spend by log.timestamp (joined from receipts)
+  const buckets = new Map<
+    number,
+    { tokens: number; requests: number; spend: number }
+  >();
+
+  for (const log of allLogs) {
+    const bucketEpoch = toBucketEpoch(log.timestamp, stepMs);
+    const existing = buckets.get(bucketEpoch) ?? {
+      tokens: 0,
+      requests: 0,
+      spend: 0,
+    };
+
+    // Get spend from joined receipt (if exists)
+    const receipt = receiptMap.get(log.id);
+    const logSpend = receipt ? Number.parseFloat(receipt.userCost) : 0;
+
+    buckets.set(bucketEpoch, {
       tokens: existing.tokens + log.tokensIn + log.tokensOut,
       requests: existing.requests + 1,
+      spend: existing.spend + logSpend,
     });
   }
 
-  // Aggregate receipts into daily buckets for spend (our billing)
-  const spendBuckets = new Map<string, number>();
-  for (const receipt of receipts) {
-    const dateKey = receipt.createdAt.toISOString().slice(0, 10);
-    const existing = spendBuckets.get(dateKey) ?? 0;
-    const cost = receipt.responseCostUsd
-      ? Number.parseFloat(receipt.responseCostUsd)
-      : 0;
-    spendBuckets.set(dateKey, existing + cost);
+  // Zero-fill: generate all buckets in range
+  const allBucketEpochs = generateBucketRange(from, to, stepMs);
+  const chartSeries = allBucketEpochs.map((epoch) => {
+    const bucket = buckets.get(epoch) ?? { tokens: 0, requests: 0, spend: 0 };
+    return {
+      bucketStart: new Date(epoch).toISOString(),
+      spend: bucket.spend.toFixed(6),
+      tokens: bucket.tokens,
+      requests: bucket.requests,
+    };
+  });
+
+  // Calculate totals from all logs in range
+  let totalUserSpend = 0;
+  let totalTokens = 0;
+  for (const log of allLogs) {
+    totalTokens += log.tokensIn + log.tokensOut;
+    const receipt = receiptMap.get(log.id);
+    if (receipt) {
+      totalUserSpend += Number.parseFloat(receipt.userCost);
+    }
   }
+  const totalRequests = allLogs.length;
 
-  // Merge buckets into chart series
-  const allDates = new Set([...logBuckets.keys(), ...spendBuckets.keys()]);
-  const chartSeries = Array.from(allDates)
-    .sort()
-    .map((date) => ({
-      bucketStart: new Date(date).toISOString(),
-      spend: (spendBuckets.get(date) ?? 0).toFixed(6),
-      tokens: logBuckets.get(date)?.tokens ?? 0,
-      requests: logBuckets.get(date)?.requests ?? 0,
-    }));
-
-  // Calculate totals
-  const totalUserSpend = receipts.reduce((sum, receipt) => {
-    return (
-      sum +
-      (receipt.responseCostUsd ? Number.parseFloat(receipt.responseCostUsd) : 0)
-    );
-  }, 0);
-
-  const totalTokens = logs.logs.reduce(
-    (sum, log) => sum + log.tokensIn + log.tokensOut,
-    0
-  );
-  const totalRequests = logs.logs.length;
-
-  // Use diffDays from validation (already calculated above)
   const avgDays = Math.max(1, diffDays);
 
   const totals = {
@@ -156,7 +215,15 @@ export async function getActivity(
     },
   };
 
-  const rows = logs.logs.map((log) => ({
+  // Build rows with user cost from joined receipts
+  // Sort by timestamp descending (most recent first) and apply pagination
+  const sortedLogs = [...allLogs].sort(
+    (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+  );
+  const pageSize = input.limit ?? 20;
+  const paginatedLogs = sortedLogs.slice(0, pageSize);
+
+  const rows = paginatedLogs.map((log) => ({
     id: log.id,
     timestamp: log.timestamp.toISOString(),
     provider: "litellm",
@@ -165,37 +232,44 @@ export async function getActivity(
     tokensIn: log.tokensIn,
     tokensOut: log.tokensOut,
     // Display user cost in USD (with markup), not provider cost
-    cost: userCostMap.get(log.id) ?? "—",
+    cost: receiptMap.get(log.id)?.userCost ?? "—",
     speed: (log.metadata?.speed as number) || 0,
     finish: (log.metadata?.finishReason as string) || "unknown",
   }));
 
+  // Generate nextCursor if there are more rows
   let nextCursor: string | null = null;
-  if (logs.nextCursor) {
-    const json = JSON.stringify({
-      createdAt: logs.nextCursor.createdAt.toISOString(),
-      id: logs.nextCursor.id,
-    });
-    nextCursor = Buffer.from(json).toString("base64");
+  if (sortedLogs.length > pageSize) {
+    const lastRow = paginatedLogs.at(-1);
+    if (lastRow) {
+      const json = JSON.stringify({
+        createdAt: lastRow.timestamp.toISOString(),
+        id: lastRow.id,
+      });
+      nextCursor = Buffer.from(json).toString("base64");
+    }
   }
 
   const result: ActivityOutput = {
+    effectiveStep,
     chartSeries,
     totals,
     rows,
     nextCursor,
   };
 
-  // Log completion event
+  // Log completion event with observability metrics
   const logEvent: AiActivityQueryCompletedEvent = {
     event: EVENT_NAMES.AI_ACTIVITY_QUERY_COMPLETED,
     reqId: effectiveReqId,
     routeId: "ai.activity.v1",
     scope: "user",
     billingAccountId: billingAccount.id,
-    groupBy: input.groupBy,
+    effectiveStep,
     durationMs: performance.now() - startTime,
     resultCount: rows.length,
+    fetchedLogCount,
+    unjoinedLogCount,
     status: "success",
   };
   logger.info(logEvent, EVENT_NAMES.AI_ACTIVITY_QUERY_COMPLETED);

@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-08
+- **Last reviewed:** 2025-12-09
 - **Status:** stable
 
 ## Purpose
@@ -64,8 +64,10 @@ pnpm test tests/integration/ai/
 - Handles provider-specific response formatting
 - Streaming malformed SSE chunks logged as warnings without failing stream
 - Promise settlement guaranteed exactly once via defer helper
-- Usage logs: bounded pagination (MAX_PAGES=10, limit≤100), pass-through data from LiteLLM (no local recomputation)
+- Usage logs: bounded scan up to MAX_RANGE_LIMIT (5000), pass-through data from LiteLLM (no local recomputation)
 - Usage adapter throws ActivityUsageUnavailableError on LiteLLM failures (never silent degradation)
+- getSpendLogs avoids date params (cause aggregation), fetches individual logs, filters in-memory by timestamp
+- Bounded scan validation: throws TooManyLogsError (422) if range incomplete after MAX_LOGS_PER_RANGE fetch
 
 ## Dependencies
 

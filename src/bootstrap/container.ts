@@ -39,6 +39,8 @@ import type {
   MetricsQueryPort,
   OnChainVerifier,
   PaymentAttemptRepository,
+  UsageLogEntry,
+  UsageLogsByRangeParams,
   UsageService,
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
@@ -73,7 +75,18 @@ export type AiCompletionDeps = Pick<
   "llmService" | "accountService" | "clock"
 >;
 
-export type ActivityDeps = Pick<Container, "usageService" | "accountService">;
+/**
+ * Activity dashboard dependencies.
+ * Note: usageService requires listUsageLogsByRange (only on LiteLlmUsageServiceAdapter, not general UsageService).
+ */
+export type ActivityDeps = {
+  usageService: UsageService & {
+    listUsageLogsByRange(
+      params: UsageLogsByRangeParams
+    ): Promise<{ logs: UsageLogEntry[] }>;
+  };
+  accountService: AccountService;
+};
 
 // Module-level singleton
 let _container: Container | null = null;
@@ -196,7 +209,7 @@ export function resolveAiDeps(): AiCompletionDeps {
 export function resolveActivityDeps(): ActivityDeps {
   const container = getContainer();
   return {
-    usageService: container.usageService,
+    usageService: container.usageService as ActivityDeps["usageService"],
     accountService: container.accountService,
   };
 }

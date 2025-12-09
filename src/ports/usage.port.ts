@@ -49,6 +49,13 @@ export interface UsageLogsParams {
   };
 }
 
+export interface UsageLogsByRangeParams {
+  billingAccountId: string;
+  from: Date;
+  to: Date;
+  limit?: number; // Optional limit (default adapter-specific)
+}
+
 export interface UsageLogEntry {
   id: string;
   timestamp: Date;
