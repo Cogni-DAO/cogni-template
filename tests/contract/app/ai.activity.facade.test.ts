@@ -63,7 +63,11 @@ vi.mock("@/bootstrap/container", () => ({
             tokensIn: 10,
             tokensOut: 20,
             cost: "0.05",
-            metadata: { app: "test-app", speed: 100, finishReason: "stop" },
+            metadata: {
+              app: "test-app",
+              speed: 100,
+              finishReason: "stop",
+            },
           },
         ],
       }),
@@ -72,14 +76,14 @@ vi.mock("@/bootstrap/container", () => ({
       getOrCreateBillingAccountForUser: vi.fn().mockResolvedValue({
         id: "billing-1",
       }),
-      // New: facade now joins LiteLLM logs with local charge receipts
+      // Facade joins LiteLLM usage logs with charge receipts via litellmCallId
       listChargeReceipts: vi.fn().mockResolvedValue([
         {
-          requestId: "req-1",
           litellmCallId: "log-1", // Joins with logs[0].id
-          chargedCredits: 500000n,
-          responseCostUsd: "0.05", // User cost with markup
-          createdAt: new Date("2024-01-01T12:00:00Z"), // Required for bucket aggregation
+          chargedCredits: "0.050000", // In USD (converted from credits for display)
+          responseCostUsd: "0.05",
+          sourceSystem: "litellm",
+          createdAt: new Date("2024-01-01T12:00:00Z"),
         },
       ]),
     },

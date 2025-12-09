@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/stack/ai/billing-e2e.stack.test`
  * Purpose: Stack test verifying billing flow from completion to ledger using fake LLM adapter.
- * Scope: Tests completion route, llm_usage insertion, credit_ledger debit, summary endpoint. Does not test LiteLLM integration.
+ * Scope: Tests completion route, charge_receipts insertion, credit_ledger debit, summary endpoint. Does not test LiteLLM integration.
  * Invariants: Uses APP_ENV=test (fake adapter); seeds test data; validates atomic billing transaction
  * Side-effects: IO (database writes, HTTP requests)
  * Notes: Verifies billingStatus='billed', cost tracking, balance consistency with deterministic fake costs
@@ -30,8 +30,8 @@ import { GET as summaryGET } from "@/app/api/v1/payments/credits/summary/route";
 import type { SessionUser } from "@/shared/auth";
 import {
   billingAccounts,
+  chargeReceipts,
   creditLedger,
-  llmUsage,
   users,
   virtualKeys,
 } from "@/shared/db/schema";
@@ -104,9 +104,9 @@ describe("Billing E2E Stack Test", () => {
     expect(requestId).toBeDefined();
 
     // 3. Verify DB Invariants (T3) - per ACTIVITY_METRICS.md
-    // Query charge_receipt (llm_usage) WHERE request_id=requestId
-    const receipt = await db.query.llmUsage.findFirst({
-      where: eq(llmUsage.requestId, requestId),
+    // Query charge_receipt WHERE request_id=requestId
+    const receipt = await db.query.chargeReceipts.findFirst({
+      where: eq(chargeReceipts.requestId, requestId),
     });
     expect(receipt).toBeDefined();
     expect(receipt?.billingAccountId).toBe(billingAccountId);
@@ -153,7 +153,7 @@ describe("Billing E2E Stack Test", () => {
     expect(summaryJson.billingAccountId).toBe(billingAccountId);
     expect(summaryJson.balanceCredits).toBe(Number(100_000_000n + amount));
 
-    // Cleanup (cascades to billing_accounts, credit_ledger, llm_usage)
+    // Cleanup (cascades to billing_accounts, credit_ledger, charge_receipts)
     await db.delete(users).where(eq(users.id, mockSessionUser.id));
   });
 });

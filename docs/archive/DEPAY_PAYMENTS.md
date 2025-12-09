@@ -100,7 +100,7 @@ Both hardening paths are **identical to the original Resmic plan** — the secur
 We keep a **hard separation**:
 
 - **Billing layer** (already spec'd in `BILLING_EVOLUTION.md`):
-  - Tables: `billing_accounts`, `credit_ledger`, `llm_usage`
+  - Tables: `billing_accounts`, `credit_ledger`, `charge_receipts`
   - Invariants:
     - Credits in **BIGINT** (`1 credit = $0.001`)
     - `user_price_credits ≥ provider_cost_credits` per LLM call
@@ -440,7 +440,7 @@ Full loop with MVP pieces:
    - [ ] LLM call via LiteLLM returns `response_cost_usd`
    - [ ] We convert to `provider_cost_credits`, compute `user_price_credits`
    - [ ] Enforce `user_price ≥ provider_cost`, and debit
-   - [ ] `llm_usage` + `credit_ledger` record the full cost trail
+   - [ ] `charge_receipts` + `credit_ledger` record the full cost trail
 
 ### 8.2 Success Criteria (MVP)
 

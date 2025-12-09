@@ -17,7 +17,7 @@ import type { ChargeReceiptProvenance } from "@/ports";
 
 /**
  * Shape of a charge receipt row for test insertion.
- * Matches llmUsage schema exactly - no forbidden fields.
+ * Matches chargeReceipts schema exactly - no forbidden fields.
  */
 export interface TestChargeReceipt {
   id: ReturnType<typeof randomUUID>;

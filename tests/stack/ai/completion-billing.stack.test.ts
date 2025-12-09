@@ -29,8 +29,8 @@ import { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
 import type { SessionUser } from "@/shared/auth/session";
 import {
   billingAccounts,
+  chargeReceipts,
   creditLedger,
-  llmUsage,
   users,
   virtualKeys,
 } from "@/shared/db/schema";
@@ -104,8 +104,8 @@ describe("Completion Billing Stack Test", () => {
     // NOTE: No model/tokens/billingStatus - LiteLLM is canonical for telemetry
     const receiptRows = await db
       .select()
-      .from(llmUsage)
-      .where(eq(llmUsage.billingAccountId, billingAccountId));
+      .from(chargeReceipts)
+      .where(eq(chargeReceipts.billingAccountId, billingAccountId));
 
     expect(receiptRows.length).toBeGreaterThan(0);
     const [receipt] = receiptRows;
@@ -134,7 +134,7 @@ describe("Completion Billing Stack Test", () => {
       .where(
         and(
           eq(creditLedger.billingAccountId, billingAccountId),
-          eq(creditLedger.reason, "llm_usage")
+          eq(creditLedger.reason, "charge_receipt")
         )
       );
 
@@ -215,11 +215,11 @@ describe("Completion Billing Stack Test", () => {
     // Assert - Request failed
     expect(response.status).toBe(402); // Payment Required or similar
 
-    // Assert - NO llm_usage row created (transaction rolled back)
+    // Assert - NO charge_receipt row created (transaction rolled back)
     const usageRows = await db
       .select()
-      .from(llmUsage)
-      .where(eq(llmUsage.billingAccountId, billingAccountId));
+      .from(chargeReceipts)
+      .where(eq(chargeReceipts.billingAccountId, billingAccountId));
 
     expect(usageRows.length).toBe(0);
 

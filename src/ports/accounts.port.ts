@@ -5,12 +5,18 @@
  * Module: `@ports/accounts`
  * Purpose: Billing account service port interface with charge receipt recording and port-level errors.
  * Scope: Defines contracts for billing account lifecycle, virtual key provisioning, and credit management. Does not implement business logic.
- * Invariants: All operations atomic; billing accounts own virtual keys; ledger integrity preserved; charge receipts are idempotent by request_id
+ * Invariants:
+ * - All operations atomic; billing accounts own virtual keys; ledger integrity preserved
+ * - charge receipts are idempotent by request_id
+ * - ChargeReceiptParams requires explicit chargeReason, sourceSystem, sourceReference (no defaults)
+ * - listChargeReceipts returns sourceSystem/sourceReference for generic linking (no litellmCallId)
  * Side-effects: none (interface definition only)
  * Notes: recordChargeReceipt is non-blocking (never throws InsufficientCredits post-call per ACTIVITY_METRICS.md)
- * Links: Implemented by DrizzleAccountService, used by completion feature and auth mapping
+ * Links: Implemented by DrizzleAccountService, used by completion feature and auth mapping, types/billing.ts (enums)
  * @public
  */
+
+import type { ChargeReason, SourceSystem } from "@/types/billing";
 
 /**
  * Port-level error thrown by adapters when billing account has insufficient credits
@@ -127,6 +133,12 @@ export type ChargeReceiptParams = {
   litellmCallId: string | null;
   /** How this receipt was generated */
   provenance: ChargeReceiptProvenance;
+  /** Economic/billing category for accounting and analytics */
+  chargeReason: ChargeReason;
+  /** External system that originated this charge */
+  sourceSystem: SourceSystem;
+  /** Reference ID in the source system for generic linking */
+  sourceReference: string;
 };
 
 export interface AccountService {
@@ -203,7 +215,7 @@ export interface AccountService {
 
   /**
    * List charge receipts for a billing account (for Activity dashboard spend join).
-   * Returns litellmCallId → chargedCredits for joining with LiteLLM telemetry.
+   * Returns litellmCallId for joining with LiteLLM usage logs, plus sourceSystem for filtering.
    */
   listChargeReceipts(params: {
     billingAccountId: string;
@@ -212,11 +224,14 @@ export interface AccountService {
     limit?: number;
   }): Promise<
     Array<{
+      /** LiteLLM call ID for Activity join (null if missing) */
       litellmCallId: string | null;
       /** Credits charged as decimal string */
       chargedCredits: string;
       /** User cost in USD (with markup) as decimal string */
       responseCostUsd: string | null;
+      /** Source system for filtering joins */
+      sourceSystem: SourceSystem;
       createdAt: Date;
     }>
   >;

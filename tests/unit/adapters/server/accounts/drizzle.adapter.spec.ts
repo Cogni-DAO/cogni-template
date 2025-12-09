@@ -5,9 +5,11 @@
  * Module: `@adapters/server/accounts/drizzle`
  * Purpose: Unit tests for DrizzleAccountService.
  * Scope: Verifies recordChargeReceipt logic per ACTIVITY_METRICS.md. Does not test actual database connection.
- * Invariants: Post-call never throws InsufficientCreditsPortError; idempotent by requestId
+ * Invariants:
+ * - Post-call never throws InsufficientCreditsPortError; idempotent by requestId
+ * - Test params include required chargeReason, sourceService, metadata fields
  * Side-effects: none (uses mocks)
- * Links: `src/adapters/server/accounts/drizzle.adapter.ts`, docs/ACTIVITY_METRICS.md
+ * Links: `src/adapters/server/accounts/drizzle.adapter.ts`, docs/ACTIVITY_METRICS.md, types/billing.ts
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -22,7 +24,7 @@ const mockTx = {
     virtualKeys: {
       findFirst: vi.fn(),
     },
-    llmUsage: {
+    chargeReceipts: {
       findFirst: vi.fn(),
     },
   },
@@ -57,7 +59,7 @@ describe("DrizzleAccountService", () => {
     vi.clearAllMocks();
     mockTx.query.billingAccounts.findFirst.mockReset();
     mockTx.query.virtualKeys.findFirst.mockReset();
-    mockTx.query.llmUsage.findFirst.mockReset();
+    mockTx.query.chargeReceipts.findFirst.mockReset();
     mockTx.returning.mockReset();
     mockTx.onConflictDoNothing.mockReset().mockReturnThis();
     service = new DrizzleAccountService(mockDb);
@@ -73,11 +75,14 @@ describe("DrizzleAccountService", () => {
       responseCostUsd: 0.002,
       litellmCallId: "call-123",
       provenance: "response" as const,
+      chargeReason: "llm_usage" as const,
+      sourceSystem: "litellm" as const,
+      sourceReference: "call-123",
     };
 
     it("successfully records charge receipt and debits credits", async () => {
       // Mock no existing receipt (new request)
-      mockTx.query.llmUsage.findFirst.mockResolvedValue(null);
+      mockTx.query.chargeReceipts.findFirst.mockResolvedValue(null);
 
       // Mock finding account with sufficient balance
       mockTx.query.billingAccounts.findFirst.mockResolvedValue({
@@ -100,7 +105,7 @@ describe("DrizzleAccountService", () => {
       expect(mockDb.transaction).toHaveBeenCalled();
 
       // Verify idempotency check ran
-      expect(mockTx.query.llmUsage.findFirst).toHaveBeenCalled();
+      expect(mockTx.query.chargeReceipts.findFirst).toHaveBeenCalled();
 
       // Verify charge receipt insert
       expect(mockTx.insert).toHaveBeenCalled();
@@ -118,7 +123,7 @@ describe("DrizzleAccountService", () => {
     it("returns early without debiting if receipt already exists (idempotent)", async () => {
       // Per ACTIVITY_METRICS.md: Idempotent receipts - request_id as PK
       // Mock existing receipt found
-      mockTx.query.llmUsage.findFirst.mockResolvedValue({
+      mockTx.query.chargeReceipts.findFirst.mockResolvedValue({
         id: "existing-uuid",
         requestId: "req-123",
         billingAccountId: "acc-123",
@@ -127,7 +132,7 @@ describe("DrizzleAccountService", () => {
       await service.recordChargeReceipt(params);
 
       // Verify idempotency check ran
-      expect(mockTx.query.llmUsage.findFirst).toHaveBeenCalled();
+      expect(mockTx.query.chargeReceipts.findFirst).toHaveBeenCalled();
 
       // Should NOT proceed with account validation or inserts
       expect(mockTx.query.billingAccounts.findFirst).not.toHaveBeenCalled();
@@ -137,7 +142,7 @@ describe("DrizzleAccountService", () => {
     it("does NOT throw when balance goes negative (post-call is non-blocking)", async () => {
       // Per ACTIVITY_METRICS.md: recordChargeReceipt must NEVER throw InsufficientCreditsPortError
       // Mock no existing receipt
-      mockTx.query.llmUsage.findFirst.mockResolvedValue(null);
+      mockTx.query.chargeReceipts.findFirst.mockResolvedValue(null);
 
       // Mock finding account with insufficient balance
       mockTx.query.billingAccounts.findFirst.mockResolvedValue({
@@ -160,7 +165,7 @@ describe("DrizzleAccountService", () => {
 
     it("throws error if account not found", async () => {
       // Mock no existing receipt
-      mockTx.query.llmUsage.findFirst.mockResolvedValue(null);
+      mockTx.query.chargeReceipts.findFirst.mockResolvedValue(null);
       mockTx.query.billingAccounts.findFirst.mockResolvedValue(null);
 
       // Account not found is a hard error (not an insufficient credits case)
