@@ -37,7 +37,11 @@ export default defineConfig({
     include: ["tests/stack/**/*.stack.test.ts"],
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
-    globalSetup: ["./tests/stack/setup/reset-db.ts"],
+    // Global setup: wait for probes, then reset DB (order matters)
+    globalSetup: [
+      "./tests/stack/setup/wait-for-probes.ts",
+      "./tests/stack/setup/reset-db.ts",
+    ],
     sequence: { concurrent: false },
   },
 });

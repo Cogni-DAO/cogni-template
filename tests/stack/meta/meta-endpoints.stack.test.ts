@@ -7,27 +7,47 @@
  * Scope: Black-box HTTP checks against running stack. Does not test internal app logic or database state.
  * Invariants: Uses TEST_BASE_URL for host; assumes stack started via dev:stack:test or docker:test:stack.
  * Side-effects: IO
- * Notes: Requires running stack; tests /health, /openapi.json, /meta/route-manifest endpoints.
- * Links: /health, /openapi.json, /meta/route-manifest
+ * Notes: Requires running stack; tests /livez, /readyz, /openapi.json, /meta/route-manifest endpoints.
+ * Links: /livez, /readyz, /openapi.json, /meta/route-manifest
  * @public
  */
 
 import { expect, test } from "vitest";
+
+import { metaLivezOutputSchema } from "@/contracts/meta.livez.read.v1.contract";
+import { metaReadyzOutputSchema } from "@/contracts/meta.readyz.read.v1.contract";
 
 function baseUrl(path: string): string {
   const root = process.env.TEST_BASE_URL ?? "http://localhost:3000/";
   return new URL(path.replace(/^\//, ""), root).toString();
 }
 
-test("[meta] health returns healthy status", async () => {
-  const response = await fetch(baseUrl("/health"));
+test("[meta] /livez returns alive status (liveness probe)", async () => {
+  const response = await fetch(baseUrl("/livez"));
   expect(response.status).toBe(200);
 
   const body = await response.json();
-  expect(body).toMatchObject({
-    status: "healthy",
-  });
-  expect(typeof body.timestamp).toBe("string");
+  const parsed = metaLivezOutputSchema.safeParse(body);
+  expect(parsed.success).toBe(true);
+
+  if (parsed.success) {
+    expect(parsed.data.status).toBe("alive");
+    expect(typeof parsed.data.timestamp).toBe("string");
+  }
+});
+
+test("[meta] /readyz returns healthy status (readiness probe)", async () => {
+  const response = await fetch(baseUrl("/readyz"));
+  expect(response.status).toBe(200);
+
+  const body = await response.json();
+  const parsed = metaReadyzOutputSchema.safeParse(body);
+  expect(parsed.success).toBe(true);
+
+  if (parsed.success) {
+    expect(parsed.data.status).toBe("healthy");
+    expect(typeof parsed.data.timestamp).toBe("string");
+  }
 });
 
 test("[meta] openapi.json is available", async () => {
