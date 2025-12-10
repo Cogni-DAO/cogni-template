@@ -2,33 +2,34 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@contracts/meta.health.read.v1.contract`
- * Purpose: Contract for health check endpoint providing liveness and readiness status.
- * Scope: Defines health check response format. Does not include detailed system diagnostics.
- * Invariants: Stable API contract; status enum remains consistent.
+ * Module: `@contracts/meta.readyz.read.v1.contract`
+ * Purpose: Contract for readiness probe endpoint (strict validation).
+ * Scope: Readiness check - validates env, secrets, and runtime requirements. MVP: env+secrets only. Does not include DB connectivity check yet.
+ * Invariants: Binary readiness for MVP; HTTP status is primary truth: 200 = ready, 503 = not ready.
  * Side-effects: none
- * Notes: Used by monitoring systems and deployment health checks.
- * Links: /health endpoint
+ * Notes: Used by Docker HEALTHCHECK, deployment validation, and K8s readiness probes.
+ *        K8s health consumers rely on HTTP status codes, not response body.
+ * Links: /readyz endpoint
  * @internal
  */
 
 import { z } from "zod";
 
-export const healthStatusSchema = z.enum(["healthy", "degraded", "unhealthy"]);
+// MVP: Binary readiness (ready or not ready)
+export const readyzStatusSchema = z.enum(["healthy"]);
 
-export const metaHealthOutputSchema = z.object({
-  status: healthStatusSchema,
-  timestamp: z.string(),
+export const metaReadyzOutputSchema = z.object({
+  status: readyzStatusSchema,
+  timestamp: z.string(), // RFC3339/ISO-8601 format
   version: z.string().optional(),
 });
 
 // Protocol-neutral operation metadata.
-// This is what both HTTP (ts-rest) and MCP will consume.
-export const metaHealthOperation = {
-  id: "meta.health.read.v1",
-  summary: "Health check for liveness and readiness",
+export const metaReadyzOperation = {
+  id: "meta.readyz.read.v1",
+  summary: "Readiness probe - full validation",
   description:
-    "Returns service health status for monitoring and deployment checks.",
+    "Readiness check validating environment, secrets, and runtime requirements. Used for deployment gates and container orchestration. HTTP status: 200 = ready, 503 = not ready.",
   input: null,
-  output: metaHealthOutputSchema,
+  output: metaReadyzOutputSchema,
 } as const;

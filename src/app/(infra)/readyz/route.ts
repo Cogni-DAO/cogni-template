@@ -2,19 +2,20 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@app/health`
- * Purpose: HTTP endpoint providing health check status for liveness and readiness probes with runtime secret preflight.
- * Scope: Returns service health status; validates runtime secrets at adapter boundary. Does not include detailed system diagnostics.
- * Invariants: Always returns valid health schema; force-dynamic runtime; fails with RuntimeSecretError if secrets missing in production.
+ * Module: `@app/readyz`
+ * Purpose: HTTP endpoint providing readiness check with full validation (env, secrets).
+ * Scope: Returns service readiness status; validates env and runtime secrets. MVP: env+secrets only. Does not check DB connectivity yet.
+ * Invariants: Always returns valid readyz schema; force-dynamic runtime; returns 503 if env/secrets invalid.
  * Side-effects: IO (HTTP response)
- * Notes: Preflights assertRuntimeSecrets() to fail-fast on misconfiguration before accepting traffic.
- * Links: `@contracts/meta.health.read.v1.contract`, src/shared/env/invariants.ts, monitoring systems
+ * Notes: Used by Docker HEALTHCHECK, deployment validation, K8s readiness probes.
+ *        HTTP status is primary truth: 200 = ready, 503 = not ready.
+ * Links: `@contracts/meta.readyz.read.v1.contract`, src/shared/env/invariants.ts, src/app/(infra)/livez/route.ts
  * @public
  */
 
 import { NextResponse } from "next/server";
 
-import { metaHealthOperation } from "@/contracts/meta.health.read.v1.contract";
+import { metaReadyzOperation } from "@/contracts/meta.readyz.read.v1.contract";
 import { EnvValidationError, serverEnv } from "@/shared/env";
 import {
   assertRuntimeSecrets,
@@ -26,7 +27,7 @@ export const dynamic = "force-dynamic";
 export function GET(): NextResponse {
   try {
     const env = serverEnv();
-    // Preflight: Validate runtime secrets before traffic (fail-fast on misconfiguration)
+    // MVP readiness: Validate env + runtime secrets (no DB check yet)
     assertRuntimeSecrets(env);
 
     const payload = {
@@ -35,9 +36,10 @@ export function GET(): NextResponse {
       version: "0",
     };
 
-    const parsed = metaHealthOperation.output.parse(payload);
+    const parsed = metaReadyzOperation.output.parse(payload);
     return NextResponse.json(parsed);
   } catch (error) {
+    // HTTP status is primary truth for K8s: 503 = not ready
     if (error instanceof EnvValidationError) {
       return new NextResponse(
         JSON.stringify({
@@ -46,7 +48,7 @@ export function GET(): NextResponse {
           details: error.meta,
         }),
         {
-          status: 500,
+          status: 503, // Service Unavailable - not ready
           headers: { "content-type": "application/json" },
         }
       );
@@ -61,7 +63,7 @@ export function GET(): NextResponse {
           message: error.message,
         }),
         {
-          status: 500,
+          status: 503, // Service Unavailable - not ready
           headers: { "content-type": "application/json" },
         }
       );
@@ -73,7 +75,7 @@ export function GET(): NextResponse {
         reason: "INTERNAL_ERROR",
       }),
       {
-        status: 500,
+        status: 503, // Service Unavailable - not ready
         headers: { "content-type": "application/json" },
       }
     );

@@ -14,7 +14,8 @@
 
 import { initContract } from "@ts-rest/core";
 
-import { metaHealthOutputSchema } from "@/contracts/meta.health.read.v1.contract";
+import { metaLivezOutputSchema } from "@/contracts/meta.livez.read.v1.contract";
+import { metaReadyzOutputSchema } from "@/contracts/meta.readyz.read.v1.contract";
 import { metaRoutesOutputSchema } from "@/contracts/meta.route-manifest.read.v1.contract";
 
 const c = initContract();
@@ -29,15 +30,25 @@ export const ApiContractV1 = c.router({
       200: metaRoutesOutputSchema,
     },
   },
-  metaHealth: {
+  metaLivez: {
     method: "GET",
-    path: "/health",
-    summary: "Health check for liveness and readiness",
+    path: "/livez",
+    summary: "Liveness probe - process alive",
     description:
-      "Returns service health status for monitoring and deployment checks.",
+      "Fast liveness check confirming the process is alive and can handle requests. No dependency checks. HTTP status: 200 = alive, 5xx = not alive.",
     responses: {
-      200: metaHealthOutputSchema,
-      503: metaHealthOutputSchema,
+      200: metaLivezOutputSchema,
+    },
+  },
+  metaReadyz: {
+    method: "GET",
+    path: "/readyz",
+    summary: "Readiness probe - full validation",
+    description:
+      "Readiness check validating environment, secrets, and runtime requirements. Used for deployment gates and container orchestration. HTTP status: 200 = ready, 503 = not ready.",
+    responses: {
+      200: metaReadyzOutputSchema,
+      503: metaReadyzOutputSchema,
     },
   },
   // Future endpoints: metaOpenapi, etc.
