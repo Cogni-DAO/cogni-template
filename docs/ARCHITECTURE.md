@@ -1,6 +1,6 @@
 # Cogni-Template Architecture
 
-**Core Mission**: A crypto-metered AI infrastructure loop where chat is just one client. DAO multi-sig → pays for GPU + OpenRouter/LiteLLM → users interact (chat/API) → users pay back in crypto → DAO multi-sig.
+**Core Mission**: A new Developer can fork + spawn a DAO-governed, AI-optimized, CI/CD-enabled service in one click: A crypto-metered AI infrastructure loop where Webapp chat is just one client (API, MCP, mobile app). DAO multi-sig → pays for GPU + OpenRouter/LiteLLM → users interact (chat/API) → users pay back in crypto → DAO multi-sig.
 
 This codebase uses a Clean Architecture, hex-inspired layering model with strict, enforced boundaries: `app → features → ports → core`, and `adapters` implementing `ports` from the outside. Domain logic and errors live in `core`, feature services expose stable, per-feature contracts (including error algebras), and the `app` layer only talks to features, never directly to core. Dependency-cruiser enforces these rules (e.g. no `app → core`, no `adapters → core`, `/types` remain domain-agnostic). See [.dependency-cruiser.cjs](../.dependency-cruiser.cjs) for boundary rules, [tests/arch/AGENTS.md](../tests/arch/AGENTS.md) for enforcement tests, and [ARCHITECTURE_ENFORCEMENT_GAPS.md](ARCHITECTURE_ENFORCEMENT_GAPS.md) for current enforcement status.
 
