@@ -45,6 +45,7 @@ docker run -d --name test-container \
     -e APP_ENV=test \
     -e LITELLM_MASTER_KEY=test-build-validation-key \
     -e DATABASE_URL=postgresql://testuser:testpass@localhost:5432/testdb \
+    -e AUTH_SECRET=test-auth-secret-min-32-chars-long-placeholder \
     "${IMAGE_REF}"
 
 # Wait for Docker healthcheck to pass
