@@ -11,7 +11,7 @@
 - [Payments Design](./PAYMENTS_DESIGN.md) - Native USDC payment architecture
 - [Billing Evolution](./BILLING_EVOLUTION.md) - Dual-cost accounting implementation
 - [Activity Metrics](./ACTIVITY_METRICS.md) - Usage dashboard and charge receipt design
-- [Payments Ponder Verification](./PAYMENTS_PONDER_VERIFICATION.md) - **Required for production security**
+- [On-Chain Readers](./ONCHAIN_READERS.md) - Treasury snapshots and token ownership intelligence (v2/v3)
 - [Observability](./OBSERVABILITY.md) - Logging and monitoring infrastructure
 
 ---
@@ -38,7 +38,7 @@ Intent-based payment flow: create intent → user transfers USDC → submit txHa
 - Two-port design: `PaymentAttemptRepository` + `OnChainVerifier`
 - Idempotency enforced at DB level
 
-**Security Note:** ⚠️ **MVP trust model: OnChainVerifier adapter is STUBBED (always returns VERIFIED). Real Ponder-backed verification required for production. See [Post-MVP Security Hardening](#10-post-mvp-security-hardening-).**
+**Security Note:** ⚠️ **MVP trust model: OnChainVerifier adapter is STUBBED (always returns VERIFIED). Real RPC-backed verification (EvmRpcOnChainVerifier) required for production. See [Post-MVP Security Hardening](#13-post-mvp-security-hardening-).**
 
 **Reference:** [PAYMENTS_DESIGN.md](./PAYMENTS_DESIGN.md)
 
@@ -148,12 +148,12 @@ Per-user API keys with 1:1 LiteLLM virtual key mapping for per-key spend attribu
 
 **Security Gap:** Backend trusts txHash submission without cryptographic proof. Mitigated by session auth, idempotency, and manual monitoring.
 
-**Required for Production - See [PAYMENTS_PONDER_VERIFICATION.md](./PAYMENTS_PONDER_VERIFICATION.md):**
+**Required for Production - See [PAYMENTS_DESIGN.md Phase 3](./PAYMENTS_DESIGN.md#phase-3-evm-rpc-verification-next---direct-rpc-with-viem):**
 
-- [ ] Deploy Ponder indexer for USDC Transfer events
-- [ ] Implement real verification in `PonderOnChainVerifierAdapter`
-- [ ] Build reconciliation service comparing on-chain vs `credit_ledger`
-- [ ] Add monitoring and alerts for discrepancies
+- [ ] Implement `EvmRpcOnChainVerifierAdapter` using viem (getTransaction, getTransactionReceipt, decode Transfer)
+- [ ] Wire into DI for all non-test environments
+- [ ] Add smoke tests against known-good txs on Sepolia/Base
+- [ ] Validate all failure modes (TX_NOT_FOUND, TX_REVERTED, SENDER_MISMATCH, etc.)
 
 ### 14. Operational Hardening ❌
 
