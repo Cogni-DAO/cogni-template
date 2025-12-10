@@ -293,18 +293,9 @@ jobs:
           docker compose -f platform/infra/services/runtime/docker-compose.dev.yml \
             --profile bootstrap run --rm db-migrate
 
-      - name: Wait for app healthcheck
-        run: |
-          for i in {1..30}; do
-            if curl -sf -k https://localhost/health > /dev/null; then
-              echo "App is healthy"; exit 0;
-            fi
-            echo "Waiting for app... $i/30"; sleep 3;
-          done
-          echo "App failed to become healthy"; exit 1
-
       - name: Run stack tests
         run: pnpm test:stack:docker
+        # Note: wait-for-probes.ts globalSetup polls /livez then /readyz before tests run
 
       - name: CI Telemetry
         if: always()

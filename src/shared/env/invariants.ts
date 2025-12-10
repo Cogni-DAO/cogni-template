@@ -8,7 +8,7 @@
  * Invariants: Throws RuntimeSecretError on missing secrets; memoizes production only; never runs at module init.
  * Side-effects: none
  * Notes: Call assertRuntimeSecrets() from adapter methods and runtime endpoints only, never from build-reachable code.
- * Links: src/shared/env/server.ts, src/adapters/server/ai/litellm.adapter.ts, src/app/(infra)/health/route.ts
+ * Links: src/shared/env/server.ts, src/adapters/server/ai/litellm.adapter.ts, src/app/(infra)/readyz/route.ts
  * @public
  */
 
