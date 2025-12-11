@@ -192,20 +192,14 @@
 4. **No secrets**: Does not require AUTH_SECRET or LITELLM_MASTER_KEY
 5. **Implementation isolation**: Must not import env/db modules (verified by test)
 
-**`/readyz` checks (current scope):**
+**`/readyz` checks (MVP scope):**
 
 1. **All env vars valid**: Zod schema validation passes (serverEnv())
 2. **Runtime secrets present**: AUTH_SECRET, LITELLM_MASTER_KEY (assertRuntimeSecrets)
-3. **EVM RPC config present**: EVM_RPC_URL set in non-test mode (assertEvmRpcConfig)
-4. **EVM RPC connectivity**: getBlockNumber() succeeds (assertEvmRpcConnectivity, 3s timeout)
-5. **Database reachable**: NOT yet implemented (future with explicit timeout budget)
-6. **External services**: NOT yet implemented (future with explicit timeout budget)
+3. **Database reachable**: NOT in MVP (future with explicit timeout budget)
+4. **External services**: NOT in MVP (future with explicit timeout budget)
 
-**Timeout budgets:**
-
-- EVM RPC connectivity: 3 seconds (single getBlockNumber() call)
-- Future DB check: 5 seconds
-- Future LiteLLM check: 3 seconds
+**Future readiness deps (P1):** DB connectivity check (5s timeout), LiteLLM health check (3s timeout). Any new dep requires explicit budget + test coverage.
 
 **Never** add env toggles to weaken `/readyz` checks (e.g., `SKIP_DB_CHECK=true`). Use `/livez` instead.
 
