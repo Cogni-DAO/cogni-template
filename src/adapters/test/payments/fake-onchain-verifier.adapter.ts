@@ -17,6 +17,7 @@ import type {
   PaymentErrorCode,
   VerificationResult,
 } from "@/ports";
+import { MIN_CONFIRMATIONS } from "@/shared/web3/chain";
 
 /**
  * Fake on-chain verifier for testing
@@ -28,7 +29,7 @@ export class FakeOnChainVerifierAdapter implements OnChainVerifier {
     actualFrom: "0x0000000000000000000000000000000000000001",
     actualTo: "0x0000000000000000000000000000000000000002",
     actualAmount: 1000000n,
-    confirmations: 5,
+    confirmations: MIN_CONFIRMATIONS,
   };
 
   public lastCallParams:
@@ -51,7 +52,7 @@ export class FakeOnChainVerifierAdapter implements OnChainVerifier {
 
   /**
    * Configure VERIFIED response with optional overrides
-   * Default: status=VERIFIED, actualFrom/To set, amount=1M, confirmations=5
+   * Default: status=VERIFIED, actualFrom/To set, amount=1M, confirmations=MIN_CONFIRMATIONS
    */
   setVerified(overrides?: Partial<Omit<VerificationResult, "status">>): void {
     this.response = {
@@ -59,7 +60,7 @@ export class FakeOnChainVerifierAdapter implements OnChainVerifier {
       actualFrom: "0x0000000000000000000000000000000000000001",
       actualTo: "0x0000000000000000000000000000000000000002",
       actualAmount: 1000000n,
-      confirmations: 5,
+      confirmations: MIN_CONFIRMATIONS,
       ...overrides,
     };
   }

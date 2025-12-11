@@ -98,7 +98,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         actualFrom: `0x${"9".repeat(40)}`, // Different from session wallet
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: 5_000_000n,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       // Create intent
@@ -335,7 +335,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         actualFrom: sessionUser.walletAddress,
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: 5_000_000n,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS from adapter
       });
 
       const result2 = await getPaymentStatusFacade(
@@ -365,7 +365,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         actualFrom: sessionUser.walletAddress,
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: 5_000_000n,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       const intent = await createPaymentIntentFacade(
@@ -415,7 +415,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         actualFrom: sessionUser.walletAddress,
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: 5_000_000n,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       // Create first attempt and bind hash
@@ -473,7 +473,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         actualFrom: sessionUser.walletAddress,
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: 5_000_000n,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       const intent = await createPaymentIntentFacade(
@@ -522,7 +522,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         actualFrom: `0x${"9".repeat(40)}`, // Different from session wallet
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: 5_000_000n,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       const intent = await createPaymentIntentFacade(
@@ -566,7 +566,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
         actualFrom: sessionUser.walletAddress,
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: 5_000_000n,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       // Create attempt with user1

@@ -5,8 +5,8 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-07
-- **Status:** draft
+- **Last reviewed:** 2025-12-11
+- **Status:** stable
 
 ## Purpose
 
@@ -29,11 +29,11 @@ Infrastructure implementations of ports including server/, worker/, cli/, and te
 
 ## Public Surface
 
-- **Exports:** Port implementations for bootstrap injection, database client (db, Database), MimirMetricsAdapter
+- **Exports:** Port implementations for bootstrap injection, database client (db, Database), MimirMetricsAdapter, ViemEvmOnchainClient, EvmRpcOnChainVerifierAdapter, EvmOnchainClient (type)
 - **Routes (if any):** none
 - **CLI (if any):** cli/ adapter implementations
-- **Env/Config keys:** DATABASE_URL, LITELLM_BASE_URL, LITELLM_MASTER_KEY, MIMIR_URL, MIMIR_USER, MIMIR_TOKEN, ANALYTICS_QUERY_TIMEOUT_MS
-- **Files considered API:** Port implementation exports, database client
+- **Env/Config keys:** DATABASE_URL, LITELLM_BASE_URL, LITELLM_MASTER_KEY, MIMIR_URL, MIMIR_USER, MIMIR_TOKEN, ANALYTICS_QUERY_TIMEOUT_MS, EVM_RPC_URL
+- **Files considered API:** Port implementation exports, database client, onchain client interfaces
 
 ## Ports (optional)
 
@@ -75,3 +75,7 @@ pnpm test tests/contract/
 ## Notes
 
 - No UI components allowed in adapters/
+- ViemEvmOnchainClient uses lazy initialization (getClient()) to allow Docker builds without EVM_RPC_URL
+- Configuration validation happens on first RPC method call, not at construction
+- /readyz probe exercises EVM RPC connectivity via assertEvmRpcConnectivity() (3s timeout budget)
+- This catches missing/invalid EVM_RPC_URL immediately after deploy, before first payment

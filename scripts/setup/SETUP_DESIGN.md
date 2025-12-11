@@ -43,9 +43,10 @@ pnpm dev  # You're ready!
    - `LITELLM_MASTER_KEY` (sk-xxx format)
    - `DATABASE_URL` (postgresql://postgres:postgres@localhost:5432/cogni_template_dev)
 3. Prompt for `OPENROUTER_API_KEY`
-4. Prompt for `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (optional, from cloud.walletconnect.com)
-5. Run `platform/bootstrap/install/install-pnpm.sh`
-6. `pnpm install` and setup git hooks
+4. Prompt for `EVM_RPC_URL` (Sepolia RPC from alchemy.com or infura.io)
+5. Prompt for `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (optional, from cloud.walletconnect.com)
+6. Run `platform/bootstrap/install/install-pnpm.sh`
+7. `pnpm install` and setup git hooks
 
 **No SSH keys, no Docker, no Cherry VMs, no GitHub secrets.**
 
@@ -112,6 +113,7 @@ pnpm setup github --env production
      - `LITELLM_MASTER_KEY` (new random sk-xxx key)
      - `AUTH_SECRET` (generated random string)
      - `OPENROUTER_API_KEY` (prompt if not in local env)
+     - `EVM_RPC_URL` (prompt if not in local env - Sepolia RPC from alchemy.com or infura.io)
    - **Deployment secrets:** From previous steps
      - `SSH_DEPLOY_KEY` (from `~/.ssh/cogni_template_<env>_deploy`)
      - `VM_HOST` (from `.env.<env>` file)

@@ -190,6 +190,7 @@ REQUIRED_SECRETS=(
     "APP_DB_PASSWORD"
     "APP_DB_NAME"
     "SOURCECRED_GITHUB_TOKEN"
+    "EVM_RPC_URL"
 )
 
 # Check required environment variables (not secrets)
@@ -404,6 +405,7 @@ APP_DB_USER=${APP_DB_USER}
 APP_DB_PASSWORD=${APP_DB_PASSWORD}
 APP_DB_NAME=${APP_DB_NAME}
 DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
+EVM_RPC_URL=${EVM_RPC_URL}
 LOKI_WRITE_URL=${GRAFANA_CLOUD_LOKI_URL:-}
 LOKI_USERNAME=${GRAFANA_CLOUD_LOKI_USER:-}
 LOKI_PASSWORD=${GRAFANA_CLOUD_LOKI_API_KEY:-}
@@ -682,7 +684,7 @@ rsync -av -e "ssh $SSH_OPTS" \
 # Upload and execute deployment script
 scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
 ssh $SSH_OPTS root@"$VM_HOST" \
-    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' APP_IMAGE='$APP_IMAGE' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_NAME='$APP_DB_NAME' SOURCECRED_GITHUB_TOKEN='$SOURCECRED_GITHUB_TOKEN' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-remote.sh"
+    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' APP_IMAGE='$APP_IMAGE' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' DATABASE_URL='$DATABASE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_NAME='$APP_DB_NAME' EVM_RPC_URL='$EVM_RPC_URL' SOURCECRED_GITHUB_TOKEN='$SOURCECRED_GITHUB_TOKEN' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-remote.sh"
 
 # Health validation
 log_info "Validating deployment health..."
@@ -695,15 +697,28 @@ check_url() {
   local label="$2"
 
   for i in $(seq 1 "$max_attempts"); do
-    if curl -fsS "$url" >/dev/null 2>&1; then
+    # Capture response body and HTTP status
+    local response
+    local http_code
+    response=$(curl -sS -w "\n%{http_code}" "$url" 2>&1)
+    http_code=$(echo "$response" | tail -n1)
+    local body=$(echo "$response" | sed '$d')
+
+    if [ "$http_code" = "200" ]; then
       log_info "✅ $label health check passed: $url"
       return 0
     fi
-    log_warn "Attempt ${i}/${max_attempts}: $label not ready yet, waiting ${sleep_seconds}s..."
+
+    log_warn "Attempt ${i}/${max_attempts}: $label not ready yet (HTTP $http_code), waiting ${sleep_seconds}s..."
+    if [ $i -eq $max_attempts ]; then
+      # On final attempt, show response body for debugging
+      log_error "❌ $label did not become ready after $((max_attempts * sleep_seconds))s: $url"
+      log_error "HTTP Status: $http_code"
+      log_error "Response body: $body"
+    fi
     sleep "$sleep_seconds"
   done
 
-  log_error "❌ $label did not become ready after $((max_attempts * sleep_seconds))s: $url"
   return 1
 }
 

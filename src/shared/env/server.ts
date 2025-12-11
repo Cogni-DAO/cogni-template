@@ -97,6 +97,10 @@ export const serverSchema = z.object({
   MIMIR_TOKEN: z.string().min(1).optional(),
   ANALYTICS_K_THRESHOLD: z.coerce.number().int().positive().default(50),
   ANALYTICS_QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
+
+  // EVM RPC - On-chain verification (Phase 3)
+  // Required for production/preview/dev; not used in test mode (FakeEvmOnchainClient)
+  EVM_RPC_URL: z.string().url().optional(),
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {

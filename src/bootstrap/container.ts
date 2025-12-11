@@ -17,18 +17,20 @@ import type { Logger } from "pino";
 import {
   DrizzleAccountService,
   DrizzlePaymentAttemptRepository,
+  EvmRpcOnChainVerifierAdapter,
   getDb,
   LiteLlmActivityUsageAdapter,
   LiteLlmAdapter,
   LiteLlmUsageServiceAdapter,
   type MimirAdapterConfig,
   MimirMetricsAdapter,
-  PonderOnChainVerifierAdapter,
   SystemClock,
+  ViemEvmOnchainClient,
 } from "@/adapters/server";
 import {
   FakeLlmAdapter,
   FakeMetricsAdapter,
+  getTestEvmOnchainClient,
   getTestOnChainVerifier,
 } from "@/adapters/test";
 import type { RateLimitBypassConfig } from "@/bootstrap/http/wrapPublicRoute";
@@ -45,6 +47,7 @@ import type {
 } from "@/ports";
 import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
+import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 
 export type UnhandledErrorPolicy = "rethrow" | "respond_500";
 
@@ -66,6 +69,7 @@ export interface Container {
   clock: Clock;
   paymentAttemptRepository: PaymentAttemptRepository;
   onChainVerifier: OnChainVerifier;
+  evmOnchainClient: EvmOnchainClient;
   metricsQuery: MetricsQueryPort;
 }
 
@@ -130,10 +134,15 @@ function createContainer(): Container {
     ? new FakeLlmAdapter()
     : new LiteLlmAdapter();
 
-  // OnChainVerifier: test uses singleton fake (configurable from tests), production uses Ponder stub (real Ponder in Phase 3)
+  // EvmOnchainClient: test uses singleton fake (configurable from tests), production uses viem RPC
+  const evmOnchainClient = env.isTestMode
+    ? getTestEvmOnchainClient()
+    : new ViemEvmOnchainClient();
+
+  // OnChainVerifier: test uses singleton fake (configurable from tests), production uses EVM RPC verifier
   const onChainVerifier = env.isTestMode
     ? getTestOnChainVerifier()
-    : new PonderOnChainVerifierAdapter();
+    : new EvmRpcOnChainVerifierAdapter(evmOnchainClient);
 
   // MetricsQuery: test uses fake adapter, production uses Mimir
   const metricsQuery: MetricsQueryPort = env.isTestMode
@@ -189,6 +198,7 @@ function createContainer(): Container {
     clock: new SystemClock(),
     paymentAttemptRepository,
     onChainVerifier,
+    evmOnchainClient,
     metricsQuery,
   };
 }

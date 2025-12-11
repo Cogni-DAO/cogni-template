@@ -43,7 +43,7 @@ export const USDC_TOKEN_ADDRESS = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
  * Minimum confirmations required for payment verification.
  * Transactions must have at least this many confirmations to be considered valid.
  */
-export const MIN_CONFIRMATIONS = 5;
+export const MIN_CONFIRMATIONS = 2;
 
 /**
  * Verification throttle in seconds (polling rate limit).

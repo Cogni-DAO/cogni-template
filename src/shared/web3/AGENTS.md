@@ -5,8 +5,8 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-26
-- **Status:** draft
+- **Last reviewed:** 2025-12-11
+- **Status:** stable
 
 ## Purpose
 
@@ -40,15 +40,18 @@ Shared blockchain configuration for web3 integrations. Provides hardcoded Base m
 ## Public Surface
 
 - **Exports:**
-  - `CHAIN` - wagmi Chain object for Base mainnet (imported from wagmi/chains)
-  - `CHAIN_ID` - Base mainnet chain ID (8453)
+  - `CHAIN` - wagmi Chain object for Ethereum Sepolia testnet (imported from wagmi/chains)
+  - `CHAIN_ID` - Ethereum Sepolia testnet chain ID (11155111)
   - `getChainId()` - Function returning chain ID
-  - `DEPAY_BLOCKCHAIN` - DePay blockchain identifier ("base")
-  - `USDC_TOKEN_ADDRESS` - Official USDC contract on Base mainnet
+  - `DEPAY_BLOCKCHAIN` - DePay blockchain identifier ("sepolia")
+  - `USDC_TOKEN_ADDRESS` - Official USDC contract on Ethereum Sepolia testnet
+  - `MIN_CONFIRMATIONS` - Minimum confirmations required for payment verification (5)
+  - `VERIFY_THROTTLE_SECONDS` - Verification polling throttle (10 seconds)
+  - `EvmOnchainClient` - Infrastructure interface for EVM RPC operations (onchain/)
 - **Routes (if any):** none
 - **CLI (if any):** none
-- **Env/Config keys:** none (chain hardcoded to Base; NEXT_PUBLIC_CHAIN_ID removed)
-- **Files considered API:** chain.ts, index.ts
+- **Env/Config keys:** none (chain hardcoded to Ethereum Sepolia; NEXT_PUBLIC_CHAIN_ID removed)
+- **Files considered API:** chain.ts, onchain/evm-onchain-client.interface.ts, index.ts
 
 ## Ports (optional)
 
@@ -87,6 +90,12 @@ import { CHAIN_ID, DEPAY_BLOCKCHAIN, USDC_TOKEN_ADDRESS } from "@/shared/web3";
 
 ## Notes
 
-- Chain locked to Base mainnet (8453) for MVP
+- Chain locked to Ethereum Sepolia (11155111) for MVP testing
+- EvmOnchainClient is an infrastructure seam (NOT a domain port) shared by multiple adapters
+- Production uses ViemEvmOnchainClient with lazy initialization (allows builds without EVM_RPC_URL)
+- Config validation (chainId, EVM_RPC_URL) deferred to first RPC call via getClient()
+- PublicClient cached after first call - no repeated serverEnv()/getWidgetConfig() invocations
+- /readyz probe validates RPC connectivity via assertEvmRpcConnectivity() (3s timeout)
+- Tests use FakeEvmOnchainClient (no RPC calls, no URL needed)
 - If supporting multiple chains, this module must be refactored to accept chain selection
 - Build fails if repo-spec chain_id mismatches app CHAIN_ID

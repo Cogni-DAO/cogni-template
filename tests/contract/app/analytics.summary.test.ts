@@ -23,9 +23,11 @@ vi.mock("@/app/_facades/analytics/summary.server", () => ({
 }));
 
 // Mock serverEnv to avoid env validation errors in tests
+// MUST set APP_ENV: "test" and isTestMode: true to use fake adapters
 vi.mock("@/shared/env", () => ({
   serverEnv: () => ({
-    APP_ENV: "production",
+    APP_ENV: "test",
+    isTestMode: true,
     AUTH_SECRET: "test-secret-32-chars-minimum-length",
   }),
 }));

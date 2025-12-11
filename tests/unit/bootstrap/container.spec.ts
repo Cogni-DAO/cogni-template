@@ -66,6 +66,7 @@ describe("bootstrap container DI wiring", () => {
         DB_HOST: "postgres",
         LITELLM_MASTER_KEY: "prod-key",
         AUTH_SECRET: "x".repeat(32),
+        EVM_RPC_URL: "https://eth-sepolia.example.com/v2/test-key",
       });
 
       // Import after env setup
@@ -90,6 +91,7 @@ describe("bootstrap container DI wiring", () => {
         DB_HOST: "localhost",
         LITELLM_MASTER_KEY: "dev-key",
         AUTH_SECRET: "x".repeat(32),
+        EVM_RPC_URL: "https://eth-sepolia.example.com/v2/test-key",
       });
 
       const { getContainer } = await import("@/bootstrap/container");

@@ -82,7 +82,7 @@ describe("Payment Numeric Flow Validation", () => {
         actualFrom: sessionUser.walletAddress,
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: expectedAmountRaw,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       // Step 1: Create intent
@@ -179,7 +179,7 @@ describe("Payment Numeric Flow Validation", () => {
         actualFrom: sessionUser.walletAddress,
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: expectedAmountRaw,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       // Step 1: Create intent

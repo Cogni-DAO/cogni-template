@@ -1,0 +1,137 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@adapters/server/onchain/viem-evm-onchain-client`
+ * Purpose: Production EVM on-chain client using viem for RPC operations.
+ * Scope: Implements EvmOnchainClient interface with real RPC calls. Does not implement business logic.
+ * Invariants: Validates chain ID against repo-spec config at construction; requires EVM_RPC_URL.
+ * Side-effects: IO (RPC calls to EVM node)
+ * Notes: Used by EvmRpcOnChainVerifierAdapter and future treasury/ownership adapters.
+ * Links: docs/ONCHAIN_READERS.md, docs/PAYMENTS_DESIGN.md
+ * @public
+ */
+
+import {
+  createPublicClient,
+  http,
+  type Log,
+  type PublicClient,
+  type Transaction,
+  type TransactionReceipt,
+} from "viem";
+
+import { getWidgetConfig } from "@/shared/config/repoSpec.server";
+import { serverEnv } from "@/shared/env";
+import { CHAIN } from "@/shared/web3/chain";
+import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
+
+/**
+ * Production EVM on-chain client using viem.
+ * Validates configuration lazily (on first method call) to allow builds without EVM_RPC_URL.
+ */
+export class ViemEvmOnchainClient implements EvmOnchainClient {
+  private client: PublicClient | null = null;
+
+  private getClient(): PublicClient {
+    if (this.client) {
+      return this.client;
+    }
+
+    const env = serverEnv();
+    const config = getWidgetConfig();
+
+    // Validate chain ID matches repo-spec
+    if (config.chainId !== CHAIN.id) {
+      throw new Error(
+        `[ViemEvmOnchainClient] Chain mismatch: repo-spec declares ${config.chainId}, CHAIN constant is ${CHAIN.id}`
+      );
+    }
+
+    // Require EVM_RPC_URL in production/preview/dev
+    if (!env.EVM_RPC_URL) {
+      throw new Error(
+        "[ViemEvmOnchainClient] EVM_RPC_URL is required for on-chain verification. " +
+          "Set it in your environment or use APP_ENV=test for fake adapter."
+      );
+    }
+
+    this.client = createPublicClient({
+      chain: CHAIN,
+      transport: http(env.EVM_RPC_URL),
+    });
+
+    return this.client;
+  }
+
+  async getTransaction(txHash: `0x${string}`): Promise<Transaction | null> {
+    const client = this.getClient();
+    try {
+      const tx = await client.getTransaction({ hash: txHash });
+      return tx;
+    } catch (error) {
+      // viem throws if transaction not found
+      if (
+        error instanceof Error &&
+        error.message.includes("Transaction not found")
+      ) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async getTransactionReceipt(
+    txHash: `0x${string}`
+  ): Promise<TransactionReceipt | null> {
+    const client = this.getClient();
+    try {
+      const receipt = await client.getTransactionReceipt({ hash: txHash });
+      return receipt;
+    } catch (error) {
+      // viem throws if receipt not found (pending tx)
+      if (
+        error instanceof Error &&
+        error.message.includes("could not be found")
+      ) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
+  async getBlockNumber(): Promise<bigint> {
+    const client = this.getClient();
+    return client.getBlockNumber();
+  }
+
+  async getLogs(params: {
+    address: `0x${string}`;
+    event: {
+      name: string;
+      inputs: readonly { name: string; type: string; indexed?: boolean }[];
+    };
+    args?: Record<string, unknown>;
+    fromBlock: bigint;
+    toBlock: bigint;
+  }): Promise<Log[]> {
+    const client = this.getClient();
+    const logs = await client.getLogs({
+      address: params.address,
+      event: {
+        type: "event",
+        name: params.event.name,
+        inputs: params.event.inputs.map((input) => ({
+          name: input.name,
+          type: input.type,
+          indexed: input.indexed ?? false,
+        })),
+      },
+      args: params.args,
+      fromBlock: params.fromBlock,
+      toBlock: params.toBlock,
+    });
+
+    return logs;
+  }
+}

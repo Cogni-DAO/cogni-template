@@ -13,6 +13,7 @@
  */
 
 import type { OnChainVerifier, VerificationResult } from "@/ports";
+import { MIN_CONFIRMATIONS } from "@/shared/web3/chain";
 
 /**
  * Ponder-backed on-chain verifier (stubbed for MVP)
@@ -36,7 +37,7 @@ export class PonderOnChainVerifierAdapter implements OnChainVerifier {
       actualFrom: null, // Unknown in stub - will be from Ponder in Phase 3
       actualTo: params.expectedTo,
       actualAmount: params.expectedAmount,
-      confirmations: 5, // Stubbed confirmation count
+      confirmations: MIN_CONFIRMATIONS, // Use canonical constant
     };
   }
 }

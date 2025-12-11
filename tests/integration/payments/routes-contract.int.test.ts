@@ -248,7 +248,7 @@ describe("Payment Routes HTTP Contract Tests", () => {
         actualFrom: testSessionUser.walletAddress,
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: 5_000_000n,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       // Create first attempt and bind txHash
@@ -452,7 +452,7 @@ describe("Payment Routes HTTP Contract Tests", () => {
         actualFrom: `0x${"9".repeat(40)}`, // Different sender
         actualTo: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
         actualAmount: 5_000_000n,
-        confirmations: 5,
+        // confirmations defaults to MIN_CONFIRMATIONS
       });
 
       // Create intent and submit (will be REJECTED)

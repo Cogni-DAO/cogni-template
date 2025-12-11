@@ -12,6 +12,7 @@
  * @public
  */
 
+export type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 export { DrizzleAccountService } from "./accounts/drizzle.adapter";
 export { DrizzleUsageAdapter } from "./accounts/drizzle.usage.adapter";
 export { LiteLlmActivityUsageAdapter } from "./ai/litellm.activity-usage.adapter";
@@ -22,6 +23,8 @@ export {
   type MimirAdapterConfig,
   MimirMetricsAdapter,
 } from "./metrics/mimir.adapter";
+export { ViemEvmOnchainClient } from "./onchain/viem-evm-onchain-client.adapter";
 export { DrizzlePaymentAttemptRepository } from "./payments/drizzle-payment-attempt.adapter";
+export { EvmRpcOnChainVerifierAdapter } from "./payments/evm-rpc-onchain-verifier.adapter";
 export { PonderOnChainVerifierAdapter } from "./payments/ponder-onchain-verifier.adapter";
 export { SystemClock } from "./time/system.adapter";
