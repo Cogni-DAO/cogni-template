@@ -26,6 +26,7 @@ import {
   MimirMetricsAdapter,
   SystemClock,
   ViemEvmOnchainClient,
+  ViemTreasuryAdapter,
 } from "@/adapters/server";
 import {
   FakeLlmAdapter,
@@ -41,6 +42,7 @@ import type {
   MetricsQueryPort,
   OnChainVerifier,
   PaymentAttemptRepository,
+  TreasuryReadPort,
   UsageLogEntry,
   UsageLogsByRangeParams,
   UsageService,
@@ -71,6 +73,7 @@ export interface Container {
   onChainVerifier: OnChainVerifier;
   evmOnchainClient: EvmOnchainClient;
   metricsQuery: MetricsQueryPort;
+  treasuryReadPort: TreasuryReadPort;
 }
 
 // Feature-specific dependency types
@@ -175,6 +178,9 @@ function createContainer(): Container {
     new LiteLlmActivityUsageAdapter()
   );
 
+  // TreasuryReadPort: always uses ViemTreasuryAdapter (no test fake needed - mocked at port level in tests)
+  const treasuryReadPort = new ViemTreasuryAdapter(evmOnchainClient);
+
   // Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
   const config: ContainerConfig = {
     unhandledErrorPolicy: env.isProd ? "respond_500" : "rethrow",
@@ -200,6 +206,7 @@ function createContainer(): Container {
     onChainVerifier,
     evmOnchainClient,
     metricsQuery,
+    treasuryReadPort,
   };
 }
 

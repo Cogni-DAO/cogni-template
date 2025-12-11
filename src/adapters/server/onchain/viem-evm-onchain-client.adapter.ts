@@ -134,4 +134,9 @@ export class ViemEvmOnchainClient implements EvmOnchainClient {
 
     return logs;
   }
+
+  async getBalance(address: `0x${string}`): Promise<bigint> {
+    const client = this.getClient();
+    return client.getBalance({ address });
+  }
 }

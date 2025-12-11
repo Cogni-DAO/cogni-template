@@ -2,14 +2,15 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@components/kit/layout/Header`
- * Purpose: Mobile-first site header with responsive layout and overflow protection.
- * Scope: Provides site chrome with logo, nav, wallet, theme toggle, and mobile menu. Does not handle routing or analytics.
- * Invariants: No horizontal overflow; min-w-0/truncate/shrink-0 guards; GitHub hidden <lg; theme hidden <md.
+ * Module: `@features/layout/components/AppHeader`
+ * Purpose: Application header composing kit components and feature-specific widgets.
+ * Scope: App-shell layout component. Renders logo, nav, treasury, wallet, theme toggle, mobile menu. Does not handle routing or analytics.
+ * Invariants: No horizontal overflow; min-w-0/truncate/shrink-0 guards; GitHub hidden <lg; theme hidden <md; treasury visible md+.
  * Side-effects: none
  * Notes: Desktop wallet in [data-wallet-slot="desktop"] for CSS (see tailwind.css).
  *        Mobile: px-4 + logo pl-4; logo 24px, text-xl; MobileNav has GitHub + theme.
- * Links: src/components/kit/auth/WalletConnectButton.tsx, src/components/kit/navigation/MobileNav.tsx, src/styles/tailwind.css
+ *        Lives in features/layout as app-shell composition that knows about treasury, wallet, etc.
+ * Links: src/components/kit/auth/WalletConnectButton.tsx, src/components/kit/navigation/MobileNav.tsx, src/styles/tailwind.css, docs/ONCHAIN_READERS.md
  * @public
  */
 
@@ -26,8 +27,9 @@ import {
   NavigationLink,
 } from "@/components";
 import { WalletConnectButton } from "@/components/kit/auth/WalletConnectButton";
+import { TreasuryBadge } from "@/features/treasury/components/TreasuryBadge";
 
-export function Header(): ReactElement {
+export function AppHeader(): ReactElement {
   return (
     <header className="border-border border-b bg-background py-3">
       {/* Container: matches max-w-7xl pattern from Credits page */}
@@ -65,6 +67,11 @@ export function Header(): ReactElement {
 
             {/* Action buttons - responsive */}
             <div className="flex shrink-0 items-center gap-1 sm:gap-3">
+              {/* Treasury: visible md+ */}
+              <div className="hidden md:flex">
+                <TreasuryBadge />
+              </div>
+
               {/* GitHub: only visible lg+ in header (mobile users access via Sheet) */}
               <div className="hidden lg:flex">
                 <GithubButton

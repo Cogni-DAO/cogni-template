@@ -25,12 +25,14 @@ export class FakeEvmOnchainClient implements EvmOnchainClient {
   private receipts: Map<string, TransactionReceipt | null> = new Map();
   private blockNumber: bigint = 1000000n;
   private logs: Log[] = [];
+  private balances: Map<string, bigint> = new Map();
 
   // Call tracking for assertions
   public getTransactionCalls: `0x${string}`[] = [];
   public getReceiptCalls: `0x${string}`[] = [];
   public getBlockNumberCalls: number = 0;
   public getLogsCalls: number = 0;
+  public getBalanceCalls: `0x${string}`[] = [];
 
   /**
    * Configure a transaction response for a given hash.
@@ -63,6 +65,13 @@ export class FakeEvmOnchainClient implements EvmOnchainClient {
   }
 
   /**
+   * Configure balance for a given address.
+   */
+  setBalance(address: `0x${string}`, balance: bigint): void {
+    this.balances.set(address.toLowerCase(), balance);
+  }
+
+  /**
    * Reset all configured responses and call history.
    */
   reset(): void {
@@ -70,10 +79,12 @@ export class FakeEvmOnchainClient implements EvmOnchainClient {
     this.receipts.clear();
     this.blockNumber = 1000000n;
     this.logs = [];
+    this.balances.clear();
     this.getTransactionCalls = [];
     this.getReceiptCalls = [];
     this.getBlockNumberCalls = 0;
     this.getLogsCalls = 0;
+    this.getBalanceCalls = [];
   }
 
   async getTransaction(txHash: `0x${string}`): Promise<Transaction | null> {
@@ -107,6 +118,12 @@ export class FakeEvmOnchainClient implements EvmOnchainClient {
   }): Promise<Log[]> {
     this.getLogsCalls++;
     return this.logs;
+  }
+
+  async getBalance(address: `0x${string}`): Promise<bigint> {
+    this.getBalanceCalls.push(address);
+    const balance = this.balances.get(address.toLowerCase());
+    return balance ?? 0n;
   }
 }
 
