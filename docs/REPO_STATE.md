@@ -12,7 +12,23 @@
 - [Billing Evolution](./BILLING_EVOLUTION.md) - Dual-cost accounting implementation
 - [Activity Metrics](./ACTIVITY_METRICS.md) - Usage dashboard and charge receipt design
 - [On-Chain Readers](./ONCHAIN_READERS.md) - Treasury snapshots and token ownership intelligence (v2/v3)
+- [Chain Configuration](./CHAIN_CONFIG.md) - Policy for binding Web2 code to DAO-approved actions
 - [Observability](./OBSERVABILITY.md) - Logging and monitoring infrastructure
+
+### Overall Assessment
+
+| Area                     | Status | Notes                                                                                                        |
+| ------------------------ | ------ | ------------------------------------------------------------------------------------------------------------ |
+| Payment + Billing Loop   | 80%    | Flow works with real RPC verification. Needs comprehensive smoke/integration/e2e tests of payments + RPC     |
+| Web2 Security            | 70%    | **EVM RPC verification implemented**, needs monitoring & smoke tests                                         |
+| Web3 Governance          | 30%    | `repoSpec.server.ts` enforces repo-spec. Needs hardening. External services required (git-review, git-admin) |
+| External API Readiness   | 30%    | Service-auth only, API keys on roadmap                                                                       |
+| Observability            | 70%    | User Activity dashboard complete, need Admin Grafana metrics dashboards                                      |
+| AI Infrastructure Wiring | 50%    | Code docs, logs MCP server. Missing: Langfuse, Evals, LangGraph, assistant-ui/CopilotKit tool use rendering  |
+| AI Intelligence          | 10%    | Simple system prompt, no tool usage, no workflows                                                            |
+| Company Automations      | 40%    | Thick CI/CD test infra foundation. No automated data analysis, coding, or AI actions                         |
+
+The system accepts USDC payments with real EVM RPC verification, tracks LLM costs with profit margins, and provides full activity visibility. Service-auth architecture means all LLM calls use shared master key (per-user keys on roadmap). AI infrastructure is basic (streaming chat only), automation is primarily CI/CD gates with no autonomous agents yet.
 
 ---
 
@@ -205,17 +221,3 @@ Per-user API keys with 1:1 LiteLLM virtual key mapping for per-key spend attribu
 - App API key management (roadmap)
 - Rate limiting & monitoring dashboards
 - Comprehensive payment verification smoke tests
-
-### Overall Assessment
-
-| Area                     | Status | Notes                                                                                                       |
-| ------------------------ | ------ | ----------------------------------------------------------------------------------------------------------- |
-| Payment + Billing Loop   | 95%    | Flow works with real RPC verification                                                                       |
-| Production Security      | 70%    | **EVM RPC verification implemented**, needs monitoring & smoke tests                                        |
-| External API Readiness   | 30%    | Service-auth only, API keys on roadmap                                                                      |
-| Observability            | 85%    | Activity dashboard complete, need Grafana dashboards                                                        |
-| AI Infrastructure Wiring | 50%    | Code docs, logs MCP server. Missing: Langfuse, Evals, LangGraph, assistant-ui/CopilotKit tool use rendering |
-| AI Intelligence          | 10%    | Simple system prompt, no tool usage, no workflows                                                           |
-| Company Automations      | 40%    | Thick CI/CD test infra foundation. No automated data analysis, coding, or AI actions                        |
-
-The system accepts USDC payments with real EVM RPC verification, tracks LLM costs with profit margins, and provides full activity visibility. Service-auth architecture means all LLM calls use shared master key (per-user keys on roadmap). AI infrastructure is basic (streaming chat only), automation is primarily CI/CD gates with no autonomous agents yet.

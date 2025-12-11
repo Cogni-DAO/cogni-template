@@ -14,6 +14,7 @@
 import { sepolia } from "wagmi/chains";
 
 /** Wagmi chain object for the active network. */
+// TODO remove and replace with Base mainnet chain object
 export const CHAIN = sepolia;
 
 /** Chain ID for the active network. Validated against repo-spec at startup. */
