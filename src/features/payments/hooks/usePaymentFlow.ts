@@ -19,7 +19,7 @@ import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { usdCentsToCredits } from "@/core";
 import * as clientLogger from "@/shared/observability/client";
 import { EVENT_NAMES } from "@/shared/observability/events";
-import { USDC_ABI } from "@/shared/web3/usdc-abi";
+import { ERC20_ABI } from "@/shared/web3";
 import type { PaymentFlowState } from "@/types/payments";
 import { paymentsClient } from "../api/paymentsClient";
 import { formatPaymentError } from "../utils/formatPaymentError";
@@ -614,7 +614,7 @@ export function usePaymentFlow(
     writeContract({
       chainId,
       address: token as `0x${string}`,
-      abi: USDC_ABI,
+      abi: ERC20_ABI,
       functionName: "transfer",
       args: [to as `0x${string}`, BigInt(amountRaw)],
     });
