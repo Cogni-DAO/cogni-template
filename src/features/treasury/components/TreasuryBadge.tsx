@@ -3,20 +3,21 @@
 
 /**
  * Module: `@features/treasury/components/TreasuryBadge`
- * Purpose: Displays DAO treasury ETH balance in header.
- * Scope: Presentation component using useTreasuryBalance hook. Client-side only. Does not call APIs or perform RPC directly.
- * Invariants: Shows "Ξ --" on loading/error; no polling (hook handles fetch strategy).
+ * Purpose: Displays DAO treasury ETH balance in header as clickable link to block explorer.
+ * Scope: Presentation component using useTreasurySnapshot hook. Client-side only. Does not call APIs or perform RPC directly.
+ * Invariants: Shows "Ξ --" on loading/error; no polling (hook handles fetch strategy); links to block explorer when data available.
  * Side-effects: none (pure presentation)
- * Notes: Phase 2: ETH only. Optional stale indicator for RPC timeouts.
+ * Notes: Phase 2: ETH only. Optional stale indicator for RPC timeouts. Links to Etherscan/Basescan based on chainId.
  * Links: docs/ONCHAIN_READERS.md
  * @public
  */
 
 "use client";
 
+import Link from "next/link";
 import type { ReactElement } from "react";
-
-import { useTreasuryBalance } from "@/features/treasury/hooks/useTreasuryBalance";
+import { useTreasurySnapshot } from "@/features/treasury/hooks/useTreasurySnapshot";
+import { getAddressExplorerUrl } from "@/shared/web3";
 
 /**
  * Formats balance for display (e.g., "3,726.42" → "3,726")
@@ -35,7 +36,14 @@ function formatBalanceForDisplay(balance: string): string {
  * @returns Treasury badge element
  */
 export function TreasuryBadge(): ReactElement {
-  const { ethBalance, isLoading, error, staleWarning } = useTreasuryBalance();
+  const {
+    ethBalance,
+    treasuryAddress,
+    chainId,
+    isLoading,
+    error,
+    staleWarning,
+  } = useTreasurySnapshot();
 
   // Determine display value
   let displayValue = "--";
@@ -43,8 +51,42 @@ export function TreasuryBadge(): ReactElement {
     displayValue = formatBalanceForDisplay(ethBalance);
   }
 
+  // Generate explorer URL if we have the data
+  const explorerUrl =
+    treasuryAddress && chainId
+      ? getAddressExplorerUrl(chainId, treasuryAddress)
+      : null;
+
   // Optional: Add visual indicator for stale data
   const textStyle = staleWarning ? "opacity-60" : "";
+
+  const content = (
+    <>
+      <span className="text-muted-foreground">Treasury</span>
+      <span className={`font-mono font-semibold ${textStyle}`}>
+        Ξ {displayValue}
+      </span>
+    </>
+  );
+
+  // If we have an explorer URL, render as link; otherwise plain div
+  if (explorerUrl) {
+    return (
+      <Link
+        href={explorerUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-1.5 text-sm transition-colors hover:bg-accent"
+        title={
+          staleWarning
+            ? "Treasury balance unavailable (RPC timeout) - Click to view on block explorer"
+            : "DAO Treasury Balance - Click to view on block explorer"
+        }
+      >
+        {content}
+      </Link>
+    );
+  }
 
   return (
     <div
@@ -55,10 +97,7 @@ export function TreasuryBadge(): ReactElement {
           : "DAO Treasury Balance"
       }
     >
-      <span className="text-muted-foreground">Treasury</span>
-      <span className={`font-mono font-semibold ${textStyle}`}>
-        Ξ {displayValue}
-      </span>
+      {content}
     </div>
   );
 }

@@ -23,7 +23,7 @@ import {
 
 import { getPaymentConfig } from "@/shared/config/repoSpec.server";
 import { serverEnv } from "@/shared/env";
-import { CHAIN } from "@/shared/web3/chain";
+import { CHAIN } from "@/shared/web3";
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 
 /**

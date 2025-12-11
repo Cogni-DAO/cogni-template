@@ -35,22 +35,29 @@ export function AppHeader(): ReactElement {
       {/* Container: matches max-w-7xl pattern from Credits page */}
       <div className="mx-auto w-full max-w-7xl px-4 sm:px-6">
         <div className="flex items-center justify-between gap-2 sm:gap-4">
-          {/* Logo - min-w-0 prevents flex overflow */}
-          <Link
-            href="/"
-            className="flex min-w-0 items-center gap-2 pl-4 sm:pl-0"
-          >
-            <Image
-              src="/TransparentBrainOnly.png"
-              alt="Cogni Brain Logo"
-              width={24}
-              height={24}
-              className="shrink-0"
-            />
-            <span className="truncate font-bold text-gradient-accent text-xl">
-              Cogni
-            </span>
-          </Link>
+          {/* Left side: Logo + Treasury */}
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+            <Link
+              href="/"
+              className="flex min-w-0 items-center gap-2 pl-4 sm:pl-0"
+            >
+              <Image
+                src="/TransparentBrainOnly.png"
+                alt="Cogni Brain Logo"
+                width={24}
+                height={24}
+                className="shrink-0"
+              />
+              <span className="truncate font-bold text-gradient-accent text-xl">
+                Cogni
+              </span>
+            </Link>
+
+            {/* Treasury: visible md+ */}
+            <div className="hidden md:flex">
+              <TreasuryBadge />
+            </div>
+          </div>
 
           {/* Nav + Action buttons grouped together on right */}
           <div className="flex shrink-0 items-center gap-4 sm:gap-6">
@@ -67,11 +74,6 @@ export function AppHeader(): ReactElement {
 
             {/* Action buttons - responsive */}
             <div className="flex shrink-0 items-center gap-1 sm:gap-3">
-              {/* Treasury: visible md+ */}
-              <div className="hidden md:flex">
-                <TreasuryBadge />
-              </div>
-
               {/* GitHub: only visible lg+ in header (mobile users access via Sheet) */}
               <div className="hidden lg:flex">
                 <GithubButton
