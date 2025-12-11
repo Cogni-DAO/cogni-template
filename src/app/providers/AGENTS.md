@@ -5,8 +5,8 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-11-26
-- **Status:** draft
+- **Last reviewed:** 2025-12-12
+- **Status:** stable
 
 ## Purpose
 
@@ -34,15 +34,13 @@ Client-side provider composition for the web UI shell. Configures React context 
   - `AppProviders` - Main composition component (imports all sub-providers)
   - `AuthProvider` - NextAuth SessionProvider wrapper for auth context
   - `QueryProvider` - React Query client provider
-  - `WalletProvider` - wagmi + RainbowKit provider (creates config dynamically in useEffect)
+  - `WalletProvider` - wagmi + RainbowKit provider with static config
   - `createAppLightTheme` - RainbowKit light theme matching design system (--muted colors)
   - `createAppDarkTheme` - RainbowKit dark theme matching design system (--accent colors)
-  - `buildWagmiConfigOptions` - Pure helper for wagmi config (testable without React)
-  - `WagmiConnector`, `WagmiConnectorsLib`, `WagmiConfigOptions` - Wagmi type aliases
 - **Routes (if any):** none
 - **CLI (if any):** none
-- **Env/Config keys:** Reads `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID`
-- **Files considered API:** app-providers.client.tsx, wallet.client.tsx, wagmi-config-builder.ts, rainbowkit-theme.ts
+- **Env/Config keys:** Reads `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` (optional)
+- **Files considered API:** app-providers.client.tsx, auth.client.tsx, query.client.tsx, wallet.client.tsx, rainbowkit-theme.ts
 
 ## Ports (optional)
 
@@ -90,6 +88,7 @@ import { AppProviders } from "./providers/app-providers.client";
 - Equivalent role to /bootstrap (server runtime) and /mcp (MCP runtime)
 - Providers only configure client-side infrastructure, no domain logic
 - wagmi v2 API (compatible with RainbowKit 2.2.9)
-- wagmi config created in WalletProvider useEffect (dynamic import) to prevent indexedDB SSR errors
-- wagmi-config-builder.ts extracted for testability: generic helper tested with simple types, production uses WagmiConnector
+- WalletProvider uses static config from @/shared/web3/wagmi.config (SSR-enabled with cookieStorage)
+- WalletProvider always renders children (no null return blocking non-wallet UI)
 - RainbowKit theme functions use design system tokens: light mode uses --muted for subtle button appearance, dark mode uses --accent for proper contrast
+- RainbowKit mocked in tests/setup.ts to prevent browser deps loading in Node
