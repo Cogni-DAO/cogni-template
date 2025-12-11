@@ -19,8 +19,9 @@ cogni_dao:
   base_url: "https://proposal.cognidao.org" # v0 Base URL: cogni-proposal-launcher service
 
 # DAO Financial Rails Configuration
+# Inbound payment configuration for USDC credits top-up
 payments_in:
-  widget:
+  credits_topup:
     provider: cogni-usdc-backend-v1
     receiving_address: "0x070075F1389Ae1182aBac722B36CA12285d0c949" # Expected receiver (DAO Wallet), testing only address rn
     allowed_chains:

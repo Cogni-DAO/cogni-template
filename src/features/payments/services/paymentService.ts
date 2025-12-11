@@ -32,7 +32,7 @@ import type {
   OnChainVerifier,
   PaymentAttemptRepository,
 } from "@/ports";
-import { getWidgetConfig } from "@/shared/config/repoSpec.server";
+import { getPaymentConfig } from "@/shared/config/repoSpec.server";
 import type { Logger } from "@/shared/observability";
 import { USDC_TOKEN_ADDRESS, VERIFY_THROTTLE_SECONDS } from "@/shared/web3";
 import { PaymentNotFoundError } from "../errors";
@@ -114,8 +114,8 @@ export async function createIntent(
     );
   }
 
-  const widgetConfig = getWidgetConfig();
-  const { chainId, receivingAddress } = widgetConfig;
+  const paymentConfig = getPaymentConfig();
+  const { chainId, receivingAddress } = paymentConfig;
   const token = USDC_TOKEN_ADDRESS;
   const amountRaw = usdCentsToRawUsdc(input.amountUsdCents);
 

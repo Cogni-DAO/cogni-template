@@ -18,7 +18,7 @@ import type {
   PaymentErrorCode,
   VerificationResult,
 } from "@/ports";
-import { getWidgetConfig } from "@/shared/config/repoSpec.server";
+import { getPaymentConfig } from "@/shared/config/repoSpec.server";
 import { MIN_CONFIRMATIONS, USDC_TOKEN_ADDRESS } from "@/shared/web3/chain";
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 
@@ -75,7 +75,7 @@ export class EvmRpcOnChainVerifierAdapter implements OnChainVerifier {
     expectedAmount: bigint;
   }): Promise<VerificationResult> {
     // 1. Validate caller params against canonical config
-    const config = getWidgetConfig();
+    const config = getPaymentConfig();
     const canonicalToken = USDC_TOKEN_ADDRESS;
 
     if (params.chainId !== config.chainId) {

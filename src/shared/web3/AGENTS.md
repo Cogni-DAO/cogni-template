@@ -94,7 +94,7 @@ import { CHAIN_ID, DEPAY_BLOCKCHAIN, USDC_TOKEN_ADDRESS } from "@/shared/web3";
 - EvmOnchainClient is an infrastructure seam (NOT a domain port) shared by multiple adapters
 - Production uses ViemEvmOnchainClient with lazy initialization (allows builds without EVM_RPC_URL)
 - Config validation (chainId, EVM_RPC_URL) deferred to first RPC call via getClient()
-- PublicClient cached after first call - no repeated serverEnv()/getWidgetConfig() invocations
+- PublicClient cached after first call - no repeated serverEnv()/getPaymentConfig() invocations
 - /readyz probe validates RPC connectivity via assertEvmRpcConnectivity() (3s timeout)
 - Tests use FakeEvmOnchainClient (no RPC calls, no URL needed)
 - If supporting multiple chains, this module must be refactored to accept chain selection

@@ -3,11 +3,11 @@
 
 /**
  * Module: `@shared/config/repoSpec.server`
- * Purpose: Server-only accessor for governance-managed widget configuration stored in .cogni/repo-spec.yaml.
- * Scope: Reads and caches repo-spec on first access; validates chain alignment and receiver address shape before exposing config to callers; does not run in client bundles or accept env overrides.
+ * Purpose: Server-only accessor for governance-managed inbound payment configuration for USDC credits top-up, stored in .cogni/repo-spec.yaml.
+ * Scope: Reads and caches repo-spec on first access; validates chain alignment and receiver address shape before exposing config to callers; does not run in client bundles or accept env overrides. This is the canonical source for chainId + receiving_address used by OnChainVerifier and payment flows.
  * Invariants: Chain ID must match `@shared/web3` CHAIN_ID; receiving address must look like an EVM address (0x + 40 hex chars); provider must be present.
  * Side-effects: IO (reads repo-spec from disk) on first call only.
- * Links: .cogni/repo-spec.yaml, docs/DEPAY_PAYMENTS.md
+ * Links: .cogni/repo-spec.yaml, docs/PAYMENTS_DESIGN.md
  * @public
  */
 
@@ -21,20 +21,20 @@ import { CHAIN_ID } from "@/shared/web3/chain";
 interface RepoSpec {
   cogni_dao?: { chain_id?: unknown };
   payments_in?: {
-    widget?: {
+    credits_topup?: {
       provider?: unknown;
       receiving_address?: unknown;
     };
   };
 }
 
-export interface WidgetConfig {
+export interface InboundPaymentConfig {
   chainId: number;
   receivingAddress: string;
   provider: string;
 }
 
-let cachedWidgetConfig: WidgetConfig | null = null;
+let cachedPaymentConfig: InboundPaymentConfig | null = null;
 
 function isValidEvmAddress(address: string | undefined): address is string {
   if (!address) return false;
@@ -61,12 +61,12 @@ function loadRepoSpec(): RepoSpec {
   }
 }
 
-function validateAndMap(spec: RepoSpec): WidgetConfig {
+function validateAndMap(spec: RepoSpec): InboundPaymentConfig {
   const chainId = Number(spec?.cogni_dao?.chain_id);
 
   if (!Number.isFinite(chainId)) {
     throw new Error(
-      "[repo-spec] Invalid cogni_dao.chain_id; expected numeric Base chain ID"
+      "[repo-spec] Invalid cogni_dao.chain_id; expected numeric chain ID"
     );
   }
 
@@ -76,20 +76,20 @@ function validateAndMap(spec: RepoSpec): WidgetConfig {
     );
   }
 
-  const receivingAddress = spec?.payments_in?.widget?.receiving_address;
+  const receivingAddress = spec?.payments_in?.credits_topup?.receiving_address;
   if (
     typeof receivingAddress !== "string" ||
     !isValidEvmAddress(receivingAddress.trim())
   ) {
     throw new Error(
-      "[repo-spec] Invalid payments_in.widget.receiving_address; expected EVM address (0x + 40 hex chars)"
+      "[repo-spec] Invalid payments_in.credits_topup.receiving_address; expected EVM address (0x + 40 hex chars)"
     );
   }
 
-  const provider = spec?.payments_in?.widget?.provider;
+  const provider = spec?.payments_in?.credits_topup?.provider;
   if (typeof provider !== "string" || provider.trim().length === 0) {
     throw new Error(
-      "[repo-spec] Missing payments_in.widget.provider; specify widget provider in repo-spec"
+      "[repo-spec] Missing payments_in.credits_topup.provider; specify payment provider in repo-spec"
     );
   }
 
@@ -100,13 +100,13 @@ function validateAndMap(spec: RepoSpec): WidgetConfig {
   };
 }
 
-export function getWidgetConfig(): WidgetConfig {
-  if (cachedWidgetConfig) {
-    return cachedWidgetConfig;
+export function getPaymentConfig(): InboundPaymentConfig {
+  if (cachedPaymentConfig) {
+    return cachedPaymentConfig;
   }
 
   const spec = loadRepoSpec();
-  cachedWidgetConfig = validateAndMap(spec);
+  cachedPaymentConfig = validateAndMap(spec);
 
-  return cachedWidgetConfig;
+  return cachedPaymentConfig;
 }

@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-24
+- **Last reviewed:** 2024-12-11
 - **Status:** draft
 
 ## Purpose
 
-Server-only configuration helpers sourced from versioned repo metadata (e.g., `.cogni/repo-spec.yaml`). Provides typed accessors for governance-managed settings that must not rely on environment variables.
+Server-only configuration helpers sourced from versioned repo metadata (e.g., `.cogni/repo-spec.yaml`). Provides typed accessors for governance-managed inbound payment configuration for USDC credits top-up. This is the canonical source for chainId + receiving_address used by OnChainVerifier and payment flows. These settings must not rely on environment variables.
 
 ## Pointers
 
@@ -38,20 +38,20 @@ Server-only configuration helpers sourced from versioned repo metadata (e.g., `.
 
 ## Public Surface
 
-- **Exports:** server-only helpers reading repo-spec metadata
+- **Exports:** `getPaymentConfig()`, `InboundPaymentConfig` - server-only helpers reading repo-spec metadata
 - **Routes/CLI:** none
 - **Env/Config keys:** none (reads versioned files only)
 - **Files considered API:** index.ts, repoSpec.server.ts
 
 ## Responsibilities
 
-- This directory **does**: read repo-spec, validate governance-critical config, expose typed helpers for server callers.
-- This directory **does not**: access browser APIs, depend on frameworks, or expose env overrides.
+- This directory **does**: read repo-spec from `payments_in.credits_topup.*` path, validate governance-critical payment config (chainId, receivingAddress, provider), expose typed helpers for server callers.
+- This directory **does not**: access browser APIs, depend on frameworks, expose env overrides, or support legacy widget paths.
 
 ## Usage
 
-- Server components/helpers: `import { getWidgetConfig } from "@/shared/config";`
-- Client components: `import type { WidgetConfig } from "@/shared/config";` (props only, no direct file access)
+- Server components/helpers: `import { getPaymentConfig } from "@/shared/config";`
+- Client components: `import type { InboundPaymentConfig } from "@/shared/config";` (props only, no direct file access)
 
 ## Standards
 
@@ -72,4 +72,5 @@ Server-only configuration helpers sourced from versioned repo metadata (e.g., `.
 
 ## Notes
 
-- Repo-spec changes require a server restart to refresh cached widget config.
+- Repo-spec changes require a server restart to refresh cached payment config.
+- Reads from `payments_in.credits_topup.*` path only - no fallback to legacy widget paths.

@@ -21,7 +21,7 @@ import {
   type TransactionReceipt,
 } from "viem";
 
-import { getWidgetConfig } from "@/shared/config/repoSpec.server";
+import { getPaymentConfig } from "@/shared/config/repoSpec.server";
 import { serverEnv } from "@/shared/env";
 import { CHAIN } from "@/shared/web3/chain";
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
@@ -39,7 +39,7 @@ export class ViemEvmOnchainClient implements EvmOnchainClient {
     }
 
     const env = serverEnv();
-    const config = getWidgetConfig();
+    const config = getPaymentConfig();
 
     // Validate chain ID matches repo-spec
     if (config.chainId !== CHAIN.id) {

@@ -38,10 +38,10 @@
 **Adapters:**
 
 - [x] Create `adapters/server/payments/drizzle-payment-attempt.adapter.ts` (PaymentAttemptRepository)
-- [x] Create `adapters/server/payments/ponder-onchain-verifier.adapter.ts` (OnChainVerifier - stubbed now, real Ponder in Phase 3)
+- [x] Create `adapters/server/payments/evm-rpc-onchain-verifier.adapter.ts` (OnChainVerifier - real EVM RPC verification via viem)
 - [x] Create `adapters/test/payments/fake-onchain-verifier.adapter.ts` (OnChainVerifier - deterministic fake for tests)
 - [x] Export from `adapters/server/index.ts` and `adapters/test/index.ts`
-- [x] Wire in `bootstrap/container.ts`: production uses PonderOnChainVerifierAdapter, test uses FakeOnChainVerifierAdapter
+- [x] Wire in `bootstrap/container.ts`: production uses EvmRpcOnChainVerifierAdapter, test uses FakeOnChainVerifierAdapter
 
 **Feature Service:**
 
@@ -135,8 +135,8 @@
 - [x] Create `adapters/server/payments/evm-rpc-onchain-verifier.adapter.ts` implementing OnChainVerifier port
 - [x] Inject `EvmOnchainClient` dependency (see [ONCHAIN_READERS.md](ONCHAIN_READERS.md#shared-evm-infrastructure))
 - [x] Read canonical config:
-  - `chainId` from `getWidgetConfig().chainId` (sourced from `.cogni/repo-spec.yaml` `cogni_dao.chain_id`, validated against `CHAIN_ID` constant)
-  - `receivingAddress` from `getWidgetConfig().receivingAddress` (sourced from `.cogni/repo-spec.yaml` `payments_in.widget.receiving_address`)
+  - `chainId` from `getPaymentConfig().chainId` (sourced from `.cogni/repo-spec.yaml` `cogni_dao.chain_id`, validated against `CHAIN_ID` constant)
+  - `receivingAddress` from `getPaymentConfig().receivingAddress` (sourced from `.cogni/repo-spec.yaml` `payments_in.credits_topup.receiving_address`)
   - `tokenAddress` from `USDC_TOKEN_ADDRESS` constant (`@/shared/web3/chain`)
 - [x] Assert caller params match canonical config (immediate failure if mismatch)
 - [x] Use `EvmOnchainClient` for all RPC operations: getTransaction, getTransactionReceipt, getBlockNumber
@@ -374,7 +374,7 @@ PENDING_UNVERIFIED -> FAILED (on tx revert OR receipt not found after 24h)
 **Production (EvmRpcOnChainVerifierAdapter):** Direct RPC verification with canonical config validation:
 
 1. **Validate caller params against canonical config:**
-   - Read: `chainId` from `getWidgetConfig().chainId`, `receivingAddress` from `getWidgetConfig().receivingAddress`, `tokenAddress` from `USDC_TOKEN_ADDRESS`
+   - Read: `chainId` from `getPaymentConfig().chainId`, `receivingAddress` from `getPaymentConfig().receivingAddress`, `tokenAddress` from `USDC_TOKEN_ADDRESS`
    - If `chainId !== config.chainId` → return `FAILED` (error_code: `INVALID_CHAIN`)
    - If `expectedTo !== config.receivingAddress` → return `FAILED` (error_code: `INVALID_RECIPIENT`)
    - If `expectedToken !== config.tokenAddress` → return `FAILED` (error_code: `INVALID_TOKEN`)
@@ -484,10 +484,11 @@ WHERE reason = 'widget_payment';
 
 - `.cogni/repo-spec.yaml` - Governance-managed configuration:
   - `cogni_dao.chain_id` - Chain ID as string (e.g., "11155111" for Ethereum Sepolia, "8453" for Base mainnet)
-  - `payments_in.widget.receiving_address` - DAO wallet receiving address
-  - `payments_in.widget.allowed_chains` - Chain names (e.g., ["Sepolia"])
-  - `payments_in.widget.allowed_tokens` - Token names (e.g., ["USDC"])
-- `src/shared/config/repoSpec.server.ts` - Server-side reader: `getWidgetConfig()` returns `{ chainId, receivingAddress, provider }`
+  - `payments_in.credits_topup.receiving_address` - DAO wallet receiving address
+  - `payments_in.credits_topup.allowed_chains` - Chain names (e.g., ["Sepolia"])
+  - `payments_in.credits_topup.allowed_tokens` - Token names (e.g., ["USDC"])
+  - `payments_in.credits_topup.provider` - Payment provider identifier
+- `src/shared/config/repoSpec.server.ts` - Server-side reader: `getPaymentConfig()` returns `{ chainId, receivingAddress, provider }`
 - `src/shared/web3/chain.ts` - Hardcoded constants:
   - `CHAIN_ID` - Must match `cogni_dao.chain_id` from repo-spec
   - `USDC_TOKEN_ADDRESS` - Token contract address for configured chain

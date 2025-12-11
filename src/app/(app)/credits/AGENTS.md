@@ -50,12 +50,12 @@ Protected credits page composition and payment widget wiring. Server component l
 
 ## Usage
 
-- Server page calls `getWidgetConfig()` and passes props to `CreditsPageClient`.
-- Client component renders DePay widget with provided chainId/receivingAddress and calls confirm endpoint on success.
+- Server page calls `getPaymentConfig()` and passes props to `CreditsPageClient`.
+- Client component renders payment UI with provided chainId/receivingAddress and calls confirm endpoint on success.
 
 ## Standards
 
-- Widget configuration must come from repo-spec via `getWidgetConfig()`; no env overrides or client-side file reads.
+- Payment configuration must come from repo-spec via `getPaymentConfig()`; no env overrides or client-side file reads.
 
 ## Dependencies
 
