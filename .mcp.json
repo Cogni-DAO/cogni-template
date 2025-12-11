@@ -1,7 +1,5 @@
 {
-  "mcpServers": {
-    // active servers go here
-  },
+  "mcpServers": {},
   "_disabledMcpServers": {
     "shadcn": {
       "command": "npx",

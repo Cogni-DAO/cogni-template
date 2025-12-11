@@ -65,6 +65,7 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   ".agent",
   ".allstar",
   ".claude",
+  ".clinerules",
   ".cogni",
   ".cursor",
   ".dependency-cruiser.cjs",
