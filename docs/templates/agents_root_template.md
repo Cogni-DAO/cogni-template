@@ -32,9 +32,10 @@
 ## Pointers
 
 - [Architecture](docs/ARCHITECTURE.md)
-- [Implementation Plan](docs/IMPLEMENTATION_PLAN.md)
-- [Repo Specification](.cogni/repo-spec.yaml) <!-- optional -->
+- [Repo State](docs/REPO_STATE.md) <!-- Current implementation status -->
+- [Repo Specification](.cogni/repo-spec.yaml) <!-- DAO configuration spec -->
 - [Subdir AGENTS.md Policy](docs/templates/agents_subdir_template.md)
+- [Feature Spec Template](docs/templates/feature_spec_template.md)
 - [Style & Lint Rules](docs/STYLE.md)
 
 ## Usage

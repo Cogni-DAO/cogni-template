@@ -1,6 +1,6 @@
 # Repository State Summary
 
-**Assessment Date:** 2025-12-10
+**Assessment Date:** 2025-12-11
 **Core Mission:** Crypto-metered AI infrastructure where users pay DAO wallet → get credits → consume LLM → billing tracked with dual-cost accounting
 
 **Related Documentation:**
@@ -12,7 +12,23 @@
 - [Billing Evolution](./BILLING_EVOLUTION.md) - Dual-cost accounting implementation
 - [Activity Metrics](./ACTIVITY_METRICS.md) - Usage dashboard and charge receipt design
 - [On-Chain Readers](./ONCHAIN_READERS.md) - Treasury snapshots and token ownership intelligence (v2/v3)
+- [Chain Configuration](./CHAIN_CONFIG.md) - Policy for binding Web2 code to DAO-approved actions
 - [Observability](./OBSERVABILITY.md) - Logging and monitoring infrastructure
+
+### Overall Assessment
+
+| Area                     | Status | Notes                                                                                                        |
+| ------------------------ | ------ | ------------------------------------------------------------------------------------------------------------ |
+| Payment + Billing Loop   | 80%    | Flow works with real RPC verification. Needs comprehensive smoke/integration/e2e tests of payments + RPC     |
+| Web2 Security            | 70%    | **EVM RPC verification implemented**, needs monitoring & smoke tests                                         |
+| Web3 Governance          | 30%    | `repoSpec.server.ts` enforces repo-spec. Needs hardening. External services required (git-review, git-admin) |
+| External API Readiness   | 30%    | Service-auth only, API keys on roadmap                                                                       |
+| Observability            | 70%    | User Activity dashboard complete, need Admin Grafana metrics dashboards                                      |
+| AI Infrastructure Wiring | 50%    | Code docs, logs MCP server. Missing: Langfuse, Evals, LangGraph, assistant-ui/CopilotKit tool use rendering  |
+| AI Intelligence          | 10%    | Simple system prompt, no tool usage, no workflows                                                            |
+| Company Automations      | 40%    | Thick CI/CD test infra foundation. No automated data analysis, coding, or AI actions                         |
+
+The system accepts USDC payments with real EVM RPC verification, tracks LLM costs with profit margins, and provides full activity visibility. Service-auth architecture means all LLM calls use shared master key (per-user keys on roadmap). AI infrastructure is basic (streaming chat only), automation is primarily CI/CD gates with no autonomous agents yet.
 
 ---
 
@@ -32,13 +48,14 @@ wagmi + RainbowKit client-side wallet connection. Chain locked to Base mainnet (
 
 ### 3. Native USDC Payments ✅
 
+x
 Intent-based payment flow: create intent → user transfers USDC → submit txHash → verify → credit account.
 
 - State machine: `CREATED_INTENT` → `PENDING_UNVERIFIED` → `CREDITED` (+ terminal: `REJECTED`, `FAILED`)
 - Two-port design: `PaymentAttemptRepository` + `OnChainVerifier`
 - Idempotency enforced at DB level
 
-**Security Note:** ⚠️ **MVP trust model: OnChainVerifier adapter is STUBBED (always returns VERIFIED). Real RPC-backed verification (EvmRpcOnChainVerifier) required for production. See [Post-MVP Security Hardening](#13-post-mvp-security-hardening-).**
+**Security Note:**: EvmRpcOnChainVerifierAdapter implemented with viem RPC verification. Validates transactions against canonical config (chain, recipient, token, amount).\*\*
 
 **Reference:** [PAYMENTS_DESIGN.md](./PAYMENTS_DESIGN.md)
 
@@ -137,23 +154,24 @@ Per-user API keys with 1:1 LiteLLM virtual key mapping for per-key spend attribu
 
 **Reference:** [ACCOUNTS_API_KEY_ENDPOINTS.md](./ACCOUNTS_API_KEY_ENDPOINTS.md) - Full spec (not implemented), [ACCOUNTS_DESIGN.md](./ACCOUNTS_DESIGN.md), [SECURITY_AUTH_SPEC.md](./SECURITY_AUTH_SPEC.md)
 
-### 13. Post-MVP Security Hardening ❌
+### 13. Post-MVP Security Hardening ⚠️
 
-**Current Trust Model (MVP):**
+**Current Trust Model:**
 
 - ✅ SIWE-authenticated session resolves billing account
 - ✅ Payment flow structure in place (intent → submit → verify)
-- ⚠️ **OnChainVerifier is STUBBED** - always returns VERIFIED without real on-chain validation
-- ⚠️ No automatic reconciliation with on-chain data
+- ✅ **EvmRpcOnChainVerifierAdapter implemented** - Real viem RPC verification with canonical config validation
+- ✅ Wired in DI container for all non-test environments
+- ⚠️ Needs comprehensive smoke tests against known-good transactions
 
-**Security Gap:** Backend trusts txHash submission without cryptographic proof. Mitigated by session auth, idempotency, and manual monitoring.
+**Security Status:** Backend performs cryptographic verification via EVM RPC. Validates chain, recipient, token, amount, and confirmations.
 
-**Required for Production - See [PAYMENTS_DESIGN.md Phase 3](./PAYMENTS_DESIGN.md#phase-3-evm-rpc-verification-next---direct-rpc-with-viem):**
+**Remaining for Production Hardening - See [PAYMENTS_DESIGN.md Phase 3](./PAYMENTS_DESIGN.md#phase-3-evm-rpc-verification-next---direct-rpc-with-viem):**
 
-- [ ] Implement `EvmRpcOnChainVerifierAdapter` using viem (getTransaction, getTransactionReceipt, decode Transfer)
-- [ ] Wire into DI for all non-test environments
 - [ ] Add smoke tests against known-good txs on Sepolia/Base
-- [ ] Validate all failure modes (TX_NOT_FOUND, TX_REVERTED, SENDER_MISMATCH, etc.)
+- [ ] Validate all failure modes in integration tests
+- [ ] Monitoring and alerting for verification failures
+- [ ] Rate limiting on RPC calls to prevent cost spikes
 
 ### 14. Operational Hardening ❌
 
@@ -200,20 +218,6 @@ Per-user API keys with 1:1 LiteLLM virtual key mapping for per-key spend attribu
 
 ### ❌ Not Started (Critical for Production)
 
-- **Ponder on-chain verification** (see [PAYMENTS_PONDER_VERIFICATION.md](./PAYMENTS_PONDER_VERIFICATION.md))
 - App API key management (roadmap)
 - Rate limiting & monitoring dashboards
-
-### Overall Assessment
-
-| Area                     | Status | Notes                                                                                                       |
-| ------------------------ | ------ | ----------------------------------------------------------------------------------------------------------- |
-| Payment + Billing Loop   | 90%    | Flow works, verification stubbed                                                                            |
-| Production Security      | 40%    | **Need Ponder verification**                                                                                |
-| External API Readiness   | 30%    | Service-auth only, API keys on roadmap                                                                      |
-| Observability            | 85%    | Activity dashboard complete, need Grafana dashboards                                                        |
-| AI Infrastructure Wiring | 50%    | Code docs, logs MCP server. Missing: Langfuse, Evals, LangGraph, assistant-ui/CopilotKit tool use rendering |
-| AI Intelligence          | 10%    | Simple system prompt, no tool usage, no workflows                                                           |
-| Company Automations      | 40%    | Thick CI/CD test infra foundation. No automated data analysis, coding, or AI actions                        |
-
-The system accepts USDC payments, tracks LLM costs with profit margins, and provides full activity visibility. Service-auth architecture means all LLM calls use shared master key (per-user keys on roadmap). Requires Ponder verification for production-grade fraud prevention. AI infrastructure is basic (streaming chat only), automation is primarily CI/CD gates with no autonomous agents yet.
+- Comprehensive payment verification smoke tests

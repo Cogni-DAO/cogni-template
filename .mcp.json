@@ -1,5 +1,6 @@
 {
-  "mcpServers": {
+  "mcpServers": {},
+  "_disabledMcpServers": {
     "shadcn": {
       "command": "npx",
       "args": ["shadcn@latest", "mcp"]
@@ -17,6 +18,12 @@
         "-lc",
         "docker rm -f mcp-grafana-local >/dev/null 2>&1 || true; exec docker run --name mcp-grafana-local --rm --init -i --network web -e GRAFANA_URL=http://grafana:3000 mcp/grafana -t stdio"
       ]
+    },
+    "assistant-ui": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@assistant-ui/mcp-docs-server"],
+      "env": {}
     }
   }
 }

@@ -4,11 +4,14 @@
 /**
  * Module: `@shared/config`
  * Purpose: Barrel export for governance-backed configuration helpers sourced from .cogni/repo-spec.yaml.
- * Scope: Server-only helpers; reads versioned config and exposes typed widget config; does not expose env overrides or client-facing APIs.
+ * Scope: Server-only helpers; reads versioned config and exposes typed inbound payment config for USDC credits top-up; does not expose env overrides or client-facing APIs.
  * Invariants: No env overrides; callers import from this entry point only.
  * Side-effects: none (delegates to repoSpec.server.ts for IO)
  * Links: .cogni/repo-spec.yaml
  * @public
  */
 
-export { getWidgetConfig, type WidgetConfig } from "./repoSpec.server";
+export {
+  getPaymentConfig,
+  type InboundPaymentConfig,
+} from "./repoSpec.server";

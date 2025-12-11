@@ -3,8 +3,8 @@
 
 /**
  * Module: `@tests/unit/shared/config/repoSpec.server`
- * Purpose: Validate that repo-spec-driven widget config loads correctly and rejects invalid specs.
- * Scope: Pure unit tests against getWidgetConfig(); uses a temporary cwd with fixture repo-spec files; does not assert cache identity or UI wiring.
+ * Purpose: Validate that repo-spec-driven inbound payment config loads correctly and rejects invalid specs.
+ * Scope: Pure unit tests against getPaymentConfig(); uses a temporary cwd with fixture repo-spec files; does not assert cache identity or UI wiring.
  * Invariants: repo-spec is the single source for chainId/receivingAddress/provider; invalid specs throw clear errors.
  * Side-effects: none (temp filesystem only)
  * Links: src/shared/config/repoSpec.server.ts, .cogni/repo-spec.yaml
@@ -17,11 +17,11 @@ import path from "node:path";
 
 import { describe, expect, it, vi } from "vitest";
 
-import type { WidgetConfig } from "@/shared/config";
+import type { InboundPaymentConfig } from "@/shared/config";
 import { CHAIN_ID } from "@/shared/web3";
 
 interface RepoSpecModule {
-  getWidgetConfig: () => WidgetConfig;
+  getPaymentConfig: () => InboundPaymentConfig;
 }
 
 const ORIGINAL_CWD = process.cwd();
@@ -34,7 +34,7 @@ function writeRepoSpec(yaml: string): string {
   return tmpDir;
 }
 
-async function loadWidgetConfig(): Promise<RepoSpecModule> {
+async function loadPaymentConfig(): Promise<RepoSpecModule> {
   vi.resetModules();
   return import("@/shared/config/repoSpec.server");
 }
@@ -44,28 +44,28 @@ function cleanup(tmpDir: string): void {
   fs.rmSync(tmpDir, { recursive: true, force: true });
 }
 
-describe("getWidgetConfig (repo-spec)", () => {
-  it("returns mapped widget config for a valid repo-spec", async () => {
+describe("getPaymentConfig (repo-spec)", () => {
+  it("returns mapped inbound payment config for a valid repo-spec", async () => {
     const tmpDir = writeRepoSpec(
       [
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
-        "  widget:",
-        "    provider: depay",
+        "  credits_topup:",
+        "    provider: cogni-usdc-backend-v1",
         '    receiving_address: "0x1111111111111111111111111111111111111111"',
       ].join("\n")
     );
     process.chdir(tmpDir);
 
     try {
-      const { getWidgetConfig } = await loadWidgetConfig();
-      const config = getWidgetConfig();
+      const { getPaymentConfig } = await loadPaymentConfig();
+      const config = getPaymentConfig();
 
       expect(config).toEqual({
         chainId: CHAIN_ID,
         receivingAddress: "0x1111111111111111111111111111111111111111",
-        provider: "depay",
+        provider: "cogni-usdc-backend-v1",
       });
     } finally {
       cleanup(tmpDir);
@@ -78,16 +78,16 @@ describe("getWidgetConfig (repo-spec)", () => {
         "cogni_dao:",
         "  chain_id: not-a-number",
         "payments_in:",
-        "  widget:",
-        "    provider: depay",
+        "  credits_topup:",
+        "    provider: cogni-usdc-backend-v1",
         '    receiving_address: "0x1111111111111111111111111111111111111111"',
       ].join("\n")
     );
     process.chdir(tmpDir);
 
     try {
-      const { getWidgetConfig } = await loadWidgetConfig();
-      expect(() => getWidgetConfig()).toThrow(/Invalid cogni_dao\.chain_id/i);
+      const { getPaymentConfig } = await loadPaymentConfig();
+      expect(() => getPaymentConfig()).toThrow(/Invalid cogni_dao\.chain_id/i);
     } finally {
       cleanup(tmpDir);
     }
@@ -99,16 +99,16 @@ describe("getWidgetConfig (repo-spec)", () => {
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID + 1}"`,
         "payments_in:",
-        "  widget:",
-        "    provider: depay",
+        "  credits_topup:",
+        "    provider: cogni-usdc-backend-v1",
         '    receiving_address: "0x1111111111111111111111111111111111111111"',
       ].join("\n")
     );
     process.chdir(tmpDir);
 
     try {
-      const { getWidgetConfig } = await loadWidgetConfig();
-      expect(() => getWidgetConfig()).toThrow(/Chain mismatch/i);
+      const { getPaymentConfig } = await loadPaymentConfig();
+      expect(() => getPaymentConfig()).toThrow(/Chain mismatch/i);
     } finally {
       cleanup(tmpDir);
     }
@@ -120,16 +120,16 @@ describe("getWidgetConfig (repo-spec)", () => {
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
-        "  widget:",
-        "    provider: depay",
+        "  credits_topup:",
+        "    provider: cogni-usdc-backend-v1",
         "    receiving_address: 0x1234",
       ].join("\n")
     );
     process.chdir(tmpDir);
 
     try {
-      const { getWidgetConfig } = await loadWidgetConfig();
-      expect(() => getWidgetConfig()).toThrow(/receiving_address/i);
+      const { getPaymentConfig } = await loadPaymentConfig();
+      expect(() => getPaymentConfig()).toThrow(/receiving_address/i);
     } finally {
       cleanup(tmpDir);
     }
@@ -141,7 +141,7 @@ describe("getWidgetConfig (repo-spec)", () => {
         "cogni_dao:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
-        "  widget:",
+        "  credits_topup:",
         '    receiving_address: "0x1111111111111111111111111111111111111111"',
         "    provider: ''",
       ].join("\n")
@@ -149,8 +149,97 @@ describe("getWidgetConfig (repo-spec)", () => {
     process.chdir(tmpDir);
 
     try {
-      const { getWidgetConfig } = await loadWidgetConfig();
-      expect(() => getWidgetConfig()).toThrow(/provider/i);
+      const { getPaymentConfig } = await loadPaymentConfig();
+      expect(() => getPaymentConfig()).toThrow(/provider/i);
+    } finally {
+      cleanup(tmpDir);
+    }
+  });
+
+  it("accepts chain_id as a number (not just string)", async () => {
+    const tmpDir = writeRepoSpec(
+      [
+        "cogni_dao:",
+        `  chain_id: ${CHAIN_ID}`,
+        "payments_in:",
+        "  credits_topup:",
+        "    provider: cogni-usdc-backend-v1",
+        '    receiving_address: "0x1111111111111111111111111111111111111111"',
+      ].join("\n")
+    );
+    process.chdir(tmpDir);
+
+    try {
+      const { getPaymentConfig } = await loadPaymentConfig();
+      const config = getPaymentConfig();
+
+      expect(config.chainId).toBe(CHAIN_ID);
+    } finally {
+      cleanup(tmpDir);
+    }
+  });
+
+  it("throws on invalid EVM address format (schema validation)", async () => {
+    const tmpDir = writeRepoSpec(
+      [
+        "cogni_dao:",
+        `  chain_id: "${CHAIN_ID}"`,
+        "payments_in:",
+        "  credits_topup:",
+        "    provider: test-provider",
+        '    receiving_address: "not-an-address"',
+      ].join("\n")
+    );
+    process.chdir(tmpDir);
+
+    try {
+      const { getPaymentConfig } = await loadPaymentConfig();
+      expect(() => getPaymentConfig()).toThrow(/repo-spec\.yaml structure/i);
+    } finally {
+      cleanup(tmpDir);
+    }
+  });
+
+  it("accepts any string values for allowed_chains (informational metadata)", async () => {
+    const tmpDir = writeRepoSpec(
+      [
+        "cogni_dao:",
+        `  chain_id: "${CHAIN_ID}"`,
+        "payments_in:",
+        "  credits_topup:",
+        "    provider: test-provider",
+        '    receiving_address: "0x1111111111111111111111111111111111111111"',
+        "    allowed_chains:",
+        '      - "CustomChain"',
+        '      - "AnotherChain"',
+      ].join("\n")
+    );
+    process.chdir(tmpDir);
+
+    try {
+      const { getPaymentConfig } = await loadPaymentConfig();
+      const config = getPaymentConfig();
+      expect(config.receivingAddress).toBe(
+        "0x1111111111111111111111111111111111111111"
+      );
+    } finally {
+      cleanup(tmpDir);
+    }
+  });
+
+  it("throws when payments_in.credits_topup is missing", async () => {
+    const tmpDir = writeRepoSpec(
+      [
+        "cogni_dao:",
+        `  chain_id: "${CHAIN_ID}"`,
+        "payments_in:", // missing credits_topup
+      ].join("\n")
+    );
+    process.chdir(tmpDir);
+
+    try {
+      const { getPaymentConfig } = await loadPaymentConfig();
+      expect(() => getPaymentConfig()).toThrow(/repo-spec\.yaml structure/i);
     } finally {
       cleanup(tmpDir);
     }

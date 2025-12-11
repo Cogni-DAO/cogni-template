@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-02
+- **Last reviewed:** 2024-12-11
 - **Status:** draft
 
 ## Purpose
 
-Feature layer for USDC payment attempts with backend verification. Handles payment intent creation, transaction submission, verification polling, atomic settlement, and legacy widget payments.
+Feature layer for USDC payment attempts with backend verification. Handles payment intent creation, transaction submission, verification polling, and atomic settlement for inbound credit top-ups.
 
 ## Pointers
 
@@ -62,7 +62,7 @@ Feature layer for USDC payment attempts with backend verification. Handles payme
 ## Responsibilities
 
 - This directory **does**: orchestrate payment attempt lifecycle; validate state machine transitions via core/rules; enforce TTLs (30min intent, 24h verification timeout); delegate settlement to confirmCreditsPayment; compute credits from USD cents (1 cent = 10 credits); validate idempotency; aggregate balance/ledger data
-- This directory **does not**: handle HTTP/session auth; access database directly; log payment events (repository owns); perform direct on-chain RPC calls; manage widget UI
+- This directory **does not**: handle HTTP/session auth; access database directly; log payment events (repository owns); perform direct on-chain RPC calls; implement payment UI
 
 ## Usage
 

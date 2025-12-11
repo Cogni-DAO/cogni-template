@@ -15,7 +15,7 @@ Shared blockchain configuration for web3 integrations. Provides hardcoded Base m
 ## Pointers
 
 - [Root AGENTS.md](../../../AGENTS.md)
-- [DePay Payments](../../../docs/DEPAY_PAYMENTS.md)
+- [Chain Configuration](../../../docs/CHAIN_CONFIG.md)
 - [Repo Spec](.cogni/repo-spec.yaml)
 
 ## Boundaries
@@ -43,7 +43,6 @@ Shared blockchain configuration for web3 integrations. Provides hardcoded Base m
   - `CHAIN` - wagmi Chain object for Ethereum Sepolia testnet (imported from wagmi/chains)
   - `CHAIN_ID` - Ethereum Sepolia testnet chain ID (11155111)
   - `getChainId()` - Function returning chain ID
-  - `DEPAY_BLOCKCHAIN` - DePay blockchain identifier ("sepolia")
   - `USDC_TOKEN_ADDRESS` - Official USDC contract on Ethereum Sepolia testnet
   - `MIN_CONFIRMATIONS` - Minimum confirmations required for payment verification (5)
   - `VERIFY_THROTTLE_SECONDS` - Verification polling throttle (10 seconds)
@@ -67,7 +66,7 @@ Shared blockchain configuration for web3 integrations. Provides hardcoded Base m
 ## Usage
 
 ```typescript
-import { CHAIN_ID, DEPAY_BLOCKCHAIN, USDC_TOKEN_ADDRESS } from "@/shared/web3";
+import { CHAIN, CHAIN_ID, USDC_TOKEN_ADDRESS } from "@/shared/web3";
 ```
 
 ## Standards
@@ -94,7 +93,7 @@ import { CHAIN_ID, DEPAY_BLOCKCHAIN, USDC_TOKEN_ADDRESS } from "@/shared/web3";
 - EvmOnchainClient is an infrastructure seam (NOT a domain port) shared by multiple adapters
 - Production uses ViemEvmOnchainClient with lazy initialization (allows builds without EVM_RPC_URL)
 - Config validation (chainId, EVM_RPC_URL) deferred to first RPC call via getClient()
-- PublicClient cached after first call - no repeated serverEnv()/getWidgetConfig() invocations
+- PublicClient cached after first call - no repeated serverEnv()/getPaymentConfig() invocations
 - /readyz probe validates RPC connectivity via assertEvmRpcConnectivity() (3s timeout)
 - Tests use FakeEvmOnchainClient (no RPC calls, no URL needed)
 - If supporting multiple chains, this module must be refactored to accept chain selection
