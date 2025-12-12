@@ -23,6 +23,7 @@ import type {
 import { isTxHashAlreadyBoundPortError } from "@/ports";
 import { users } from "@/shared/db/schema.auth";
 import { billingAccounts } from "@/shared/db/schema.billing";
+import { CHAIN_ID } from "@/shared/web3/chain";
 
 import { dispose, makeHarness, type TestHarness } from "./factory";
 
@@ -108,7 +109,7 @@ export function registerPaymentAttemptRepositoryContract(
         const params: CreatePaymentAttemptParams = {
           billingAccountId: testBillingAccountId,
           fromAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-          chainId: 11155111,
+          chainId: CHAIN_ID,
           token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
           toAddress: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
           amountRaw: 5_000_000n,
@@ -129,7 +130,7 @@ export function registerPaymentAttemptRepositoryContract(
         const params: CreatePaymentAttemptParams = {
           billingAccountId: testBillingAccountId,
           fromAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-          chainId: 11155111,
+          chainId: CHAIN_ID,
           token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
           toAddress: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
           amountRaw: 5_000_000n,
@@ -153,7 +154,7 @@ export function registerPaymentAttemptRepositoryContract(
         const params: CreatePaymentAttemptParams = {
           billingAccountId: testBillingAccountId,
           fromAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-          chainId: 11155111,
+          chainId: CHAIN_ID,
           token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
           toAddress: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
           amountRaw: 5_000_000n,
@@ -166,13 +167,13 @@ export function registerPaymentAttemptRepositoryContract(
         await repo.bindTxHash(attempt.id, txHash, new Date());
 
         // Find by txHash succeeds
-        const found = await repo.findByTxHash(11155111, txHash);
+        const found = await repo.findByTxHash(CHAIN_ID, txHash);
         expect(found).not.toBeNull();
         expect(found?.id).toBe(attempt.id);
         expect(found?.txHash).toBe(txHash);
 
         // Different chain returns null
-        const notFound = await repo.findByTxHash(8453, txHash);
+        const notFound = await repo.findByTxHash(11155111, txHash); // Sepolia, not active chain
         expect(notFound).toBeNull();
       });
 
@@ -180,7 +181,7 @@ export function registerPaymentAttemptRepositoryContract(
         const params1: CreatePaymentAttemptParams = {
           billingAccountId: testBillingAccountId,
           fromAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-          chainId: 11155111,
+          chainId: CHAIN_ID,
           token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
           toAddress: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
           amountRaw: 5_000_000n,
@@ -209,7 +210,7 @@ export function registerPaymentAttemptRepositoryContract(
         const params: CreatePaymentAttemptParams = {
           billingAccountId: testBillingAccountId,
           fromAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-          chainId: 11155111,
+          chainId: CHAIN_ID,
           token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
           toAddress: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
           amountRaw: 5_000_000n,
@@ -241,7 +242,7 @@ export function registerPaymentAttemptRepositoryContract(
         const params: CreatePaymentAttemptParams = {
           billingAccountId: testBillingAccountId,
           fromAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-          chainId: 11155111,
+          chainId: CHAIN_ID,
           token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
           toAddress: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
           amountRaw: 5_000_000n,
@@ -273,7 +274,7 @@ export function registerPaymentAttemptRepositoryContract(
         const params: CreatePaymentAttemptParams = {
           billingAccountId: testBillingAccountId,
           fromAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-          chainId: 11155111,
+          chainId: CHAIN_ID,
           token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
           toAddress: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
           amountRaw: 5_000_000n,

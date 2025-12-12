@@ -18,6 +18,7 @@ import {
 } from "@tests/_fixtures/auth/nextauth-http-helpers";
 import { generateTestWallet } from "@tests/_fixtures/auth/siwe-helpers";
 import { describe, expect, it } from "vitest";
+import { CHAIN_ID } from "@/shared/web3/chain";
 
 function baseUrl(path = ""): string {
   const root = process.env.TEST_BASE_URL ?? "http://localhost:3000";
@@ -35,7 +36,7 @@ describe("SIWE Session Stack Test", () => {
       baseUrl: baseUrl(),
       wallet,
       domain,
-      chainId: 11155111, // Sepolia
+      chainId: CHAIN_ID,
     });
 
     // Assert: NextAuth accepted the SIWE signature (HTTP 2xx/3xx, no error)

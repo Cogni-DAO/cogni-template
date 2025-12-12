@@ -18,6 +18,7 @@ import type {
   PaymentErrorCode,
 } from "@/core";
 import { PAYMENT_INTENT_TTL_MS, PENDING_UNVERIFIED_TTL_MS } from "@/core";
+import { CHAIN_ID, USDC_TOKEN_ADDRESS } from "@/shared/web3/chain";
 
 /**
  * Options for creating a PaymentAttempt test fixture
@@ -50,14 +51,14 @@ export interface PaymentAttemptOptions {
 const DEFAULT_TIMESTAMP = new Date("2025-01-01T00:00:00.000Z");
 
 /**
- * Default Ethereum Sepolia chain ID (MVP)
+ * Default chain ID from active chain config
  */
-const DEFAULT_CHAIN_ID = 11155111;
+const DEFAULT_CHAIN_ID = CHAIN_ID;
 
 /**
- * Default USDC token address on Ethereum Sepolia
+ * Default USDC token address from active chain config
  */
-const DEFAULT_TOKEN = "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238";
+const DEFAULT_TOKEN = USDC_TOKEN_ADDRESS;
 
 /**
  * Default DAO wallet address (test fixture)

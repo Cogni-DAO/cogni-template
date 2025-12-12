@@ -34,6 +34,7 @@ import {
   creditLedger,
   paymentAttempts,
 } from "@/shared/db/schema.billing";
+import { CHAIN_ID } from "@/shared/web3/chain";
 
 describe("Payment Numeric Flow Validation", () => {
   let testUserId: string;
@@ -131,7 +132,7 @@ describe("Payment Numeric Flow Validation", () => {
 
       // Step 6: Verify ledger entry has correct credits
       const ledgerEntry = await db.query.creditLedger.findFirst({
-        where: eq(creditLedger.reference, "11155111:0x1dollar"),
+        where: eq(creditLedger.reference, `${CHAIN_ID}:0x1dollar`),
       });
 
       if (!ledgerEntry) {
@@ -228,7 +229,7 @@ describe("Payment Numeric Flow Validation", () => {
 
       // Step 6: Verify ledger entry has correct credits
       const ledgerEntry = await db.query.creditLedger.findFirst({
-        where: eq(creditLedger.reference, "11155111:0x50dollars"),
+        where: eq(creditLedger.reference, `${CHAIN_ID}:0x50dollars`),
       });
 
       if (!ledgerEntry) {

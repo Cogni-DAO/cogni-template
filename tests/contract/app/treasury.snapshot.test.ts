@@ -16,6 +16,7 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TreasurySnapshotResponseV1 } from "@/contracts/treasury.snapshot.v1.contract";
+import { CHAIN_ID, USDC_TOKEN_ADDRESS } from "@/shared/web3/chain";
 
 // Mock the facade
 vi.mock("@/app/_facades/treasury/snapshot.server", () => ({
@@ -48,12 +49,12 @@ import { GET } from "@/app/api/v1/public/treasury/snapshot/route";
 describe("/api/v1/public/treasury/snapshot contract tests", () => {
   const mockTreasuryData = {
     treasuryAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-    chainId: 11155111,
+    chainId: CHAIN_ID,
     blockNumber: "1000000",
     balances: [
       {
         token: "USDC",
-        tokenAddress: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+        tokenAddress: USDC_TOKEN_ADDRESS,
         balanceWei: "3726420000",
         balanceFormatted: "3726.42",
         decimals: 6,
@@ -121,13 +122,11 @@ describe("/api/v1/public/treasury/snapshot contract tests", () => {
       expect(parsed.treasuryAddress).toBe(
         "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
       );
-      expect(parsed.chainId).toBe(11155111);
+      expect(parsed.chainId).toBe(CHAIN_ID);
       expect(parsed.blockNumber).toBe("1000000");
       expect(parsed.balances).toHaveLength(1);
       expect(parsed.balances[0]?.token).toBe("USDC");
-      expect(parsed.balances[0]?.tokenAddress).toBe(
-        "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
-      );
+      expect(parsed.balances[0]?.tokenAddress).toBe(USDC_TOKEN_ADDRESS);
       expect(parsed.balances[0]?.balanceWei).toBe("3726420000");
       expect(parsed.balances[0]?.balanceFormatted).toBe("3726.42");
       expect(parsed.balances[0]?.decimals).toBe(6);

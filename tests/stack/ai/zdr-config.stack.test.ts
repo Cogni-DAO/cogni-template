@@ -70,22 +70,24 @@ describe("ZDR Configuration", () => {
     const config = yaml.parse(configContent);
 
     // Find non-ZDR models (OpenAI, DeepSeek, etc.)
-    const gpt5Nano = config.model_list.find(
-      (m: { model_name: string }) => m.model_name === "gpt-5-nano"
+    const gpt4oMini = config.model_list.find(
+      (m: { model_name: string }) => m.model_name === "gpt-4o-mini"
     );
     const deepseek = config.model_list.find(
       (m: { model_name: string }) => m.model_name === "deepseek-v3.1"
     );
 
-    expect(gpt5Nano).toBeDefined();
+    expect(gpt4oMini).toBeDefined();
     expect(deepseek).toBeDefined();
 
     // Assert ZDR flag is NOT present
-    expect(gpt5Nano?.litellm_params?.extra_body?.provider?.zdr).toBeUndefined();
+    expect(
+      gpt4oMini?.litellm_params?.extra_body?.provider?.zdr
+    ).toBeUndefined();
     expect(deepseek?.litellm_params?.extra_body?.provider?.zdr).toBeUndefined();
 
     // Assert is_zdr metadata is NOT set or false
-    expect(gpt5Nano?.model_info?.is_zdr).toBeUndefined();
+    expect(gpt4oMini?.model_info?.is_zdr).toBeUndefined();
     expect(deepseek?.model_info?.is_zdr).toBeUndefined();
   });
 });

@@ -23,6 +23,7 @@ import {
   resetTestOnChainVerifier,
 } from "@/adapters/test";
 import type { SessionUser } from "@/shared/auth";
+import { CHAIN_ID } from "@/shared/web3/chain";
 import type {
   PaymentAttemptStatus,
   PaymentErrorCode,
@@ -142,7 +143,7 @@ describe("Payment Routes HTTP Contract Tests", () => {
       // Validate exact contract shape
       expect(data).toMatchObject({
         attemptId: expect.stringMatching(/^[0-9a-f-]{36}$/), // UUID
-        chainId: 11155111,
+        chainId: CHAIN_ID,
         token: expect.stringMatching(/^0x[a-fA-F0-9]{40}$/),
         to: expect.stringMatching(/^0x[a-fA-F0-9]{40}$/),
         amountRaw: expect.any(String),
