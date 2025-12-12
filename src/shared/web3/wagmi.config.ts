@@ -27,7 +27,7 @@ import { CHAIN } from "./evm-wagmi";
  * WalletConnect projectId is optional - app degrades to injected wallet (MetaMask, etc.) if missing.
  */
 export const wagmiConfig = getDefaultConfig({
-  appName: "Cogni Template",
+  appName: "Cogni",
   projectId:
     clientEnv().NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "YOUR_PROJECT_ID",
   chains: [CHAIN],
