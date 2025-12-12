@@ -5,7 +5,7 @@
  * Module: `@features/layout/components/AppHeader`
  * Purpose: Application header composing kit components and feature-specific widgets.
  * Scope: App-shell layout component. Renders logo, nav, treasury, wallet, theme toggle, mobile menu. Does not handle routing or analytics.
- * Invariants: No horizontal overflow; min-w-0/truncate/shrink-0 guards; GitHub hidden <lg; theme hidden <md; treasury visible md+.
+ * Invariants: No horizontal overflow; min-w-0/truncate/shrink-0 guards; GitHub hidden <lg; theme hidden <md; treasury always visible.
  * Side-effects: none
  * Notes: Desktop wallet in [data-wallet-slot="desktop"] for CSS (see tailwind.css).
  *        Mobile: px-4 + logo pl-4; logo 24px, text-xl; MobileNav has GitHub + theme.
@@ -48,13 +48,13 @@ export function AppHeader(): ReactElement {
                 height={24}
                 className="shrink-0"
               />
-              <span className="truncate font-bold text-gradient-accent text-xl">
+              <span className="hidden truncate font-bold text-gradient-accent text-xl md:inline">
                 Cogni
               </span>
             </Link>
 
-            {/* Treasury: visible md+ */}
-            <div className="hidden md:flex">
+            {/* Treasury: visible on all screen sizes */}
+            <div className="flex">
               <TreasuryBadge />
             </div>
           </div>
