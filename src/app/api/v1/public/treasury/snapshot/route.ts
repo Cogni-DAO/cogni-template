@@ -4,27 +4,27 @@
 /**
  * Module: `@app/api/v1/public/treasury/snapshot/route`
  * Purpose: Public HTTP endpoint for DAO treasury balance snapshots.
- * Scope: Public namespace (no auth required). Delegates to facade with timeout; returns 200 even on RPC failure (with staleWarning). Does not perform RPC calls directly.
- * Invariants: Always returns 200; staleWarning indicates RPC timeout/error; validates output with contract.
+ * Scope: Public route using wrapPublicRoute(); delegates to facade with timeout; returns 200 even on RPC failure (with staleWarning). Does not perform RPC calls directly.
+ * Invariants: Always returns 200; staleWarning indicates RPC timeout/error; validates output with contract; rate limit + cache via wrapPublicRoute().
  * Side-effects: IO (HTTP response, RPC via TreasuryReadPort through facade)
- * Notes: USDC balance only. No client-side polling - called once per page load.
- * Links: docs/ONCHAIN_READERS.md
+ * Notes: USDC balance only. No client-side polling - called once per page load. wrapPublicRoute() auto-applies rate limiting (10 req/min/IP + burst 5) and cache headers (120s + swr 300s).
+ * Links: docs/ONCHAIN_READERS.md, bootstrap/http/wrapPublicRoute.ts
  * @public
  */
 
 import { NextResponse } from "next/server";
 
 import { getTreasurySnapshotFacade } from "@/app/_facades/treasury/snapshot.server";
-import { getSessionUser } from "@/app/_lib/auth/session";
-import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
+import { wrapPublicRoute } from "@/bootstrap/http";
 import { TreasurySnapshotResponseV1 } from "@/contracts/treasury.snapshot.v1.contract";
 
 export const dynamic = "force-dynamic";
 
-export const GET = wrapRouteHandlerWithLogging(
+export const GET = wrapPublicRoute(
   {
     routeId: "treasury.snapshot",
-    auth: { mode: "optional", getSessionUser }, // Public endpoint - auth optional
+    cacheTtlSeconds: 120, // 2 minutes - matches staleTime in useTreasurySnapshot
+    staleWhileRevalidateSeconds: 300, // 5 minutes
   },
   async (ctx) => {
     // Call facade - returns staleWarning on RPC failure instead of throwing
