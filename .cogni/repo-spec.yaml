@@ -12,10 +12,10 @@ intent:
 fail_on_error: true
 
 cogni_dao:
-  dao_contract: "0x067d3d827fAb4F3cE7c7A3D3b97F5898d490761D" # Current Cogni parent DAO Contract Address
-  plugin_contract: "0x67966e0e9E30fEA545f2EeDE4253f96e1Fb68E2c" # DAO's Aragon Voting Plugin Address
-  signal_contract: "0x685350a73E7bC60143568d32040EE3d79C0b11DD" # DAO's CogniSignal Contract Address
-  chain_id: "11155111" # Chain ID: Eth Sepolia testnet
+  dao_contract: "0xF61c3fafD4D34b4568e7a500d92b28Ac175e83C6" # Current Cogni parent DAO Contract Address
+  plugin_contract: "0x609B427f04C1C42De3e28898cb7b9Bad329e6b77" # DAO's Aragon Voting Plugin Address
+  signal_contract: "0x590FC79B9c925C377fA63F4AaF54cdbF4Ee273A1" # DAO's CogniSignal Contract Address
+  chain_id: "8453" # Chain ID: Eth Sepolia testnet
   base_url: "https://proposal.cognidao.org" # v0 Base URL: cogni-proposal-launcher service
 
 # DAO Financial Rails Configuration
@@ -23,9 +23,9 @@ cogni_dao:
 payments_in:
   credits_topup:
     provider: cogni-usdc-backend-v1
-    receiving_address: "0x070075F1389Ae1182aBac722B36CA12285d0c949" # Expected receiver (DAO Wallet), testing only address rn
+    receiving_address: "0xF61c3fafD4D34b4568e7a500d92b28Ac175e83C6" # Expected receiver (DAO Wallet), testing only address rn
     allowed_chains:
-      - Sepolia
+      - Base
     allowed_tokens:
       - USDC
 

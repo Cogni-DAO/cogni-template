@@ -59,9 +59,8 @@ export const CHAINS: Record<ChainKey, ChainConfig> = {
 /**
  * Active chain for this deployment.
  * This is the single switch that determines all chain-specific behavior.
- * TODO: Switch to BASE for production deployment.
  */
-export const ACTIVE_CHAIN_KEY: ChainKey = "SEPOLIA";
+export const ACTIVE_CHAIN_KEY: ChainKey = "BASE";
 
 /**
  * Active chain configuration.

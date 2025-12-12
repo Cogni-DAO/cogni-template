@@ -211,7 +211,7 @@ jobs:
       DOMAIN: localhost
       LITELLM_MASTER_KEY: test-key
       OPENROUTER_API_KEY: test-key
-      EVM_RPC_URL: https://eth-sepolia.g.alchemy.com/v2/fake-test-key
+      EVM_RPC_URL: https://base-mainnet.g.alchemy.com/v2/fake-test-key
       TEST_BASE_URL: https://localhost/
       AUTH_SECRET: tNf5lFM9yMhdgwS5yeQB8Y2kmigblBqobkvI2XN2brg=
       METRICS_TOKEN: test-metrics-token-for-stack-tests
