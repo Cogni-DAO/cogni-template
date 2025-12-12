@@ -4,13 +4,13 @@
 /**
  * Module: `@app/providers/wallet.client`
  * Purpose: Wallet provider for EVM wallet connections using wagmi and RainbowKit.
- * Scope: Wraps app with WagmiProvider and RainbowKitProvider. Does not handle server-side rendering of wallet context.
- * Invariants: Config created in useEffect (browser-only); stable across theme changes;
- *        nested RainbowKitThemeProvider isolates theme from WagmiProvider; triggers session refresh after SIWE.
- * Side-effects: IO (session update after SIWE verification)
- * Notes: Nested RainbowKitThemeProvider isolates theme changes from WagmiProvider to prevent React Query Hydrate warnings.
- *        Session refresh ensures immediate navigation after auth.
- * Links: https://rainbowkit.com/docs/authentication
+ * Scope: Wraps app with WagmiProvider and RainbowKitProvider with SSR support. Does not handle wallet UI or transaction signing.
+ * Invariants: Static config with ssr: true and cookieStorage; always renders children (no null return);
+ *        nested RainbowKitThemeProvider isolates theme changes from WagmiProvider.
+ * Side-effects: none (providers only)
+ * Notes: Static wagmi config prevents IndexedDB errors and unblocks non-wallet UI (e.g., public treasury badge).
+ *        RainbowKitThemeProvider nested to prevent React Query Hydrate warnings on theme changes.
+ * Links: https://rainbowkit.com/docs/installation, https://wagmi.sh/react/guides/ssr
  * @public
  */
 
@@ -21,11 +21,9 @@ import { RainbowKitSiweNextAuthProvider } from "@rainbow-me/rainbowkit-siwe-next
 import { useTheme } from "next-themes";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
-import type { Config } from "wagmi";
 import { WagmiProvider } from "wagmi";
 
-import { clientEnv } from "@/shared/env";
-import { CHAIN } from "@/shared/web3";
+import { wagmiConfig } from "@/shared/web3/wagmi.config";
 
 import { createAppDarkTheme, createAppLightTheme } from "./rainbowkit-theme";
 
@@ -61,43 +59,6 @@ export function WalletProvider({
 }: {
   readonly children: ReactNode;
 }): ReactNode {
-  const [wagmiConfig, setWagmiConfig] = useState<Config | null>(null);
-
-  // Create wagmi config in browser only to prevent IndexedDB SSR errors
-  // Config created once and never recreated (stable across theme changes)
-  useEffect(() => {
-    let cancelled = false;
-
-    async function initWagmiConfig() {
-      const { getDefaultConfig } = await import("@rainbow-me/rainbowkit");
-      const env = clientEnv();
-
-      const config = getDefaultConfig({
-        appName: "Cogni Template",
-        projectId:
-          env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "YOUR_PROJECT_ID",
-        chains: [CHAIN],
-        ssr: false,
-      });
-
-      if (!cancelled) {
-        setWagmiConfig(config);
-      }
-    }
-
-    initWagmiConfig();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Wait for config before rendering to prevent useAccount hook errors
-  // Brief delay covered by skeleton overlay in WalletConnectButton
-  if (!wagmiConfig) {
-    return null;
-  }
-
   return (
     <WagmiProvider config={wagmiConfig}>
       <RainbowKitSiweNextAuthProvider

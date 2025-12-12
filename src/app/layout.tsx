@@ -21,7 +21,7 @@ import Script from "next/script";
 import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
 
-import { Header } from "@/components";
+import { AppHeader } from "@/features/layout";
 
 import { AppProviders } from "./providers/app-providers.client";
 
@@ -52,7 +52,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AppProviders>
-            <Header />
+            <AppHeader />
             <main id="main">{children}</main>
           </AppProviders>
         </ThemeProvider>

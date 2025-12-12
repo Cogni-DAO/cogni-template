@@ -59,4 +59,19 @@ export interface EvmOnchainClient {
     fromBlock: bigint;
     toBlock: bigint;
   }): Promise<Log[]>;
+
+  /**
+   * Gets the native token balance (ETH) for an address.
+   * Used for native token balance queries.
+   */
+  getNativeBalance(address: `0x${string}`): Promise<bigint>;
+
+  /**
+   * Gets ERC20 token balance for a holder address.
+   * Used for token balance queries (e.g., USDC treasury balance).
+   */
+  getErc20Balance(params: {
+    tokenAddress: `0x${string}`;
+    holderAddress: `0x${string}`;
+  }): Promise<bigint>;
 }

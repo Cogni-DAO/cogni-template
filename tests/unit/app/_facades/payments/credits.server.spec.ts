@@ -73,6 +73,7 @@ describe("app/_facades/payments/credits.server", () => {
       evmOnchainClient: {} as never,
       usageService: {} as never,
       metricsQuery: {} as never,
+      treasuryReadPort: {} as never,
     });
   });
 

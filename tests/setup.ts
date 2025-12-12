@@ -12,8 +12,26 @@
  * @public
  */
 
+import "@testing-library/jest-dom/vitest";
 import { Agent, type Dispatcher, setGlobalDispatcher } from "undici";
-import { afterEach, beforeAll } from "vitest";
+import { afterEach, beforeAll, vi } from "vitest";
+
+// Minimal RainbowKit mock to prevent browser-only dependencies from loading in Node
+vi.mock("@rainbow-me/rainbowkit", () => ({
+  getDefaultConfig: vi.fn(() => ({
+    chains: [],
+    transports: {},
+    connectors: [],
+  })),
+  RainbowKitProvider: ({ children }: { children: React.ReactNode }) => children,
+  RainbowKitSiweNextAuthProvider: ({
+    children,
+  }: {
+    children: React.ReactNode;
+  }) => children,
+  darkTheme: vi.fn(() => ({})),
+  lightTheme: vi.fn(() => ({})),
+}));
 
 /**
  * Global test setup for deterministic, isolated testing.

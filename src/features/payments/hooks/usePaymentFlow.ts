@@ -19,7 +19,7 @@ import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { usdCentsToCredits } from "@/core";
 import * as clientLogger from "@/shared/observability/client";
 import { EVENT_NAMES } from "@/shared/observability/events";
-import { USDC_ABI } from "@/shared/web3/usdc-abi";
+import { ERC20_ABI, getTransactionExplorerUrl } from "@/shared/web3";
 import type { PaymentFlowState } from "@/types/payments";
 import { paymentsClient } from "../api/paymentsClient";
 import { formatPaymentError } from "../utils/formatPaymentError";
@@ -73,8 +73,8 @@ type InternalState =
   | {
       phase: "SUCCESS";
       creditsAdded: number;
-      txHash: string | null;
-      chainId: number | null;
+      txHash: string;
+      chainId: number;
     }
   | {
       phase: "ERROR";
@@ -107,8 +107,8 @@ type Action =
   | {
       type: "VERIFICATION_SUCCESS";
       creditsAdded: number;
-      txHash: string | null;
-      chainId: number | null;
+      txHash: string;
+      chainId: number;
     }
   | {
       type: "VERIFICATION_FAILED";
@@ -214,25 +214,6 @@ function reducer(state: InternalState, action: Action): InternalState {
   }
 }
 
-function getExplorerUrl(
-  txHash: string | null,
-  chainId: number | null
-): string | null {
-  if (!txHash || !chainId) return null;
-
-  switch (chainId) {
-    case 11155111: // Ethereum Sepolia
-      return `https://sepolia.etherscan.io/tx/${txHash}`;
-    case 8453: // Base mainnet
-      return `https://basescan.org/tx/${txHash}`;
-    case 1: // Ethereum mainnet
-      return `https://etherscan.io/tx/${txHash}`;
-    default:
-      // Unknown chain - return null so UI can offer "Copy tx hash" instead
-      return null;
-  }
-}
-
 function derivePublicState(internal: InternalState): PaymentFlowState {
   const _isInFlight =
     internal.phase === "CREATING_INTENT" ||
@@ -288,7 +269,7 @@ function derivePublicState(internal: InternalState): PaymentFlowState {
         isCreatingIntent: false,
         walletStep: "CONFIRMING",
         txHash,
-        explorerUrl: getExplorerUrl(txHash, chainId),
+        explorerUrl: getTransactionExplorerUrl(chainId, txHash),
         isInFlight: true,
         result: null,
         errorMessage: null,
@@ -303,7 +284,7 @@ function derivePublicState(internal: InternalState): PaymentFlowState {
         isCreatingIntent: false,
         walletStep: "SUBMITTING",
         txHash,
-        explorerUrl: getExplorerUrl(txHash, chainId),
+        explorerUrl: getTransactionExplorerUrl(chainId, txHash),
         isInFlight: true,
         result: null,
         errorMessage: null,
@@ -318,7 +299,7 @@ function derivePublicState(internal: InternalState): PaymentFlowState {
         isCreatingIntent: false,
         walletStep: "VERIFYING",
         txHash,
-        explorerUrl: getExplorerUrl(txHash, chainId),
+        explorerUrl: getTransactionExplorerUrl(chainId, txHash),
         isInFlight: true,
         result: null,
         errorMessage: null,
@@ -332,7 +313,10 @@ function derivePublicState(internal: InternalState): PaymentFlowState {
         isCreatingIntent: false,
         walletStep: null,
         txHash: internal.txHash,
-        explorerUrl: getExplorerUrl(internal.txHash, internal.chainId),
+        explorerUrl: getTransactionExplorerUrl(
+          internal.chainId,
+          internal.txHash
+        ),
         isInFlight: false,
         result: "SUCCESS",
         errorMessage: null,
@@ -346,7 +330,10 @@ function derivePublicState(internal: InternalState): PaymentFlowState {
         isCreatingIntent: false,
         walletStep: null,
         txHash: internal.txHash,
-        explorerUrl: getExplorerUrl(internal.txHash, internal.chainId),
+        explorerUrl:
+          internal.chainId && internal.txHash
+            ? getTransactionExplorerUrl(internal.chainId, internal.txHash)
+            : null,
         isInFlight: false,
         result: "ERROR",
         errorMessage: internal.message,
@@ -463,6 +450,8 @@ export function usePaymentFlow(
 
         // Check if backend immediately resolved (stub verifier case)
         // submitTxHash returns internal backend status (CREATED_INTENT | PENDING_UNVERIFIED | CREDITED | REJECTED | FAILED)
+        // At this point, internalState is AWAITING_CONFIRMATION which has non-null txHash and chainId
+        if (internalState.phase !== "AWAITING_CONFIRMATION") return;
         const { txHash, chainId } = internalState;
 
         if (result.data.status === "CREDITED") {
@@ -503,7 +492,8 @@ export function usePaymentFlow(
 
     // Capture attemptId at effect start to detect stale async
     const effectAttemptId = attemptIdRef.current;
-    const { txHash, chainId } = internalState;
+    // Type narrowing: POLLING_VERIFICATION always has non-null txHash and chainId
+    const { txHash, chainId, attemptId } = internalState;
 
     const pollInterval = setInterval(async () => {
       // Guard: if attempt was reset, stop polling
@@ -512,7 +502,7 @@ export function usePaymentFlow(
         return;
       }
 
-      const result = await paymentsClient.getStatus(internalState.attemptId);
+      const result = await paymentsClient.getStatus(attemptId);
 
       // Guard: check again after await
       if (attemptIdRef.current !== effectAttemptId) {
@@ -614,7 +604,7 @@ export function usePaymentFlow(
     writeContract({
       chainId,
       address: token as `0x${string}`,
-      abi: USDC_ABI,
+      abi: ERC20_ABI,
       functionName: "transfer",
       args: [to as `0x${string}`, BigInt(amountRaw)],
     });

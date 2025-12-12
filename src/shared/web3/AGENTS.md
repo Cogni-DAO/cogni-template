@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-11
+- **Last reviewed:** 2025-12-12
 - **Status:** stable
 
 ## Purpose
@@ -40,17 +40,20 @@ Shared blockchain configuration for web3 integrations. Provides hardcoded Base m
 ## Public Surface
 
 - **Exports:**
-  - `CHAIN` - wagmi Chain object for Ethereum Sepolia testnet (imported from wagmi/chains)
+  - `CHAIN` - wagmi Chain object for Ethereum Sepolia testnet (evm-wagmi.ts)
   - `CHAIN_ID` - Ethereum Sepolia testnet chain ID (11155111)
   - `getChainId()` - Function returning chain ID
   - `USDC_TOKEN_ADDRESS` - Official USDC contract on Ethereum Sepolia testnet
-  - `MIN_CONFIRMATIONS` - Minimum confirmations required for payment verification (5)
+  - `MIN_CONFIRMATIONS` - Minimum confirmations required for payment verification
   - `VERIFY_THROTTLE_SECONDS` - Verification polling throttle (10 seconds)
+  - `ERC20_ABI` - Generic ERC20 ABI (balanceOf, decimals, transfer)
   - `EvmOnchainClient` - Infrastructure interface for EVM RPC operations (onchain/)
+  - `getAddressExplorerUrl()` - Generate block explorer URL for address
+  - `getTransactionExplorerUrl()` - Generate block explorer URL for transaction
 - **Routes (if any):** none
 - **CLI (if any):** none
-- **Env/Config keys:** none (chain hardcoded to Ethereum Sepolia; NEXT_PUBLIC_CHAIN_ID removed)
-- **Files considered API:** chain.ts, onchain/evm-onchain-client.interface.ts, index.ts
+- **Env/Config keys:** none (chain hardcoded to Ethereum Sepolia)
+- **Files considered API:** chain.ts, evm-wagmi.ts, erc20-abi.ts, block-explorer.ts, onchain/evm-onchain-client.interface.ts, index.ts
 
 ## Ports (optional)
 
@@ -90,11 +93,11 @@ import { CHAIN, CHAIN_ID, USDC_TOKEN_ADDRESS } from "@/shared/web3";
 ## Notes
 
 - Chain locked to Ethereum Sepolia (11155111) for MVP testing
+- wagmi.config.ts exists for client-side wallet config but NOT exported from index.ts (prevents server-side import)
+- EvmOnchainClient extended with getNativeBalance() and getErc20Balance() for treasury reads
+- ERC20_ABI is generic (token-agnostic); used by treasury adapter for USDC balance queries
+- evm-wagmi.ts separates wagmi types from framework-agnostic chain.ts
 - EvmOnchainClient is an infrastructure seam (NOT a domain port) shared by multiple adapters
 - Production uses ViemEvmOnchainClient with lazy initialization (allows builds without EVM_RPC_URL)
-- Config validation (chainId, EVM_RPC_URL) deferred to first RPC call via getClient()
-- PublicClient cached after first call - no repeated serverEnv()/getPaymentConfig() invocations
-- /readyz probe validates RPC connectivity via assertEvmRpcConnectivity() (3s timeout)
 - Tests use FakeEvmOnchainClient (no RPC calls, no URL needed)
-- If supporting multiple chains, this module must be refactored to accept chain selection
 - Build fails if repo-spec chain_id mismatches app CHAIN_ID

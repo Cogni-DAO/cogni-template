@@ -59,4 +59,9 @@ export {
   type PaymentErrorCode,
   TxHashAlreadyBoundPortError,
 } from "./payment-attempt.port";
+export type {
+  TokenBalance,
+  TreasuryReadPort,
+  TreasurySnapshot,
+} from "./treasury-read.port";
 export * from "./usage.port";

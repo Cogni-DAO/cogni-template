@@ -16,7 +16,7 @@
 
 ### 2. Core Implementation ✅
 
-- [x] Create `src/shared/web3/usdc-abi.ts` - minimal ERC20 transfer ABI
+- [x] Use `src/shared/web3/erc20-abi.ts` - generic ERC20 ABI for token operations
 - [x] Create `src/shared/http/paymentsClient.ts` - typed API client (discriminated union returns)
 - [x] Create `src/features/payments/utils/mapBackendStatus.ts` - ONE status mapping function
 - [x] Create `src/features/payments/hooks/usePaymentFlow.ts` - orchestration hook
@@ -76,7 +76,7 @@
 
 | File                                              | Status      | Notes                         |
 | ------------------------------------------------- | ----------- | ----------------------------- |
-| `src/shared/web3/usdc-abi.ts`                     | ✅ Complete | Minimal ERC20 transfer ABI    |
+| `src/shared/web3/erc20-abi.ts`                    | ✅ Complete | Generic ERC20 ABI             |
 | `src/features/payments/api/paymentsClient.ts`     | ✅ Complete | Typed API client              |
 | `src/features/payments/utils/mapBackendStatus.ts` | ✅ Complete | Status mapping from `/types`  |
 | `src/features/payments/hooks/usePaymentFlow.ts`   | ✅ Complete | Payment flow orchestration    |
@@ -317,7 +317,7 @@ src/
 │   │   └── payments.ts               # NEW: Type-only exports (bottom layer)
 │   └── web3/
 │       ├── chain.ts                  # EXISTS
-│       └── usdc-abi.ts               # NEW: ERC20 transfer ABI
+│       └── erc20-abi.ts              # Generic ERC20 ABI (transfer, balanceOf, decimals)
 ├── features/payments/
 │   ├── api/
 │   │   └── paymentsClient.ts         # MOVED: From shared/http (can import contracts)
@@ -606,28 +606,11 @@ import {
 
 ---
 
-## USDC ABI
+## ERC20 ABI
 
-```typescript
-// src/shared/web3/usdc-abi.ts
+Payment flow uses the generic `ERC20_ABI` from `src/shared/web3/erc20-abi.ts` for token transfers. The token address (USDC) is provided by the backend payment intent, which sources it from repo-spec.yaml via `getPaymentConfig()`.
 
-/**
- * Minimal ERC20 ABI for USDC transfer.
- * Only includes the transfer function needed for payments.
- */
-export const USDC_ABI = [
-  {
-    name: "transfer",
-    type: "function",
-    stateMutability: "nonpayable",
-    inputs: [
-      { name: "to", type: "address" },
-      { name: "amount", type: "uint256" },
-    ],
-    outputs: [{ name: "", type: "bool" }],
-  },
-] as const;
-```
+**Invariant:** Frontend never hardcodes token addresses or chain IDs - all payment parameters come from backend.
 
 ---
 

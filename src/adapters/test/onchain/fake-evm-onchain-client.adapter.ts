@@ -25,12 +25,19 @@ export class FakeEvmOnchainClient implements EvmOnchainClient {
   private receipts: Map<string, TransactionReceipt | null> = new Map();
   private blockNumber: bigint = 1000000n;
   private logs: Log[] = [];
+  private nativeBalances: Map<string, bigint> = new Map();
+  private erc20Balances: Map<string, bigint> = new Map(); // key: "tokenAddress:holderAddress"
 
   // Call tracking for assertions
   public getTransactionCalls: `0x${string}`[] = [];
   public getReceiptCalls: `0x${string}`[] = [];
   public getBlockNumberCalls: number = 0;
   public getLogsCalls: number = 0;
+  public getNativeBalanceCalls: `0x${string}`[] = [];
+  public getErc20BalanceCalls: Array<{
+    tokenAddress: `0x${string}`;
+    holderAddress: `0x${string}`;
+  }> = [];
 
   /**
    * Configure a transaction response for a given hash.
@@ -63,6 +70,25 @@ export class FakeEvmOnchainClient implements EvmOnchainClient {
   }
 
   /**
+   * Configure native balance for a given address.
+   */
+  setNativeBalance(address: `0x${string}`, balance: bigint): void {
+    this.nativeBalances.set(address.toLowerCase(), balance);
+  }
+
+  /**
+   * Configure ERC20 token balance for a holder.
+   */
+  setErc20Balance(
+    tokenAddress: `0x${string}`,
+    holderAddress: `0x${string}`,
+    balance: bigint
+  ): void {
+    const key = `${tokenAddress.toLowerCase()}:${holderAddress.toLowerCase()}`;
+    this.erc20Balances.set(key, balance);
+  }
+
+  /**
    * Reset all configured responses and call history.
    */
   reset(): void {
@@ -70,10 +96,14 @@ export class FakeEvmOnchainClient implements EvmOnchainClient {
     this.receipts.clear();
     this.blockNumber = 1000000n;
     this.logs = [];
+    this.nativeBalances.clear();
+    this.erc20Balances.clear();
     this.getTransactionCalls = [];
     this.getReceiptCalls = [];
     this.getBlockNumberCalls = 0;
     this.getLogsCalls = 0;
+    this.getNativeBalanceCalls = [];
+    this.getErc20BalanceCalls = [];
   }
 
   async getTransaction(txHash: `0x${string}`): Promise<Transaction | null> {
@@ -107,6 +137,22 @@ export class FakeEvmOnchainClient implements EvmOnchainClient {
   }): Promise<Log[]> {
     this.getLogsCalls++;
     return this.logs;
+  }
+
+  async getNativeBalance(address: `0x${string}`): Promise<bigint> {
+    this.getNativeBalanceCalls.push(address);
+    const balance = this.nativeBalances.get(address.toLowerCase());
+    return balance ?? 0n;
+  }
+
+  async getErc20Balance(params: {
+    tokenAddress: `0x${string}`;
+    holderAddress: `0x${string}`;
+  }): Promise<bigint> {
+    this.getErc20BalanceCalls.push(params);
+    const key = `${params.tokenAddress.toLowerCase()}:${params.holderAddress.toLowerCase()}`;
+    const balance = this.erc20Balances.get(key);
+    return balance ?? 0n;
   }
 }
 
