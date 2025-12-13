@@ -13,11 +13,11 @@
 
 /**
  * TokenVoting plugin version tag for OSx v1.4.0 deployments.
- * release=1, build=2 corresponds to TokenVotingSetup v1.2.
+ * release=1, build=3 matches cogni-gov-contracts Foundry script.
  */
 export const TOKEN_VOTING_VERSION_TAG = {
   release: 1,
-  build: 2,
+  build: 3,
 } as const;
 
 /**
@@ -26,13 +26,10 @@ export const TOKEN_VOTING_VERSION_TAG = {
  * OSx v1.3: (address[] receivers, uint256[] amounts)
  * OSx v1.4: (address[] receivers, uint256[] amounts, bool ensureDelegationOnMint)
  *
- * Our deployments target OSx v1.4.0 addresses but TokenVoting plugin repo
- * uses v1.3 MintSettings struct (2 fields, no ensureDelegationOnMint).
- *
- * TODO: Verify against live contracts if v1.4 MintSettings is deployed.
- * For now, use v1.3 as it matches cogni-gov-contracts Foundry scripts.
+ * Foundry script uses v1.4 struct with ensureDelegationOnMint field.
+ * Matches GovernanceERC20.MintSettings in token-voting-plugin.
  */
-export const MINT_SETTINGS_VERSION = "v1.3" as const;
+export const MINT_SETTINGS_VERSION = "v1.4" as const;
 
 /**
  * Default TokenVoting configuration matching NODE_FORMATION_SPEC.md §3.
