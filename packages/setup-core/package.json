@@ -1,0 +1,7 @@
+{
+  "name": "@cogni/setup-core",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false
+}

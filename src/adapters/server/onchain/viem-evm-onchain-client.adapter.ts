@@ -153,4 +153,29 @@ export class ViemEvmOnchainClient implements EvmOnchainClient {
     });
     return balance as bigint;
   }
+
+  async getBytecode(address: `0x${string}`): Promise<`0x${string}` | null> {
+    const client = this.getClient();
+    const code = await client.getBytecode({ address });
+    return code;
+  }
+
+  async readContract(params: {
+    address: `0x${string}`;
+    abi: readonly unknown[];
+    functionName: string;
+    args: readonly unknown[];
+  }): Promise<unknown> {
+    const client = this.getClient();
+    return client.readContract({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      address: params.address as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      abi: params.abi as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      functionName: params.functionName as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      args: params.args as any,
+    });
+  }
 }

@@ -1,7 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -26,22 +30,57 @@
       }
     ],
     "paths": {
-      "@/*": ["src/*"],
-      "@/components/*": ["src/components/*"],
-      "@/shared/*": ["src/shared/*"],
-      "@/core": ["src/core/public.ts"],
-      "@/ports": ["src/ports/index.ts"],
-      "@/adapters/server": ["src/adapters/server/index.ts"],
-      "@/shared": ["src/shared/index.ts"],
-      "@features/*": ["src/features/*"],
-      "@app/*": ["src/app/*"],
-      "@adapters/*": ["src/adapters/*"],
-      "@bootstrap/*": ["src/bootstrap/*"],
-      "@components/*": ["src/components/*"],
-      "@styles/*": ["src/styles/*"],
-      "@types/*": ["src/types/*"],
-      "@assets/*": ["src/assets/*"],
-      "@tests/*": ["tests/*"]
+      "@/*": [
+        "src/*"
+      ],
+      "@/components/*": [
+        "src/components/*"
+      ],
+      "@/shared/*": [
+        "src/shared/*"
+      ],
+      "@/core": [
+        "src/core/public.ts"
+      ],
+      "@/ports": [
+        "src/ports/index.ts"
+      ],
+      "@/adapters/server": [
+        "src/adapters/server/index.ts"
+      ],
+      "@/shared": [
+        "src/shared/index.ts"
+      ],
+      "@setup-core/*": [
+        "packages/setup-core/src/*"
+      ],
+      "@features/*": [
+        "src/features/*"
+      ],
+      "@app/*": [
+        "src/app/*"
+      ],
+      "@adapters/*": [
+        "src/adapters/*"
+      ],
+      "@bootstrap/*": [
+        "src/bootstrap/*"
+      ],
+      "@components/*": [
+        "src/components/*"
+      ],
+      "@styles/*": [
+        "src/styles/*"
+      ],
+      "@types/*": [
+        "src/types/*"
+      ],
+      "@assets/*": [
+        "src/assets/*"
+      ],
+      "@tests/*": [
+        "tests/*"
+      ]
     }
   },
   "include": [
@@ -54,5 +93,9 @@
     "**/*.mjs",
     ".next/dev/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "test*/**/fixtures/**", "**/__arch_probes__/**"]
+  "exclude": [
+    "node_modules",
+    "test*/**/fixtures/**",
+    "**/__arch_probes__/**"
+  ]
 }
