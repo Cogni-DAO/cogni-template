@@ -30,15 +30,18 @@ const INCLUDE = process.argv.slice(2).length
   : [
       "e2e/**/*.{ts,tsx,js,mjs,cjs}",
       "infra/**/*.{ts,tsx,js,mjs,cjs}",
+      "packages/**/*.{ts,tsx,js,mjs,cjs}",
       "scripts/**/*.{ts,tsx,js,mjs,cjs}",
       "src/**/*.{ts,tsx,js,mjs,cjs}",
       "tests/**/*.{ts,tsx,js,mjs,cjs}",
     ];
 const EXCLUDE = [
   "**/*.d.ts",
+  "**/dist/**",
   "**/generated/**",
   "**/fixtures/**",
   "**/icons/**",
+  "**/node_modules/**",
   "**/*.svg.tsx",
   "docs/**",
   // Vendor components maintain their own licensing

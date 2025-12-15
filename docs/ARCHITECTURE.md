@@ -81,6 +81,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 - **tests/** → Unit (core/features with mocked ports), integration (adapters), contract (port compliance), setup.
 - **e2e/** → Playwright API/UI specs.
 - **scripts/** → Migrations, seeds, generators.
+- **packages/** → Internal shared packages (pure libraries, no `src/` imports).
 
 ## Configuration Directories
 
@@ -508,6 +509,7 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 ## Related Documentation
 
 - [Architecture Enforcement Status](ARCHITECTURE_ENFORCEMENT_GAPS.md) - Current boundary enforcement coverage and known gaps
+- [Packages Architecture](PACKAGES_ARCHITECTURE.md) - Internal packages, isolation boundaries, and CI/CD setup
 - [Environment & Stack Deployment Modes](ENVIRONMENTS.md) - All 6 deployment modes, environment variables, and when to use each
 - [Observability](OBSERVABILITY.md) - Structured logging, Prometheus metrics, and Grafana Cloud integration
 - [Database & Migration Architecture](DATABASES.md) - Database organization, migration strategies, and URL construction

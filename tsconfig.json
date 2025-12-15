@@ -33,6 +33,7 @@
       "@/ports": ["src/ports/index.ts"],
       "@/adapters/server": ["src/adapters/server/index.ts"],
       "@/shared": ["src/shared/index.ts"],
+      "@cogni/aragon-osx": ["packages/aragon-osx/src/index.ts"],
       "@features/*": ["src/features/*"],
       "@app/*": ["src/app/*"],
       "@adapters/*": ["src/adapters/*"],

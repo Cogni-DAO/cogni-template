@@ -1,12 +1,13 @@
 // .dependency-cruiser.cjs
 // Hexagonal architecture boundaries enforced via dependency-cruiser.
 // Pure policy config - scope controlled via CLI --include-only flag.
-// Production: depcruise src --include-only '^src' --output-type err-long
+// Production: depcruise src packages services --include-only '^(src|packages|services)' --output-type err-long
 // Arch probes: depcruise src/__arch_probes__ --include-only '^src/__arch_probes__' --output-type err
 
 /** @type {import('dependency-cruiser').IConfiguration} */
 
-const layers = {
+// src/ hexagonal layers
+const srcLayers = {
   core: "^src/core",
   ports: "^src/ports",
   features: "^src/features",
@@ -28,7 +29,16 @@ const layers = {
   mcp: "^src/mcp",
 };
 
-const knownLayerPatterns = Object.values(layers);
+// Monorepo boundary layers (packages/, services/)
+const monorepoLayers = {
+  packages: "^packages/",
+  services: "^services/",
+};
+
+const layers = { ...srcLayers, ...monorepoLayers };
+
+// Only src/ layers are checked for "unknown layer" violations
+const knownSrcLayerPatterns = Object.values(srcLayers);
 
 module.exports = {
   options: {
@@ -212,16 +222,39 @@ module.exports = {
       to: { path: [layers.types] },
     },
 
+    // =========================================================================
+    // Monorepo package rules
+    // =========================================================================
+
+    // packages/ can import within itself (internal)
+    {
+      from: { path: "^packages/" },
+      to: { path: "^packages/" },
+    },
+
+    // src/ can import from packages/ (consumption)
+    {
+      from: { path: "^src/" },
+      to: { path: "^packages/" },
+    },
+
+    // services/ can import from packages/ (future-proof)
+    {
+      from: { path: "^services/" },
+      to: { path: "^packages/" },
+    },
+
     // Files not in a known layer are caught by the forbidden `no-unknown-layer` rule below.
   ],
 
   forbidden: [
     // Enforce "no-unknown-files": any file in src/** not covered by a known layer pattern is an error.
     {
+      name: "no-unknown-src-layer",
       severity: "error",
       from: {
         path: "^src",
-        pathNot: knownLayerPatterns,
+        pathNot: knownSrcLayerPatterns,
       },
       to: {},
     },
@@ -305,6 +338,65 @@ module.exports = {
       },
       comment:
         "Only import from features/*/services or features/*/components subdirectories",
+    },
+
+    // =========================================================================
+    // Monorepo boundary rules: packages/, services/, src/ isolation
+    // =========================================================================
+
+    // packages/ cannot import from src/ or services/
+    {
+      name: "no-packages-to-src-or-services",
+      severity: "error",
+      from: {
+        path: "^packages/",
+      },
+      to: {
+        path: ["^src/", "^services/"],
+      },
+      comment:
+        "packages/ must be standalone; cannot depend on src/ or services/",
+    },
+
+    // services/ cannot import from src/
+    {
+      name: "no-services-to-src",
+      severity: "error",
+      from: {
+        path: "^services/",
+      },
+      to: {
+        path: "^src/",
+      },
+      comment: "services/ cannot depend on Node app code in src/",
+    },
+
+    // src/ cannot import from services/
+    {
+      name: "no-src-to-services",
+      severity: "error",
+      from: {
+        path: "^src/",
+      },
+      to: {
+        path: "^services/",
+      },
+      comment: "src/ cannot depend on Operator services",
+    },
+
+    // Block deep imports into package internals (force use of package exports)
+    // Allows index.ts (entrypoint), blocks other internal files
+    {
+      name: "no-deep-package-imports",
+      severity: "error",
+      from: {
+        path: "^(src|services)/",
+      },
+      to: {
+        path: "^packages/[^/]+/src/(?!index\\.ts$)",
+      },
+      comment:
+        "Import from package root (@cogni/setup-core), not internal paths",
     },
   ],
 };

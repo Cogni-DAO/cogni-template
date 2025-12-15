@@ -1,0 +1,26 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@cogni/aragon-osx/tsup.config`
+ * Purpose: Build configuration for aragon-osx package.
+ * Scope: Build tooling only; does not contain runtime code.
+ * Invariants: Output must be ESM with type declarations.
+ * Side-effects: IO
+ * Links: docs/PACKAGES_ARCHITECTURE.md
+ * @internal
+ */
+
+import { defineConfig } from "tsup";
+
+export const tsupConfig = defineConfig({
+  entry: ["src/index.ts"],
+  format: ["esm"],
+  dts: true,
+  clean: true,
+  sourcemap: true,
+  platform: "neutral",
+  external: ["viem"],
+});
+
+export default tsupConfig;

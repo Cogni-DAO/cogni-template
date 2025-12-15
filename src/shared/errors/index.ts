@@ -4,11 +4,12 @@
 /**
  * Module: `@shared/errors`
  * Purpose: Shared error types for cross-layer use.
- * Scope: Exports error classes, enums, and constants. Does not handle error reporting or logging.
+ * Scope: Exports error classes, enums, constants, and error normalization utilities. Does not handle error reporting or logging.
  * Invariants:
  * - Error types are immutable and serializable.
  * - TooManyLogsError maps to 422 Unprocessable Entity.
  * - MAX_LOGS_PER_RANGE (5000) enforces fail-loud behavior.
+ * - toUiError normalizes wagmi/viem errors to UiError shape.
  * Side-effects: none
  * Links: Used by features, adapters, and facades
  * @public
@@ -58,3 +59,6 @@ export class TooManyLogsError extends Error {
 export function isTooManyLogsError(error: Error): error is TooManyLogsError {
   return error instanceof TooManyLogsError;
 }
+
+// On-chain UI errors
+export { toUiError, type UiError } from "./onchain-ui-error";

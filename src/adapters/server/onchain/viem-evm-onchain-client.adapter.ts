@@ -13,6 +13,9 @@
  */
 
 import {
+  type Abi,
+  type ContractFunctionArgs,
+  type ContractFunctionName,
   createPublicClient,
   http,
   type Log,
@@ -152,5 +155,34 @@ export class ViemEvmOnchainClient implements EvmOnchainClient {
       args: [params.holderAddress],
     });
     return balance as bigint;
+  }
+
+  async getBytecode(address: `0x${string}`): Promise<`0x${string}` | null> {
+    const client = this.getClient();
+    const code = await client.getBytecode({ address });
+    return code ?? null;
+  }
+
+  async readContract<
+    const TAbi extends Abi,
+    TFunctionName extends ContractFunctionName<TAbi, "view" | "pure">,
+    const TArgs extends ContractFunctionArgs<
+      TAbi,
+      "view" | "pure",
+      TFunctionName
+    >,
+  >(params: {
+    address: `0x${string}`;
+    abi: TAbi;
+    functionName: TFunctionName;
+    args: TArgs;
+  }): Promise<unknown> {
+    const client = this.getClient();
+    return client.readContract({
+      address: params.address,
+      abi: params.abi,
+      functionName: params.functionName,
+      args: params.args,
+    });
   }
 }

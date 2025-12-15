@@ -12,7 +12,14 @@
  * @public
  */
 
-import type { Log, Transaction, TransactionReceipt } from "viem";
+import type {
+  Abi,
+  ContractFunctionArgs,
+  ContractFunctionName,
+  Log,
+  Transaction,
+  TransactionReceipt,
+} from "viem";
 
 /**
  * EVM on-chain client interface for RPC operations.
@@ -74,4 +81,29 @@ export interface EvmOnchainClient {
     tokenAddress: `0x${string}`;
     holderAddress: `0x${string}`;
   }): Promise<bigint>;
+
+  /**
+   * Returns deployed contract bytecode at address.
+   * Useful for verifying that a contract exists at an address.
+   */
+  getBytecode(address: `0x${string}`): Promise<`0x${string}` | null>;
+
+  /**
+   * Generic contract read helper (typed wrapper over viem readContract).
+   * Keeps all contract reads behind the same infra seam.
+   */
+  readContract<
+    const TAbi extends Abi,
+    TFunctionName extends ContractFunctionName<TAbi, "view" | "pure">,
+    const TArgs extends ContractFunctionArgs<
+      TAbi,
+      "view" | "pure",
+      TFunctionName
+    >,
+  >(params: {
+    address: `0x${string}`;
+    abi: TAbi;
+    functionName: TFunctionName;
+    args: TArgs;
+  }): Promise<unknown>;
 }

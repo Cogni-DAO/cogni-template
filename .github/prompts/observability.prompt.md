@@ -21,6 +21,7 @@ Goal: add **minimal, high-signal** logging/metrics for the changes in this branc
   - Fields: `reqId`, `routeId`, `status`, `durationMs`, `outcome: success|error`, plus **counts only**.
 - Adapter (only on failure): `adapter.<dep>.error`
   - Fields: `dep`, `reasonCode`, `status?`, `durationMs`, `reqId?`.
+- When outcome=error, you must include errorCode (enum from the event registry) identifying the failure class; counts alone are not sufficient. Do not log raw error messages.
 
 ## 3) Metrics rule
 
