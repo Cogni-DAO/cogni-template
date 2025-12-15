@@ -11,8 +11,17 @@
  * @internal
  */
 
-import { encodeTokenVotingSetup } from "@cogni/setup-core";
-import { encodeAbiParameters, parseAbiParameters } from "viem";
+import {
+  DAO_REGISTERED_EVENT,
+  encodeTokenVotingSetup,
+  INSTALLATION_APPLIED_EVENT,
+} from "@cogni/setup-core";
+import {
+  encodeAbiParameters,
+  keccak256,
+  parseAbiParameters,
+  stringToBytes,
+} from "viem";
 import { describe, expect, it } from "vitest";
 
 /**
@@ -196,6 +205,24 @@ describe("TokenVotingSetup data encoding parity", () => {
 
     // Just verify it parses without error
     expect(FULL_ABI).toBeDefined();
+  });
+});
+
+/**
+ * Event topic verification
+ * Ensures our hardcoded topic hashes match keccak256 of canonical signatures
+ */
+describe("OSx Event Topic Hashes", () => {
+  it("DAORegistered topic matches keccak256 of signature", () => {
+    const signature = "DAORegistered(address,address,string)";
+    const computed = keccak256(stringToBytes(signature));
+    expect(DAO_REGISTERED_EVENT.topic).toBe(computed);
+  });
+
+  it("InstallationApplied topic matches keccak256 of signature", () => {
+    const signature = "InstallationApplied(address,address,bytes32,bytes32)";
+    const computed = keccak256(stringToBytes(signature));
+    expect(INSTALLATION_APPLIED_EVENT.topic).toBe(computed);
   });
 });
 

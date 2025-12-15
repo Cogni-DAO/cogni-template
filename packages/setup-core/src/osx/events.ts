@@ -25,8 +25,9 @@ export const DAO_REGISTERED_EVENT = {
     ],
   },
   // keccak256("DAORegistered(address,address,string)")
+  // Verified with: cast keccak "DAORegistered(address,address,string)"
   topic:
-    "0x5c0366e72f6d8608e72a1f50a8e61fdc9187b94c8c0cee349b2e879c03a9c6d9" as const,
+    "0xbc0b11fe649bb4d67c7fb40936163e5423f45c3ae83fbd8f8f8c75e1a3fa97af" as const,
 } as const;
 
 /**
@@ -45,8 +46,9 @@ export const INSTALLATION_APPLIED_EVENT = {
     ],
   },
   // keccak256("InstallationApplied(address,address,bytes32,bytes32)")
+  // Verified with: cast keccak "InstallationApplied(address,address,bytes32,bytes32)"
   topic:
-    "0x6fe58f3e17da33f74b44ff6a4bf7824e31c5b4b4e6c3cb7ac8c1a0c15d4b4f24" as const,
+    "0x74e616c7264536b98a5ec234d051ae6ce1305bf05c85f9ddc112364440ccf129" as const,
 } as const;
 
 /**
