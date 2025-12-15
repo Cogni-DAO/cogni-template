@@ -27,7 +27,10 @@ import type {
   VerifiedAddresses,
 } from "@/features/setup/daoFormation/formation.reducer";
 import { toUiError } from "@/shared/errors";
-import { CHAINS } from "@/shared/web3/chain";
+import {
+  getDaoUrl,
+  getTransactionExplorerUrl,
+} from "@/shared/web3/block-explorer";
 
 export interface FormationFlowDialogProps {
   open: boolean;
@@ -37,6 +40,7 @@ export interface FormationFlowDialogProps {
   errorMessage: string | null;
   repoSpecYaml: string | null;
   addresses: VerifiedAddresses | null;
+  tokenName: string | null;
   isInFlight: boolean;
   isTerminal: boolean;
   onClose: () => void;
@@ -64,12 +68,6 @@ function getPhaseMessage(phase: FormationPhase): string {
     case "ERROR":
       return "Formation failed";
   }
-}
-
-function getExplorerUrl(chainId: number, txHash: string): string | null {
-  const chain = Object.values(CHAINS).find((c) => c.chainId === chainId);
-  if (!chain) return null;
-  return `${chain.explorerBaseUrl}/tx/${txHash}`;
 }
 
 /**
@@ -142,6 +140,7 @@ export function FormationFlowDialog({
   errorMessage,
   repoSpecYaml,
   addresses,
+  tokenName,
   isInFlight,
   isTerminal,
   onClose,
@@ -152,8 +151,9 @@ export function FormationFlowDialog({
   // Determine which txHash to show (signal if available, else dao)
   const displayTxHash = signalTxHash ?? daoTxHash;
   const explorerUrl = displayTxHash
-    ? getExplorerUrl(chainId, displayTxHash)
+    ? getTransactionExplorerUrl(chainId, displayTxHash)
     : null;
+  const daoUrl = addresses?.dao ? getDaoUrl(chainId, addresses.dao) : null;
 
   // Dialog is dismissible in active states (parent decides cancel vs close)
   const dismissible = isInFlight || isTerminal;
@@ -215,9 +215,14 @@ export function FormationFlowDialog({
             <>
               <div className="flex flex-col items-center gap-6 py-8">
                 <CheckCircle2 className="h-16 w-16 text-success" />
-                <p className="font-semibold text-foreground text-xl">
-                  DAO Published
-                </p>
+                <div className="text-center">
+                  <p className="font-semibold text-foreground text-xl">
+                    DAO Published
+                  </p>
+                  {tokenName && (
+                    <p className="mt-1 text-muted-foreground">{tokenName}</p>
+                  )}
+                </div>
                 {addresses && (
                   <div className="w-full space-y-2 rounded-md bg-muted p-4 font-mono text-xs">
                     <div className="flex justify-between">
@@ -241,10 +246,21 @@ export function FormationFlowDialog({
               </div>
 
               <div className="flex flex-col gap-2">
+                {/* Primary action: View on Aragon */}
+                {daoUrl && (
+                  <Button asChild size="lg">
+                    <a href={daoUrl} target="_blank" rel="noopener noreferrer">
+                      View on Aragon
+                      <ExternalLink className="ml-2 h-4 w-4" />
+                    </a>
+                  </Button>
+                )}
+
                 <Button
                   onClick={() => {
                     onReset();
                   }}
+                  variant={daoUrl ? "outline" : "default"}
                   size="lg"
                 >
                   Done

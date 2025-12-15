@@ -57,24 +57,44 @@ export function getTransactionExplorerUrl(
 }
 
 /**
- * Generates Aragon DAO app URL for a treasury address on the specified chain.
+ * Maps chain ID to DAO platform network identifier.
+ * Currently hardcoded to Aragon network identifiers.
+ */
+function getDaoNetworkId(chainId: number): string | null {
+  const networkMap: Record<number, string> = {
+    11155111: "ethereum-sepolia", // Sepolia testnet
+    8453: "base-mainnet", // Base mainnet
+  };
+  return networkMap[chainId] ?? null;
+}
+
+/**
+ * Generates DAO management app URL for a DAO address on the specified chain.
+ * Currently hardcoded to Aragon app URLs.
+ *
+ * @param chainId - Chain ID (from chain.ts CHAINS map)
+ * @param address - DAO address
+ * @returns DAO app URL or null if chain not supported
+ */
+export function getDaoUrl(chainId: number, address: string): string | null {
+  const network = getDaoNetworkId(chainId);
+  if (!network) return null;
+  return `https://app.aragon.org/dao/${network}/${address}`;
+}
+
+/**
+ * Generates DAO treasury/assets URL for a DAO address on the specified chain.
+ * Currently hardcoded to Aragon app URLs.
  *
  * @param chainId - Chain ID (from chain.ts CHAINS map)
  * @param address - DAO treasury address
- * @returns Aragon DAO assets URL or null if chain not supported
+ * @returns DAO assets URL or null if chain not supported
  */
 export function getDaoTreasuryUrl(
   chainId: number,
   address: string
 ): string | null {
-  // Map chain ID to Aragon network identifier
-  const networkMap: Record<number, string> = {
-    11155111: "ethereum-sepolia", // Sepolia testnet
-    8453: "base-mainnet", // Base mainnet
-  };
-
-  const network = networkMap[chainId];
-  if (!network) return null;
-
-  return `https://app.aragon.org/dao/${network}/${address}/assets`;
+  const daoUrl = getDaoUrl(chainId, address);
+  if (!daoUrl) return null;
+  return `${daoUrl}/assets`;
 }

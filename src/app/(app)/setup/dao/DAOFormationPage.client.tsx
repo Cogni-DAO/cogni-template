@@ -184,6 +184,7 @@ export function DAOFormationPageClient(): ReactElement {
         errorMessage={formation.state.errorMessage}
         repoSpecYaml={formation.state.repoSpecYaml}
         addresses={formation.state.addresses}
+        tokenName={formation.state.config?.tokenName ?? null}
         isInFlight={isInFlight}
         isTerminal={isTerminal}
         onClose={handleDialogClose}
