@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@setup-core/osx/version`
+ * Module: `@aragon-osx/osx/version`
  * Purpose: Pinned OSx version constants for TokenVoting plugin.
  * Scope: Pure constants; no RPC.
  * Invariants: Version tags must match deployed OSx infrastructure.

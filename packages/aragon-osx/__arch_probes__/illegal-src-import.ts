@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@setup-core/__arch_probes__/illegal-src-import`
+ * Module: `@aragon-osx/__arch_probes__/illegal-src-import`
  * Purpose: Arch probe that intentionally violates no-packages-to-src-or-services rule.
  * Scope: Test-only fixture; does NOT run in production.
  * Invariants: Must trigger depcruise violation when scanned.

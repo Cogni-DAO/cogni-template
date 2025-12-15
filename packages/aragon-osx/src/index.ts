@@ -4,5 +4,4 @@
 export * from "./aragon";
 export * from "./encoding";
 export * from "./osx";
-export * from "./receipts";
 export * from "./types";

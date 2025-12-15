@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@setup-core/tests/encoding.parity`
+ * Module: `@aragon-osx/tests/encoding.parity`
  * Purpose: Golden test ensuring viem encoding matches Foundry output exactly.
  * Scope: Tests canonical Base mainnet OSx v1.4.0 MintSettings encoding; does not test v1.3/v1.4 branching.
  * Invariants: Encoded bytes must match Foundry script output byte-for-byte.
  * Side-effects: none
- * Links: packages/setup-core/src/encoding.ts
+ * Links: packages/aragon-osx/src/encoding.ts
  * @public
  */
 
@@ -17,7 +17,7 @@ import {
   encodeTokenVotingSetup,
   INITIAL_TOKEN_AMOUNT,
   MINT_SETTINGS_VERSION,
-} from "@setup-core";
+} from "@aragon-osx";
 import { describe, expect, it } from "vitest";
 
 describe("encodeTokenVotingSetup parity with Foundry", () => {
@@ -26,7 +26,7 @@ describe("encodeTokenVotingSetup parity with Foundry", () => {
     // 1. cd cogni-gov-contracts
     // 2. forge script script/EncodeTokenVotingSetup.s.sol --sig "run(string,string,address)" "TestDAO" "TEST" "0x1234567890123456789012345678901234567890"
     // 3. Capture encoded bytes output
-    // 4. Commit to packages/setup-core/tests/fixtures/foundry-golden.json
+    // 4. Commit to packages/aragon-osx/tests/fixtures/foundry-golden.json
     //
     // Expected fixture shape:
     // {

@@ -1,4 +1,4 @@
-# setup-core · AGENTS.md
+# aragon-osx · AGENTS.md
 
 > Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
 
@@ -62,8 +62,8 @@ Pure TypeScript package for Node Formation P0. Provides Aragon OSx encoding, add
 ## Usage
 
 ```bash
-pnpm --filter @setup-core typecheck
-pnpm --filter @setup-core test
+pnpm --filter @aragon-osx typecheck
+pnpm --filter @aragon-osx test
 ```
 
 ## Standards

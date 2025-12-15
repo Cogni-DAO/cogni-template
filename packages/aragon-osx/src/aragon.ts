@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@setup-core/aragon`
+ * Module: `@aragon-osx/aragon`
  * Purpose: Aragon OSx address/config constants for Node Formation P0.
  * Scope: Pure constants only. No RPC, no env access.
  * Invariants: Addresses must match the chain deployment.
@@ -47,7 +47,7 @@ export const ARAGON_OSX_ADDRESSES: Record<
 
 export function getAragonAddresses(chainId: number): AragonOsxAddresses {
   if (!(SUPPORTED_CHAIN_IDS as readonly number[]).includes(chainId)) {
-    throw new Error(`[setup-core] Unsupported chainId: ${chainId}`);
+    throw new Error(`[aragon-osx] Unsupported chainId: ${chainId}`);
   }
   return ARAGON_OSX_ADDRESSES[chainId as SupportedChainId];
 }

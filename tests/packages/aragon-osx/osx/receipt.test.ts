@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@setup-core/tests/osx/receipt`
+ * Module: `@aragon-osx/tests/osx/receipt`
  * Purpose: Unit tests for strict OSx receipt decoders.
  * Scope: Tests address extraction from event logs; does not perform RPC calls.
  * Invariants: Decoders throw ReceiptDecodingError if expected events missing.
  * Side-effects: none
- * Links: packages/setup-core/src/osx/receipt.ts
+ * Links: packages/aragon-osx/src/osx/receipt.ts
  * @public
  */
 
@@ -21,7 +21,7 @@ import {
   INSTALLATION_APPLIED_EVENT,
   ReceiptDecodingError,
   type TransactionReceipt,
-} from "@setup-core";
+} from "@aragon-osx";
 import { describe, expect, it } from "vitest";
 
 // ============================================================================

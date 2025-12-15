@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@setup-core/types`
- * Purpose: Shared type definitions for setup-core package.
+ * Module: `@aragon-osx/types`
+ * Purpose: Shared type definitions for aragon-osx package.
  * Scope: Type definitions only; does not contain runtime code.
  * Invariants: Types must be compatible with viem hex types.
  * Side-effects: none

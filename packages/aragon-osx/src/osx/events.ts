@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@setup-core/osx/events`
+ * Module: `@aragon-osx/osx/events`
  * Purpose: Aragon OSx event ABIs and topic constants for receipt decoding.
  * Scope: Pure constants; no RPC.
  * Invariants: Topics computed from keccak256 of canonical signatures.
