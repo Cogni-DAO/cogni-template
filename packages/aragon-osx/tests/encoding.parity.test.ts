@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@aragon-osx/tests/encoding.parity`
+ * Module: `@cogni/aragon-osx/tests/encoding.parity`
  * Purpose: Verify TypeScript ABI encoding matches Foundry output byte-for-byte.
- * Scope: Parity test for critical structs (prevents silent ABI mismatch).
+ * Scope: Parity test for critical structs; does not test runtime behavior.
  * Invariants: If this test fails, createDao will revert on-chain.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md, cogni-gov-contracts/script/gov_providers/Aragon/AragonOSxProvider.sol
+ * Links: docs/NODE_FORMATION_SPEC.md
  * @internal
  */
 

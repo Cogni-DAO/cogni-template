@@ -2,11 +2,12 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@aragon-osx/encoding`
+ * Module: `@cogni/aragon-osx/encoding`
  * Purpose: ABI-encode Aragon TokenVoting setup data for Node Formation P0.
- * Scope: Pure encoding only; no RPC.
+ * Scope: Pure encoding only; does not make RPC calls.
  * Invariants: Encoded layout must match OSx TokenVoting setup contract.
  * Side-effects: none
+ * Links: docs/NODE_FORMATION_SPEC.md
  * @public
  */
 

@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@aragon-osx/osx/version`
+ * Module: `@cogni/aragon-osx/osx/version`
  * Purpose: Pinned OSx version constants for TokenVoting plugin.
- * Scope: Pure constants; no RPC.
+ * Scope: Pure constants; does not make RPC calls.
  * Invariants: Version tags must match deployed OSx infrastructure.
  * Side-effects: none
  * Links: docs/NODE_FORMATION_SPEC.md

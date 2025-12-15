@@ -2,11 +2,12 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@aragon-osx/aragon`
+ * Module: `@cogni/aragon-osx/aragon`
  * Purpose: Aragon OSx address/config constants for Node Formation P0.
- * Scope: Pure constants only. No RPC, no env access.
+ * Scope: Pure constants only; does not make RPC calls or access env.
  * Invariants: Addresses must match the chain deployment.
  * Side-effects: none
+ * Links: docs/NODE_FORMATION_SPEC.md
  * @public
  */
 

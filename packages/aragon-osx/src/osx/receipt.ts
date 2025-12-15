@@ -2,11 +2,12 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@aragon-osx/osx/receipt`
+ * Module: `@cogni/aragon-osx/osx/receipt`
  * Purpose: Strict decoders for Aragon OSx transaction receipts.
- * Scope: Pure decoding; no RPC. Throws if expected events not found.
+ * Scope: Pure decoding; does not make RPC calls. Throws if expected events not found.
  * Invariants: No fallback heuristics. Missing events throw errors.
  * Side-effects: none
+ * Links: docs/NODE_FORMATION_SPEC.md
  * @public
  */
 
