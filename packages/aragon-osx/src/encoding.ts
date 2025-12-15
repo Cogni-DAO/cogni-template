@@ -59,7 +59,7 @@ export function encodeTokenVotingSetup(params: {
    */
   mintSettingsVersion: "v1.4" | "v1.3";
 }): Hex {
-  // Layout based on NODE_FORMATION_SPEC.md / DAO_FORMATION_SCRIPT.md:
+  // Layout based on NODE_FORMATION_SPEC.md:
   // (
   //   VotingSettings,
   //   TokenSettings,

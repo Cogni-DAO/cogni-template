@@ -15,7 +15,6 @@ Pure TypeScript package for Node Formation P0. Provides Aragon OSx encoding, add
 ## Pointers
 
 - [Node Formation Spec](../../docs/NODE_FORMATION_SPEC.md)
-- [DAO Formation Script](../../docs/DAO_FORMATION_SCRIPT.md)
 
 ## Boundaries
 
@@ -43,11 +42,13 @@ Pure TypeScript package for Node Formation P0. Provides Aragon OSx encoding, add
   - `encodeTokenVotingSetup()` - ABI-encode TokenVoting plugin setup data
   - `ARAGON_OSX_ADDRESSES` - Hardcoded OSx addresses per chainId
   - `getAragonAddresses()` - Lookup helper
-  - `extractCandidateAddressesFromReceipt()` - Heuristic address extraction
+  - `osx/events` - Event ABIs and topic constants
+  - `osx/receipt` - Receipt decoders (strict, throws if events missing)
+  - `osx/version` - Pinned version constants
   - Types: `HexAddress`, `Hex`, `SupportedChainId`, `AragonOsxAddresses`
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** `index.ts`, `encoding.ts`, `aragon.ts`, `receipts.ts`, `types.ts`
+- **Files considered API:** `index.ts`, `encoding.ts`, `aragon.ts`, `osx/*.ts`, `types.ts`
 
 ## Ports
 

@@ -35,6 +35,7 @@
       "@/shared": ["src/shared/index.ts"],
       "@aragon-osx": ["packages/aragon-osx/src/index.ts"],
       "@aragon-osx/*": ["packages/aragon-osx/src/*"],
+      "@cogni/aragon-osx": ["packages/aragon-osx/src/index.ts"],
       "@features/*": ["src/features/*"],
       "@app/*": ["src/app/*"],
       "@adapters/*": ["src/adapters/*"],
