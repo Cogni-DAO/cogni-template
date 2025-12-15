@@ -12,7 +12,14 @@
  * @public
  */
 
-import type { Log, Transaction, TransactionReceipt } from "viem";
+import type {
+  Abi,
+  ContractFunctionArgs,
+  ContractFunctionName,
+  Log,
+  Transaction,
+  TransactionReceipt,
+} from "viem";
 
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 
@@ -27,6 +34,8 @@ export class FakeEvmOnchainClient implements EvmOnchainClient {
   private logs: Log[] = [];
   private nativeBalances: Map<string, bigint> = new Map();
   private erc20Balances: Map<string, bigint> = new Map(); // key: "tokenAddress:holderAddress"
+  private bytecodes: Map<string, `0x${string}`> = new Map();
+  private contractReads: Map<string, unknown> = new Map(); // key: `${address}:${functionName}:${JSON.stringify(args)}`
 
   // Call tracking for assertions
   public getTransactionCalls: `0x${string}`[] = [];
@@ -37,6 +46,12 @@ export class FakeEvmOnchainClient implements EvmOnchainClient {
   public getErc20BalanceCalls: Array<{
     tokenAddress: `0x${string}`;
     holderAddress: `0x${string}`;
+  }> = [];
+  public getBytecodeCalls: `0x${string}`[] = [];
+  public readContractCalls: Array<{
+    address: `0x${string}`;
+    functionName: string;
+    args: readonly unknown[];
   }> = [];
 
   /**
@@ -89,6 +104,29 @@ export class FakeEvmOnchainClient implements EvmOnchainClient {
   }
 
   /**
+   * Configure bytecode for an address.
+   * Use "0x" to simulate empty code; omit to simulate null (unknown).
+   */
+  setBytecode(address: `0x${string}`, bytecode: `0x${string}`): void {
+    this.bytecodes.set(address.toLowerCase(), bytecode);
+  }
+
+  /**
+   * Configure a readContract response (for deterministic tests).
+   */
+  setReadContractResult(params: {
+    address: `0x${string}`;
+    functionName: string;
+    args: readonly unknown[];
+    result: unknown;
+  }): void {
+    const key = `${params.address.toLowerCase()}:${params.functionName}:${JSON.stringify(
+      params.args
+    )}`;
+    this.contractReads.set(key, params.result);
+  }
+
+  /**
    * Reset all configured responses and call history.
    */
   reset(): void {
@@ -98,12 +136,16 @@ export class FakeEvmOnchainClient implements EvmOnchainClient {
     this.logs = [];
     this.nativeBalances.clear();
     this.erc20Balances.clear();
+    this.bytecodes.clear();
+    this.contractReads.clear();
     this.getTransactionCalls = [];
     this.getReceiptCalls = [];
     this.getBlockNumberCalls = 0;
     this.getLogsCalls = 0;
     this.getNativeBalanceCalls = [];
     this.getErc20BalanceCalls = [];
+    this.getBytecodeCalls = [];
+    this.readContractCalls = [];
   }
 
   async getTransaction(txHash: `0x${string}`): Promise<Transaction | null> {
@@ -153,6 +195,37 @@ export class FakeEvmOnchainClient implements EvmOnchainClient {
     const key = `${params.tokenAddress.toLowerCase()}:${params.holderAddress.toLowerCase()}`;
     const balance = this.erc20Balances.get(key);
     return balance ?? 0n;
+  }
+
+  async getBytecode(address: `0x${string}`): Promise<`0x${string}` | null> {
+    this.getBytecodeCalls.push(address);
+    const code = this.bytecodes.get(address.toLowerCase());
+    return code ?? null;
+  }
+
+  async readContract<
+    const TAbi extends Abi,
+    TFunctionName extends ContractFunctionName<TAbi, "view" | "pure">,
+    const TArgs extends ContractFunctionArgs<
+      TAbi,
+      "view" | "pure",
+      TFunctionName
+    >,
+  >(params: {
+    address: `0x${string}`;
+    abi: TAbi;
+    functionName: TFunctionName;
+    args: TArgs;
+  }): Promise<unknown> {
+    this.readContractCalls.push({
+      address: params.address,
+      functionName: String(params.functionName),
+      args: Array.isArray(params.args) ? [...params.args] : [],
+    });
+    const key = `${params.address.toLowerCase()}:${params.functionName}:${JSON.stringify(
+      params.args
+    )}`;
+    return this.contractReads.get(key);
   }
 }
 

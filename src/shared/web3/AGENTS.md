@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-12
+- **Last reviewed:** 2025-12-13
 - **Status:** stable
 
 ## Purpose
 
-Shared blockchain configuration for web3 integrations. Provides hardcoded Base mainnet chain constants for DePay widgets and wagmi providers.
+Shared blockchain configuration for web3 integrations. Provides Base mainnet chain constants, EVM RPC client interface, and Node Formation primitives (ABIs, bytecode, OSx addresses).
 
 ## Pointers
 
@@ -40,20 +40,20 @@ Shared blockchain configuration for web3 integrations. Provides hardcoded Base m
 ## Public Surface
 
 - **Exports:**
-  - `CHAIN` - wagmi Chain object for Ethereum Sepolia testnet (evm-wagmi.ts)
-  - `CHAIN_ID` - Ethereum Sepolia testnet chain ID (11155111)
+  - `CHAIN` - wagmi Chain object for Base mainnet
+  - `CHAIN_ID` - Chain ID constant
   - `getChainId()` - Function returning chain ID
-  - `USDC_TOKEN_ADDRESS` - Official USDC contract on Ethereum Sepolia testnet
-  - `MIN_CONFIRMATIONS` - Minimum confirmations required for payment verification
-  - `VERIFY_THROTTLE_SECONDS` - Verification polling throttle (10 seconds)
-  - `ERC20_ABI` - Generic ERC20 ABI (balanceOf, decimals, transfer)
-  - `EvmOnchainClient` - Infrastructure interface for EVM RPC operations (onchain/)
-  - `getAddressExplorerUrl()` - Generate block explorer URL for address
-  - `getTransactionExplorerUrl()` - Generate block explorer URL for transaction
-- **Routes (if any):** none
-- **CLI (if any):** none
-- **Env/Config keys:** none (chain hardcoded to Ethereum Sepolia)
-- **Files considered API:** chain.ts, evm-wagmi.ts, erc20-abi.ts, block-explorer.ts, onchain/evm-onchain-client.interface.ts, index.ts
+  - `USDC_TOKEN_ADDRESS` - USDC contract address
+  - `MIN_CONFIRMATIONS` - Payment verification confirmations
+  - `VERIFY_THROTTLE_SECONDS` - Verification polling throttle
+  - `ERC20_ABI` - Generic ERC20 ABI
+  - `EvmOnchainClient` - Infrastructure interface for EVM RPC operations
+  - `getAddressExplorerUrl()`, `getTransactionExplorerUrl()` - Block explorer URLs
+  - `node-formation/*` - Node Formation ABIs, bytecode, OSx addresses (see node-formation/AGENTS.md)
+- **Routes:** none
+- **CLI:** none
+- **Env/Config keys:** none (chain hardcoded)
+- **Files considered API:** chain.ts, evm-wagmi.ts, erc20-abi.ts, block-explorer.ts, wagmi.config.ts, onchain/, node-formation/, index.ts
 
 ## Ports (optional)
 
@@ -92,10 +92,10 @@ import { CHAIN, CHAIN_ID, USDC_TOKEN_ADDRESS } from "@/shared/web3";
 
 ## Notes
 
-- Chain locked to Ethereum Sepolia (11155111) for MVP testing
+- Chain locked to Base mainnet (8453)
 - wagmi.config.ts exists for client-side wallet config but NOT exported from index.ts (prevents server-side import)
-- EvmOnchainClient extended with getNativeBalance() and getErc20Balance() for treasury reads
-- ERC20_ABI is generic (token-agnostic); used by treasury adapter for USDC balance queries
+- EvmOnchainClient extended with getBytecode() and readContract() for Node Formation verification
+- node-formation/ subdirectory contains P0 DAO formation primitives (isolated from payment/treasury code)
 - evm-wagmi.ts separates wagmi types from framework-agnostic chain.ts
 - EvmOnchainClient is an infrastructure seam (NOT a domain port) shared by multiple adapters
 - Production uses ViemEvmOnchainClient with lazy initialization (allows builds without EVM_RPC_URL)

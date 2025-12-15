@@ -44,19 +44,34 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 ## Pointers
 
+### Core Architecture
+
 - [Technical Roadmap](ROADMAP.md)
-- [Developer Setup](docs/SETUP.md)
+- [Node vs Operator Contract](docs/NODE_VS_OPERATOR_CONTRACT.md)
+- [MVP Deliverables](docs/MVP_DELIVERABLES.md)
+- [Node Formation Spec](docs/NODE_FORMATION_SPEC.md)
 - [Architecture](docs/ARCHITECTURE.md)
-- [Observability](docs/OBSERVABILITY.md)
 - [Services Migration Guide](docs/SERVICES_MIGRATION.md)
+
+### AI & Evals
+
+- [AI Architecture & Evals](docs/AI_EVALS.md)
+
+### Development
+
+- [Developer Setup](docs/SETUP.md)
 - [Environment & Stack Deployment Modes](docs/ENVIRONMENTS.md)
 - [Database & Migration Architecture](docs/DATABASES.md)
 - [Testing Strategy](docs/TESTING.md)
 - [Feature Development Guide](docs/FEATURE_DEVELOPMENT_GUIDE.md)
 - [UI Implementation Guide](docs/UI_IMPLEMENTATION_GUIDE.md)
+- [Style & Lint Rules](docs/STYLE.md)
+
+### Operations
+
+- [Observability](docs/OBSERVABILITY.md)
 - [Repo Specification](.cogni/repo-spec.yaml)
 - [Subdir AGENTS.md Policy](docs/templates/agents_subdir_template.md)
-- [Style & Lint Rules](docs/STYLE.md)
 
 ## Usage
 

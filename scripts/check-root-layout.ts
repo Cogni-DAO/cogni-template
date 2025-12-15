@@ -59,6 +59,7 @@ const REQUIRED_PATHS: PathRequirement[] = [
   { anyOf: ["src/shared"], kind: "dir" },
   { anyOf: ["src/bootstrap"], kind: "dir" },
   { anyOf: ["platform", "infra"], kind: "dir" },
+  { anyOf: ["packages"], kind: "dir" },
 ];
 
 const ALLOWED_ROOT_ENTRIES = new Set<string>([
@@ -113,10 +114,12 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   "knip.json",
   "next.config.ts",
   "package.json",
+  "packages",
   "platform",
   "playwright.config.mjs",
   "playwright.config.ts",
   "pnpm-lock.yaml",
+  "pnpm-workspace.yaml",
   "postcss.config.mjs",
   "public",
   "scripts",

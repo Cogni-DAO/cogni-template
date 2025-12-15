@@ -54,6 +54,9 @@ export const EVENT_NAMES = {
     "client.payments.flow_wallet_write_error",
   CLIENT_PAYMENTS_FLOW_RECEIPT_ERROR: "client.payments.flow_receipt_error",
 
+  // Setup Domain - Server
+  SETUP_DAO_VERIFY_COMPLETE: "setup.dao_verify_complete",
+
   // Adapter Events
   ADAPTER_LITELLM_COMPLETION_RESULT: "adapter.litellm.completion_result",
   ADAPTER_LITELLM_STREAM_RESULT: "adapter.litellm.stream_result",

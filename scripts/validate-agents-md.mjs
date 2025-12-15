@@ -109,6 +109,8 @@ function validateBoundaries(block, filePathRaw) {
     "scripts",
     "infra",
     "meta",
+    "packages",
+    "services",
   ];
 
   // Map dirs to canonical layer and allowed imports (must match ESLint)
@@ -135,6 +137,8 @@ function validateBoundaries(block, filePathRaw) {
     { re: /^scripts\//, layer: "scripts" },
     { re: /^infra\//, layer: "infra" },
     { re: /^platform\//, layer: "infra" },
+    { re: /^packages\//, layer: "packages" },
+    { re: /^services\//, layer: "services" },
   ];
 
   const POLICY_ALLOW = {
@@ -187,6 +191,10 @@ function validateBoundaries(block, filePathRaw) {
     scripts: ["scripts", "ports", "shared", "types"],
     infra: ["infra"], // doc-only
     meta: ["meta"], // doc-only
+    // Monorepo packages: isolated, no src/services imports (external deps only)
+    packages: ["packages"],
+    // Services: can use shared packages, no src imports
+    services: ["services", "packages"],
   };
 
   if (!VALID_LAYERS.includes(j.layer))

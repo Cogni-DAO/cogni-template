@@ -188,6 +188,16 @@
           }
         }
       }
+    },
+    {
+      "includes": ["packages/aragon-osx/tsup.config.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noDefaultExport": "off"
+          }
+        }
+      }
     }
   ]
 }

@@ -44,7 +44,7 @@ const BASE_BADGE_CLASSES =
  * Uses ConnectButton.Custom render props - no wagmi hooks inside component.
  */
 export function WalletConnectButton({
-  variant = "default",
+  // variant = "default",
   className,
 }: WalletConnectButtonProps = {}): React.JSX.Element {
   return (
