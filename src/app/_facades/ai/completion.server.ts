@@ -63,6 +63,8 @@ export async function completion(
   const caller: LlmCaller = {
     billingAccountId: billingAccount.id,
     virtualKeyId: billingAccount.defaultVirtualKeyId,
+    requestId: ctx.reqId,
+    traceId: ctx.traceId,
   };
 
   // Enrich context with business identifiers
@@ -138,6 +140,8 @@ export async function completionStream(
   const caller: LlmCaller = {
     billingAccountId: billingAccount.id,
     virtualKeyId: billingAccount.defaultVirtualKeyId,
+    requestId: ctx.reqId,
+    traceId: ctx.traceId,
   };
 
   const enrichedCtx: RequestContext = {

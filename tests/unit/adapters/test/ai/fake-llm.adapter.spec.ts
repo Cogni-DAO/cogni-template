@@ -24,6 +24,8 @@ describe("FakeLlmAdapter deterministic behavior", () => {
   const createTestCaller = (): LlmCaller => ({
     billingAccountId: "test-user",
     virtualKeyId: "virtual-key-1",
+    requestId: "req-test",
+    traceId: "trace-test",
   });
 
   beforeEach(() => {

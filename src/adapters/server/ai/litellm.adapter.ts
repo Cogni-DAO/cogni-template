@@ -109,8 +109,8 @@ export class LiteLlmAdapter implements LlmService {
     const temperature = params.temperature ?? DEFAULT_TEMPERATURE;
     const maxTokens = params.maxTokens ?? DEFAULT_MAX_TOKENS;
 
-    // Extract caller data for user attribution (cost tracking in LiteLLM)
-    const { billingAccountId } = params.caller;
+    // Extract caller data for user attribution and correlation (cost tracking in LiteLLM)
+    const { billingAccountId, requestId, traceId } = params.caller;
 
     // Convert core Messages to LiteLLM format
     const liteLlmMessages = params.messages.map((msg) => ({
@@ -134,6 +134,8 @@ export class LiteLlmAdapter implements LlmService {
       user: billingAccountId, // LiteLLM user tracking for cost attribution
       metadata: {
         cogni_billing_account_id: billingAccountId,
+        request_id: requestId,
+        trace_id: traceId,
       },
     };
 
@@ -274,7 +276,7 @@ export class LiteLlmAdapter implements LlmService {
     const model = params.model;
     const temperature = params.temperature ?? DEFAULT_TEMPERATURE;
     const maxTokens = params.maxTokens ?? DEFAULT_MAX_TOKENS;
-    const { billingAccountId } = params.caller;
+    const { billingAccountId, requestId, traceId } = params.caller;
 
     const liteLlmMessages = params.messages.map((msg) => ({
       role: msg.role,
@@ -297,6 +299,8 @@ export class LiteLlmAdapter implements LlmService {
       user: billingAccountId, // LiteLLM user tracking for cost attribution
       metadata: {
         cogni_billing_account_id: billingAccountId,
+        request_id: requestId,
+        trace_id: traceId,
       },
       stream: true,
       stream_options: { include_usage: true }, // Request usage in stream if supported

@@ -55,6 +55,8 @@ describe("features/ai/services/completion", () => {
   const createTestCaller = (): LlmCaller => ({
     billingAccountId: "billing-test-user",
     virtualKeyId: "virtual-key-123",
+    requestId: "req-test",
+    traceId: "trace-test",
   });
 
   describe("execute", () => {

@@ -61,13 +61,12 @@
 - [x] OTel instrumentation with explicit root span at request entry (do not rely on auto-instrumentation)
 - [x] Store `trace_id` deterministically from root span into RequestContext
 - [ ] Direct Langfuse SDK integration (not OTel exporter) to reliably obtain `langfuse_trace_id`
-- [ ] Propagate `reqId` + `trace_id` in LiteLLM metadata
+- [x] Propagate `reqId` + `trace_id` in LiteLLM metadata
 - [x] Create `ai_invocation_summaries` table (see schema below)
 - [ ] Write correlation IDs to ai_invocation_summaries on every AI call
 
 #### P0 Known Issues
 
-- [ ] LiteLLM metadata incomplete (only sends `cogni_billing_account_id`, missing `request_id`/`trace_id`)
 - [ ] No stack test for telemetry writes (code writes to `ai_invocation_summaries` but no test validates rows)
 
 #### Chores

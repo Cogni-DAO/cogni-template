@@ -44,6 +44,8 @@ describe("Security: No secret fields in port interfaces", () => {
     const caller: LlmCaller = {
       billingAccountId: "billing-123",
       virtualKeyId: "vk-789",
+      requestId: "req-123",
+      traceId: "trace-456",
       // @ts-expect-error - litellmVirtualKey must NOT exist on LlmCaller (security invariant)
       litellmVirtualKey: "should-not-compile",
     };
