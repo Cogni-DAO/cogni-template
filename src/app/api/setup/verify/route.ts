@@ -39,6 +39,7 @@ import {
 } from "@/shared/web3/node-formation/aragon-abi";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const baseLog = makeLogger();
 const clock = { now: () => new Date().toISOString() };
@@ -56,9 +57,16 @@ function getPublicClient(chainId: SupportedChainId) {
   }
 
   const rpcUrl = serverEnv().EVM_RPC_URL;
+  // Hard requirement: no fallback to default RPC
+  if (!rpcUrl) {
+    throw new Error(
+      `EVM_RPC_URL is required for setup verification. chainId=${chainId}`
+    );
+  }
+
   return createPublicClient({
     chain,
-    transport: http(rpcUrl || undefined),
+    transport: http(rpcUrl),
   });
 }
 
@@ -88,8 +96,13 @@ export async function POST(request: Request): Promise<NextResponse> {
       return NextResponse.json(response, { status: 400 });
     }
 
-    const { chainId, daoTxHash, signalTxHash, initialHolder } =
-      parseResult.data;
+    const {
+      chainId,
+      daoTxHash,
+      signalTxHash,
+      signalBlockNumber,
+      initialHolder,
+    } = parseResult.data;
     const errors: string[] = [];
 
     const client = getPublicClient(chainId as SupportedChainId);
@@ -228,22 +241,43 @@ export async function POST(request: Request): Promise<NextResponse> {
     }
 
     // 5. Verify CogniSignal.DAO() == daoAddress
+    // Query at signalBlockNumber to avoid cross-RPC race condition
     if (signalAddress && daoAddress) {
       try {
+        const blockNumber = BigInt(signalBlockNumber);
+        // Verify contract exists at the specific block (avoids "latest" race)
+        const bytecode = await client.getBytecode({
+          address: signalAddress,
+          blockNumber,
+        });
         ctx.log.info(
-          { signalAddress, daoAddress },
+          {
+            signalAddress,
+            daoAddress,
+            signalBlockNumber,
+            bytecodeExists: bytecode != null,
+            bytecodeLength: bytecode?.length ?? 0,
+          },
           "setup.verify: calling CogniSignal.DAO()"
         );
-        const signalDao = await client.readContract({
-          address: signalAddress,
-          abi: COGNI_SIGNAL_ABI,
-          functionName: "DAO",
-        });
 
-        if (signalDao.toLowerCase() !== daoAddress.toLowerCase()) {
+        if (!bytecode) {
           errors.push(
-            `CogniSignal.DAO() mismatch: expected ${daoAddress}, got ${signalDao}`
+            `CogniSignal contract not found at ${signalAddress} at block ${signalBlockNumber}`
           );
+        } else {
+          const signalDao = await client.readContract({
+            address: signalAddress,
+            abi: COGNI_SIGNAL_ABI,
+            functionName: "DAO",
+            blockNumber,
+          });
+
+          if (signalDao.toLowerCase() !== daoAddress.toLowerCase()) {
+            errors.push(
+              `CogniSignal.DAO() mismatch: expected ${daoAddress}, got ${signalDao}`
+            );
+          }
         }
       } catch (err) {
         ctx.log.error(

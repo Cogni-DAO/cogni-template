@@ -47,6 +47,7 @@ export async function verifyFormation(params: {
   chainId: number;
   daoTxHash: HexAddress;
   signalTxHash: HexAddress;
+  signalBlockNumber: number;
   initialHolder: HexAddress;
 }): Promise<VerifyResult> {
   try {
@@ -54,6 +55,7 @@ export async function verifyFormation(params: {
       chainId: params.chainId,
       daoTxHash: params.daoTxHash,
       signalTxHash: params.signalTxHash,
+      signalBlockNumber: params.signalBlockNumber,
       initialHolder: params.initialHolder,
     };
 

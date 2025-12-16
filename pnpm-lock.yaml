@@ -20,6 +20,12 @@ importers:
       '@auth/drizzle-adapter':
         specifier: ^1.7.0
         version: 1.11.1
+      '@cogni/aragon-osx':
+        specifier: workspace:*
+        version: link:packages/aragon-osx
+      '@cogni/cogni-contracts':
+        specifier: workspace:*
+        version: link:packages/cogni-contracts
       '@radix-ui/react-avatar':
         specifier: ^1.1.11
         version: 1.1.11(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)

@@ -35,6 +35,12 @@ export const setupVerifyOperation = {
         ),
       daoTxHash: txHash.describe("DAOFactory.createDao transaction hash"),
       signalTxHash: txHash.describe("CogniSignal deployment transaction hash"),
+      // Block number from client receipt - used to query at specific block (avoids cross-RPC race)
+      signalBlockNumber: z
+        .number()
+        .int()
+        .positive()
+        .describe("Block number where CogniSignal was deployed (from receipt)"),
       initialHolder: hexAddress.describe("Expected token recipient address"),
     })
     .strict(), // SECURITY: Reject any client-supplied addresses (must derive from receipts)

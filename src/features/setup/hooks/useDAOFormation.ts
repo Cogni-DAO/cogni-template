@@ -182,7 +182,10 @@ export function useDAOFormation(): UseDAOFormationReturn {
   // ──────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (signalReceipt && state.phase === "AWAITING_SIGNAL_CONFIRMATION") {
-      dispatch({ type: "SIGNAL_TX_CONFIRMED" });
+      dispatch({
+        type: "SIGNAL_TX_CONFIRMED",
+        blockNumber: Number(signalReceipt.blockNumber),
+      });
     }
   }, [signalReceipt, state.phase]);
 
@@ -211,9 +214,15 @@ export function useDAOFormation(): UseDAOFormationReturn {
   // Effect: Auto-verify when signal confirmed
   // ──────────────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const { phase, daoTxHash, signalTxHash, config } = state;
+    const { phase, daoTxHash, signalTxHash, signalBlockNumber, config } = state;
 
-    if (phase !== "VERIFYING" || !daoTxHash || !signalTxHash || !config) {
+    if (
+      phase !== "VERIFYING" ||
+      !daoTxHash ||
+      !signalTxHash ||
+      !signalBlockNumber ||
+      !config
+    ) {
       return;
     }
 
@@ -224,6 +233,7 @@ export function useDAOFormation(): UseDAOFormationReturn {
         chainId,
         daoTxHash,
         signalTxHash,
+        signalBlockNumber,
         initialHolder: config.initialHolder,
       });
 
