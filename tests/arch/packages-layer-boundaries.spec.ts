@@ -48,35 +48,63 @@ function runDepCruise(probeDirs: string[]): {
 }
 
 describe("Packages layer isolation (monorepo boundaries)", () => {
-  it("allows packages to import from packages (internal)", () => {
-    const { exitCode, stderr } = runDepCruise(["packages/aragon-osx/src"]);
-    if (exitCode !== 0) {
-      console.error("STDERR:", stderr);
-    }
-    expect(exitCode).toBe(0);
+  describe("@cogni/aragon-osx", () => {
+    it("allows internal imports", () => {
+      const { exitCode, stderr } = runDepCruise(["packages/aragon-osx/src"]);
+      if (exitCode !== 0) {
+        console.error("STDERR:", stderr);
+      }
+      expect(exitCode).toBe(0);
+    });
+
+    it("blocks importing from src/", () => {
+      const { exitCode, stdout } = runDepCruise([
+        "packages/aragon-osx/__arch_probes__",
+        "src/shared",
+      ]);
+      if (exitCode === 0) {
+        console.log("STDOUT:", stdout);
+      }
+      expect(exitCode).not.toBe(0);
+      expect(stdout).toContain("no-packages-to-src-or-services");
+    });
   });
 
-  it("blocks packages from importing src", () => {
-    const { exitCode, stdout } = runDepCruise([
-      "packages/aragon-osx/__arch_probes__",
-      "src/shared",
-    ]);
-    if (exitCode === 0) {
-      console.log("STDOUT:", stdout);
-    }
-    expect(exitCode).not.toBe(0);
-    expect(stdout).toContain("no-packages-to-src-or-services");
+  describe("@cogni/cogni-contracts", () => {
+    it("allows internal imports", () => {
+      const { exitCode, stderr } = runDepCruise([
+        "packages/cogni-contracts/src",
+      ]);
+      if (exitCode !== 0) {
+        console.error("STDERR:", stderr);
+      }
+      expect(exitCode).toBe(0);
+    });
+
+    it("blocks importing from src/", () => {
+      const { exitCode, stdout } = runDepCruise([
+        "packages/cogni-contracts/__arch_probes__",
+        "src/shared",
+      ]);
+      if (exitCode === 0) {
+        console.log("STDOUT:", stdout);
+      }
+      expect(exitCode).not.toBe(0);
+      expect(stdout).toContain("no-packages-to-src-or-services");
+    });
   });
 
-  it("blocks src from deep-importing package internals", () => {
-    const { exitCode, stdout } = runDepCruise([
-      "src/features/__arch_probes__/illegal-deep-package-import.ts",
-      "packages/aragon-osx/src",
-    ]);
-    if (exitCode === 0) {
-      console.log("STDOUT:", stdout);
-    }
-    expect(exitCode).not.toBe(0);
-    expect(stdout).toContain("no-deep-package-imports");
+  describe("src/ deep imports", () => {
+    it("blocks deep-importing package internals", () => {
+      const { exitCode, stdout } = runDepCruise([
+        "src/features/__arch_probes__/illegal-deep-package-import.ts",
+        "packages/aragon-osx/src",
+      ]);
+      if (exitCode === 0) {
+        console.log("STDOUT:", stdout);
+      }
+      expect(exitCode).not.toBe(0);
+      expect(stdout).toContain("no-deep-package-imports");
+    });
   });
 });

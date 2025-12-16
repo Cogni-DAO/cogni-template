@@ -17,10 +17,10 @@ import {
   INSTALLATION_APPLIED_EVENT,
   type SupportedChainId,
 } from "@cogni/aragon-osx";
+import { COGNI_SIGNAL_ABI } from "@cogni/cogni-contracts";
 import { NextResponse } from "next/server";
 import { createPublicClient, http } from "viem";
 import { base, sepolia } from "viem/chains";
-
 import {
   type SetupVerifyOutput,
   setupVerifyOperation,
@@ -37,7 +37,6 @@ import {
   GOVERNANCE_ERC20_ABI,
   TOKEN_VOTING_ABI,
 } from "@/shared/web3/node-formation/aragon-abi";
-import { COGNI_SIGNAL_ABI } from "@/shared/web3/node-formation/bytecode";
 
 export const dynamic = "force-dynamic";
 

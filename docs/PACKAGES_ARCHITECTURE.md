@@ -69,9 +69,10 @@ The fast lane runs on every commit. The contract lane validates that `dist/` exp
 
 ## Existing Packages
 
-| Package             | Target     | Purpose                                          |
-| ------------------- | ---------- | ------------------------------------------------ |
-| `@cogni/aragon-osx` | isomorphic | Aragon OSx encoding, addresses, receipt decoders |
+| Package                  | Target     | Purpose                                          |
+| ------------------------ | ---------- | ------------------------------------------------ |
+| `@cogni/aragon-osx`      | isomorphic | Aragon OSx encoding, addresses, receipt decoders |
+| `@cogni/cogni-contracts` | isomorphic | Cogni-owned contract ABI and bytecode constants  |
 
 ## Related Docs
 

@@ -12,5 +12,4 @@
  */
 
 export * from "./aragon-abi";
-export * from "./bytecode";
 export * from "./constants";

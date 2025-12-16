@@ -19,6 +19,10 @@ import {
   SUPPORTED_CHAIN_IDS,
   type SupportedChainId,
 } from "@cogni/aragon-osx";
+import {
+  COGNI_SIGNAL_ABI,
+  COGNI_SIGNAL_BYTECODE,
+} from "@cogni/cogni-contracts";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import {
   useAccount,
@@ -27,12 +31,7 @@ import {
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
-
 import { DAO_FACTORY_ABI } from "@/shared/web3/node-formation/aragon-abi";
-import {
-  COGNI_SIGNAL_ABI,
-  COGNI_SIGNAL_BYTECODE,
-} from "@/shared/web3/node-formation/bytecode";
 import { verifyFormation } from "../daoFormation/api";
 import {
   type DAOFormationConfig,
