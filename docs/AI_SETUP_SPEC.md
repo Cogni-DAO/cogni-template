@@ -67,7 +67,7 @@
 
 #### P0 Known Issues
 
-- [ ] No stack test for telemetry writes (code writes to `ai_invocation_summaries` but no test validates rows)
+- [x] Stack test for telemetry writes (`tests/stack/ai/ai-telemetry.stack.test.ts` validates `ai_invocation_summaries` rows)
 
 #### Chores
 
