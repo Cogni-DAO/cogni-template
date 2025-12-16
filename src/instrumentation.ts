@@ -22,25 +22,24 @@ import { NodeSDK } from "@opentelemetry/sdk-node";
 let sdk: NodeSDK | null = null;
 
 /**
- * Next.js instrumentation hook - called once per Node.js process.
- * Initializes OpenTelemetry SDK for distributed tracing.
+ * Initialize OTel SDK with P0 configuration.
+ * Shared between Next.js instrumentation and test setup.
  *
  * Per AI_SETUP_SPEC.md:
  * - Service name via OTEL_SERVICE_NAME env var (SDK reads it automatically)
  * - No auto-instrumentation for P0 (explicit spans only)
  * - No exporter for P0 (IDs + Langfuse only; no Tempo/Grafana traces yet)
- * - Hard-fail in non-dev if startup fails
+ *
+ * @param options - Optional configuration
+ * @param options.failOnError - Whether to throw on startup failure (default: !isDev)
+ * @returns true if SDK started successfully, false otherwise
  */
-export async function register(): Promise<void> {
-  // Only initialize OTel in Node.js runtime (allowlist, not denylist)
-  // biome-ignore lint/style/noProcessEnv: NEXT_RUNTIME is set by Next.js, no config file
-  if (process.env.NEXT_RUNTIME !== "nodejs") {
-    return;
-  }
-
-  // Skip if already initialized (shouldn't happen, but defensive)
+export async function initOtelSdk(options?: {
+  failOnError?: boolean;
+}): Promise<boolean> {
+  // Skip if already initialized
   if (sdk !== null) {
-    return;
+    return true;
   }
 
   // P0: No exporter configured - we only need trace IDs for correlation
@@ -57,19 +56,39 @@ export async function register(): Promise<void> {
     // Log successful initialization (console since Pino may not be ready)
     // biome-ignore lint/suspicious/noConsole: OTel init happens before logging is available
     console.log("[instrumentation] OTel SDK started successfully");
+    return true;
   } catch (error) {
     // biome-ignore lint/style/noProcessEnv: NODE_ENV is standard Next.js runtime env
     const isDev = process.env.NODE_ENV === "development";
+    const shouldFail = options?.failOnError ?? !isDev;
 
     // biome-ignore lint/suspicious/noConsole: OTel init happens before logging is available
     console.error("[instrumentation] OTel SDK startup failed:", error);
 
-    if (!isDev) {
-      // Hard-fail in non-dev environments (per AI_SETUP_SPEC.md)
+    if (shouldFail) {
+      // Hard-fail when required (per AI_SETUP_SPEC.md)
       throw error;
     }
-    // In dev, continue without OTel (graceful degradation)
+    // Graceful degradation
+    return false;
   }
+}
+
+/**
+ * Next.js instrumentation hook - called once per Node.js process.
+ * Initializes OpenTelemetry SDK for distributed tracing.
+ *
+ * Per AI_SETUP_SPEC.md:
+ * - Hard-fail in non-dev if startup fails
+ */
+export async function register(): Promise<void> {
+  // Only initialize OTel in Node.js runtime (allowlist, not denylist)
+  // biome-ignore lint/style/noProcessEnv: NEXT_RUNTIME is set by Next.js, no config file
+  if (process.env.NEXT_RUNTIME !== "nodejs") {
+    return;
+  }
+
+  await initOtelSdk();
 }
 
 /**
