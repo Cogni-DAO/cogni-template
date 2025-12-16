@@ -34,6 +34,10 @@ services:
       - PORT=${PORT:-3000}
       - PINO_LOG_LEVEL=${PINO_LOG_LEVEL:-info}
       - METRICS_TOKEN=${METRICS_TOKEN:-}
+      # Langfuse - AI Observability (optional)
+      - LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
+      - LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
+      - LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL:-}
     depends_on:
       postgres:
         condition: service_healthy
