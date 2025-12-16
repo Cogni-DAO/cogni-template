@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2025-12-13
+- **Last reviewed:** 2025-12-16
 - **Status:** draft
 
 ## Purpose
