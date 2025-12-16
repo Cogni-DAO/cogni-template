@@ -69,7 +69,9 @@ src/shared/observability/
 **Cardinal Rules:**
 
 - All event names MUST be in EVENT_NAMES registry (prevents ad-hoc strings)
-- All events MUST include reqId (enforced by logEvent(), fail-closed)
+- All server events MUST include `reqId` (enforced by logEvent(), fail-closed)
+- All server events MUST include `traceId` (from OTel root span)
+- AI events SHOULD include `litellmCallId` and `langfuseTraceId` when available
 - No sensitive payloads (prompts, request bodies, secrets, PII)
 - 2-6 events per request max
 - Every operation has deterministic terminal outcome (success OR failure)
@@ -94,7 +96,17 @@ src/shared/observability/
 - `service="app|litellm|caddy|deployment"` - Docker service name
 - `stream="stdout|stderr"` - Log stream
 
-**High-cardinality fields** (in JSON, not labels): `reqId`, `userId`, `billingAccountId`, `model`, `time`
+**High-cardinality fields** (in JSON, NOT labels): `reqId`, `traceId`, `spanId`, `langfuseTraceId`, `litellmCallId`, `userId`, `billingAccountId`, `model`, `time`
+
+---
+
+## Context Propagation
+
+`reqId` and trace context propagate through all adapters, tools, and graphs:
+
+- `reqId` attached as OTel span attribute (`cogni.request_id`)
+- `reqId` + `traceId` forwarded in LiteLLM metadata for correlation
+- Child loggers inherit `reqId` + `traceId` from RequestContext
 
 ---
 

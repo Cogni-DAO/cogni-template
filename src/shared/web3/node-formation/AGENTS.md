@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2025-12-13
+- **Last reviewed:** 2025-12-16
 - **Status:** draft
 
 ## Purpose
 
-Node Formation P0 web3 primitives: Aragon OSx ABIs, CogniSignal ABI, contract bytecode placeholders, and chain address constants.
+Node Formation P0 web3 primitives: Aragon OSx ABIs and chain address constants. CogniSignal artifacts are in `@cogni/cogni-contracts`.
 
 ## Pointers
 
@@ -33,8 +33,6 @@ Node Formation P0 web3 primitives: Aragon OSx ABIs, CogniSignal ABI, contract by
   - `DAO_FACTORY_ABI` - DAOFactory.createDao + pluginSetupProcessor
   - `TOKEN_VOTING_ABI` - TokenVoting.getVotingToken
   - `GOVERNANCE_ERC20_ABI` - GovernanceERC20.balanceOf
-  - `COGNI_SIGNAL_ABI` - CogniSignal.DAO
-  - `COGNI_SIGNAL_BYTECODE` - Deployment bytecode (placeholder)
   - `ARAGON_OSX_ADDRESSES` - Per-chain OSx deployment addresses
   - `TOKEN_VOTING_VERSION_TAG` - Plugin version (v1.4.0)
 - **CLI:** none
@@ -43,8 +41,8 @@ Node Formation P0 web3 primitives: Aragon OSx ABIs, CogniSignal ABI, contract by
 
 ## Responsibilities
 
-- This directory **does**: Provide minimal ABIs for DAO formation, export bytecode constants, maintain chain address mappings
-- This directory **does not**: Encode setup data (see `packages/aragon-osx`), make RPC calls, handle wallet signing
+- This directory **does**: Provide minimal Aragon OSx ABIs for DAO formation, maintain chain address mappings
+- This directory **does not**: Encode setup data (see `packages/aragon-osx`), provide CogniSignal artifacts (see `@cogni/cogni-contracts`), make RPC calls, handle wallet signing
 
 ## Usage
 
@@ -52,9 +50,13 @@ Node Formation P0 web3 primitives: Aragon OSx ABIs, CogniSignal ABI, contract by
 import {
   DAO_FACTORY_ABI,
   TOKEN_VOTING_ABI,
+} from "@/shared/web3/node-formation";
+
+// CogniSignal artifacts from @cogni/cogni-contracts
+import {
   COGNI_SIGNAL_ABI,
   COGNI_SIGNAL_BYTECODE,
-} from "@/shared/web3/node-formation";
+} from "@cogni/cogni-contracts";
 ```
 
 ## Standards
@@ -79,5 +81,5 @@ import {
 
 ## Notes
 
-- `COGNI_SIGNAL_BYTECODE` is placeholder `"0x"` until build-time extraction implemented
 - Real OSx addresses hardcoded (Base Mainnet, Base Sepolia, Sepolia)
+- CogniSignal ABI/bytecode moved to `packages/cogni-contracts`

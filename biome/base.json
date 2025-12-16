@@ -190,7 +190,10 @@
       }
     },
     {
-      "includes": ["packages/aragon-osx/tsup.config.ts"],
+      "includes": [
+        "packages/aragon-osx/tsup.config.ts",
+        "packages/cogni-contracts/tsup.config.ts"
+      ],
       "linter": {
         "rules": {
           "style": {

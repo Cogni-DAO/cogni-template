@@ -7,7 +7,7 @@
  * Scope: Connects wagmi hooks to pure reducer; does not contain business logic.
  * Invariants: Reducer is single source of truth; effects only for receipt transitions.
  * Side-effects: IO (wagmi, server API); React state
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/NODE_FORMATION_SPEC.md, docs/CHAIN_DEPLOYMENT_TECH_DEBT.md
  * @public
  */
 
@@ -19,6 +19,10 @@ import {
   SUPPORTED_CHAIN_IDS,
   type SupportedChainId,
 } from "@cogni/aragon-osx";
+import {
+  COGNI_SIGNAL_ABI,
+  COGNI_SIGNAL_BYTECODE,
+} from "@cogni/cogni-contracts";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import {
   useAccount,
@@ -27,12 +31,7 @@ import {
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
-
 import { DAO_FACTORY_ABI } from "@/shared/web3/node-formation/aragon-abi";
-import {
-  COGNI_SIGNAL_ABI,
-  COGNI_SIGNAL_BYTECODE,
-} from "@/shared/web3/node-formation/bytecode";
 import { verifyFormation } from "../daoFormation/api";
 import {
   type DAOFormationConfig,
@@ -183,7 +182,10 @@ export function useDAOFormation(): UseDAOFormationReturn {
   // ──────────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (signalReceipt && state.phase === "AWAITING_SIGNAL_CONFIRMATION") {
-      dispatch({ type: "SIGNAL_TX_CONFIRMED" });
+      dispatch({
+        type: "SIGNAL_TX_CONFIRMED",
+        blockNumber: Number(signalReceipt.blockNumber),
+      });
     }
   }, [signalReceipt, state.phase]);
 
@@ -212,9 +214,15 @@ export function useDAOFormation(): UseDAOFormationReturn {
   // Effect: Auto-verify when signal confirmed
   // ──────────────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const { phase, daoTxHash, signalTxHash, config } = state;
+    const { phase, daoTxHash, signalTxHash, signalBlockNumber, config } = state;
 
-    if (phase !== "VERIFYING" || !daoTxHash || !signalTxHash || !config) {
+    if (
+      phase !== "VERIFYING" ||
+      !daoTxHash ||
+      !signalTxHash ||
+      !signalBlockNumber ||
+      !config
+    ) {
       return;
     }
 
@@ -225,6 +233,7 @@ export function useDAOFormation(): UseDAOFormationReturn {
         chainId,
         daoTxHash,
         signalTxHash,
+        signalBlockNumber,
         initialHolder: config.initialHolder,
       });
 

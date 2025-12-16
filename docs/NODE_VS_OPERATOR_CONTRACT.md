@@ -94,6 +94,8 @@ Node is **container-native / K8s-ready** but not Kubernetes-dependent:
 | Operator | Node DB           | **NO**         | Never direct access          |
 | Operator | Node wallet       | **NO**         | Never custody                |
 
+**Operator Node Registry:** Operator maintains a derived `node_registry_nodes` table for control-plane routing. This is rebuildable from on-chain receipts + repo-spec snapshots. `node_id` (UUID) is the canonical tenant key in Operator APIs/headers/claims. See [Node Formation Spec §9](NODE_FORMATION_SPEC.md#9-operator-node-registry-p1).
+
 ---
 
 ## Directory Structures
@@ -176,5 +178,5 @@ Operator shares CI/CD, observability, deploy invariants, and hex architecture wi
 
 ---
 
-**Last Updated**: 2025-01-13
+**Last Updated**: 2025-12-16
 **Status**: Design Approved

@@ -105,6 +105,17 @@ push to main → build-prod.yml (build → test → push) → deploy-production.
 - **Rollback-ready:** Any prod image can be redeployed
 - **History preservation:** Feature branches auto-archived as tags after merge
 
+## TypeScript Package Build Strategy
+
+**Rule**: If a step imports `@cogni/*` packages, run `pnpm exec tsc -b` first.
+
+**Applies to**:
+
+- CI jobs running typecheck/tests
+- Dockerfile before `next build`
+
+**Current**: Each context builds independently (~1-2s overhead). Future: Turborepo remote caching when scale justifies complexity.
+
 ## Image Tagging Strategy
 
 **App images**: Commit-based

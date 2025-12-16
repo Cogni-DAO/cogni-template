@@ -110,6 +110,8 @@
     ]
   },
   "dependencies": {
+    "@cogni/aragon-osx": "workspace:*",
+    "@cogni/cogni-contracts": "workspace:*",
     "@assistant-ui/react": "^0.11.47",
     "@assistant-ui/react-markdown": "^0.11.6",
     "@auth/drizzle-adapter": "^1.7.0",

@@ -33,7 +33,6 @@
       "@/ports": ["src/ports/index.ts"],
       "@/adapters/server": ["src/adapters/server/index.ts"],
       "@/shared": ["src/shared/index.ts"],
-      "@cogni/aragon-osx": ["packages/aragon-osx/src/index.ts"],
       "@features/*": ["src/features/*"],
       "@app/*": ["src/app/*"],
       "@adapters/*": ["src/adapters/*"],
@@ -55,5 +54,9 @@
     "**/*.mjs",
     ".next/dev/dev/types/**/*.ts"
   ],
-  "exclude": ["node_modules", "test*/**/fixtures/**", "**/__arch_probes__/**"]
+  "exclude": ["node_modules", "test*/**/fixtures/**", "**/__arch_probes__/**"],
+  "references": [
+    { "path": "./packages/aragon-osx" },
+    { "path": "./packages/cogni-contracts" }
+  ]
 }

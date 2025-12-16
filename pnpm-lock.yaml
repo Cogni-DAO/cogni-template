@@ -20,6 +20,12 @@ importers:
       '@auth/drizzle-adapter':
         specifier: ^1.7.0
         version: 1.11.1
+      '@cogni/aragon-osx':
+        specifier: workspace:*
+        version: link:packages/aragon-osx
+      '@cogni/cogni-contracts':
+        specifier: workspace:*
+        version: link:packages/cogni-contracts
       '@radix-ui/react-avatar':
         specifier: ^1.1.11
         version: 1.1.11(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
@@ -363,6 +369,15 @@ importers:
       viem:
         specifier: ^2.0.0
         version: 2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.13)
+
+  packages/cogni-contracts:
+    devDependencies:
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.1)
+      typescript:
+        specifier: ^5
+        version: 5.9.3
 
 packages:
 

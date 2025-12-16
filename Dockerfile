@@ -37,6 +37,10 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
 ENV DATABASE_URL="postgresql://build_user:build_pass@build-host.invalid:5432/build_db" \
     AUTH_SECRET="build-time-secret-min-32-chars-long-placeholder"
 
+# Build workspace packages (TypeScript project references)
+# Required: Next.js build imports @cogni/* packages, which must be built first
+RUN pnpm exec tsc -b
+
 # Persist Next's build cache across Docker builds (huge win for rebuilds)
 RUN --mount=type=cache,id=next-cache,target=/app/.next/cache,sharing=locked \
     pnpm build

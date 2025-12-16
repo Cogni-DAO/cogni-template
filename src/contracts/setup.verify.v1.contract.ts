@@ -7,7 +7,7 @@
  * Scope: Defines request/response schemas for POST /api/setup/verify; does not perform RPC or persistence.
  * Invariants: Server derives ALL addresses from tx receipts; never trusts client-provided addresses.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/NODE_FORMATION_SPEC.md, docs/CHAIN_DEPLOYMENT_TECH_DEBT.md
  * @public
  */
 
@@ -35,6 +35,12 @@ export const setupVerifyOperation = {
         ),
       daoTxHash: txHash.describe("DAOFactory.createDao transaction hash"),
       signalTxHash: txHash.describe("CogniSignal deployment transaction hash"),
+      // Block number from client receipt - used to query at specific block (avoids cross-RPC race)
+      signalBlockNumber: z
+        .number()
+        .int()
+        .positive()
+        .describe("Block number where CogniSignal was deployed (from receipt)"),
       initialHolder: hexAddress.describe("Expected token recipient address"),
     })
     .strict(), // SECURITY: Reject any client-supplied addresses (must derive from receipts)

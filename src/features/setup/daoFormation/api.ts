@@ -7,7 +7,7 @@
  * Scope: HTTP requests to /api/setup/verify; does not perform local validation or RPC reads.
  * Invariants: Returns typed Result; never throws.
  * Side-effects: IO (HTTP fetch)
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/NODE_FORMATION_SPEC.md, docs/CHAIN_DEPLOYMENT_TECH_DEBT.md
  * @public
  */
 
@@ -47,6 +47,7 @@ export async function verifyFormation(params: {
   chainId: number;
   daoTxHash: HexAddress;
   signalTxHash: HexAddress;
+  signalBlockNumber: number;
   initialHolder: HexAddress;
 }): Promise<VerifyResult> {
   try {
@@ -54,6 +55,7 @@ export async function verifyFormation(params: {
       chainId: params.chainId,
       daoTxHash: params.daoTxHash,
       signalTxHash: params.signalTxHash,
+      signalBlockNumber: params.signalBlockNumber,
       initialHolder: params.initialHolder,
     };
 

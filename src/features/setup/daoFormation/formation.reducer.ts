@@ -7,7 +7,7 @@
  * Scope: State transitions only; does not perform IO or side effects.
  * Invariants: Single source of truth for formation state.
  * Side-effects: none
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/NODE_FORMATION_SPEC.md, docs/CHAIN_DEPLOYMENT_TECH_DEBT.md
  * @public
  */
 
@@ -46,6 +46,7 @@ export interface FormationState {
   config: DAOFormationConfig | null;
   daoTxHash: HexAddress | null;
   signalTxHash: HexAddress | null;
+  signalBlockNumber: number | null;
   daoAddress: HexAddress | null;
   pluginAddress: HexAddress | null;
   addresses: VerifiedAddresses | null;
@@ -71,7 +72,7 @@ export type FormationAction =
     }
   | { type: "DAO_TX_FAILED"; error: string }
   | { type: "SIGNAL_TX_SENT"; txHash: HexAddress }
-  | { type: "SIGNAL_TX_CONFIRMED" }
+  | { type: "SIGNAL_TX_CONFIRMED"; blockNumber: number }
   | { type: "SIGNAL_TX_FAILED"; error: string }
   | {
       type: "VERIFY_SUCCESS";
@@ -90,6 +91,7 @@ export const initialFormationState: FormationState = {
   config: null,
   daoTxHash: null,
   signalTxHash: null,
+  signalBlockNumber: null,
   daoAddress: null,
   pluginAddress: null,
   addresses: null,
@@ -156,7 +158,11 @@ export function formationReducer(
       };
 
     case "SIGNAL_TX_CONFIRMED":
-      return { ...state, phase: "VERIFYING" };
+      return {
+        ...state,
+        phase: "VERIFYING",
+        signalBlockNumber: action.blockNumber,
+      };
 
     case "SIGNAL_TX_FAILED":
       // DAO already created, manual recovery needed

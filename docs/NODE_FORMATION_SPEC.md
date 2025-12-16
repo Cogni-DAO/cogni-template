@@ -132,7 +132,7 @@ Current implementation uses v1.3 MintSettings (2 fields). Supports v1.4 (3 field
 - [x] Documentation updates → Created AGENTS.md files for `src/app/(app)/setup`, `src/features/setup`, `src/features/setup/components`
 - [x] Observability instrumentation → `SETUP_DAO_VERIFY_COMPLETE` event with outcome, chainId, duration, errors
 
-### P1: Multi-Holder + CLI Setup Tools
+### P1: Multi-Holder + CLI Setup Tools + Operator Registry
 
 - [ ] Multi-holder support (multiple initial token recipients)
 - [ ] Create `packages/setup-cli/` with Node adapters (fs, shell, gh, tofu)
@@ -140,12 +140,31 @@ Current implementation uses v1.3 MintSettings (2 fields). Supports v1.4 (3 field
 - [ ] Implement `pnpm setup infra --env preview|production`
 - [ ] Implement `pnpm setup github --env preview|production`
 - [ ] Add WalletConnect adapter (CLI wallet signing if proven needed)
+- [ ] Operator-side `node_registry_nodes` table (see [Design Decision §9](#9-operator-node-registry-p1))
 
 ### P2: Full npx End-to-End (Deferred)
 
 - [ ] Evaluate after P1 adoption
 - [ ] npx-based repo clone + init + DAO formation flow
 - [ ] **Do NOT build preemptively**
+
+### P3: Federation Enrollment & Fork Licensing (Future)
+
+**Goal:** Federation legitimacy requires opt-in enrollment; hostile forks cannot inherit it.
+
+**Build Order:**
+
+1. **Node-side persistence** — Store formations in local `node_formations` table after verify succeeds
+2. **Stable fingerprints** — Verify endpoint emits `repo_spec_hash`, `cred_policy_hash`, `template_commit_hash`
+3. **Signed policy files** — `.cogni/cred-policy.json` + `.cogni/cred-policy.sig` (detached signatures)
+4. **Operator enrollment API** — `POST /api/federation/enroll` with founder signature
+5. **Optional enroll UI** — Post-formation button: "Enroll in Cogni Federation"
+
+**Licensing Policy:** Source-available (PolyForm Shield); forks permitted. Federation benefits (badges, payouts, datasets) require enrollment with signed CogniCred config. Non-compliant forks lose federation features, not code access.
+
+→ Full spec: [Cred Licensing Policy](CRED_LICENSING_POLICY_SPEC.md)
+
+**Scope guardrails:** Formation stays Node-owned. No on-chain registry in MVP. No multi-holder prerequisite.
 
 ---
 
@@ -356,6 +375,42 @@ Populates: `dao_contract`, `plugin_contract`, `signal_contract`, `chain_id` (as 
 
 ---
 
+### 9. Operator Node Registry (P1)
+
+**Purpose:** Operator-side derived index for control-plane functions (entitlements, service routing). Does NOT violate Node sovereignty.
+
+**Source of Truth:** On-chain receipts + Node-authored `repo-spec.yaml`. Operator table is rebuildable from these.
+
+**Table:** `node_registry_nodes` (Operator DB, not Node DB)
+
+| Column              | Type | Notes                                  |
+| ------------------- | ---- | -------------------------------------- |
+| `node_id`           | UUID | PK, Operator's canonical tenant key    |
+| `chain_id`          | INT  | Network identifier                     |
+| `dao_address`       | TEXT | From DAORegistered event               |
+| `token_address`     | TEXT | From TokenVoting.getVotingToken()      |
+| `plugin_address`    | TEXT | From InstallationApplied event         |
+| `signal_address`    | TEXT | From CogniSignal deployment receipt    |
+| `formation_tx_hash` | TEXT | Auditable reference to on-chain tx     |
+| `repo_spec_hash`    | TEXT | Proves Operator consumed Node's policy |
+| `status`            | TEXT | pending → confirmed → (reorged if bad) |
+
+**Write Rules:**
+
+- Insert only after server-side receipt verification succeeds
+- Upsert on `(chain_id, formation_tx_hash)` to prevent duplicates
+- Never delete; mark `reorged` if invalidated
+
+**Sovereignty Invariants:**
+
+- No private keys stored (addresses + receipts only)
+- Node operation does not depend on this table
+- Operator can rebuild from on-chain data
+
+→ See: [Node vs Operator Contract](NODE_VS_OPERATOR_CONTRACT.md)
+
+---
+
 ## Explicit Non-Goals (P0)
 
 | Item                                | Reason                                   |
@@ -373,11 +428,12 @@ Populates: `dao_contract`, `plugin_contract`, `signal_contract`, `chain_id` (as 
 
 ## Related Docs
 
-| Doc                                                       | Purpose                 |
-| --------------------------------------------------------- | ----------------------- |
-| [Node vs Operator Contract](NODE_VS_OPERATOR_CONTRACT.md) | Formation is Node-owned |
-| [MVP Deliverables](MVP_DELIVERABLES.md)                   | Scope lock              |
-| [ROADMAP](../ROADMAP.md)                                  | Phase overview          |
+| Doc                                                       | Purpose                           |
+| --------------------------------------------------------- | --------------------------------- |
+| [Node vs Operator Contract](NODE_VS_OPERATOR_CONTRACT.md) | Formation is Node-owned           |
+| [Cred Licensing Policy](CRED_LICENSING_POLICY_SPEC.md)    | Federation enrollment & licensing |
+| [MVP Deliverables](MVP_DELIVERABLES.md)                   | Scope lock                        |
+| [ROADMAP](../ROADMAP.md)                                  | Phase overview                    |
 
 ---
 
@@ -393,5 +449,5 @@ OSx v1.4.0 deployments. Hardcoded addresses from [cogni-signal-evm-contracts](ht
 
 ---
 
-**Last Updated**: 2025-12-15
+**Last Updated**: 2025-12-16
 **Status**: P0 Complete (manual e2e validated on Base mainnet)
