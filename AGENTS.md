@@ -50,6 +50,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [Node vs Operator Contract](docs/NODE_VS_OPERATOR_CONTRACT.md)
 - [MVP Deliverables](docs/MVP_DELIVERABLES.md)
 - [Node Formation Spec](docs/NODE_FORMATION_SPEC.md)
+- [Chain Deployment Tech Debt](docs/CHAIN_DEPLOYMENT_TECH_DEBT.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Services Migration Guide](docs/SERVICES_MIGRATION.md)
 

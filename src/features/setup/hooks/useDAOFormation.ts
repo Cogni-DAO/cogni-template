@@ -7,7 +7,7 @@
  * Scope: Connects wagmi hooks to pure reducer; does not contain business logic.
  * Invariants: Reducer is single source of truth; effects only for receipt transitions.
  * Side-effects: IO (wagmi, server API); React state
- * Links: docs/NODE_FORMATION_SPEC.md
+ * Links: docs/NODE_FORMATION_SPEC.md, docs/CHAIN_DEPLOYMENT_TECH_DEBT.md
  * @public
  */
 

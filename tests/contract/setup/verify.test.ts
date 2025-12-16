@@ -24,6 +24,7 @@ describe("setupVerifyOperation contract", () => {
           "0x1234567890123456789012345678901234567890123456789012345678901234",
         signalTxHash:
           "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        signalBlockNumber: 12345678,
         initialHolder: "0x1234567890123456789012345678901234567890",
       });
 
@@ -37,6 +38,7 @@ describe("setupVerifyOperation contract", () => {
           "0x1234567890123456789012345678901234567890123456789012345678901234",
         signalTxHash:
           "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        signalBlockNumber: 12345678,
         initialHolder: "0x1234567890123456789012345678901234567890",
       });
 
@@ -50,6 +52,7 @@ describe("setupVerifyOperation contract", () => {
           "0x1234567890123456789012345678901234567890123456789012345678901234",
         signalTxHash:
           "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        signalBlockNumber: 12345678,
         initialHolder: "0x1234567890123456789012345678901234567890",
       });
 
@@ -66,6 +69,7 @@ describe("setupVerifyOperation contract", () => {
           "0x1234567890123456789012345678901234567890123456789012345678901234",
         signalTxHash:
           "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        signalBlockNumber: 12345678,
         initialHolder: "0x1234567890123456789012345678901234567890",
       });
 
@@ -78,6 +82,7 @@ describe("setupVerifyOperation contract", () => {
         daoTxHash: "0xinvalid",
         signalTxHash:
           "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        signalBlockNumber: 12345678,
         initialHolder: "0x1234567890123456789012345678901234567890",
       });
 
@@ -94,6 +99,7 @@ describe("setupVerifyOperation contract", () => {
           "0x1234567890123456789012345678901234567890123456789012345678901234",
         signalTxHash:
           "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        signalBlockNumber: 12345678,
         initialHolder: "0xinvalid",
       });
 
@@ -103,6 +109,19 @@ describe("setupVerifyOperation contract", () => {
       }
     });
 
+    it("rejects missing signalBlockNumber", () => {
+      const result = setupVerifyOperation.input.safeParse({
+        chainId: 8453,
+        daoTxHash:
+          "0x1234567890123456789012345678901234567890123456789012345678901234",
+        signalTxHash:
+          "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        initialHolder: "0x1234567890123456789012345678901234567890",
+      });
+
+      expect(result.success).toBe(false);
+    });
+
     it("SECURITY: rejects request with client-supplied daoAddress field", () => {
       const malicious = {
         chainId: 8453,
@@ -110,6 +129,7 @@ describe("setupVerifyOperation contract", () => {
           "0x1234567890123456789012345678901234567890123456789012345678901234",
         signalTxHash:
           "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        signalBlockNumber: 12345678,
         initialHolder: "0x1234567890123456789012345678901234567890",
         daoAddress: "0xMALICIOUS0000000000000000000000000000000", // MUST be rejected
       };
@@ -130,6 +150,7 @@ describe("setupVerifyOperation contract", () => {
           "0x1234567890123456789012345678901234567890123456789012345678901234",
         signalTxHash:
           "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        signalBlockNumber: 12345678,
         initialHolder: "0x1234567890123456789012345678901234567890",
         pluginAddress: "0xMALICIOUS0000000000000000000000000000000",
       };
@@ -145,6 +166,7 @@ describe("setupVerifyOperation contract", () => {
           "0x1234567890123456789012345678901234567890123456789012345678901234",
         signalTxHash:
           "0xabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcdefabcd",
+        signalBlockNumber: 12345678,
         initialHolder: "0x1234567890123456789012345678901234567890",
         signalAddress: "0xMALICIOUS0000000000000000000000000000000",
       };
