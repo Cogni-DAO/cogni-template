@@ -41,23 +41,25 @@ function sanitizeReqId(incoming: string | null): string {
  *
  * @param deps - Dependencies: baseLog (root logger), clock (time provider)
  * @param request - Incoming HTTP request
- * @param meta - Request metadata (routeId, session)
- * @returns RequestContext with child logger (reqId, route, method bound)
+ * @param meta - Request metadata (routeId, traceId, session)
+ * @returns RequestContext with child logger (reqId, traceId, route, method bound)
  */
 export function createRequestContext(
   deps: { baseLog: Logger; clock: Clock },
   request: Request,
-  meta: { routeId: string; session?: SessionUser | undefined }
+  meta: { routeId: string; traceId: string; session?: SessionUser | undefined }
 ): RequestContext {
   const reqId = sanitizeReqId(request.headers.get(REQUEST_ID_HEADER));
 
   return {
     log: deps.baseLog.child({
       reqId,
+      traceId: meta.traceId,
       route: meta.routeId,
       method: request.method,
     }),
     reqId,
+    traceId: meta.traceId,
     routeId: meta.routeId,
     session: meta.session,
     clock: deps.clock,

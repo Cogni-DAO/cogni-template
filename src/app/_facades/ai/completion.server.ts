@@ -47,7 +47,8 @@ export async function completion(
   ctx: RequestContext
 ): Promise<CompletionOutput> {
   // Resolve dependencies from bootstrap (pure composition root)
-  const { llmService, accountService, clock } = resolveAiDeps();
+  const { llmService, accountService, clock, aiTelemetry, langfuse } =
+    resolveAiDeps();
 
   const billingAccount = await getOrCreateBillingAccountForUser(
     accountService,
@@ -62,6 +63,8 @@ export async function completion(
   const caller: LlmCaller = {
     billingAccountId: billingAccount.id,
     virtualKeyId: billingAccount.defaultVirtualKeyId,
+    requestId: ctx.reqId,
+    traceId: ctx.traceId,
   };
 
   // Enrich context with business identifiers
@@ -86,7 +89,9 @@ export async function completion(
       accountService,
       clock,
       caller,
-      enrichedCtx
+      enrichedCtx,
+      aiTelemetry,
+      langfuse
     );
 
     // Map core result back to DTO
@@ -119,7 +124,8 @@ export async function completionStream(
   stream: AsyncIterable<import("@/ports").ChatDeltaEvent>;
   final: Promise<{ message: MessageDto; requestId: string }>;
 }> {
-  const { llmService, accountService, clock } = resolveAiDeps();
+  const { llmService, accountService, clock, aiTelemetry, langfuse } =
+    resolveAiDeps();
 
   const billingAccount = await getOrCreateBillingAccountForUser(
     accountService,
@@ -134,6 +140,8 @@ export async function completionStream(
   const caller: LlmCaller = {
     billingAccountId: billingAccount.id,
     virtualKeyId: billingAccount.defaultVirtualKeyId,
+    requestId: ctx.reqId,
+    traceId: ctx.traceId,
   };
 
   const enrichedCtx: RequestContext = {
@@ -157,6 +165,8 @@ export async function completionStream(
       clock,
       caller,
       ctx: enrichedCtx,
+      aiTelemetry,
+      langfuse,
       // Explicitly handle optional property
       ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
     });

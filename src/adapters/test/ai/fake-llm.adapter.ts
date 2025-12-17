@@ -36,6 +36,10 @@ export class FakeLlmAdapter implements LlmService {
         provider: "fake",
         requestId: "fake-request-id",
       },
+      // AI_SETUP_SPEC.md fields for telemetry
+      litellmCallId: "fake-litellm-call-id",
+      resolvedProvider: "fake",
+      resolvedModel: params.model ?? "fake-model",
     };
   }
 
@@ -92,6 +96,10 @@ export class FakeLlmAdapter implements LlmService {
           provider: "fake",
           requestId: "fake-request-id",
         },
+        // AI_SETUP_SPEC.md fields for telemetry
+        litellmCallId: "fake-litellm-call-id",
+        resolvedProvider: "fake",
+        resolvedModel: params.model ?? "fake-model",
       }),
     };
   }

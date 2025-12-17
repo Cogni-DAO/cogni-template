@@ -11,5 +11,6 @@
  * @public
  */
 
+export * from "./schema.ai";
 export * from "./schema.auth";
 export * from "./schema.billing";

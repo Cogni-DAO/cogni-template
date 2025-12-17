@@ -101,6 +101,16 @@ export const serverSchema = z.object({
   // EVM RPC - On-chain verification (Phase 3)
   // Required for production/preview/dev; not used in test mode (FakeEvmOnchainClient)
   EVM_RPC_URL: z.string().url().optional(),
+
+  // Langfuse (AI observability) - Optional
+  // Only required when Langfuse tracing is enabled
+  LANGFUSE_PUBLIC_KEY: z.string().min(1).optional(),
+  LANGFUSE_SECRET_KEY: z.string().min(1).optional(),
+  LANGFUSE_BASE_URL: z.string().url().optional(),
+
+  // AI Telemetry - Router policy version for reproducibility
+  // Per AI_SETUP_SPEC.md: semver or git SHA identifying model routing policy
+  ROUTER_POLICY_VERSION: z.string().default("1.0.0"),
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {

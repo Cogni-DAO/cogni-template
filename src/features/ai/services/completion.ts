@@ -8,9 +8,9 @@
  * Invariants:
  * - Only imports core, ports, shared - never contracts or adapters
  * - Pre-call credit check enforced; post-call billing never blocks response
- * - Records chargeReason='llm_usage', sourceSystem='litellm', sourceReference=litellmCallId for all completions
+ * - request_id is stable per request entry (ctx.reqId), NOT regenerated per LLM call
  * Side-effects: IO (via ports)
- * Notes: Logs warnings when cost is zero; post-call billing errors swallowed to preserve UX; logs error if litellmCallId missing
+ * Notes: Uses adapter promptHash when available (canonical); logs warnings when cost is zero; post-call billing errors swallowed to preserve UX
  * Links: Called by API routes, uses core domain and ports, types/billing.ts (categorization)
  * @public
  */
@@ -26,9 +26,21 @@ import {
   type Message,
   trimConversationHistory,
 } from "@/core";
-import type { AccountService, Clock, LlmCaller, LlmService } from "@/ports";
-import { InsufficientCreditsPortError } from "@/ports";
+import type {
+  AccountService,
+  AiTelemetryPort,
+  Clock,
+  LangfusePort,
+  LlmCaller,
+  LlmService,
+} from "@/ports";
+import { InsufficientCreditsPortError, LlmError } from "@/ports";
 import { getModelClass, isModelFree } from "@/shared/ai/model-catalog.server";
+import {
+  computePromptHash,
+  DEFAULT_MAX_TOKENS,
+  DEFAULT_TEMPERATURE,
+} from "@/shared/ai/prompt-hash";
 import { serverEnv } from "@/shared/env";
 import {
   type AiLlmCallEvent,
@@ -131,7 +143,9 @@ export async function execute(
   accountService: AccountService,
   clock: Clock,
   caller: LlmCaller,
-  ctx: RequestContext
+  ctx: RequestContext,
+  aiTelemetry: AiTelemetryPort,
+  langfuse: LangfusePort | undefined
 ): Promise<{ message: Message; requestId: string }> {
   const log = ctx.log.child({ feature: "ai.completion" });
 
@@ -142,7 +156,23 @@ export async function execute(
     accountService
   );
 
-  const requestId = randomUUID();
+  // Per spec: request_id is stable per request entry (from ctx.reqId), NOT regenerated here
+  const requestId = ctx.reqId;
+  // Per AI_SETUP_SPEC.md: invocation_id is unique per LLM call attempt (idempotency key)
+  const invocationId = randomUUID();
+
+  // Per AI_SETUP_SPEC.md: Compute prompt_hash BEFORE LLM call so it's available on error path
+  // Messages are converted to LLM-ready format (role + content only, no timestamp)
+  const llmMessages = finalMessages.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }));
+  const promptHash = computePromptHash({
+    model,
+    messages: llmMessages,
+    temperature: DEFAULT_TEMPERATURE,
+    maxTokens: DEFAULT_MAX_TOKENS,
+  });
 
   // Delegate to port - caller constructed at auth boundary
   log.debug({ messageCount: finalMessages.length }, "calling LLM");
@@ -164,6 +194,59 @@ export async function execute(
       code: errorCode,
       model_class: errorModelClass,
     });
+
+    // Per AI_SETUP_SPEC.md: Record telemetry on error path with REAL prompt_hash
+    // latencyMs must be integer for DB schema (milliseconds precision sufficient)
+    const latencyMs = Math.max(0, Math.round(performance.now() - llmStart));
+    const errorKind = error instanceof LlmError ? error.kind : "unknown";
+
+    // Create Langfuse trace first to capture langfuseTraceId for DB record
+    let langfuseTraceId: string | undefined;
+    if (langfuse) {
+      try {
+        langfuseTraceId = await langfuse.createTrace(ctx.traceId, {
+          requestId: ctx.reqId,
+          model,
+          promptHash, // Real hash
+        });
+        langfuse.recordGeneration(ctx.traceId, {
+          model,
+          status: "error",
+          errorCode: errorKind,
+          latencyMs,
+        });
+        // Flush in background (never await on request path per spec)
+        langfuse
+          .flush()
+          .catch((err) => log.warn({ err }, "Langfuse flush failed"));
+      } catch {
+        // Langfuse failure shouldn't block request - DB telemetry still written
+        langfuseTraceId = undefined;
+      }
+    }
+
+    try {
+      await aiTelemetry.recordInvocation({
+        invocationId,
+        requestId: ctx.reqId,
+        traceId: ctx.traceId,
+        ...(langfuseTraceId ? { langfuseTraceId } : {}),
+        provider: "unknown", // Not available on error (no response)
+        model,
+        promptHash, // Real hash computed BEFORE LLM call
+        routerPolicyVersion: serverEnv().ROUTER_POLICY_VERSION, // Current version
+        status: "error",
+        errorCode: errorKind,
+        latencyMs,
+      });
+    } catch (telemetryError) {
+      // Telemetry should never block error propagation
+      log.error(
+        { err: telemetryError, invocationId },
+        "Failed to record error telemetry"
+      );
+    }
+
     throw error;
   }
 
@@ -310,6 +393,79 @@ export async function execute(
     }
   }
 
+  // Per AI_SETUP_SPEC.md: Record success telemetry
+  // Prefer adapter's promptHash (canonical payload hash) when available; fall back to pre-computed
+  // latencyMs must be integer for DB schema (milliseconds precision sufficient)
+  const latencyMs = Math.max(0, Math.round(llmEvent.durationMs));
+  const resolvedPromptHash = result.promptHash ?? promptHash;
+
+  // Create Langfuse trace first to capture langfuseTraceId for DB record
+  let langfuseTraceId: string | undefined;
+  if (langfuse) {
+    try {
+      langfuseTraceId = await langfuse.createTrace(ctx.traceId, {
+        requestId: ctx.reqId,
+        model: result.resolvedModel ?? modelId,
+        promptHash: resolvedPromptHash,
+      });
+      langfuse.recordGeneration(ctx.traceId, {
+        model: result.resolvedModel ?? modelId,
+        status: "success",
+        latencyMs,
+        ...(result.usage?.promptTokens !== undefined
+          ? { tokensIn: result.usage.promptTokens }
+          : {}),
+        ...(result.usage?.completionTokens !== undefined
+          ? { tokensOut: result.usage.completionTokens }
+          : {}),
+        ...(result.providerCostUsd !== undefined
+          ? { providerCostUsd: result.providerCostUsd }
+          : {}),
+      });
+      // Flush in background (never await on request path per spec)
+      langfuse
+        .flush()
+        .catch((err) => log.warn({ err }, "Langfuse flush failed"));
+    } catch {
+      // Langfuse failure shouldn't block request - DB telemetry still written
+      langfuseTraceId = undefined;
+    }
+  }
+
+  try {
+    await aiTelemetry.recordInvocation({
+      invocationId,
+      requestId: ctx.reqId,
+      traceId: ctx.traceId,
+      ...(langfuseTraceId ? { langfuseTraceId } : {}),
+      provider: result.resolvedProvider ?? "unknown",
+      model: result.resolvedModel ?? modelId,
+      promptHash: resolvedPromptHash, // Prefer adapter's canonical hash
+      routerPolicyVersion: serverEnv().ROUTER_POLICY_VERSION, // Current version
+      status: "success",
+      latencyMs,
+      ...(result.usage?.promptTokens !== undefined
+        ? { tokensIn: result.usage.promptTokens }
+        : {}),
+      ...(result.usage?.completionTokens !== undefined
+        ? { tokensOut: result.usage.completionTokens }
+        : {}),
+      ...(result.usage?.totalTokens !== undefined
+        ? { tokensTotal: result.usage.totalTokens }
+        : {}),
+      ...(result.providerCostUsd !== undefined
+        ? { providerCostUsd: result.providerCostUsd }
+        : {}),
+      ...(result.litellmCallId ? { litellmCallId: result.litellmCallId } : {}),
+    });
+  } catch (telemetryError) {
+    // Telemetry should never block user response
+    log.error(
+      { err: telemetryError, invocationId },
+      "Failed to record success telemetry"
+    );
+  }
+
   // Feature sets timestamp after completion using injected clock
   return {
     message: {
@@ -328,6 +484,8 @@ export interface ExecuteStreamParams {
   clock: Clock;
   caller: LlmCaller;
   ctx: RequestContext;
+  aiTelemetry: AiTelemetryPort;
+  langfuse: LangfusePort | undefined;
   abortSignal?: AbortSignal;
 }
 
@@ -339,6 +497,8 @@ export async function executeStream({
   clock,
   caller,
   ctx,
+  aiTelemetry,
+  langfuse,
   abortSignal,
 }: ExecuteStreamParams): Promise<{
   stream: AsyncIterable<import("@/ports").ChatDeltaEvent>;
@@ -353,7 +513,23 @@ export async function executeStream({
     accountService
   );
 
-  const requestId = randomUUID();
+  // Per spec: request_id is stable per request entry (from ctx.reqId), NOT regenerated here
+  const requestId = ctx.reqId;
+  // Per AI_SETUP_SPEC.md: invocation_id is unique per LLM call attempt (idempotency key)
+  const invocationId = randomUUID();
+
+  // Per AI_SETUP_SPEC.md: Compute prompt_hash BEFORE LLM call so it's available on error path
+  const llmMessages = finalMessages.map((m) => ({
+    role: m.role,
+    content: m.content,
+  }));
+  const promptHash = computePromptHash({
+    model,
+    messages: llmMessages,
+    temperature: DEFAULT_TEMPERATURE,
+    maxTokens: DEFAULT_MAX_TOKENS,
+  });
+
   log.debug({ messageCount: finalMessages.length }, "starting LLM stream");
   const llmStart = performance.now();
 
@@ -483,6 +659,81 @@ export async function executeStream({
         if (serverEnv().APP_ENV === "test") throw error;
       }
 
+      // Per AI_SETUP_SPEC.md: Record success telemetry for stream
+      // Prefer adapter's promptHash (canonical payload hash) when available; fall back to pre-computed
+      // latencyMs must be integer for DB schema (milliseconds precision sufficient)
+      const latencyMs = Math.max(0, Math.round(llmEvent.durationMs));
+      const resolvedPromptHash = result.promptHash ?? promptHash;
+
+      // Create Langfuse trace first to capture langfuseTraceId for DB record
+      let langfuseTraceId: string | undefined;
+      if (langfuse) {
+        try {
+          langfuseTraceId = await langfuse.createTrace(ctx.traceId, {
+            requestId: ctx.reqId,
+            model: result.resolvedModel ?? modelId,
+            promptHash: resolvedPromptHash,
+          });
+          langfuse.recordGeneration(ctx.traceId, {
+            model: result.resolvedModel ?? modelId,
+            status: "success",
+            latencyMs,
+            ...(result.usage?.promptTokens !== undefined
+              ? { tokensIn: result.usage.promptTokens }
+              : {}),
+            ...(result.usage?.completionTokens !== undefined
+              ? { tokensOut: result.usage.completionTokens }
+              : {}),
+            ...(result.providerCostUsd !== undefined
+              ? { providerCostUsd: result.providerCostUsd }
+              : {}),
+          });
+          // Flush in background (never await on request path per spec)
+          langfuse
+            .flush()
+            .catch((err) => log.warn({ err }, "Langfuse flush failed"));
+        } catch {
+          // Langfuse failure shouldn't block request - DB telemetry still written
+          langfuseTraceId = undefined;
+        }
+      }
+
+      try {
+        await aiTelemetry.recordInvocation({
+          invocationId,
+          requestId: ctx.reqId,
+          traceId: ctx.traceId,
+          ...(langfuseTraceId ? { langfuseTraceId } : {}),
+          provider: result.resolvedProvider ?? "unknown",
+          model: result.resolvedModel ?? modelId,
+          promptHash: resolvedPromptHash, // Prefer adapter's canonical hash
+          routerPolicyVersion: serverEnv().ROUTER_POLICY_VERSION,
+          status: "success",
+          latencyMs,
+          ...(result.usage?.promptTokens !== undefined
+            ? { tokensIn: result.usage.promptTokens }
+            : {}),
+          ...(result.usage?.completionTokens !== undefined
+            ? { tokensOut: result.usage.completionTokens }
+            : {}),
+          ...(result.usage?.totalTokens !== undefined
+            ? { tokensTotal: result.usage.totalTokens }
+            : {}),
+          ...(result.providerCostUsd !== undefined
+            ? { providerCostUsd: result.providerCostUsd }
+            : {}),
+          ...(result.litellmCallId
+            ? { litellmCallId: result.litellmCallId }
+            : {}),
+        });
+      } catch (telemetryError) {
+        // Telemetry should never block user response
+        log.error(
+          { err: telemetryError, invocationId },
+          "Failed to record stream success telemetry"
+        );
+      }
+
       return {
         message: {
           ...result.message,
@@ -505,6 +756,58 @@ export async function executeStream({
         code: errorCode,
         model_class: errorModelClass,
       });
+
+      // Per AI_SETUP_SPEC.md: Record error telemetry for stream with REAL prompt_hash
+      // latencyMs must be integer for DB schema (milliseconds precision sufficient)
+      const latencyMs = Math.max(0, Math.round(performance.now() - llmStart));
+      const errorKind = error instanceof LlmError ? error.kind : "unknown";
+
+      // Create Langfuse trace first to capture langfuseTraceId for DB record
+      let langfuseTraceId: string | undefined;
+      if (langfuse) {
+        try {
+          langfuseTraceId = await langfuse.createTrace(ctx.traceId, {
+            requestId: ctx.reqId,
+            model,
+            promptHash, // Real hash
+          });
+          langfuse.recordGeneration(ctx.traceId, {
+            model,
+            status: "error",
+            errorCode: errorKind,
+            latencyMs,
+          });
+          // Flush in background (never await on request path per spec)
+          langfuse
+            .flush()
+            .catch((err) => log.warn({ err }, "Langfuse flush failed"));
+        } catch {
+          // Langfuse failure shouldn't block request - DB telemetry still written
+          langfuseTraceId = undefined;
+        }
+      }
+
+      try {
+        await aiTelemetry.recordInvocation({
+          invocationId,
+          requestId: ctx.reqId,
+          traceId: ctx.traceId,
+          ...(langfuseTraceId ? { langfuseTraceId } : {}),
+          provider: "unknown",
+          model,
+          promptHash, // Real hash computed BEFORE LLM call
+          routerPolicyVersion: serverEnv().ROUTER_POLICY_VERSION,
+          status: "error",
+          errorCode: errorKind,
+          latencyMs,
+        });
+      } catch (telemetryError) {
+        // Telemetry should never block error propagation
+        log.error(
+          { err: telemetryError, invocationId },
+          "Failed to record stream error telemetry"
+        );
+      }
 
       throw error;
     });

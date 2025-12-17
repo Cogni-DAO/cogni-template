@@ -14,6 +14,7 @@
 import {
   createMockAccountServiceWithDefaults,
   createUserMessage,
+  FakeAiTelemetryAdapter,
   FakeClock,
   FakeLlmService,
   TEST_MODEL_ID,
@@ -24,6 +25,9 @@ import { executeStream } from "@/features/ai/services/completion";
 import type { LlmCaller } from "@/ports";
 import type { RequestContext } from "@/shared/observability";
 import { makeNoopLogger } from "@/shared/observability";
+
+// Helper to create fake telemetry for tests
+const createFakeAiTelemetry = () => new FakeAiTelemetryAdapter();
 
 // Mock serverEnv
 vi.mock("@/shared/env", () => ({
@@ -36,6 +40,8 @@ describe("features/ai/services/completion (stream)", () => {
   const createTestCaller = (): LlmCaller => ({
     billingAccountId: "billing-test-user",
     virtualKeyId: "virtual-key-123",
+    requestId: "req-test",
+    traceId: "trace-test",
   });
 
   it("should orchestrate streaming flow and bill on completion", async () => {
@@ -49,6 +55,7 @@ describe("features/ai/services/completion (stream)", () => {
     const testCtx: RequestContext = {
       log: makeNoopLogger(),
       reqId: "test-req-123",
+      traceId: "00000000000000000000000000000000",
       routeId: "test.route",
       clock,
     };
@@ -63,6 +70,8 @@ describe("features/ai/services/completion (stream)", () => {
       clock,
       caller,
       ctx: testCtx,
+      aiTelemetry: createFakeAiTelemetry(),
+      langfuse: undefined,
     });
 
     // Consume stream

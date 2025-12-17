@@ -31,6 +31,7 @@ import {
 } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 /**
  * Internal message DTO for completion facade

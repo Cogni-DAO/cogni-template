@@ -25,11 +25,22 @@ export {
   isVirtualKeyNotFoundPortError,
   VirtualKeyNotFoundPortError,
 } from "./accounts.port";
+export {
+  type AiTelemetryPort,
+  classifyLlmErrorFromStatus,
+  type InvocationStatus,
+  isLlmError,
+  type LangfusePort,
+  LlmError,
+  type LlmErrorKind,
+  type RecordInvocationParams,
+} from "./ai-telemetry.port";
 export type { Clock } from "./clock.port";
 export type {
   ChatDeltaEvent,
   CompletionStreamParams,
   LlmCaller,
+  LlmCompletionResult,
   LlmService,
 } from "./llm.port";
 export type {

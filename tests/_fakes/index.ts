@@ -12,6 +12,7 @@
  * @public
  */
 
+export { FakeAiTelemetryAdapter } from "@/adapters/test";
 export {
   createMockAccountService,
   createMockAccountServiceWithDefaults,

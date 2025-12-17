@@ -13,7 +13,7 @@
  */
 
 import type { Message } from "@/core";
-import type { LlmCaller, LlmService } from "@/ports";
+import type { LlmCaller, LlmCompletionResult, LlmService } from "@/ports";
 
 export interface FakeLlmOptions {
   shouldThrow?: boolean;
@@ -26,6 +26,8 @@ export interface FakeLlmOptions {
     totalTokens: number;
   };
   delay?: number;
+  /** Custom promptHash to return (tests canonical hash propagation) */
+  promptHash?: string;
 }
 
 export class FakeLlmService implements LlmService {
@@ -52,17 +54,7 @@ export class FakeLlmService implements LlmService {
     temperature?: number;
     maxTokens?: number;
     caller: LlmCaller;
-  }): Promise<{
-    message: Message;
-    usage?: {
-      promptTokens: number;
-      completionTokens: number;
-      totalTokens: number;
-    };
-    finishReason?: string;
-    providerMeta?: Record<string, unknown>;
-    providerCostUsd?: number;
-  }> {
+  }): Promise<LlmCompletionResult> {
     // Log the call for assertions
     this.callLog.push({ ...params });
 
@@ -76,18 +68,8 @@ export class FakeLlmService implements LlmService {
       throw new Error(this.options.errorMessage ?? "Mock LLM error");
     }
 
-    // Return mock response
-    const response: {
-      message: Message;
-      usage?: {
-        promptTokens: number;
-        completionTokens: number;
-        totalTokens: number;
-      };
-      finishReason?: string;
-      providerMeta?: Record<string, unknown>;
-      providerCostUsd?: number;
-    } = {
+    // Return mock response with all fields per LlmCompletionResult
+    const response: LlmCompletionResult = {
       message: {
         role: "assistant" as const,
         content: this.options.responseContent ?? "Default mock response",
@@ -99,6 +81,11 @@ export class FakeLlmService implements LlmService {
         requestId: "fake-request-id",
       },
       providerCostUsd: 0.0001, // Small fixed cost for billing tests
+      // New fields per AI_SETUP_SPEC.md
+      litellmCallId: "fake-litellm-call-id",
+      promptHash: this.options.promptHash ?? "fake-prompt-hash-sha256",
+      resolvedProvider: "fake",
+      resolvedModel: params.model ?? "mock-model",
     };
 
     if (this.options.finishReason) {
@@ -150,6 +137,11 @@ export class FakeLlmService implements LlmService {
           requestId: "fake-request-id",
         },
         providerCostUsd,
+        // New fields per AI_SETUP_SPEC.md
+        litellmCallId: "fake-litellm-call-id",
+        promptHash: this.options.promptHash ?? "fake-prompt-hash-sha256",
+        resolvedProvider: "fake",
+        resolvedModel: params.model ?? "mock-model",
       }),
     };
   }

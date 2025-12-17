@@ -74,6 +74,8 @@ describe("app/_facades/payments/credits.server", () => {
       usageService: {} as never,
       metricsQuery: {} as never,
       treasuryReadPort: {} as never,
+      aiTelemetry: {} as never,
+      langfuse: undefined,
     });
   });
 
