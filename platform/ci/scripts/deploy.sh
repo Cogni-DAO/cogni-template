@@ -74,6 +74,13 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Append env var to file only if value is non-empty
+# Usage: append_env_if_set FILE KEY VALUE
+append_env_if_set() {
+    local file="${1:?file required}" key="${2:?key required}" val="${3-}"
+    [[ -n "$val" ]] && printf '%s=%s\n' "$key" "$val" >> "$file"
+}
+
 # Emit deployment event to Grafana Cloud Loki
 emit_deployment_event() {
   local event="$1"
@@ -391,7 +398,9 @@ DOMAIN=${DOMAIN}
 ENV_EOF
 
 # Runtime env (full app config)
-cat > /opt/cogni-template-runtime/.env << ENV_EOF
+RUNTIME_ENV=/opt/cogni-template-runtime/.env
+cat > "$RUNTIME_ENV" << ENV_EOF
+# Required vars
 DOMAIN=${DOMAIN}
 APP_ENV=${APP_ENV}
 APP_IMAGE=${APP_IMAGE}
@@ -409,17 +418,19 @@ APP_DB_PASSWORD=${APP_DB_PASSWORD}
 APP_DB_NAME=${APP_DB_NAME}
 DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
 EVM_RPC_URL=${EVM_RPC_URL}
-LOKI_WRITE_URL=${GRAFANA_CLOUD_LOKI_URL:-}
-LOKI_USERNAME=${GRAFANA_CLOUD_LOKI_USER:-}
-LOKI_PASSWORD=${GRAFANA_CLOUD_LOKI_API_KEY:-}
-METRICS_TOKEN=${METRICS_TOKEN:-}
-PROMETHEUS_REMOTE_WRITE_URL=${PROMETHEUS_REMOTE_WRITE_URL:-}
-PROMETHEUS_USERNAME=${PROMETHEUS_USERNAME:-}
-PROMETHEUS_PASSWORD=${PROMETHEUS_PASSWORD:-}
-LANGFUSE_PUBLIC_KEY=${LANGFUSE_PUBLIC_KEY:-}
-LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
-LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL:-}
 ENV_EOF
+
+# Optional observability vars - only written if set (empty string breaks Zod validation)
+append_env_if_set "$RUNTIME_ENV" LOKI_WRITE_URL "${GRAFANA_CLOUD_LOKI_URL-}"
+append_env_if_set "$RUNTIME_ENV" LOKI_USERNAME "${GRAFANA_CLOUD_LOKI_USER-}"
+append_env_if_set "$RUNTIME_ENV" LOKI_PASSWORD "${GRAFANA_CLOUD_LOKI_API_KEY-}"
+append_env_if_set "$RUNTIME_ENV" METRICS_TOKEN "${METRICS_TOKEN-}"
+append_env_if_set "$RUNTIME_ENV" PROMETHEUS_REMOTE_WRITE_URL "${PROMETHEUS_REMOTE_WRITE_URL-}"
+append_env_if_set "$RUNTIME_ENV" PROMETHEUS_USERNAME "${PROMETHEUS_USERNAME-}"
+append_env_if_set "$RUNTIME_ENV" PROMETHEUS_PASSWORD "${PROMETHEUS_PASSWORD-}"
+append_env_if_set "$RUNTIME_ENV" LANGFUSE_PUBLIC_KEY "${LANGFUSE_PUBLIC_KEY-}"
+append_env_if_set "$RUNTIME_ENV" LANGFUSE_SECRET_KEY "${LANGFUSE_SECRET_KEY-}"
+append_env_if_set "$RUNTIME_ENV" LANGFUSE_BASE_URL "${LANGFUSE_BASE_URL-}"
 
 # SourceCred env
 cat > /opt/cogni-template-sourcecred/.env << ENV_EOF
