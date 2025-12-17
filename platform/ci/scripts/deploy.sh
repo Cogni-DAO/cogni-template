@@ -74,13 +74,6 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Append env var to file only if value is non-empty
-# Usage: append_env_if_set FILE KEY VALUE
-append_env_if_set() {
-    local file="${1:?file required}" key="${2:?key required}" val="${3-}"
-    [[ -n "$val" ]] && printf '%s=%s\n' "$key" "$val" >> "$file"
-}
-
 # Emit deployment event to Grafana Cloud Loki
 emit_deployment_event() {
   local event="$1"
@@ -377,6 +370,13 @@ hash_file() {
     log_warn "No sha256 tool available, skipping config hash check"
     echo "no-hash-tool"
   fi
+}
+
+# Append env var to file only if value is non-empty
+# Usage: append_env_if_set FILE KEY VALUE
+append_env_if_set() {
+    local file="${1:?file required}" key="${2:?key required}" val="${3-}"
+    [[ -n "$val" ]] && printf '%s=%s\n' "$key" "$val" >> "$file"
 }
 
 log_info "Setting up deployment environment on VM..."
