@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @cogni-dao/core
-- **Last reviewed:** 2025-12-13
+- **Last reviewed:** 2025-12-16
 - **Status:** stable
 
 ## Purpose
@@ -75,7 +75,7 @@ import { useDAOFormation } from "@/features/setup/public";
 
 ## Dependencies
 
-- **Internal:** `@aragon-osx`, `@/shared/web3`, `@/shared/errors`, `@/components/kit`
+- **Internal:** `@cogni/aragon-osx`, `@cogni/cogni-contracts`, `@/shared/web3`, `@/shared/errors`, `@/components/kit`
 - **External:** wagmi, viem, react
 
 ## Change Protocol

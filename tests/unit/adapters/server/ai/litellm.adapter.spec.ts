@@ -30,6 +30,8 @@ describe("LiteLlmAdapter", () => {
   const testCaller: LlmCaller = {
     billingAccountId: "test-user-123",
     virtualKeyId: "vk-test-1",
+    requestId: "req-test-abc",
+    traceId: "trace-test-xyz",
   };
 
   // Mock fetch globally
@@ -92,6 +94,8 @@ describe("LiteLlmAdapter", () => {
             user: "test-user-123", // billingAccountId for cost attribution
             metadata: {
               cogni_billing_account_id: "test-user-123",
+              request_id: "req-test-abc",
+              trace_id: "trace-test-xyz",
             },
           }),
           signal: expect.any(AbortSignal),
@@ -126,6 +130,8 @@ describe("LiteLlmAdapter", () => {
         user: "test-user-123",
         metadata: {
           cogni_billing_account_id: "test-user-123",
+          request_id: "req-test-abc",
+          trace_id: "trace-test-xyz",
         },
       });
     });
@@ -156,6 +162,10 @@ describe("LiteLlmAdapter", () => {
         },
         providerCostUsd: 0.0002,
         litellmCallId: "chatcmpl-test-123", // From response.id, used for joining with /spend/logs
+        // New fields per AI_SETUP_SPEC.md
+        promptHash: expect.any(String), // SHA-256 hash of canonical payload
+        resolvedProvider: "openai", // Inferred from "gpt-" prefix in model name
+        resolvedModel: "gpt-3.5-turbo", // From response (defaults to request model)
       });
     });
 
@@ -229,7 +239,7 @@ describe("LiteLlmAdapter", () => {
       });
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "LiteLLM completion failed: LiteLLM API error: 401 Unauthorized"
+        "LiteLLM API error: 401 Unauthorized"
       );
     });
 
@@ -252,7 +262,7 @@ describe("LiteLlmAdapter", () => {
       });
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "LiteLLM completion failed: Invalid response from LiteLLM"
+        "Invalid response from LiteLLM"
       );
     });
 
@@ -270,7 +280,7 @@ describe("LiteLlmAdapter", () => {
       });
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "LiteLLM completion failed: Invalid response from LiteLLM"
+        "Invalid response from LiteLLM"
       );
     });
 
@@ -278,7 +288,7 @@ describe("LiteLlmAdapter", () => {
       mockFetch.mockRejectedValueOnce(new Error("Network error"));
 
       await expect(adapter.completion(basicParams)).rejects.toThrow(
-        "LiteLLM completion failed: Network error"
+        "LiteLLM network error: Network error"
       );
     });
 
@@ -373,6 +383,40 @@ describe("LiteLlmAdapter", () => {
         promptTokens: 0,
         completionTokens: 0,
         totalTokens: 0,
+      });
+    });
+  });
+
+  describe("AI_SETUP_SPEC.md: Correlation ID propagation", () => {
+    it("includes request_id and trace_id in LiteLLM metadata", async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        headers: new Headers(),
+        json: async () => ({
+          id: "test",
+          choices: [{ message: { content: "test" }, finish_reason: "stop" }],
+          usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+        }),
+      });
+
+      await adapter.completion({
+        model: "test-model",
+        messages: [{ role: "user", content: "test" }],
+        caller: {
+          billingAccountId: "acc-123",
+          virtualKeyId: "vk-456",
+          requestId: "req-correlation-test",
+          traceId: "trace-correlation-test",
+        },
+      });
+
+      const requestBody = JSON.parse(
+        mockFetch.mock.calls[0]?.[1]?.body as string
+      );
+      expect(requestBody.metadata).toEqual({
+        cogni_billing_account_id: "acc-123",
+        request_id: "req-correlation-test",
+        trace_id: "trace-correlation-test",
       });
     });
   });

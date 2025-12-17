@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-12-08
+- **Last reviewed:** 2025-12-17
 - **Status:** draft
 
 ## Purpose
@@ -47,7 +47,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 
 ## Ports
 
-- **Uses ports:** LlmService (completion, completionStream), AccountService (recordChargeReceipt)
+- **Uses ports:** LlmService (completion, completionStream), AccountService (recordChargeReceipt), AiTelemetryPort (recordInvocation), LangfusePort (createTrace, recordGeneration)
 - **Implements ports:** none
 - **Contracts:** ai.completion.v1, ai.chat.v1, ai.models.v1, ai.activity.v1
 
@@ -63,6 +63,8 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - Transform between wire formats and domain DTOs
   - Delegate to LlmCaller port for actual LLM calls
   - Record charge receipts via AccountService.recordChargeReceipt (per ACTIVITY_METRICS.md)
+  - Record AI invocation telemetry via AiTelemetryPort (per AI_SETUP_SPEC.md)
+  - Create Langfuse traces for observability (optional, env-gated)
 
 - **This feature does not:**
   - Implement LLM adapters (owned by adapters/server/ai)

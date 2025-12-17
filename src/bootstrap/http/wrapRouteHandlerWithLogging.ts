@@ -19,6 +19,7 @@
 import { type NextRequest, NextResponse } from "next/server";
 
 import { getContainer } from "@/bootstrap/container";
+import { withRootSpan } from "@/bootstrap/otel";
 import type { SessionUser } from "@/shared/auth";
 import {
   createRequestContext,
@@ -108,72 +109,84 @@ export function wrapRouteHandlerWithLogging<TContext = unknown>(
         ? await options.auth.getSessionUser()
         : null;
 
-    const ctx = createRequestContext(
-      { baseLog: container.log, clock: container.clock },
-      request,
-      {
-        routeId: options.routeId,
-        session: sessionUser ?? undefined,
-      }
-    );
-
     // Get config once before try block to avoid env failures masking real errors
     const { unhandledErrorPolicy } = container.config;
 
-    logRequestStart(ctx.log);
-    const start = performance.now();
-
-    // Track response for metrics/logging (captured in try/catch, used in finally)
-    let responseStatus = 500;
-    let response: NextResponse;
-
-    try {
-      // Check session requirement before calling handler
-      if (options.auth?.mode === "required" && !sessionUser) {
-        responseStatus = 401;
-        response = NextResponse.json(
-          { error: "Session required" },
-          { status: responseStatus }
+    // Wrap entire request in OTel root span for distributed tracing
+    // Per AI_SETUP_SPEC.md: root span bound to context via context.with()
+    return withRootSpan(
+      `${request.method} ${options.routeId}`,
+      { route_id: options.routeId },
+      async ({ traceId, span }) => {
+        const ctx = createRequestContext(
+          { baseLog: container.log, clock: container.clock },
+          request,
+          {
+            routeId: options.routeId,
+            traceId,
+            session: sessionUser ?? undefined,
+          }
         );
-        return response;
+
+        // Per AI_SETUP_SPEC.md: request_id must be on root span for trace-log correlation
+        span.setAttribute("request_id", ctx.reqId);
+
+        logRequestStart(ctx.log);
+        const start = performance.now();
+
+        // Track response for metrics/logging (captured in try/catch, used in finally)
+        let responseStatus = 500;
+        let response: NextResponse;
+
+        try {
+          // Check session requirement before calling handler
+          if (options.auth?.mode === "required" && !sessionUser) {
+            responseStatus = 401;
+            response = NextResponse.json(
+              { error: "Session required" },
+              { status: responseStatus }
+            );
+            return response;
+          }
+
+          response = await handler(ctx, request, sessionUser, context);
+          responseStatus = response.status;
+          return response;
+        } catch (error) {
+          // Wrapper only catches unhandled errors - route should handle domain errors
+          responseStatus = 500;
+          logRequestError(ctx.log, error, "INTERNAL_SERVER_ERROR");
+
+          if (unhandledErrorPolicy === "rethrow") {
+            throw error;
+          }
+
+          // respond_500: convert to 500 for production safety
+          response = NextResponse.json(
+            { error: "Internal server error" },
+            { status: responseStatus }
+          );
+          return response;
+        } finally {
+          // Always log request end exactly once and record metrics
+          const durationMs = performance.now() - start;
+
+          logRequestEnd(ctx.log, { status: responseStatus, durationMs });
+
+          // Skip metrics recording for scraper endpoint to avoid polluting user traffic metrics
+          if (options.routeId !== "meta.metrics") {
+            httpRequestsTotal.inc({
+              route: options.routeId,
+              method: request.method,
+              status: statusBucket(responseStatus),
+            });
+            httpRequestDurationMs.observe(
+              { route: options.routeId, method: request.method },
+              durationMs
+            );
+          }
+        }
       }
-
-      response = await handler(ctx, request, sessionUser, context);
-      responseStatus = response.status;
-      return response;
-    } catch (error) {
-      // Wrapper only catches unhandled errors - route should handle domain errors
-      responseStatus = 500;
-      logRequestError(ctx.log, error, "INTERNAL_SERVER_ERROR");
-
-      if (unhandledErrorPolicy === "rethrow") {
-        throw error;
-      }
-
-      // respond_500: convert to 500 for production safety
-      response = NextResponse.json(
-        { error: "Internal server error" },
-        { status: responseStatus }
-      );
-      return response;
-    } finally {
-      // Always log request end exactly once and record metrics
-      const durationMs = performance.now() - start;
-
-      logRequestEnd(ctx.log, { status: responseStatus, durationMs });
-
-      // Skip metrics recording for scraper endpoint to avoid polluting user traffic metrics
-      if (options.routeId !== "meta.metrics") {
-        httpRequestsTotal.inc({
-          route: options.routeId,
-          method: request.method,
-          status: statusBucket(responseStatus),
-        });
-        httpRequestDurationMs.observe(
-          { route: options.routeId, method: request.method },
-          durationMs
-        );
-      }
-    }
+    );
   };
 }

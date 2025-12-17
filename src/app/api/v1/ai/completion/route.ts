@@ -22,6 +22,7 @@ import { isAccountsFeatureError } from "@/features/accounts/public";
 import { logRequestWarn, type RequestContext } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 /**
  * Local error handler for AI completion route.

@@ -16,8 +16,12 @@ import type { SessionUser } from "@/shared/auth";
 import { makeNoopLogger, type RequestContext } from "@/shared/observability";
 import { FakeClock } from "./fake-clock";
 
+/** Zero trace ID for tests (since OTel SDK not running) */
+const TEST_TRACE_ID = "00000000000000000000000000000000";
+
 export interface TestCtxOptions {
   reqId?: string;
+  traceId?: string;
   routeId?: string;
   session?: SessionUser;
   clockTime?: string;
@@ -26,6 +30,7 @@ export interface TestCtxOptions {
 /**
  * Create a test RequestContext with sensible defaults.
  * Uses makeNoopLogger(), FakeClock, and optional session.
+ * traceId defaults to zero trace ID (OTel SDK not running in tests).
  */
 export function makeTestCtx(options: TestCtxOptions = {}): RequestContext {
   const clock = new FakeClock(options.clockTime ?? "2025-01-01T00:00:00.000Z");
@@ -33,6 +38,7 @@ export function makeTestCtx(options: TestCtxOptions = {}): RequestContext {
   return {
     log: makeNoopLogger(),
     reqId: options.reqId ?? `test-req-${Date.now()}`,
+    traceId: options.traceId ?? TEST_TRACE_ID,
     routeId: options.routeId ?? "test.route",
     session: options.session,
     clock,

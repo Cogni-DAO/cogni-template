@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-12-05
+- **Last reviewed:** 2025-12-16
 - **Status:** draft
 
 ## Purpose
@@ -39,6 +39,7 @@ HTTP API endpoints using Next.js App Router. Contract-validated entry points tha
 - **Exports:** none
 - **Routes (if any):**
   - `/api/auth/[...nextauth]` [GET, POST]
+  - `/api/setup/verify` [POST] - DAO formation verification
   - `/api/v1/ai/completion` [POST]
   - `/api/v1/activity` [GET]
 - **CLI (if any):** none

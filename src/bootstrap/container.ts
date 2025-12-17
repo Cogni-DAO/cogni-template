@@ -16,9 +16,11 @@ import type { Logger } from "pino";
 
 import {
   DrizzleAccountService,
+  DrizzleAiTelemetryAdapter,
   DrizzlePaymentAttemptRepository,
   EvmRpcOnChainVerifierAdapter,
   getDb,
+  LangfuseAdapter,
   LiteLlmActivityUsageAdapter,
   LiteLlmAdapter,
   LiteLlmUsageServiceAdapter,
@@ -37,7 +39,9 @@ import {
 import type { RateLimitBypassConfig } from "@/bootstrap/http/wrapPublicRoute";
 import type {
   AccountService,
+  AiTelemetryPort,
   Clock,
+  LangfusePort,
   LlmService,
   MetricsQueryPort,
   OnChainVerifier,
@@ -74,12 +78,16 @@ export interface Container {
   evmOnchainClient: EvmOnchainClient;
   metricsQuery: MetricsQueryPort;
   treasuryReadPort: TreasuryReadPort;
+  /** AI telemetry DB writer - always wired */
+  aiTelemetry: AiTelemetryPort;
+  /** Langfuse tracer - undefined when LANGFUSE_SECRET_KEY not set */
+  langfuse: LangfusePort | undefined;
 }
 
 // Feature-specific dependency types
 export type AiCompletionDeps = Pick<
   Container,
-  "llmService" | "accountService" | "clock"
+  "llmService" | "accountService" | "clock" | "aiTelemetry" | "langfuse"
 >;
 
 /**
@@ -181,6 +189,19 @@ function createContainer(): Container {
   // TreasuryReadPort: always uses ViemTreasuryAdapter (no test fake needed - mocked at port level in tests)
   const treasuryReadPort = new ViemTreasuryAdapter(evmOnchainClient);
 
+  // AI Telemetry: DrizzleAiTelemetryAdapter always wired (per AI_SETUP_SPEC.md)
+  const aiTelemetry = new DrizzleAiTelemetryAdapter(db);
+
+  // Langfuse: only wired when LANGFUSE_SECRET_KEY is set (optional)
+  const langfuse: Container["langfuse"] =
+    env.LANGFUSE_SECRET_KEY && env.LANGFUSE_PUBLIC_KEY
+      ? new LangfuseAdapter({
+          publicKey: env.LANGFUSE_PUBLIC_KEY,
+          secretKey: env.LANGFUSE_SECRET_KEY,
+          ...(env.LANGFUSE_BASE_URL ? { baseUrl: env.LANGFUSE_BASE_URL } : {}),
+        })
+      : undefined;
+
   // Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
   const config: ContainerConfig = {
     unhandledErrorPolicy: env.isProd ? "respond_500" : "rethrow",
@@ -207,6 +228,8 @@ function createContainer(): Container {
     evmOnchainClient,
     metricsQuery,
     treasuryReadPort,
+    aiTelemetry,
+    langfuse,
   };
 }
 
@@ -220,6 +243,8 @@ export function resolveAiDeps(): AiCompletionDeps {
     llmService: container.llmService,
     accountService: container.accountService,
     clock: container.clock,
+    aiTelemetry: container.aiTelemetry,
+    langfuse: container.langfuse,
   };
 }
 

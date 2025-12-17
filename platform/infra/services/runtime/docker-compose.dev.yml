@@ -18,7 +18,13 @@ services:
       - internal
     environment:
       - NODE_ENV=${NODE_ENV:-production}
-      - APP_ENV=${APP_ENV}
+      # Required vars - fail fast at compose level if missing
+      - APP_ENV=${APP_ENV?APP_ENV is required}
+      - AUTH_SECRET=${AUTH_SECRET?AUTH_SECRET is required}
+      - EVM_RPC_URL=${EVM_RPC_URL?EVM_RPC_URL is required}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY?LITELLM_MASTER_KEY is required}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY?OPENROUTER_API_KEY is required}
+      # Vars with sensible defaults
       - APP_BASE_URL=${APP_BASE_URL:-https://localhost}
       - NEXTAUTH_URL=${NEXTAUTH_URL:-${APP_BASE_URL:-https://localhost}}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
@@ -27,13 +33,13 @@ services:
       - DB_HOST=postgres
       - DB_PORT=5432
       - LITELLM_BASE_URL=http://litellm:4000
-      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
-      - AUTH_SECRET=${AUTH_SECRET}
-      - EVM_RPC_URL=${EVM_RPC_URL}
       - PORT=${PORT:-3000}
       - PINO_LOG_LEVEL=${PINO_LOG_LEVEL:-info}
-      - METRICS_TOKEN=${METRICS_TOKEN:-}
+      # Optional vars - pass-through only if set in host (absent = undefined, not empty string)
+      - METRICS_TOKEN
+      - LANGFUSE_PUBLIC_KEY
+      - LANGFUSE_SECRET_KEY
+      - LANGFUSE_BASE_URL
     depends_on:
       postgres:
         condition: service_healthy

@@ -8,6 +8,13 @@
       "when": 1765314420410,
       "tag": "0000_daffy_mandroid",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1765895033599,
+      "tag": "0001_parched_barracuda",
+      "breakpoints": true
     }
   ]
 }

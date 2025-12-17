@@ -24,6 +24,7 @@ import {
 import { serverEnv } from "@/shared/env";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export const GET = wrapRouteHandlerWithLogging(
   { routeId: "ai.models", auth: { mode: "required", getSessionUser } },

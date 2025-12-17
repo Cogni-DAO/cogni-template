@@ -518,3 +518,4 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 - [Model Selection](MODEL_SELECTION.md) - Dynamic model fetching from LiteLLM, validation, and UI integration
 - [CI/CD Pipeline Flow](CI-CD.md) - Branch model, workflows, and deployment automation
 - [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) - Infrastructure and deployment details
+- [Route Runtime Policy](RUNTIME_POLICY.md) - When to use Node.js vs Edge runtime in API routes

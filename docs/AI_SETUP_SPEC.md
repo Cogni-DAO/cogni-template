@@ -57,13 +57,17 @@
 
 ### P0: MVP - Observability Foundation
 
-- [ ] Enforce Node runtime for AI routes (`export const runtime = 'nodejs'`)
-- [ ] OTel instrumentation with explicit root span at request entry (do not rely on auto-instrumentation)
-- [ ] Store `trace_id` deterministically from root span into RequestContext
-- [ ] Direct Langfuse SDK integration (not OTel exporter) to reliably obtain `langfuse_trace_id`
-- [ ] Propagate `reqId` + `trace_id` in LiteLLM metadata
-- [ ] Create `ai_invocation_summaries` table (see schema below)
-- [ ] Write correlation IDs to ai_invocation_summaries on every AI call
+- [x] Enforce Node runtime for AI routes (`export const runtime = 'nodejs'`)
+- [x] OTel instrumentation with explicit root span at request entry (do not rely on auto-instrumentation)
+- [x] Store `trace_id` deterministically from root span into RequestContext
+- [x] Direct Langfuse SDK integration (not OTel exporter) to reliably obtain `langfuse_trace_id`
+- [x] Propagate `reqId` + `trace_id` in LiteLLM metadata
+- [x] Create `ai_invocation_summaries` table (see schema below)
+- [x] Write correlation IDs to ai_invocation_summaries on every AI call
+
+#### P0 Known Issues
+
+- [x] Stack test for telemetry writes (`tests/stack/ai/ai-telemetry.stack.test.ts` validates `ai_invocation_summaries` rows)
 
 #### Chores
 
@@ -103,28 +107,31 @@
 
 **Purpose:** Covers both direct LLM calls and LangGraph runs. Clearly not billing; clearly not full telemetry.
 
-| Column              | Type        | Notes                                                |
-| ------------------- | ----------- | ---------------------------------------------------- |
-| `id`                | uuid        | PK                                                   |
-| `request_id`        | text        | NOT NULL (multiple rows per request allowed)         |
-| `trace_id`          | text        | NOT NULL (from explicit root span)                   |
-| `langfuse_trace_id` | text        | Nullable, debug URL                                  |
-| `litellm_call_id`   | text        | Nullable, join to /spend/logs                        |
-| `graph_run_id`      | text        | Nullable (identifies graph execution within request) |
-| `graph_name`        | text        | Nullable (null = direct LLM call)                    |
-| `graph_version`     | text        | Nullable, git SHA                                    |
-| `provider`          | text        | e.g., "openai", "anthropic"                          |
-| `model`             | text        | Resolved model ID                                    |
-| `tokens_in`         | int         | Nullable                                             |
-| `tokens_out`        | int         | Nullable                                             |
-| `tokens_total`      | int         | Nullable                                             |
-| `provider_cost_usd` | numeric     | Nullable                                             |
-| `latency_ms`        | int         | Call duration                                        |
-| `status`            | text        | "success" / "error"                                  |
-| `error_code`        | text        | Nullable                                             |
-| `created_at`        | timestamptz |                                                      |
+| Column                  | Type        | Notes                                                |
+| ----------------------- | ----------- | ---------------------------------------------------- |
+| `id`                    | uuid        | PK                                                   |
+| `invocation_id`         | text        | NOT NULL, UNIQUE (idempotency key per LLM call)      |
+| `request_id`            | text        | NOT NULL (multiple rows per request allowed)         |
+| `trace_id`              | text        | NOT NULL (from explicit root span)                   |
+| `langfuse_trace_id`     | text        | Nullable, debug URL                                  |
+| `litellm_call_id`       | text        | Nullable, join to /spend/logs                        |
+| `prompt_hash`           | text        | NOT NULL, SHA-256 of canonical payload               |
+| `router_policy_version` | text        | NOT NULL, semver or git SHA                          |
+| `graph_run_id`          | text        | Nullable (identifies graph execution within request) |
+| `graph_name`            | text        | Nullable (null = direct LLM call)                    |
+| `graph_version`         | text        | Nullable, git SHA                                    |
+| `provider`              | text        | NOT NULL, e.g., "openai", "anthropic"                |
+| `model`                 | text        | Resolved model ID                                    |
+| `tokens_in`             | int         | Nullable                                             |
+| `tokens_out`            | int         | Nullable                                             |
+| `tokens_total`          | int         | Nullable                                             |
+| `provider_cost_usd`     | numeric     | Nullable                                             |
+| `latency_ms`            | int         | Call duration                                        |
+| `status`                | text        | "success" / "error"                                  |
+| `error_code`            | text        | Nullable                                             |
+| `created_at`            | timestamptz |                                                      |
 
-**Uniqueness:** `UNIQUE(request_id, litellm_call_id)` — allows multiple AI calls per request while preventing duplicate inserts.
+**Uniqueness:** `UNIQUE(invocation_id)` — UUID generated per LLM call attempt serves as idempotency key (better than `request_id + litellm_call_id` since `litellm_call_id` is null on errors).
 
 **Do NOT add:** prompts, responses, full metadata blobs.
 
@@ -253,5 +260,5 @@
 
 ---
 
-**Last Updated**: 2025-12-16
+**Last Updated**: 2025-12-17
 **Status**: Design Approved
