@@ -127,6 +127,7 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   "src",
   "tailwind.config.ts",
   "tests",
+  "tsconfig.app.json",
   "tsconfig.eslint.json",
   "tsconfig.json",
   "vitest.api.config.mts",
