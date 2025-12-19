@@ -340,6 +340,22 @@ module.exports = {
         "Only import from features/*/services or features/*/components subdirectories",
     },
 
+    // AI _facades: must import from features/ai/public.ts, never features/ai/services/*
+    // Prevents app-layer bypassing the feature boundary
+    // TODO: Extend to all facades after refactor PR
+    {
+      name: "no-ai-facades-to-feature-services",
+      severity: "error",
+      from: {
+        path: "^src/app/_facades/ai/",
+      },
+      to: {
+        path: "^src/features/ai/services/",
+      },
+      comment:
+        "AI app facades must import from features/ai/public.ts, not internal services",
+    },
+
     // =========================================================================
     // Monorepo boundary rules: packages/, services/, src/ isolation
     // =========================================================================

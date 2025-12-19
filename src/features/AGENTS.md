@@ -5,8 +5,8 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-17
-- **Status:** draft
+- **Last reviewed:** 2025-12-19
+- **Status:** stable
 
 ## Purpose
 
@@ -22,13 +22,20 @@ Vertical slices containing use cases like accounts/, ai/, and home/. Orchestrate
 ```json
 {
   "layer": "features",
-  "may_import": ["features", "ports", "core", "shared", "types", "components"],
+  "may_import": [
+    "features",
+    "ports",
+    "core",
+    "shared",
+    "types",
+    "components",
+    "contracts"
+  ],
   "must_not_import": [
     "app",
     "adapters/server",
     "adapters/worker",
     "bootstrap",
-    "contracts",
     "styles"
   ]
 }

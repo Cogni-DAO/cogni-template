@@ -4,7 +4,7 @@
 /**
  * Module: `@features/ai/services/completion`
  * Purpose: Use case orchestration for AI completion with dual-cost billing.
- * Scope: Coordinate core rules, port calls, set output timestamp, record usage. Does not handle authentication or rate limiting.
+ * Scope: Coordinate core rules, port calls, record usage, return StreamFinalResult. Does not handle authentication or rate limiting.
  * Invariants:
  * - Only imports core, ports, shared - never contracts or adapters
  * - Pre-call credit check enforced; post-call billing never blocks response
@@ -26,6 +26,7 @@ import {
   type Message,
   trimConversationHistory,
 } from "@/core";
+import type { StreamFinalResult } from "@/features/ai/types";
 import type {
   AccountService,
   AiTelemetryPort,
@@ -494,7 +495,7 @@ export async function executeStream({
   model,
   llmService,
   accountService,
-  clock,
+  clock: _clock,
   caller,
   ctx,
   aiTelemetry,
@@ -502,7 +503,7 @@ export async function executeStream({
   abortSignal,
 }: ExecuteStreamParams): Promise<{
   stream: AsyncIterable<import("@/ports").ChatDeltaEvent>;
-  final: Promise<{ message: Message; requestId: string }>;
+  final: Promise<StreamFinalResult>;
 }> {
   const log = ctx.log.child({ feature: "ai.completion.stream" });
 
@@ -735,11 +736,13 @@ export async function executeStream({
       }
 
       return {
-        message: {
-          ...result.message,
-          timestamp: clock.now(),
-        },
+        ok: true as const,
         requestId,
+        usage: {
+          promptTokens: result.usage?.promptTokens ?? 0,
+          completionTokens: result.usage?.completionTokens ?? 0,
+        },
+        finishReason: result.finishReason ?? "stop",
       };
     })
     .catch(async (error) => {
@@ -809,7 +812,13 @@ export async function executeStream({
         );
       }
 
-      throw error;
+      // Return discriminated union instead of throwing
+      const isAborted = error instanceof Error && error.name === "AbortError";
+      return {
+        ok: false as const,
+        requestId,
+        error: isAborted ? ("aborted" as const) : ("internal" as const),
+      };
     });
 
   return { stream, final: wrappedFinal };

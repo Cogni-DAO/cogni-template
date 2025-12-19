@@ -3,12 +3,15 @@
 
 /**
  * Module: `@app/_facades/ai/completion.server`
- * Purpose: App-layer facade for AI completion - coordinates billing account resolution and AI features.
- * Scope: Resolves session user to billing account + virtual key, delegates to AI completion feature. Does not handle HTTP concerns.
- * Invariants: Only app layer imports this; validates billing account before completion execution; propagates feature errors
+ * Purpose: App-layer coordinator for AI completion - session → billing account, delegates to feature layer.
+ * Scope: Resolves session user to billing account + virtual key, creates LlmCaller, maps DTOs, normalizes errors. Does not contain business logic or HTTP concerns.
+ * Invariants:
+ *   - Only app layer imports this; routes call this, not features/* directly
+ *   - Must import features via public.ts ONLY (never import from services subdirectories)
+ *   - Validates billing account before delegation; propagates feature errors
  * Side-effects: IO (via resolved dependencies)
- * Notes: Uses accounts feature for validation via Result pattern; propagates AccountsFeatureError to routes
- * Links: Called by API routes, uses accounts and AI features
+ * Notes: Uses accounts feature for validation; propagates AccountsFeatureError to routes
+ * Links: Called by API routes, delegates to features/ai/public.ts
  * @public
  */
 
@@ -17,12 +20,13 @@ import type { z } from "zod";
 import { resolveAiDeps } from "@/bootstrap/container";
 import type { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
 import { mapAccountsPortErrorToFeature } from "@/features/accounts/public";
-import { execute } from "@/features/ai/services/completion";
+// Import from public.server.ts - never from services/* directly (dep-cruiser enforced)
 import {
+  execute,
   fromCoreMessage,
   type MessageDto,
   toCoreMessages,
-} from "@/features/ai/services/mappers";
+} from "@/features/ai/public.server";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { LlmCaller } from "@/ports";
 import {
@@ -117,12 +121,17 @@ export async function completion(
   }
 }
 
+/**
+ * Stream chat completion via AI streaming service.
+ * App facade responsibility: session → billing account, caller creation, error mapping.
+ * NO business logic here - delegates to feature layer via public.ts.
+ */
 export async function completionStream(
   input: CompletionInput & { abortSignal?: AbortSignal },
   ctx: RequestContext
 ): Promise<{
-  stream: AsyncIterable<import("@/ports").ChatDeltaEvent>;
-  final: Promise<{ message: MessageDto; requestId: string }>;
+  stream: AsyncIterable<import("@/features/ai/public").AiEvent>;
+  final: Promise<import("@/features/ai/public").StreamFinalResult>;
 }> {
   const { llmService, accountService, clock, aiTelemetry, langfuse } =
     resolveAiDeps();
@@ -156,27 +165,27 @@ export async function completionStream(
   const coreMessages = toCoreMessages(input.messages, timestamp);
 
   try {
-    const { executeStream } = await import("@/features/ai/services/completion");
-    const { stream, final } = await executeStream({
-      messages: coreMessages,
-      model: input.model,
+    // Import from public.server.ts - never from services/* directly
+    const { createAiRuntime } = await import("@/features/ai/public.server");
+    const aiRuntime = createAiRuntime({
       llmService,
       accountService,
       clock,
-      caller,
-      ctx: enrichedCtx,
       aiTelemetry,
       langfuse,
-      // Explicitly handle optional property
-      ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
     });
 
-    const wrappedFinal = final.then((result) => ({
-      message: fromCoreMessage(result.message),
-      requestId: result.requestId,
-    }));
+    const { stream, final } = await aiRuntime.runChatStream(
+      {
+        messages: coreMessages,
+        model: input.model,
+        caller,
+        ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
+      },
+      enrichedCtx
+    );
 
-    return { stream, final: wrappedFinal };
+    return { stream, final };
   } catch (error) {
     if (
       isInsufficientCreditsPortError(error) ||

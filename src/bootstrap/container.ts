@@ -248,6 +248,25 @@ export function resolveAiDeps(): AiCompletionDeps {
   };
 }
 
+/**
+ * Resolves minimal dependencies for AI runtime.
+ * Per AI_SETUP_SPEC.md: Single AI entrypoint for routes.
+ * Note: Full AiRuntimeDeps is resolved via resolveAiDeps() above.
+ * @deprecated Use resolveAiDeps() instead - this is unused legacy code.
+ */
+export type AiRuntimeMinimalDeps = Pick<
+  Container,
+  "llmService" | "accountService"
+>;
+
+export function resolveAiRuntimeMinimalDeps(): AiRuntimeMinimalDeps {
+  const container = getContainer();
+  return {
+    llmService: container.llmService,
+    accountService: container.accountService,
+  };
+}
+
 export function resolveActivityDeps(): ActivityDeps {
   const container = getContainer();
   return {

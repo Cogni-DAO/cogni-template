@@ -84,14 +84,14 @@ describe("features/ai/services/completion (stream)", () => {
 
     const result = await final;
 
-    // Assert
+    // Assert - stream content and final result shape
     expect(chunks).toEqual(["Streamed response"]);
-    expect(result.message).toEqual({
-      role: "assistant",
-      content: "Streamed response",
-      timestamp: "2025-01-01T12:00:00.000Z",
+    expect(result).toEqual({
+      ok: true,
+      requestId: expect.any(String),
+      usage: { promptTokens: 10, completionTokens: 10 },
+      finishReason: "stop",
     });
-    expect(result.requestId).toBeDefined();
 
     // Verify charge receipt recorded (per ACTIVITY_METRICS.md)
     expect(accountService.recordChargeReceipt).toHaveBeenCalledTimes(1);

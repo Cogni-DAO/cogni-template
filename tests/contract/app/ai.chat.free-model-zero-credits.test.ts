@@ -131,13 +131,10 @@ describe("POST /api/v1/ai/chat - Free Model Zero Credits", () => {
           yield { type: "text_delta" as const, delta: "AI response" };
         })(),
         final: Promise.resolve({
-          message: {
-            role: "assistant",
-            content: "AI response",
-            requestId: "req-123",
-            timestamp: new Date().toISOString(),
-          },
+          ok: true as const,
           requestId: "req-123",
+          usage: { promptTokens: 10, completionTokens: 20 },
+          finishReason: "stop",
         }),
       };
     });

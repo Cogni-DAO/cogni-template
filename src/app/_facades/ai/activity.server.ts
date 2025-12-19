@@ -25,7 +25,7 @@ import {
   type aiActivityOperation,
   STEP_MS,
 } from "@/contracts/ai.activity.v1.contract";
-import { validateActivityRange } from "@/features/ai/services/activity";
+import { validateActivityRange } from "@/features/ai/public.server";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { SessionUser } from "@/shared/auth";
 import {

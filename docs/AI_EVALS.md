@@ -13,58 +13,47 @@
 
 ---
 
-## packages/ai-core Charter
+## Graph Location (Feature-Centric)
 
-Location: `packages/ai-core/`
+Graphs live in feature slices, NOT in a shared package. Packages are only for cross-repo contracts after proven reuse.
 
-**Allowed:**
+**Location:** `src/features/<feature>/ai/`
 
-- LangGraph graph definitions
+**Allowed in graphs:**
+
+- LangGraph workflow definitions
 - Prompt templates (versioned, parameterized)
 - Tool schemas + response parsers
 - Model routing policy (provider/model selection)
 - Safety constraints + guardrails
 
-**Forbidden:**
+**Forbidden in graphs:**
 
 - HTTP handlers or API routes
 - Database access
+- Direct adapter/IO imports
 - Business logic unrelated to AI orchestration
-- Provider-specific SDK wrappers (use adapters instead)
 
 ### Structure
 
 ```
-packages/ai-core/
-  src/
-    graphs/               # LangGraph workflow definitions
-      review.graph.ts     # PR review workflow
-      admin.graph.ts      # Admin action workflow
-    prompts/              # Prompt templates
-      review/
-        system.txt
-        user.txt
-      admin/
-        system.txt
-    tools/                # Tool definitions + schemas
-      repo-read.tool.ts
-      diff-analyze.tool.ts
-    parsers/              # Response parsers
-      review-output.parser.ts
-    routing/              # Model selection logic
-      provider.router.ts
-    safety/               # Guardrails
-      content-filter.ts
-    index.ts              # Public exports
-  package.json
-  tsconfig.json
+src/features/<feature>/ai/
+  graphs/               # LangGraph workflow definitions
+    <graph>.graph.ts    # Graph definition (pure logic)
+  prompts/              # Prompt templates
+    <graph>.prompt.ts   # System/user prompts
+  tools/                # Tool contracts (feature-scoped)
+    <tool>.tool.ts      # Zod schema + handler interface
+  services/             # Orchestration
+    <graph>.ts          # Bridges ports, receives graphRunId from facade
 ```
 
 ### Prompt Versioning
 
-- Prompts stored as text files, not inline strings
+- Prompts stored as text files or template modules, not inline strings
 - Changes tracked in git with semantic commit messages
 - Langfuse syncs prompt versions for A/B testing
+- `prompt_hash` computed per call for drift detection
 
 ---
 
@@ -191,13 +180,20 @@ LangGraph → OTel SDK → OTel Collector → Langfuse
 
 ## Ownership
 
-| Component          | Owner                                                    |
-| ------------------ | -------------------------------------------------------- |
-| `packages/ai-core` | Node (for Node AI features) or Operator (for service AI) |
-| `evals/`           | Whoever owns the AI code being tested                    |
-| Langfuse instance  | Operator (shared) or Node (self-hosted)                  |
+| Component              | Owner                                   |
+| ---------------------- | --------------------------------------- |
+| Feature graphs/prompts | Feature owner                           |
+| `evals/`               | Whoever owns the AI code being tested   |
+| Langfuse instance      | Operator (shared) or Node (self-hosted) |
 
 ---
 
-**Last Updated**: 2025-01-13
-**Status**: Design Approved
+## Related Docs
+
+- [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — P0/P1/P2 checklists, ID map, invariants
+- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — How to create a graph in a feature
+
+---
+
+**Last Updated**: 2025-12-19
+**Status**: Design Approved (Feature-Centric Pivot)

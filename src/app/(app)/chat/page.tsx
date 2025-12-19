@@ -25,10 +25,7 @@ import {
 
 import { ErrorAlert, Thread } from "@/components";
 import type { ChatError } from "@/contracts/error.chat.v1.contract";
-import {
-  ChatRuntimeProvider,
-  type ChatRuntimeRef,
-} from "@/features/ai/chat/providers/ChatRuntimeProvider.client";
+import { ChatRuntimeProvider } from "@/features/ai/chat/providers/ChatRuntimeProvider.client";
 import { toErrorAlertProps } from "@/features/ai/chat/utils/toErrorAlertProps";
 import {
   ChatComposerExtras,
@@ -65,7 +62,6 @@ export default function ChatPage(): ReactNode {
   // Refs for user intent tracking (prevent re-init after user selection)
   const hasUserSelectedRef = useRef(false);
   const hasInitializedRef = useRef(false);
-  const runtimeRef = useRef<ChatRuntimeRef>(null);
 
   // State
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
@@ -148,9 +144,8 @@ export default function ChatPage(): ReactNode {
     }
   }, [defaultFreeModelId, handleModelChange]);
 
-  // Retry action
+  // Retry action - clear error (runtime handles retry internally)
   const handleRetry = useCallback(() => {
-    runtimeRef.current?.retryLastSend();
     setChatError(null);
   }, []);
 
@@ -220,12 +215,10 @@ export default function ChatPage(): ReactNode {
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ChatRuntimeProvider
-        ref={runtimeRef}
         selectedModel={selectedModel}
         defaultModelId={uiDefaultModelId}
         onAuthExpired={() => signOut()}
         onError={handleError}
-        disabled={isBlocked}
       >
         <Thread
           welcomeMessage={<ChatWelcomeWithHint />}

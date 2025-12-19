@@ -37,7 +37,7 @@ Single source of truth for externally callable operations. Each file defines an 
 
 ## Public Surface
 
-- **Exports:** ai.completion.v1, ai.chat.v1, ai.models.v1, error.chat.v1, payments.intent.v1, payments.submit.v1, payments.status.v1, payments.credits.confirm.v1, payments.credits.summary.v1, analytics.summary.v1, meta.livez.read.v1, meta.readyz.read.v1, meta.route-manifest.read.v1; http/router.v1.ts (ts-rest contracts); http/openapi.v1.ts (OpenAPI generation)
+- **Exports:** ai.completion.v1, ai.chat.v1 (AssistantUiInputSchema, AssistantUiInput, AssistantUiMessage), ai.models.v1, error.chat.v1, payments.intent.v1, payments.submit.v1, payments.status.v1, payments.credits.confirm.v1, payments.credits.summary.v1, analytics.summary.v1, meta.livez.read.v1, meta.readyz.read.v1, meta.route-manifest.read.v1; http/router.v1.ts (ts-rest contracts); http/openapi.v1.ts (OpenAPI generation)
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none

@@ -17,7 +17,7 @@ Cogni is a DAO-first "org factory." This repo ships the **Node** — a sovereign
 
 - [ ] **Phase 0**: Node Formation MVP (manual steps remain)
 - [ ] **Phase 0.5**: Freeze Node Template
-- [ ] **Phase 1**: AI Core + Evals Foundation
+- [ ] **Phase 1**: First LangGraph Graph + Evals Foundation
 - [ ] **Phase 2**: Operator Services Scaffold
 - [ ] **Phase 3**: git-review-daemon Live
 - [ ] **Phase 4**: git-admin-daemon Live
@@ -30,10 +30,10 @@ Cogni is a DAO-first "org factory." This repo ships the **Node** — a sovereign
 
 ## Repository Structures
 
-| Repo         | Key Directories                                               | Purpose                               |
-| ------------ | ------------------------------------------------------------- | ------------------------------------- |
-| **Node**     | `src/`, `packages/ai-core/`, `smart-contracts/`, `platform/`  | Sovereign DAO+app                     |
-| **Operator** | `apps/operator/`, `services/*`, `packages/*`, `platform/k8s/` | Meta-Node: control plane + data plane |
+| Repo         | Key Directories                                                | Purpose                               |
+| ------------ | -------------------------------------------------------------- | ------------------------------------- |
+| **Node**     | `src/`, `packages/`, `smart-contracts/`, `platform/`, `evals/` | Sovereign DAO+app                     |
+| **Operator** | `apps/operator/`, `services/*`, `packages/*`, `platform/k8s/`  | Meta-Node: control plane + data plane |
 
 **Design Principle — Mirror Rails, Not Features:**
 Operator shares CI/CD, observability, deploy invariants, and hex architecture with Node. Only domain logic differs.
@@ -98,11 +98,14 @@ Enable anyone to create their own Node (DAO + app). Manual steps remain for infr
 
 Lock current hex architecture. Document what exists. All code is Node-owned.
 
-### Phase 1: AI Core + Evals Foundation
+### Phase 1: First LangGraph Graph + Evals Foundation
 
-- Create `packages/ai-core` with LangGraph structure
-- Create `evals/` with harness + initial datasets
+- Create first LangGraph graph in feature slice (`src/features/<feature>/ai/graphs/`)
+- Create `evals/` with harness skeleton + initial fixtures
 - Establish eval CI gate
+- Packages NOT required; created only after proven cross-service reuse
+
+→ See: [AI Setup Spec](docs/AI_SETUP_SPEC.md), [LangGraph AI](docs/LANGGRAPH_AI.md)
 
 ### Phase 2: Operator Services Scaffold
 
@@ -169,11 +172,13 @@ Requirements:
 | [Node vs Operator Contract](docs/NODE_VS_OPERATOR_CONTRACT.md) | Boundaries, invariants, boot seams |
 | [MVP Deliverables](docs/MVP_DELIVERABLES.md)                   | Scope lock, success criteria       |
 | [Node Formation Spec](docs/NODE_FORMATION_SPEC.md)             | DAO formation tooling (Phase 0)    |
+| [AI Setup Spec](docs/AI_SETUP_SPEC.md)                         | AI P0/P1/P2 checklists, invariants |
+| [LangGraph AI](docs/LANGGRAPH_AI.md)                           | How to create a graph in a feature |
 | [AI Architecture & Evals](docs/AI_EVALS.md)                    | LangGraph, Langfuse, eval gates    |
 | [Services Migration Guide](docs/SERVICES_MIGRATION.md)         | Implementation checklist           |
 | [Architecture](docs/ARCHITECTURE.md)                           | Hex architecture details           |
 
 ---
 
-**Last Updated**: 2025-01-13
+**Last Updated**: 2025-12-19
 **Status**: Design Approved
