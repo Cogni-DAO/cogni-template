@@ -27,7 +27,7 @@ const ChatMessagePartSchema = z.object({
 });
 
 /**
- * Base message schema
+ * Base message schema for output
  * - id: client or server generated UUID
  * - role: user or assistant (no system from client)
  * - createdAt: ISO timestamp
@@ -42,23 +42,39 @@ export const ChatMessageSchema = z.object({
   requestId: z.string().optional(),
 });
 
+/**
+ * assistant-ui message schema (from useDataStreamRuntime)
+ * Simpler than output - no id or createdAt required
+ */
+const AssistantUiMessageSchema = z.object({
+  role: z.enum(["user", "assistant", "system"]),
+  content: z.union([
+    z.string(), // system messages are plain string
+    z.array(ChatMessagePartSchema), // user/assistant messages have parts
+  ]),
+});
+
+/**
+ * assistant-ui input schema
+ * Used by useDataStreamRuntime from @assistant-ui/react-data-stream
+ */
+export const AssistantUiInputSchema = z.object({
+  /** Message history */
+  messages: z.array(AssistantUiMessageSchema),
+  /** Model ID */
+  model: z.string(),
+  /** System prompt (optional) */
+  system: z.string().optional(),
+  /** Tools (optional, ignored for now) */
+  tools: z.record(z.string(), z.unknown()).optional(),
+});
+
 export const aiChatOperation = {
   id: "ai.chat.v1",
-  summary: "Chat with AI using assistant-ui format",
+  summary: "Chat with AI via assistant-ui streaming",
   description:
-    "Send chat messages in assistant-ui format and receive streaming or non-streaming responses",
-  input: z.object({
-    /** Client-generated thread ID (v0: session-local, v2: persisted) */
-    threadId: z.string(),
-    /** Client-generated request ID for retry deduplication */
-    clientRequestId: z.string().uuid(),
-    /** Message history in assistant-ui format */
-    messages: z.array(ChatMessageSchema),
-    /** Model ID (REQUIRED) - client resolves to defaultModelId if needed */
-    model: z.string(),
-    /** Enable streaming response via SSE (optional, defaults to false) */
-    stream: z.boolean().optional().default(false),
-  }),
+    "Send chat messages and receive streaming responses via assistant-stream",
+  input: AssistantUiInputSchema,
   output: z.object({
     /** Echo back threadId (v0: same as input, v2: from DB) */
     threadId: z.string(),
@@ -70,4 +86,6 @@ export const aiChatOperation = {
 // Export inferred types - all consumers MUST use these, never manual interfaces
 export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 export type ChatInput = z.infer<typeof aiChatOperation.input>;
+export type AssistantUiMessage = z.infer<typeof AssistantUiMessageSchema>;
+export type AssistantUiInput = z.infer<typeof AssistantUiInputSchema>;
 export type ChatOutput = z.infer<typeof aiChatOperation.output>;
