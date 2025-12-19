@@ -17,6 +17,12 @@ import type { Message } from "@/core";
 // Re-export Message for adapters
 export type { Message } from "@/core";
 
+/**
+ * Caller info for direct LLM calls (no graph execution).
+ * Per AI_SETUP_SPEC.md P1 invariant GRAPH_CALLER_TYPE_REQUIRED:
+ * DO NOT add graphRunId as optional field here.
+ * Use GraphLlmCaller for graph executions.
+ */
 export interface LlmCaller {
   billingAccountId: string;
   virtualKeyId: string;
@@ -24,6 +30,23 @@ export interface LlmCaller {
   requestId: string;
   /** OTel trace ID - for LiteLLM metadata propagation */
   traceId: string;
+}
+
+/**
+ * Caller info for LLM calls within a graph execution.
+ * Extends LlmCaller with REQUIRED graph metadata (not optional).
+ * Per AI_SETUP_SPEC.md:
+ * - graphRunId: UUID per graph execution, groups multiple LLM calls in one request
+ * - graphName: Graph module constant (e.g., "review_graph")
+ * - graphVersion: Git SHA at build time (for reproducibility)
+ */
+export interface GraphLlmCaller extends LlmCaller {
+  /** UUID identifying this graph execution; same across all LLM calls in graph */
+  graphRunId: string;
+  /** Graph module constant (e.g., "review_graph"); enables correlation in ai_invocation_summaries */
+  graphName: string;
+  /** Git SHA at build time; enables reproducibility across deployments */
+  graphVersion: string;
 }
 
 export interface CompletionStreamParams {
