@@ -16,13 +16,8 @@ import { defineConfig } from "tsup";
 export const tsupConfig = defineConfig({
   entry: ["src/index.ts"],
   format: ["esm"],
-  dts: {
-    compilerOptions: {
-      // Disable composite for tsup DTS generation to avoid TS6307
-      composite: false,
-    },
-  },
-  clean: true,
+  dts: false, // tsc -b emits per-file declarations; tsup handles JS only
+  clean: false, // preserve .d.ts files from tsc -b (incremental builds)
   sourcemap: true,
   platform: "neutral",
   external: ["viem"],

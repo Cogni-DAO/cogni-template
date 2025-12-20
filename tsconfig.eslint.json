@@ -1,7 +1,11 @@
 {
-  "extends": "./tsconfig.json",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
   "include": ["src/**/*.ts", "src/**/*.tsx", "*.ts", "*.tsx", "tests/**/*.ts"],
   "exclude": [
+    "packages/**",
     "**/*.mjs",
     "**/*.cjs",
     ".next",

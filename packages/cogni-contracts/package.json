@@ -16,7 +16,7 @@
   ],
   "scripts": {
     "build": "tsup",
-    "postbuild": "node -e \"const fs=require('fs'); if(!fs.existsSync('dist/index.js')||!fs.existsSync('dist/index.d.ts')){console.error('ERROR: dist/index.js or dist/index.d.ts missing'); process.exit(1)}\"",
+    "postbuild": "node -e \"const fs=require('fs'); if(!fs.existsSync('dist/index.js')){console.error('ERROR: dist/index.js missing'); process.exit(1)}\"",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

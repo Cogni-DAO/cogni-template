@@ -20,6 +20,9 @@ import { defineConfig } from "vitest/config";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  esbuild: {
+    jsx: "automatic",
+  },
   test: {
     globals: true,
     environment: "node",
@@ -57,7 +60,7 @@ export default defineConfig({
     testTimeout: 10_000,
     hookTimeout: 10_000,
   },
-  plugins: [tsconfigPaths()],
+  plugins: [tsconfigPaths({ projects: ["./tsconfig.base.json"] })],
   resolve: {
     alias: {
       "@tests": path.resolve(__dirname, "./tests"),

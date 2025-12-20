@@ -90,6 +90,8 @@ pnpm docker:test:stack:fast   # start all services containerized in test mode (s
 pnpm docker:stack             # start full stack locally (with build)
 pnpm docker:stack:fast        # start full stack locally (skip build)
 pnpm build                    # build for production
+pnpm packages:build           # build workspace packages (tsup JS + tsc declarations)
+pnpm packages:clean           # clean package dist/ and .tsbuildinfo
 pnpm check                    # lint + type + format validation (fast, no infra)
 pnpm check:full               # CI-parity gate: full docker build, stack launch + all test suites
 pnpm check:full:fast          # Same as check:full but skip Docker rebuild

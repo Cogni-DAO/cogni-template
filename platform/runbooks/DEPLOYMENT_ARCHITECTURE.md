@@ -194,6 +194,7 @@ POSTGRES_DB=${APP_DB_NAME}
 
 ## Related Documentation
 
+- [Node CI/CD Contract](../../docs/NODE_CI_CD_CONTRACT.md) - CI/CD invariants, portability, Jenkins path
 - [CI/CD Pipeline Flow](../../docs/CI-CD.md) - Branch model, workflows, and deployment automation
 - [Application Architecture](../../docs/ARCHITECTURE.md) - Hexagonal design and code organization
 - [DEPLOY.md](DEPLOY.md) - Step-by-step deployment guide

@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7-labs
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 
@@ -11,15 +12,20 @@ RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
 FROM base AS builder
 RUN apk add --no-cache g++ make python3
 
-# Copy full workspace (filtered by .dockerignore)
-COPY . .
+# 1. Copy dependency manifests first (maximizes install layer caching)
+#    --parents preserves directory structure with wildcards (BuildKit feature)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY --parents packages/*/package.json ./
 
 # Use official node dist to avoid unofficial-builds.nodejs.org flakiness
 ENV npm_config_disturl=https://nodejs.org/dist
 
-# Install all dependencies (workspace-aware via pnpm-workspace.yaml in context)
+# 2. Install dependencies (cached when manifests unchanged)
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
     pnpm install --frozen-lockfile
+
+# 3. Copy full source (filtered by .dockerignore)
+COPY . .
 
 ARG APP_ENV=production
 
@@ -29,7 +35,8 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
 
 # Build all workspace packages (brute-force, not graph-scoped)
 # Required: package exports point to dist/, must exist before Next.js build
-RUN pnpm -r --filter "./packages/**" build
+# Uses canonical packages:build: tsup (JS) + tsc -b (declarations) + validation
+RUN pnpm packages:build
 
 # Build-time placeholder for AUTH_SECRET (required by env validation during Next.js page collection)
 # Not a real secret; runtime containers must provide real AUTH_SECRET via deployment env

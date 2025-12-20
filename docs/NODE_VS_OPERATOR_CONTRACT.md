@@ -178,5 +178,12 @@ Operator shares CI/CD, observability, deploy invariants, and hex architecture wi
 
 ---
 
-**Last Updated**: 2025-12-16
+## Related Docs
+
+- [Node CI/CD Contract](NODE_CI_CD_CONTRACT.md) - CI/CD invariants, portability, Jenkins path
+- [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) - VM provisioning, Docker Compose stack
+
+---
+
+**Last Updated**: 2025-12-20
 **Status**: Design Approved
