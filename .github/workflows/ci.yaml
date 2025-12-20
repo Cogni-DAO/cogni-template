@@ -40,8 +40,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build package references
-        run: pnpm exec tsc -b
+      - name: Build workspace packages
+        run: pnpm packages:build
 
       - name: Type check
         run: pnpm typecheck
@@ -79,8 +79,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build package references
-        run: pnpm exec tsc -b
+      - name: Build workspace packages
+        run: pnpm packages:build
 
       - name: Repository policy check
         run: pnpm check:root-layout

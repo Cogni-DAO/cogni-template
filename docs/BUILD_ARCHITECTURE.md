@@ -17,12 +17,13 @@ cogni-template/          # Workspace root (Next.js app)
 Workspace packages must build **before** the app because their exports point to `dist/`:
 
 ```
-1. packages/*  →  tsup        →  dist/index.js (bundled JS)
-2. root        →  tsc -b      →  dist/*.d.ts (per-file declarations via project references)
-3. root app    →  next build  →  .next/standalone
+1. packages/*  →  tsup              →  dist/index.js (bundled JS)
+2. root        →  tsc -b            →  dist/*.d.ts (per-file declarations via project references)
+3. root        →  packages:validate →  verify declarations exist
+4. root app    →  next build        →  .next/standalone
 ```
 
-**Why two-phase package build:** tsup bundles JS; `tsc -b` from root emits per-file declarations using TypeScript project references. This separation ensures `tsc -b` validates the full type graph correctly.
+**Why three-phase package build:** tsup bundles JS; `tsc -b` from root emits per-file declarations; `packages:validate` verifies all declarations exist. The canonical command `pnpm packages:build` runs all three phases atomically.
 
 ## Local Build
 
@@ -39,14 +40,14 @@ The Dockerfile uses a single `builder` stage:
 COPY . .
 pnpm install --frozen-lockfile
 
-# 1. Build all packages: tsup for JS, tsc -b for declarations
-pnpm -r --filter "./packages/**" build && pnpm exec tsc -b
+# 1. Build all packages using canonical command (tsup + tsc -b + validation)
+pnpm packages:build
 
 # 2. Build workspace root
 pnpm -w build
 ```
 
-**Why three steps:** tsup bundles JS for each package, `tsc -b` from root emits per-file declarations via project references, then Next.js builds the app.
+**Why canonical command:** `pnpm packages:build` is the single source of truth for package builds. It runs tsup (JS), tsc -b (declarations), and validation atomically. The same command is used in local dev, CI, and Docker builds.
 
 ## Critical Details
 
@@ -75,16 +76,31 @@ dts: false,  // tsc -b handles declarations via project references
 
 **Important:** Never add `tsc -b` to individual package build scripts. Always run it from root to ensure the full reference graph is built correctly.
 
-### Fast vs Full Typecheck
+### Declaration Validation
 
-Two tsconfigs exist for different scenarios:
+After `tsc -b` runs, `pnpm packages:validate` verifies that all declarations exist. This is data-driven:
 
-| Config              | Command               | Includes                | Use Case                         |
-| ------------------- | --------------------- | ----------------------- | -------------------------------- |
-| `tsconfig.app.json` | `pnpm typecheck`      | `src/`, `scripts/` only | Fast checks (no packages needed) |
-| `tsconfig.json`     | `pnpm typecheck:full` | Everything via `tsc -b` | Full build (packages must exist) |
+1. Reads `tsconfig.json` references to discover packages
+2. For each package, reads `package.json` exports["."].types
+3. Verifies that file exists
 
-**Why**: Root tsconfig uses project references to packages. Running `tsc --noEmit` on it requires `dist/` to exist (TS6305). The app-only config sidesteps this for fast iteration.
+No hardcoded package names — new packages are automatically validated when added to `tsconfig.json` references.
+
+### TypeScript Configuration
+
+Five tsconfigs exist for different scenarios:
+
+| Config                  | Command               | Includes               | Use Case                               |
+| ----------------------- | --------------------- | ---------------------- | -------------------------------------- |
+| `tsconfig.base.json`    | N/A                   | None (options only)    | Shared compiler options + path aliases |
+| `tsconfig.json`         | `pnpm typecheck:full` | None (solution-style)  | `tsc -b` with project references       |
+| `tsconfig.app.json`     | `pnpm typecheck`      | `src/`                 | Fast app typecheck (no packages)       |
+| `tsconfig.scripts.json` | N/A (tsx uses it)     | `scripts/`             | tsx tooling path resolution            |
+| `tsconfig.eslint.json`  | N/A (ESLint uses it)  | `src/`, `tests/`, root | ESLint parser                          |
+
+**Why solution-style root**: `tsconfig.json` contains only `references` (no `include`). This prevents the "mixed-mode" anti-pattern where package sources are both directly included AND referenced, causing TS6305 errors in Docker builds.
+
+**Why separate configs**: Each tool (tsc, tsx, ESLint) needs path aliases but has different scope requirements. Shared options live in `tsconfig.base.json`; tool-specific configs extend it.
 
 ## Known Issues
 

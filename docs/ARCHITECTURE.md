@@ -107,8 +107,11 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] eslint.config.mjs # eslint config (tailwind, UI governance, import rules)
 [x] commitlint.config.cjs # conventional commits enforcement
 [x] src/styles/tailwind.css # Tailwind v4 CSS-first config (@theme, @utility, @custom-variant)
-[x] tsconfig.json # typescript + alias paths
-[x] tsconfig.eslint.json # eslint typescript config
+[x] tsconfig.base.json # shared compiler options + path aliases
+[x] tsconfig.json # solution-style for tsc -b (project references only)
+[x] tsconfig.app.json # app typecheck (src/, scripts/)
+[x] tsconfig.scripts.json # tsx tooling path resolution
+[x] tsconfig.eslint.json # ESLint parser config
 [x] package.json # deps, scripts, engines (db scripts added)
 [x] drizzle.config.ts # database migrations config
 [x] Dockerfile # reproducible build

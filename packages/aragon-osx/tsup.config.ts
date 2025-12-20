@@ -17,7 +17,7 @@ export const tsupConfig = defineConfig({
   entry: ["src/index.ts"],
   format: ["esm"],
   dts: false, // tsc -b emits per-file declarations; tsup handles JS only
-  clean: true,
+  clean: false, // preserve .d.ts files from tsc -b (incremental builds)
   sourcemap: true,
   platform: "neutral",
   external: ["viem"],

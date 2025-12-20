@@ -44,7 +44,7 @@ module.exports = {
   options: {
     // Use TS path resolution so @/aliases resolve to src/** correctly
     tsConfig: {
-      fileName: "./tsconfig.json",
+      fileName: "./tsconfig.base.json",
     },
 
     // Track TypeScript type-only imports

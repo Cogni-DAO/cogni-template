@@ -1,67 +1,6 @@
 {
-  "compilerOptions": {
-    "target": "ES2020",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noUncheckedIndexedAccess": true,
-    "noImplicitOverride": true,
-    "exactOptionalPropertyTypes": true,
-    "verbatimModuleSyntax": true,
-    "forceConsistentCasingInFileNames": true,
-    "noFallthroughCasesInSwitch": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "react-jsx",
-    "incremental": true,
-    "baseUrl": ".",
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    "paths": {
-      "@/*": ["src/*"],
-      "@/components/*": ["src/components/*"],
-      "@/shared/*": ["src/shared/*"],
-      "@/core": ["src/core/public.ts"],
-      "@/ports": ["src/ports/index.ts"],
-      "@/adapters/server": ["src/adapters/server/index.ts"],
-      "@/shared": ["src/shared/index.ts"],
-      "@features/*": ["src/features/*"],
-      "@app/*": ["src/app/*"],
-      "@adapters/*": ["src/adapters/*"],
-      "@bootstrap/*": ["src/bootstrap/*"],
-      "@components/*": ["src/components/*"],
-      "@styles/*": ["src/styles/*"],
-      "@types/*": ["src/types/*"],
-      "@assets/*": ["src/assets/*"],
-      "@tests/*": ["tests/*"]
-    }
-  },
-  "include": [
-    "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
-    ".next/types/**/*.ts",
-    ".next/dev/types/**/*.ts",
-    "**/*.mts",
-    "**/*.mjs",
-    ".next/dev/dev/types/**/*.ts"
-  ],
-  "exclude": [
-    "node_modules/**",
-    "**/dist/**",
-    ".next/**",
-    "coverage/**",
-    "test*/**/fixtures/**",
-    "**/__arch_probes__/**"
-  ],
+  "files": [],
+  "include": [],
   "references": [
     { "path": "./packages/aragon-osx" },
     { "path": "./packages/cogni-contracts" }

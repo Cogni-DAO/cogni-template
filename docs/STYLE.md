@@ -65,6 +65,7 @@ Use these templates for different file types:
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Layer boundaries
 - Component tracking managed via code analysis tools
 - `eslint.config.mjs` - Linting rules
-- `tsconfig.json` - TypeScript config
+- `tsconfig.base.json` - Shared TypeScript options + path aliases
+- `tsconfig.json` - Solution-style config (project references only)
 
 _Enforced by:_ `pnpm check` (lint, typecheck, format, tests, SPDX, repo-linter)

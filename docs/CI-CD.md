@@ -107,12 +107,14 @@ push to main → build-prod.yml (build → test → push) → deploy-production.
 
 ## TypeScript Package Build Strategy
 
-**Rule**: If a step imports `@cogni/*` packages, run `pnpm exec tsc -b` first.
+**Rule**: If a step imports `@cogni/*` packages, run `pnpm packages:build` first.
 
 **Applies to**:
 
 - CI jobs running typecheck/tests
 - Dockerfile before `next build`
+
+**Canonical command**: `pnpm packages:build` runs tsup (JS), tsc -b (declarations), and validation atomically. Same command in local dev, CI, and Docker.
 
 **Current**: Each context builds independently (~1-2s overhead). Future: Turborepo remote caching when scale justifies complexity.
 

@@ -123,7 +123,7 @@ fi
 # Step 0: Verify .env.test exists
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-log_step "0/8" "Verifying .env.test configuration..."
+log_step "0/5" "Verifying .env.test configuration..."
 
 if [ ! -f .env.test ]; then
   log_error ".env.test not found. Create it from .env.test.example"
@@ -138,7 +138,7 @@ export CHECK_FULL_MODE=true
 # Step 1: Pre-flight checks
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-log_step "1/8" "Pre-flight checks..."
+log_step "1/5" "Pre-flight checks..."
 
 set +e  # Don't fail fast for port checks
 if ! check_port 55432; then
@@ -158,7 +158,7 @@ set -e  # Re-enable fail fast
 # Step 2: Start test stack
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-log_step "2/8" "Starting test stack..."
+log_step "2/5" "Starting test stack..."
 step_start=$(date +%s)
 
 if [ "$SKIP_BUILD" = true ]; then
@@ -175,7 +175,7 @@ log_success "$step_duration"
 # Step 3: Provision and migrate test database
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-log_step "3/8" "Provisioning test database..."
+log_step "3/5" "Provisioning test database..."
 step_start=$(date +%s)
 
 pnpm docker:test:stack:setup
@@ -187,32 +187,21 @@ log_success "$step_duration"
 # Step 4: Build workspace packages (required for host-run tests)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-log_step "4/8" "Building workspace packages..."
+log_step "4/5" "Building workspace packages (JS + declarations)..."
 step_start=$(date +%s)
 
+# Canonical command: tsup (JS) + tsc -b (declarations) + validation
 # Docker build creates dist/ inside container; tests run on host and need host dist/
-pnpm -r --filter "./packages/**" build
+pnpm packages:build
 
 step_duration=$(($(date +%s) - step_start))
 log_success "$step_duration"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 5: Full typecheck (project references, includes packages)
+# Step 5: Run test suites (same order as CI)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-log_step "5/8" "Running full typecheck (with project references)..."
-step_start=$(date +%s)
-
-pnpm typecheck:full
-
-step_duration=$(($(date +%s) - step_start))
-log_success "$step_duration"
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 6: Run test suites (same order as CI)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-log_step "6/8" "Running test suites..."
+log_step "5/5" "Running test suites..."
 
 # Unit tests (fast, no infrastructure)
 echo ""

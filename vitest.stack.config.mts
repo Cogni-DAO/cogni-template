@@ -8,12 +8,16 @@
  * Invariants: Uses tsconfigPaths plugin for clean `@/core` resolution; expects env vars loaded externally; expects running HTTP server.
  * Side-effects: HTTP requests to running server, database connections
  * Notes: Environment variables loaded by package.json dotenv commands or CI; runs reset-db.ts globalSetup; sequential test execution.
- * Links: tsconfig.json paths, stack test files, tests/setup.ts
+ * Links: tsconfig.base.json paths, stack test files, tests/setup.ts
  * @public
  */
 
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { defineConfig } from "vitest/config";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function requireEnv(name: string): string {
   const value = process.env[name];
@@ -32,7 +36,7 @@ requireEnv("POSTGRES_DB");
 requireEnv("TEST_BASE_URL");
 
 export default defineConfig({
-  plugins: [tsconfigPaths()],
+  plugins: [tsconfigPaths({ projects: ["./tsconfig.base.json"] })],
   test: {
     include: ["tests/stack/**/*.stack.test.ts"],
     environment: "node",
@@ -43,5 +47,10 @@ export default defineConfig({
       "./tests/stack/setup/reset-db.ts",
     ],
     sequence: { concurrent: false },
+  },
+  resolve: {
+    alias: {
+      "@tests": path.resolve(__dirname, "./tests"),
+    },
   },
 });
