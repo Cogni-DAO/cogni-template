@@ -28,9 +28,9 @@
 - [x] Extract `message-preparation.ts` - move `prepareForExecution()` logic, return `PreparedMessages`
 - [x] Wire into `completion.ts` - call `prepareMessages()`, keep all other code unchanged
 - [x] Verify: `pnpm check` passes, all tests green
-- [ ] Extract `metrics.ts` - move Prometheus metric calls to `recordMetrics()`
-- [ ] Wire into `completion.ts` - call `recordMetrics()` in both paths
-- [ ] Verify: `pnpm check` passes, all tests green
+- [x] Extract `metrics.ts` - move Prometheus metric calls to `recordMetrics()`
+- [x] Wire into `completion.ts` - call `recordMetrics()` in both paths
+- [x] Verify: `pnpm check` passes, all tests green
 
 ### P2: Extract Port-Dependent Modules
 

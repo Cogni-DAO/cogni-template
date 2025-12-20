@@ -16,6 +16,14 @@
  * @public
  */
 
+import { getModelClass } from "@/shared/ai/model-catalog.server";
+import {
+  aiLlmCallDurationMs,
+  aiLlmCostUsdTotal,
+  aiLlmErrorsTotal,
+  aiLlmTokensTotal,
+} from "@/shared/observability";
+
 /**
  * Context for recording LLM metrics.
  */
@@ -31,8 +39,41 @@ export interface MetricsContext {
 /**
  * Record Prometheus metrics for an LLM call.
  *
+ * For success path: records duration, tokens, and cost.
+ * For error path: records error counter only.
+ *
  * @param context - Metrics context from LLM result
  */
-export async function recordMetrics(_context: MetricsContext): Promise<void> {
-  throw new Error("Not implemented - P1 extraction pending");
+export async function recordMetrics(context: MetricsContext): Promise<void> {
+  const modelClass = await getModelClass(context.model);
+
+  if (context.isError) {
+    // Error path: increment error counter
+    aiLlmErrorsTotal.inc({
+      provider: "litellm",
+      code: context.errorCode ?? "unknown",
+      model_class: modelClass,
+    });
+    return;
+  }
+
+  // Success path: record duration, tokens, cost
+  aiLlmCallDurationMs.observe(
+    { provider: "litellm", model_class: modelClass },
+    context.durationMs
+  );
+
+  if (context.tokensUsed) {
+    aiLlmTokensTotal.inc(
+      { provider: "litellm", model_class: modelClass },
+      context.tokensUsed
+    );
+  }
+
+  if (typeof context.providerCostUsd === "number") {
+    aiLlmCostUsdTotal.inc(
+      { provider: "litellm", model_class: modelClass },
+      context.providerCostUsd
+    );
+  }
 }

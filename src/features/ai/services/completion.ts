@@ -27,19 +27,16 @@ import type {
   LlmService,
 } from "@/ports";
 import { InsufficientCreditsPortError, LlmError } from "@/ports";
-import { getModelClass, isModelFree } from "@/shared/ai/model-catalog.server";
+import { isModelFree } from "@/shared/ai/model-catalog.server";
 import { serverEnv } from "@/shared/env";
 import {
   type AiLlmCallEvent,
-  aiLlmCallDurationMs,
-  aiLlmCostUsdTotal,
-  aiLlmErrorsTotal,
-  aiLlmTokensTotal,
   classifyLlmError,
   type RequestContext,
 } from "@/shared/observability";
 import { calculateDefaultLlmCharge } from "./llmPricingPolicy";
 import { prepareMessages } from "./message-preparation";
+import { recordMetrics } from "./metrics";
 
 /**
  * Estimate cost in credits for pre-flight gating.
@@ -126,11 +123,11 @@ export async function execute(
   } catch (error) {
     // Record error metric before rethrowing
     const errorCode = classifyLlmError(error);
-    const errorModelClass = await getModelClass(model);
-    aiLlmErrorsTotal.inc({
-      provider: "litellm",
-      code: errorCode,
-      model_class: errorModelClass,
+    await recordMetrics({
+      model,
+      durationMs: performance.now() - llmStart,
+      isError: true,
+      errorCode,
     });
 
     // Per AI_SETUP_SPEC.md: Record telemetry on error path with REAL prompt_hash
@@ -223,23 +220,17 @@ export async function execute(
   log.info(llmEvent, "ai.llm_call_completed");
 
   // Record LLM metrics
-  const modelClass = await getModelClass(modelId);
-  aiLlmCallDurationMs.observe(
-    { provider: "litellm", model_class: modelClass },
-    llmEvent.durationMs
-  );
-  if (llmEvent.tokensUsed) {
-    aiLlmTokensTotal.inc(
-      { provider: "litellm", model_class: modelClass },
-      llmEvent.tokensUsed
-    );
-  }
-  if (typeof llmEvent.providerCostUsd === "number") {
-    aiLlmCostUsdTotal.inc(
-      { provider: "litellm", model_class: modelClass },
-      llmEvent.providerCostUsd
-    );
-  }
+  await recordMetrics({
+    model: modelId,
+    durationMs: llmEvent.durationMs,
+    ...(llmEvent.tokensUsed !== undefined && {
+      tokensUsed: llmEvent.tokensUsed,
+    }),
+    ...(llmEvent.providerCostUsd !== undefined && {
+      providerCostUsd: llmEvent.providerCostUsd,
+    }),
+    isError: false,
+  });
 
   // Post-call billing: Calculate charged credits and record receipt
   // Per ACTIVITY_METRICS.md: post-call is NEVER blocking
@@ -524,23 +515,17 @@ export async function executeStream({
       log.info(llmEvent, "ai.llm_call_completed");
 
       // Record LLM metrics
-      const modelClass = await getModelClass(modelId);
-      aiLlmCallDurationMs.observe(
-        { provider: "litellm", model_class: modelClass },
-        llmEvent.durationMs
-      );
-      if (llmEvent.tokensUsed) {
-        aiLlmTokensTotal.inc(
-          { provider: "litellm", model_class: modelClass },
-          llmEvent.tokensUsed
-        );
-      }
-      if (typeof llmEvent.providerCostUsd === "number") {
-        aiLlmCostUsdTotal.inc(
-          { provider: "litellm", model_class: modelClass },
-          llmEvent.providerCostUsd
-        );
-      }
+      await recordMetrics({
+        model: modelId,
+        durationMs: llmEvent.durationMs,
+        ...(llmEvent.tokensUsed !== undefined && {
+          tokensUsed: llmEvent.tokensUsed,
+        }),
+        ...(llmEvent.providerCostUsd !== undefined && {
+          providerCostUsd: llmEvent.providerCostUsd,
+        }),
+        isError: false,
+      });
 
       // Post-call billing: Calculate charged credits and record receipt
       // Per ACTIVITY_METRICS.md: post-call is NEVER blocking
@@ -695,11 +680,11 @@ export async function executeStream({
 
       // Record error metric
       const errorCode = classifyLlmError(error);
-      const errorModelClass = await getModelClass(model);
-      aiLlmErrorsTotal.inc({
-        provider: "litellm",
-        code: errorCode,
-        model_class: errorModelClass,
+      await recordMetrics({
+        model,
+        durationMs: performance.now() - llmStart,
+        isError: true,
+        errorCode,
       });
 
       // Per AI_SETUP_SPEC.md: Record error telemetry for stream with REAL prompt_hash
