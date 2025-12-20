@@ -109,6 +109,8 @@ Create first graph inside a feature slice with full correlation flow. No package
 - [ ] **HASHING_SINGLE_CALL_SITE**: Only `litellm.adapter.ts` computes `promptHash`. Graph code must NOT compute or re-compute it.
 - [ ] **GRAPH_METADATA_ENFORCED**: If `caller.graphRunId` is present, then `graph_name` and `graph_version` must be non-null on `ai_invocation_summaries` rows. Enforced by telemetry writer validation.
 - [ ] **GRAPHS_NO_IO**: Graphs must not import IO/adapters; routes stay thin; graphs live in feature slices.
+- [ ] **GRAPH_LLM_VIA_COMPLETION**: chat.graph.ts must never call llmService directly; it must call `completion.executeStream` so billing/telemetry/metrics/promptHash invariants remain centralized. Every LLM call in the agentic loop streams to the user.
+- [ ] **GRAPH_FINALIZATION_ONCE**: chat.graph.ts must emit exactly one `done` event and resolve `final` exactly once across multi-step tool loops; do not attach side effects to stream iteration.
 - [ ] **GRAPHS_USE_TOOLRUNNER_ONLY**: Graphs invoke tools exclusively through `toolRunner.exec()`. No direct tool implementation calls. ToolRunner is sole owner of toolCallId generation and tool lifecycle AiEvents.
 - [x] **AI_RUNTIME_EMITS_AIEVENTS**: ai_runtime emits AiEvents only (text_delta for P1; tool events when graphs land). Route layer maps AiEvents → Data Stream Protocol using official assistant-ui helper. Runtime never touches protocol encoding.
 - [ ] **DATA_STREAM_PROTOCOL_ONLY**: Chat route maps AiEvents to assistant-ui Data Stream Protocol chunks via official helper; never invent custom SSE vocabulary.
@@ -292,13 +294,12 @@ Build eval harness to validate graph outputs against golden fixtures.
 
 ### 1. Graph & AI Component Location
 
-| Component            | Location                                     | Rationale                                 |
-| -------------------- | -------------------------------------------- | ----------------------------------------- |
-| LangGraph graphs     | `src/features/<feature>/ai/graphs/`          | Feature-scoped; pure logic, no IO         |
-| Prompt templates     | `src/features/<feature>/ai/prompts/`         | Versioned text files                      |
-| Tool contracts       | `src/features/<feature>/ai/tools/` (default) | Feature-scoped schemas                    |
-| Tool implementations | `src/adapters/tools/`                        | IO + policy + instrumentation             |
-| Route handlers       | `src/app/`                                   | Thin entrypoints calling feature services |
+| Component              | Location                   | Rationale                                 |
+| ---------------------- | -------------------------- | ----------------------------------------- |
+| LangGraph graphs       | `src/features/ai/graphs/`  | Feature-scoped; pure logic, no IO         |
+| Prompt templates       | `src/features/ai/prompts/` | Versioned text files                      |
+| Tool contracts + impls | `src/features/ai/tools/`   | Pure functions, receive ports via DI      |
+| Route handlers         | `src/app/`                 | Thin entrypoints calling feature services |
 
 **Graphs start in feature slices.** Packages are NOT required for LangGraph. See [LANGGRAPH_AI.md](LANGGRAPH_AI.md).
 
@@ -322,12 +323,13 @@ Create packages only when criteria are met:
 
 **Per-tool files:**
 
-- `src/features/<feature>/ai/tools/<tool>.tool.ts` - Contract: name, schema (Zod), typed handler interface
-- `src/adapters/tools/<tool>.impl.ts` - Implementation: IO, policy checks, instrumentation
+- `src/features/ai/tools/<tool>.tool.ts` — Contract + implementation: Zod schemas, allowlist, pure `execute()` function
+
+Tool implementations receive port dependencies via injection. No direct adapter imports.
 
 **Single registry:**
 
-- `src/features/ai/tool-registry.ts` - Binds tool contracts to implementations (DI wiring)
+- `src/features/ai/tool-registry.ts` — Name→BoundTool map, bindings at feature layer (not bootstrap)
 
 **Drift guardrail:** If a tool contract is used by 2+ features or any Operator service, move to shared location (`src/shared/ai/contracts/` or package post-split).
 

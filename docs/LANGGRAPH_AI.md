@@ -260,23 +260,19 @@ Route maps UiEvents to assistant-ui Data Stream Protocol:
 
 ## Tool Structure
 
-### Contract (feature-scoped by default)
+### Contract + Implementation (feature-scoped)
 
-| File                                             | Contents                                               |
-| ------------------------------------------------ | ------------------------------------------------------ |
-| `src/features/<feature>/ai/tools/<tool>.tool.ts` | Tool name, Zod input/output schemas, handler interface |
+| File                                   | Contents                                          |
+| -------------------------------------- | ------------------------------------------------- |
+| `src/features/ai/tools/<tool>.tool.ts` | Zod schemas, allowlist, pure `execute()` function |
 
-### Implementation (in adapters)
-
-| File                                | Contents                           |
-| ----------------------------------- | ---------------------------------- |
-| `src/adapters/tools/<tool>.impl.ts` | IO, policy checks, instrumentation |
+Tool implementations receive port dependencies via injection. No direct adapter imports.
 
 ### Registry (in features)
 
-| File                               | Contents                                |
-| ---------------------------------- | --------------------------------------- |
-| `src/features/ai/tool-registry.ts` | Binds tool contracts to implementations |
+| File                               | Contents                     |
+| ---------------------------------- | ---------------------------- |
+| `src/features/ai/tool-registry.ts` | Name→BoundTool map, bindings |
 
 ### ToolRunner Execution
 
@@ -342,17 +338,19 @@ Create packages only when criteria are met:
 
 ## Anti-Patterns
 
-1. **No IO in graphs** — Tool contracts define schemas; implementations live in adapters
+1. **No IO in graphs** — Tool contracts define schemas; implementations receive ports via DI
 2. **No graphs in routes** — Routes call ai.facade; facade decides graph vs direct
 3. **No direct tool calls from graphs** — Graphs invoke tools only through toolRunner.exec(); ToolRunner owns toolCallId and UiEvent emission
-4. **No port-per-tool** — Ports per external system; tools compose on top
-5. **No optional graphRunId in graph APIs** — Use distinct caller types with required fields
-6. **No duplicate promptHash computation** — Only adapter computes; graph receives result
-7. **No span_id persistence** — span_id is for tracing UI only; not a durable join key
-8. **No premature packaging** — Package only after proven cross-service reuse
-9. **No full tool artifacts in user stream** — Stream UI-safe summaries + status + references; capture full artifacts out-of-band. Tool lifecycle state MUST be in stream.
-10. **No custom SSE event vocabulary** — Route maps UiEvents to Data Stream Protocol via official helper; never invent custom events
-11. **No protocol encoding in facade** — Facade emits UiEvents only; route handles wire protocol
+4. **No direct llmService from graphs** — chat.graph.ts must call `completion.executeStream`, never llmService directly; billing/telemetry/promptHash invariants stay centralized
+5. **No multiple done events** — Graph emits exactly one `done` and resolves `final` exactly once across multi-step tool loops; no side effects on stream iteration
+6. **No port-per-tool** — Ports per external system; tools compose on top
+7. **No optional graphRunId in graph APIs** — Use distinct caller types with required fields
+8. **No duplicate promptHash computation** — Only adapter computes; graph receives result
+9. **No span_id persistence** — span_id is for tracing UI only; not a durable join key
+10. **No premature packaging** — Package only after proven cross-service reuse
+11. **No full tool artifacts in user stream** — Stream UI-safe summaries + status + references; capture full artifacts out-of-band. Tool lifecycle state MUST be in stream.
+12. **No custom SSE event vocabulary** — Route maps UiEvents to Data Stream Protocol via official helper; never invent custom events
+13. **No protocol encoding in facade** — Facade emits UiEvents only; route handles wire protocol
 
 ---
 
