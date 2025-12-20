@@ -17,12 +17,13 @@ cogni-template/          # Workspace root (Next.js app)
 Workspace packages must build **before** the app because their exports point to `dist/`:
 
 ```
-1. packages/*  →  tsup        →  dist/index.js (bundled JS)
-2. root        →  tsc -b      →  dist/*.d.ts (per-file declarations via project references)
-3. root app    →  next build  →  .next/standalone
+1. packages/*  →  tsup              →  dist/index.js (bundled JS)
+2. root        →  tsc -b            →  dist/*.d.ts (per-file declarations via project references)
+3. root        →  packages:validate →  verify declarations exist
+4. root app    →  next build        →  .next/standalone
 ```
 
-**Why two-phase package build:** tsup bundles JS; `tsc -b` from root emits per-file declarations using TypeScript project references. This separation ensures `tsc -b` validates the full type graph correctly.
+**Why three-phase package build:** tsup bundles JS; `tsc -b` from root emits per-file declarations; `packages:validate` verifies all declarations exist. The canonical command `pnpm packages:build` runs all three phases atomically.
 
 ## Local Build
 
@@ -39,14 +40,14 @@ The Dockerfile uses a single `builder` stage:
 COPY . .
 pnpm install --frozen-lockfile
 
-# 1. Build all packages: tsup for JS, tsc -b for declarations
-pnpm -r --filter "./packages/**" build && pnpm exec tsc -b
+# 1. Build all packages using canonical command (tsup + tsc -b + validation)
+pnpm packages:build
 
 # 2. Build workspace root
 pnpm -w build
 ```
 
-**Why three steps:** tsup bundles JS for each package, `tsc -b` from root emits per-file declarations via project references, then Next.js builds the app.
+**Why canonical command:** `pnpm packages:build` is the single source of truth for package builds. It runs tsup (JS), tsc -b (declarations), and validation atomically. The same command is used in local dev, CI, and Docker builds.
 
 ## Critical Details
 
@@ -74,6 +75,16 @@ dts: false,  // tsc -b handles declarations via project references
 ```
 
 **Important:** Never add `tsc -b` to individual package build scripts. Always run it from root to ensure the full reference graph is built correctly.
+
+### Declaration Validation
+
+After `tsc -b` runs, `pnpm packages:validate` verifies that all declarations exist. This is data-driven:
+
+1. Reads `tsconfig.json` references to discover packages
+2. For each package, reads `package.json` exports["."].types
+3. Verifies that file exists
+
+No hardcoded package names — new packages are automatically validated when added to `tsconfig.json` references.
 
 ### TypeScript Configuration
 
