@@ -16,7 +16,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { ESTIMATED_USD_PER_1K_TOKENS, type Message } from "@/core";
+import type { Message } from "@/core";
 import type { StreamFinalResult } from "@/features/ai/types";
 import type {
   AccountService,
@@ -26,7 +26,7 @@ import type {
   LlmCaller,
   LlmService,
 } from "@/ports";
-import { InsufficientCreditsPortError, LlmError } from "@/ports";
+import { LlmError } from "@/ports";
 import { isModelFree } from "@/shared/ai/model-catalog.server";
 import { serverEnv } from "@/shared/env";
 import {
@@ -37,35 +37,7 @@ import {
 import { calculateDefaultLlmCharge } from "./llmPricingPolicy";
 import { prepareMessages } from "./message-preparation";
 import { recordMetrics } from "./metrics";
-
-/**
- * Estimate cost in credits for pre-flight gating.
- *
- * Uses ESTIMATED_USD_PER_1K_TOKENS as upper-bound estimate.
- * Post-call billing uses actual LiteLLM cost; these may differ (expected).
- *
- * Invariants:
- * - Free models MUST return 0n
- * - Paid models return >0n
- * - Uses same USD→credits pipeline as post-call (calculateDefaultLlmCharge)
- * - Only difference: estimated vs actual USD input
- */
-async function estimateCostCredits(
-  model: string,
-  estimatedTotalTokens: number
-): Promise<bigint> {
-  if (await isModelFree(model)) {
-    return 0n;
-  }
-
-  // Preflight uses conservative upper-bound estimate
-  const estimatedCostUsd =
-    (estimatedTotalTokens / 1000) * ESTIMATED_USD_PER_1K_TOKENS;
-
-  // Same pipeline as post-call: markup + ceil via calculateDefaultLlmCharge
-  const { chargedCredits } = calculateDefaultLlmCharge(estimatedCostUsd);
-  return chargedCredits;
-}
+import { validateCreditsUpperBound } from "./preflight-credit-check";
 
 export async function execute(
   messages: Message[],
@@ -88,21 +60,13 @@ export async function execute(
     estimatedTokensUpperBound,
   } = prepareMessages(messages, model);
 
-  // Credit check (inline for now, will be extracted to preflight-credit-check.ts in P2)
-  const estimatedUserPriceCredits = await estimateCostCredits(
+  // P2: Pre-flight credit check (upper-bound estimate)
+  await validateCreditsUpperBound(
+    caller.billingAccountId,
+    estimatedTokensUpperBound,
     model,
-    estimatedTokensUpperBound
+    accountService
   );
-  const currentBalance = await accountService.getBalance(
-    caller.billingAccountId
-  );
-  if (currentBalance < Number(estimatedUserPriceCredits)) {
-    throw new InsufficientCreditsPortError(
-      caller.billingAccountId,
-      Number(estimatedUserPriceCredits),
-      currentBalance
-    );
-  }
 
   // Per spec: request_id is stable per request entry (from ctx.reqId), NOT regenerated here
   const requestId = ctx.reqId;
@@ -443,21 +407,13 @@ export async function executeStream({
     estimatedTokensUpperBound,
   } = prepareMessages(messages, model);
 
-  // Credit check (inline for now, will be extracted to preflight-credit-check.ts in P2)
-  const estimatedUserPriceCredits = await estimateCostCredits(
+  // P2: Pre-flight credit check (upper-bound estimate)
+  await validateCreditsUpperBound(
+    caller.billingAccountId,
+    estimatedTokensUpperBound,
     model,
-    estimatedTokensUpperBound
+    accountService
   );
-  const currentBalance = await accountService.getBalance(
-    caller.billingAccountId
-  );
-  if (currentBalance < Number(estimatedUserPriceCredits)) {
-    throw new InsufficientCreditsPortError(
-      caller.billingAccountId,
-      Number(estimatedUserPriceCredits),
-      currentBalance
-    );
-  }
 
   // Per spec: request_id is stable per request entry (from ctx.reqId), NOT regenerated here
   const requestId = ctx.reqId;

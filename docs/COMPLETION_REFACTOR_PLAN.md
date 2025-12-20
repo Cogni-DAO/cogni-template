@@ -1,7 +1,7 @@
 # Refactor Plan: completion.ts Modularization
 
-> **Status**: In Progress (P1)
-> **Scope**: Extract `completion.ts` (826 lines) into focused modules (<150 lines each)
+> **Status**: In Progress (P2 - preflight-credit-check complete)
+> **Scope**: Extract `completion.ts` (826→708 lines) into focused modules (<150 lines each)
 > **Goal**: Clean architecture, DRY, testable, LangGraph-ready
 
 > [!CRITICAL]
@@ -34,9 +34,9 @@
 
 ### P2: Extract Port-Dependent Modules
 
-- [ ] Extract `preflight-credit-check.ts` - move credit estimation + balance check
-- [ ] Wire into `completion.ts` - call `validateCreditsUpperBound()`
-- [ ] Verify: `pnpm check` passes, all tests green
+- [x] Extract `preflight-credit-check.ts` - move credit estimation + balance check
+- [x] Wire into `completion.ts` - call `validateCreditsUpperBound()`
+- [x] Verify: `pnpm check` passes, all tests green
 - [ ] Extract `billing.ts` - unify billing logic from `execute()` and `executeStream().wrappedFinal`
 - [ ] Wire into `completion.ts` - call `recordBilling()` in both paths
 - [ ] Verify: `pnpm check` passes, all tests green
@@ -501,4 +501,4 @@ Per `FEATURE_DEVELOPMENT_GUIDE.md`, feature services export `execute`. The new m
 ---
 
 **Last Updated**: 2025-12-21
-**Status**: In Progress (P1 message-preparation complete)
+**Status**: In Progress (P2 preflight-credit-check complete)

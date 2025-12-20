@@ -16,7 +16,40 @@
  * @public
  */
 
+import { ESTIMATED_USD_PER_1K_TOKENS } from "@/core";
 import type { AccountService } from "@/ports";
+import { InsufficientCreditsPortError } from "@/ports";
+import { isModelFree } from "@/shared/ai/model-catalog.server";
+import { calculateDefaultLlmCharge } from "./llmPricingPolicy";
+
+/**
+ * Estimate cost in credits for pre-flight gating.
+ *
+ * Uses ESTIMATED_USD_PER_1K_TOKENS as upper-bound estimate.
+ * Post-call billing uses actual LiteLLM cost; these may differ (expected).
+ *
+ * Invariants:
+ * - Free models MUST return 0n
+ * - Paid models return >0n
+ * - Uses same USD→credits pipeline as post-call (calculateDefaultLlmCharge)
+ * - Only difference: estimated vs actual USD input
+ */
+async function estimateCostCredits(
+  model: string,
+  estimatedTotalTokens: number
+): Promise<bigint> {
+  if (await isModelFree(model)) {
+    return 0n;
+  }
+
+  // Preflight uses conservative upper-bound estimate
+  const estimatedCostUsd =
+    (estimatedTotalTokens / 1000) * ESTIMATED_USD_PER_1K_TOKENS;
+
+  // Same pipeline as post-call: markup + ceil via calculateDefaultLlmCharge
+  const { chargedCredits } = calculateDefaultLlmCharge(estimatedCostUsd);
+  return chargedCredits;
+}
 
 /**
  * Validate that billing account has sufficient credits for estimated LLM cost.
@@ -31,10 +64,23 @@ import type { AccountService } from "@/ports";
  * @throws InsufficientCreditsPortError if balance < estimated cost
  */
 export async function validateCreditsUpperBound(
-  _billingAccountId: string,
-  _estimatedTokensUpperBound: number,
-  _model: string,
-  _accountService: AccountService
+  billingAccountId: string,
+  estimatedTokensUpperBound: number,
+  model: string,
+  accountService: AccountService
 ): Promise<void> {
-  throw new Error("Not implemented - P2 extraction pending");
+  const estimatedUserPriceCredits = await estimateCostCredits(
+    model,
+    estimatedTokensUpperBound
+  );
+
+  const currentBalance = await accountService.getBalance(billingAccountId);
+
+  if (currentBalance < Number(estimatedUserPriceCredits)) {
+    throw new InsufficientCreditsPortError(
+      billingAccountId,
+      Number(estimatedUserPriceCredits),
+      currentBalance
+    );
+  }
 }
