@@ -29,9 +29,8 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
 
 # Build all workspace packages (brute-force, not graph-scoped)
 # Required: package exports point to dist/, must exist before Next.js build
-# 1. tsup bundles JS for each package
-# 2. tsc -b from root emits per-file declarations via project references
-RUN pnpm -r --filter "./packages/**" build && pnpm exec tsc -b
+# Uses canonical packages:build: tsup (JS) + tsc -b (declarations) + validation
+RUN pnpm packages:build
 
 # Build-time placeholder for AUTH_SECRET (required by env validation during Next.js page collection)
 # Not a real secret; runtime containers must provide real AUTH_SECRET via deployment env
