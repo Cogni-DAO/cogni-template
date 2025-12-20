@@ -1,7 +1,7 @@
 # Refactor Plan: completion.ts Modularization
 
-> **Status**: In Progress (P2 - billing complete)
-> **Scope**: Extract `completion.ts` (826→587 lines) into focused modules (<150 lines each)
+> **Status**: In Progress (P2 complete)
+> **Scope**: Extract `completion.ts` (826→419 lines) into focused modules
 > **Goal**: Clean architecture, DRY, testable, LangGraph-ready
 
 > [!CRITICAL]
@@ -40,9 +40,9 @@
 - [x] Extract `billing.ts` - unify billing logic from `execute()` and `executeStream().wrappedFinal`
 - [x] Wire into `completion.ts` - call `recordBilling()` in both paths
 - [x] Verify: `pnpm check` passes, all tests green
-- [ ] Extract `telemetry.ts` - unify success/error telemetry from both paths
-- [ ] Wire into `completion.ts` - call `recordTelemetry()` in both paths
-- [ ] Verify: `pnpm check` passes, all tests green
+- [x] Extract `telemetry.ts` - unify success/error telemetry from both paths
+- [x] Wire into `completion.ts` - call `recordTelemetry()` in both paths (4 call sites)
+- [x] Verify: `pnpm check` passes, all tests green
 
 ### P3: Consolidate Orchestrator
 
@@ -501,4 +501,4 @@ Per `FEATURE_DEVELOPMENT_GUIDE.md`, feature services export `execute`. The new m
 ---
 
 **Last Updated**: 2025-12-21
-**Status**: In Progress (P2 billing complete)
+**Status**: In Progress (P2 complete, P3 pending)
