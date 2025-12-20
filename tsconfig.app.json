@@ -8,8 +8,7 @@
     "next-env.d.ts",
     ".next/types/**/*.ts",
     "src/**/*.ts",
-    "src/**/*.tsx",
-    "scripts/**/*.ts"
+    "src/**/*.tsx"
   ],
   "exclude": [
     "packages/**",

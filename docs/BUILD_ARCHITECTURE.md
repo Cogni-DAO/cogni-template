@@ -83,7 +83,7 @@ Five tsconfigs exist for different scenarios:
 | ----------------------- | --------------------- | ---------------------- | -------------------------------------- |
 | `tsconfig.base.json`    | N/A                   | None (options only)    | Shared compiler options + path aliases |
 | `tsconfig.json`         | `pnpm typecheck:full` | None (solution-style)  | `tsc -b` with project references       |
-| `tsconfig.app.json`     | `pnpm typecheck`      | `src/`, `scripts/`     | Fast app typecheck (no packages)       |
+| `tsconfig.app.json`     | `pnpm typecheck`      | `src/`                 | Fast app typecheck (no packages)       |
 | `tsconfig.scripts.json` | N/A (tsx uses it)     | `scripts/`             | tsx tooling path resolution            |
 | `tsconfig.eslint.json`  | N/A (ESLint uses it)  | `src/`, `tests/`, root | ESLint parser                          |
 
