@@ -9,12 +9,14 @@
 # Node / build artifacts
 node_modules
 .next
-dist
 build
 coverage
 out
 .nyc_output
-*.tsbuildinfo
+
+# Build outputs (** required for nested paths in monorepo)
+**/dist
+**/*.tsbuildinfo
 
 # Env (don’t bake secrets into images)
 .env*

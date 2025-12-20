@@ -34,18 +34,29 @@ pnpm -w build          # Build Next.js app (workspace root)
 
 ## Docker Build
 
-The Dockerfile uses a single `builder` stage:
+The Dockerfile uses a single `builder` stage with manifest-first layering for optimal caching:
 
 ```dockerfile
-COPY . .
+# syntax=docker/dockerfile:1.7-labs
+
+# 1. Copy dependency manifests first (maximizes install layer caching)
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY --parents packages/*/package.json ./
+
+# 2. Install (cached when manifests unchanged)
 pnpm install --frozen-lockfile
 
-# 1. Build all packages using canonical command (tsup + tsc -b + validation)
+# 3. Copy source
+COPY . .
+
+# 4. Build all packages using canonical command (tsup + tsc -b + validation)
 pnpm packages:build
 
-# 2. Build workspace root
+# 5. Build workspace root
 pnpm -w build
 ```
+
+**Why manifest-first:** Copying dependency manifests before `pnpm install` ensures the install layer is cached when only source files change. The `--parents` flag (requires `1.7-labs` syntax) preserves directory structure for workspace package manifests.
 
 **Why canonical command:** `pnpm packages:build` is the single source of truth for package builds. It runs tsup (JS), tsc -b (declarations), and validation atomically. The same command is used in local dev, CI, and Docker builds.
 
