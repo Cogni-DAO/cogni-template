@@ -305,6 +305,10 @@ export interface ExecuteStreamParams {
   aiTelemetry: AiTelemetryPort;
   langfuse: LangfusePort | undefined;
   abortSignal?: AbortSignal;
+  /** Optional tools for function calling */
+  tools?: import("@/ports").LlmToolDefinition[];
+  /** Optional tool choice policy */
+  toolChoice?: import("@/ports").LlmToolChoice;
 }
 
 export async function executeStream({
@@ -318,6 +322,8 @@ export async function executeStream({
   aiTelemetry,
   langfuse,
   abortSignal,
+  tools,
+  toolChoice,
 }: ExecuteStreamParams): Promise<{
   stream: AsyncIterable<import("@/ports").ChatDeltaEvent>;
   final: Promise<StreamFinalResult>;
@@ -367,7 +373,9 @@ export async function executeStream({
     messages: finalMessages,
     model,
     caller,
-    ...(abortSignal ? { abortSignal } : {}),
+    ...(abortSignal && { abortSignal }),
+    ...(tools && tools.length > 0 && { tools }),
+    ...(toolChoice && { toolChoice }),
   });
 
   // Wrap final promise to handle billing/telemetry
@@ -395,7 +403,7 @@ export async function executeStream({
         finishReason: result.finishReason ?? "stop",
       };
 
-      // Add billing fields only when present (exactOptionalPropertyTypes compliance)
+      // Add billing fields and tool calls only when present (exactOptionalPropertyTypes compliance)
       return {
         ...baseResult,
         ...(modelId && { model: modelId }),
@@ -403,6 +411,8 @@ export async function executeStream({
           providerCostUsd: result.providerCostUsd,
         }),
         ...(result.litellmCallId && { litellmCallId: result.litellmCallId }),
+        ...(result.toolCalls &&
+          result.toolCalls.length > 0 && { toolCalls: result.toolCalls }),
       };
     })
     .catch(async (error) => {

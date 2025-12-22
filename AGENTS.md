@@ -57,7 +57,8 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 ### AI & Evals
 
 - [AI Setup Spec](docs/AI_SETUP_SPEC.md)
-- [LangGraph Architecture](docs/LANGGRAPH_AI.md)
+- [LangGraph Server](docs/LANGGRAPH_SERVER.md)
+- [LangGraph Patterns](docs/LANGGRAPH_AI.md)
 - [AI Evals](docs/AI_EVALS.md)
 
 ### Development

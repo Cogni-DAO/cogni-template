@@ -19,6 +19,8 @@ export {
   type CompletionStreamFn,
   type CompletionStreamParams,
   type CompletionStreamResult,
+  type CompletionUnitExecutor,
+  type GraphResolverFn,
   InProcGraphExecutorAdapter,
   type InProcGraphExecutorDeps,
 } from "./ai/inproc-graph.adapter";

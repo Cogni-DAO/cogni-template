@@ -15,24 +15,32 @@
 
 import {
   type CompletionStreamFn,
+  type GraphResolverFn,
   InProcGraphExecutorAdapter,
 } from "@/adapters/server";
 import type { GraphExecutorPort } from "@/ports";
 import { resolveAiAdapterDeps } from "./container";
 
 /**
- * Factory for creating InProcGraphExecutorAdapter.
+ * Factory for creating InProcGraphExecutorAdapter with optional graph resolver.
  * Per UNIFIED_GRAPH_EXECUTOR: all graph execution flows through GraphExecutorPort.
  *
  * Architecture boundary: Facade calls this factory (app → bootstrap),
  * factory creates adapter (bootstrap → adapters). Facade never imports adapters.
+ * Resolver is built by facade (app layer can import features), passed here.
  *
  * @param completionStreamFn - Feature function for LLM streaming (from features/ai)
+ * @param graphResolver - Optional resolver for graph routing (from facade)
  * @returns GraphExecutorPort implementation
  */
 export function createInProcGraphExecutor(
-  completionStreamFn: CompletionStreamFn
+  completionStreamFn: CompletionStreamFn,
+  graphResolver?: GraphResolverFn
 ): GraphExecutorPort {
   const deps = resolveAiAdapterDeps();
-  return new InProcGraphExecutorAdapter(deps, completionStreamFn);
+  return new InProcGraphExecutorAdapter(
+    deps,
+    completionStreamFn,
+    graphResolver
+  );
 }

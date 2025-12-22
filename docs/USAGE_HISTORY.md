@@ -1,7 +1,7 @@
 # Usage History Design
 
 > [!CRITICAL]
-> Usage history persists message artifacts from AI runs (user input, assistant output). It is a parallel AiEvent stream consumer to billing—neither blocks the other. Not all runs are "conversations."
+> Usage history persists message artifacts from AI runs (user input, assistant output). It is a parallel AiEvent stream consumer to billing—neither blocks the other. **For `langgraph_server` executor, LangGraph Server owns canonical thread state; `run_artifacts` is optional cache only.**
 
 ## Core Invariants
 
@@ -19,7 +19,7 @@
 
 7. **RETRY_IS_NEW_RUN**: A retry creates a new `run_id`. No `attempt` field in P0—lineage/retry semantics are P1+ (requires `runs` table).
 
-8. **ARTIFACTS_ARE_CACHE**: `run_artifacts` is a best-effort transcript cache for billing correlation and activity display—NOT the source of truth for LangGraph state. LangGraph checkpointer owns graph memory; run_artifacts caches final messages for cross-executor use. **Note:** Do not claim "audit" until durable event delivery exists.
+8. **ARTIFACTS_ARE_CACHE**: `run_artifacts` is a best-effort transcript cache for billing correlation and activity display—NOT the source of truth for thread state. **For `langgraph_server` executor:** LangGraph Server is canonical; never reconstruct conversation from `run_artifacts`. **For `inproc`/`claude_sdk` executors:** artifacts may be the only record. **Note:** Do not claim "audit" until durable event delivery exists.
 
 9. **THREAD_ID_PROPAGATION**: For LangGraph runs, `thread_id` flows: `GraphRunRequest.threadId` → LangGraph config → relay context → `run_artifacts.thread_id`. Enables resume/time-travel correlation.
 
@@ -34,6 +34,10 @@
 14. **REDACT_BEFORE_PERSIST**: HistoryWriterSubscriber applies masking before computing `content_hash` and before calling `persistArtifact()`. Same masking applies before any logs/traces. Single redaction boundary—no downstream masking. Regex masking is best-effort (secrets-first: API keys, tokens). **Stored content may still contain PII**—retention and deletion must treat all content as personal data.
 
 15. **TENANT_SCOPED_THREAD_ID**: LangGraph `thread_id` MUST be tenant-scoped: `${accountId}:${threadKey}`. This ensures checkpoint isolation—checkpoints contain real state and may include PII. Isolating only artifacts is insufficient.
+
+16. **EXECUTOR_TYPE_REQUIRED**: `UsageFact.executorType` is required (`langgraph_server` | `claude_sdk` | `inproc`). History/billing logic must be executor-agnostic. P0: Store in `run_artifacts.metadata.executorType`; defer column migration until indexing need.
+
+17. **P0_NO_GDPR_DELETE**: P0 does NOT provide compliant user data deletion. Deleting `run_artifacts` without LangGraph checkpoints is insufficient for `langgraph_server` runs. Full deletion (artifacts + checkpoints by tenant-scoped thread_id) is a P1 requirement.
 
 ---
 
@@ -93,11 +97,12 @@ Persist user input and assistant final output per run. No tool call/result stora
 
 ### P1: Tool Call Artifacts (Optional)
 
-Enable if graph tool-calling requires audit/replay.
+Enable for `inproc`/`claude_sdk` executors if tool-calling requires audit/replay. **Not needed for `langgraph_server`—LangGraph Server already persists tool calls in checkpoints.**
 
 - [ ] Add `tool_call` artifact type: `{toolName, argsRedacted, resultSummary}`
 - [ ] Persist tool artifacts via HistoryWriterSubscriber on `tool_call_result` events
 - [ ] Stack test: graph with tool calls → tool artifacts persisted
+- [ ] Gate persistence: only for non-langgraph_server executors (or make optional via config)
 
 ### P1: Enhanced Retention & Masking
 
@@ -106,13 +111,15 @@ Enable if graph tool-calling requires audit/replay.
 - [ ] Evaluate Presidio integration for stronger PII detection
 - [ ] Add per-workspace retention policy override
 
-### P1: LangGraph Checkpoint Retention (Compliance)
+### P1: LangGraph Checkpoint Deletion (Compliance Blocker)
 
-Deleting artifacts without checkpoints is not compliant user data deletion—checkpoints hold real conversation state.
+**Per P0_NO_GDPR_DELETE:** Deleting artifacts without checkpoints is NOT compliant user data deletion—checkpoints hold real conversation state including PII.
 
-- [ ] Implement retention/deletion for LangGraph PostgresSaver checkpoint tables
-- [ ] Ensure checkpoint deletion respects tenant-scoped thread_id (per TENANT_SCOPED_THREAD_ID)
+- [ ] Implement deletion API for LangGraph PostgresSaver checkpoint tables
+- [ ] Delete by tenant-scoped thread_id prefix (`${accountId}:%`) for full account deletion
+- [ ] Delete by specific thread_id for conversation deletion
 - [ ] Coordinate artifact + checkpoint deletion for GDPR/user-initiated delete requests
+- [ ] Stack test: delete user data → both artifacts AND checkpoints removed
 
 ### P1+: Run Lineage (Future)
 
@@ -368,13 +375,14 @@ export interface GraphRunRequest {
 
 ## Related Documents
 
+- [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) — External runtime, checkpoint ownership
 - [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) — Owner vs Actor tenancy rules (canonical source for `account_id` semantics)
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Run-centric billing, RunEventRelay, pump+fanout
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — AiEvent types, stream architecture
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Hexagonal layers, port patterns
-- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Thread_id generation (must be tenant-scoped per TENANT_SCOPED_THREAD_ID)
+- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Graph patterns, thread_id tenant-scoping
 
 ---
 
 **Last Updated**: 2025-12-22
-**Status**: Draft (P0 Design - Compliance Review Complete)
+**Status**: Draft (P0 Design - Executor-Agnostic)

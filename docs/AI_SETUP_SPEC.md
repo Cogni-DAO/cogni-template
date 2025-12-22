@@ -85,54 +85,67 @@
 - [x] Observability instrumentation [observability.md](../.agent/workflows/observability.md)
 - [x] Documentation updates [document.md](../.agent/workflows/document.md)
 
-### P1: First LangGraph Graph
+### P1: LangGraph Server Integration
 
-Create first graph inside a feature slice with full correlation flow. No package required.
+Deploy LangGraph Server as external runtime; implement adapter; preserve unified billing. See [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) for full spec.
 
-**Runtime choice:** P1 uses assistant-ui **Data Stream Protocol** (`@assistant-ui/react-data-stream`). We are NOT using assistant-ui's LangGraph runtime (`@assistant-ui/react-langgraph`). Server emits DSP chunks; client uses standard data-stream runtime.
+**Runtime architecture:**
+
+- **Next.js:** Uses assistant-ui Data Stream Protocol
+- **LangGraph Server:** External process executes graphs, owns thread state
+- **Adapter:** `LangGraphServerAdapter` translates server streams → AiEvents
 
 #### P1 Deliverables
 
-**P1 instance:** `src/features/ai/graphs/chat.graph.ts` (chat subfeature under AI feature).
+**P1 instance:** `apps/langgraph-service/src/graphs/chat/chat.graph.ts`
 
-- [ ] Implement first graph (`src/features/<feature>/ai/graphs/<graph>.graph.ts`)
-- [ ] Create prompt templates (`src/features/<feature>/ai/prompts/<graph>.prompt.ts`)
-- [ ] Create orchestration service (`src/features/<feature>/ai/services/<graph>.ts`)
+- [ ] Create `apps/langgraph-service/` with LangGraph Server + Postgres checkpointer
+- [ ] Move graph definitions from `src/features/ai/graphs/` to langgraph-service
+- [ ] Implement `LangGraphServerAdapter` implementing `GraphExecutorPort`
+- [ ] Add `executorType` to `UsageFact` (required field)
 - [x] Create `src/features/ai/services/ai_runtime.ts` as single AI entrypoint (generates `runId`, uses GraphExecutorPort)
-- [x] Create `src/features/ai/tool-runner.ts` for tool execution + AiEvent emission
+- [x] Create `src/features/ai/tool-runner.ts` for tool execution + AiEvent emission (InProc adapter only)
 - [x] Integrate chat route: consumes AiEvents from runtime, maps to Data Stream Protocol
 
 #### P1 Invariants (Blocking for Merge)
 
-- [ ] **GRAPH_CALLER_TYPE_REQUIRED**: Use distinct caller types: `LlmCaller` (no graphRunId) vs `GraphLlmCaller` (extends LlmCaller with REQUIRED `graphRunId`, `graphName`, `graphVersion`). Do NOT add graphRunId as optional field on base LlmCaller.
-- [ ] **PROMPT_HASH_VERSION_IN_PAYLOAD**: `prompt_hash_version: 'v1'` must be embedded inside the canonical payload that is hashed, not just exported as a constant.
-- [ ] **HASHING_SINGLE_CALL_SITE**: Only `litellm.adapter.ts` computes `promptHash`. Graph code must NOT compute or re-compute it.
-- [ ] **GRAPH_METADATA_ENFORCED**: If `caller.graphRunId` is present, then `graph_name` and `graph_version` must be non-null on `ai_invocation_summaries` rows. Enforced by telemetry writer validation.
-- [ ] **GRAPHS_NO_IO**: Graphs must not import IO/adapters; routes stay thin; graphs live in feature slices.
-- [ ] **GRAPH_LLM_VIA_COMPLETION**: chat.graph.ts must never call llmService directly; it must call `completion.executeStream` so billing/telemetry/metrics/promptHash invariants remain centralized. Every LLM call in the agentic loop streams to the user.
-- [ ] **GRAPH_FINALIZATION_ONCE**: chat.graph.ts must emit exactly one `done` event and resolve `final` exactly once across multi-step tool loops; do not attach side effects to stream iteration.
-- [ ] **GRAPHS_USE_TOOLRUNNER_ONLY**: Graphs invoke tools exclusively through `toolRunner.exec()`. No direct tool implementation calls. ToolRunner is sole owner of toolCallId generation and tool lifecycle AiEvents.
-- [x] **AI_RUNTIME_EMITS_AIEVENTS**: ai_runtime emits AiEvents only (text_delta for P1; tool events when graphs land). Route layer maps AiEvents → Data Stream Protocol using official assistant-ui helper. Runtime never touches protocol encoding.
+**Runtime Boundary:**
+
+- [ ] **RUNTIME_IS_EXTERNAL**: Next.js never imports graph modules. All graph code in `apps/langgraph-service/`. `LangGraphServerAdapter` calls external service.
+- [ ] **THREAD_ID_TENANT_SCOPED**: `thread_id` derived server-side as `${accountId}:${threadKey}`. Never accept raw thread_id from client.
+- [ ] **EXECUTOR_TYPE_REQUIRED**: `UsageFact.executorType` is required. All billing/history logic must be executor-agnostic.
+
+**Billing & Telemetry:**
+
+- [ ] **GRAPH_CALLER_TYPE_REQUIRED**: Use distinct caller types: `LlmCaller` (no graphRunId) vs `GraphLlmCaller` (extends LlmCaller with REQUIRED `graphRunId`, `graphName`, `graphVersion`).
+- [ ] **GRAPH_METADATA_ENFORCED**: If `caller.graphRunId` is present, then `graph_name` and `graph_version` must be non-null on `ai_invocation_summaries` rows.
+- [x] **AI_RUNTIME_EMITS_AIEVENTS**: ai_runtime emits AiEvents only. Route layer maps AiEvents → Data Stream Protocol using official assistant-ui helper.
+- [x] **RUNTIME_STREAMS_ASYNC_ITERABLE**: ai_runtime must return `AsyncIterable<AiEvent>`, yielding immediately. No buffering.
+
+**Protocol:**
+
 - [ ] **DATA_STREAM_PROTOCOL_ONLY**: Chat route maps AiEvents to assistant-ui Data Stream Protocol chunks via official helper; never invent custom SSE vocabulary.
-- [ ] **TOOLCALL_ID_STABLE**: Tool calls use either model-provided `tool_call.id` (when model-initiated) or UUID generated at tool-runner boundary (when graph-initiated). Same `toolCallId` persists across all stream chunks (start→args→result). Never use `span_id` as `toolCallId`.
-- [x] **RUNTIME_STREAMS_ASYNC_ITERABLE**: ai_runtime must return `AsyncIterable<AiEvent>`, yielding immediately. No buffering or `Promise<AiEvent[]>`. Buffering breaks live tool-running state in UI.
-- [ ] **TOOLRUNNER_ALLOWLIST_HARD_FAIL**: Redaction uses explicit allowlist per tool. Missing allowlist or redaction failure → emit `tool_call_result` as error with safe message. Never pass-through unknown fields.
-- [ ] **TOOLRUNNER_RESULT_SHAPE**: `toolRunner.exec()` returns `{ok:true, value}` | `{ok:false, errorCode, safeMessage}`. Error codes: `validation`, `execution`, `unavailable`, `redaction_failed`. Graphs handle via result shape, not exceptions.
-- [ ] **TOOLRUNNER_PIPELINE_ORDER**: Fixed order: validate args → execute → validate result → redact → emit AiEvent → return. Validation failures still emit `tool_call_result` error event with same `toolCallId`.
+- [ ] **GRAPH_FINALIZATION_ONCE**: Adapter emits exactly one `done` event and resolves `final` exactly once per run.
+
+**InProc Adapter Only** (not applicable to LangGraph Server):
+
+- [ ] **TOOLCALL_ID_STABLE**: Tool calls use model-provided `tool_call.id` or UUID from tool-runner. Same `toolCallId` persists across start→result.
+- [ ] **TOOLRUNNER_ALLOWLIST_HARD_FAIL**: Redaction uses explicit allowlist per tool. Missing allowlist → emit error.
+- [ ] **TOOLRUNNER_RESULT_SHAPE**: `toolRunner.exec()` returns `{ok:true, value}` | `{ok:false, errorCode, safeMessage}`.
+- [ ] **PROMPT_HASH_VERSION_IN_PAYLOAD**: `prompt_hash_version: 'v1'` embedded in canonical payload for hashing.
 
 #### P1 File Pointers
 
-| File                                                  | Purpose                                                                          |
-| ----------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `src/features/ai/types.ts`                            | AiEvent type definition (feature-internal, NOT in shared/)                       |
-| `src/features/ai/services/ai_runtime.ts`              | Single AI entrypoint; decides graph vs direct; emits AiEvents                    |
-| `src/features/ai/tool-runner.ts`                      | Tool execution; owns toolCallId; emits tool lifecycle AiEvents; redacts payloads |
-| `src/features/<feature>/ai/graphs/<graph>.graph.ts`   | Graph definition (pure logic, no IO)                                             |
-| `src/features/<feature>/ai/prompts/<graph>.prompt.ts` | Prompt templates                                                                 |
-| `src/features/<feature>/ai/services/<graph>.ts`       | Orchestration: bridges ports, receives `graphRunId` from runtime                 |
-| `src/app/api/v1/ai/chat/route.ts`                     | Consumes AiEvents; maps to Data Stream Protocol                                  |
-| `src/shared/ai/prompt-hash.ts`                        | `computePromptHash()`, `PROMPT_HASH_VERSION`                                     |
-| `src/adapters/server/ai/litellm.adapter.ts`           | Sole `promptHash` computation site                                               |
+| File                                                   | Purpose                                                  |
+| ------------------------------------------------------ | -------------------------------------------------------- |
+| `apps/langgraph-service/`                              | LangGraph Server deployment directory                    |
+| `apps/langgraph-service/src/graphs/chat/chat.graph.ts` | Chat graph definition (LangGraph native)                 |
+| `src/adapters/server/ai/langgraph-server.adapter.ts`   | `LangGraphServerAdapter` implementing GraphExecutorPort  |
+| `src/types/usage.ts`                                   | Add `executorType` required field to `UsageFact`         |
+| `src/features/ai/services/ai_runtime.ts`               | Single AI entrypoint; derives thread_id; selects adapter |
+| `src/features/ai/tool-runner.ts`                       | Tool execution (InProc adapter only)                     |
+| `src/app/api/v1/ai/chat/route.ts`                      | Consumes AiEvents; maps to Data Stream Protocol          |
+| `src/adapters/server/ai/litellm.adapter.ts`            | `promptHash` computation (InProc adapter path)           |
 
 ---
 
@@ -406,13 +419,14 @@ Tool implementations receive port dependencies via injection. No direct adapter 
 
 ## Related Docs
 
-- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) - LangGraph architecture, port definitions, flow diagrams
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) - Graph execution, billing idempotency, pump+fanout pattern
+- [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) - External runtime MVP, adapter implementation
+- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) - Graph patterns, anti-patterns
+- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) - Billing idempotency, pump+fanout pattern
+- [USAGE_HISTORY.md](USAGE_HISTORY.md) - Artifact caching (executor-agnostic)
 - [AI_EVALS.md](AI_EVALS.md) - Eval harness structure, CI gates
-- [PACKAGES_ARCHITECTURE.md](PACKAGES_ARCHITECTURE.md) - Package creation rules
 - [ARCHITECTURE.md](ARCHITECTURE.md) - Hexagonal layers
 
 ---
 
-**Last Updated**: 2025-12-19
-**Status**: P0 Complete, P1/P2 Design Approved (Feature-Centric Pivot)
+**Last Updated**: 2025-12-22
+**Status**: P0 Complete, P1 Design Approved (External Runtime)

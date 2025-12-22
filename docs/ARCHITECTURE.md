@@ -522,7 +522,8 @@ Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [GRAPH_EXECUTION.md](G
 - [Architecture Enforcement Status](ARCHITECTURE_ENFORCEMENT_GAPS.md) - Current boundary enforcement coverage and known gaps
 - [Graph Execution](GRAPH_EXECUTION.md) - GraphExecutorPort, billing idempotency, pump+fanout pattern
 - [AI Setup Spec](AI_SETUP_SPEC.md) - AI correlation IDs, telemetry invariants, P0/P1 checklists
-- [LangGraph AI Guide](LANGGRAPH_AI.md) - Agentic graph workflows (no @langchain/langgraph library)
+- [LangGraph Server](LANGGRAPH_SERVER.md) - External LangGraph Server runtime, adapter implementation
+- [LangGraph AI Guide](LANGGRAPH_AI.md) - Graph patterns and anti-patterns
 - [Tool Use Spec](TOOL_USE_SPEC.md) - Tool execution invariants, first tool checklist
 - [Packages Architecture](PACKAGES_ARCHITECTURE.md) - Internal packages, isolation boundaries, and CI/CD setup
 - [Environment & Stack Deployment Modes](ENVIRONMENTS.md) - All 6 deployment modes, environment variables, and when to use each

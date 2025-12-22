@@ -1,17 +1,21 @@
 # LangGraph AI Guide
 
-> How to create and maintain agentic graph workflows in feature slices.
+> How to create and maintain agentic graph workflows.
 
 > [!IMPORTANT]
-> **We do NOT use the `@langchain/langgraph` library.** This document describes "graph-shaped" agentic workflows implemented as hand-rolled TypeScript. See TOOL_USE_SPEC.md invariant `NO_LANGGRAPH_RUNTIME`. The name "LangGraph" is retained for conceptual alignment with the pattern.
+> **LangGraph graphs execute in an external LangGraph Server process.** Next.js never imports graph modules. See [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) for runtime architecture. `LangGraphServerAdapter` implements `GraphExecutorPort`, preserving unified billing/telemetry.
 
 ## Overview
 
-Graphs live in feature slices, NOT in shared packages. This keeps AI logic co-located with the feature it serves and avoids premature abstraction.
+Graph definitions live in `apps/langgraph-service/` (feature-sliced within that service). Next.js only communicates with LangGraph Server via adapter—no graph code in the Next.js codebase.
 
-**Runtime choice:** We use assistant-ui **Data Stream Protocol** (`@assistant-ui/react-data-stream`), NOT the LangGraph runtime (`@assistant-ui/react-langgraph`). Server emits DSP chunks; graphs run server-side via `GraphExecutorPort`.
+**Runtime architecture:**
 
-**Key Principle:** Graphs start in `src/features/<feature>/ai/`. Packages are only for cross-repo contracts after proven reuse across 2+ services.
+- **Next.js:** Uses assistant-ui Data Stream Protocol (`@assistant-ui/react-data-stream`)
+- **LangGraph Server:** External process executes graphs, owns thread state/checkpoints
+- **Adapter:** `LangGraphServerAdapter` translates server streams → AiEvents
+
+**Key Principle:** All AI execution flows through `GraphExecutorPort`. The executor choice (LangGraph Server, Claude SDK, InProc) is an implementation detail behind the unified interface.
 
 ---
 
@@ -48,36 +52,44 @@ All AI execution flows through `GraphExecutorPort` per the **UNIFIED_GRAPH_EXECU
 ### File Structure
 
 ```
+apps/langgraph-service/
+└── src/
+    └── graphs/
+        └── <feature>/
+            ├── <graph>.graph.ts      # Graph definition (LangGraph native)
+            ├── <graph>.prompt.ts     # Prompt templates
+            └── tools/                # Tool definitions for LangGraph
+                └── <tool>.ts
+
 src/features/<feature>/ai/
-├── graphs/
-│   └── <graph>.graph.ts      # Graph definition (pure logic, no IO)
-├── prompts/
-│   └── <graph>.prompt.ts     # Prompt templates
-├── tools/
-│   └── <tool>.tool.ts        # Tool contracts (Zod schema + handler interface)
-└── services/
-    └── <graph>.ts            # Orchestration: bridges ports, receives graphRunId
+└── tools/
+    └── <tool>.tool.ts                # Tool contracts (InProc adapter only)
 ```
+
+**Note:** Graph code lives in `apps/langgraph-service/`, NOT in `src/features/`. Next.js never imports graph modules.
+
+**Tool ownership by executor:**
+
+- **`langgraph_server`:** Tool definitions live in `apps/langgraph-service/`. LangGraph Server executes tools internally.
+- **`inproc`:** Tool contracts in `src/features/` for validation/redaction when streaming tool events to UI.
 
 ### Step-by-Step
 
-1. **Create graph definition** in `graphs/<graph>.graph.ts`
-   - Pure logic only; no IO/adapter imports
-   - Accept completion service + toolRunner via dependency injection
-   - Invoke tools only through toolRunner.exec()
+1. **Create graph definition** in `apps/langgraph-service/src/graphs/<feature>/<graph>.graph.ts`
+   - Use LangGraph native patterns
+   - Tool definitions for LangGraph; contracts in Next.js for validation
 
-2. **Create prompt templates** in `prompts/<graph>.prompt.ts`
+2. **Create prompt templates** in `apps/langgraph-service/src/graphs/<feature>/<graph>.prompt.ts`
    - Versioned text; tracked in git
-   - `prompt_hash` computed by adapter for drift detection
+   - `prompt_hash` computed by LangGraph Server or adapter
 
-3. **Create orchestration service** in `services/<graph>.ts`
-   - Receive `graphRunId` from ai_runtime (single owner)
-   - Bridge app's `LlmService` to graph's expected port
-   - Pass `graph_name` + `graph_version` to telemetry
+3. **Configure assistant ID** in environment
+   - Add `AI_LANGGRAPH_ASSISTANT_ID_<FEATURE>` config
+   - Maps feature → assistant/graph deployment
 
-4. **Wire via GraphExecutorPort** (not directly in route)
-   - Route calls ai_runtime; runtime uses GraphExecutorPort
-   - Adapter emits AiEvents; route maps to Data Stream Protocol
+4. **Next.js calls via adapter** (never imports graph)
+   - Route calls ai_runtime; runtime selects `LangGraphServerAdapter`
+   - Adapter calls LangGraph Server, translates stream → AiEvents
 
 ---
 
@@ -113,9 +125,9 @@ src/features/<feature>/ai/
 
 - `request_id`, `trace_id`, `user`, `metadata` (correlation/billing fields)
 
-### Single Computation Site
+### Single Computation Site (InProc Only)
 
-**Invariant:** Only `src/adapters/server/ai/litellm.adapter.ts` computes `promptHash`. Graph code never computes it.
+**Invariant:** For `inproc` executor, only `src/adapters/server/ai/litellm.adapter.ts` computes `promptHash`. For `langgraph_server`, promptHash is not available in P0—LangGraph Server owns its own telemetry.
 
 ---
 
@@ -132,10 +144,10 @@ src/features/<feature>/ai/
                               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │ AI RUNTIME (src/features/ai/services/ai_runtime.ts)                 │
-│ - Generates runId via run-id-factory                                │
-│ - Calls GraphExecutorPort.runGraph()                                │
+│ - Generates runId, derives tenant-scoped thread_id                  │
+│ - Selects adapter via GraphExecutorPort                             │
 │ - RunEventRelay: pumps stream to completion (billing-independent)   │
-│ - Fans out: UI subscriber + billing subscriber                      │
+│ - Fans out: UI subscriber + billing subscriber (+ history optional) │
 └─────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -145,29 +157,23 @@ src/features/<feature>/ai/
 │ - Returns { stream: AsyncIterable<AiEvent>, final: Promise }        │
 └─────────────────────────────────────────────────────────────────────┘
                               │
+            ┌─────────────────┼─────────────────┐
+            ▼                 ▼                 ▼
+┌───────────────────┐ ┌───────────────┐ ┌───────────────────┐
+│ LangGraphServer   │ │ InProc        │ │ ClaudeSdk         │
+│ Adapter (P0)      │ │ Adapter       │ │ Adapter (P2)      │
+│ ─────────────     │ │ ─────         │ │ ───────           │
+│ Calls external    │ │ Wraps         │ │ Calls Anthropic   │
+│ LangGraph Server  │ │ completion.ts │ │ SDK directly      │
+│ via HTTP/WS       │ │               │ │                   │
+└───────────────────┘ └───────────────┘ └───────────────────┘
+            │                 │                 │
+            └─────────────────┼─────────────────┘
                               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│ INPROC GRAPH ADAPTER (src/adapters/server/ai/inproc-graph.adapter)  │
-│ - Wraps completion.executeStream()                                  │
-│ - Emits text_delta events from LLM stream                           │
-│ - Emits usage_report event BEFORE done (for billing)                │
-│ - P1: Will invoke chat.graph.ts for tool loops                      │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ TOOL RUNNER (src/features/ai/tool-runner.ts)                        │
-│ - Sole tool execution point (graphs never call impls directly)      │
-│ - Generates/owns toolCallId                                         │
-│ - Emits tool_call_start/result AiEvents                             │
-│ - Redacts payloads per allowlist                                    │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ LLM ADAPTER (src/adapters/server/ai/litellm.adapter.ts)             │
-│ - Computes promptHash (single call site)                            │
-│ - Extracts litellmCallId, providerCostUsd                           │
+│ ALL ADAPTERS EMIT (normalized):                                     │
+│ - AiEvents (text_delta, assistant_final, done, error)               │
+│ - usage_report with UsageFact (executorType required)               │
 └─────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
@@ -177,6 +183,8 @@ src/features/<feature>/ai/
 │ - Enforces: if graphRunId → graph_name + graph_version non-null     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
+
+**Note:** Per `P0_NO_TOOL_EVENT_STREAMING`: LangGraph Server adapter emits `text_delta`, `assistant_final`, `usage_report`, `done` only. Tool events (`tool_call_start`/`tool_call_result`) are `inproc` executor only in P0. ToolRunner is InProc-specific.
 
 ---
 
@@ -346,31 +354,33 @@ Create packages only when criteria are met:
 
 ## Anti-Patterns
 
-1. **No IO in graphs** — Tool contracts define schemas; implementations receive ports via DI
-2. **No graphs in routes** — Routes call ai_runtime; runtime uses GraphExecutorPort
-3. **No direct tool calls from graphs** — Graphs invoke tools only through toolRunner.exec(); ToolRunner owns toolCallId and AiEvent emission
-4. **No direct llmService from graphs** — chat.graph.ts must call `completion.executeStream`, never llmService directly; billing/telemetry/promptHash invariants stay centralized
-5. **No multiple done events** — Graph emits exactly one `done` and resolves `final` exactly once across multi-step tool loops; no side effects on stream iteration
-6. **No port-per-tool** — Ports per external system; tools compose on top
-7. **No optional graphRunId in graph APIs** — Use distinct caller types with required fields
-8. **No duplicate promptHash computation** — Only adapter computes; graph receives result
-9. **No span_id persistence** — span_id is for tracing UI only; not a durable join key
-10. **No premature packaging** — Package only after proven cross-service reuse
-11. **No full tool artifacts in user stream** — Stream UI-safe summaries + status + references; capture full artifacts out-of-band. Tool lifecycle state MUST be in stream.
-12. **No custom SSE event vocabulary** — Route maps AiEvents to Data Stream Protocol via official helper; never invent custom events
-13. **No protocol encoding in runtime** — Runtime emits AiEvents only; route handles wire protocol
+1. **No graph imports in Next.js** — All graph code in `apps/langgraph-service/`. Next.js communicates via adapter only.
+2. **No raw thread_id from client** — Always derive server-side with tenant prefix (`${accountId}:${threadKey}`)
+3. **No graphs in routes** — Routes call ai_runtime; runtime uses GraphExecutorPort
+4. **No multiple done events** — Adapter emits exactly one `done` and resolves `final` exactly once per run
+5. **No port-per-tool** — Ports per external system; tools compose on top
+6. **No optional graphRunId in graph APIs** — Use distinct caller types with required fields
+7. **No span_id persistence** — span_id is for tracing UI only; not a durable join key
+8. **No premature packaging** — Package only after proven cross-service reuse
+9. **No full tool artifacts in user stream** — Stream UI-safe summaries + status + references; capture full artifacts out-of-band
+10. **No custom SSE event vocabulary** — Route maps AiEvents to Data Stream Protocol via official helper
+11. **No protocol encoding in runtime** — Runtime emits AiEvents only; route handles wire protocol
+12. **No rebuild of LangGraph Server capabilities** — Use checkpoints/threads/runs as-is; don't duplicate in `run_artifacts`
+13. **No executor-specific billing logic** — `UsageFact` is normalized; adapters translate to common shape
 
 ---
 
 ## Related Docs
 
+- [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) — External runtime MVP, adapter implementation
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — P0/P1/P2 checklists, ID map, invariants
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Graph execution, billing idempotency, pump+fanout
-- [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool execution invariants, first tool checklist
+- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Billing idempotency, pump+fanout
+- [USAGE_HISTORY.md](USAGE_HISTORY.md) — Artifact caching (executor-agnostic)
+- [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool execution invariants
 - [AI_EVALS.md](AI_EVALS.md) — Eval harness structure, CI gates
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Hexagonal layers
 
 ---
 
 **Last Updated**: 2025-12-22
-**Status**: Design Approved (Feature-Centric)
+**Status**: Design Approved (External Runtime)

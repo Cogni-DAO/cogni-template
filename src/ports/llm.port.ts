@@ -17,6 +17,73 @@ import type { Message } from "@/core";
 // Re-export Message for adapters
 export type { Message } from "@/core";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Tool Types (OpenAI-compatible format for LiteLLM)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * JSON Schema object for tool parameters.
+ * Simplified representation - full JSON Schema spec not needed for MVP.
+ */
+export interface JsonSchemaObject {
+  readonly type: "object";
+  readonly properties?: Record<string, unknown>;
+  readonly required?: readonly string[];
+  readonly additionalProperties?: boolean;
+}
+
+/**
+ * Tool definition in OpenAI function-calling format.
+ * Used to declare tools to the LLM.
+ */
+export interface LlmToolDefinition {
+  readonly type: "function";
+  readonly function: {
+    readonly name: string;
+    readonly description?: string;
+    readonly parameters: JsonSchemaObject;
+  };
+}
+
+/**
+ * Completed tool call from LLM response.
+ * Represents a fully-formed tool invocation request.
+ */
+export interface LlmToolCall {
+  readonly id: string;
+  readonly type: "function";
+  readonly function: {
+    readonly name: string;
+    readonly arguments: string; // JSON string, needs parsing
+  };
+}
+
+/**
+ * Incremental tool call delta from SSE stream.
+ * Fragments are accumulated by index until complete.
+ */
+export interface LlmToolCallDelta {
+  readonly index: number;
+  readonly id?: string;
+  readonly function?: {
+    readonly name?: string;
+    readonly arguments?: string; // Partial JSON fragment
+  };
+}
+
+/**
+ * Tool choice specification for LLM request.
+ * - "auto": LLM decides whether to use tools
+ * - "none": Disable tool use
+ * - "required": Force tool use
+ * - {name: string}: Force specific tool
+ */
+export type LlmToolChoice =
+  | "auto"
+  | "none"
+  | "required"
+  | { readonly type: "function"; readonly function: { readonly name: string } };
+
 /**
  * Caller info for direct LLM calls (no graph execution).
  * Per AI_SETUP_SPEC.md P1 invariant GRAPH_CALLER_TYPE_REQUIRED:
@@ -56,10 +123,15 @@ export interface CompletionStreamParams {
   maxTokens?: number;
   caller: LlmCaller;
   abortSignal?: AbortSignal;
+  /** Tool definitions for function calling */
+  tools?: LlmToolDefinition[];
+  /** Tool choice strategy */
+  toolChoice?: LlmToolChoice;
 }
 
 export type ChatDeltaEvent =
   | { type: "text_delta"; delta: string }
+  | { type: "tool_call_delta"; delta: LlmToolCallDelta }
   | { type: "error"; error: string }
   | { type: "done" };
 
@@ -75,6 +147,8 @@ export interface LlmCompletionResult {
     totalTokens: number;
   };
   finishReason?: "stop" | "length" | "tool_calls" | "content_filter" | string;
+  /** Accumulated tool calls from stream (when finish_reason == "tool_calls") */
+  toolCalls?: LlmToolCall[];
   providerMeta?: Record<string, unknown>;
   providerCostUsd?: number;
   /** LiteLLM call ID for forensic correlation (x-litellm-call-id header or response id) */

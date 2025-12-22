@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-12-22
+- **Last reviewed:** 2025-12-23
 - **Status:** stable
 
 ## Purpose
@@ -17,7 +17,8 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 - [Root AGENTS.md](../../../AGENTS.md)
 - [Architecture](../../../docs/ARCHITECTURE.md)
 - [AI Setup Spec](../../../docs/AI_SETUP_SPEC.md) (P0/P1 checklists, invariants)
-- [LangGraph AI](../../../docs/LANGGRAPH_AI.md) (graph creation, facade pattern, tool runner)
+- [LangGraph Server](../../../docs/LANGGRAPH_SERVER.md) (external runtime, adapter implementation)
+- [LangGraph Patterns](../../../docs/LANGGRAPH_AI.md) (graph patterns, anti-patterns)
 - [Chat subfeature](./chat/AGENTS.md)
 - **Related:** [../payments/](../payments/) (credits), [../../contracts/](../../contracts/) (ai.completion.v1, ai.chat.v1, ai.models.v1)
 
@@ -42,16 +43,19 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - `StreamFinalResult` (discriminated union for stream completion: ok with usage/finishReason, or error)
   - `AiEvent` (union of all AI runtime events: text_delta, tool events, done)
   - `createAiRuntime` (AI runtime orchestrator via public.server.ts)
-  - `toolRunner` (P1: tool execution; owns toolCallId; emits tool lifecycle AiEvents)
+  - `toolRunner` (tool execution; owns toolCallId; emits tool lifecycle AiEvents)
+  - `createChatRunner` (graph runner factory for chat graph, via public.server.ts)
+  - `getToolsForGraph` (tool registry lookup)
 - **Routes:**
   - `/api/v1/ai/completion` (POST) - text completion with credits metering
   - `/api/v1/ai/chat` (POST) - chat endpoint (P1: consumes AiEvents, maps to assistant-stream format)
   - `/api/v1/ai/models` (GET) - list available models with tier info
   - `/api/v1/activity` (GET) - usage statistics and logs
-- **Subdirectories (P1):**
-  - `graphs/` - LangGraph definitions (pure logic, no IO)
-  - `prompts/` - Prompt templates (versioned text)
-  - `tools/` - Tool contracts (Zod schemas + handler interfaces)
+- **Subdirectories:**
+  - `tools/` - Tool contracts and implementations (Zod schemas + execute functions). See [tools/AGENTS.md](./tools/AGENTS.md).
+  - `runners/` - Graph runner factories for bootstrap wiring. See [runners/AGENTS.md](./runners/AGENTS.md).
+  - `graphs/` - Graph definitions (chat.graph.ts with agentic tool loop)
+  - Note: LangGraph graphs live in `apps/langgraph-service/` (external process), NOT here. See [LANGGRAPH_SERVER.md](../../../docs/LANGGRAPH_SERVER.md).
   - `services/` - AI service modules:
     - `completion.ts` - Orchestrator with internal DRY helpers (execute, executeStream)
     - `message-preparation.ts` - Message filtering, validation, fallbackPromptHash
@@ -63,7 +67,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
     - `run-id-factory.ts` - Run identity factory (P0: runId = reqId)
     - `llmPricingPolicy.ts` - Pricing markup calculation
 - **Env/Config keys:** `LITELLM_BASE_URL`, `DEFAULT_MODEL` (via serverEnv)
-- **Files considered API:** public.ts, public.server.ts, types.ts, services/ai_runtime.ts, tool-runner.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
+- **Files considered API:** public.ts, public.server.ts, types.ts, services/ai_runtime.ts, tool-runner.ts, tool-registry.ts, runners/chat.runner.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
 
 ## Ports
 
@@ -87,15 +91,16 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - Create Langfuse traces for observability (optional, env-gated)
   - Provide createAiRuntime as single AI entrypoint via GraphExecutorPort
   - Use RunEventRelay for pump+fanout pattern (billing independent of UI)
-  - (P1) Execute tools via toolRunner — owns toolCallId, emits AiEvents, redacts payloads
-  - (P1) Host LangGraph graphs in `ai/graphs/` — pure logic, no IO imports
+  - Execute tools via toolRunner — owns toolCallId, emits AiEvents, redacts payloads
+  - Provide graph runner factories via createChatRunner (for bootstrap wiring)
 
 - **This feature does not:**
   - Implement LLM adapters (owned by adapters/server/ai)
   - Manage credits/billing (owned by features/accounts)
   - Persist chat messages to database (planned for v2)
   - Map AiEvents to wire protocol (owned by route layer)
-  - Compute promptHash (owned by litellm.adapter.ts)
+  - Compute promptHash (owned by litellm.adapter.ts, InProc path only)
+  - Host LangGraph graph code (owned by apps/langgraph-service/)
 
 ## Usage
 

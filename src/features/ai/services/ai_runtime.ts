@@ -40,6 +40,8 @@ export interface AiRuntimeInput {
   readonly caller: LlmCaller;
   /** Abort signal for cancellation */
   readonly abortSignal?: AbortSignal;
+  /** Graph name to execute (default: uses adapter fallback) */
+  readonly graphName?: string;
 }
 
 /**
@@ -84,7 +86,7 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
     input: AiRuntimeInput,
     ctx: RequestContext
   ): AiRuntimeResult {
-    const { messages, model, caller, abortSignal } = input;
+    const { messages, model, caller, abortSignal, graphName } = input;
     const log = ctx.log.child({ feature: "ai.runtime" });
 
     // Create run identity via factory (P0: runId = ingressRequestId = ctx.reqId)
@@ -94,7 +96,10 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
     // Create RunContext for relay subscribers (per RELAY_PROVIDES_CONTEXT)
     const runContext: RunContext = { runId, attempt, ingressRequestId };
 
-    log.debug({ runId, ingressRequestId, model }, "runChatStream starting");
+    log.debug(
+      { runId, ingressRequestId, model, graphName },
+      "runChatStream starting"
+    );
 
     // Call graph executor (non-async: returns stream handle immediately)
     const { stream: graphStream, final: graphFinal } = graphExecutor.runGraph({
@@ -104,6 +109,7 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
       model,
       caller,
       ...(abortSignal && { abortSignal }),
+      ...(graphName && { graphName }),
     });
 
     // Create RunEventRelay for pump+fanout pattern (context provided to subscribers)

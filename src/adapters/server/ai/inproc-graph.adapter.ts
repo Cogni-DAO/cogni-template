@@ -58,26 +58,33 @@ export interface InProcGraphExecutorDeps {
  */
 export interface CompletionStreamResult {
   stream: AsyncIterable<ChatDeltaEvent>;
-  final: Promise<
-    | {
-        ok: true;
-        requestId: string;
-        usage: { promptTokens: number; completionTokens: number };
-        finishReason: string;
-        /** Resolved model ID for billing */
-        model?: string;
-        /** Provider cost in USD */
-        providerCostUsd?: number;
-        /** LiteLLM call ID for idempotent billing */
-        litellmCallId?: string;
-      }
-    | {
-        ok: false;
-        requestId: string;
-        error: "timeout" | "aborted" | "internal";
-      }
-  >;
+  final: Promise<CompletionFinalResult>;
 }
+
+/**
+ * Completion final result shape.
+ * Includes toolCalls for agentic graph runners.
+ */
+export type CompletionFinalResult =
+  | {
+      ok: true;
+      requestId: string;
+      usage: { promptTokens: number; completionTokens: number };
+      finishReason: string;
+      /** Resolved model ID for billing */
+      model?: string;
+      /** Provider cost in USD */
+      providerCostUsd?: number;
+      /** LiteLLM call ID for idempotent billing */
+      litellmCallId?: string;
+      /** Tool calls requested by LLM (when finishReason === "tool_calls") */
+      toolCalls?: import("@/ports").LlmToolCall[];
+    }
+  | {
+      ok: false;
+      requestId: string;
+      error: "timeout" | "aborted" | "internal";
+    };
 
 /**
  * Completion stream parameters.
@@ -93,6 +100,39 @@ export interface CompletionStreamParams {
   aiTelemetry: AiTelemetryPort;
   langfuse: LangfusePort | undefined;
   abortSignal?: AbortSignal;
+  /** Tool definitions for LLM (optional) */
+  tools?: import("@/ports").LlmToolDefinition[];
+  /** Tool choice for LLM (optional) */
+  toolChoice?: import("@/ports").LlmToolChoice;
+}
+
+/**
+ * Parameters for a single completion unit execution.
+ * Used by graph runners that need multiple LLM calls.
+ */
+export interface CompletionUnitParams {
+  messages: GraphRunRequest["messages"];
+  model: string;
+  caller: GraphRunRequest["caller"];
+  runContext: {
+    runId: string;
+    attempt: number;
+    ingressRequestId: string;
+  };
+  abortSignal?: AbortSignal;
+  tools?: import("@/ports").LlmToolDefinition[];
+  toolChoice?: import("@/ports").LlmToolChoice;
+}
+
+/**
+ * Result from a single completion unit execution.
+ * Stream includes text_delta + usage_report but NOT done.
+ */
+export interface CompletionUnitResult {
+  /** Stream of AiEvents (text_delta, usage_report) - NO done event */
+  stream: AsyncIterable<AiEvent>;
+  /** Final result including toolCalls */
+  final: Promise<CompletionFinalResult>;
 }
 
 /**
@@ -104,17 +144,43 @@ export type CompletionStreamFn = (
 ) => Promise<CompletionStreamResult>;
 
 /**
+ * Graph runner function signature.
+ * Runners implement graph-specific orchestration logic.
+ * Defined in adapter to avoid features importing from adapters.
+ */
+export type GraphRunnerFn = (req: GraphRunRequest) => GraphRunResult;
+
+/**
+ * Interface for completion unit execution capability.
+ * Used by graph runners to access LLM execution.
+ */
+export type CompletionUnitExecutor = Pick<
+  InProcGraphExecutorAdapter,
+  "executeCompletionUnit"
+>;
+
+/**
+ * Graph resolver function signature.
+ * Returns a runner for a given graphName, or undefined for default behavior.
+ * Receives adapter reference for runners that need executeCompletionUnit.
+ */
+export type GraphResolverFn = (
+  graphName: string,
+  adapter: CompletionUnitExecutor
+) => GraphRunnerFn | undefined;
+
+/**
  * In-process graph executor adapter.
  * Wraps existing completion flow behind GraphExecutorPort interface.
- *
- * P0: Single-node "graphs" (direct LLM calls). Multi-step graphs in P1.
+ * Routes to graph runners via injected resolver, falls back to default completion.
  */
 export class InProcGraphExecutorAdapter implements GraphExecutorPort {
   private readonly log: Logger;
 
   constructor(
     private readonly deps: InProcGraphExecutorDeps,
-    private readonly completionStream: CompletionStreamFn
+    private readonly completionStream: CompletionStreamFn,
+    private readonly graphResolver?: GraphResolverFn
   ) {
     this.log = makeLogger({ component: "InProcGraphExecutorAdapter" });
   }
@@ -127,20 +193,43 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
    * - P0_ATTEMPT_FREEZE: attempt is always 0
    * - GRAPH_LLM_VIA_COMPLETION: delegates to completion.executeStream
    * - Emits usage_report event before done for billing subscriber
+   *
+   * Graph routing: If graphResolver is injected and returns a runner for
+   * req.graphName, delegates to that runner. Otherwise uses default completion path.
    */
   runGraph(req: GraphRunRequest): GraphRunResult {
-    const { runId, ingressRequestId, messages, model, caller, abortSignal } =
-      req;
+    const {
+      runId,
+      ingressRequestId,
+      messages,
+      model,
+      caller,
+      abortSignal,
+      graphName,
+    } = req;
     const attempt = 0; // P0_ATTEMPT_FREEZE
 
+    this.log.debug(
+      { runId, attempt, model, graphName, messageCount: messages.length },
+      "InProcGraphExecutorAdapter.runGraph starting"
+    );
+
+    // Check for custom graph runner
+    if (this.graphResolver && graphName) {
+      const runner = this.graphResolver(graphName, this);
+      if (runner) {
+        this.log.debug(
+          { runId, graphName },
+          "Delegating to custom graph runner"
+        );
+        return runner(req);
+      }
+    }
+
+    // Default: single completion path
     // Create RequestContext for completion layer
     // Per RUNID_IS_CANONICAL: reqId = ingressRequestId (delivery correlation), not runId
     const ctx = this.createRequestContext(ingressRequestId);
-
-    this.log.debug(
-      { runId, attempt, model, messageCount: messages.length },
-      "InProcGraphExecutorAdapter.runGraph starting"
-    );
 
     // Start completion asynchronously
     // The completion promise is created lazily when the stream is consumed
@@ -178,6 +267,150 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
     const final = this.createFinalPromise(getCompletionPromise, runId);
 
     return { stream, final };
+  }
+
+  /**
+   * Execute a single completion unit (LLM call) for use by graph runners.
+   * Transforms stream, emits usage_report, but does NOT emit done.
+   * Used by multi-step graph runners that need multiple LLM calls.
+   *
+   * Per GRAPH_LLM_VIA_COMPLETION: this is the shared in-proc execution engine.
+   * Runners orchestrate; this method handles transformation + billing events.
+   */
+  executeCompletionUnit(params: CompletionUnitParams): CompletionUnitResult {
+    const {
+      messages,
+      model,
+      caller,
+      runContext,
+      abortSignal,
+      tools,
+      toolChoice,
+    } = params;
+    const { runId, attempt, ingressRequestId } = runContext;
+
+    const ctx = this.createRequestContext(ingressRequestId);
+
+    this.log.debug(
+      {
+        runId,
+        attempt,
+        model,
+        messageCount: messages.length,
+        hasTools: !!tools,
+      },
+      "InProcGraphExecutorAdapter.executeCompletionUnit"
+    );
+
+    // Create completion promise lazily
+    const completionPromiseHolder: {
+      promise?: ReturnType<CompletionStreamFn>;
+    } = {};
+
+    const getCompletionPromise = async () => {
+      if (!completionPromiseHolder.promise) {
+        completionPromiseHolder.promise = this.completionStream({
+          messages,
+          model,
+          llmService: this.deps.llmService,
+          accountService: this.deps.accountService,
+          clock: this.deps.clock,
+          caller,
+          ctx,
+          aiTelemetry: this.deps.aiTelemetry,
+          langfuse: this.deps.langfuse,
+          ...(abortSignal && { abortSignal }),
+          ...(tools && { tools }),
+          ...(toolChoice && { toolChoice }),
+        });
+      }
+      return completionPromiseHolder.promise;
+    };
+
+    // Create stream WITHOUT done (for multi-step runners)
+    const stream = this.createCompletionUnitStream(getCompletionPromise, {
+      runId,
+      attempt,
+      caller,
+    });
+
+    // Final promise with toolCalls
+    const final = this.createCompletionUnitFinal(getCompletionPromise);
+
+    return { stream, final };
+  }
+
+  /**
+   * Create stream for completion unit - text_delta + usage_report, NO done.
+   */
+  private async *createCompletionUnitStream(
+    getCompletionPromise: () => Promise<
+      Awaited<ReturnType<CompletionStreamFn>>
+    >,
+    runContext: {
+      runId: string;
+      attempt: number;
+      caller: GraphRunRequest["caller"];
+    }
+  ): AsyncIterable<AiEvent> {
+    const { runId, attempt, caller } = runContext;
+    const completionResult = await getCompletionPromise();
+    const { stream, final } = completionResult;
+
+    // Stream text deltas
+    let sawDone = false;
+    for await (const event of stream) {
+      switch (event.type) {
+        case "text_delta": {
+          const textEvent: TextDeltaEvent = {
+            type: "text_delta",
+            delta: event.delta,
+          };
+          yield textEvent;
+          break;
+        }
+        case "error":
+          this.log.warn({ runId, error: event }, "Stream error event");
+          break;
+        case "done":
+          sawDone = true;
+          break;
+      }
+      if (sawDone) break;
+    }
+
+    // Emit usage_report (but NOT done - caller handles that)
+    const result = await final;
+    if (result.ok) {
+      const fact: UsageFact = {
+        runId,
+        attempt,
+        source: "litellm",
+        executorType: "inproc",
+        billingAccountId: caller.billingAccountId,
+        virtualKeyId: caller.virtualKeyId,
+        inputTokens: result.usage.promptTokens,
+        outputTokens: result.usage.completionTokens,
+        ...(result.litellmCallId && { usageUnitId: result.litellmCallId }),
+        ...(result.model && { model: result.model }),
+        ...(result.providerCostUsd !== undefined && {
+          costUsd: result.providerCostUsd,
+        }),
+      };
+      const usageEvent: UsageReportEvent = { type: "usage_report", fact };
+      yield usageEvent;
+    }
+    // NO done event - caller emits done when all iterations complete
+  }
+
+  /**
+   * Create final promise for completion unit - includes toolCalls.
+   */
+  private async createCompletionUnitFinal(
+    getCompletionPromise: () => Promise<Awaited<ReturnType<CompletionStreamFn>>>
+  ): Promise<CompletionFinalResult> {
+    const { final } = await getCompletionPromise();
+    return final;
   }
 
   /**
@@ -259,6 +492,7 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
         runId,
         attempt,
         source: "litellm",
+        executorType: "inproc",
         billingAccountId: caller.billingAccountId,
         virtualKeyId: caller.virtualKeyId,
         inputTokens: result.usage.promptTokens,

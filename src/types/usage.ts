@@ -9,12 +9,19 @@
  * - usageUnitId is optional; billing.ts assigns fallback if missing
  * - runId + attempt + usageUnitId form the idempotency key (computed by billing.ts)
  * - source identifies the adapter system (litellm, anthropic_sdk, etc.)
+ * - executorType is REQUIRED for executor-agnostic billing/history
  * Side-effects: none (types only)
- * Links: billing.ts (computeIdempotencyKey, commitUsageFact), GRAPH_EXECUTION.md
+ * Links: billing.ts (computeIdempotencyKey, commitUsageFact), GRAPH_EXECUTION.md, LANGGRAPH_SERVER.md
  * @public
  */
 
 import type { SourceSystem } from "./billing";
+
+/**
+ * Executor type for multi-runtime billing.
+ * Per EXECUTOR_TYPE_REQUIRED invariant: all UsageFacts must specify executorType.
+ */
+export type ExecutorType = "langgraph_server" | "claude_sdk" | "inproc";
 
 /**
  * Usage fact emitted by graph executors for billing ingestion.
@@ -36,6 +43,12 @@ export interface UsageFact {
 
   /** Source system for source_system column (NOT in idempotency key) */
   readonly source: SourceSystem;
+
+  /**
+   * Executor type for cross-executor billing (REQUIRED).
+   * Per EXECUTOR_TYPE_REQUIRED invariant in LANGGRAPH_SERVER.md.
+   */
+  readonly executorType: ExecutorType;
 
   // Required billing context
   readonly billingAccountId: string;

@@ -34,6 +34,8 @@ export interface GraphRunRequest {
   readonly caller: LlmCaller;
   /** Optional abort signal for cancellation */
   readonly abortSignal?: AbortSignal;
+  /** Graph name to execute (default: "chat") */
+  readonly graphName?: string;
 }
 
 /**

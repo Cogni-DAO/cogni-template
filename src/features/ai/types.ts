@@ -50,6 +50,8 @@ export type StreamFinalResult =
       readonly providerCostUsd?: number;
       /** LiteLLM call ID for idempotent billing (usage_unit_id) */
       readonly litellmCallId?: string;
+      /** Tool calls requested by LLM (present when finishReason === "tool_calls") */
+      readonly toolCalls?: import("@/ports").LlmToolCall[];
     }
   | {
       readonly ok: false;

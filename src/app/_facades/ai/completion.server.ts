@@ -24,7 +24,11 @@ import { createInProcGraphExecutor } from "@/bootstrap/graph-executor.factory";
 import type { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
 import { mapAccountsPortErrorToFeature } from "@/features/accounts/public";
 // Import from public.server.ts - never from services/* directly (dep-cruiser enforced)
-import { type MessageDto, toCoreMessages } from "@/features/ai/public.server";
+import {
+  createChatRunner,
+  type MessageDto,
+  toCoreMessages,
+} from "@/features/ai/public.server";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { LlmCaller } from "@/ports";
 import {
@@ -39,6 +43,8 @@ interface CompletionInput {
   messages: MessageDto[];
   model: string;
   sessionUser: SessionUser;
+  /** Graph name to execute (default: "chat") */
+  graphName?: string;
 }
 
 // Type-level enforcement: facade MUST return exact contract shape
@@ -122,8 +128,15 @@ export async function completionStream(
   const { accountService, clock } = resolveAiAdapterDeps();
   const { executeStream } = await import("@/features/ai/public.server");
 
-  // Create graph executor via bootstrap factory
-  const graphExecutor = createInProcGraphExecutor(executeStream);
+  // Build graph resolver: "chat" → chat runner, else undefined (falls back to default)
+  // Resolver receives adapter from bootstrap, facade imports createChatRunner from features
+  const graphResolver = (
+    graphName: string,
+    adapter: Parameters<typeof createChatRunner>[0]
+  ) => (graphName === "chat" ? createChatRunner(adapter) : undefined);
+
+  // Create graph executor via bootstrap factory with resolver
+  const graphExecutor = createInProcGraphExecutor(executeStream, graphResolver);
 
   const billingAccount = await getOrCreateBillingAccountForUser(
     accountService,
@@ -168,6 +181,7 @@ export async function completionStream(
         model: input.model,
         caller,
         ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
+        ...(input.graphName ? { graphName: input.graphName } : {}),
       },
       enrichedCtx
     );
