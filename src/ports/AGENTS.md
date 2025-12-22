@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-22
+- **Last reviewed:** 2025-12-23
 - **Status:** stable
 
 ## Purpose
@@ -38,7 +38,7 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
 
 - **Exports:**
   - AccountService (getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordChargeReceipt, listChargeReceipts, listCreditLedgerEntries, findCreditLedgerEntryByReference)
-  - LlmService (completion, completionStream with CompletionStreamParams including abortSignal; returns providerCostUsd, litellmCallId)
+  - LlmService (completion, completionStream with CompletionStreamParams including abortSignal, tools, toolChoice; returns providerCostUsd, litellmCallId, toolCalls)
   - GraphExecutorPort (runGraph → stream + completion promise; unified graph execution per GRAPH_EXECUTION.md)
   - GraphRunRequest, GraphRunResult, GraphFinal (graph execution types)
   - UsageService (getUsageStats, listUsageLogs; legacy aggregation interface)
@@ -53,6 +53,7 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
   - Clock (now)
   - Port-level errors (InsufficientCreditsPortError, BillingAccountNotFoundPortError, VirtualKeyNotFoundPortError, PaymentAttemptNotFoundPortError, TxHashAlreadyBoundPortError, ActivityUsageUnavailableError)
   - LlmError, LlmErrorKind (typed error classification from status codes)
+  - LlmToolDefinition, LlmToolCall, LlmToolChoice (tool calling types)
   - Types (ChargeReceiptParams, ChargeReceiptProvenance, LlmCaller, BillingAccount, CreditLedgerEntry, CreatePaymentAttemptParams, LogPaymentEventParams, VerificationResult, VerificationStatus, CompletionStreamParams)
 - **Routes:** none
 - **CLI:** none
