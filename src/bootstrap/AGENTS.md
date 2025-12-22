@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-07
+- **Last reviewed:** 2025-12-22
 - **Status:** stable
 
 ## Purpose
@@ -53,7 +53,8 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
   - `Container` interface - Ports + logger + config (includes metricsQuery port)
   - `ContainerConfig` interface - Runtime config (unhandledErrorPolicy, rateLimitBypass, DEPLOY_ENVIRONMENT)
   - `UnhandledErrorPolicy` type - `"rethrow" | "respond_500"`
-  - `resolveAiDeps()` - AI feature dependencies
+  - `resolveAiAdapterDeps()` - AI adapter dependencies for factory
+  - `createInProcGraphExecutor()` - Factory for GraphExecutorPort (from `graph-executor.factory.ts`)
   - `wrapRouteHandlerWithLogging()` - Route logging wrapper with metrics (from `http/`)
   - `wrapPublicRoute()` - Lazy singleton wrapper for public routes with rate limiting (from `http/`)
   - `makeWrapPublicRoute()` - Pure factory for testing (from `http/wrapPublicRoute`)
@@ -62,12 +63,13 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none (uses `@/shared/env`)
-- **Files considered API:** `container.ts`, `http/index.ts`, `http/wrapPublicRoute.ts`, `http/rateLimiter.ts`
+- **Files considered API:** `container.ts`, `graph-executor.factory.ts`, `http/index.ts`, `http/wrapPublicRoute.ts`, `http/rateLimiter.ts`
 
 ## Responsibilities
 
 - This directory **does**:
   - Dependency injection wiring with singleton container
+  - Factory functions for adapter construction (e.g., createInProcGraphExecutor)
   - Environment-based adapter selection (APP_ENV=test → fakes, production → real)
   - Logger initialization (one per process)
   - Route logging wrapper with type-safe auth config (envelope-only)
