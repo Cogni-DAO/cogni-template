@@ -40,8 +40,8 @@ Refactor billing for run-centric idempotency. Wrap existing LLM path behind `Gra
 - [x] Add `UsageReportEvent` to AiEvent union
 - [x] Add `commitUsageFact()` to `billing.ts` — sole ledger writer
 - [x] Schema: add `run_id`, `attempt` columns; `UNIQUE(source_system, source_reference)`
-- [ ] Add depcruise rule + grep test for ONE_LEDGER_WRITER
-- [ ] Add idempotency test: replay usage_report twice → 1 row
+- [x] Add grep test for ONE_LEDGER_WRITER (depcruise impractical—see §5)
+- [x] Add idempotency test: replay with same (source_system, source_reference) → 1 row
 
 ### P1: First LangGraph Graph + Run Persistence
 
@@ -273,24 +273,9 @@ export interface UsageFact {
 
 ### 5. ONE_LEDGER_WRITER Enforcement
 
-**Depcruise rule** (`.dependency-cruiser.cjs`):
+**Enforcement:** Stack test (grep-based). Depcruise rule is impractical because other features legitimately import `AccountService` for read operations (`getBalance`, `creditAccount`, `listCreditLedgerEntries`). The grep test precisely targets `recordChargeReceipt()` call sites.
 
-```javascript
-// Only billing.ts may import from accounts port/adapter (which exposes recordChargeReceipt)
-{
-  name: "one-ledger-writer",
-  severity: "error",
-  from: {
-    path: "^src/features/",
-    pathNot: "^src/features/ai/services/billing\\.ts$"
-  },
-  to: {
-    path: "^src/(ports/accounts|adapters/server/accounts)"
-  }
-}
-```
-
-**Stack test** (`tests/stack/ai/one-ledger-writer.test.ts`):
+**Stack test** (`tests/stack/ai/one-ledger-writer.stack.test.ts`):
 
 ```typescript
 import { execSync } from "child_process";

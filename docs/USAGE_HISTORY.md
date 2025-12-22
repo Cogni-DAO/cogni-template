@@ -13,11 +13,11 @@
 
 4. **USER_ARTIFACT_AT_START**: User input artifact persisted immediately on run start (before execution). Survives graph crash.
 
-5. **ASSISTANT_ARTIFACT_ON_FINAL**: Assistant output artifact persisted on `done` event—NOT on deltas. One assistant artifact per run attempt. HistoryWriterSubscriber buffers text_deltas and persists accumulated content on `done`.
+5. **ASSISTANT_ARTIFACT_ON_FINAL**: Assistant output artifact persisted on `done` event—NOT on deltas. One assistant artifact per run. HistoryWriterSubscriber buffers text_deltas in-memory and persists accumulated content on `done`.
 
 6. **NO_DELTA_STORAGE**: P0 does NOT persist streaming deltas. Only user input + final assistant output. Delta storage is P2+ if needed for replay UX.
 
-7. **P0_ATTEMPT_FREEZE_APPLIES**: Per GRAPH_EXECUTION.md, attempt is always 0 in P0. Constraint `UNIQUE(run_id, artifact_key)` is sufficient. P1 may embed attempt in artifact_key if retry semantics require distinct artifacts per attempt.
+7. **RETRY_IS_NEW_RUN**: A retry creates a new `run_id`. No `attempt` field in P0—lineage/retry semantics are P1 (requires `runs` table).
 
 ---
 
@@ -81,22 +81,22 @@ Session = sequence of related runs (multi-turn chat, iterative workflows).
 
 **New table: `run_artifacts`**
 
-| Column         | Type        | Notes                                             |
-| -------------- | ----------- | ------------------------------------------------- |
-| `id`           | uuid        | PK                                                |
-| `run_id`       | text        | NOT NULL, FK-like (no constraint—runs not tabled) |
-| `attempt`      | int         | NOT NULL, default 0                               |
-| `artifact_key` | text        | NOT NULL, e.g. `user/0`, `assistant/final`        |
-| `role`         | text        | NOT NULL, `user` \| `assistant` \| `tool`         |
-| `content`      | text        | Nullable (content may be in content_ref)          |
-| `content_ref`  | text        | Nullable (blob storage ref for large content)     |
-| `metadata`     | jsonb       | Nullable (model, finishReason, etc.)              |
-| `created_at`   | timestamptz |                                                   |
+| Column         | Type        | Notes                                         |
+| -------------- | ----------- | --------------------------------------------- |
+| `id`           | uuid        | PK                                            |
+| `run_id`       | text        | NOT NULL                                      |
+| `artifact_key` | text        | NOT NULL, e.g. `user/0`, `assistant/final`    |
+| `role`         | text        | NOT NULL, `user` \| `assistant` \| `tool`     |
+| `content`      | text        | Nullable (content may be in content_ref)      |
+| `content_ref`  | text        | Nullable (blob storage ref for large content) |
+| `metadata`     | jsonb       | Nullable (model, finishReason, etc.)          |
+| `created_at`   | timestamptz |                                               |
 
 **Constraints:**
 
-- `UNIQUE(run_id, artifact_key)` — idempotency (single row per artifact per run/attempt)
+- `UNIQUE(run_id, artifact_key)` — idempotency (one artifact per key per run)
 - Index on `run_id` for run-level queries
+- Adapter uses `INSERT ... ON CONFLICT DO NOTHING` for idempotent writes
 
 **Idempotency key format:**
 
@@ -109,6 +109,11 @@ Session = sequence of related runs (multi-turn chat, iterative workflows).
 **Why no `conversation_id`?** Conversations are a UI concept. The underlying primitive is runs. Session/conversation grouping is P2 if needed.
 
 **Why `content` + `content_ref`?** Small messages inline; large messages (images, docs) go to blob storage with a ref. P0: inline only.
+
+**Metadata fields (P0 minimum):** Since no `runs` table exists in P0, artifact metadata carries run-level info for debugging:
+
+- `assistant/final` metadata: `{model, finishReason, executorType, graphName?}`
+- `user/0` metadata: `{selectedModel, executorType}`
 
 ---
 
@@ -151,10 +156,10 @@ Session = sequence of related runs (multi-turn chat, iterative workflows).
 
 **Content buffering:** HistoryWriterSubscriber maintains per-run buffer state:
 
-1. On `text_delta` → append delta to buffer
-2. On `done` → persist accumulated buffer as assistant artifact, clear buffer
+1. On `text_delta` → append delta to in-memory buffer (transient, NOT persisted)
+2. On `done` → persist assembled buffer as assistant artifact content, clear buffer
 
-This matches how UI clients accumulate streaming content. No changes needed to AiEvent types.
+**Explicit:** Deltas are buffered transiently in-memory only. The `run_artifacts` table stores only the final assembled content, not individual deltas. This matches how UI clients accumulate streaming content. No changes needed to AiEvent types—`DoneEvent` remains a signal; content comes from buffered deltas.
 
 ---
 
@@ -168,7 +173,7 @@ This matches how UI clients accumulate streaming content. No changes needed to A
 | `assistant/final` | One final output per run |
 | `tool/{callId}`   | One per tool invocation  |
 
-**Why not `run_id/attempt/role`?** The `artifact_key` is simpler and more explicit. Attempt is already a column.
+**Why this format?** Simple, explicit, and self-documenting. No attempt field in P0—retries create new runs.
 
 ---
 
@@ -216,7 +221,6 @@ Only `history-writer.ts` may call `runHistoryPort.persistArtifact()`.
 
 export interface RunArtifact {
   readonly runId: string;
-  readonly attempt: number;
   readonly artifactKey: string;
   readonly role: "user" | "assistant" | "tool";
   readonly content?: string;
@@ -226,7 +230,8 @@ export interface RunArtifact {
 
 export interface RunHistoryPort {
   /**
-   * Persist a run artifact. Idempotent: duplicate (runId, artifactKey) is no-op.
+   * Persist a run artifact.
+   * Idempotent: duplicate (runId, artifactKey) is no-op via ON CONFLICT DO NOTHING.
    */
   persistArtifact(artifact: RunArtifact): Promise<void>;
 
