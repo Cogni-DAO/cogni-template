@@ -5,19 +5,21 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-09
+- **Last reviewed:** 2025-12-22
 - **Status:** stable
 
 ## Purpose
 
-LiteLLM service implementations for AI completion, streaming, and usage telemetry operations.
+AI service adapters including LiteLLM completion/streaming, usage telemetry, and in-process graph execution.
 
 ## Pointers
 
 - [LlmService port](../../../ports/llm.port.ts)
+- [GraphExecutorPort](../../../ports/graph-executor.port.ts)
 - [ActivityUsagePort](../../../ports/usage.port.ts)
 - [LiteLLM configuration](../../../../../platform/infra/services/litellm/)
 - [Activity Metrics Design](../../../../docs/ACTIVITY_METRICS.md)
+- [Graph Execution Design](../../../../docs/GRAPH_EXECUTION.md)
 
 ## Boundaries
 
@@ -31,22 +33,22 @@ LiteLLM service implementations for AI completion, streaming, and usage telemetr
 
 ## Public Surface
 
-- **Exports:** LiteLlmAdapter (LlmService), LiteLlmActivityUsageAdapter (ActivityUsagePort), LiteLlmUsageServiceAdapter (UsageService)
+- **Exports:** LiteLlmAdapter (LlmService), LiteLlmActivityUsageAdapter (ActivityUsagePort), LiteLlmUsageServiceAdapter (UsageService), InProcGraphExecutorAdapter (GraphExecutorPort)
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** LITELLM_BASE_URL, LITELLM_MASTER_KEY (model param required - no env fallback)
-- **Files considered API:** litellm.adapter.ts, litellm.activity-usage.adapter.ts, litellm.usage-service.adapter.ts
+- **Files considered API:** litellm.adapter.ts, litellm.activity-usage.adapter.ts, litellm.usage-service.adapter.ts, inproc-graph.adapter.ts
 - **Streaming:** completionStream() supports SSE streaming via eventsource-parser with robustness against malformed chunks
 
 ## Ports (optional)
 
 - **Uses ports:** none
-- **Implements ports:** LlmService, ActivityUsagePort, UsageService
+- **Implements ports:** LlmService, ActivityUsagePort, UsageService, GraphExecutorPort
 - **Contracts (required if implementing):** LlmService contract tests in tests/contract/, usage adapter tests in tests/unit/adapters/
 
 ## Responsibilities
 
-- This directory **does**: Implement LlmService for AI completions and streaming; implement ActivityUsagePort for LiteLLM usage logs (read-only, powers Activity dashboard); implement UsageService adapter mapping usage logs to usage stats
+- This directory **does**: Implement LlmService for AI completions and streaming; implement ActivityUsagePort for LiteLLM usage logs (read-only, powers Activity dashboard); implement UsageService adapter mapping usage logs to usage stats; implement GraphExecutorPort for in-process graph execution (wraps completion flow)
 - This directory **does not**: Handle authentication, rate limiting, timestamps, or write charge receipts to DB
 
 ## Usage

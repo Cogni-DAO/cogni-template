@@ -15,6 +15,13 @@
 export type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 export { DrizzleAccountService } from "./accounts/drizzle.adapter";
 export { DrizzleUsageAdapter } from "./accounts/drizzle.usage.adapter";
+export {
+  type CompletionStreamFn,
+  type CompletionStreamParams,
+  type CompletionStreamResult,
+  InProcGraphExecutorAdapter,
+  type InProcGraphExecutorDeps,
+} from "./ai/inproc-graph.adapter";
 export { LiteLlmActivityUsageAdapter } from "./ai/litellm.activity-usage.adapter";
 export { LiteLlmAdapter } from "./ai/litellm.adapter";
 export { LiteLlmUsageServiceAdapter } from "./ai/litellm.usage-service.adapter";

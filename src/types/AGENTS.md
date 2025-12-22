@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-11-30
+- **Last reviewed:** 2025-12-22
 - **Status:** draft
 
 ## Purpose
@@ -41,6 +41,9 @@ Bottom-of-tree type definitions. TS utility types, branded types, ambient global
 
 - **Exports:** TS utility types, branded types, global.d.ts, Env interfaces, domain enums
   - `payments.ts` - PaymentFlowState, PaymentStatus, PaymentAttemptStatus, PaymentErrorCode (canonical source)
+  - `billing.ts` - SourceSystem enum (litellm, anthropic_sdk, etc.)
+  - `usage.ts` - UsageFact (run-centric billing with idempotency)
+  - `ai-events.ts` - AiEvent union (TextDeltaEvent, ToolCallStartEvent, ToolCallResultEvent, UsageReportEvent, DoneEvent)
   - `next-auth.d.ts` - NextAuth session extensions
 - **Routes:** none
 - **CLI:** none

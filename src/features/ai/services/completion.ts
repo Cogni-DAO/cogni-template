@@ -34,7 +34,7 @@ import {
   classifyLlmError,
   type RequestContext,
 } from "@/shared/observability";
-import { recordBilling } from "./billing";
+// recordBilling removed: billing now via RunEventRelay + commitUsageFact (GRAPH_EXECUTION.md)
 import { prepareMessages } from "./message-preparation";
 import { recordMetrics } from "./metrics";
 import { validateCreditsUpperBound } from "./preflight-credit-check";
@@ -63,8 +63,9 @@ interface PostCallContext {
 }
 
 /**
- * Handle successful LLM completion (metrics, billing, telemetry).
+ * Handle successful LLM completion (metrics, telemetry).
  * Used by both execute() and executeStream().
+ * Note: Billing now handled by RunEventRelay via usage_report events (GRAPH_EXECUTION.md).
  */
 async function handleLlmSuccess(
   result: LlmCompletionResult,
@@ -81,7 +82,7 @@ async function handleLlmSuccess(
     llmStart,
     caller,
     provenance,
-    accountService,
+    // accountService unused: billing via RunEventRelay (GRAPH_EXECUTION.md)
     aiTelemetry,
     langfuse,
   } = context;
@@ -133,20 +134,8 @@ async function handleLlmSuccess(
     isError: false,
   });
 
-  // Post-call billing (non-blocking, handles errors internally)
-  await recordBilling(
-    {
-      billingAccountId: caller.billingAccountId,
-      virtualKeyId: caller.virtualKeyId,
-      requestId,
-      model: modelId,
-      providerCostUsd: result.providerCostUsd,
-      litellmCallId: result.litellmCallId,
-      provenance,
-    },
-    accountService,
-    log
-  );
+  // Billing handled by RunEventRelay via usage_report events (per GRAPH_EXECUTION.md)
+  // adapter emits usage_report → RunEventRelay billing subscriber → commitUsageFact()
 
   // Record success telemetry
   const latencyMs = Math.max(0, Math.round(durationMs));
@@ -387,7 +376,16 @@ export async function executeStream({
     .then(async (result) => {
       await handleLlmSuccess(result, postCallContext, log);
 
-      return {
+      // Extract model ID from provider metadata for billing
+      const providerMeta = (result.providerMeta ?? {}) as Record<
+        string,
+        unknown
+      >;
+      const modelId =
+        typeof providerMeta.model === "string" ? providerMeta.model : null;
+
+      // Build base result
+      const baseResult = {
         ok: true as const,
         requestId,
         usage: {
@@ -395,6 +393,16 @@ export async function executeStream({
           completionTokens: result.usage?.completionTokens ?? 0,
         },
         finishReason: result.finishReason ?? "stop",
+      };
+
+      // Add billing fields only when present (exactOptionalPropertyTypes compliance)
+      return {
+        ...baseResult,
+        ...(modelId && { model: modelId }),
+        ...(result.providerCostUsd !== undefined && {
+          providerCostUsd: result.providerCostUsd,
+        }),
+        ...(result.litellmCallId && { litellmCallId: result.litellmCallId }),
       };
     })
     .catch(async (error) => {

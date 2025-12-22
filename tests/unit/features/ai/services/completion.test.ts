@@ -107,7 +107,7 @@ describe("features/ai/services/completion", () => {
       expect(payload?.messages[0]?.role).toBe("system");
       expect(payload?.messages[0]?.content).toContain("You are Cogni");
 
-      expect(accountService.recordChargeReceipt).toHaveBeenCalled();
+      // Note: Billing now occurs via RunEventRelay → commitUsageFact() (per GRAPH_EXECUTION.md)
     });
 
     it("should strip malicious client system messages and inject baseline only", async () => {
@@ -341,12 +341,7 @@ describe("features/ai/services/completion", () => {
       expect(lastInvocation).toBeDefined();
       expect(lastInvocation?.requestId).toBe(testCtx.reqId);
 
-      // 3. Charge receipt uses stable requestId (check mock was called with it)
-      expect(accountService.recordChargeReceipt).toHaveBeenCalledWith(
-        expect.objectContaining({
-          requestId: testCtx.reqId,
-        })
-      );
+      // Note: Billing now occurs via RunEventRelay → commitUsageFact() (per GRAPH_EXECUTION.md)
     });
 
     it("should use adapter promptHash when available (canonical hash)", async () => {
@@ -460,13 +455,7 @@ describe("features/ai/services/completion", () => {
       expect(result.message.content).toBe("Free response");
       expect(llmService.wasCalled()).toBe(true);
 
-      // Verify charge receipt recorded with 0 credits (free model)
-      expect(accountService.recordChargeReceipt).toHaveBeenCalledWith(
-        expect.objectContaining({
-          chargedCredits: 0n, // Free model
-          provenance: "response",
-        })
-      );
+      // Note: Billing (including free model receipts) now occurs via RunEventRelay
     });
 
     it("should block paid model execution with zero balance", async () => {

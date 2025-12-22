@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-17
+- **Last reviewed:** 2025-12-22
 - **Status:** stable
 
 ## Purpose
@@ -35,7 +35,7 @@ AI telemetry adapters for recording invocation summaries and Langfuse trace corr
   - LangfuseAdapter (implements LangfusePort)
 - **Routes:** none
 - **CLI:** none
-- **Env/Config keys:** LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_BASE_URL (all optional)
+- **Env/Config keys:** LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY, LANGFUSE_BASE_URL (all optional); DEPLOY_ENVIRONMENT (passed via constructor for trace filtering)
 - **Files considered API:** drizzle.adapter.ts, langfuse.adapter.ts
 
 ## Ports

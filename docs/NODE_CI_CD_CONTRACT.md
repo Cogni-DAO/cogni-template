@@ -76,6 +76,12 @@
 
 **Gate**: 2+ nodes exist AND workflow drift maintenance burden proven
 
+**Sovereignty Safeguards:**
+
+- External rails are opt-in and version-pinned (prefer commit SHA)
+- Node MUST retain a vendored fallback (committed) sufficient to run CI/CD if upstream rails are unavailable
+- Upgrades occur only via explicit bump/regeneration; Node controls timing
+
 - [ ] Extract `_rails-node-ci.yml` to `cogni-rails` repo
 - [ ] Extract composite actions (`loki-ci-telemetry`, `loki-push`)
 - [ ] Extract `platform/ci/scripts/` portable scripts
@@ -167,5 +173,5 @@ Rails kit provides **orchestration defaults**, not **policy mandates**.
 
 ---
 
-**Last Updated**: 2025-12-20
+**Last Updated**: 2025-12-22
 **Status**: Design Approved

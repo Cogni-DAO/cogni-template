@@ -128,11 +128,11 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
       expect(latestReceipt?.provenance).toBe("stream");
 
       // Assert - Exactly ONE ai_invocation_summaries row with status='success'
-      // Query by requestId from the latest receipt for precision
-      const requestId = latestReceipt?.requestId;
+      // Query by ingressRequestId from the latest receipt for precision (P0: equals requestId)
+      const requestId = latestReceipt?.ingressRequestId;
       expect(requestId).toBeTruthy();
 
-      if (!requestId) throw new Error("requestId missing from receipt");
+      if (!requestId) throw new Error("ingressRequestId missing from receipt");
 
       const telemetryRows = await db
         .select()
@@ -220,11 +220,15 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
 
       if (!latestReceipt) throw new Error("No receipt found");
 
-      // Query telemetry by this requestId
+      // Query telemetry by ingressRequestId (P0: equals requestId for telemetry join)
+      if (!latestReceipt.ingressRequestId)
+        throw new Error("ingressRequestId missing");
       const telemetryRows = await db
         .select()
         .from(aiInvocationSummaries)
-        .where(eq(aiInvocationSummaries.requestId, latestReceipt.requestId));
+        .where(
+          eq(aiInvocationSummaries.requestId, latestReceipt.ingressRequestId)
+        );
 
       // Only ONE telemetry row, despite multiple chunks
       expect(telemetryRows.length).toBe(1);

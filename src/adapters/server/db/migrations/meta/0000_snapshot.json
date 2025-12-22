@@ -1,9 +1,253 @@
 {
-  "id": "1f70dd95-61e5-4bad-ae53-dab93df187d6",
+  "id": "678dc319-9fb5-4df5-a33f-0cafd138ee24",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
+    "public.ai_invocation_summaries": {
+      "name": "ai_invocation_summaries",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "invocation_id": {
+          "name": "invocation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "request_id": {
+          "name": "request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "trace_id": {
+          "name": "trace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "langfuse_trace_id": {
+          "name": "langfuse_trace_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "litellm_call_id": {
+          "name": "litellm_call_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "prompt_hash": {
+          "name": "prompt_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "router_policy_version": {
+          "name": "router_policy_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "graph_run_id": {
+          "name": "graph_run_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "graph_name": {
+          "name": "graph_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "graph_version": {
+          "name": "graph_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider": {
+          "name": "provider",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "model": {
+          "name": "model",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tokens_in": {
+          "name": "tokens_in",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tokens_out": {
+          "name": "tokens_out",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "tokens_total": {
+          "name": "tokens_total",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "provider_cost_usd": {
+          "name": "provider_cost_usd",
+          "type": "numeric",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "latency_ms": {
+          "name": "latency_ms",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "error_code": {
+          "name": "error_code",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "ai_invocation_summaries_request_id_idx": {
+          "name": "ai_invocation_summaries_request_id_idx",
+          "columns": [
+            {
+              "expression": "request_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ai_invocation_summaries_trace_id_idx": {
+          "name": "ai_invocation_summaries_trace_id_idx",
+          "columns": [
+            {
+              "expression": "trace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ai_invocation_summaries_litellm_call_id_idx": {
+          "name": "ai_invocation_summaries_litellm_call_id_idx",
+          "columns": [
+            {
+              "expression": "litellm_call_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ai_invocation_summaries_prompt_hash_idx": {
+          "name": "ai_invocation_summaries_prompt_hash_idx",
+          "columns": [
+            {
+              "expression": "prompt_hash",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ai_invocation_summaries_created_at_idx": {
+          "name": "ai_invocation_summaries_created_at_idx",
+          "columns": [
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "ai_invocation_summaries_status_idx": {
+          "name": "ai_invocation_summaries_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "ai_invocation_summaries_invocation_id_unique": {
+          "name": "ai_invocation_summaries_invocation_id_unique",
+          "nullsNotDistinct": false,
+          "columns": ["invocation_id"]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
     "public.users": {
       "name": "users",
       "schema": "",
@@ -136,11 +380,23 @@
           "primaryKey": false,
           "notNull": true
         },
-        "request_id": {
-          "name": "request_id",
+        "run_id": {
+          "name": "run_id",
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "attempt": {
+          "name": "attempt",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "ingress_request_id": {
+          "name": "ingress_request_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "litellm_call_id": {
           "name": "litellm_call_id",
@@ -271,8 +527,44 @@
           "method": "btree",
           "with": {}
         },
-        "charge_receipts_source_link_idx": {
-          "name": "charge_receipts_source_link_idx",
+        "charge_receipts_ingress_request_idx": {
+          "name": "charge_receipts_ingress_request_idx",
+          "columns": [
+            {
+              "expression": "ingress_request_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "charge_receipts_run_attempt_idx": {
+          "name": "charge_receipts_run_attempt_idx",
+          "columns": [
+            {
+              "expression": "run_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "attempt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "charge_receipts_source_idempotency_unique": {
+          "name": "charge_receipts_source_idempotency_unique",
           "columns": [
             {
               "expression": "source_system",
@@ -287,7 +579,7 @@
               "nulls": "last"
             }
           ],
-          "isUnique": false,
+          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -314,13 +606,7 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "charge_receipts_request_id_unique": {
-          "name": "charge_receipts_request_id_unique",
-          "nullsNotDistinct": false,
-          "columns": ["request_id"]
-        }
-      },
+      "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

@@ -122,8 +122,8 @@ describe("Completion Billing Stack Test", () => {
 
     // Minimal charge_receipt fields per ACTIVITY_METRICS.md
     expect(receipt.virtualKeyId).toBe(virtualKeyId);
-    expect(receipt.requestId).toBeTruthy();
-    expect(receipt.provenance).toBe("response"); // Non-streaming
+    expect(receipt.runId).toBeTruthy();
+    expect(receipt.provenance).toBe("stream"); // Per UNIFIED_GRAPH_EXECUTOR: all execution flows through streaming
     expect(receipt.chargedCredits).toBeGreaterThanOrEqual(0n);
 
     // Assert - credit_ledger debit created

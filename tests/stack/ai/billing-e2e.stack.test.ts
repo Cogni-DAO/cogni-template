@@ -103,17 +103,19 @@ describe("Billing E2E Stack Test", () => {
     expect(requestId).toBeDefined();
 
     // 3. Verify DB Invariants (T3) - per ACTIVITY_METRICS.md
-    // Query charge_receipt WHERE request_id=requestId
+    // Query charge_receipt WHERE run_id=requestId (P0: runId === requestId)
     const receipt = await db.query.chargeReceipts.findFirst({
-      where: eq(chargeReceipts.requestId, requestId),
+      where: eq(chargeReceipts.runId, requestId),
     });
     expect(receipt).toBeDefined();
     expect(receipt?.billingAccountId).toBe(billingAccountId);
-    expect(receipt?.provenance).toBe("response"); // Non-streaming
+    expect(receipt?.provenance).toBe("stream"); // Per UNIFIED_GRAPH_EXECUTOR: all execution flows through streaming
 
-    // Query credit_ledger WHERE reference=requestId
+    // Query credit_ledger WHERE reference=sourceReference (ledger uses sourceReference as reference)
+    if (!receipt?.sourceReference)
+      throw new Error("Receipt missing sourceReference");
     const ledgerRows = await db.query.creditLedger.findMany({
-      where: eq(creditLedger.reference, requestId),
+      where: eq(creditLedger.reference, receipt.sourceReference),
     });
     expect(ledgerRows).toHaveLength(1);
     const ledger = ledgerRows[0];
@@ -140,10 +142,12 @@ describe("Billing E2E Stack Test", () => {
     expect(summaryRes.status).toBe(200);
     const summaryJson = await summaryRes.json();
 
-    // Assert summary endpoint returns that same reference/requestId in its ledger[0]
+    // Assert summary endpoint returns entry with sourceReference in its ledger
+    // Per GRAPH_EXECUTION.md: ledger reference = sourceReference (not requestId)
     expect(summaryJson.ledger.length).toBeGreaterThan(0);
+    const expectedReference = receipt.sourceReference; // Already narrowed above
     const summaryEntry = summaryJson.ledger.find(
-      (l: { reference: string }) => l.reference === requestId
+      (l: { reference: string }) => l.reference === expectedReference
     );
     expect(summaryEntry).toBeDefined();
     expect(summaryEntry.amount).toBe(Number(amount));

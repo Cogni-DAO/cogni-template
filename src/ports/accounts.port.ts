@@ -118,12 +118,22 @@ export type ChargeReceiptProvenance = "response" | "stream";
 /**
  * Charge receipt params - minimal audit-focused fields per ACTIVITY_METRICS.md
  * No model/tokens/usage JSONB - LiteLLM is canonical for telemetry
+ *
+ * Per GRAPH_EXECUTION.md:
+ * - runId: Canonical execution identity (groups multiple LLM calls)
+ * - attempt: Retry attempt number (P0: always 0)
+ * - sourceReference: Idempotency key = runId/attempt/usageUnitId
+ * - ingressRequestId: Optional delivery-layer correlation (P0: equals runId; P1: many per runId)
  */
 export type ChargeReceiptParams = {
   billingAccountId: string;
   virtualKeyId: string;
-  /** Server-generated UUID, idempotency key */
-  requestId: string;
+  /** Canonical execution identity - groups all LLM calls in one graph execution */
+  runId: string;
+  /** Retry attempt number (P0: always 0; enables future retry semantics) */
+  attempt: number;
+  /** Ingress request correlation (optional, debug only). P0: equals runId; P1: many per runId (reconnect/resume) */
+  ingressRequestId?: string;
   /** Credits debited from user balance */
   chargedCredits: bigint;
   /** Observational USD cost from LiteLLM (header or usage.cost) - null if unavailable */
@@ -136,7 +146,7 @@ export type ChargeReceiptParams = {
   chargeReason: ChargeReason;
   /** External system that originated this charge */
   sourceSystem: SourceSystem;
-  /** Reference ID in the source system for generic linking */
+  /** Idempotency key: runId/attempt/usageUnitId (unique per source_system) */
   sourceReference: string;
 };
 

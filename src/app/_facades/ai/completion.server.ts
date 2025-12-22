@@ -6,27 +6,25 @@
  * Purpose: App-layer coordinator for AI completion - session → billing account, delegates to feature layer.
  * Scope: Resolves session user to billing account + virtual key, creates LlmCaller, maps DTOs, normalizes errors. Does not contain business logic or HTTP concerns.
  * Invariants:
+ *   - UNIFIED_GRAPH_EXECUTOR: Both completion() and completionStream() use GraphExecutorPort
  *   - Only app layer imports this; routes call this, not features/* directly
  *   - Must import features via public.ts ONLY (never import from services subdirectories)
+ *   - NEVER import adapters (use bootstrap factories instead)
  *   - Validates billing account before delegation; propagates feature errors
  * Side-effects: IO (via resolved dependencies)
- * Notes: Uses accounts feature for validation; propagates AccountsFeatureError to routes
- * Links: Called by API routes, delegates to features/ai/public.ts
+ * Notes: completion() delegates to completionStream() and collects response server-side
+ * Links: Called by API routes, delegates to features/ai/public.ts, GRAPH_EXECUTION.md
  * @public
  */
 
 import type { z } from "zod";
 
-import { resolveAiDeps } from "@/bootstrap/container";
+import { resolveAiAdapterDeps } from "@/bootstrap/container";
+import { createInProcGraphExecutor } from "@/bootstrap/graph-executor.factory";
 import type { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
 import { mapAccountsPortErrorToFeature } from "@/features/accounts/public";
 // Import from public.server.ts - never from services/* directly (dep-cruiser enforced)
-import {
-  execute,
-  fromCoreMessage,
-  type MessageDto,
-  toCoreMessages,
-} from "@/features/ai/public.server";
+import { type MessageDto, toCoreMessages } from "@/features/ai/public.server";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { LlmCaller } from "@/ports";
 import {
@@ -46,78 +44,64 @@ interface CompletionInput {
 // Type-level enforcement: facade MUST return exact contract shape
 type CompletionOutput = z.infer<typeof aiCompletionOperation.output>;
 
+/**
+ * Non-streaming AI completion.
+ * Per UNIFIED_GRAPH_EXECUTOR: delegates to completionStream() and collects response server-side.
+ * This ensures billing flows through GraphExecutorPort → RunEventRelay → commitUsageFact().
+ */
 export async function completion(
   input: CompletionInput,
   ctx: RequestContext
 ): Promise<CompletionOutput> {
-  // Resolve dependencies from bootstrap (pure composition root)
-  const { llmService, accountService, clock, aiTelemetry, langfuse } =
-    resolveAiDeps();
+  const { clock } = resolveAiAdapterDeps();
 
-  const billingAccount = await getOrCreateBillingAccountForUser(
-    accountService,
-    {
-      userId: input.sessionUser.id,
-      ...(input.sessionUser.walletAddress
-        ? { walletAddress: input.sessionUser.walletAddress }
-        : {}),
-    }
-  );
+  // Delegate to streaming path (UNIFIED_GRAPH_EXECUTOR)
+  const { stream, final } = await completionStream(input, ctx);
 
-  const caller: LlmCaller = {
-    billingAccountId: billingAccount.id,
-    virtualKeyId: billingAccount.defaultVirtualKeyId,
-    requestId: ctx.reqId,
-    traceId: ctx.traceId,
-  };
-
-  // Enrich context with business identifiers
-  const enrichedCtx: RequestContext = {
-    ...ctx,
-    log: ctx.log.child({
-      userId: input.sessionUser.id,
-      billingAccountId: billingAccount.id,
-    }),
-  };
-
-  // Map DTOs to core types using feature mappers (no core imports here)
-  const timestamp = clock.now();
-  const coreMessages = toCoreMessages(input.messages, timestamp);
-
+  // Collect text deltas server-side
+  // Errors (including InsufficientCreditsPortError from preflight) occur lazily during consumption
+  // Both stream consumption AND final await are wrapped - final can reject after loop completes
+  const textParts: string[] = [];
   try {
-    // Execute pure feature with injected dependencies
-    const result = await execute(
-      coreMessages,
-      input.model,
-      llmService,
-      accountService,
-      clock,
-      caller,
-      enrichedCtx,
-      aiTelemetry,
-      langfuse
-    );
+    for await (const event of stream) {
+      if (event.type === "text_delta") {
+        textParts.push(event.delta);
+      }
+      // done event signals end of stream; billing already handled by RunEventRelay
+      // Note: errors are thrown as exceptions, not emitted as events
+    }
 
-    // Map core result back to DTO
-    const messageDto = fromCoreMessage(result.message);
+    // Await final to ensure billing completed via RunEventRelay
+    const result = await final;
+
+    if (!result.ok) {
+      // Map error result to thrown error for route handler
+      throw new Error(`Completion failed: ${result.error}`);
+    }
+
+    // Build response in contract format
+    const content = textParts.join("");
+    const timestamp = clock.now();
 
     return {
       message: {
-        ...messageDto,
+        role: "assistant",
+        content,
+        timestamp,
         requestId: result.requestId,
       },
     };
   } catch (error) {
+    // Map port-level errors to feature errors for route handler
+    // Route layer handles AccountsFeatureError via isAccountsFeatureError() → 402/403
     if (
       isInsufficientCreditsPortError(error) ||
       isBillingAccountNotFoundPortError(error) ||
-      isVirtualKeyNotFoundPortError(error) ||
-      mapAccountsPortErrorToFeature(error).kind !== "GENERIC"
+      isVirtualKeyNotFoundPortError(error)
     ) {
       throw mapAccountsPortErrorToFeature(error);
     }
-
-    throw error;
+    throw error; // Re-throw unknown errors
   }
 }
 
@@ -133,8 +117,13 @@ export async function completionStream(
   stream: AsyncIterable<import("@/features/ai/public").AiEvent>;
   final: Promise<import("@/features/ai/public").StreamFinalResult>;
 }> {
-  const { llmService, accountService, clock, aiTelemetry, langfuse } =
-    resolveAiDeps();
+  // Per UNIFIED_GRAPH_EXECUTOR: use bootstrap factory (app → bootstrap → adapters)
+  // Facade CANNOT import adapters - architecture boundary enforced by depcruise
+  const { accountService, clock } = resolveAiAdapterDeps();
+  const { executeStream } = await import("@/features/ai/public.server");
+
+  // Create graph executor via bootstrap factory
+  const graphExecutor = createInProcGraphExecutor(executeStream);
 
   const billingAccount = await getOrCreateBillingAccountForUser(
     accountService,
@@ -168,14 +157,12 @@ export async function completionStream(
     // Import from public.server.ts - never from services/* directly
     const { createAiRuntime } = await import("@/features/ai/public.server");
     const aiRuntime = createAiRuntime({
-      llmService,
+      graphExecutor,
       accountService,
-      clock,
-      aiTelemetry,
-      langfuse,
     });
 
-    const { stream, final } = await aiRuntime.runChatStream(
+    // runChatStream is now synchronous (returns immediately with stream handle)
+    const { stream, final } = aiRuntime.runChatStream(
       {
         messages: coreMessages,
         model: input.model,

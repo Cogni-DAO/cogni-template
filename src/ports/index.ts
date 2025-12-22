@@ -37,6 +37,12 @@ export {
 } from "./ai-telemetry.port";
 export type { Clock } from "./clock.port";
 export type {
+  GraphExecutorPort,
+  GraphFinal,
+  GraphRunRequest,
+  GraphRunResult,
+} from "./graph-executor.port";
+export type {
   ChatDeltaEvent,
   CompletionStreamParams,
   LlmCaller,

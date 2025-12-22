@@ -96,7 +96,35 @@ This is what exists _right now_ in code, not what we want later.
 ## What This Doc Owns
 
 - The _billing_ model (accounts, credits, receipts) and how credentials map to spend attribution.
+- Tenancy rules: owner vs actor semantics, data ownership boundaries.
 - It does **not** define SIWE/Auth.js mechanics in depth (see SECURITY_AUTH_SPEC.md).
+
+---
+
+## Tenancy & Data Ownership (Owner vs Actor)
+
+### Definitions
+
+- **Owner (`account_id`)**: Data tenancy boundary. RLS enforced. Determines deletion scope and retention policy.
+- **Actor (`actor_type`, `actor_id`)**: Who initiated the run. Metadata only—does not change tenancy.
+
+| Field        | Purpose                   | Storage                               |
+| ------------ | ------------------------- | ------------------------------------- |
+| `account_id` | Data owner (RLS boundary) | Column (NOT NULL)                     |
+| `actor_type` | `'user'` or `'service'`   | metadata (P0), column (P1 if indexed) |
+| `actor_id`   | Initiator identifier      | metadata (P0), column (P1 if indexed) |
+
+### Hard Rule
+
+**Customer-derived content is always stored under the customer's `account_id`**, even if initiated by system automation. Never repoint customer artifacts into a system account.
+
+### System Tenant
+
+- `account_type='system'` for purely internal governance/automation runs
+- System tenant may have different retention defaults (policy-driven)
+- **Forbidden:** Customer message content in system tenant
+
+---
 
 ### Future: Multi-Tenant & OAuth
 

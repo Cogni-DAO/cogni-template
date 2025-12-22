@@ -6,12 +6,13 @@
  * Purpose: DrizzleAccountService implementation for PostgreSQL billing account operations with charge receipt recording.
  * Scope: Implements AccountService port with ledger-based credit accounting and virtual key management. Does not compute pricing.
  * Invariants:
- * - Atomic ops; ledger source of truth; balance cached; UUID v4 validated; request_id is idempotency key
- * - Persists chargeReason, sourceService, metadata to charge_receipts (required fields)
- * - listChargeReceipts returns sourceService for Activity UI join
+ * - Atomic ops; ledger source of truth; balance cached; UUID v4 validated
+ * - IDEMPOTENT_CHARGES: (source_system, source_reference) is idempotency key per GRAPH_EXECUTION.md
+ * - Persists chargeReason, sourceSystem, runId to charge_receipts (required fields)
+ * - listChargeReceipts returns sourceSystem for Activity UI join
  * Side-effects: IO (database operations)
  * Notes: Uses transactions for consistency; recordChargeReceipt is non-blocking (never throws InsufficientCredits per ACTIVITY_METRICS.md)
- * Links: Implements AccountService port, uses shared database schema, docs/ACTIVITY_METRICS.md, types/billing.ts
+ * Links: Implements AccountService port, uses shared database schema, docs/ACTIVITY_METRICS.md, docs/GRAPH_EXECUTION.md, types/billing.ts
  * @public
  */
 
@@ -182,14 +183,20 @@ export class DrizzleAccountService implements AccountService {
 
   async recordChargeReceipt(params: ChargeReceiptParams): Promise<void> {
     await this.db.transaction(async (tx) => {
-      // Idempotency check: if receipt already exists, return early
-      // This prevents double-debits on retries per ACTIVITY_METRICS.md
+      // Idempotency check: (source_system, source_reference) per GRAPH_EXECUTION.md
+      // This prevents double-debits on retries
       const existing = await tx.query.chargeReceipts.findFirst({
-        where: eq(chargeReceipts.requestId, params.requestId),
+        where: and(
+          eq(chargeReceipts.sourceSystem, params.sourceSystem),
+          eq(chargeReceipts.sourceReference, params.sourceReference)
+        ),
       });
       if (existing) {
         logger.debug(
-          { requestId: params.requestId },
+          {
+            sourceSystem: params.sourceSystem,
+            sourceReference: params.sourceReference,
+          },
           "recordChargeReceipt: idempotent return - receipt already exists"
         );
         return;
@@ -202,11 +209,13 @@ export class DrizzleAccountService implements AccountService {
         params.virtualKeyId
       );
 
-      // Insert charge receipt (unique constraint on request_id ensures no duplicates)
+      // Insert charge receipt (unique constraint on source_system, source_reference ensures no duplicates)
       await tx.insert(chargeReceipts).values({
         billingAccountId: params.billingAccountId,
         virtualKeyId: params.virtualKeyId,
-        requestId: params.requestId,
+        runId: params.runId,
+        attempt: params.attempt,
+        ingressRequestId: params.ingressRequestId ?? null, // Optional ingress correlation
         litellmCallId: params.litellmCallId,
         chargedCredits: params.chargedCredits,
         responseCostUsd: params.responseCostUsd?.toString() ?? null,
@@ -234,13 +243,14 @@ export class DrizzleAccountService implements AccountService {
       const newBalance = updatedAccount.balanceCredits;
 
       // Insert ledger entry (unique partial index ensures no duplicates for charge_receipt reason)
+      // reference = sourceReference for idempotent ledger writes per GRAPH_EXECUTION.md
       await tx.insert(creditLedger).values({
         billingAccountId: params.billingAccountId,
         virtualKeyId: params.virtualKeyId,
         amount: debitAmount,
         balanceAfter: newBalance,
         reason: "charge_receipt",
-        reference: params.requestId,
+        reference: params.sourceReference,
         metadata: null,
       });
 
@@ -250,7 +260,7 @@ export class DrizzleAccountService implements AccountService {
         logger.error(
           {
             billingAccountId: params.billingAccountId,
-            requestId: params.requestId,
+            sourceReference: params.sourceReference,
             chargedCredits: Number(params.chargedCredits),
             newBalance: Number(newBalance),
           },

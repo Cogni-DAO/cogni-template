@@ -6,8 +6,8 @@
  * Purpose: Unit tests for DrizzleAccountService.
  * Scope: Verifies recordChargeReceipt logic per ACTIVITY_METRICS.md. Does not test actual database connection.
  * Invariants:
- * - Post-call never throws InsufficientCreditsPortError; idempotent by requestId
- * - Test params include required chargeReason, sourceService, metadata fields
+ * - Post-call never throws InsufficientCreditsPortError; idempotent by (source_system, source_reference)
+ * - Test params include required chargeReason, sourceSystem, runId, attempt fields
  * Side-effects: none (uses mocks)
  * Links: `src/adapters/server/accounts/drizzle.adapter.ts`, docs/ACTIVITY_METRICS.md, types/billing.ts
  */
@@ -66,18 +66,20 @@ describe("DrizzleAccountService", () => {
   });
 
   describe("recordChargeReceipt", () => {
-    // Per ACTIVITY_METRICS.md: minimal charge_receipt fields
+    // Per GRAPH_EXECUTION.md: run-centric charge_receipt fields
     const params = {
       billingAccountId: "acc-123",
       virtualKeyId: "vk-123",
-      requestId: "req-123",
+      runId: "run-123",
+      attempt: 0,
+      ingressRequestId: "req-123",
       chargedCredits: 2000n,
       responseCostUsd: 0.002,
       litellmCallId: "call-123",
       provenance: "response" as const,
       chargeReason: "llm_usage" as const,
       sourceSystem: "litellm" as const,
-      sourceReference: "call-123",
+      sourceReference: "run-123/0/call-123",
     };
 
     it("successfully records charge receipt and debits credits", async () => {
@@ -107,13 +109,14 @@ describe("DrizzleAccountService", () => {
       // Verify idempotency check ran
       expect(mockTx.query.chargeReceipts.findFirst).toHaveBeenCalled();
 
-      // Verify charge receipt insert
+      // Verify charge receipt insert with run-centric fields
       expect(mockTx.insert).toHaveBeenCalled();
       expect(mockTx.values).toHaveBeenCalledWith(
         expect.objectContaining({
           billingAccountId: "acc-123",
           virtualKeyId: "vk-123",
-          requestId: "req-123",
+          runId: "run-123",
+          attempt: 0,
           chargedCredits: 2000n,
           provenance: "response",
         })
@@ -121,11 +124,12 @@ describe("DrizzleAccountService", () => {
     });
 
     it("returns early without debiting if receipt already exists (idempotent)", async () => {
-      // Per ACTIVITY_METRICS.md: Idempotent receipts - request_id as PK
+      // Per GRAPH_EXECUTION.md: Idempotent receipts via (source_system, source_reference)
       // Mock existing receipt found
       mockTx.query.chargeReceipts.findFirst.mockResolvedValue({
         id: "existing-uuid",
-        requestId: "req-123",
+        runId: "run-123",
+        sourceReference: "run-123/0/call-123",
         billingAccountId: "acc-123",
       });
 

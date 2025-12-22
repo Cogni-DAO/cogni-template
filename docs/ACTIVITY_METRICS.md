@@ -19,7 +19,7 @@
 
 5. **User-visible spend = our billing**: Dashboard displays `charged_credits` (our billed amount with markup), not raw provider costs from LiteLLM.
 
-6. **Idempotent receipts with ledger pairing**: Every charge_receipt row is keyed by `request_id`. Each receipt maps 1:1 to a `credit_ledger` debit entry.
+6. **Idempotent receipts with ledger pairing**: Every charge_receipt row is keyed by `(source_system, source_reference)`. Multiple receipts per `request_id` allowed for multi-LLM-call graphs. See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md).
 
 7. **No fallback**: If LiteLLM is down, fail loudly (503), don't show partial data.
 

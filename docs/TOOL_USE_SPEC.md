@@ -162,16 +162,16 @@ export const GenerateTitleToolUI = makeAssistantToolUI({
 
 ## Existing Infrastructure (✓ Built)
 
-| Component                | Location                             | Status                            |
-| ------------------------ | ------------------------------------ | --------------------------------- |
-| AiEvent types            | `features/ai/types.ts`               | ✓ Complete                        |
-| ToolContract, BoundTool  | `features/ai/types.ts`               | ✓ Complete                        |
-| tool-runner.ts           | `features/ai/tool-runner.ts`         | ✓ Complete pipeline               |
-| tool-registry.ts         | `features/ai/tool-registry.ts`       | ✓ Empty skeleton                  |
-| chat.graph.ts            | `features/ai/graphs/chat.graph.ts`   | ✓ Empty skeleton                  |
-| Route tool handling      | `app/api/v1/ai/chat/route.ts`        | ✓ Written but commented (264-285) |
-| ai_runtime.ts            | `features/ai/services/ai_runtime.ts` | ✓ Direct LLM only                 |
-| LlmCaller/GraphLlmCaller | `ports/llm.port.ts`                  | ✓ Types defined                   |
+| Component                | Location                             | Status                                         |
+| ------------------------ | ------------------------------------ | ---------------------------------------------- |
+| AiEvent types            | `features/ai/types.ts`               | ✓ Complete                                     |
+| ToolContract, BoundTool  | `features/ai/types.ts`               | ✓ Complete                                     |
+| tool-runner.ts           | `features/ai/tool-runner.ts`         | ✓ Complete pipeline                            |
+| tool-registry.ts         | `features/ai/tool-registry.ts`       | ✓ Empty skeleton                               |
+| chat.graph.ts            | `features/ai/graphs/chat.graph.ts`   | ✓ Empty skeleton                               |
+| Route tool handling      | `app/api/v1/ai/chat/route.ts`        | ✓ Written but commented (264-285)              |
+| ai_runtime.ts            | `features/ai/services/ai_runtime.ts` | ✓ Uses GraphExecutorPort (no tool routing yet) |
+| LlmCaller/GraphLlmCaller | `ports/llm.port.ts`                  | ✓ Types defined                                |
 
 ---
 
@@ -179,8 +179,9 @@ export const GenerateTitleToolUI = makeAssistantToolUI({
 
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — Correlation IDs, telemetry invariants
 - [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Architecture, anti-patterns
+- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — GraphExecutorPort, billing, pump+fanout
 
 ---
 
-**Last Updated**: 2025-12-21
+**Last Updated**: 2025-12-22
 **Status**: Draft

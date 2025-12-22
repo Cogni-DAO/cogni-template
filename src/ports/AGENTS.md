@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-17
+- **Last reviewed:** 2025-12-22
 - **Status:** stable
 
 ## Purpose
@@ -39,6 +39,8 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
 - **Exports:**
   - AccountService (getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordChargeReceipt, listChargeReceipts, listCreditLedgerEntries, findCreditLedgerEntryByReference)
   - LlmService (completion, completionStream with CompletionStreamParams including abortSignal; returns providerCostUsd, litellmCallId)
+  - GraphExecutorPort (runGraph → stream + completion promise; unified graph execution per GRAPH_EXECUTION.md)
+  - GraphRunRequest, GraphRunResult, GraphFinal (graph execution types)
   - UsageService (getUsageStats, listUsageLogs; legacy aggregation interface)
   - ActivityUsagePort (getSpendLogs, getSpendChart; LiteLLM-only telemetry for Activity dashboard)
   - UsageLogEntry, UsageLogsByRangeParams (types for log fetching)
