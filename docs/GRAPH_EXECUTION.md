@@ -17,11 +17,13 @@
 
 6. **GRAPH_FINALIZATION_ONCE**: Graph emits exactly one `done` event and resolves `final` exactly once per run attempt.
 
-7. **BILLING_INDEPENDENT_OF_CLIENT**: Billing commits occur server-side regardless of client connection state. `AiRuntimeService` uses a StreamDriver + Fanout pattern via `RunEventRelay`: a StreamDriver consumes the upstream `AsyncIterable` to completion, broadcasting events to subscribers (UI + billing). UI disconnect or slow consumption does not stop the StreamDriver. Billing subscriber never drops events.
+7. **USAGE_REPORT_AT_MOST_ONCE_PER_USAGE_UNIT**: Adapter emits at most one `usage_report` per `(runId, attempt, usageUnitId)`. DB uniqueness constraint is a safety net, not a substitute for correct event semantics.
 
-8. **P0_ATTEMPT_FREEZE**: In P0, `attempt` is always 0. No code path increments attempt. Full attempt/retry semantics require run persistence (P1). The `attempt` field exists in schema and `UsageFact` for forward compatibility but is frozen at 0.
+8. **BILLING_INDEPENDENT_OF_CLIENT**: Billing commits occur server-side regardless of client connection state. `AiRuntimeService` uses a StreamDriver + Fanout pattern via `RunEventRelay`: a StreamDriver consumes the upstream `AsyncIterable` to completion, broadcasting events to subscribers (UI + billing). UI disconnect or slow consumption does not stop the StreamDriver. Billing subscriber never drops events.
 
-9. **RUNID_IS_CANONICAL**: `runId` is the canonical execution identity. `ingressRequestId` is optional delivery-layer correlation (HTTP/SSE/worker/queue). P0: they coincidentally equal (no run persistence). P1: many `ingressRequestId`s per `runId` (reconnect/resume). No business logic relies on `ingressRequestId == runId`. Never use `ingressRequestId` for idempotency.
+9. **P0_ATTEMPT_FREEZE**: In P0, `attempt` is always 0. No code path increments attempt. Full attempt/retry semantics require run persistence (P1). The `attempt` field exists in schema and `UsageFact` for forward compatibility but is frozen at 0.
+
+10. **RUNID_IS_CANONICAL**: `runId` is the canonical execution identity. `ingressRequestId` is optional delivery-layer correlation (HTTP/SSE/worker/queue). P0: they coincidentally equal (no run persistence). P1: many `ingressRequestId`s per `runId` (reconnect/resume). No business logic relies on `ingressRequestId == runId`. Never use `ingressRequestId` for idempotency.
 
 ---
 
@@ -33,8 +35,9 @@ Refactor billing for run-centric idempotency. Wrap existing LLM path behind `Gra
 
 - [x] Create `GraphExecutorPort` interface in `src/ports/graph-executor.port.ts`
 - [x] Create `InProcGraphExecutorAdapter` wrapping existing streaming/completion path
-- [ ] Implement `RunEventRelay` (StreamDriver + Fanout) in `AiRuntimeService` (billing-independent consumption)
-- [ ] Refactor `completion.ts`: emit `usage_report` event only, remove `recordBilling()` call
+- [x] Implement `RunEventRelay` (StreamDriver + Fanout) in `AiRuntimeService` (billing-independent consumption)
+- [x] Refactor `completion.ts`: remove `recordBilling()` call; return usage fields in final (litellmCallId, costUsd, tokens)
+- [x] Refactor `InProcGraphExecutorAdapter`: emit `usage_report` AiEvent from final BEFORE done
 - [x] Add `UsageFact` type in `src/types/usage.ts` (type only, no functions)
 - [x] Add `computeIdempotencyKey(UsageFact)` in `billing.ts` (per types layer policy)
 - [x] Add `UsageReportEvent` to AiEvent union
@@ -70,11 +73,11 @@ n8n/Flowise adapters — build only if demand materializes and engines route LLM
 | ------------------------------------------------- | --------------------------------------------------------------------- |
 | `src/ports/graph-executor.port.ts`                | New: `GraphExecutorPort`, `GraphRunRequest`, `GraphRunResult`         |
 | `src/ports/index.ts`                              | Re-export `GraphExecutorPort`                                         |
-| `src/adapters/server/ai/inproc-graph.adapter.ts`  | New: `InProcGraphExecutorAdapter`                                     |
+| `src/adapters/server/ai/inproc-graph.adapter.ts`  | New: `InProcGraphExecutorAdapter`; emits `usage_report` before `done` |
 | `src/types/usage.ts`                              | New: `UsageFact` type (no functions per types layer policy)           |
 | `src/types/billing.ts`                            | Add `'anthropic_sdk'` to `SOURCE_SYSTEMS`                             |
 | `src/features/ai/types.ts`                        | Add `UsageReportEvent` (contains `UsageFact`)                         |
-| `src/features/ai/services/completion.ts`          | Refactor: emit `usage_report`, remove `recordBilling()` call          |
+| `src/features/ai/services/completion.ts`          | Remove `recordBilling()`; return usage in final (no AiEvent emission) |
 | `src/features/ai/services/billing.ts`             | Add `commitUsageFact()`, `computeIdempotencyKey()` (functions here)   |
 | `src/features/ai/services/ai_runtime.ts`          | Add `RunEventRelay` (StreamDriver + Fanout)                           |
 | `src/shared/db/schema.billing.ts`                 | Add `run_id`, `attempt` columns; change uniqueness constraints        |
@@ -371,10 +374,11 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
 
 **Ownership clarity:**
 
-| Component       | Responsibility                                                                                           |
-| --------------- | -------------------------------------------------------------------------------------------------------- |
-| `completion.ts` | Emits `usage_report` event with `usageUnitId = litellmCallId` (or `undefined` if missing)                |
-| `billing.ts`    | Sole ledger writer. Owns `callIndex` counter. Computes fallback `usageUnitId` at commit time if missing. |
+| Component                    | Responsibility                                                                                           |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `completion.ts`              | Returns usage fields in final (litellmCallId, costUsd, tokens); yields `ChatDeltaEvent` only             |
+| `InProcGraphExecutorAdapter` | Emits `usage_report` AiEvent from final BEFORE `done`; owns `UsageFact` construction                     |
+| `billing.ts`                 | Sole ledger writer. Owns `callIndex` counter. Computes fallback `usageUnitId` at commit time if missing. |
 
 **Fallback policy (STRICT):** If `usageUnitId` is missing at `commitUsageFact()` time:
 
@@ -407,10 +411,14 @@ function commitUsageFact(fact: UsageFact, callIndex: number): void {
 
 **Why billing-subscriber-assigned callIndex?**
 
-- `usageUnitId` is formed at emission time (in completion.ts), but the adapter may not have the ID yet
+- `usageUnitId` is formed at emission time (in adapter), but the provider may not have returned the ID yet
 - Fallback must be computed at commit time by billing.ts (the sole ledger writer)
 - `callIndex` is deterministic within a run: same run replayed = same callIndex = same idempotency key = no double billing
 - Using `Date.now()` would break idempotency on replay
+
+#### Known Issues
+
+- [ ] `usage_report` only emitted on success; error/abort with partial usage not billed (P1: add optional `usage` to error result)
 
 ---
 
@@ -426,4 +434,4 @@ function commitUsageFact(fact: UsageFact, callIndex: number): void {
 ---
 
 **Last Updated**: 2025-12-22
-**Status**: Draft (Rev 6 - requestId→ingressRequestId, attempt in port, schema migration ready)
+**Status**: Draft (Rev 7 - bootstrap factory pattern)
