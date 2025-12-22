@@ -10,11 +10,12 @@
  * - billing_accounts.owner_user_id FK → auth.users(id).
  * - payment_attempts has partial unique index on (chain_id, tx_hash) where tx_hash is not null.
  * - credit_ledger(reference) is unique for widget_payment and charge_receipt.
- * - charge_receipts.request_id is idempotency key (unique)
- * - charge_receipts has NOT NULL charge_reason, source_system, source_reference (no defaults, explicit values required)
+ * - charge_receipts: UNIQUE(source_system, source_reference) for run-centric idempotency
+ * - charge_receipts.request_id is NOT unique (multiple receipts per request allowed for graphs)
+ * - charge_receipts has run_id, attempt columns for run-level queries
  * - charge_receipts uses (source_system, source_reference) for generic linking to external systems
  * Side-effects: none (schema definitions only)
- * Links: docs/PAYMENTS_DESIGN.md, docs/ACTIVITY_METRICS.md, types/billing.ts (categorization enums)
+ * Links: docs/PAYMENTS_DESIGN.md, docs/ACTIVITY_METRICS.md, docs/GRAPH_EXECUTION.md, types/billing.ts
  * @public
  */
 
@@ -107,7 +108,13 @@ export const creditLedger = pgTable(
 /**
  * Charge receipts - minimal audit-focused table.
  * LiteLLM is canonical for telemetry (model/tokens). We only store billing data.
- * See docs/ACTIVITY_METRICS.md for design rationale.
+ * See docs/ACTIVITY_METRICS.md, docs/GRAPH_EXECUTION.md for design rationale.
+ *
+ * Per GRAPH_EXECUTION.md:
+ * - run_id: Canonical execution identity (groups multiple LLM calls)
+ * - attempt: Retry attempt number (P0: always 0)
+ * - Idempotency: UNIQUE(source_system, source_reference) where source_reference = runId/attempt/usageUnitId
+ * - ingress_request_id: Optional delivery correlation (debug only, never for idempotency)
  */
 export const chargeReceipts = pgTable(
   "charge_receipts",
@@ -119,8 +126,12 @@ export const chargeReceipts = pgTable(
     virtualKeyId: uuid("virtual_key_id")
       .notNull()
       .references(() => virtualKeys.id, { onDelete: "cascade" }),
-    /** Server-generated UUID, idempotency key */
-    requestId: text("request_id").notNull().unique(),
+    /** Canonical execution identity - groups all LLM calls in one graph execution */
+    runId: text("run_id").notNull(),
+    /** Retry attempt number (P0: always 0; enables future retry semantics) */
+    attempt: integer("attempt").notNull(),
+    /** Ingress request correlation (nullable, debug only). P0: coincidentally equals runId; P1: many per runId */
+    ingressRequestId: text("ingress_request_id"),
     /** LiteLLM call ID for forensic correlation (x-litellm-call-id header) */
     litellmCallId: text("litellm_call_id"),
     /** Credits debited from user balance */
@@ -131,9 +142,9 @@ export const chargeReceipts = pgTable(
     provenance: text("provenance").notNull(),
     /** Economic/billing category for accounting and analytics */
     chargeReason: text("charge_reason", { enum: CHARGE_REASONS }).notNull(),
-    /** External system that originated this charge (e.g. 'litellm', 'stripe') */
+    /** External system that originated this charge (e.g. 'litellm', 'anthropic_sdk') */
     sourceSystem: text("source_system", { enum: SOURCE_SYSTEMS }).notNull(),
-    /** Reference ID in the source system for generic linking */
+    /** Idempotency key: runId/attempt/usageUnitId (unique per source_system) */
     sourceReference: text("source_reference").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
@@ -157,11 +168,19 @@ export const chargeReceipts = pgTable(
       table.createdAt,
       table.id
     ),
-    // Index for reverse joins: find charge by (source_system, source_reference)
-    sourceLinkIdx: index("charge_receipts_source_link_idx").on(
-      table.sourceSystem,
-      table.sourceReference
+    // Index for ingress request correlation (debug queries only)
+    ingressRequestIdx: index("charge_receipts_ingress_request_idx").on(
+      table.ingressRequestId
     ),
+    // Index for run-level queries: Filter by run_id + attempt
+    runAttemptIdx: index("charge_receipts_run_attempt_idx").on(
+      table.runId,
+      table.attempt
+    ),
+    // UNIQUE constraint for idempotency: (source_system, source_reference)
+    sourceIdempotencyUnique: uniqueIndex(
+      "charge_receipts_source_idempotency_unique"
+    ).on(table.sourceSystem, table.sourceReference),
   })
 );
 

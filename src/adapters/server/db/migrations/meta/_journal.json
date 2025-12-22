@@ -15,6 +15,13 @@
       "when": 1765895033599,
       "tag": "0001_parched_barracuda",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1766376474010,
+      "tag": "0002_common_karnak",
+      "breakpoints": true
     }
   ]
 }
