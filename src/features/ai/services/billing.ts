@@ -111,10 +111,14 @@ export async function recordBilling(
       );
     }
 
+    // P0: Direct LLM call = single-node graph; ingressRequestId coincidentally equals runId
+    // P1: runId persists across reconnects; many ingressRequestIds per runId
     await accountService.recordChargeReceipt({
       billingAccountId,
       virtualKeyId,
-      requestId,
+      runId: requestId, // P0: requestId serves as runId for direct LLM calls
+      attempt: 0, // P0: always 0
+      ingressRequestId: requestId, // Optional delivery correlation
       chargedCredits,
       responseCostUsd: userCostUsd,
       litellmCallId: litellmCallId ?? null,
@@ -136,6 +140,137 @@ export async function recordBilling(
     );
     // DO NOT RETHROW - user already got LLM response, must see it
     // EXCEPT in test environment where we need to catch these issues
+    if (serverEnv().APP_ENV === "test") {
+      throw error;
+    }
+  }
+}
+
+// ============================================================================
+// Run-Centric Billing (GRAPH_EXECUTION.md P0)
+// ============================================================================
+
+/**
+ * Compute idempotency key for run-centric billing.
+ * Per GRAPH_EXECUTION.md: source_reference = runId/attempt/usageUnitId
+ *
+ * @param runId - Graph run ID
+ * @param attempt - Attempt number (P0: always 0)
+ * @param usageUnitId - Adapter-provided stable ID for this usage unit
+ * @returns Idempotency key for source_reference column
+ */
+export function computeIdempotencyKey(
+  runId: string,
+  attempt: number,
+  usageUnitId: string
+): string {
+  return `${runId}/${attempt}/${usageUnitId}`;
+}
+
+/**
+ * Commit a usage fact to the billing ledger.
+ * Per GRAPH_EXECUTION.md: billing subscriber calls this for each usage_report event.
+ *
+ * Invariants:
+ * - ONE_LEDGER_WRITER: Only this module calls accountService.recordChargeReceipt()
+ * - IDEMPOTENT_CHARGES: DB constraint on (source_system, source_reference) prevents duplicates
+ * - Billing subscriber owns callIndex for deterministic fallback
+ *
+ * @param fact - Usage fact from usage_report event
+ * @param callIndex - Billing-subscriber-assigned index for fallback usageUnitId
+ * @param accountService - Account service port for charge recording
+ * @param log - Logger for error reporting
+ */
+export async function commitUsageFact(
+  fact: UsageFact,
+  callIndex: number,
+  accountService: AccountService,
+  log: Logger
+): Promise<void> {
+  const {
+    runId,
+    attempt,
+    billingAccountId,
+    virtualKeyId,
+    ingressRequestId,
+    source,
+  } = fact;
+
+  // Resolve usageUnitId: adapter-provided or fallback
+  let usageUnitId = fact.usageUnitId;
+  if (!usageUnitId) {
+    log.error(
+      { runId, model: fact.model, callIndex },
+      "billing.missing_usage_unit_id"
+    );
+    usageUnitId = `MISSING:${runId}/${callIndex}`;
+  }
+
+  try {
+    // Determine model and cost
+    const model = fact.model ?? "unknown";
+    const isFree = await isModelFree(model);
+    let chargedCredits = 0n;
+    let userCostUsd: number | null = null;
+
+    if (!isFree && typeof fact.costUsd === "number") {
+      const charge = calculateDefaultLlmCharge(fact.costUsd);
+      chargedCredits = charge.chargedCredits;
+      userCostUsd = charge.userCostUsd;
+
+      log.debug(
+        {
+          runId,
+          ingressRequestId,
+          providerCostUsd: fact.costUsd,
+          userCostUsd,
+          chargedCredits: chargedCredits.toString(),
+        },
+        "commitUsageFact: cost calculation complete"
+      );
+    } else if (!isFree && typeof fact.costUsd !== "number") {
+      log.error(
+        { runId, ingressRequestId, model, usageUnitId },
+        "CRITICAL: UsageFact missing cost data - billing incomplete (degraded under-billing mode)"
+      );
+    }
+
+    // Compute idempotency key
+    const sourceReference = computeIdempotencyKey(runId, attempt, usageUnitId);
+
+    // Record charge receipt (sole ledger writer)
+    await accountService.recordChargeReceipt({
+      billingAccountId,
+      virtualKeyId,
+      runId,
+      attempt,
+      ...(ingressRequestId && { ingressRequestId }), // Optional delivery correlation
+      chargedCredits,
+      responseCostUsd: userCostUsd,
+      litellmCallId: fact.usageUnitId ?? null, // Original adapter ID for correlation
+      provenance: "stream", // Graph execution always streams
+      chargeReason: "llm_usage",
+      sourceSystem: source,
+      sourceReference,
+    });
+
+    log.info(
+      {
+        runId,
+        attempt,
+        usageUnitId,
+        sourceReference,
+        chargedCredits: chargedCredits.toString(),
+      },
+      "commitUsageFact: charge recorded"
+    );
+  } catch (error) {
+    // Post-call billing is best-effort - NEVER block user response
+    log.error(
+      { err: error, runId, ingressRequestId, billingAccountId },
+      "CRITICAL: commitUsageFact failed - user response NOT blocked"
+    );
+    // Re-throw in test environment for visibility
     if (serverEnv().APP_ENV === "test") {
       throw error;
     }
