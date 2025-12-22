@@ -4,64 +4,27 @@
 /**
  * Module: `@features/ai/types`
  * Purpose: Internal type definitions for AI feature streaming and tool lifecycle.
- * Scope: AiEvent types emitted by ai_runtime, StreamFinalResult for completion, and tool-runner types. Feature-internal, NOT in shared/.
+ * Scope: Re-exports AiEvent types from @/types/ai-events, defines StreamFinalResult and tool-runner types. Feature-internal, NOT in shared/.
  * Invariants:
  *   - AiEvents are the ONLY output type from ai_runtime
  *   - toolCallId must be stable across start→result lifecycle
  *   - Route layer maps AiEvents to assistant-stream format (never runtime)
+ *   - UsageReportEvent carries UsageFact for billing subscriber (never to UI)
  * Side-effects: none (types only)
- * Notes: Per AI_SETUP_SPEC.md P1 invariant AI_RUNTIME_EMITS_AIEVENTS
- * Links: ai_runtime.ts, tool-runner.ts, AI_SETUP_SPEC.md
+ * Notes: Per AI_SETUP_SPEC.md P1 invariant AI_RUNTIME_EMITS_AIEVENTS, GRAPH_EXECUTION.md
+ * Links: ai_runtime.ts, tool-runner.ts, AI_SETUP_SPEC.md, GRAPH_EXECUTION.md, @/types/ai-events.ts
  * @internal
  */
 
-/**
- * Text content streaming from LLM.
- * Emitted by runtime when receiving text chunks from LLM stream.
- */
-export interface TextDeltaEvent {
-  readonly type: "text_delta";
-  /** Incremental text content */
-  readonly delta: string;
-}
-
-/**
- * Tool call initiated.
- * Emitted by tool-runner when a tool execution begins.
- * Per TOOLCALL_ID_STABLE: same toolCallId persists across start→result.
- */
-export interface ToolCallStartEvent {
-  readonly type: "tool_call_start";
-  /** Stable ID for this tool call (model-provided or UUID) */
-  readonly toolCallId: string;
-  /** Tool name (snake_case, stable API identifier) */
-  readonly toolName: string;
-  /** Tool arguments (validated, may be redacted for streaming) */
-  readonly args: Record<string, unknown>;
-}
-
-/**
- * Tool call completed.
- * Emitted by tool-runner after tool execution completes (success or error).
- * Per TOOLRUNNER_ALLOWLIST_HARD_FAIL: result is always redacted per allowlist.
- */
-export interface ToolCallResultEvent {
-  readonly type: "tool_call_result";
-  /** Same toolCallId as corresponding start event */
-  readonly toolCallId: string;
-  /** Redacted result (UI-safe fields only per tool allowlist) */
-  readonly result: Record<string, unknown>;
-  /** True if tool execution failed */
-  readonly isError?: boolean;
-}
-
-/**
- * Stream completed.
- * Emitted by runtime when the entire response is done.
- */
-export interface DoneEvent {
-  readonly type: "done";
-}
+// Re-export shared AI event types from types layer
+export type {
+  AiEvent,
+  DoneEvent,
+  TextDeltaEvent,
+  ToolCallResultEvent,
+  ToolCallStartEvent,
+  UsageReportEvent,
+} from "@/types/ai-events";
 
 /**
  * Stream final result - discriminated union for ok/error paths.
@@ -83,16 +46,6 @@ export type StreamFinalResult =
       readonly requestId: string;
       readonly error: "timeout" | "aborted" | "internal";
     };
-
-/**
- * Union of all AI events emitted by ai_runtime.
- * Per AI_RUNTIME_EMITS_AIEVENTS: runtime emits these only; route maps to wire protocol.
- */
-export type AiEvent =
-  | TextDeltaEvent
-  | ToolCallStartEvent
-  | ToolCallResultEvent
-  | DoneEvent;
 
 /**
  * Tool execution result shape.

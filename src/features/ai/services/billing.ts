@@ -3,16 +3,17 @@
 
 /**
  * Module: `@features/ai/services/billing`
- * Purpose: Post-call charge recording (non-blocking).
+ * Purpose: Post-call charge recording (non-blocking) and run-centric billing via commitUsageFact.
  * Scope: Calculate user charge from provider cost, record charge receipt. Does NOT perform pre-flight checks or LLM calls.
  * Invariants:
+ *   - ONE_LEDGER_WRITER: Only this module calls accountService.recordChargeReceipt()
  *   - Post-call billing NEVER blocks user response (catches errors in prod)
  *   - ZERO_CREDIT_RECEIPTS_WRITTEN: Always records receipt even when chargedCredits = 0n
- *   - LITELLM_CALL_ID_FALLBACK: sourceReference = litellmCallId ?? requestId with error log
+ *   - IDEMPOTENT_CHARGES: source_reference = runId/attempt/usageUnitId; DB constraint prevents duplicates
  *   - TEST_ENV_RETHROWS_BILLING: APP_ENV === "test" re-throws for test visibility
  * Side-effects: IO (writes charge receipt via AccountService)
- * Notes: Per COMPLETION_REFACTOR_PLAN.md P2 extraction
- * Links: completion.ts, ports/account.port.ts, llmPricingPolicy.ts
+ * Notes: Per GRAPH_EXECUTION.md, COMPLETION_REFACTOR_PLAN.md P2 extraction
+ * Links: completion.ts, ports/account.port.ts, llmPricingPolicy.ts, GRAPH_EXECUTION.md
  * @public
  */
 
@@ -20,6 +21,7 @@ import type { Logger } from "pino";
 import type { AccountService } from "@/ports";
 import { isModelFree } from "@/shared/ai/model-catalog.server";
 import { serverEnv } from "@/shared/env";
+import type { UsageFact } from "@/types/usage";
 import { calculateDefaultLlmCharge } from "./llmPricingPolicy";
 
 /**
