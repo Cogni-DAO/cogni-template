@@ -25,6 +25,8 @@
 
 10. **RUNID_IS_CANONICAL**: `runId` is the canonical execution identity. `ingressRequestId` is optional delivery-layer correlation (HTTP/SSE/worker/queue). P0: they coincidentally equal (no run persistence). P1: many `ingressRequestId`s per `runId` (reconnect/resume). No business logic relies on `ingressRequestId == runId`. Never use `ingressRequestId` for idempotency.
 
+11. **BILLABLE_AI_THROUGH_EXECUTOR**: Production code paths that emit `UsageFact` must execute via `AiRuntimeService` → `GraphExecutorPort`. Direct `completion.executeStream()` calls outside executor internals bypass billing/telemetry pipeline and are prohibited. Enforced by stack test (`no-direct-completion-executestream.stack.test.ts`).
+
 ---
 
 ## Implementation Checklist
@@ -69,25 +71,26 @@ n8n/Flowise adapters — build only if demand materializes and engines route LLM
 
 ## File Pointers (P0 Scope)
 
-| File                                              | Change                                                                |
-| ------------------------------------------------- | --------------------------------------------------------------------- |
-| `src/ports/graph-executor.port.ts`                | New: `GraphExecutorPort`, `GraphRunRequest`, `GraphRunResult`         |
-| `src/ports/index.ts`                              | Re-export `GraphExecutorPort`                                         |
-| `src/adapters/server/ai/inproc-graph.adapter.ts`  | New: `InProcGraphExecutorAdapter`; emits `usage_report` before `done` |
-| `src/types/usage.ts`                              | New: `UsageFact` type (no functions per types layer policy)           |
-| `src/types/billing.ts`                            | Add `'anthropic_sdk'` to `SOURCE_SYSTEMS`                             |
-| `src/features/ai/types.ts`                        | Add `UsageReportEvent` (contains `UsageFact`)                         |
-| `src/features/ai/services/completion.ts`          | Remove `recordBilling()`; return usage in final (no AiEvent emission) |
-| `src/features/ai/services/billing.ts`             | Add `commitUsageFact()`, `computeIdempotencyKey()` (functions here)   |
-| `src/features/ai/services/ai_runtime.ts`          | Add `RunEventRelay` (StreamDriver + Fanout)                           |
-| `src/shared/db/schema.billing.ts`                 | Add `run_id`, `attempt` columns; change uniqueness constraints        |
-| `src/bootstrap/container.ts`                      | Wire `InProcGraphExecutorAdapter`                                     |
-| `src/features/ai/graphs/langgraph-smoke.graph.ts` | New: minimal LangGraph graph (P1)                                     |
-| `.dependency-cruiser.cjs`                         | Add ONE_LEDGER_WRITER rule                                            |
-| `tests/ports/graph-executor.port.spec.ts`         | New: port contract test                                               |
-| `tests/stack/ai/one-ledger-writer.test.ts`        | New: grep for `.recordChargeReceipt(` call sites                      |
-| `tests/stack/ai/billing-idempotency.test.ts`      | New: replay usage_report twice, assert 1 row                          |
-| `tests/stack/ai/billing-disconnect.test.ts`       | New: StreamDriver completes billing even if UI subscriber disconnects |
+| File                                                              | Change                                                                |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `src/ports/graph-executor.port.ts`                                | New: `GraphExecutorPort`, `GraphRunRequest`, `GraphRunResult`         |
+| `src/ports/index.ts`                                              | Re-export `GraphExecutorPort`                                         |
+| `src/adapters/server/ai/inproc-graph.adapter.ts`                  | New: `InProcGraphExecutorAdapter`; emits `usage_report` before `done` |
+| `src/types/usage.ts`                                              | New: `UsageFact` type (no functions per types layer policy)           |
+| `src/types/billing.ts`                                            | Add `'anthropic_sdk'` to `SOURCE_SYSTEMS`                             |
+| `src/features/ai/types.ts`                                        | Add `UsageReportEvent` (contains `UsageFact`)                         |
+| `src/features/ai/services/completion.ts`                          | Remove `recordBilling()`; return usage in final (no AiEvent emission) |
+| `src/features/ai/services/billing.ts`                             | Add `commitUsageFact()`, `computeIdempotencyKey()` (functions here)   |
+| `src/features/ai/services/ai_runtime.ts`                          | Add `RunEventRelay` (StreamDriver + Fanout)                           |
+| `src/shared/db/schema.billing.ts`                                 | Add `run_id`, `attempt` columns; change uniqueness constraints        |
+| `src/bootstrap/container.ts`                                      | Wire `InProcGraphExecutorAdapter`                                     |
+| `src/features/ai/graphs/langgraph-smoke.graph.ts`                 | New: minimal LangGraph graph (P1)                                     |
+| `.dependency-cruiser.cjs`                                         | Add ONE_LEDGER_WRITER rule                                            |
+| `tests/ports/graph-executor.port.spec.ts`                         | New: port contract test                                               |
+| `tests/stack/ai/one-ledger-writer.test.ts`                        | New: grep for `.recordChargeReceipt(` call sites                      |
+| `tests/stack/ai/billing-idempotency.test.ts`                      | New: replay usage_report twice, assert 1 row                          |
+| `tests/stack/ai/billing-disconnect.test.ts`                       | New: StreamDriver completes billing even if UI subscriber disconnects |
+| `tests/stack/ai/no-direct-completion-executestream.stack.test.ts` | New: grep test for BILLABLE_AI_THROUGH_EXECUTOR                       |
 
 ---
 
