@@ -13,7 +13,11 @@
  */
 
 import { TEST_MODEL_ID } from "@tests/_fakes";
-import { setupCompletionFacadeTest } from "@tests/_fixtures/ai/completion-facade-setup";
+import {
+  createContainerMock,
+  createMockAiAdapterDeps,
+  setupCompletionFacadeTest,
+} from "@tests/_fixtures/ai/completion-facade-setup";
 import { describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 
@@ -31,13 +35,11 @@ vi.mock("@/shared/env", () => ({
 describe("completion facade contract", () => {
   it("should return exact shape matching aiCompletionOperation.output", async () => {
     // Arrange - Use reusable fixture
-    const { llmService, accountService, clock, mockBillingAccount } =
-      setupCompletionFacadeTest();
+    const { mockBillingAccount, clock } = setupCompletionFacadeTest();
+    const mockDeps = createMockAiAdapterDeps();
 
-    // Mock bootstrap container
-    vi.doMock("@/bootstrap/container", () => ({
-      resolveAiDeps: () => ({ llmService, accountService, clock }),
-    }));
+    // Mock bootstrap container with proper AiAdapterDeps shape
+    vi.doMock("@/bootstrap/container", () => createContainerMock(mockDeps));
 
     // Mock auth mapping
     vi.doMock("@/lib/auth/mapping", () => ({
@@ -79,12 +81,11 @@ describe("completion facade contract", () => {
 
   it("should provide type safety via contract inference", async () => {
     // Arrange - Use reusable fixture
-    const { llmService, accountService, clock, mockBillingAccount } =
-      setupCompletionFacadeTest();
+    const { mockBillingAccount, clock } = setupCompletionFacadeTest();
+    const mockDeps = createMockAiAdapterDeps();
 
-    vi.doMock("@/bootstrap/container", () => ({
-      resolveAiDeps: () => ({ llmService, accountService, clock }),
-    }));
+    // Mock bootstrap container with proper AiAdapterDeps shape
+    vi.doMock("@/bootstrap/container", () => createContainerMock(mockDeps));
 
     vi.doMock("@/lib/auth/mapping", () => ({
       getOrCreateBillingAccountForUser: vi

@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @cogni-dao
-- **Last reviewed:** 2025-12-09
+- **Last reviewed:** 2025-12-22
 - **Status:** stable
 
 ## Purpose
@@ -41,6 +41,8 @@ Event name registry as single source of truth. Prevents ad-hoc event strings and
   - `EventName` - union type derived from EVENT_NAMES
   - `EventBase` - required base fields (reqId always; routeId for HTTP)
   - `AiActivityQueryCompletedEvent` - typed event with fetchedLogCount/unjoinedLogCount
+  - `AiBillingCommitCompleteEvent` - billing commit outcome (success/error with chargedCredits or errorCode)
+  - `AiRelayPumpErrorEvent` - relay pump failure event (per BILLING_INDEPENDENT_OF_CLIENT)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none

@@ -43,10 +43,16 @@ interface TestAccount {
 /**
  * Default test values for charge receipt fields (DRY helper).
  * Apply via object spread: { ...testChargeReceiptDefaults, sourceReference: "unique-id", ...specificFields }
+ *
+ * Per GRAPH_EXECUTION.md:
+ * - runId: required canonical execution identity
+ * - attempt: required (P0: always 0)
+ * - ingressRequestId: optional delivery correlation
  */
 const testChargeReceiptDefaults = {
   chargeReason: "llm_usage" as ChargeReason,
   sourceSystem: "litellm" as SourceSystem,
+  attempt: 0, // P0: always 0
 };
 
 describe("DrizzleUsageAdapter Integration Tests", () => {
@@ -119,6 +125,7 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
 
     // Seed charge receipts for Account A (5 records over 3 days)
     // Per ACTIVITY_METRICS.md: no model/tokens/usage - LiteLLM is canonical
+    // Per GRAPH_EXECUTION.md: runId is canonical, attempt=0 (P0), ingressRequestId is optional
     const baseDate = new Date("2024-06-15T00:00:00Z");
     await db.insert(chargeReceipts).values([
       {
@@ -126,12 +133,12 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         id: randomUUID(),
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
-        requestId: "req-a-1",
+        runId: "run-a-1",
         litellmCallId: "call-a-1",
         chargedCredits: 5000n,
         responseCostUsd: "0.005000",
         provenance: "response",
-        sourceReference: "call-a-1",
+        sourceReference: "run-a-1/0/call-a-1",
         createdAt: new Date(baseDate.getTime()),
       },
       {
@@ -139,8 +146,8 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         id: randomUUID(),
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
-        requestId: "req-a-2",
-        sourceReference: "req-a-2",
+        runId: "run-a-2",
+        sourceReference: "run-a-2/0/call-a-2",
         litellmCallId: "call-a-2",
         chargedCredits: 10000n,
         responseCostUsd: "0.010000",
@@ -152,8 +159,8 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         id: randomUUID(),
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
-        requestId: "req-a-3",
-        sourceReference: "req-a-3",
+        runId: "run-a-3",
+        sourceReference: "run-a-3/0/call-a-3",
         litellmCallId: "call-a-3",
         chargedCredits: 1000n,
         responseCostUsd: "0.001000",
@@ -165,8 +172,8 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         id: randomUUID(),
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
-        requestId: "req-a-4",
-        sourceReference: "req-a-4",
+        runId: "run-a-4",
+        sourceReference: "run-a-4/0/call-a-4",
         litellmCallId: "call-a-4",
         chargedCredits: 15000n,
         responseCostUsd: "0.015000",
@@ -178,8 +185,8 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         id: randomUUID(),
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
-        requestId: "req-a-5",
-        sourceReference: "req-a-5",
+        runId: "run-a-5",
+        sourceReference: "run-a-5/0/call-a-5",
         litellmCallId: "call-a-5",
         chargedCredits: 20000n,
         responseCostUsd: "0.020000",
@@ -192,14 +199,15 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
 
     // Seed charge receipts for Account B (3 records, different amounts)
     // Per ACTIVITY_METRICS.md: no model/tokens/usage - LiteLLM is canonical
+    // Per GRAPH_EXECUTION.md: runId is canonical, attempt=0 (P0), ingressRequestId is optional
     await db.insert(chargeReceipts).values([
       {
         ...testChargeReceiptDefaults,
         id: randomUUID(),
         billingAccountId: accountB.billingAccountId,
         virtualKeyId: accountB.virtualKeyId,
-        requestId: "req-b-1",
-        sourceReference: "req-b-1",
+        runId: "run-b-1",
+        sourceReference: "run-b-1/0/call-b-1",
         litellmCallId: "call-b-1",
         chargedCredits: 100000n,
         responseCostUsd: "0.100000",
@@ -211,8 +219,8 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         id: randomUUID(),
         billingAccountId: accountB.billingAccountId,
         virtualKeyId: accountB.virtualKeyId,
-        requestId: "req-b-2",
-        sourceReference: "req-b-2",
+        runId: "run-b-2",
+        sourceReference: "run-b-2/0/call-b-2",
         litellmCallId: "call-b-2",
         chargedCredits: 200000n,
         responseCostUsd: "0.200000",
@@ -224,8 +232,8 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         id: randomUUID(),
         billingAccountId: accountB.billingAccountId,
         virtualKeyId: accountB.virtualKeyId,
-        requestId: "req-b-3",
-        sourceReference: "req-b-3",
+        runId: "run-b-3",
+        sourceReference: "run-b-3/0/call-b-3",
         litellmCallId: "call-b-3",
         chargedCredits: 50000n,
         responseCostUsd: "0.050000",
@@ -441,14 +449,16 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         .limit(1);
       if (!vk) throw new Error("Expected virtual key");
 
+      const nonalignedRunId1 = `run-nonaligned-1-${randomUUID()}`;
+      const nonalignedRunId2 = `run-nonaligned-2-${randomUUID()}`;
       await db.insert(chargeReceipts).values([
         {
           ...testChargeReceiptDefaults,
           id: randomUUID(),
           billingAccountId: accountA.billingAccountId,
           virtualKeyId: vk.id,
-          requestId: `req-nonaligned-1-${randomUUID()}`,
-          sourceReference: `req-nonaligned-1-${randomUUID()}`,
+          runId: nonalignedRunId1,
+          sourceReference: `${nonalignedRunId1}/0/call-nonaligned-1`,
           litellmCallId: "call-nonaligned-1",
           chargedCredits: 10000n,
           responseCostUsd: "0.010000",
@@ -460,8 +470,8 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
           id: randomUUID(),
           billingAccountId: accountA.billingAccountId,
           virtualKeyId: vk.id,
-          requestId: `req-nonaligned-2-${randomUUID()}`,
-          sourceReference: `req-nonaligned-2-${randomUUID()}`,
+          runId: nonalignedRunId2,
+          sourceReference: `${nonalignedRunId2}/0/call-nonaligned-2`,
           litellmCallId: "call-nonaligned-2",
           chargedCredits: 10000n,
           responseCostUsd: "0.010000",
@@ -612,15 +622,17 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
     });
   });
 
-  describe("inv_charge_receipt_idempotent (per ACTIVITY_METRICS.md)", () => {
+  describe("inv_charge_receipt_idempotent (per GRAPH_EXECUTION.md)", () => {
     let accountService: DrizzleAccountService;
 
     beforeAll(() => {
       accountService = new DrizzleAccountService(db);
     });
 
-    it("recordChargeReceipt is idempotent - calling twice with same requestId creates exactly one receipt and one ledger entry", async () => {
-      const requestId = `idem-test-${randomUUID()}`;
+    it("recordChargeReceipt is idempotent - calling twice with same sourceReference creates exactly one receipt and one ledger entry", async () => {
+      const runId = `idem-run-${randomUUID()}`;
+      const callId = `call-${runId}`;
+      const sourceReference = `${runId}/0/${callId}`;
       const chargedCredits = 5000n;
 
       // Get initial balance
@@ -628,38 +640,40 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         accountA.billingAccountId
       );
 
-      // Call recordChargeReceipt twice with same requestId
+      // Call recordChargeReceipt twice with same sourceReference
       await accountService.recordChargeReceipt({
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
-        requestId,
+        runId,
+        attempt: 0,
         chargedCredits,
         responseCostUsd: 0.005,
-        litellmCallId: `call-${requestId}`,
+        litellmCallId: callId,
         provenance: "response",
         chargeReason: "llm_usage",
         sourceSystem: "litellm",
-        sourceReference: `call-${requestId}`,
+        sourceReference,
       });
 
       await accountService.recordChargeReceipt({
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
-        requestId, // Same requestId - should be idempotent
+        runId,
+        attempt: 0, // Same sourceReference - should be idempotent
         chargedCredits,
         responseCostUsd: 0.005,
-        litellmCallId: `call-${requestId}`,
+        litellmCallId: callId,
         provenance: "response",
         chargeReason: "llm_usage",
         sourceSystem: "litellm",
-        sourceReference: `call-${requestId}`,
+        sourceReference,
       });
 
-      // Verify exactly one charge receipt exists
+      // Verify exactly one charge receipt exists (by sourceReference)
       const receipts = await db
         .select()
         .from(chargeReceipts)
-        .where(eq(chargeReceipts.requestId, requestId));
+        .where(eq(chargeReceipts.sourceReference, sourceReference));
       expect(receipts).toHaveLength(1);
 
       // Verify exactly one ledger entry exists for this reference
@@ -668,7 +682,7 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         .from(creditLedger)
         .where(
           and(
-            eq(creditLedger.reference, requestId),
+            eq(creditLedger.reference, sourceReference),
             eq(creditLedger.reason, "charge_receipt")
           )
         );
@@ -683,9 +697,13 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
       );
     });
 
-    it("different requestIds create separate receipts and ledger entries", async () => {
-      const requestId1 = `diff-test-1-${randomUUID()}`;
-      const requestId2 = `diff-test-2-${randomUUID()}`;
+    it("different sourceReferences create separate receipts and ledger entries", async () => {
+      const runId1 = `diff-run-1-${randomUUID()}`;
+      const runId2 = `diff-run-2-${randomUUID()}`;
+      const callId1 = `call-${runId1}`;
+      const callId2 = `call-${runId2}`;
+      const sourceReference1 = `${runId1}/0/${callId1}`;
+      const sourceReference2 = `${runId2}/0/${callId2}`;
       const chargedCredits = 1000n;
 
       // Get initial balance
@@ -693,42 +711,44 @@ describe("DrizzleUsageAdapter Integration Tests", () => {
         accountA.billingAccountId
       );
 
-      // Call with two different requestIds
+      // Call with two different sourceReferences
       await accountService.recordChargeReceipt({
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
-        requestId: requestId1,
+        runId: runId1,
+        attempt: 0,
         chargedCredits,
         responseCostUsd: 0.001,
-        litellmCallId: `call-${requestId1}`,
+        litellmCallId: callId1,
         provenance: "response",
         chargeReason: "llm_usage",
         sourceSystem: "litellm",
-        sourceReference: `call-${requestId1}`,
+        sourceReference: sourceReference1,
       });
 
       await accountService.recordChargeReceipt({
         billingAccountId: accountA.billingAccountId,
         virtualKeyId: accountA.virtualKeyId,
-        requestId: requestId2, // Different requestId
+        runId: runId2,
+        attempt: 0, // Different sourceReference
         chargedCredits,
         responseCostUsd: 0.001,
-        litellmCallId: `call-${requestId2}`,
+        litellmCallId: callId2,
         provenance: "stream",
         chargeReason: "llm_usage",
         sourceSystem: "litellm",
-        sourceReference: `call-${requestId2}`,
+        sourceReference: sourceReference2,
       });
 
       // Verify two charge receipts exist
       const receipts1 = await db
         .select()
         .from(chargeReceipts)
-        .where(eq(chargeReceipts.requestId, requestId1));
+        .where(eq(chargeReceipts.sourceReference, sourceReference1));
       const receipts2 = await db
         .select()
         .from(chargeReceipts)
-        .where(eq(chargeReceipts.requestId, requestId2));
+        .where(eq(chargeReceipts.sourceReference, sourceReference2));
       expect(receipts1).toHaveLength(1);
       expect(receipts2).toHaveLength(1);
 

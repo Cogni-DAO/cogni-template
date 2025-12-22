@@ -27,6 +27,8 @@ export const EVENT_NAMES = {
   AI_CHAT_CLIENT_ABORTED: "ai.chat_client_aborted",
   AI_MODELS_LIST_SUCCESS: "ai.models_list_success",
   AI_ACTIVITY_QUERY_COMPLETED: "ai.activity.query_completed",
+  AI_BILLING_COMMIT_COMPLETE: "ai.billing.commit_complete",
+  AI_RELAY_PUMP_ERROR: "ai.relay.pump_error",
 
   // AI Domain - Client
   CLIENT_CHAT_MODEL_INVALID_RETRY: "client.chat.model_invalid_retry",

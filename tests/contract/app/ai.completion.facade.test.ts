@@ -5,10 +5,12 @@
  * Module: `@app/_facades/ai/completion.server`
  * Purpose: Verifies DTO validation and dependency coordination of AI completion facade.
  * Scope: App-layer contract testing with mocks. Does NOT test feature logic or HTTP routing.
- * Invariants: Contract compliance; error mapping; dependency injection; timestamp consistency.
+ * Invariants:
+ *   - Contract compliance; error mapping; dependency injection; timestamp consistency.
+ *   - UNIFIED_GRAPH_EXECUTOR: All execution flows through GraphExecutorPort.runGraph()
  * Side-effects: none
- * Notes: Uses fake services for isolation; tests error propagation.
- * Links: aiCompletionOperation contract, completion facade
+ * Notes: Uses fake services for isolation; mocks GraphExecutor at bootstrap boundary.
+ * Links: aiCompletionOperation contract, completion facade, GRAPH_EXECUTION.md
  * @public
  */
 
@@ -17,31 +19,72 @@ import {
   FakeAiTelemetryAdapter,
   FakeClock,
 } from "@tests/_fakes";
-import { FakeLlmService, TEST_MODEL_ID } from "@tests/_fakes/ai/fakes";
+import { TEST_MODEL_ID } from "@tests/_fakes/ai/fakes";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { completion } from "@/app/_facades/ai/completion.server";
 import { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
-import { ChatErrorCode, ChatValidationError } from "@/core";
+import type {
+  GraphExecutorPort,
+  GraphRunRequest,
+  GraphRunResult,
+} from "@/ports";
 import type { SessionUser } from "@/shared/auth";
 import type { RequestContext } from "@/shared/observability";
 import { makeNoopLogger } from "@/shared/observability";
+import type { AiEvent } from "@/types/ai-events";
 
 // Mock the bootstrap container
 vi.mock("@/bootstrap/container", () => ({
-  resolveAiDeps: vi.fn(),
+  resolveAiAdapterDeps: vi.fn(),
 }));
 
-// Mock the feature service
-vi.mock("@/features/ai/services/completion", () => ({
-  execute: vi.fn(),
+// Mock the graph executor factory (stable boundary per UNIFIED_GRAPH_EXECUTOR)
+vi.mock("@/bootstrap/graph-executor.factory", () => ({
+  createInProcGraphExecutor: vi.fn(),
 }));
 
-import { resolveAiDeps } from "@/bootstrap/container";
-import { execute } from "@/features/ai/services/completion";
+import { resolveAiAdapterDeps } from "@/bootstrap/container";
+import { createInProcGraphExecutor } from "@/bootstrap/graph-executor.factory";
 
-const mockResolveAiDeps = vi.mocked(resolveAiDeps);
-const mockExecute = vi.mocked(execute);
+const mockResolveAiAdapterDeps = vi.mocked(resolveAiAdapterDeps);
+const mockCreateInProcGraphExecutor = vi.mocked(createInProcGraphExecutor);
+
+/**
+ * Create a fake GraphExecutorPort for testing.
+ * Emits a simple stream with text_delta and done events.
+ */
+function createFakeGraphExecutor(options: {
+  responseContent: string;
+  requestId: string;
+}): GraphExecutorPort & { runGraphSpy: ReturnType<typeof vi.fn> } {
+  const runGraphSpy = vi.fn();
+
+  const executor: GraphExecutorPort = {
+    runGraph(req: GraphRunRequest): GraphRunResult {
+      runGraphSpy(req);
+
+      // Create async generator for stream
+      async function* createStream(): AsyncIterable<AiEvent> {
+        yield { type: "text_delta", delta: options.responseContent };
+        yield { type: "done" };
+      }
+
+      // Create final promise
+      const final = Promise.resolve({
+        ok: true as const,
+        runId: req.runId,
+        requestId: options.requestId,
+        usage: { promptTokens: 10, completionTokens: 20 },
+        finishReason: "stop",
+      });
+
+      return { stream: createStream(), final };
+    },
+  };
+
+  return { ...executor, runGraphSpy };
+}
 
 describe("app/_facades/ai/completion.server", () => {
   const sessionUser: SessionUser = {
@@ -54,7 +97,7 @@ describe("app/_facades/ai/completion.server", () => {
   });
 
   describe("completion", () => {
-    it("should handle valid DTO input and return contract-compliant output", async () => {
+    it("should handle valid DTO input and return contract-compliant output via GraphExecutorPort", async () => {
       // Arrange
       const input = {
         messages: [
@@ -65,26 +108,23 @@ describe("app/_facades/ai/completion.server", () => {
         sessionUser,
       };
 
-      const fakeLlm = new FakeLlmService({ responseContent: "AI response" });
       const fakeClock = new FakeClock("2025-01-01T12:00:00.000Z");
       const mockAccountService = createMockAccountServiceWithDefaults();
 
-      mockResolveAiDeps.mockReturnValue({
-        llmService: fakeLlm,
+      mockResolveAiAdapterDeps.mockReturnValue({
+        llmService: {} as never, // Not used in streaming path
         accountService: mockAccountService,
         clock: fakeClock,
         aiTelemetry: new FakeAiTelemetryAdapter(),
         langfuse: undefined,
       });
 
-      mockExecute.mockResolvedValue({
-        message: {
-          role: "assistant",
-          content: "AI response",
-          timestamp: "2025-01-01T12:00:00.000Z",
-        },
+      // Create fake executor with spy
+      const fakeExecutor = createFakeGraphExecutor({
+        responseContent: "AI response",
         requestId: "req-123",
       });
+      mockCreateInProcGraphExecutor.mockReturnValue(fakeExecutor);
 
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
@@ -97,7 +137,17 @@ describe("app/_facades/ai/completion.server", () => {
       // Act
       const result = await completion(input, testCtx);
 
-      // Assert
+      // Assert - CRITICAL: GraphExecutorPort.runGraph() MUST be called
+      expect(fakeExecutor.runGraphSpy).toHaveBeenCalledTimes(1);
+      const runGraphCall = fakeExecutor.runGraphSpy.mock
+        .calls[0]?.[0] as GraphRunRequest;
+      expect(runGraphCall).toBeDefined();
+      expect(runGraphCall.runId).toBe("test-req-123"); // P0: runId = ctx.reqId
+      expect(runGraphCall.ingressRequestId).toBe("test-req-123");
+      expect(runGraphCall.model).toBe(TEST_MODEL_ID);
+      expect(runGraphCall.messages).toHaveLength(2);
+
+      // Verify contract-compliant output
       expect(result).toEqual({
         message: {
           role: "assistant",
@@ -110,34 +160,7 @@ describe("app/_facades/ai/completion.server", () => {
       // Verify contract compliance
       expect(() => aiCompletionOperation.output.parse(result)).not.toThrow();
 
-      // Verify feature was called with mapped core messages
-      const executeCall = mockExecute.mock.calls[0];
-      expect(executeCall).toBeDefined();
-      const coreMessages = executeCall?.[0];
-      expect(coreMessages).toBeDefined();
-
-      expect(coreMessages).toHaveLength(2);
-      expect(coreMessages?.[0]).toEqual({
-        role: "user",
-        content: "Hello",
-        timestamp: "2025-01-01T12:00:00.000Z",
-      });
-      expect(coreMessages?.[1]).toEqual({
-        role: "assistant",
-        content: "Hi there",
-        timestamp: "2025-01-01T12:00:00.000Z",
-      });
-      expect(executeCall?.[1]).toBe(TEST_MODEL_ID); // model parameter
-      expect(executeCall?.[2]).toBe(fakeLlm);
-      expect(executeCall?.[3]).toBe(mockAccountService);
-      expect(executeCall?.[4]).toBe(fakeClock);
-      expect(executeCall?.[5]).toEqual({
-        billingAccountId: "billing-test-account-id",
-        virtualKeyId: "virtual-key-1",
-        requestId: "test-req-123",
-        traceId: "00000000000000000000000000000000",
-      });
-
+      // Verify billing account lookup
       expect(
         mockAccountService.getOrCreateBillingAccountForUser
       ).toHaveBeenCalledWith({
@@ -146,49 +169,7 @@ describe("app/_facades/ai/completion.server", () => {
       });
     });
 
-    it("should map ChatValidationError to structured error response", async () => {
-      // Arrange
-      const input = {
-        messages: [{ role: "user" as const, content: "A".repeat(5000) }],
-        model: TEST_MODEL_ID,
-        sessionUser,
-      };
-
-      const mockAccountService = createMockAccountServiceWithDefaults();
-      const fakeClock = new FakeClock();
-
-      mockResolveAiDeps.mockReturnValue({
-        llmService: new FakeLlmService(),
-        accountService: mockAccountService,
-        clock: fakeClock,
-        aiTelemetry: new FakeAiTelemetryAdapter(),
-        langfuse: undefined,
-      });
-
-      const testCtx: RequestContext = {
-        log: makeNoopLogger(),
-        reqId: "test-req-123",
-        traceId: "00000000000000000000000000000000",
-        routeId: "test.route",
-        clock: fakeClock,
-      };
-
-      const validationError = new ChatValidationError(
-        ChatErrorCode.MESSAGE_TOO_LONG,
-        "Message exceeds limit"
-      );
-      mockExecute.mockRejectedValue(validationError);
-
-      // Act & Assert
-      await expect(completion(input, testCtx)).rejects.toThrow(
-        ChatValidationError
-      );
-      await expect(completion(input, testCtx)).rejects.toThrow(
-        "Message exceeds limit"
-      );
-    });
-
-    it("should handle LLM service failures", async () => {
+    it("should propagate errors from GraphExecutorPort final result", async () => {
       // Arrange
       const input = {
         messages: [{ role: "user" as const, content: "Hello" }],
@@ -196,16 +177,36 @@ describe("app/_facades/ai/completion.server", () => {
         sessionUser,
       };
 
-      const mockAccountService = createMockAccountServiceWithDefaults();
       const fakeClock = new FakeClock();
+      const mockAccountService = createMockAccountServiceWithDefaults();
 
-      mockResolveAiDeps.mockReturnValue({
-        llmService: new FakeLlmService(),
+      mockResolveAiAdapterDeps.mockReturnValue({
+        llmService: {} as never,
         accountService: mockAccountService,
         clock: fakeClock,
         aiTelemetry: new FakeAiTelemetryAdapter(),
         langfuse: undefined,
       });
+
+      // Create executor that returns error result
+      const errorExecutor: GraphExecutorPort = {
+        runGraph(req: GraphRunRequest): GraphRunResult {
+          async function* createStream(): AsyncIterable<AiEvent> {
+            yield { type: "done" };
+          }
+
+          return {
+            stream: createStream(),
+            final: Promise.resolve({
+              ok: false as const,
+              runId: req.runId,
+              requestId: "req-err",
+              error: "internal" as const,
+            }),
+          };
+        },
+      };
+      mockCreateInProcGraphExecutor.mockReturnValue(errorExecutor);
 
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
@@ -215,16 +216,53 @@ describe("app/_facades/ai/completion.server", () => {
         clock: fakeClock,
       };
 
-      const serviceError = new Error("LLM service temporarily unavailable");
-      mockExecute.mockRejectedValue(serviceError);
-
       // Act & Assert
       await expect(completion(input, testCtx)).rejects.toThrow(
-        "LLM service temporarily unavailable"
+        "Completion failed: internal"
       );
     });
 
-    it("should set timestamps consistently on input messages", async () => {
+    it("should use factory to create graph executor", async () => {
+      // Arrange
+      const input = {
+        messages: [{ role: "user" as const, content: "Hello" }],
+        model: TEST_MODEL_ID,
+        sessionUser,
+      };
+
+      const fakeClock = new FakeClock();
+      const mockAccountService = createMockAccountServiceWithDefaults();
+
+      mockResolveAiAdapterDeps.mockReturnValue({
+        llmService: {} as never,
+        accountService: mockAccountService,
+        clock: fakeClock,
+        aiTelemetry: new FakeAiTelemetryAdapter(),
+        langfuse: undefined,
+      });
+
+      const fakeExecutor = createFakeGraphExecutor({
+        responseContent: "Response",
+        requestId: "req-456",
+      });
+      mockCreateInProcGraphExecutor.mockReturnValue(fakeExecutor);
+
+      const testCtx: RequestContext = {
+        log: makeNoopLogger(),
+        reqId: "test-req-123",
+        traceId: "00000000000000000000000000000000",
+        routeId: "test.route",
+        clock: fakeClock,
+      };
+
+      // Act
+      await completion(input, testCtx);
+
+      // Assert - Factory must be called to create executor
+      expect(mockCreateInProcGraphExecutor).toHaveBeenCalledTimes(1);
+    });
+
+    it("should set timestamps consistently from clock", async () => {
       // Arrange
       const input = {
         messages: [
@@ -239,22 +277,19 @@ describe("app/_facades/ai/completion.server", () => {
       const fakeClock = new FakeClock(fixedTime);
       const mockAccountService = createMockAccountServiceWithDefaults();
 
-      mockResolveAiDeps.mockReturnValue({
-        llmService: new FakeLlmService(),
+      mockResolveAiAdapterDeps.mockReturnValue({
+        llmService: {} as never,
         accountService: mockAccountService,
         clock: fakeClock,
         aiTelemetry: new FakeAiTelemetryAdapter(),
         langfuse: undefined,
       });
 
-      mockExecute.mockResolvedValue({
-        message: {
-          role: "assistant",
-          content: "Response",
-          timestamp: fixedTime,
-        },
+      const fakeExecutor = createFakeGraphExecutor({
+        responseContent: "Response",
         requestId: "req-456",
       });
+      mockCreateInProcGraphExecutor.mockReturnValue(fakeExecutor);
 
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
@@ -265,61 +300,10 @@ describe("app/_facades/ai/completion.server", () => {
       };
 
       // Act
-      await completion(input, testCtx);
+      const result = await completion(input, testCtx);
 
-      // Assert - all input messages should get the same timestamp
-      const executeCall = mockExecute.mock.calls[0];
-      expect(executeCall).toBeDefined();
-      const coreMessages = executeCall?.[0];
-      expect(coreMessages).toBeDefined();
-
-      expect(coreMessages).toEqual([
-        { role: "user", content: "First", timestamp: fixedTime },
-        { role: "assistant", content: "Second", timestamp: fixedTime },
-      ]);
-    });
-
-    it("should reject system role messages at facade level", async () => {
-      // Arrange - This tests the mapper's role validation
-      const input = {
-        messages: [
-          { role: "user" as const, content: "Hello" },
-          // Note: TypeScript prevents system role in DTO, but test runtime behavior
-        ],
-        model: TEST_MODEL_ID,
-        sessionUser,
-      };
-
-      const mockAccountService = createMockAccountServiceWithDefaults();
-      const fakeClock = new FakeClock();
-
-      mockResolveAiDeps.mockReturnValue({
-        llmService: new FakeLlmService(),
-        accountService: mockAccountService,
-        clock: fakeClock,
-        aiTelemetry: new FakeAiTelemetryAdapter(),
-        langfuse: undefined,
-      });
-
-      const testCtx: RequestContext = {
-        log: makeNoopLogger(),
-        reqId: "test-req-123",
-        traceId: "00000000000000000000000000000000",
-        routeId: "test.route",
-        clock: fakeClock,
-      };
-
-      // Simulate mapper throwing on invalid role (tested in isolation elsewhere)
-      const roleError = new ChatValidationError(
-        ChatErrorCode.INVALID_CONTENT,
-        "Invalid role: system"
-      );
-      mockExecute.mockRejectedValue(roleError);
-
-      // Act & Assert
-      await expect(completion(input, testCtx)).rejects.toThrow(
-        ChatValidationError
-      );
+      // Assert - Output timestamp should use clock
+      expect(result.message.timestamp).toBe(fixedTime);
     });
   });
 });

@@ -9,6 +9,7 @@ Extends [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) with profit-enforcing billing a
 - Wallet integration: [INTEGRATION_WALLETS_CREDITS.md](INTEGRATION_WALLETS_CREDITS.md)
 - Payments (MVP funding): [DEPAY_PAYMENTS.md](DEPAY_PAYMENTS.md)
 - Usage/Activity Design: [ACTIVITY_METRICS.md](ACTIVITY_METRICS.md)
+- Graph Execution & Idempotency: [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md)
 
 ---
 
@@ -65,22 +66,29 @@ Minimal audit-focused table. LiteLLM is canonical for telemetry.
 
 **Schema:**
 
-| Column               | Type         | Purpose                                  |
-| -------------------- | ------------ | ---------------------------------------- |
-| `request_id`         | text UNIQUE  | Server-generated UUID, idempotency key   |
-| `billing_account_id` | text         | FK to billing_accounts                   |
-| `virtual_key_id`     | uuid         | FK to virtual_keys                       |
-| `litellm_call_id`    | text NULL    | Forensic correlation (x-litellm-call-id) |
-| `charged_credits`    | bigint       | Credits debited from user balance        |
-| `response_cost_usd`  | decimal NULL | Observational USD cost from LiteLLM      |
-| `provenance`         | text         | `stream` \| `response`                   |
-| `created_at`         | timestamptz  |                                          |
+| Column               | Type         | Purpose                                                  |
+| -------------------- | ------------ | -------------------------------------------------------- |
+| `request_id`         | text         | Server-generated UUID, correlation key (not unique)      |
+| `billing_account_id` | text         | FK to billing_accounts                                   |
+| `virtual_key_id`     | uuid         | FK to virtual_keys                                       |
+| `litellm_call_id`    | text NULL    | Forensic correlation (x-litellm-call-id)                 |
+| `charged_credits`    | bigint       | Credits debited from user balance                        |
+| `response_cost_usd`  | decimal NULL | Observational USD cost (with markup)                     |
+| `provenance`         | text         | `stream` \| `response`                                   |
+| `charge_reason`      | text         | Economic category (`llm_usage`, etc.)                    |
+| `source_system`      | text         | External system (`litellm`, `anthropic_sdk`)             |
+| `source_reference`   | text         | Idempotency key: `${run_id}/${attempt}/${usage_unit_id}` |
+| `run_id`             | text         | Graph run identifier (P0: added for run-centric billing) |
+| `attempt`            | int          | Retry attempt (P0: frozen at 0)                          |
+| `created_at`         | timestamptz  |                                                          |
 
 **Invariants:**
 
-- `request_id` is PRIMARY KEY for idempotency
-- Each receipt maps 1:1 to a `credit_ledger` entry with `reference = request_id`
+- `UNIQUE(source_system, source_reference)` is the idempotency constraint
+- Multiple receipts per `request_id` allowed (graphs make N LLM calls)
+- Each receipt maps to a `credit_ledger` entry with `reference = source_reference`
 - `response_cost_usd` stores USER cost (with markup), not provider cost
+- See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) for idempotency key format
 
 ---
 
@@ -128,7 +136,7 @@ Protocol constant `CREDITS_PER_USD = 10_000_000` is NOT configurable (hardcoded)
 - `response_cost_usd` stores user cost (with markup), not provider cost
 - Single ceil at end: `chargedCredits = ceil(userCostUsd × CREDITS_PER_USD)`
 - Post-call billing NEVER blocks user response
-- `charge_receipts.request_id` = `credit_ledger.reference` (1:1 linkage)
+- Idempotency via `UNIQUE(source_system, source_reference)` — see [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md)
 
 **Verification:**
 

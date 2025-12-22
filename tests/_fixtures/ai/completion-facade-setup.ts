@@ -8,13 +8,16 @@
  * Invariants: All mocks configured; dependencies properly injected; serverEnv mocked
  * Side-effects: none
  * Notes: Use this to ensure consistent test setup and prevent ad-hoc mocks in test files
- * Links: completion.server.ts, FakeLlmService, FakeClock
+ * Links: completion.server.ts, FakeLlmService, FakeClock, AiAdapterDeps
  * @public
  */
 
 import { FakeClock } from "@tests/_fakes";
 import { createMockAccountServiceWithDefaults } from "@tests/_fakes/accounts/mock-account.service";
 import { FakeLlmService } from "@tests/_fakes/ai/fakes";
+import { vi } from "vitest";
+
+import type { AiAdapterDeps } from "@/bootstrap/container";
 
 /**
  * Setup completion facade test environment with mocked dependencies
@@ -33,5 +36,42 @@ export function setupCompletionFacadeTest() {
       id: "test-billing-account",
       defaultVirtualKeyId: "test-vk-id",
     },
+  };
+}
+
+/**
+ * Create a mock AiAdapterDeps object matching the container export shape.
+ * Use this with vi.doMock("@/bootstrap/container", ...) to mock resolveAiAdapterDeps.
+ *
+ * @param overrides - Optional partial overrides for specific deps
+ * @returns Complete AiAdapterDeps mock
+ */
+export function createMockAiAdapterDeps(
+  overrides?: Partial<AiAdapterDeps>
+): AiAdapterDeps {
+  const base = setupCompletionFacadeTest();
+
+  return {
+    llmService: base.llmService,
+    accountService: base.accountService,
+    clock: base.clock,
+    aiTelemetry: {
+      recordInvocation: vi.fn().mockResolvedValue(undefined),
+    },
+    langfuse: undefined,
+    ...overrides,
+  };
+}
+
+/**
+ * Create the mock object for vi.doMock("@/bootstrap/container", ...).
+ * Returns an object with resolveAiAdapterDeps that returns the provided deps.
+ *
+ * @param deps - AiAdapterDeps to return from resolveAiAdapterDeps
+ * @returns Mock module shape for @/bootstrap/container
+ */
+export function createContainerMock(deps: AiAdapterDeps) {
+  return {
+    resolveAiAdapterDeps: () => deps,
   };
 }

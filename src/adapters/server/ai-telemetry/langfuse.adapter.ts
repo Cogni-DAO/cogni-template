@@ -22,6 +22,8 @@ export interface LangfuseAdapterConfig {
   publicKey: string;
   secretKey: string;
   baseUrl?: string;
+  /** Deploy environment (e.g., "local", "preview", "production") for trace filtering */
+  environment?: string;
 }
 
 /**
@@ -41,6 +43,7 @@ export class LangfuseAdapter implements LangfusePort {
       publicKey: config.publicKey,
       secretKey: config.secretKey,
       ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
+      ...(config.environment ? { environment: config.environment } : {}),
     });
   }
 

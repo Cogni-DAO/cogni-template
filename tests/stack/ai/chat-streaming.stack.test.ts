@@ -220,7 +220,7 @@ describe("Chat Streaming", () => {
     // Model lives in LiteLLM (canonical source)
     expect(receipt).toBeTruthy();
     expect(receipt?.provenance).toBe("stream");
-    expect(receipt?.requestId).toBeTruthy();
+    expect(receipt?.runId).toBeTruthy();
   });
 
   it("stops streaming when aborted", async () => {

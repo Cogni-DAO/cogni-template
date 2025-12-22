@@ -85,7 +85,8 @@ export interface Container {
 }
 
 // Feature-specific dependency types
-export type AiCompletionDeps = Pick<
+// AI adapter deps: used internally by createInProcGraphExecutor
+export type AiAdapterDeps = Pick<
   Container,
   "llmService" | "accountService" | "clock" | "aiTelemetry" | "langfuse"
 >;
@@ -193,14 +194,18 @@ function createContainer(): Container {
   const aiTelemetry = new DrizzleAiTelemetryAdapter(db);
 
   // Langfuse: only wired when LANGFUSE_SECRET_KEY is set (optional)
+  // Environment passed for trace filtering (separates dev/preview/prod data)
   const langfuse: Container["langfuse"] =
     env.LANGFUSE_SECRET_KEY && env.LANGFUSE_PUBLIC_KEY
       ? new LangfuseAdapter({
           publicKey: env.LANGFUSE_PUBLIC_KEY,
           secretKey: env.LANGFUSE_SECRET_KEY,
           ...(env.LANGFUSE_BASE_URL ? { baseUrl: env.LANGFUSE_BASE_URL } : {}),
+          environment: env.DEPLOY_ENVIRONMENT ?? "local",
         })
       : undefined;
+
+  const clock = new SystemClock();
 
   // Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
   const config: ContainerConfig = {
@@ -222,7 +227,7 @@ function createContainer(): Container {
     llmService,
     accountService,
     usageService,
-    clock: new SystemClock(),
+    clock,
     paymentAttemptRepository,
     onChainVerifier,
     evmOnchainClient,
@@ -234,10 +239,10 @@ function createContainer(): Container {
 }
 
 /**
- * Resolves dependencies for AI completion feature
- * Returns subset of Container needed for AI operations
+ * Resolves dependencies for AI adapter construction.
+ * Used by graph-executor.factory.ts.
  */
-export function resolveAiDeps(): AiCompletionDeps {
+export function resolveAiAdapterDeps(): AiAdapterDeps {
   const container = getContainer();
   return {
     llmService: container.llmService,
@@ -245,25 +250,6 @@ export function resolveAiDeps(): AiCompletionDeps {
     clock: container.clock,
     aiTelemetry: container.aiTelemetry,
     langfuse: container.langfuse,
-  };
-}
-
-/**
- * Resolves minimal dependencies for AI runtime.
- * Per AI_SETUP_SPEC.md: Single AI entrypoint for routes.
- * Note: Full AiRuntimeDeps is resolved via resolveAiDeps() above.
- * @deprecated Use resolveAiDeps() instead - this is unused legacy code.
- */
-export type AiRuntimeMinimalDeps = Pick<
-  Container,
-  "llmService" | "accountService"
->;
-
-export function resolveAiRuntimeMinimalDeps(): AiRuntimeMinimalDeps {
-  const container = getContainer();
-  return {
-    llmService: container.llmService,
-    accountService: container.accountService,
   };
 }
 

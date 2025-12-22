@@ -38,7 +38,8 @@ export type ChargeReason = (typeof CHARGE_REASONS)[number];
 /**
  * Source systems represent the external system that originated a charge.
  * Used for generic linking in charge_receipts (source_system + source_reference).
+ * Per GRAPH_EXECUTION.md: each adapter has a source system for billing attribution.
  */
-export const SOURCE_SYSTEMS = ["litellm"] as const;
+export const SOURCE_SYSTEMS = ["litellm", "anthropic_sdk"] as const;
 
 export type SourceSystem = (typeof SOURCE_SYSTEMS)[number];

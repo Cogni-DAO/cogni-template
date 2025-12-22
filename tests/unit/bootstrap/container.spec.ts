@@ -132,17 +132,18 @@ describe("bootstrap container DI wiring", () => {
       expect(container1.log).toBe(container2.log);
     });
 
-    it("resolveAiDeps uses singleton container", async () => {
-      const { getContainer, resolveAiDeps } = await import(
+    it("resolveAiAdapterDeps uses singleton container", async () => {
+      const { getContainer, resolveAiAdapterDeps } = await import(
         "@/bootstrap/container"
       );
 
       const container = getContainer();
-      const aiDeps = resolveAiDeps();
+      const aiDeps = resolveAiAdapterDeps();
 
       // Should reference the same singleton instances
       expect(container.llmService).toBe(aiDeps.llmService);
       expect(container.clock).toBe(aiDeps.clock);
+      expect(container.aiTelemetry).toBe(aiDeps.aiTelemetry);
     });
 
     it("provides all required container dependencies", async () => {

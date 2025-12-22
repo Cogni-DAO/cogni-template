@@ -40,3 +40,32 @@ export interface AiActivityQueryCompletedEvent {
   unjoinedLogCount: number;
   status: "success" | "error";
 }
+
+/**
+ * Emitted when commitUsageFact completes (success or error).
+ * Per GRAPH_EXECUTION.md: billing subscriber commits usage facts to ledger.
+ */
+export interface AiBillingCommitCompleteEvent {
+  event: "ai.billing.commit_complete";
+  /** Request ID for Loki correlation (from context.ingressRequestId) */
+  reqId: string;
+  runId: string;
+  attempt: number;
+  outcome: "success" | "error";
+  /** Populated only on error */
+  errorCode?: "db_error" | "validation" | "unknown" | undefined;
+  chargedCredits?: string | undefined;
+  sourceSystem: string;
+}
+
+/**
+ * Emitted when RunEventRelay pump fails unexpectedly.
+ * Per BILLING_INDEPENDENT_OF_CLIENT: pump errors are logged but never propagate.
+ */
+export interface AiRelayPumpErrorEvent {
+  event: "ai.relay.pump_error";
+  /** Request ID for Loki correlation (from context.ingressRequestId) */
+  reqId: string;
+  runId: string;
+  errorCode: "pump_failed";
+}

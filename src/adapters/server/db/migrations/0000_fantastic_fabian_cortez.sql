@@ -1,3 +1,28 @@
+CREATE TABLE "ai_invocation_summaries" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"invocation_id" text NOT NULL,
+	"request_id" text NOT NULL,
+	"trace_id" text NOT NULL,
+	"langfuse_trace_id" text,
+	"litellm_call_id" text,
+	"prompt_hash" text NOT NULL,
+	"router_policy_version" text NOT NULL,
+	"graph_run_id" text,
+	"graph_name" text,
+	"graph_version" text,
+	"provider" text NOT NULL,
+	"model" text NOT NULL,
+	"tokens_in" integer,
+	"tokens_out" integer,
+	"tokens_total" integer,
+	"provider_cost_usd" numeric,
+	"latency_ms" integer NOT NULL,
+	"status" text NOT NULL,
+	"error_code" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "ai_invocation_summaries_invocation_id_unique" UNIQUE("invocation_id")
+);
+--> statement-breakpoint
 CREATE TABLE "users" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text,
@@ -20,7 +45,9 @@ CREATE TABLE "charge_receipts" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"billing_account_id" text NOT NULL,
 	"virtual_key_id" uuid NOT NULL,
-	"request_id" text NOT NULL,
+	"run_id" text NOT NULL,
+	"attempt" integer NOT NULL,
+	"ingress_request_id" text,
 	"litellm_call_id" text,
 	"charged_credits" bigint NOT NULL,
 	"response_cost_usd" numeric,
@@ -28,8 +55,7 @@ CREATE TABLE "charge_receipts" (
 	"charge_reason" text NOT NULL,
 	"source_system" text NOT NULL,
 	"source_reference" text NOT NULL,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "charge_receipts_request_id_unique" UNIQUE("request_id")
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "credit_ledger" (
@@ -91,11 +117,19 @@ ALTER TABLE "credit_ledger" ADD CONSTRAINT "credit_ledger_virtual_key_id_virtual
 ALTER TABLE "payment_attempts" ADD CONSTRAINT "payment_attempts_billing_account_id_billing_accounts_id_fk" FOREIGN KEY ("billing_account_id") REFERENCES "public"."billing_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "payment_events" ADD CONSTRAINT "payment_events_attempt_id_payment_attempts_id_fk" FOREIGN KEY ("attempt_id") REFERENCES "public"."payment_attempts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "virtual_keys" ADD CONSTRAINT "virtual_keys_billing_account_id_billing_accounts_id_fk" FOREIGN KEY ("billing_account_id") REFERENCES "public"."billing_accounts"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "ai_invocation_summaries_request_id_idx" ON "ai_invocation_summaries" USING btree ("request_id");--> statement-breakpoint
+CREATE INDEX "ai_invocation_summaries_trace_id_idx" ON "ai_invocation_summaries" USING btree ("trace_id");--> statement-breakpoint
+CREATE INDEX "ai_invocation_summaries_litellm_call_id_idx" ON "ai_invocation_summaries" USING btree ("litellm_call_id");--> statement-breakpoint
+CREATE INDEX "ai_invocation_summaries_prompt_hash_idx" ON "ai_invocation_summaries" USING btree ("prompt_hash");--> statement-breakpoint
+CREATE INDEX "ai_invocation_summaries_created_at_idx" ON "ai_invocation_summaries" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX "ai_invocation_summaries_status_idx" ON "ai_invocation_summaries" USING btree ("status","created_at");--> statement-breakpoint
 CREATE INDEX "charge_receipts_billing_account_idx" ON "charge_receipts" USING btree ("billing_account_id");--> statement-breakpoint
 CREATE INDEX "charge_receipts_virtual_key_idx" ON "charge_receipts" USING btree ("virtual_key_id");--> statement-breakpoint
 CREATE INDEX "charge_receipts_aggregation_idx" ON "charge_receipts" USING btree ("billing_account_id","created_at");--> statement-breakpoint
 CREATE INDEX "charge_receipts_pagination_idx" ON "charge_receipts" USING btree ("billing_account_id","created_at","id");--> statement-breakpoint
-CREATE INDEX "charge_receipts_source_link_idx" ON "charge_receipts" USING btree ("source_system","source_reference");--> statement-breakpoint
+CREATE INDEX "charge_receipts_ingress_request_idx" ON "charge_receipts" USING btree ("ingress_request_id");--> statement-breakpoint
+CREATE INDEX "charge_receipts_run_attempt_idx" ON "charge_receipts" USING btree ("run_id","attempt");--> statement-breakpoint
+CREATE UNIQUE INDEX "charge_receipts_source_idempotency_unique" ON "charge_receipts" USING btree ("source_system","source_reference");--> statement-breakpoint
 CREATE INDEX "credit_ledger_reference_reason_idx" ON "credit_ledger" USING btree ("reference","reason");--> statement-breakpoint
 CREATE UNIQUE INDEX "credit_ledger_payment_ref_unique" ON "credit_ledger" USING btree ("reference") WHERE "credit_ledger"."reason" = 'widget_payment';--> statement-breakpoint
 CREATE UNIQUE INDEX "credit_ledger_charge_receipt_ref_unique" ON "credit_ledger" USING btree ("reference") WHERE "credit_ledger"."reason" = 'charge_receipt';--> statement-breakpoint

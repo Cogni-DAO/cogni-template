@@ -5,8 +5,8 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-12-21
-- **Status:** draft (P1 in progress)
+- **Last reviewed:** 2025-12-22
+- **Status:** stable
 
 ## Purpose
 
@@ -56,17 +56,18 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
     - `completion.ts` - Orchestrator with internal DRY helpers (execute, executeStream)
     - `message-preparation.ts` - Message filtering, validation, fallbackPromptHash
     - `preflight-credit-check.ts` - Upper-bound credit estimation
-    - `billing.ts` - Non-blocking charge receipt recording
+    - `billing.ts` - Non-blocking charge receipt recording (commitUsageFact, recordBilling)
     - `telemetry.ts` - DB + Langfuse writes (ai_invocation_summaries)
     - `metrics.ts` - Prometheus metric recording
-    - `ai_runtime.ts` - AI runtime orchestration (bridges ports, receives graphRunId from runtime)
+    - `ai_runtime.ts` - AI runtime orchestration with RunEventRelay (pump+fanout pattern)
+    - `run-id-factory.ts` - Run identity factory (P0: runId = reqId)
     - `llmPricingPolicy.ts` - Pricing markup calculation
 - **Env/Config keys:** `LITELLM_BASE_URL`, `DEFAULT_MODEL` (via serverEnv)
 - **Files considered API:** public.ts, public.server.ts, types.ts, services/ai_runtime.ts, tool-runner.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
 
 ## Ports
 
-- **Uses ports:** LlmService (completion, completionStream), AccountService (recordChargeReceipt), AiTelemetryPort (recordInvocation), LangfusePort (createTrace, recordGeneration)
+- **Uses ports:** GraphExecutorPort (runGraph), AccountService (recordChargeReceipt), LlmService (completion, completionStream), AiTelemetryPort (recordInvocation), LangfusePort (createTrace, recordGeneration)
 - **Implements ports:** none
 - **Contracts:** ai.completion.v1, ai.chat.v1, ai.models.v1, ai.activity.v1
 
@@ -84,7 +85,8 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - Record charge receipts via AccountService.recordChargeReceipt (per ACTIVITY_METRICS.md)
   - Record AI invocation telemetry via AiTelemetryPort (per AI_SETUP_SPEC.md)
   - Create Langfuse traces for observability (optional, env-gated)
-  - (P1) Provide ai_runtime as single AI entrypoint — decides graph vs direct LLM
+  - Provide createAiRuntime as single AI entrypoint via GraphExecutorPort
+  - Use RunEventRelay for pump+fanout pattern (billing independent of UI)
   - (P1) Execute tools via toolRunner — owns toolCallId, emits AiEvents, redacts payloads
   - (P1) Host LangGraph graphs in `ai/graphs/` — pure logic, no IO imports
 
