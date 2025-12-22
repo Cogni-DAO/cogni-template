@@ -242,6 +242,7 @@ export const POST = wrapRouteHandlerWithLogging(
             model: input.model,
             sessionUser,
             abortSignal: request.signal,
+            graphName: input.graphName,
           },
           ctx
         );
@@ -261,28 +262,36 @@ export const POST = wrapRouteHandlerWithLogging(
         // No custom SSE events - use official helper only
         const response = createAssistantStreamResponse(async (controller) => {
           try {
-            // TODO(P1): Uncomment when adding tool support
-            // const toolCallControllers = new Map<
-            //   string,
-            //   ReturnType<typeof controller.addToolCallPart>
-            // >();
+            // Track tool call controllers for setting results
+            const toolCallControllers = new Map<
+              string,
+              ReturnType<typeof controller.addToolCallPart>
+            >();
 
             for await (const event of deltaStream) {
               if (event.type === "text_delta") {
                 controller.appendText(event.delta);
+              } else if (event.type === "tool_call_start") {
+                // MVP: Stream tool lifecycle to UI
+                const toolCtrl = controller.addToolCallPart({
+                  toolCallId: event.toolCallId,
+                  toolName: event.toolName,
+                  args: event.args as Parameters<
+                    typeof controller.addToolCallPart
+                  >[0] extends { args: infer A }
+                    ? A
+                    : never,
+                });
+                toolCallControllers.set(event.toolCallId, toolCtrl);
+              } else if (event.type === "tool_call_result") {
+                // Set tool result (completes the tool call in UI)
+                const toolCtrl = toolCallControllers.get(event.toolCallId);
+                toolCtrl?.setResponse({
+                  result: event.result as Parameters<
+                    NonNullable<typeof toolCtrl>["setResponse"]
+                  >[0]["result"],
+                });
               }
-              // TODO(P1): Handle tool events from facade
-              // else if (event.type === "tool_call_start") {
-              //   const toolCtrl = controller.addToolCallPart({
-              //     toolCallId: event.toolCallId,
-              //     toolName: event.toolName,
-              //     args: event.args,
-              //   });
-              //   toolCallControllers.set(event.toolCallId, toolCtrl);
-              // } else if (event.type === "tool_call_result") {
-              //   const toolCtrl = toolCallControllers.get(event.toolCallId);
-              //   toolCtrl?.setResponse(event.result);
-              // }
             }
 
             // Wait for final result (billing) with 15s timeout
