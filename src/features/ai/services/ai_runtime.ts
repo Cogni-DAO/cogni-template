@@ -173,6 +173,18 @@ class RunEventRelay {
   ) {}
 
   /**
+   * Wake up UI stream if waiting. Called when events are queued or pump finishes.
+   * Centralizes resolve-and-clear pattern to prevent race conditions.
+   */
+  private notifyUi(): void {
+    if (this.uiResolve) {
+      const resolve = this.uiResolve;
+      this.uiResolve = null;
+      resolve();
+    }
+  }
+
+  /**
    * Start the pump loop. Runs to completion, regardless of UI consumption.
    * Fire-and-forget: errors are logged but not propagated.
    */
@@ -187,11 +199,7 @@ class RunEventRelay {
       };
       this.log.error({ ...pumpErrorEvent, err });
       this.pumpDone = true;
-      // Wake up UI stream if waiting
-      if (this.uiResolve) {
-        this.uiResolve();
-        this.uiResolve = null;
-      }
+      this.notifyUi();
     });
   }
 
@@ -209,18 +217,11 @@ class RunEventRelay {
 
       // UI subscriber: queue all other events
       this.uiQueue.push(event);
-      if (this.uiResolve) {
-        this.uiResolve();
-        this.uiResolve = null;
-      }
+      this.notifyUi();
     }
 
     this.pumpDone = true;
-    // Wake up UI stream if waiting
-    if (this.uiResolve) {
-      this.uiResolve();
-      this.uiResolve = null;
-    }
+    this.notifyUi();
   }
 
   /**
@@ -252,6 +253,9 @@ class RunEventRelay {
   /**
    * UI stream: yields events from queue, filters out usage_report.
    * Safe to abandon - pump continues regardless.
+   *
+   * Race-safe: re-checks pumpDone and queue length AFTER installing resolver
+   * to prevent hang if pump finishes between the check and await.
    */
   async *uiStream(): AsyncIterable<AiEvent> {
     while (true) {
@@ -266,9 +270,18 @@ class RunEventRelay {
         return;
       }
 
-      // Wait for more events
+      // Wait for more events with race-safe re-check
+      // Must install resolver THEN re-check pumpDone/queue to avoid:
+      // 1. Check pumpDone (false)
+      // 2. Pump finishes, calls notifyUi() (uiResolve still null!)
+      // 3. Install resolver → hangs forever
       await new Promise<void>((resolve) => {
         this.uiResolve = resolve;
+        // Re-check after installing resolver (race-safe)
+        if (this.pumpDone || this.uiQueue.length > 0) {
+          this.uiResolve = null;
+          resolve();
+        }
       });
     }
   }

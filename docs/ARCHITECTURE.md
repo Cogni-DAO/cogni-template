@@ -177,6 +177,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] ├── proxy.ts # Auth proxy for /api/v1/_ (except /api/v1/public/_)
 [x] ├── bootstrap/ # composition root (DI)
 [x] │ ├── container.ts # wires adapters → ports
+[x] │ ├── graph-executor.factory.ts # GraphExecutorPort factory
 [ ] │ └── config.ts # Zod-validated env
 [ ] │
 [x] ├── contracts/ # operation contracts (edge IO)
@@ -221,7 +222,11 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] ├── features/ # application services
 [x] │ ├── home/ # home page data
 [x] │ ├── ai/ # AI services
-[x] │ │ ├── services/ # completion service, llmPricingPolicy
+[x] │ │ ├── services/ # completion, billing, ai_runtime, telemetry
+[x] │ │ ├── graphs/ # Graph definitions (chat.graph.ts)
+[x] │ │ ├── prompts/ # Prompt templates
+[x] │ │ ├── tool-runner.ts # Tool execution (sole toolCallId owner)
+[x] │ │ ├── tool-registry.ts # Tool contracts registry
 [x] │ │ ├── chat/ # streaming chat (assistant-ui)
 [x] │ │ │ ├── providers/
 [x] │ │ │ └── components/
@@ -272,6 +277,8 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [ ] │
 [x] ├── ports/ # contracts (minimal interfaces)
 [x] │ ├── llm.port.ts # LLM service interface (LlmCaller)
+[x] │ ├── graph-executor.port.ts # GraphExecutorPort (unified graph execution)
+[x] │ ├── ai-telemetry.port.ts # AiTelemetryPort (ai_invocation_summaries)
 [x] │ ├── clock.port.ts # Clock { now(): Date }
 [x] │ ├── accounts.port.ts # AccountService interface (create, debit, credit)
 [x] │ ├── payment-attempt.port.ts # PaymentAttemptRepository interface
@@ -288,6 +295,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] ├── adapters/ # infrastructure implementations (no UI)
 [x] │ ├── server/
 [x] │ │ ├── ai/litellm.adapter.ts # LLM completion service
+[x] │ │ ├── ai/inproc-graph.adapter.ts # InProcGraphExecutorAdapter (unified execution)
 [x] │ │ ├── ai/litellm.activity-usage.adapter.ts # Activity dashboard (LiteLLM /spend/logs)
 [x] │ │ ├── ai/litellm.usage-service.adapter.ts # UsageService bridge
 [x] │ │ ├── accounts/ # account service implementation
@@ -462,7 +470,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 5. **Telemetry** to Langfuse and logs to Pino.
 6. **Balance view** in protected UI.
 
-LangGraph, Loki/Grafana, Akash/IaC move to v2.
+Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) for graph architecture.
 
 ---
 
@@ -512,6 +520,10 @@ LangGraph, Loki/Grafana, Akash/IaC move to v2.
 ## Related Documentation
 
 - [Architecture Enforcement Status](ARCHITECTURE_ENFORCEMENT_GAPS.md) - Current boundary enforcement coverage and known gaps
+- [Graph Execution](GRAPH_EXECUTION.md) - GraphExecutorPort, billing idempotency, pump+fanout pattern
+- [AI Setup Spec](AI_SETUP_SPEC.md) - AI correlation IDs, telemetry invariants, P0/P1 checklists
+- [LangGraph AI Guide](LANGGRAPH_AI.md) - Agentic graph workflows (no @langchain/langgraph library)
+- [Tool Use Spec](TOOL_USE_SPEC.md) - Tool execution invariants, first tool checklist
 - [Packages Architecture](PACKAGES_ARCHITECTURE.md) - Internal packages, isolation boundaries, and CI/CD setup
 - [Environment & Stack Deployment Modes](ENVIRONMENTS.md) - All 6 deployment modes, environment variables, and when to use each
 - [Observability](OBSERVABILITY.md) - Structured logging, Prometheus metrics, and Grafana Cloud integration
