@@ -41,9 +41,6 @@ export interface UsageFact {
   readonly billingAccountId: string;
   readonly virtualKeyId: string;
 
-  /** Optional delivery-layer correlation (HTTP/SSE/worker/queue). Debug only, never for idempotency. */
-  readonly ingressRequestId?: string;
-
   // Provider details
   readonly provider?: string;
   readonly model?: string;
