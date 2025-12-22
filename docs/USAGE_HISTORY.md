@@ -368,6 +368,7 @@ export interface GraphRunRequest {
 
 ## Related Documents
 
+- [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) — Owner vs Actor tenancy rules (canonical source for `account_id` semantics)
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Run-centric billing, RunEventRelay, pump+fanout
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — AiEvent types, stream architecture
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Hexagonal layers, port patterns

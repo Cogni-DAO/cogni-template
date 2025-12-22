@@ -424,6 +424,7 @@ function commitUsageFact(fact: UsageFact, callIndex: number): void {
 
 ## Related Documents
 
+- [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) — Owner vs Actor tenancy rules (`account_id` in relay context)
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — P1 invariants, telemetry
 - [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Graph architecture, anti-patterns
 - [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool execution within graphs
