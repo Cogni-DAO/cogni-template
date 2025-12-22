@@ -45,9 +45,15 @@ export type {
 export type {
   ChatDeltaEvent,
   CompletionStreamParams,
+  GraphLlmCaller,
+  JsonSchemaObject,
   LlmCaller,
   LlmCompletionResult,
   LlmService,
+  LlmToolCall,
+  LlmToolCallDelta,
+  LlmToolChoice,
+  LlmToolDefinition,
 } from "./llm.port";
 export type {
   InstantQueryParams,
