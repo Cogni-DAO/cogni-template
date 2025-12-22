@@ -1,45 +1,45 @@
 # LangGraph AI Guide
 
-> How to create and maintain LangGraph graphs in feature slices.
+> How to create and maintain agentic graph workflows in feature slices.
+
+> [!IMPORTANT]
+> **We do NOT use the `@langchain/langgraph` library.** This document describes "graph-shaped" agentic workflows implemented as hand-rolled TypeScript. See TOOL_USE_SPEC.md invariant `NO_LANGGRAPH_RUNTIME`. The name "LangGraph" is retained for conceptual alignment with the pattern.
 
 ## Overview
 
 Graphs live in feature slices, NOT in shared packages. This keeps AI logic co-located with the feature it serves and avoids premature abstraction.
 
-**Runtime choice:** We use assistant-ui **Data Stream Protocol** (`@assistant-ui/react-data-stream`), NOT the LangGraph runtime (`@assistant-ui/react-langgraph`). Server emits DSP chunks; graphs run server-side behind ai.facade.
+**Runtime choice:** We use assistant-ui **Data Stream Protocol** (`@assistant-ui/react-data-stream`), NOT the LangGraph runtime (`@assistant-ui/react-langgraph`). Server emits DSP chunks; graphs run server-side via `GraphExecutorPort`.
 
 **Key Principle:** Graphs start in `src/features/<feature>/ai/`. Packages are only for cross-repo contracts after proven reuse across 2+ services.
 
 ---
 
-## AI Facade Pattern
+## AI Runtime Architecture
 
-Routes and features call AI through a single facade (`src/features/ai/ai.facade.ts`), never graphs directly.
+All AI execution flows through `GraphExecutorPort` per the **UNIFIED_GRAPH_EXECUTOR** invariant. There is no "graph vs direct LLM decision" — everything goes through the same port.
 
-**Facade responsibilities:**
+**Route → ai_runtime → GraphExecutorPort → Adapter**
 
-- Decides graph vs direct LLM based on task complexity
-- Generates `graphRunId` for graph executions
-- Returns `AsyncIterable<UiEvent>` — must yield immediately, no buffering
-- Does NOT map to wire protocol (that's route's job)
+| Component          | Location                                         | Responsibility                                   |
+| ------------------ | ------------------------------------------------ | ------------------------------------------------ |
+| Route              | `src/app/api/v1/ai/chat/route.ts`                | Maps AiEvents → Data Stream Protocol             |
+| AI Runtime         | `src/features/ai/services/ai_runtime.ts`         | Creates runId, manages RunEventRelay for billing |
+| GraphExecutorPort  | `src/ports/graph-executor.port.ts`               | Unified execution interface                      |
+| InProcGraphAdapter | `src/adapters/server/ai/inproc-graph.adapter.ts` | Wraps LLM completion, emits usage_report         |
 
 **Route responsibilities:**
 
-- Consumes UiEvents from facade
-- Maps UiEvents → Data Stream Protocol using official assistant-ui helper
+- Consumes AiEvents from ai_runtime
+- Maps AiEvents → Data Stream Protocol using official assistant-ui helper
 - Applies final transport-level truncation if needed
 
-**When to use direct LLM (via facade):**
+**AI Runtime responsibilities:**
 
-- Classification, routing, entity extraction
-- Title/summary generation
-- Simple Q&A without tools
-
-**When to use graphs (via facade):**
-
-- Any tool use or retrieval
-- Multi-step reasoning
-- Structured tool lifecycle visible in UI
+- Generates `runId` for graph executions
+- Manages `RunEventRelay` for pump+fanout (billing independent of client)
+- Returns `AsyncIterable<AiEvent>` — must yield immediately, no buffering
+- Does NOT map to wire protocol (that's route's job)
 
 ---
 
@@ -56,14 +56,14 @@ src/features/<feature>/ai/
 ├── tools/
 │   └── <tool>.tool.ts        # Tool contracts (Zod schema + handler interface)
 └── services/
-    └── <graph>.ts            # Orchestration: bridges ports, receives graphRunId from facade
+    └── <graph>.ts            # Orchestration: bridges ports, receives graphRunId
 ```
 
 ### Step-by-Step
 
 1. **Create graph definition** in `graphs/<graph>.graph.ts`
    - Pure logic only; no IO/adapter imports
-   - Accept LLM port + toolRunner via dependency injection
+   - Accept completion service + toolRunner via dependency injection
    - Invoke tools only through toolRunner.exec()
 
 2. **Create prompt templates** in `prompts/<graph>.prompt.ts`
@@ -71,13 +71,13 @@ src/features/<feature>/ai/
    - `prompt_hash` computed by adapter for drift detection
 
 3. **Create orchestration service** in `services/<graph>.ts`
-   - Receive `graphRunId` from facade (single owner)
+   - Receive `graphRunId` from ai_runtime (single owner)
    - Bridge app's `LlmService` to graph's expected port
    - Pass `graph_name` + `graph_version` to telemetry
 
-4. **Wire via ai.facade** (not directly in route)
-   - Route calls ai.facade; facade decides graph vs direct
-   - Facade emits UiEvents; route maps to Data Stream Protocol
+4. **Wire via GraphExecutorPort** (not directly in route)
+   - Route calls ai_runtime; runtime uses GraphExecutorPort
+   - Adapter emits AiEvents; route maps to Data Stream Protocol
 
 ---
 
@@ -124,46 +124,53 @@ src/features/<feature>/ai/
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │ ROUTE (src/app/api/v1/ai/chat/route.ts)                             │
-│ - Calls ai.facade with request context                              │
-│ - Consumes UiEvents from facade                                     │
-│ - Maps UiEvents → Data Stream Protocol (official helper)            │
+│ - Calls ai_runtime.runChatStream()                                  │
+│ - Consumes AiEvents from runtime                                    │
+│ - Maps AiEvents → Data Stream Protocol (official helper)            │
 └─────────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│ AI FACADE (src/features/ai/ai.facade.ts)                            │
-│ - Decides: graph vs direct LLM                                      │
-│ - Generates graphRunId (once per graph invocation)                  │
-│ - Emits UiEvents (text_delta, tool_call_start/result, done)         │
-│ - Does NOT touch wire protocol                                      │
+│ AI RUNTIME (src/features/ai/services/ai_runtime.ts)                 │
+│ - Generates runId via run-id-factory                                │
+│ - Calls GraphExecutorPort.runGraph()                                │
+│ - RunEventRelay: pumps stream to completion (billing-independent)   │
+│ - Fans out: UI subscriber + billing subscriber                      │
 └─────────────────────────────────────────────────────────────────────┘
                               │
-              ┌───────────────┴───────────────┐
-              ▼                               ▼
-┌──────────────────────────┐    ┌─────────────────────────────────────┐
-│ GRAPH (pure logic)       │    │ DIRECT LLM (simple tasks)           │
-│ - No IO/adapters         │    │ - Classification, extraction        │
-│ - Calls toolRunner only  │    │ - Title/summary generation          │
-│ - Same graphRunId        │    └─────────────────────────────────────┘
-└──────────────────────────┘
-              │
-              ▼
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ GRAPH EXECUTOR PORT (src/ports/graph-executor.port.ts)              │
+│ - Unified interface for all graph execution                         │
+│ - Returns { stream: AsyncIterable<AiEvent>, final: Promise }        │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ INPROC GRAPH ADAPTER (src/adapters/server/ai/inproc-graph.adapter)  │
+│ - Wraps completion.executeStream()                                  │
+│ - Emits text_delta events from LLM stream                           │
+│ - Emits usage_report event BEFORE done (for billing)                │
+│ - P1: Will invoke chat.graph.ts for tool loops                      │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │ TOOL RUNNER (src/features/ai/tool-runner.ts)                        │
 │ - Sole tool execution point (graphs never call impls directly)      │
 │ - Generates/owns toolCallId                                         │
-│ - Emits tool_call_start/result UiEvents                             │
+│ - Emits tool_call_start/result AiEvents                             │
 │ - Redacts payloads per allowlist                                    │
 └─────────────────────────────────────────────────────────────────────┘
-              │
-              ▼
+                              │
+                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │ LLM ADAPTER (src/adapters/server/ai/litellm.adapter.ts)             │
 │ - Computes promptHash (single call site)                            │
 │ - Extracts litellmCallId, providerCostUsd                           │
 └─────────────────────────────────────────────────────────────────────┘
-              │
-              ▼
+                              │
+                              ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │ TELEMETRY (src/features/ai/services/telemetry.ts)                   │
 │ - Writes ai_invocation_summaries row per LLM call                   │
@@ -177,23 +184,24 @@ src/features/<feature>/ai/
 
 **Separation of concerns:**
 
-- **ai.facade** emits UiEvents (text_delta, tool_call_start, tool_call_result, done)
-- **route.ts** maps UiEvents → Data Stream Protocol using official assistant-ui helper
+- **ai_runtime** emits AiEvents (text_delta, tool_call_start, tool_call_result, usage_report, done)
+- **route.ts** maps AiEvents → Data Stream Protocol using official assistant-ui helper
 
-Do NOT invent custom SSE event vocabulary. Do NOT encode protocol in facade.
+Do NOT invent custom SSE event vocabulary. Do NOT encode protocol in runtime.
 
-### UiEvent Types (Facade Output)
+### AiEvent Types (Runtime Output)
 
-| Event              | Fields                                        | Emitter                  |
-| ------------------ | --------------------------------------------- | ------------------------ |
-| `text_delta`       | `delta: string`                               | Facade (from LLM stream) |
-| `tool_call_start`  | `toolCallId`, `toolName`, `args`              | ToolRunner               |
-| `tool_call_result` | `toolCallId`, `result` (redacted), `isError?` | ToolRunner               |
-| `done`             | —                                             | Facade                   |
+| Event              | Fields                                        | Emitter                   |
+| ------------------ | --------------------------------------------- | ------------------------- |
+| `text_delta`       | `delta: string`                               | Adapter (from LLM stream) |
+| `tool_call_start`  | `toolCallId`, `toolName`, `args`              | ToolRunner                |
+| `tool_call_result` | `toolCallId`, `result` (redacted), `isError?` | ToolRunner                |
+| `usage_report`     | `fact: UsageFact`                             | Adapter (for billing)     |
+| `done`             | —                                             | Adapter                   |
 
 ### Wire Format (Route Output)
 
-Route maps UiEvents to assistant-ui Data Stream Protocol:
+Route maps AiEvents to assistant-ui Data Stream Protocol:
 
 - **Text deltas:** assistant-ui text chunk type
 - **Tool calls:** assistant-ui tool-call parts with stable `toolCallId`
@@ -218,7 +226,7 @@ Route maps UiEvents to assistant-ui Data Stream Protocol:
 
 **Redaction ownership:**
 
-- **ToolRunner** redacts tool payloads per allowlist before emitting UiEvents
+- **ToolRunner** redacts tool payloads per allowlist before emitting AiEvents
 - **Route** may apply final transport-level truncation as last-mile enforcement
 
 **Prod:** Redact full payloads; stream summaries + references + status only
@@ -286,7 +294,7 @@ Tool implementations receive port dependencies via injection. No direct adapter 
 2. Execute tool implementation
 3. Validate result (Zod outputSchema)
 4. Redact per allowlist (hard-fail if missing)
-5. Emit `tool_call_result` UiEvent
+5. Emit `tool_call_result` AiEvent
 6. Return result shape
 
 **Invariant:** Validation/redaction failures still emit `tool_call_result` error event with same `toolCallId`. Never pass-through unknown fields.
@@ -339,8 +347,8 @@ Create packages only when criteria are met:
 ## Anti-Patterns
 
 1. **No IO in graphs** — Tool contracts define schemas; implementations receive ports via DI
-2. **No graphs in routes** — Routes call ai.facade; facade decides graph vs direct
-3. **No direct tool calls from graphs** — Graphs invoke tools only through toolRunner.exec(); ToolRunner owns toolCallId and UiEvent emission
+2. **No graphs in routes** — Routes call ai_runtime; runtime uses GraphExecutorPort
+3. **No direct tool calls from graphs** — Graphs invoke tools only through toolRunner.exec(); ToolRunner owns toolCallId and AiEvent emission
 4. **No direct llmService from graphs** — chat.graph.ts must call `completion.executeStream`, never llmService directly; billing/telemetry/promptHash invariants stay centralized
 5. **No multiple done events** — Graph emits exactly one `done` and resolves `final` exactly once across multi-step tool loops; no side effects on stream iteration
 6. **No port-per-tool** — Ports per external system; tools compose on top
@@ -349,8 +357,8 @@ Create packages only when criteria are met:
 9. **No span_id persistence** — span_id is for tracing UI only; not a durable join key
 10. **No premature packaging** — Package only after proven cross-service reuse
 11. **No full tool artifacts in user stream** — Stream UI-safe summaries + status + references; capture full artifacts out-of-band. Tool lifecycle state MUST be in stream.
-12. **No custom SSE event vocabulary** — Route maps UiEvents to Data Stream Protocol via official helper; never invent custom events
-13. **No protocol encoding in facade** — Facade emits UiEvents only; route handles wire protocol
+12. **No custom SSE event vocabulary** — Route maps AiEvents to Data Stream Protocol via official helper; never invent custom events
+13. **No protocol encoding in runtime** — Runtime emits AiEvents only; route handles wire protocol
 
 ---
 
@@ -358,10 +366,11 @@ Create packages only when criteria are met:
 
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — P0/P1/P2 checklists, ID map, invariants
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Graph execution, billing idempotency, pump+fanout
+- [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool execution invariants, first tool checklist
 - [AI_EVALS.md](AI_EVALS.md) — Eval harness structure, CI gates
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Hexagonal layers
 
 ---
 
-**Last Updated**: 2025-12-19
+**Last Updated**: 2025-12-22
 **Status**: Design Approved (Feature-Centric)
