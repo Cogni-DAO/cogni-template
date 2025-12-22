@@ -29,6 +29,8 @@ import {
   classifyLlmErrorFromStatus,
   LlmError,
   type LlmService,
+  type LlmToolCall,
+  type LlmToolCallDelta,
 } from "@/ports";
 import {
   computePromptHash,
@@ -119,8 +121,8 @@ export class LiteLlmAdapter implements LlmService {
     // Extract caller data for user attribution and correlation (cost tracking in LiteLLM)
     const { billingAccountId, requestId, traceId } = params.caller;
 
-    // Convert core Messages to LiteLLM format
-    const liteLlmMessages = params.messages.map((msg) => ({
+    // Canonical messages for prompt hash (role + content only per AI_SETUP_SPEC.md)
+    const canonicalMessages = params.messages.map((msg) => ({
       role: msg.role,
       content: msg.content,
     }));
@@ -128,9 +130,33 @@ export class LiteLlmAdapter implements LlmService {
     // Compute prompt hash BEFORE adding metadata (per AI_SETUP_SPEC.md)
     const promptHash = computePromptHash({
       model,
-      messages: liteLlmMessages,
+      messages: canonicalMessages,
       temperature,
       maxTokens,
+    });
+
+    // Convert core Messages to LiteLLM format (includes tool fields for agentic loop)
+    const liteLlmMessages = params.messages.map((msg) => {
+      const base: Record<string, unknown> = {
+        role: msg.role,
+        content: msg.content,
+      };
+      // Assistant messages with tool calls (OpenAI format)
+      if (msg.toolCalls && msg.toolCalls.length > 0) {
+        base.tool_calls = msg.toolCalls.map((tc) => ({
+          id: tc.id,
+          type: "function",
+          function: {
+            name: tc.name,
+            arguments: tc.arguments,
+          },
+        }));
+      }
+      // Tool result messages need tool_call_id
+      if (msg.role === "tool" && msg.toolCallId) {
+        base.tool_call_id = msg.toolCallId;
+      }
+      return base;
     });
 
     const requestBody = {
@@ -286,7 +312,8 @@ export class LiteLlmAdapter implements LlmService {
     const maxTokens = params.maxTokens ?? DEFAULT_MAX_TOKENS;
     const { billingAccountId, requestId, traceId } = params.caller;
 
-    const liteLlmMessages = params.messages.map((msg) => ({
+    // Canonical messages for prompt hash (role + content only per AI_SETUP_SPEC.md)
+    const canonicalMessages = params.messages.map((msg) => ({
       role: msg.role,
       content: msg.content,
     }));
@@ -294,12 +321,37 @@ export class LiteLlmAdapter implements LlmService {
     // Compute prompt hash BEFORE adding metadata (per AI_SETUP_SPEC.md)
     const promptHash = computePromptHash({
       model,
-      messages: liteLlmMessages,
+      messages: canonicalMessages,
       temperature,
       maxTokens,
     });
 
-    const requestBody = {
+    // Convert core Messages to LiteLLM format (includes tool fields for agentic loop)
+    const liteLlmMessages = params.messages.map((msg) => {
+      const base: Record<string, unknown> = {
+        role: msg.role,
+        content: msg.content,
+      };
+      // Assistant messages with tool calls (OpenAI format)
+      if (msg.toolCalls && msg.toolCalls.length > 0) {
+        base.tool_calls = msg.toolCalls.map((tc) => ({
+          id: tc.id,
+          type: "function",
+          function: {
+            name: tc.name,
+            arguments: tc.arguments,
+          },
+        }));
+      }
+      // Tool result messages need tool_call_id
+      if (msg.role === "tool" && msg.toolCallId) {
+        base.tool_call_id = msg.toolCallId;
+      }
+      return base;
+    });
+
+    // Build request body with optional tools
+    const requestBody: Record<string, unknown> = {
       model,
       messages: liteLlmMessages,
       temperature,
@@ -313,6 +365,14 @@ export class LiteLlmAdapter implements LlmService {
       stream: true,
       stream_options: { include_usage: true }, // Request usage in stream if supported
     };
+
+    // Add tools if provided (OpenAI function-calling format)
+    if (params.tools && params.tools.length > 0) {
+      requestBody.tools = params.tools;
+    }
+    if (params.toolChoice) {
+      requestBody.tool_choice = params.toolChoice;
+    }
 
     let response: Response;
     // Use short timeout for connection/TTFB only (not entire stream duration)
@@ -403,6 +463,13 @@ export class LiteLlmAdapter implements LlmService {
         let usageCost: number | undefined; // Cost from stream usage event
         let litellmRequestId: string | undefined; // LiteLLM's gen-... ID from response
         let streamCompleted = false; // Track if stream completed normally (not aborted/errored)
+
+        // Tool call accumulation state (per ADAPTER_ASSEMBLES_TOOLCALLS invariant)
+        // Accumulates fragments by index until stream ends, then assembles final.toolCalls
+        const toolCallAccumulators: Map<
+          number,
+          { id: string; name: string; arguments: string }
+        > = new Map();
 
         // Queue for parsed events from eventsource-parser
         const eventQueue: EventSourceMessage[] = [];
@@ -497,6 +564,52 @@ export class LiteLlmAdapter implements LlmService {
                     fullContent += content;
                     yield { type: "text_delta", delta: content } as const;
                   }
+
+                  // Parse and accumulate tool_calls deltas (OpenAI SSE format)
+                  // Each delta contains index + partial id/name/arguments
+                  const toolCalls = choice.delta?.tool_calls as
+                    | Array<{
+                        index: number;
+                        id?: string;
+                        type?: string;
+                        function?: { name?: string; arguments?: string };
+                      }>
+                    | undefined;
+
+                  if (toolCalls && Array.isArray(toolCalls)) {
+                    for (const tc of toolCalls) {
+                      const idx = tc.index;
+
+                      // Initialize accumulator on first delta for this index
+                      let acc = toolCallAccumulators.get(idx);
+                      if (!acc) {
+                        acc = { id: "", name: "", arguments: "" };
+                        toolCallAccumulators.set(idx, acc);
+                      }
+
+                      // Accumulate fragments
+                      if (tc.id) acc.id = tc.id;
+                      if (tc.function?.name) acc.name = tc.function.name;
+                      if (tc.function?.arguments)
+                        acc.arguments += tc.function.arguments;
+
+                      // Build delta event for UI streaming
+                      const delta: LlmToolCallDelta = {
+                        index: idx,
+                        ...(tc.id && { id: tc.id }),
+                        ...(tc.function && {
+                          function: {
+                            ...(tc.function.name && { name: tc.function.name }),
+                            ...(tc.function.arguments && {
+                              arguments: tc.function.arguments,
+                            }),
+                          },
+                        }),
+                      };
+
+                      yield { type: "tool_call_delta", delta } as const;
+                    }
+                  }
                 }
               } catch (parseError) {
                 // Log malformed JSON but continue streaming (transient SSE noise)
@@ -531,6 +644,27 @@ export class LiteLlmAdapter implements LlmService {
             const resolvedModel = model;
             const resolvedProvider = extractProviderFromModel(resolvedModel);
 
+            // Assemble final tool calls from accumulated deltas (per ADAPTER_ASSEMBLES_TOOLCALLS)
+            // Only include if finishReason is "tool_calls" and we have accumulated data
+            let assembledToolCalls: LlmToolCall[] | undefined;
+            if (
+              finishReason === "tool_calls" &&
+              toolCallAccumulators.size > 0
+            ) {
+              assembledToolCalls = Array.from(toolCallAccumulators.entries())
+                .sort(([a], [b]) => a - b) // Sort by index
+                .map(
+                  ([, acc]): LlmToolCall => ({
+                    id: acc.id,
+                    type: "function",
+                    function: {
+                      name: acc.name,
+                      arguments: acc.arguments,
+                    },
+                  })
+                );
+            }
+
             // Build result object conditionally to satisfy exactOptionalPropertyTypes
             const result: CompletionResult = {
               message: { role: "assistant", content: fullContent },
@@ -543,6 +677,9 @@ export class LiteLlmAdapter implements LlmService {
             }
             if (finishReason) {
               result.finishReason = finishReason;
+            }
+            if (assembledToolCalls && assembledToolCalls.length > 0) {
+              result.toolCalls = assembledToolCalls;
             }
 
             // Cost derivation priority (ACTIVITY_METRICS.md §3):
@@ -581,6 +718,7 @@ export class LiteLlmAdapter implements LlmService {
                 hasCost: typeof derivedCost === "number",
                 hasCallId: !!result.litellmCallId,
                 contentLength: fullContent.length,
+                toolCallCount: assembledToolCalls?.length ?? 0,
                 promptHash,
               },
               "adapter.litellm.stream_result"
