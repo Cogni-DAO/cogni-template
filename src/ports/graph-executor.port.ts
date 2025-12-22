@@ -24,6 +24,8 @@ import type { LlmCaller } from "./llm.port";
 export interface GraphRunRequest {
   /** Unique run ID for this graph execution (caller-provided) */
   readonly runId: string;
+  /** Ingress request ID for delivery-layer correlation (P0: equals runId; P1: many per runId) */
+  readonly ingressRequestId: string;
   /** Conversation messages */
   readonly messages: Message[];
   /** Model identifier */
