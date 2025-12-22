@@ -40,7 +40,9 @@ export interface UsageFact {
   // Required billing context
   readonly billingAccountId: string;
   readonly virtualKeyId: string;
-  readonly requestId: string;
+
+  /** Optional delivery-layer correlation (HTTP/SSE/worker/queue). Debug only, never for idempotency. */
+  readonly ingressRequestId?: string;
 
   // Provider details
   readonly provider?: string;
