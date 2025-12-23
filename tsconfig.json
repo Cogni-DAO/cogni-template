@@ -3,6 +3,7 @@
   "files": [],
   "include": [],
   "references": [
+    { "path": "./packages/ai-core" },
     { "path": "./packages/aragon-osx" },
     { "path": "./packages/cogni-contracts" }
   ]

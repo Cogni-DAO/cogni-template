@@ -82,6 +82,9 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 - **e2e/** → Playwright API/UI specs.
 - **scripts/** → Migrations, seeds, generators.
 - **packages/** → Internal shared packages (pure libraries, no `src/` imports).
+  - `ai-core/` → Executor-agnostic AI primitives (AiEvent, UsageFact, tool schemas)
+  - `langgraph-server/` → LangGraph.js service code (HTTP API, event normalization)
+  - `langgraph-graphs/` → Feature-sliced graph definitions (Next.js must NOT import)
 
 ## Configuration Directories
 
@@ -448,6 +451,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
   - `mcp` → `@/contracts|@/bootstrap|@/features/*/services/*|@/ports`.
 - **ESLint**: flat config for UI governance and Tailwind rules.
 - **Dependency-cruiser**: enforces hexagonal architecture boundaries; CI gate for import violations. Arch probes in `src/**/__arch_probes__/` validate boundaries via tests; excluded from builds (tsconfig, .dockerignore).
+- **LangGraph Graphs Isolation**: `src/**` must never import from `packages/langgraph-graphs/**`. Only `packages/langgraph-server/**` may import graphs. Enforced by dependency-cruiser.
 - **Contracts**: `tests/contract` must pass for any adapter.
 - **Env**: Zod-validated; build fails on invalid/missing.
 - **Security**: middleware sets headers, verifies session or API key, rate-limits.

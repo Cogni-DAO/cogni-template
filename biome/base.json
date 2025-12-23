@@ -191,6 +191,7 @@
     },
     {
       "includes": [
+        "packages/ai-core/tsup.config.ts",
         "packages/aragon-osx/tsup.config.ts",
         "packages/cogni-contracts/tsup.config.ts"
       ],
