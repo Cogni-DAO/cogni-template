@@ -414,5 +414,19 @@ module.exports = {
       comment:
         "Import from package root (@cogni/setup-core), not internal paths",
     },
+
+    // NO_NEXT_IMPORT_GRAPHS: Next.js must never import graph definitions (external runtime only)
+    {
+      name: "no-src-to-langgraph-graphs",
+      severity: "error",
+      from: {
+        path: "^src/",
+      },
+      to: {
+        path: "^packages/langgraph-graphs/",
+      },
+      comment:
+        "Next.js must not import graph definitions; graphs run in external LangGraph Server",
+    },
   ],
 };
