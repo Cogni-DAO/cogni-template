@@ -238,6 +238,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build workspace packages
+        run: pnpm packages:build
+
       - name: Derive image tags
         run: |
           # INV-COUPLED-TAGS-NO-GUESSING: derive APP_IMAGE from IMAGE_NAME + IMAGE_TAG
