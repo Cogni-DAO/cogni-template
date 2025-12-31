@@ -481,6 +481,52 @@ function commitUsageFact(fact: UsageFact, callIndex: number): void {
 
 - [ ] `usage_report` only emitted on success; error/abort with partial usage not billed (P1: add optional `usage` to error result)
 
+### LangGraphServerAdapter (P0 Gated)
+
+**P0 Constraint:** `langgraph_server` executor is **internal/experimental only** in P0. It cannot be a customer-billable path until it achieves billing-grade `UsageFact` parity.
+
+**Missing for billing parity:**
+
+| Field         | InProc | Server | Notes                                |
+| ------------- | ------ | ------ | ------------------------------------ |
+| `usageUnitId` | Yes    | No     | Requires `x-litellm-call-id` capture |
+| `costUsd`     | Yes    | No     | Requires `x-litellm-response-cost`   |
+| `model`       | Yes    | No     | Requires resolved model from LiteLLM |
+
+**Fix path (if server must be paid in P0):** `langgraph-server` must capture LiteLLM response headers (`call-id`, `response-cost`, `model`, tokens) and emit `usage_report` with `usageUnitId=litellmCallId`. Without this, billing idempotency relies on `callIndex` fallback which is unsafe.
+
+---
+
+## P0 Scope Constraints
+
+### Billable Executor Scope
+
+**P0 ships with `inproc` as the only customer-billable executor.** The `langgraph_server` executor is gated as internal/experimental until it can emit stable `usageUnitId` (prefer `litellmCallId`) + `costUsd` + resolved model.
+
+### Graph Contract Requirement
+
+**Required seam:** Define/enforce a per-graph contract — graphs are pure functions over injected dependencies:
+
+```typescript
+interface GraphDeps {
+  llm: BaseChatModel; // Injected, not instantiated
+  tools: StructuredTool[]; // Injected, not hardcoded
+  runContext: RunContext; // Caller, tracing, billing
+  policy: GraphPolicy; // Model selection, rate limits
+  abortSignal?: AbortSignal; // Cancellation propagation
+}
+```
+
+**Invariant:** No env reads or provider SDKs in graph code. Event semantics + billing guarantee must be tested per-graph.
+
+### Risk Flags
+
+1. **callIndex fallback is nondeterministic under concurrency/resume** — Must remain error-only path and not become normal operation. If `callIndex` fallback frequency exceeds threshold, investigate root cause.
+
+2. **USAGE_EMIT_ON_FINAL_ONLY implies partial failures are unbilled** — Explicitly accepted for P0. If graph fails mid-execution after N LLM calls, those calls are not billed. Add partial-usage reporting in P1 if revenue leakage is material.
+
+3. **Server path without usageUnitId breaks idempotency** — If server path is exposed to customers without fix, duplicate charges are possible on retry. Gate behind feature flag until resolved.
+
 ---
 
 ## Related Documents
@@ -495,5 +541,5 @@ function commitUsageFact(fact: UsageFact, callIndex: number): void {
 
 ---
 
-**Last Updated**: 2025-12-28
-**Status**: Draft (Rev 8 - GraphResolverFn pattern + executeCompletionUnit contract)
+**Last Updated**: 2025-12-31
+**Status**: Draft (Rev 9 - P0 scope constraints + risk flags)
