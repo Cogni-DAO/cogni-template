@@ -21,8 +21,9 @@ COPY --parents packages/*/package.json ./
 ENV npm_config_disturl=https://nodejs.org/dist
 
 # 2. Install dependencies (cached when manifests unchanged)
+#    --ignore-scripts: skip lifecycle hooks (postinstall, etc.) since sources aren't copied yet
 RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store,sharing=locked \
-    pnpm install --frozen-lockfile
+    pnpm install --frozen-lockfile --ignore-scripts
 
 # 3. Copy full source (filtered by .dockerignore)
 COPY . .

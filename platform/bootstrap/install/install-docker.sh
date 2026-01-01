@@ -18,37 +18,111 @@ log_warn() {
     echo -e "${YELLOW}[WARN]${NC} $1"
 }
 
-check_command() {
-    if command -v "$1" >/dev/null 2>&1; then
-        log_info "$1 is already installed"
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Check if Docker daemon is running
+check_docker_daemon() {
+    if docker info >/dev/null 2>&1; then
         return 0
     else
         return 1
     fi
 }
 
-install_brew_package() {
-    local package=$1
-    if ! check_command "$package"; then
-        log_info "Installing $package via Homebrew..."
-        brew install "$package"
+# Check if docker compose v2 is available
+check_docker_compose() {
+    if docker compose version >/dev/null 2>&1; then
+        return 0
+    else
+        return 1
     fi
 }
 
-# Install Docker
-if [[ "$OSTYPE" == "darwin"* ]]; then
+# Install Docker Desktop on macOS
+install_docker_macos() {
     # Check for Homebrew
-    if ! check_command brew; then
-        log_warn "Homebrew not found. Please install Homebrew first."
+    if ! command -v brew >/dev/null 2>&1; then
+        log_error "Homebrew not found. Please install Homebrew first:"
+        log_error "  /bin/bash -c \"\$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)\""
         exit 1
     fi
-    
-    install_brew_package docker
-    log_info "Note: You may also want to install Docker Desktop for macOS GUI"
+
+    # Check if Docker Desktop is already installed (app exists)
+    if [[ -d "/Applications/Docker.app" ]]; then
+        log_info "Docker Desktop is already installed"
+    else
+        log_info "Installing Docker Desktop via Homebrew..."
+        brew install --cask docker
+        log_info "Docker Desktop installed"
+    fi
+}
+
+# Wait for Docker daemon with timeout
+wait_for_docker() {
+    local max_attempts=30
+    local attempt=1
+
+    log_info "Waiting for Docker daemon to start..."
+    while [[ $attempt -le $max_attempts ]]; do
+        if check_docker_daemon; then
+            log_info "Docker daemon is running"
+            return 0
+        fi
+        sleep 2
+        ((attempt++))
+    done
+
+    return 1
+}
+
+# Main installation flow
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    install_docker_macos
+
+    # Check if daemon is running
+    if ! check_docker_daemon; then
+        log_warn "Docker daemon is not running."
+        log_info "Launching Docker Desktop..."
+        open -a Docker
+
+        if ! wait_for_docker; then
+            log_error "Docker daemon did not start in time."
+            log_error "Please launch Docker Desktop manually and wait for it to start."
+            log_error "Then re-run this script or run: pnpm dev:stack"
+            exit 1
+        fi
+    fi
+
+    # Verify docker compose v2
+    if ! check_docker_compose; then
+        log_error "docker compose v2 not available."
+        log_error "Please ensure Docker Desktop is up to date."
+        exit 1
+    fi
+
+    log_info "Docker compose $(docker compose version --short) available"
+
 else
-    if ! check_command docker; then
-        log_warn "Non-macOS system detected. Please install Docker manually:"
-        log_warn "- Docker: https://docs.docker.com/engine/install/"
+    # Linux/other
+    if ! command -v docker >/dev/null 2>&1; then
+        log_error "Docker not found. Please install Docker:"
+        log_error "  https://docs.docker.com/engine/install/"
+        exit 1
+    fi
+
+    if ! check_docker_daemon; then
+        log_error "Docker daemon is not running. Please start it:"
+        log_error "  sudo systemctl start docker"
+        exit 1
+    fi
+
+    if ! check_docker_compose; then
+        log_error "docker compose v2 not available."
+        log_error "Please install docker-compose-plugin:"
+        log_error "  https://docs.docker.com/compose/install/"
+        exit 1
     fi
 fi
 
