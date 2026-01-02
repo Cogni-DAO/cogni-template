@@ -146,6 +146,7 @@ Update A records at your domain registrar (e.g., Namecheap → Advanced DNS):
 | --------- | ---- | ------------- | --------- |
 | `preview` | A    | `$PREVIEW_IP` | Automatic |
 | `@`       | A    | `$PROD_IP`    | Automatic |
+| `www`     | A    | `$PROD_IP`    | Automatic |
 
 **Verify propagation** (may take 5-15 minutes):
 
