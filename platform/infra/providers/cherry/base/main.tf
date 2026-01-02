@@ -44,3 +44,29 @@ output "vm_host" {
   value       = [for ip in cherryservers_server.server.ip_addresses : ip.address if ip.type == "primary-ip"][0]
   sensitive   = false
 }
+
+# Health check: verify bootstrap completed and Docker is working
+# Skipped if ssh_private_key is empty
+resource "null_resource" "bootstrap_health_check" {
+  count = var.ssh_private_key != "" ? 1 : 0
+
+  depends_on = [cherryservers_server.server]
+
+  triggers = {
+    server_id = cherryservers_server.server.id
+  }
+
+  connection {
+    type        = "ssh"
+    host        = [for ip in cherryservers_server.server.ip_addresses : ip.address if ip.type == "primary-ip"][0]
+    user        = "root"
+    private_key = var.ssh_private_key
+    timeout     = "10m"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "bash -lc 'set -euo pipefail; echo \"Waiting for cloud-init...\"; cloud-init status --wait; echo \"Checking bootstrap marker...\"; test -f /var/lib/cogni/bootstrap.ok || { echo \"FAIL: missing bootstrap.ok\"; cat /var/lib/cogni/bootstrap.fail 2>/dev/null || true; tail -n 200 /var/log/cloud-init-output.log || true; tail -n 200 /var/log/cogni-bootstrap.log || true; exit 1; }; echo \"Checking Docker...\"; docker version; docker compose version; echo \"Bootstrap health check passed\"'"
+    ]
+  }
+}

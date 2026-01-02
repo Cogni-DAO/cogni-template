@@ -289,6 +289,46 @@ cat > "$ARTIFACT_DIR/deploy-remote.sh" << 'EOF'
 
 set -euo pipefail
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step -1: Docker prerequisite gate (fail fast if VM not bootstrapped)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+prereq_failed() {
+  echo -e "\033[0;31m[ERROR]\033[0m Docker prerequisites not met. VM bootstrap may have failed."
+  echo ""
+  echo "=== Bootstrap marker files ==="
+  cat /var/lib/cogni/bootstrap.ok 2>/dev/null || echo "(bootstrap.ok not found)"
+  cat /var/lib/cogni/bootstrap.fail 2>/dev/null || echo "(bootstrap.fail not found)"
+  echo ""
+  echo "=== cloud-init-output.log (last 200 lines) ==="
+  tail -n 200 /var/log/cloud-init-output.log 2>/dev/null || echo "(not found)"
+  echo ""
+  echo "=== cogni-bootstrap.log (last 200 lines) ==="
+  tail -n 200 /var/log/cogni-bootstrap.log 2>/dev/null || echo "(not found)"
+  exit 1
+}
+
+if ! command -v docker &>/dev/null; then
+  echo -e "\033[0;31m[ERROR]\033[0m docker binary not found"
+  prereq_failed
+fi
+
+if ! docker version &>/dev/null; then
+  echo -e "\033[0;31m[ERROR]\033[0m docker daemon not reachable"
+  prereq_failed
+fi
+
+if ! docker compose version &>/dev/null; then
+  echo -e "\033[0;31m[ERROR]\033[0m docker compose plugin not found"
+  prereq_failed
+fi
+
+if command -v systemctl &>/dev/null && ! systemctl is-active --quiet docker; then
+  echo -e "\033[0;31m[ERROR]\033[0m docker service not active"
+  prereq_failed
+fi
+
+echo -e "\033[0;32m[INFO]\033[0m Docker prerequisites verified"
+
 # Compose shortcuts (explicit project names, no global export)
 EDGE_COMPOSE="docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml"
 RUNTIME_COMPOSE="docker compose --project-name cogni-runtime -f /opt/cogni-template-runtime/docker-compose.yml"
@@ -441,8 +481,7 @@ ENV_EOF
 # Step 2: Start edge stack (idempotent - only starts if not running)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "Ensuring edge stack (Caddy) is running..."
-EDGE_RUNNING=$($EDGE_COMPOSE ps -q caddy 2>/dev/null | wc -l || echo "0")
-if [[ "$EDGE_RUNNING" -eq 0 ]]; then
+if ! $EDGE_COMPOSE ps -q caddy 2>/dev/null | grep -q .; then
   log_info "Starting edge stack..."
   $EDGE_COMPOSE up -d
 else

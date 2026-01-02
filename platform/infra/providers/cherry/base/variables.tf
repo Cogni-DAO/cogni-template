@@ -36,3 +36,10 @@ variable "public_key_path" {
   # No default - specified in env.*.tfvars
 }
 
+variable "ssh_private_key" {
+  description = "SSH private key content for bootstrap health check. Empty to skip."
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
