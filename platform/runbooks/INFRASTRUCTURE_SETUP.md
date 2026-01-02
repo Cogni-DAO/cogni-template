@@ -40,6 +40,9 @@ ssh-keygen -t ed25519 -f ~/.ssh/cogni_template_preview_deploy -C "cogni-template
 
 # Copy public key to repo
 cp ~/.ssh/cogni_template_preview_deploy.pub keys/
+
+# Upload private key to GitHub Secrets immediately
+gh secret set SSH_DEPLOY_KEY --env preview --body "$(cat ~/.ssh/cogni_template_preview_deploy)"
 ```
 
 ### Production Key
@@ -50,17 +53,21 @@ ssh-keygen -t ed25519 -f ~/.ssh/cogni_template_production_deploy -C "cogni-templ
 
 # Copy public key to repo
 cp ~/.ssh/cogni_template_production_deploy.pub keys/
+
+# Upload private key to GitHub Secrets immediately
+gh secret set SSH_DEPLOY_KEY --env production --body "$(cat ~/.ssh/cogni_template_production_deploy)"
 ```
 
-### Commit Public Keys
+### Commit Public Keys & Cleanup
 
 ```bash
 git add keys/*.pub
 git commit -m "chore(infra): add SSH deploy keys for preview and production"
 git push
-```
 
-> **Security**: Private keys (`~/.ssh/cogni_template_*_deploy`) stay on your machine and are added to GitHub Secrets in Step 5. Never commit private keys.
+# Optional: delete local private keys (now stored in GitHub Secrets)
+rm ~/.ssh/cogni_template_preview_deploy ~/.ssh/cogni_template_production_deploy
+```
 
 ---
 
@@ -189,10 +196,9 @@ gh secret set DOMAIN --env $ENV --body "preview.cognidao.org"  # or "cognidao.or
 gh secret set OPENROUTER_API_KEY --env $ENV --body "<your-openrouter-key>"
 gh secret set EVM_RPC_URL --env $ENV --body "<your-rpc-url>"
 gh secret set SOURCECRED_GITHUB_TOKEN --env $ENV --body "<github-pat-for-sourcecred>"
-
-# SSH deploy key (private key content)
-gh secret set SSH_DEPLOY_KEY --env $ENV --body "$(cat ~/.ssh/cogni_template_${ENV}_deploy)"
 ```
+
+> **Note**: `SSH_DEPLOY_KEY` was already set in Step 1.
 
 ### Repository Secrets (Shared)
 
