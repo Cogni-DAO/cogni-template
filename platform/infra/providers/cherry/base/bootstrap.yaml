@@ -33,21 +33,74 @@ write_files:
       SystemMaxUse=200M
       SystemMaxFileSize=50M
       RuntimeMaxUse=50M
+  - path: /opt/cogni-bootstrap.sh
+    owner: root:root
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      # Cogni VM Bootstrap - single fail-fast script for cloud-init
+      # Contract: writes /var/lib/cogni/bootstrap.ok on success, bootstrap.fail on error
+      set -euo pipefail
+
+      MARKER_OK="/var/lib/cogni/bootstrap.ok"
+      MARKER_FAIL="/var/lib/cogni/bootstrap.fail"
+      LOG="/var/log/cogni-bootstrap.log"
+
+      mkdir -p /var/lib/cogni
+      exec > >(tee -a "$LOG") 2>&1
+
+      # Trap: write failure marker with context, append diagnostics to log
+      trap 'ec=$?; {
+        echo "BOOTSTRAP_OK=0"
+        echo "FAIL_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "EXIT_CODE=$ec"
+        echo "LAST_COMMAND=${BASH_COMMAND}"
+      } > "$MARKER_FAIL"
+      echo "=== cloud-init status ===" >> "$LOG"
+      cloud-init status 2>&1 >> "$LOG" || true
+      echo "=== cloud-init-output.log tail ===" >> "$LOG"
+      tail -n 200 /var/log/cloud-init-output.log 2>&1 >> "$LOG" || true
+      exit $ec' ERR
+
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Starting Cogni bootstrap..."
+
+      # Install Docker via get.docker.com (more resilient than apt to CDN issues)
+      # TODO: Replace with golden image (Packer) - Docker should be pre-installed, not fetched at boot
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Installing Docker via get.docker.com..."
+      curl -fsSL https://get.docker.com | sh
+
+      # Enable and start Docker
+      systemctl enable docker
+      systemctl start docker
+
+      # Validate installation (explicit checks, fail fast)
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Validating Docker installation..."
+      command -v docker >/dev/null || { echo "FATAL: docker binary not found"; exit 1; }
+      docker --version || { echo "FATAL: docker --version failed"; exit 1; }
+      docker compose version || { echo "FATAL: docker compose plugin not found"; exit 1; }
+      systemctl is-active --quiet docker || { echo "FATAL: docker service not active"; exit 1; }
+
+      # Restart journald for updated log config
+      systemctl restart systemd-journald
+
+      # Create shared Docker network
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Creating cogni-edge network..."
+      docker network create cogni-edge || true
+
+      # Create deployment directories
+      mkdir -p /opt/cogni-template-edge /opt/cogni-template-runtime /opt/cogni-template-sourcecred
+      mkdir -p /var/lib/cogni
+
+      # Write success marker
+      rm -f "$MARKER_FAIL"
+      {
+        echo "BOOTSTRAP_OK=1"
+        echo "BOOTSTRAP_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+        echo "DOCKER_VERSION=$(docker --version)"
+        echo "COMPOSE_VERSION=$(docker compose version)"
+      } > "$MARKER_OK"
+
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Bootstrap complete!"
 
 runcmd:
-  # Install Docker
-  - install -m 0755 -d /etc/apt/keyrings
-  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-  - bash -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" > /etc/apt/sources.list.d/docker.list'
-  - apt-get update
-  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-  - systemctl enable docker
-  - systemctl start docker
-  - systemctl restart systemd-journald
-  # Create cogni-edge network (shared between edge and runtime compose projects)
-  # Must exist before any docker compose up that references it as external
-  - docker network create cogni-edge || true
-  # Create deployment directories (rsync targets)
-  - mkdir -p /opt/cogni-template-edge /opt/cogni-template-runtime
-  # Create config hash directory for checksum-gated restarts
-  - mkdir -p /var/lib/cogni
+  - bash /opt/cogni-bootstrap.sh

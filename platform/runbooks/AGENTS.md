@@ -14,8 +14,9 @@ Operational procedures and documentation for deployment, rollback, and incident 
 
 ## Pointers
 
-- [DEPLOY.md](DEPLOY.md): Deployment procedures and troubleshooting
-- [ROLLBACK.md](ROLLBACK.md): Emergency rollback procedures
+- [INFRASTRUCTURE_SETUP.md](INFRASTRUCTURE_SETUP.md): VM provisioning, DNS, GitHub secrets (disaster recovery)
+- [DEPLOYMENT_ARCHITECTURE.md](DEPLOYMENT_ARCHITECTURE.md): Architecture overview
+- [CI-CD.md](../../docs/CI-CD.md): Branch model, workflows, deployment automation
 
 ## Boundaries
 

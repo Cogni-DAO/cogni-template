@@ -12,13 +12,14 @@ A production-ready Next.js template for AI-powered autonomous organizations.
 
 ### 1. 👨‍💻 Contributor: Improve the Template
 
-**Goal:** Develop improvements and merge back into CogniDAO repo  
+**Goal:** Develop improvements and merge back into CogniDAO repo
 _We love you! ❤️_
 
 ```bash
 git clone https://github.com/Cogni-DAO/cogni-template
 cd cogni-template
-pnpm setup local     # Automated setup TODO: lol sorry, cp .env.local.example .env.local
+platform/bootstrap/setup.sh   # Install tools + dependencies, prompts to start dev stack
+cp .env.local.example .env.local  # Configure environment (add OpenRouter API key)
 pnpm dev:stack       # Start developing with full stack (DB + LiteLLM + Next.js)
 pnpm db:setup        # Migrate and Seed database, once dev stack is running
 pnpm docker:stack    # Full production simulation (https://localhost - browser cert warning expected)
@@ -28,15 +29,15 @@ pnpm docker:stack    # Full production simulation (https://localhost - browser c
 
 ### 2. 🚀 Fork Owner: Launch Your Own DAO
 
-**Goal:** Create your own autonomous organization with your unique direction  
+**Goal:** Create your own autonomous organization with your unique direction
 _We love you too, go for it! 🎯_
 
 ```bash
-pnpm setup local                    # Local development
-pnpm setup infra --env preview      # Infrastructure + SSH keys
-pnpm setup infra --env production   # Production infrastructure
-pnpm setup github --env preview     # GitHub secrets + branch protection
-pnpm setup github --env production  # Production GitHub setup
+git clone https://github.com/YOUR-ORG/your-fork
+cd your-fork
+platform/bootstrap/setup.sh --all   # Install all tools (includes OpenTofu, REUSE)
+cp .env.local.example .env.local    # Configure environment
+pnpm dev:stack                      # Start dev stack
 ```
 
 ---
@@ -47,7 +48,8 @@ _We're working to automate more of this! Want to help? Contribute setup automati
 
 ### ✅ Current Script Support
 
-- **`platform/bootstrap/install/*`** - Tool installation (pnpm, docker, tofu, reuse)
+- **`platform/bootstrap/setup.sh`** - One-command dev environment setup (Volta, Node 20, pnpm, Docker Desktop)
+- **`platform/bootstrap/setup.sh --all`** - Full setup including OpenTofu and REUSE
 - **`tofu apply`** - VM provisioning (when manually configured)
 
 ### ⚠️ Current Manual Setup Required
@@ -56,7 +58,6 @@ _We're working to automate more of this! Want to help? Contribute setup automati
 
 - Get [OpenRouter API key](https://openrouter.ai/keys) for AI features
 - Copy `.env.local.example` → `.env.local` and fill in values
-- `pnpm install` and `pnpm dev:stack`
 - **Observability:** Local Loki + Grafana on localhost:3001 (auto-configured). For MCP log queries, optionally set `GRAFANA_URL` + `GRAFANA_SERVICE_ACCOUNT_TOKEN` for Grafana Cloud access.
 
 **For Fork Owners (everything above, plus):**

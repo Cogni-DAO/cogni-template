@@ -13,7 +13,7 @@ Build once. Push to GHCR. Deploy via GitHub Actions + Docker Compose to Cherry V
 ### Base Infrastructure (`platform/infra/providers/cherry/base/`)
 
 - **Purpose**: VM provisioning with Cherry Servers API
-- **Environment separation**: `env.preview.tfvars`, `env.prod.tfvars`
+- **Environment separation**: `terraform.preview.tfvars`, `terraform.production.tfvars`
 - **Creates**: `preview-cogni`, `production-cogni` VMs with SSH deploy keys
 - **Authentication**: SSH public keys only, VM host output to GitHub secrets
 - **Bootstrap**: Creates `cogni-edge` network, deployment directories
@@ -43,8 +43,8 @@ platform/infra/
 │   │   └── cogni_prod_deploy.pub
 │   ├── main.tf                     # Cherry provider + VM resources + outputs
 │   ├── variables.tf                # environment, vm_name_prefix, plan, region, public_key_path
-│   ├── env.preview.tfvars         # Preview VM config
-│   ├── env.prod.tfvars            # Production VM config
+│   ├── terraform.preview.tfvars   # Preview VM config (create from example)
+│   ├── terraform.production.tfvars # Production VM config (create from example)
 │   └── bootstrap.yaml             # Cloud-init VM setup (creates cogni-edge network)
 └── services/
     ├── edge/                       # TLS termination (immutable, rarely touched)
@@ -98,34 +98,24 @@ For private GHCR images, VMs authenticate using bot account credentials:
 - **Environment secrets**: `GHCR_DEPLOY_TOKEN` (PAT), `GHCR_USERNAME=Cogni-1729`
 - **Deploy flow**: CI injects `docker login ghcr.io` before `docker compose pull`
 
-## GitHub Actions Workflows (Primary Interface)
+## GitHub Actions Workflows
 
-**Build & Test Pipeline:**
+See [CI-CD.md](../../docs/CI-CD.md) for complete workflow documentation.
 
-- `ci.yaml` - Static checks (lint, type, REUSE) on all PRs
-- `build-preview.yml` - Docker build + health tests (triggered by app changes)
-- `build-prod.yml` - Docker build + health tests for production
+**Key workflows:**
 
-**Deployment Pipeline:**
-
-- `deploy-preview.yml` - **Auto-triggered on PR**: Build + Push + Deploy (consolidated workflow)
-- `deploy-production.yml` - **Auto-triggered on main**: Build → Push GHCR → SSH → Docker Compose
-- `provision-base.yml` - **Manual VM provisioning** via OpenTofu workflow dispatch
-
-**End-to-End Testing:**
-
-- `e2e-test-preview.yml` - Runs after preview deployment completes
+- `staging-preview.yml` - Push to staging: build → test → push → deploy → e2e → auto-promote
+- `build-prod.yml` - Push to main: build → test → push
+- `deploy-production.yml` - Triggered on build-prod success: deploy to production
 
 ## Getting Started
 
-**First-time setup**: See [DEPLOY.md](DEPLOY.md) for step-by-step guide.
+**First-time setup / Disaster recovery**: See [INFRASTRUCTURE_SETUP.md](INFRASTRUCTURE_SETUP.md)
 
 ## Deployment Flows
 
-**VM Provisioning (One-time)**: GitHub Actions "Provision Base Infrastructure" workflow  
-**App Deployment (Routine)**: Auto-triggered on PR/main → rsync bundle → SSH → `docker compose up`
-
-**Manual deployments**: See [DEPLOY.md](DEPLOY.md)
+**VM Provisioning (One-time)**: Manual via OpenTofu (see INFRASTRUCTURE_SETUP.md)
+**App Deployment (Routine)**: Auto-triggered on staging/main → rsync bundle → SSH → `docker compose up`
 
 ## Secrets Management
 
@@ -194,7 +184,6 @@ POSTGRES_DB=${APP_DB_NAME}
 
 ## Related Documentation
 
-- [Node CI/CD Contract](../../docs/NODE_CI_CD_CONTRACT.md) - CI/CD invariants, portability, Jenkins path
 - [CI/CD Pipeline Flow](../../docs/CI-CD.md) - Branch model, workflows, and deployment automation
+- [Infrastructure Setup](INFRASTRUCTURE_SETUP.md) - VM provisioning and disaster recovery
 - [Application Architecture](../../docs/ARCHITECTURE.md) - Hexagonal design and code organization
-- [DEPLOY.md](DEPLOY.md) - Step-by-step deployment guide

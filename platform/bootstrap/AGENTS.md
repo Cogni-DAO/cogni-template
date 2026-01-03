@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-12
+- **Last reviewed:** 2026-01-02
 - **Status:** draft
 
 ## Purpose
@@ -31,9 +31,9 @@ Development environment setup installers for one-time machine and repository con
 
 - **Exports:** none
 - **Routes (if any):** none
-- **CLI (if any):** `install/*.sh` scripts
+- **CLI (if any):** `setup.sh`, `simple-local-env-setup.sh`, `install/*.sh` scripts
 - **Env/Config keys:** none
-- **Files considered API:** `install/*.sh`
+- **Files considered API:** `setup.sh`, `simple-local-env-setup.sh`, `install/*.sh`
 
 ## Ports (optional)
 
@@ -48,12 +48,20 @@ Development environment setup installers for one-time machine and repository con
 
 ## Usage
 
-Minimal local commands:
+One-command setup (recommended for new developers):
 
 ```bash
-install/install-pnpm.sh    # Node.js development stack
-install/install-tofu.sh    # Infrastructure tooling
-install/install-docker.sh  # Container runtime
+./setup.sh           # Install tools + set up dev/test environments
+./setup.sh --all     # Also install OpenTofu and REUSE
+```
+
+Individual installers:
+
+```bash
+install/install-pnpm.sh    # Volta + Node.js + pnpm
+install/install-docker.sh  # Docker Desktop
+install/install-tofu.sh    # Infrastructure tooling (optional)
+install/install-reuse.sh   # License compliance (optional)
 ```
 
 ## Standards

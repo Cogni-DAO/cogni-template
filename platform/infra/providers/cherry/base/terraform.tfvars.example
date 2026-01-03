@@ -8,9 +8,9 @@ project_id = "YOUR_PROJECT_ID"
 domain = "canary.cognidao.org"
 
 # Optional overrides (defaults are shown)
-# region = "eu_nord_1"
+# region = "LT-Siauliai"
 # image = "ubuntu_22_04"  
-# plan = "cloud_vps_1"
+# plan = "B1-1-1gb-20s-shared"
 # hostname = "cogni-canary"
 # public_key_path = "~/.ssh/id_rsa.pub"
 
