@@ -85,9 +85,14 @@ export CHERRY_PROJECT_ID="<your-project-id>"
 
 ## Step 3: Provision VMs
 
+> **Important**: Each environment has its own SSH keypair. The `TF_VAR_ssh_private_key` variable must match the public key in your tfvars file. If mismatched, the health check will fail with "SSH authentication failed".
+
 ### Preview Environment
 
 ```bash
+# Set private key for health check (must match public_key_path in tfvars)
+export TF_VAR_ssh_private_key="$(cat ~/.ssh/cogni_template_preview_deploy)"
+
 # Create tfvars file
 cat > terraform.preview.tfvars << EOF
 environment     = "preview"
@@ -114,6 +119,9 @@ echo "Preview VM IP: $PREVIEW_IP"
 ### Production Environment
 
 ```bash
+# Set private key for health check (must match public_key_path in tfvars)
+export TF_VAR_ssh_private_key="$(cat ~/.ssh/cogni_template_production_deploy)"
+
 # Create tfvars file
 cat > terraform.production.tfvars << EOF
 environment     = "production"
@@ -291,6 +299,23 @@ docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-comp
 **Cause**: VM was terminated and IP reassigned, or Caddy failed to obtain certificate
 
 **Fix**: Re-provision VM (Step 2), update DNS (Step 3), update GitHub secrets (Step 4)
+
+### Health Check Fails: "SSH authentication failed"
+
+**Symptom**: `tofu apply` times out with `ssh: unable to authenticate, attempted methods [none publickey]`
+
+**Cause**: `TF_VAR_ssh_private_key` doesn't match the public key on the VM. Common when switching between preview/production.
+
+**Fix**:
+
+```bash
+# Ensure private key matches the environment you're provisioning
+export TF_VAR_ssh_private_key="$(cat ~/.ssh/cogni_template_preview_deploy)"    # for preview
+export TF_VAR_ssh_private_key="$(cat ~/.ssh/cogni_template_production_deploy)" # for production
+
+# Re-run apply
+tofu apply -var-file=terraform.<environment>.tfvars
+```
 
 ### SSH Connection Failed
 
