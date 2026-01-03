@@ -393,3 +393,4 @@ sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
 ## Future Roadmap
 
 - [ ] **Golden image via Packer**: Bake Docker+Compose into a snapshot image instead of boot-time installs. Eliminates nondeterministic failures from upstream repo/CDN issues. Cloud-init becomes config-only.
+- [ ] **Flaky LiteLLM Fix**: first deployment of the app on new infra tends to fail, for unhealthy litellm. re-deploy fixes. TODO: root cause and fix flakiness
