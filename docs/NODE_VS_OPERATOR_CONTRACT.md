@@ -111,13 +111,17 @@ src/                      # Next.js app (App Router)
   features/               # Vertical slices
   contracts/              # Zod API contracts
 packages/
-  ai-core/                # LangGraph graphs, prompts, tools, parsers
+  ai-core/                # Executor-agnostic AI primitives (AiEvent, UsageFact, tool schemas)
+  langgraph-server/       # LangGraph Server service code (Node.js/LangGraph.js)
+  langgraph-graphs/       # Feature-sliced graph definitions + prompts
+    graphs/<feature>/     # Graph definitions (Next.js must NOT import)
+    prompts/<feature>/    # Prompt templates
 smart-contracts/          # Per-node DAO contracts
   src/                    # Token.sol, Governor.sol, PaymentReceiver.sol
   deploy/                 # Deploy scripts + config
   addresses/              # Deployed addresses (env-scoped)
 platform/                 # Deployment + CD infrastructure
-  docker/                 # Docker configs
+  infra/services/runtime/ # Docker Compose (postgres, litellm, langgraph-server)
   opentofu/               # IaC for cloud deployment
 evals/                    # AI evaluation datasets + regression harness
 tests/                    # Test suites
@@ -185,5 +189,5 @@ Operator shares CI/CD, observability, deploy invariants, and hex architecture wi
 
 ---
 
-**Last Updated**: 2025-12-20
+**Last Updated**: 2025-12-23
 **Status**: Design Approved

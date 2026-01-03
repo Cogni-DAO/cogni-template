@@ -4,22 +4,19 @@
 /**
  * Module: `@types/billing`
  * Purpose: Shared billing type definitions and categorization constants (logic-free).
- * Scope: Defines charge_reason and source_service enums for activity tracking. Does NOT implement business logic, pricing, or policy.
+ * Scope: Defines charge_reason enum for activity tracking. Re-exports SourceSystem from @cogni/ai-core. Does NOT implement business logic.
  * Invariants:
  * - ONLY exports: enums (as const arrays), literal union types, and simple string mappings
  * - FORBIDDEN: functions, computations, validation logic, or business rules
  * - charge_reason is for accounting/refunds, source_service is for UI/reports
- * - Lives in types/ layer to be importable by all layers (shared, ports, adapters, components, core)
+ * - SOURCE_SYSTEMS/SourceSystem: Re-exported from @cogni/ai-core (SINGLE_SOURCE_OF_TRUTH)
  * Side-effects: none (constants and types only)
  * Links: Used by billing schema, ports, adapters, UI components, and core/public.ts re-exports
  * @public
- *
- * These enums define the two primary dimensions for activity tracking:
- * - charge_reason: Economic/billing category (for accounting, refunds, analytics)
- * - source_service: User-facing origin/channel (shown in Activity UI)
- *
- * When adding new entrypoints, expand these arrays and update SERVICE_LABELS.
  */
+
+// Re-export from canonical source (per SINGLE_SOURCE_OF_TRUTH invariant)
+export { SOURCE_SYSTEMS, type SourceSystem } from "@cogni/ai-core";
 
 /**
  * Charge reasons represent the economic/billing category of a charge.
@@ -34,12 +31,3 @@ export const CHARGE_REASONS = [
 ] as const;
 
 export type ChargeReason = (typeof CHARGE_REASONS)[number];
-
-/**
- * Source systems represent the external system that originated a charge.
- * Used for generic linking in charge_receipts (source_system + source_reference).
- * Per GRAPH_EXECUTION.md: each adapter has a source system for billing attribution.
- */
-export const SOURCE_SYSTEMS = ["litellm", "anthropic_sdk"] as const;
-
-export type SourceSystem = (typeof SOURCE_SYSTEMS)[number];

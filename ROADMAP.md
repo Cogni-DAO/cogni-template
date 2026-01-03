@@ -100,12 +100,14 @@ Lock current hex architecture. Document what exists. All code is Node-owned.
 
 ### Phase 1: First LangGraph Graph + Evals Foundation
 
-- Create first LangGraph graph in feature slice (`src/features/<feature>/ai/graphs/`)
+- Create `packages/ai-core/` with shared AI primitives (`AiEvent`, `UsageFact`, `SourceSystem`)
+- Create `packages/langgraph-server/` (LangGraph.js service, runs in Docker)
+- Create `packages/langgraph-graphs/` with first chat graph (feature-sliced: `graphs/chat/`)
 - Create `evals/` with harness skeleton + initial fixtures
 - Establish eval CI gate
-- Packages NOT required; created only after proven cross-service reuse
+- Add dependency-cruiser rule: Next.js (`src/**`) cannot import `packages/langgraph-graphs/`
 
-→ See: [AI Setup Spec](docs/AI_SETUP_SPEC.md), [LangGraph AI](docs/LANGGRAPH_AI.md)
+→ See: [AI Setup Spec](docs/AI_SETUP_SPEC.md), [LangGraph Server](docs/LANGGRAPH_SERVER.md)
 
 ### Phase 2: Operator Services Scaffold
 
@@ -180,5 +182,5 @@ Requirements:
 
 ---
 
-**Last Updated**: 2025-12-19
+**Last Updated**: 2025-12-23
 **Status**: Design Approved

@@ -147,6 +147,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build workspace packages
+        run: pnpm packages:build
+
       - name: Integration tests (testcontainers)
         run: pnpm test:int
 
@@ -234,6 +237,9 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages
+        run: pnpm packages:build
 
       - name: Derive image tags
         run: |

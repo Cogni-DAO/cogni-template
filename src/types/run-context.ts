@@ -3,33 +3,15 @@
 
 /**
  * Module: `@types/run-context`
- * Purpose: Shared run context type for relay subscribers (billing, history, etc.).
- * Scope: Defines RunContext provided by RunEventRelay to subscribers. Does NOT implement functions (per types layer policy).
+ * Purpose: Re-export RunContext from @cogni/ai-core.
+ * Scope: Shim layer for backwards compatibility. Does NOT define types.
  * Invariants:
- *   - RELAY_PROVIDES_CONTEXT: Relay provides context to subscribers, not events
- *   - ingressRequestId is transport correlation only, NEVER for idempotency
- *   - runId + attempt form execution identity
- * Side-effects: none (types only)
- * Links: ai_runtime.ts (RunEventRelay), billing.ts (commitUsageFact), GRAPH_EXECUTION.md, USAGE_HISTORY.md
+ *   - SINGLE_SOURCE_OF_TRUTH: Canonical definitions in @cogni/ai-core
+ *   - This file only re-exports; no local type definitions allowed
+ * Side-effects: none (re-exports only)
+ * Links: packages/ai-core/src/context/run-context.ts, LANGGRAPH_SERVER.md
  * @public
  */
 
-/**
- * Run context provided by RunEventRelay to all subscribers.
- * Per RELAY_PROVIDES_CONTEXT: subscribers receive context from relay, not from events.
- *
- * This ensures:
- * - Events (UsageFact, AssistantFinal) remain executor-agnostic
- * - Transport concerns (ingressRequestId) don't leak into billing facts
- * - All subscribers have consistent run identity
- */
-export interface RunContext {
-  /** Canonical execution identity (groups all LLM calls in one run) */
-  readonly runId: string;
-  /** Retry attempt number (P0: always 0) */
-  readonly attempt: number;
-  /** Delivery-layer correlation (HTTP/SSE/worker/queue). For charge_receipts.request_id only. */
-  readonly ingressRequestId: string;
-  /** LangGraph thread scope (optional, for history/checkpoint correlation) */
-  readonly threadId?: string;
-}
+// Re-export from canonical source (per SINGLE_SOURCE_OF_TRUTH invariant)
+export type { RunContext } from "@cogni/ai-core";
