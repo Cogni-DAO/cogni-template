@@ -89,6 +89,33 @@ When adding a new package:
    }
    ```
 
+8. **Vitest config** — Add `packages/<name>/vitest.config.ts` for package-local tests:
+
+   ```typescript
+   import tsconfigPaths from "vite-tsconfig-paths";
+   import { defineProject } from "vitest/config";
+
+   export default defineProject({
+     plugins: [
+       tsconfigPaths({
+         projects: ["../../tsconfig.json"], // Repo root for @cogni/* resolution
+       }),
+     ],
+     test: {
+       name: "<name>",
+       globals: true,
+       environment: "node",
+       include: ["tests/**/*.{test,spec}.{ts,tsx}"],
+     },
+   });
+   ```
+
+   Also add the vitest config to `biome/base.json` noDefaultExport override.
+
+   **Test location rules:**
+   - Package-local tests (`packages/<name>/tests/**`) must only import that package — no `src/` imports (enforced by dependency-cruiser)
+   - Cross-package integration tests live in `tests/packages/**` and may import multiple `@cogni/*` packages
+
 ## Canonical CI Flow
 
 **TypeScript project references (`tsc -b`) is the default way packages are built and type-checked in CI.**
