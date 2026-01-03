@@ -49,7 +49,7 @@ Graph runner factories for MVP tool use. Creates thin wrappers around graph exec
 - **This directory does:**
   - Create graph runner factories for bootstrap wiring
   - Wire toolRunner with noop emit (graph yields events directly per MVP_GRAPH_YIELDS_TOOL_EVENTS)
-  - Load tools via getToolsForGraph()
+  - Import tools from @cogni/ai-tools (per TOOLS_IN_PACKAGES)
   - Convert async generators to { stream, completion } shape
   - Bind completionUnit to run context
 
@@ -78,7 +78,7 @@ const graphResolver = (graphName, adapter) =>
 
 ## Dependencies
 
-- **Internal:** ../graphs/chat.graph.ts, ../tool-registry.ts, ../tool-runner.ts, @/ports
+- **Internal:** ../graphs/chat.graph.ts, ../tool-runner.ts, @cogni/ai-tools, @/ports
 - **External:** none
 
 ## Change Protocol
@@ -89,6 +89,6 @@ const graphResolver = (graphName, adapter) =>
 
 ## Notes
 
-- MVP: Only chat runner exists
-- Per NO_LANGGRAPH_RUNTIME: Hand-rolled runners until LangGraph migration
+- MVP: Only chat runner exists (will be replaced by @cogni/langgraph-graphs)
+- Per LANGGRAPH_OWNS_GRAPHS: Migrating to LangGraph package graphs
 - Resolver receives adapter at call time (solves circular dependency)

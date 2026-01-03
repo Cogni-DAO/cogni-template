@@ -45,15 +45,14 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - `createAiRuntime` (AI runtime orchestrator via public.server.ts)
   - `toolRunner` (tool execution; owns toolCallId; emits tool lifecycle AiEvents)
   - `createChatRunner` (graph runner factory for chat graph, via public.server.ts)
-  - `getToolsForGraph` (tool registry lookup)
 - **Routes:**
   - `/api/v1/ai/completion` (POST) - text completion with credits metering
   - `/api/v1/ai/chat` (POST) - chat endpoint (P1: consumes AiEvents, maps to assistant-stream format)
   - `/api/v1/ai/models` (GET) - list available models with tier info
   - `/api/v1/activity` (GET) - usage statistics and logs
 - **Subdirectories:**
-  - `tools/` - Tool contracts and implementations (Zod schemas + execute functions). See [tools/AGENTS.md](./tools/AGENTS.md).
   - `runners/` - Graph runner factories for bootstrap wiring. See [runners/AGENTS.md](./runners/AGENTS.md).
+  - Note: Tool contracts live in `@cogni/ai-tools` package (per TOOLS_IN_PACKAGES invariant).
   - `graphs/` - Graph definitions (chat.graph.ts with agentic tool loop)
   - Note: LangGraph graphs live in `apps/langgraph-service/` (external process), NOT here. See [LANGGRAPH_SERVER.md](../../../docs/LANGGRAPH_SERVER.md).
   - `services/` - AI service modules:
@@ -67,7 +66,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
     - `run-id-factory.ts` - Run identity factory (P0: runId = reqId)
     - `llmPricingPolicy.ts` - Pricing markup calculation
 - **Env/Config keys:** `LITELLM_BASE_URL`, `DEFAULT_MODEL` (via serverEnv)
-- **Files considered API:** public.ts, public.server.ts, types.ts, services/ai_runtime.ts, tool-runner.ts, tool-registry.ts, runners/chat.runner.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
+- **Files considered API:** public.ts, public.server.ts, types.ts, services/ai_runtime.ts, tool-runner.ts, runners/chat.runner.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
 
 ## Ports
 

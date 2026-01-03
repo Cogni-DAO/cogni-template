@@ -4,26 +4,79 @@
 /**
  * Module: `@features/ai/runners/chat.runner`
  * Purpose: Thin wrapper that creates chat graph runner for bootstrap wiring.
- * Scope: Creates ChatGraphDeps, invokes executeChatGraph, returns GraphRunResult. Does not contain orchestration logic.
+ * Scope: Creates ChatGraphDeps, invokes executeChatGraph, returns GraphRunResult; does not contain orchestration logic.
  * Invariants:
  *   - MVP_NOOP_EMIT: toolRunner receives noop emit (graph yields events directly)
- *   - TOOLS_FROM_REGISTRY: tools loaded via getToolsForGraph()
+ *   - TOOLS_FROM_PACKAGES: tools imported from @cogni/ai-tools (per TOOLS_IN_PACKAGES)
  *   - GRAPH_LLM_VIA_COMPLETION: completionUnit provided by adapter
  * Side-effects: none (pure factory)
- * Notes: MVP implementation before LangGraph migration
- * Links: chat.graph.ts, tool-registry.ts, bootstrap/graph-executor.factory.ts
+ * Notes: MVP implementation before LangGraph migration. Tool binding inline until bootstrap refactor.
+ * Links: chat.graph.ts, @cogni/ai-tools, bootstrap/graph-executor.factory.ts
  * @internal
  */
 
-import type { GraphRunRequest, GraphRunResult } from "@/ports";
+import {
+  type BoundTool,
+  GET_CURRENT_TIME_NAME,
+  getCurrentTimeBoundTool,
+  getCurrentTimeContract,
+} from "@cogni/ai-tools";
+
+import type {
+  GraphRunRequest,
+  GraphRunResult,
+  JsonSchemaObject,
+  LlmToolDefinition,
+} from "@/ports";
 
 import {
   type ChatGraphDeps,
   type CompletionUnitFn,
   executeChatGraph,
 } from "../graphs/chat.graph";
-import { getToolsForGraph } from "../tool-registry";
 import { createToolRunner } from "../tool-runner";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inline Tool Binding (temporary - will move to src/bootstrap/ai/)
+// ─────────────────────────────────────────────────────────────────────────────
+
+type AnyBoundTool = BoundTool<
+  string,
+  unknown,
+  unknown,
+  Record<string, unknown>
+>;
+
+/**
+ * Convert a tool contract to OpenAI-compatible LLM tool definition.
+ */
+function contractToLlmDefinition(
+  contract: { name: string; description: string },
+  parametersSchema: JsonSchemaObject
+): LlmToolDefinition {
+  return {
+    type: "function",
+    function: {
+      name: contract.name,
+      description: contract.description,
+      parameters: parametersSchema,
+    },
+  };
+}
+
+/** Chat graph tools - bound from @cogni/ai-tools */
+const CHAT_GRAPH_BOUND_TOOLS: Record<string, AnyBoundTool> = {
+  [GET_CURRENT_TIME_NAME]: getCurrentTimeBoundTool as AnyBoundTool,
+};
+
+const CHAT_GRAPH_LLM_DEFINITIONS: LlmToolDefinition[] = [
+  contractToLlmDefinition(getCurrentTimeContract, {
+    type: "object",
+    properties: {},
+    required: [],
+    additionalProperties: false,
+  }),
+];
 
 /**
  * Adapter interface for executing a single completion unit.
@@ -68,12 +121,10 @@ export function createChatRunner(
       req;
     const attempt = 0; // P0_ATTEMPT_FREEZE
 
-    // Get tools for chat graph
-    const { llmDefinitions, boundTools } = getToolsForGraph("chat_graph");
-
     // Create toolRunner with noop emit (MVP: graph yields events directly)
+    // Tools imported directly from @cogni/ai-tools (per TOOLS_IN_PACKAGES)
     const noopEmit = () => {};
-    const toolRunner = createToolRunner(boundTools, noopEmit);
+    const toolRunner = createToolRunner(CHAT_GRAPH_BOUND_TOOLS, noopEmit);
 
     // Create completionUnit bound to this run's context
     const completionUnit: CompletionUnitFn = (params) => {
@@ -91,7 +142,7 @@ export function createChatRunner(
     const deps: ChatGraphDeps = {
       completionUnit,
       toolRunner,
-      tools: llmDefinitions,
+      tools: CHAT_GRAPH_LLM_DEFINITIONS,
     };
 
     // Execute graph - returns async generator

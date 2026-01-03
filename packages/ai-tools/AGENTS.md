@@ -30,8 +30,7 @@ Pure tool definitions for AI agent execution. Defines `ToolContract`, `ToolImple
     "core",
     "adapters",
     "shared",
-    "services",
-    "@langchain/*"
+    "services"
   ]
 }
 ```
