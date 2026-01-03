@@ -7,7 +7,7 @@
 
 1. **TOOLS_VIA_TOOLRUNNER**: All tool execution flows through `toolRunner.exec()` for InProc execution. LangChain tool wrappers (`@cogni/langgraph-graphs`) must delegate to `toolRunner.exec()` to preserve validation/redaction pipeline. No direct tool implementation calls.
 
-2. **TOOLS_IN_PACKAGES**: Tool contracts + implementations in `@cogni/ai-tools`. Wire DTOs (OpenAI-shaped) in `@cogni/ai-core`. LangChain wrappers in `@cogni/langgraph-graphs/runtime`. Binding in composition roots only. No tool definitions in `src/**`.
+2. **TOOLS_IN_PACKAGES**: Tool contracts + implementations in `@cogni/ai-tools`. Semantic types (`ToolSpec`, `ToolInvocationRecord`) in `@cogni/ai-core/tooling/`. Wire adapters (OpenAI/Anthropic encoders/decoders) in adapters layer. LangChain wrappers in `@cogni/langgraph-graphs/runtime`. Binding in composition roots only. No tool definitions in `src/**`.
 
 3. **TOOLS_IO_VIA_CAPABILITIES**: Tools receive IO capabilities as injected interfaces (defined in packages). No direct adapter/env imports in tool code. Capabilities are bound to adapters in composition roots.
 
@@ -19,43 +19,59 @@
 
 7. **STREAM_VIA_ASSISTANT_STREAM**: Use `assistant-stream` package only. No custom SSE.
 
-8. **ADAPTER_ASSEMBLES_TOOLCALLS**: `litellm.adapter.ts` is the single assembler of streamed `tool_call` deltas into `final.toolCalls`. Assembly state is scoped to a single `completionStream()` call and reset between calls. Graph executes tools only from `final.toolCalls`, never from raw deltas.
+8. **DECODER_ASSEMBLES_TOOLCALLS**: Wire decoders (e.g., `OpenAIToolDecoder`) are the single assemblers of streamed tool deltas into `ToolInvocationRecord`. `litellm.adapter.ts` delegates to the decoder; it does not implement assembly logic itself. Assembly state is scoped to a single decode session and reset between calls. Graph executes tools only from decoded records, never from raw deltas.
 
 9. **BINDING_IN_COMPOSITION_ROOT**: Tool binding (connecting contracts to ports/deps) occurs only in composition roots: `src/bootstrap/**` (Next.js) or `packages/langgraph-server/**` (LangGraph Server). Features and packages never instantiate bound tools.
 
-10. **OPENAI_WIRE_DTOS_CANONICAL**: All tool wire DTOs (tool definitions, tool calls, deltas, tool result messages) use canonical OpenAI-shaped types defined in `@cogni/ai-core/tooling/openai-wire-dtos.ts`. Adapters may map provider formats (e.g., Anthropic `tool_use`/`tool_result`) to/from these DTOs at boundaries; no other module defines wire tool shapes.
+10. **TOOL_SEMANTICS_CANONICAL**: The canonical tool types are semantic, not wire-format-specific:
+    - `ToolSpec { name, description, inputSchema: JSONSchema7, redaction }` — tool definition (compiled schema, no Zod runtime)
+    - `ToolInvocationRecord { toolCallId, name, args, result, error, startedAt, endedAt, raw?: unknown }` — execution record
+      `inputSchema` must conform to P0-supported JSONSchema subset; disallow `oneOf`/`anyOf`/`allOf`/`not`/`if-then-else`/`patternProperties`/complex `$ref`. Enforced by `validateToolSchemaP0()` tests.
+      `raw` preserves provider-native payload for observability only; must be redacted/omitted from UI/logs, and must never influence execution or billing.
+      These live in `@cogni/ai-core/tooling/`. Zod stays in `@cogni/ai-tools`; compile to JSONSchema7 before passing to core.
 
-11. **JSON_SCHEMA7_PARAMETERS**: Tool definition `parameters` field uses full JSONSchema7 (not a simplified subset). Tool input schemas must compile deterministically from Zod → JSON Schema for wire emission. Use `zod-to-json-schema` or equivalent.
+11. **WIRE_FORMATS_ARE_ADAPTERS**: Wire DTOs (OpenAI function-calling, Anthropic tool_use/tool_result) are adapter concerns, not core types. Encoders convert `ToolSpec` → provider wire format. Decoders convert provider responses → `ToolInvocationRecord` + tool AiEvents. This enables Anthropic richness (attachments, content blocks) without core rewrites.
 
-12. **NO_MANUAL_SCHEMA_DUPLICATION**: No hand-written JSON Schema objects alongside Zod schemas. The `parameters` field in wire DTOs must be derived from the contract's Zod schema via `getToolJsonSchema(contract)`. Manual duplication causes drift.
+12. **OPENAI_WIRE_V1_SUPPORTED**: OpenAI function-calling format is the P0 wire protocol (via LiteLLM). `OpenAIToolEncoder(ToolSpec)` produces `tools[]`. `OpenAIToolDecoder(stream)` assembles deltas into `ToolInvocationRecord`. Anthropic wire support is P1.
 
-13. **GOLDEN_FIXTURES_ENFORCE_WIRE_FORMAT**: Golden fixture tests enforce OpenAI wire conformance: exact key sets (no extra keys), required fields for tool definitions, correct `tool_calls` delta assembly, and correct tool result message formation. Tests assert structure, not JSON key ordering.
+13. **JSON_SCHEMA7_PARAMETERS**: Tool definition `parameters` field uses full JSONSchema7 (not a simplified subset). Tool input schemas must compile deterministically from Zod → JSON Schema for wire emission. Use `zod-to-json-schema` or equivalent.
+
+14. **NO_MANUAL_SCHEMA_DUPLICATION**: No hand-written JSON Schema objects alongside Zod schemas. The `parameters` field in wire DTOs must be derived from the contract's Zod schema via `getToolJsonSchema(contract)`. Manual duplication causes drift.
+
+15. **GOLDEN_FIXTURES_ENFORCE_WIRE_FORMAT**: Golden fixture tests enforce wire conformance per adapter: exact key sets (no extra keys), required fields for tool definitions, correct delta assembly, and correct result message formation. Tests assert structure, not JSON key ordering.
 
 ---
 
 ## Implementation Checklist
 
-### P0: OpenAI Wire Format Alignment
+### P0: Canonical Tool Semantics + OpenAI Wire Adapter
 
-Per invariants **OPENAI_WIRE_DTOS_CANONICAL**, **JSON_SCHEMA7_PARAMETERS**, **NO_MANUAL_SCHEMA_DUPLICATION**, **GOLDEN_FIXTURES_ENFORCE_WIRE_FORMAT**:
+Per invariants **TOOL_SEMANTICS_CANONICAL**, **WIRE_FORMATS_ARE_ADAPTERS**, **OPENAI_WIRE_V1_SUPPORTED**, **JSON_SCHEMA7_PARAMETERS**, **NO_MANUAL_SCHEMA_DUPLICATION**, **GOLDEN_FIXTURES_ENFORCE_WIRE_FORMAT**:
 
-**Wire DTO layer (`@cogni/ai-core`):**
+**Semantic types (`@cogni/ai-core/tooling/`):**
 
-- [ ] Create `@cogni/ai-core/tooling/openai-wire-dtos.ts` with canonical OpenAI types
-- [ ] Replace simplified `JsonSchemaObject` with proper `JSONSchema7` import
-- [ ] Migrate `LlmToolDefinition`, `LlmToolCall`, `LlmToolCallDelta`, `LlmToolChoice` from `llm.port.ts`
+- [ ] Create `ToolSpec { name, description, inputSchema: JSONSchema7, redaction }` — tool definition (no Zod runtime)
+- [ ] Create `ToolInvocationRecord { toolCallId, name, args, result, error, startedAt, endedAt, raw?: unknown }` — execution record
+- [ ] `raw` field preserves provider-native payload (Anthropic content blocks, attachments)
+- [ ] All internal tool logic uses these types; wire formats are adapter concerns
 
 **Schema compilation (`@cogni/ai-tools`):**
 
 - [ ] Add `zod-to-json-schema` dependency
-- [ ] Create `getToolJsonSchema(contract)` in `@cogni/ai-tools/schema.ts`
-- [ ] Remove manual JSON Schema in `chat.runner.ts` — derive from contract
+- [ ] Create `toToolSpec(contract)` in `@cogni/ai-tools/schema.ts` — compiles contract → `ToolSpec` with JSONSchema7
+- [ ] Remove manual JSON Schema in `chat.runner.ts` — use `toToolSpec()` output
+
+**OpenAI wire adapter (`src/adapters/server/ai/`):**
+
+- [ ] `OpenAIToolEncoder(ToolSpec)` → `tools[]` for LLM request
+- [ ] `OpenAIToolDecoder(stream)` → `ToolInvocationRecord` + tool AiEvents
+- [ ] Replace simplified `JsonSchemaObject` with proper `JSONSchema7` import
 
 **Golden fixtures (`tests/contracts/`):**
 
 - [ ] `openai-tool-wire-format.test.ts` — tool definition serialization (exact keys, no extras)
 - [ ] `tool-call-delta-assembly.test.ts` — stream delta accumulation matches OpenAI SSE format
-- [ ] `tool-result-message.test.ts` — `{ role: "tool", content: string, tool_call_id }` format
+- [ ] `tool-invocation-record.test.ts` — semantic record captures full lifecycle
 
 ### P0: First Tool End-to-End
 
@@ -112,20 +128,22 @@ Per invariants **OPENAI_WIRE_DTOS_CANONICAL**, **JSON_SCHEMA7_PARAMETERS**, **NO
 
 ## File Pointers (P0)
 
-| File                                                 | Change                                                             |
-| ---------------------------------------------------- | ------------------------------------------------------------------ |
-| `@cogni/ai-core/tooling/openai-wire-dtos.ts`         | New: canonical OpenAI-shaped tool types (definitions, calls, etc.) |
-| `@cogni/ai-tools/schema.ts`                          | New: `getToolJsonSchema(contract)` — Zod → JSONSchema7 compiler    |
-| `src/ports/llm.port.ts`                              | Migrate tool types to `@cogni/ai-core`, re-export for compat       |
-| `src/adapters/server/ai/litellm.adapter.ts`          | Parse `delta.tool_calls` in SSE stream, emit `tool_call_delta`     |
-| `src/features/ai/runners/chat.runner.ts`             | Remove manual JSON Schema, use `getToolJsonSchema()`               |
-| `@cogni/ai-tools/tools/get-current-time.ts`          | Contract + implementation with capability injection                |
-| `@cogni/ai-tools/capabilities/*.ts`                  | Capability interfaces (e.g., Clock) for tool IO                    |
-| `@cogni/langgraph-graphs/runtime/langchain-tools.ts` | `toLangChainTool()` wrapper for LangGraph execution                |
-| `src/bootstrap/ai/tools.bindings.ts`                 | Bind capabilities → adapters for Next.js runtime                   |
-| `src/app/api/v1/ai/chat/route.ts`                    | Uncomment `addToolCallPart()` handling (lines 275-285)             |
-| `src/features/ai/components/tools/ToolFallback.tsx`  | New: generic tool result UI component (optional for MVP)           |
-| `tests/contracts/openai-tool-wire-format.test.ts`    | New: golden fixture tests for wire format conformance              |
+| File                                                 | Change                                                               |
+| ---------------------------------------------------- | -------------------------------------------------------------------- |
+| `@cogni/ai-core/tooling/types.ts`                    | New: `ToolSpec`, `ToolInvocationRecord` — canonical semantic types   |
+| `@cogni/ai-tools/schema.ts`                          | New: `toToolSpec(contract)` — compiles Zod contract → ToolSpec       |
+| `src/adapters/server/ai/openai-tool-encoder.ts`      | New: `OpenAIToolEncoder(ToolSpec)` → `tools[]`                       |
+| `src/adapters/server/ai/openai-tool-decoder.ts`      | New: `OpenAIToolDecoder(stream)` → `ToolInvocationRecord` + AiEvents |
+| `src/adapters/server/ai/litellm.adapter.ts`          | Use encoder/decoder; parse `delta.tool_calls` in SSE stream          |
+| `src/features/ai/runners/chat.runner.ts`             | Remove manual JSON Schema, use `toToolSpec()` output                 |
+| `@cogni/ai-tools/tools/get-current-time.ts`          | Contract + implementation with capability injection                  |
+| `@cogni/ai-tools/capabilities/*.ts`                  | Capability interfaces (e.g., Clock) for tool IO                      |
+| `@cogni/langgraph-graphs/runtime/langchain-tools.ts` | `toLangChainTool()` wrapper for LangGraph execution                  |
+| `src/bootstrap/ai/tools.bindings.ts`                 | Bind capabilities → adapters for Next.js runtime                     |
+| `src/app/api/v1/ai/chat/route.ts`                    | Uncomment `addToolCallPart()` handling (lines 275-285)               |
+| `src/features/ai/components/tools/ToolFallback.tsx`  | New: generic tool result UI component (optional for MVP)             |
+| `tests/contracts/openai-tool-wire-format.test.ts`    | New: golden fixture tests for OpenAI wire format conformance         |
+| `tests/contracts/tool-invocation-record.test.ts`     | New: semantic record lifecycle tests                                 |
 
 ---
 
@@ -133,26 +151,29 @@ Per invariants **OPENAI_WIRE_DTOS_CANONICAL**, **JSON_SCHEMA7_PARAMETERS**, **NO
 
 ### 1. Tool Architecture
 
-| Layer            | Location                                     | Owns                                                                  |
-| ---------------- | -------------------------------------------- | --------------------------------------------------------------------- |
-| Wire DTOs        | `@cogni/ai-core/tooling/openai-wire-dtos.ts` | OpenAI-shaped types: tool definitions, calls, deltas, result messages |
-| Contract         | `@cogni/ai-tools/tools/*.ts`                 | Zod schema, allowlist, name, description, redaction                   |
-| Implementation   | `@cogni/ai-tools/tools/*.ts`                 | `execute(ctx, args)` — IO via injected capabilities                   |
-| Schema compiler  | `@cogni/ai-tools/schema.ts`                  | `getToolJsonSchema(contract)` — Zod → JSONSchema7                     |
-| Capability iface | `@cogni/ai-tools/capabilities/*.ts`          | Minimal interfaces tools depend on (e.g., Clock)                      |
-| LangChain wrap   | `@cogni/langgraph-graphs/runtime/`           | `toLangChainTool()` converter (delegates to toolRunner)               |
-| Binding (Next)   | `src/bootstrap/**`                           | Wire capabilities → adapters for Next.js runtime                      |
-| Binding (Server) | `packages/langgraph-server/bootstrap/`       | Wire capabilities → adapters for LangGraph Server                     |
-| IO Adapter       | `src/adapters/server/**`                     | Capability implementation                                             |
+| Layer            | Location                               | Owns                                                                   |
+| ---------------- | -------------------------------------- | ---------------------------------------------------------------------- |
+| Semantic types   | `@cogni/ai-core/tooling/types.ts`      | `ToolSpec` (JSONSchema7), `ToolInvocationRecord` (with `raw`) — no Zod |
+| Contract         | `@cogni/ai-tools/tools/*.ts`           | Zod schema, allowlist, name, description, redaction                    |
+| Implementation   | `@cogni/ai-tools/tools/*.ts`           | `execute(ctx, args)` — IO via injected capabilities                    |
+| Schema compiler  | `@cogni/ai-tools/schema.ts`            | `toToolSpec(contract)` — compiles Zod → ToolSpec with JSONSchema7      |
+| Wire encoder     | `src/adapters/server/ai/*-encoder.ts`  | `ToolSpec` → provider wire format (OpenAI, Anthropic)                  |
+| Wire decoder     | `src/adapters/server/ai/*-decoder.ts`  | Provider response → `ToolInvocationRecord` + AiEvents                  |
+| Capability iface | `@cogni/ai-tools/capabilities/*.ts`    | Minimal interfaces tools depend on (e.g., Clock)                       |
+| LangChain wrap   | `@cogni/langgraph-graphs/runtime/`     | `toLangChainTool()` converter (delegates to toolRunner)                |
+| Binding (Next)   | `src/bootstrap/**`                     | Wire capabilities → adapters for Next.js runtime                       |
+| Binding (Server) | `packages/langgraph-server/bootstrap/` | Wire capabilities → adapters for LangGraph Server                      |
+| IO Adapter       | `src/adapters/server/**`               | Capability implementation                                              |
 
 **Rules:**
 
-- Tool contracts in `@cogni/ai-tools`. Wire DTOs in `@cogni/ai-core`. No tool definitions in `src/**`.
+- Semantic types (`ToolSpec`, `ToolInvocationRecord`) in `@cogni/ai-core` — no Zod runtime dependency.
+- Tool contracts (with Zod) in `@cogni/ai-tools`; compile to `ToolSpec` before passing to core.
+- Wire formats (OpenAI, Anthropic) are adapter concerns — encoders/decoders in `src/adapters/`.
 - IO allowed only via injected capabilities — no adapter/env imports in tools.
 - Binding in composition roots only.
-- Wire DTO layer is OpenAI-shaped; adapters map provider-specific formats (Anthropic, etc.) at boundaries.
 
-**Note:** Per **OPENAI_WIRE_DTOS_CANONICAL**, `@cogni/ai-core` owns the canonical OpenAI wire format. The current `LlmToolDefinition`, `LlmToolCall`, etc. in `llm.port.ts` will migrate to this location. Future Anthropic direct adapter would map `tools[].input_schema` and `tool_use`/`tool_result` content blocks into these canonical DTOs.
+**Note:** Per **TOOL_SEMANTICS_CANONICAL** and **WIRE_FORMATS_ARE_ADAPTERS**, the canonical types are semantic (not wire-format-specific). OpenAI function-calling is P0 via `OpenAIToolEncoder`/`OpenAIToolDecoder`. Future Anthropic adapter would add `AnthropicToolEncoder`/`AnthropicToolDecoder` mapping `tool_use`/`tool_result` content blocks to the same `ToolInvocationRecord`, preserving rich attachments in `raw`.
 
 ### 2. assistant-stream Tool API
 
@@ -274,7 +295,7 @@ When `toolCall.function.arguments` is invalid JSON:
 
 ---
 
-## Related Documents
+## Related Documentsx
 
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — Correlation IDs, telemetry invariants
 - [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Architecture, anti-patterns
