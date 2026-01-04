@@ -57,18 +57,8 @@ export const getCurrentTimeContract: ToolContract<
 > = {
   name: GET_CURRENT_TIME_NAME,
   description: "Get the current UTC time. Returns the time in ISO 8601 format.",
-
-  validateInput: (input: unknown): GetCurrentTimeInput => {
-    // Accept empty object or undefined/null (no required params)
-    if (input === undefined || input === null) {
-      return {};
-    }
-    return GetCurrentTimeInputSchema.parse(input);
-  },
-
-  validateOutput: (output: unknown): GetCurrentTimeOutput => {
-    return GetCurrentTimeOutputSchema.parse(output);
-  },
+  inputSchema: GetCurrentTimeInputSchema,
+  outputSchema: GetCurrentTimeOutputSchema,
 
   redact: (output: GetCurrentTimeOutput): GetCurrentTimeRedacted => {
     // No sensitive data - return full output

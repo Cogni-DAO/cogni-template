@@ -38,44 +38,44 @@ describe("get_current_time contract", () => {
     expect(getCurrentTimeContract.allowlist.length).toBeGreaterThan(0);
   });
 
-  describe("validateInput", () => {
+  describe("inputSchema", () => {
     it("accepts empty object", () => {
-      const result = getCurrentTimeContract.validateInput({});
+      const result = getCurrentTimeContract.inputSchema.parse({});
       expect(result).toEqual({});
     });
 
-    it("accepts undefined", () => {
-      const result = getCurrentTimeContract.validateInput(undefined);
-      expect(result).toEqual({});
+    it("rejects undefined", () => {
+      expect(() =>
+        getCurrentTimeContract.inputSchema.parse(undefined)
+      ).toThrow();
     });
 
-    it("accepts null", () => {
-      const result = getCurrentTimeContract.validateInput(null);
-      expect(result).toEqual({});
+    it("rejects null", () => {
+      expect(() => getCurrentTimeContract.inputSchema.parse(null)).toThrow();
     });
 
     it("rejects extra properties (strict mode)", () => {
       expect(() =>
-        getCurrentTimeContract.validateInput({ extra: "field" })
+        getCurrentTimeContract.inputSchema.parse({ extra: "field" })
       ).toThrow();
     });
   });
 
-  describe("validateOutput", () => {
+  describe("outputSchema", () => {
     it("accepts valid ISO timestamp", () => {
-      const result = getCurrentTimeContract.validateOutput({
+      const result = getCurrentTimeContract.outputSchema.parse({
         currentTime: "2025-01-03T12:00:00.000Z",
       });
       expect(result.currentTime).toBe("2025-01-03T12:00:00.000Z");
     });
 
     it("rejects missing currentTime", () => {
-      expect(() => getCurrentTimeContract.validateOutput({})).toThrow();
+      expect(() => getCurrentTimeContract.outputSchema.parse({})).toThrow();
     });
 
     it("rejects non-string currentTime", () => {
       expect(() =>
-        getCurrentTimeContract.validateOutput({ currentTime: 12345 })
+        getCurrentTimeContract.outputSchema.parse({ currentTime: 12345 })
       ).toThrow();
     });
   });
@@ -108,7 +108,9 @@ describe("get_current_time implementation", () => {
 
   it("output passes validation", async () => {
     const result = await getCurrentTimeImplementation.execute({});
-    expect(() => getCurrentTimeContract.validateOutput(result)).not.toThrow();
+    expect(() =>
+      getCurrentTimeContract.outputSchema.parse(result)
+    ).not.toThrow();
   });
 });
 
