@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2025-12-23
+- **Last reviewed:** 2026-01-05
 - **Status:** draft
 
 ## Purpose
@@ -35,7 +35,7 @@ Executor-agnostic AI primitives for cross-process communication. Defines `AiEven
 }
 ```
 
-**External deps:** none. Pure TypeScript types only.
+**External deps:** `json-schema` (types only). Pure TypeScript types.
 
 ## Public Surface
 
@@ -47,9 +47,12 @@ Executor-agnostic AI primitives for cross-process communication. Defines `AiEven
   - `ExecutorType` - Executor discriminator ("langgraph_server" | "claude_sdk" | "inproc")
   - `RunContext` - Run identity provided to relay subscribers
   - `SourceSystem`, `SOURCE_SYSTEMS` - Billing source system enum
+  - `ToolSpec` - Canonical tool definition (JSONSchema7 inputSchema)
+  - `ToolInvocationRecord` - Tool execution record (timing, result, error)
+  - `ToolRedactionConfig` - Redaction config for tool output
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** `index.ts`, `events/*.ts`, `usage/*.ts`, `context/*.ts`, `billing/*.ts`
+- **Files considered API:** `index.ts`, `events/*.ts`, `usage/*.ts`, `context/*.ts`, `billing/*.ts`, `tooling/*.ts`
 
 ## Ports
 

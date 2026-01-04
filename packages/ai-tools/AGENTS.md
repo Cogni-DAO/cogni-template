@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2025-01-03
+- **Last reviewed:** 2026-01-05
 - **Status:** draft
 
 ## Purpose
@@ -35,20 +35,22 @@ Pure tool definitions for AI agent execution. Defines `ToolContract`, `ToolImple
 }
 ```
 
-**External deps:** `zod` only. NO LangChain.
+**External deps:** `zod`, `zod-to-json-schema`. Imports `@cogni/ai-core` (ToolSpec type). NO LangChain.
 
 ## Public Surface
 
 - **Exports:**
-  - `ToolContract` - Tool definition interface (name, validateInput, validateOutput, redact)
+  - `ToolContract` - Tool definition interface (name, inputSchema, outputSchema, redact)
   - `ToolImplementation` - Pure execute function interface
   - `BoundTool` - Contract + implementation bundled together
   - `ToolResult`, `ToolErrorCode` - Execution result types
   - `getCurrentTimeBoundTool` - First tool implementation
   - `GET_CURRENT_TIME_NAME` - Tool name constant
+  - `toToolSpec()` - Compile ToolContract to ToolSpec (Zod → JSONSchema7)
+  - `toToolSpecs()` - Compile multiple contracts
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** `index.ts`, `types.ts`, `tools/*.ts`
+- **Files considered API:** `index.ts`, `types.ts`, `schema.ts`, `tools/*.ts`
 
 ## Ports
 
@@ -75,8 +77,8 @@ pnpm --filter @cogni/ai-tools build
 
 ## Dependencies
 
-- **Internal:** none (standalone package)
-- **External:** `zod` for schema validation
+- **Internal:** `@cogni/ai-core` (ToolSpec type)
+- **External:** `zod`, `zod-to-json-schema`
 
 ## Change Protocol
 
