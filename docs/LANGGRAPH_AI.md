@@ -85,11 +85,13 @@ import {
 5. **RESULT_REFLECTS_OUTCOME**: `runner.final.ok` must match stream success/failure (deferred promise pattern).
 6. **CANCEL_PROPAGATION**: If the consumer stops/cancels the stream, runner must abort underlying completion/graph execution (via AbortSignal or equivalent) and close the queue to avoid leaked work.
 7. **ENV_FREE_EXPORTS**: Package exports never read `env.ts` or instantiate provider SDKs directly.
-8. **SINGLE_AIEVENT_CONTRACT**: Both InProc and Server executors emit identical AiEvent semantics at the GraphExecutorPort boundary. Executor-specific raw translation is permitted; shared mapping helpers encouraged. Conformance tests verify equivalent event sequences.
+8. **SINGLE_AIEVENT_CONTRACT**: P0 common subset: `text_delta`, `usage_report`, `assistant_final`, `done`. Tool events (`tool_call_start`, `tool_call_result`) are InProc-only for P0; Server tool streaming is P1. Conformance tests verify common subset sequences.
 9. **NO_AWAIT_IN_TOKEN_PATH**: The path from LLM token emission to AiEvent yield must not await I/O or slow operations. Use synchronous queue push to prevent backpressure-induced stream aborts.
 10. **NO_DIRECT_MODEL_CALLS_IN_INPROC_GRAPH_CODE**: In InProc execution, all model calls must go through `CompletionUnitLLM` (via injected `CompletionFn`). No direct `ChatOpenAI`/`initChatModel`/provider SDK calls in graph or tool code. This ensures billing/streaming/telemetry are never bypassed.
 11. **INTERNAL_DRAIN_BEFORE_RESOLVE**: CompletionUnitLLM must drain provider stream before resolving its internal promise. This is an implementation detail; consumers may cancel early per CANCEL_PROPAGATION.
 12. **SINGLE_QUEUE_PER_RUN**: Each graph run owns exactly one AsyncQueue. Tool events and LLM events flow to the same queue. The runner creates the queue and binds emit callbacks; adapters (`InProcGraphExecutorAdapter`, `LangGraphServerAdapter`) do not create queues.
+13. **CORRELATION_ID_PROPAGATION**: Adapters must use `req.caller.traceId` and `req.ingressRequestId` from GraphRunRequest. Never generate new trace/request IDs in adapters or runners.
+14. **ASSISTANT_FINAL_REQUIRED**: All executors must emit exactly one `assistant_final` event per run with the complete assistant response. Required for USAGE_HISTORY persistence. InProc extracts from graph state; Server extracts from final SDK message.
 
 ---
 
@@ -430,17 +432,17 @@ InProc uses `graph.invoke()` + AsyncQueue pattern (NOT `streamEvents`). Tokens f
 
 **Translation Ownership:**
 
-| Component             | Owns                                                            | Shared Helpers                                                        |
-| --------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------- |
-| **Server Adapter**    | SSE decoding, `{event, data}` envelope parsing                  | Content extraction, AiEvent constructors                              |
-| **InProc Runner**     | Token queue lifecycle, `invoke()` orchestration, final emission | Content extraction, AiEvent constructors                              |
-| **Shared (runtime/)** | —                                                               | `extractTextContent()`, `createTextDeltaEvent()`, `accumulateUsage()` |
+| Component             | Owns                                                                        | Shared Helpers                                                        |
+| --------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **Server Adapter**    | Maps SDK chunks → AiEvent (SDK handles SSE parsing)                         | Content extraction, AiEvent constructors                              |
+| **InProc Runner**     | Token queue lifecycle, `invoke()` orchestration, `assistant_final` emission | Content extraction, AiEvent constructors                              |
+| **Shared (runtime/)** | —                                                                           | `extractTextContent()`, `createTextDeltaEvent()`, `accumulateUsage()` |
 
 **Token Flow:**
 
 - InProc: `CompletionUnitLLM._generate()` → `tokenSink.push()` (sync) → AsyncQueue → yield AiEvent
-- Server: SDK `client.runs.stream()` → SSE → `translateChunk()` → yield AiEvent
-- Both paths emit identical AiEvent sequences at GraphExecutorPort boundary
+- Server: SDK `client.runs.stream()` → SDK chunk → `mapChunkToAiEvent()` → yield AiEvent
+- P0 common subset: `text_delta`, `usage_report`, `assistant_final`, `done` (tool events InProc-only)
 
 **Remaining:**
 
@@ -470,7 +472,7 @@ InProc uses `graph.invoke()` + AsyncQueue pattern (NOT `streamEvents`). Tokens f
 1. **No `@langchain` imports in `src/`** — All LangChain code in `packages/langgraph-graphs/`
 2. **No hardcoded models in graphs** — Model comes from `GraphRunRequest.model` → `config.configurable.model`
 3. **No direct `ChatOpenAI` in InProc** — Use `CompletionUnitLLM` wrapper for billing
-4. **No raw `thread_id` from client** — Always derive server-side with tenant prefix
+4. **No raw `thread_id` from client** — Always derive server-side. Conversation continuity requires a stable, server-derived `threadKey`.
 5. **No `done` emission in completion unit** — Only graph-level runner emits `done`
 6. **No env reads in package exports** — Inject dependencies, don't read `env.ts`
 7. **No `await` in token sink** — `tokenSink.push()` must be synchronous; async causes backpressure aborts
@@ -493,6 +495,7 @@ InProc uses `graph.invoke()` + AsyncQueue pattern (NOT `streamEvents`). Tokens f
 - [LANGGRAPH_TESTING.md](LANGGRAPH_TESTING.md) — Testing strategy for both executors
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — Correlation IDs, telemetry
 - [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool execution invariants
+- [USAGE_HISTORY.md](USAGE_HISTORY.md) — Run artifacts, assistant_final persistence
 
 ---
 
