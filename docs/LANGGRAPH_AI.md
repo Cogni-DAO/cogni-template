@@ -38,9 +38,9 @@ packages/
 │
 └── langgraph-graphs/                 # ALL LangChain code lives here (planned)
     └── src/
-        ├── graphs/                   # Graph definitions (tools, prompts)
+        ├── graphs/                   # Graph definitions (logic, prompts, tool imports)
         │   └── chat/                 # Chat graph (executes LangGraph AI internally)
-        │       ├── tools.ts          # Tool definitions
+        │       ├── graph.ts          # createChatGraph(llm, tools) factory
         │       └── prompts.ts        # System prompts
         ├── runtime/                  # Shared LangChain utilities
         │   ├── completion-unit-llm.ts # CompletionUnitLLM, toBaseMessage, fromBaseMessage
@@ -86,6 +86,7 @@ import {
 9. **NO_AWAIT_IN_TOKEN_PATH**: The path from LLM token emission to AiEvent yield must not await I/O or slow operations. Use synchronous queue push to prevent backpressure-induced stream aborts.
 10. **NO_DIRECT_MODEL_CALLS_IN_INPROC_GRAPH_CODE**: In InProc execution, all model calls must go through `CompletionUnitLLM` (via injected `CompletionFn`). No direct `ChatOpenAI`/`initChatModel`/provider SDK calls in graph or tool code. This ensures billing/streaming/telemetry are never bypassed.
 11. **DRAIN_BEFORE_FINAL**: Stream must be fully consumed before awaiting final (prevents deadlock).
+12. **SINGLE_QUEUE_PER_RUN**: Each graph run owns exactly one AsyncQueue. Tool events and LLM events flow to the same queue. The runner creates the queue and binds emit callbacks; bridges in `src/` do not create queues.
 
 ---
 
@@ -169,11 +170,15 @@ export function fromBaseMessage(msg: BaseMessage): Message;
 Main entry point for InProc execution:
 
 ```typescript
-export function createInProcChatRunner(
-  completionFn: CompletionFn,
-  req: InProcGraphRequest
-): { stream: AsyncIterable<AiEvent>; final: Promise<GraphResult> };
+export function createInProcChatRunner(opts: {
+  completionFn: CompletionFn;
+  createToolExecFn: (emit: (e: AiEvent) => void) => ToolExecFn;
+  toolContracts: ToolContract[];
+  req: InProcGraphRequest;
+}): { stream: AsyncIterable<AiEvent>; final: Promise<GraphResult> };
 ```
+
+**Factory Pattern:** Runner creates the queue and passes `emit` to `createToolExecFn`. This ensures tool events and LLM events flow to the same queue (per SINGLE_QUEUE_PER_RUN).
 
 **Deferred Promise Pattern:** Uses shared deferred promise so `final` reflects actual execution outcome even if stream is not fully consumed.
 
@@ -290,34 +295,37 @@ export { createInProcMyAgentRunner } from "./my-agent-runner";
 
 ### Definition Location
 
-| Executor   | Tool Location                                          | Notes                        |
-| ---------- | ------------------------------------------------------ | ---------------------------- |
-| **InProc** | `packages/langgraph-graphs/src/graphs/<name>/tools.ts` | Executed in Next.js process  |
-| **Server** | Same package location                                  | Executed in LangGraph Server |
+| Executor   | Tool Contract Location       | Tool Wrapping Location                           |
+| ---------- | ---------------------------- | ------------------------------------------------ |
+| **InProc** | `@cogni/ai-tools/tools/*.ts` | Wrapped via `toLangChainTools()` at runner level |
+| **Server** | `@cogni/ai-tools/tools/*.ts` | Wrapped via `toLangChainTools()` at server boot  |
 
 ### Tool Contract Pattern
 
+Tool contracts are defined in `@cogni/ai-tools` (pure, no LangChain). LangGraph wraps them via `toLangChainTools()`:
+
 ```typescript
-// packages/langgraph-graphs/src/graphs/chat/tools.ts
-import { z } from "zod";
-import { tool } from "@langchain/core/tools";
+// @cogni/ai-tools defines the contract (no LangChain dependency)
+import { defineToolContract } from "@cogni/ai-tools";
 
-export const webSearchTool = tool(
-  async ({ query }) => {
-    // Tool implementation
-    return JSON.stringify(results);
-  },
-  {
-    name: "web_search",
-    description: "Search the web for information",
-    schema: z.object({
-      query: z.string().describe("Search query"),
-    }),
-  }
-);
+export const webSearchContract = defineToolContract({
+  name: "web_search",
+  description: "Search the web for information",
+  inputSchema: z.object({ query: z.string() }),
+  outputSchema: z.object({ results: z.array(z.string()) }),
+  redaction: { allowlist: ["results"] },
+});
 
-export const chatTools = [webSearchTool];
+// @cogni/langgraph-graphs wraps contracts for LangGraph execution
+import { toLangChainTools } from "@cogni/langgraph-graphs/runtime";
+
+const tools = toLangChainTools({
+  contracts: [webSearchContract],
+  exec: toolExecFn,
+});
 ```
+
+**Note:** No `tool()` definitions in `graphs/`. All tool contracts live in `@cogni/ai-tools`.
 
 ### Tool Separation of Concerns
 
@@ -330,19 +338,24 @@ export const chatTools = [webSearchTool];
 
 ```typescript
 // packages/langgraph-graphs/src/runtime/langchain-tools.ts
+type ToolExecFn = (params: {
+  toolName: string;
+  args: unknown;
+  toolCallId: string;
+}) => Promise<ToolExecResult>;
+
 export function toLangChainTool(opts: {
   contract: ToolContract;
-  exec: (name: string, args: unknown) => Promise<string>;
-  eventSink?: { push: (event: AiEvent) => void };
-  toolCallIdFactory?: () => string;
-}): StructuredTool;
+  exec: ToolExecFn;
+}): StructuredToolInterface;
 
 export function toLangChainTools(opts: {
-  registry: ToolRegistry;
-  eventSink?: { push: (event: AiEvent) => void };
-  // ...deps
-}): StructuredTool[];
+  contracts: ToolContract[];
+  exec: ToolExecFn;
+}): StructuredToolInterface[];
 ```
+
+**Note:** Wrapper generates `toolCallId` per invocation and passes it to `exec`. No `eventSink` — toolRunner owns event emission via the `emit` callback bound at runner level.
 
 ---
 
@@ -413,7 +426,7 @@ The `langgraph-server` package re-exports graphs from `@cogni/langgraph-graphs/g
 
 - [x] Resolve depcruiser rule conflict (removed rule, Biome enforces NO_LANGCHAIN_IN_SRC)
 - [ ] Create `/inproc` subpath export in package.json
-- [ ] Implement `createInProcChatRunner()` in `src/inproc/runner.ts`
+- [ ] Implement `createInProcChatRunner()` in `packages/langgraph-graphs/src/inproc/runner.ts`
 - [ ] Create `langgraph-runner.ts` thin adapter in `src/` (NO `@langchain` imports)
 - [ ] Wire `createLangGraphRunner()` in bootstrap factory
 - [ ] Add grep test: `@langchain` only in `packages/langgraph-graphs/`
@@ -476,7 +489,7 @@ InProc uses `graph.invoke()` + AsyncQueue pattern (NOT `streamEvents`). Tokens f
 6. **No env reads in package exports** — Inject dependencies, don't read `env.ts`
 7. **No `await` in token sink** — `tokenSink.push()` must be synchronous; async causes backpressure aborts
 8. **No `streamEvents()` for InProc** — Use `invoke()` + AsyncQueue; `streamEvents()` has Pregel lifecycle issues
-9. **No circular dependencies** — `ai-tools` must not import `langgraph-graphs`; only `langgraph-graphs` wraps `ai-tools` into LangChain tools
+9. **No circular dependencies** — `ai-tools` must not import `langgraph-graphs`; only `langgraph-graphs` wraps `ai-tools` into LangChain tools. Adapters in `src/` pass factories, not pre-bound functions
 10. **No nested `done`/`final` from subgraphs** — Subgraph invocation runs in "subgraph mode" (no `done`); parent run owns `done`/`final`
 
 ---
@@ -498,4 +511,4 @@ InProc uses `graph.invoke()` + AsyncQueue pattern (NOT `streamEvents`). Tokens f
 ---
 
 **Last Updated**: 2026-01-04
-**Status**: Draft (Rev 8 - Phase 1 package foundation complete, Phase 2 blocked on depcruiser decision)
+**Status**: Draft (Rev 9 - Phase 2 InProc runner implementation in progress)
