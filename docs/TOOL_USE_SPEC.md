@@ -191,19 +191,9 @@ Per invariants **TOOL_SEMANTICS_CANONICAL**, **WIRE_FORMATS_ARE_ADAPTERS**, **OP
 
 ### 2. assistant-stream Tool API
 
-Route uses `assistant-stream` controller API:
+Route uses `assistant-stream` controller API. See `finalizeToolCall()` in `route.ts` for the correct pattern.
 
-```typescript
-// Tool start
-const toolCtrl = controller.addToolCallPart({
-  toolCallId: event.toolCallId,
-  toolName: event.toolName,
-  args: event.args,
-});
-
-// Tool result
-toolCtrl.setResponse(event.result);
-```
+**Critical:** `setResponse()` alone does NOT finalize the substream. Must call `close()` after. See Known Issues.
 
 **Never** invent custom SSE events. Use official helper only.
 
@@ -309,7 +299,14 @@ When `toolCall.function.arguments` is invalid JSON:
 
 ---
 
-## Related Documentsx
+## Known Issues
+
+- [ ] **assistant-stream API footgun**: `setResponse()` does not finalize tool-call substream; `close()` must be called after. Current workaround: `finalizeToolCall()` helper in `route.ts`. Upstream fix pending.
+- [ ] **assistant-stream chunk ordering**: Async merger does not guarantee ToolCallResult precedes FinishMessage. Chunks exist but may arrive out of order. Upstream fix needed. see `tests/stack/ai/chat-tool-replay.stack.test.ts`
+
+---
+
+## Related Documents
 
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — Correlation IDs, telemetry invariants
 - [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Architecture, anti-patterns
@@ -317,5 +314,5 @@ When `toolCall.function.arguments` is invalid JSON:
 
 ---
 
-**Last Updated**: 2026-01-03
+**Last Updated**: 2026-01-05
 **Status**: Draft (aligned with LANGGRAPH_AI.md)

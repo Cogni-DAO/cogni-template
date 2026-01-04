@@ -21,7 +21,6 @@ import {
   isErrorEvent,
   isFinishMessageEvent,
   isTextDeltaEvent,
-  readDataStreamEvents,
 } from "@tests/helpers/data-stream";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -188,12 +187,67 @@ describe("Chat Tool Replay", () => {
     // Assert - completionStream was called (proves mock applied)
     expect(completionStreamMock).toHaveBeenCalledTimes(1);
 
-    // Collect all stream events
+    // Collect all stream events - read until EOF, not just until FinishMessage
     const events: Array<{ type: string; value: unknown }> = [];
-    for await (const e of readDataStreamEvents(res)) {
-      events.push(e);
-      if (isFinishMessageEvent(e)) break;
+    const rawLines: string[] = [];
+
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error("No response body reader");
+
+    const decoder = new TextDecoder();
+    let buf = "";
+    let streamEndedCleanly = false;
+
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) {
+          streamEndedCleanly = true;
+          break;
+        }
+        buf += decoder.decode(value, { stream: true });
+
+        let idx = buf.indexOf("\n");
+        while (idx !== -1) {
+          const line = buf.slice(0, idx);
+          buf = buf.slice(idx + 1);
+          if (line.trim()) {
+            rawLines.push(line);
+            const colonIdx = line.indexOf(":");
+            if (colonIdx !== -1) {
+              const type = line.slice(0, colonIdx);
+              try {
+                const parsedValue = JSON.parse(line.slice(colonIdx + 1));
+                events.push({ type, value: parsedValue });
+              } catch {
+                /* skip parse errors */
+              }
+            }
+          }
+          idx = buf.indexOf("\n");
+        }
+      }
+    } finally {
+      reader.releaseLock();
     }
+
+    // Debug output
+    console.log("=== RAW DSP LINES ===");
+    for (let i = 0; i < rawLines.length; i++) {
+      const line = rawLines[i];
+      console.log(
+        `  ${i}: ${line.slice(0, 120)}${line.length > 120 ? "..." : ""}`
+      );
+    }
+    console.log("=== STREAM ENDED CLEANLY:", streamEndedCleanly);
+    console.log("=== EVENT TYPES:", events.map((e) => e.type).join(", "));
+
+    // Check for 'a:' presence before assertions
+    const hasToolCallResult = rawLines.some((line) => line.startsWith("a:"));
+    console.log("=== HAS TOOL_CALL_RESULT (a:):", hasToolCallResult);
+
+    // Assert stream ended cleanly
+    expect(streamEndedCleanly).toBe(true);
 
     // Assert - No error chunks emitted
     const errorEvents = events.filter((e) => isErrorEvent(e));
@@ -227,6 +281,11 @@ describe("Chat Tool Replay", () => {
     // Assert - Exactly one FinishMessage chunk
     const finishEvents = events.filter((e) => isFinishMessageEvent(e));
     expect(finishEvents).toHaveLength(1);
+
+    // Note: Ideally ToolCallResult ("a:") should precede FinishMessage ("d:"),
+    // but assistant-stream's async merger doesn't guarantee ordering.
+    // TODO(assistant-stream): Upstream fix needed for reliable chunk ordering.
+    // For now, we verify both chunks exist (proves close() was called).
 
     // Assert - Facade received correct message DTOs
     expect(completionStreamCalls).toHaveLength(1);

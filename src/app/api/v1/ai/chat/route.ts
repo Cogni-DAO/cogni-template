@@ -15,6 +15,7 @@
  */
 
 import { createAssistantStreamResponse } from "assistant-stream";
+import type { ReadonlyJSONValue } from "assistant-stream/utils";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
@@ -387,6 +388,65 @@ export const POST = wrapRouteHandlerWithLogging(
         // Use assistant-stream package for streaming
         // No custom SSE events - use official helper only
         const response = createAssistantStreamResponse(async (controller) => {
+          // Helper: finalize tool-call substream with result, then close.
+          // Encapsulates setResponse + close to prevent partial finalization bugs.
+          // assistant-stream requires explicit close() after setResponse() to:
+          // - Finalize the tool-call substream (emit part-finish)
+          // - Preserve chunk ordering (result before message-finish)
+          // - Allow the merger to complete and close the main stream
+          //
+          // TODO(assistant-stream): The current API is a footgun - setResponse() does NOT
+          // finalize the tool-call substream. Consider wrapping assistant-stream or submitting
+          // upstream PR to make setResponse() auto-close, or provide a finalizeWithResponse() method.
+          // See: https://github.com/assistant-ui/assistant-ui/issues/XXX
+          async function finalizeToolCall(
+            toolCtrl: ReturnType<typeof controller.addToolCallPart>,
+            toolCallId: string,
+            result: ReadonlyJSONValue,
+            aborted: boolean
+          ): Promise<void> {
+            // Phase 1: Set the response (enqueues result chunk)
+            try {
+              await toolCtrl.setResponse({ result });
+            } catch (err) {
+              const isClosedError =
+                err instanceof Error &&
+                (err.message.includes("Controller is already closed") ||
+                  (err as NodeJS.ErrnoException).code === "ERR_INVALID_STATE");
+              if (isClosedError && aborted) {
+                ctx.log.debug(
+                  { toolCallId, phase: "setResponse" },
+                  "tool_call skipped (client abort)"
+                );
+                return;
+              }
+              throw err;
+            }
+
+            // Phase 2: Close the substream (finalizes ordering)
+            try {
+              await toolCtrl.close();
+            } catch (err) {
+              const isClosedError =
+                err instanceof Error &&
+                (err.message.includes("Controller is already closed") ||
+                  (err as NodeJS.ErrnoException).code === "ERR_INVALID_STATE");
+              if (isClosedError && aborted) {
+                ctx.log.debug(
+                  { toolCallId, phase: "close" },
+                  "tool_call close skipped (client abort)"
+                );
+              } else {
+                // Log non-abort close errors at warn for visibility
+                ctx.log.warn(
+                  { toolCallId, reqId: ctx.reqId, aborted, err },
+                  "tool_call close failed"
+                );
+              }
+              // Don't throw - close errors shouldn't abort the stream
+            }
+          }
+
           try {
             // Track tool call controllers for setting results
             const toolCallControllers = new Map<
@@ -404,11 +464,15 @@ export const POST = wrapRouteHandlerWithLogging(
                 // MVP: Stream tool lifecycle to UI
                 // NOTE: Do NOT pass args to addToolCallPart - it closes argsText immediately,
                 // causing setResponse() to fail (double-close). Manually append args instead.
+                ctx.log.info(
+                  { toolCallId: event.toolCallId, toolName: event.toolName },
+                  "tool_call_start received, creating controller"
+                );
                 const toolCtrl = controller.addToolCallPart({
                   toolCallId: event.toolCallId,
                   toolName: event.toolName,
                 });
-                // Stream args text without closing (setResponse will close it)
+                // Stream args text without closing (finalizeToolCall will close)
                 if (event.args != null) {
                   // Invariant: assistant-stream must provide argsText.append
                   if (typeof toolCtrl.argsText?.append !== "function") {
@@ -420,8 +484,6 @@ export const POST = wrapRouteHandlerWithLogging(
                 }
                 toolCallControllers.set(event.toolCallId, toolCtrl);
               } else if (event.type === "tool_call_result") {
-                // Set tool result (completes the tool call in UI)
-                // Must await: setResponse enqueues async after Promise.resolve()
                 const toolCtrl = toolCallControllers.get(event.toolCallId);
                 if (!toolCtrl) {
                   ctx.log.warn(
@@ -430,29 +492,16 @@ export const POST = wrapRouteHandlerWithLogging(
                   );
                   continue;
                 }
-                try {
-                  await toolCtrl.setResponse({
-                    result: event.result as Parameters<
-                      typeof toolCtrl.setResponse
-                    >[0]["result"],
-                  });
-                } catch (err) {
-                  // Only swallow closed-controller errors when client has aborted
-                  // Otherwise, surface the error as it indicates a streaming bug
-                  const isClosedError =
-                    err instanceof Error &&
-                    (err.message.includes("Controller is already closed") ||
-                      (err as NodeJS.ErrnoException).code ===
-                        "ERR_INVALID_STATE");
-                  if (isClosedError && request.signal.aborted) {
-                    ctx.log.debug(
-                      { toolCallId: event.toolCallId },
-                      "setResponse after controller closed (client abort)"
-                    );
-                  } else {
-                    throw err;
-                  }
-                }
+                await finalizeToolCall(
+                  toolCtrl,
+                  event.toolCallId,
+                  event.result as ReadonlyJSONValue,
+                  request.signal.aborted
+                );
+                ctx.log.info(
+                  { toolCallId: event.toolCallId },
+                  "tool_call_result completed"
+                );
               }
             }
 
