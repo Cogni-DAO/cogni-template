@@ -367,20 +367,58 @@ The `langgraph-server` package re-exports graphs from `@cogni/langgraph-graphs/g
 
 ## Implementation Checklist
 
-### P0: InProc LangGraph Execution
+### P0: Package Foundation (Phase 1 — Current)
 
-- [ ] Create `@cogni/ai-core` with canonical types (CompletionFn, Message, AiEvent, UsageFact)
-- [ ] Create `@cogni/langgraph-graphs` package structure
-- [ ] Implement `CompletionUnitLLM` wrapper in runtime
-- [ ] Implement `toBaseMessage()` / `fromBaseMessage()` converters
-- [ ] Implement `createInProcChatRunner()` in inproc
-- [ ] Implement `createChatGraph(llm)` factory in inproc
-- [ ] Create `langgraph-runner.ts` thin adapter (NO `@langchain` imports)
+**@cogni/ai-core canonical types:**
+
+- [x] `AiEvent` union type (events/ai-events.ts)
+- [x] `UsageFact`, `ExecutorType` (usage/usage.ts)
+- [ ] `CompletionFn`, `CompletionResult` — **tech debt: currently defined in langgraph-graphs**
+- [ ] `Message`, `MessageToolCall` — **tech debt: currently defined in langgraph-graphs**
+
+**@cogni/langgraph-graphs package structure:**
+
+- [x] Package scaffolding (package.json, tsconfig.json, tsup.config.ts, vitest.config.ts)
+- [x] Root tsconfig.json project reference added
+- [x] Root package.json workspace dependency added
+- [x] Biome noDefaultExport override for config files
+- [x] Dependency-cruiser rule: PACKAGES_NO_SRC_IMPORTS (`:365-375`)
+- [x] Biome rule: NO_LANGCHAIN_IN_SRC (via noRestrictedImports `:68-69`)
+
+**Runtime utilities (`/runtime` subpath):**
+
+- [x] `CompletionUnitLLM` — BaseChatModel wrapper with injected CompletionFn
+- [x] `toBaseMessage()` / `fromBaseMessage()` — Message format converters
+- [x] `toLangChainTool()` / `toLangChainTools()` — Tool contract → StructuredTool wrappers
+- [x] `AsyncQueue` — Sync-push async-iterate queue for invoke() pattern
+
+**Graph factories (`/graphs` subpath):**
+
+- [x] `createChatGraph(llm, tools)` — React agent factory
+- [x] `CHAT_GRAPH_NAME` constant
+
+**Tests:**
+
+- [x] AsyncQueue unit tests (5 passing)
+- [ ] CompletionUnitLLM unit tests
+- [ ] Message converter unit tests
+- [ ] Tool wrapper unit tests
+
+### P0: InProc Execution Path (Phase 2)
+
+> **✅ RESOLVED:** Removed depcruiser rule `no-src-to-langgraph-graphs`.
+> NO_LANGCHAIN_IN_SRC is enforced via Biome `noRestrictedImports` which blocks
+> `@langchain/**` imports in `src/`. The adapter layer (`src/adapters/server/ai/`)
+> CAN import from `@cogni/langgraph-graphs` — only the LangChain packages themselves are blocked.
+
+- [x] Resolve depcruiser rule conflict (removed rule, Biome enforces NO_LANGCHAIN_IN_SRC)
+- [ ] Create `/inproc` subpath export in package.json
+- [ ] Implement `createInProcChatRunner()` in `src/inproc/runner.ts`
+- [ ] Create `langgraph-runner.ts` thin adapter in `src/` (NO `@langchain` imports)
 - [ ] Wire `createLangGraphRunner()` in bootstrap factory
-- [ ] Add dependency-cruiser rules (NO_LANGCHAIN_IN_SRC, PACKAGES_NO_SRC_IMPORTS)
 - [ ] Add grep test: `@langchain` only in `packages/langgraph-graphs/`
 
-### P0: Server Path
+### P0: Server Path (Phase 3)
 
 - [ ] Create `LangGraphServerAdapter` implementing `GraphExecutorPort`
 - [ ] Implement `thread_id` derivation (UUIDv5, tenant-scoped)
@@ -415,8 +453,8 @@ InProc uses `graph.invoke()` + AsyncQueue pattern (NOT `streamEvents`). Tokens f
 
 - [x] Create `packages/ai-tools` package (NO `@langchain`, NO `src` imports)
 - [x] Move tool contracts + pure implementations to `packages/ai-tools`
-- [ ] Create `toLangChainTool()` wrapper in `packages/langgraph-graphs/src/runtime/`
-- [ ] Update `createChatGraph(llm, tools)` to accept injected tools
+- [x] Create `toLangChainTool()` wrapper in `packages/langgraph-graphs/src/runtime/`
+- [x] Update `createChatGraph(llm, tools)` to accept injected tools
 - [ ] Wire `toolExec` function in `langgraph-runner.ts` (passes to package APIs)
 - [ ] Add stack test: tool_call_start/tool_call_result events emitted
 
@@ -453,5 +491,5 @@ InProc uses `graph.invoke()` + AsyncQueue pattern (NOT `streamEvents`). Tokens f
 
 ---
 
-**Last Updated**: 2025-12-29
-**Status**: Draft (Rev 7 - invoke + AsyncQueue pattern, tool support planned)
+**Last Updated**: 2026-01-04
+**Status**: Draft (Rev 8 - Phase 1 package foundation complete, Phase 2 blocked on depcruiser decision)

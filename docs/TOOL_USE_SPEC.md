@@ -50,15 +50,16 @@ Per invariants **TOOL_SEMANTICS_CANONICAL**, **WIRE_FORMATS_ARE_ADAPTERS**, **OP
 
 **Semantic types (`@cogni/ai-core/tooling/`):**
 
-- [ ] Create `ToolSpec { name, description, inputSchema: JSONSchema7, redaction }` — tool definition (no Zod runtime)
-- [ ] Create `ToolInvocationRecord { toolCallId, name, args, result, error, startedAt, endedAt, raw?: unknown }` — execution record
-- [ ] `raw` field preserves provider-native payload (Anthropic content blocks, attachments)
-- [ ] All internal tool logic uses these types; wire formats are adapter concerns
+- [x] Create `ToolSpec { name, description, inputSchema: JSONSchema7, redaction, schemaHash? }` — tool definition (no Zod runtime, schemaHash optional for P0)
+- [x] Create `ToolInvocationRecord { toolCallId, name, args, result, error, startedAtMs, endedAtMs, raw? }` — execution record
+- [x] `raw` field preserves provider-native payload (Anthropic content blocks, attachments)
+- [x] All internal tool logic uses these types; wire formats are adapter concerns
 
 **Schema compilation (`@cogni/ai-tools`):**
 
-- [ ] Add `zod-to-json-schema` dependency
-- [ ] Create `toToolSpec(contract)` in `@cogni/ai-tools/schema.ts` — compiles contract → `ToolSpec` with JSONSchema7
+- [x] Add `zod-to-json-schema` dependency
+- [x] Create `toToolSpec(contract)` in `@cogni/ai-tools/schema.ts` — compiles contract → `ToolSpec` with JSONSchema7
+- [ ] P0 schema subset validation (rejects oneOf/anyOf/allOf/not/if-then-else/patternProperties) — deferred post-P0
 - [ ] Remove manual JSON Schema in `chat.runner.ts` — use `toToolSpec()` output
 
 **OpenAI wire adapter (`src/adapters/server/ai/`):**
@@ -92,7 +93,7 @@ Per invariants **TOOL_SEMANTICS_CANONICAL**, **WIRE_FORMATS_ARE_ADAPTERS**, **OP
 
 - [x] Create `get_current_time` tool in `@cogni/ai-tools/tools/get-current-time.ts`
 - [x] Create `@cogni/ai-tools` package with ToolContract, BoundTool types
-- [ ] Create `toLangChainTool()` converter in `@cogni/langgraph-graphs/runtime/`
+- [x] Create `toLangChainTool()` converter in `@cogni/langgraph-graphs/runtime/`
 - [ ] Implement agentic loop in `@cogni/langgraph-graphs/inproc/` (LLM→tool→LLM cycle)
 
 **Bootstrap layer:**
