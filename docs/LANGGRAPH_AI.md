@@ -481,6 +481,12 @@ InProc uses `graph.invoke()` + AsyncQueue pattern (NOT `streamEvents`). Tokens f
 
 ---
 
+## Known Issues
+
+- [ ] **Stream controller "already closed" error** — Chat with Tool usage -> new message -> `TypeError: Invalid state: Controller is already closed` fires on client abort/disconnect but does not block execution. The `createAssistantStreamResponse()` callback in `src/app/api/v1/ai/chat/route.ts` attempts writes after stream termination. Fix: wrap controller writes to catch `ERR_INVALID_STATE`, check `request.signal.aborted` before writes, skip finalization on abort. Tracked as non-blocking; stream completes successfully despite error.
+
+---
+
 ## Related Documents
 
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Executor-agnostic billing, tracking, UI/UX patterns

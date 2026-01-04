@@ -109,6 +109,8 @@ export function normalizeMessageRole(role: string): MessageRole | null {
       return "assistant";
     case "system":
       return "system";
+    case "tool":
+      return "tool";
     default:
       return null;
   }
