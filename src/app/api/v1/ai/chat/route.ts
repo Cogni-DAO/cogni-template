@@ -15,6 +15,7 @@
  */
 
 import { createAssistantStreamResponse } from "assistant-stream";
+import type { ReadonlyJSONValue } from "assistant-stream/utils";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
@@ -22,6 +23,7 @@ import {
   type AssistantUiMessage,
   aiChatOperation,
   type ChatInput,
+  type ContentPart,
 } from "@/contracts/ai.chat.v1.contract";
 import { isAccountsFeatureError } from "@/features/accounts/public";
 import {
@@ -34,32 +36,147 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
- * Internal message DTO for completion facade
- * Matches MessageDto from @features/ai/services/mappers
+ * Tool call structure for MessageDto.
+ * Matches downstream toBaseMessage() expectations.
  */
-interface MessageDto {
-  role: "user" | "assistant";
-  content: string;
-  timestamp?: string;
+interface MessageToolCall {
+  id: string;
+  name: string;
+  arguments: string;
 }
 
 /**
- * Transform assistant-ui wire format → MessageDto for completion facade
- * Handles both string content (system) and array content (user/assistant)
+ * Internal message DTO for completion facade.
+ * Extended to support tool calls (assistant) and tool results (tool role).
+ */
+interface MessageDto {
+  role: "user" | "assistant" | "tool";
+  content: string;
+  timestamp?: string;
+  /** Tool calls made by assistant (only for role: "assistant") */
+  toolCalls?: MessageToolCall[];
+  /** Tool call ID this message responds to (only for role: "tool") */
+  toolCallId?: string;
+}
+
+/**
+ * Validate message history consistency.
+ * Returns error message if invalid, undefined if valid.
+ *
+ * Checks:
+ * 1. No system messages (not supported in P0)
+ * 2. All tool-result toolCallIds reference earlier assistant tool-calls
+ * 3. No duplicate tool-results for the same toolCallId
+ */
+function validateMessageHistory(
+  wireMessages: AssistantUiMessage[]
+): string | undefined {
+  const seenToolCallIds = new Set<string>();
+  const resolvedToolCallIds = new Set<string>();
+
+  for (const msg of wireMessages) {
+    // System messages not supported in P0
+    if (msg.role === "system") {
+      return "system messages are not supported; use the system field in request body";
+    }
+
+    if (typeof msg.content === "string") continue;
+
+    // Collect tool call IDs from assistant messages
+    if (msg.role === "assistant") {
+      for (const part of msg.content) {
+        if (part.type === "tool-call") {
+          seenToolCallIds.add(part.toolCallId);
+        }
+      }
+    }
+
+    // Validate tool result IDs reference seen tool calls and are not duplicates
+    if (msg.role === "tool") {
+      for (const part of msg.content) {
+        if (part.type === "tool-result") {
+          if (!seenToolCallIds.has(part.toolCallId)) {
+            return `tool-result references unknown toolCallId: ${part.toolCallId}`;
+          }
+          if (resolvedToolCallIds.has(part.toolCallId)) {
+            return `duplicate tool-result for toolCallId: ${part.toolCallId}`;
+          }
+          resolvedToolCallIds.add(part.toolCallId);
+        }
+      }
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Transform assistant-ui wire format → MessageDto for completion facade.
+ * Handles text, tool-call, and tool-result content parts.
  */
 function toMessageDtos(wireMessages: AssistantUiMessage[]): MessageDto[] {
-  return wireMessages
-    .filter(
-      (m): m is AssistantUiMessage & { role: "user" | "assistant" } =>
-        m.role === "user" || m.role === "assistant"
-    )
-    .map((m) => ({
-      role: m.role,
-      content:
-        typeof m.content === "string"
-          ? m.content
-          : m.content.map((p) => p.text).join("\n"),
-    }));
+  const result: MessageDto[] = [];
+
+  for (const msg of wireMessages) {
+    // Skip system messages (handled separately via system prompt)
+    if (msg.role === "system") continue;
+
+    // String content (shouldn't happen for user/assistant/tool, but handle gracefully)
+    if (typeof msg.content === "string") {
+      if (msg.role === "user" || msg.role === "assistant") {
+        result.push({ role: msg.role, content: msg.content });
+      }
+      continue;
+    }
+
+    const parts = msg.content;
+
+    if (msg.role === "user") {
+      // User messages: extract text parts only
+      const textContent = parts
+        .filter((p): p is ContentPart & { type: "text" } => p.type === "text")
+        .map((p) => p.text)
+        .join("\n");
+      result.push({ role: "user", content: textContent });
+    } else if (msg.role === "assistant") {
+      // Assistant messages: extract text + tool calls
+      const textParts = parts.filter(
+        (p): p is ContentPart & { type: "text" } => p.type === "text"
+      );
+      const toolCallParts = parts.filter(
+        (p): p is ContentPart & { type: "tool-call" } => p.type === "tool-call"
+      );
+
+      const textContent = textParts.map((p) => p.text).join("\n");
+      const toolCalls: MessageToolCall[] = toolCallParts.map((p) => ({
+        id: p.toolCallId,
+        name: p.toolName,
+        arguments: JSON.stringify(p.args),
+      }));
+
+      result.push({
+        role: "assistant",
+        content: textContent,
+        ...(toolCalls.length > 0 ? { toolCalls } : {}),
+      });
+    } else if (msg.role === "tool") {
+      // Tool messages: extract tool results (one message per result)
+      const toolResultParts = parts.filter(
+        (p): p is ContentPart & { type: "tool-result" } =>
+          p.type === "tool-result"
+      );
+
+      for (const part of toolResultParts) {
+        result.push({
+          role: "tool",
+          content: JSON.stringify(part.result),
+          toolCallId: part.toolCallId,
+        });
+      }
+    }
+  }
+
+  return result;
 }
 
 /**
@@ -183,6 +300,16 @@ export const POST = wrapRouteHandlerWithLogging(
       }
       input = inputParseResult.data;
 
+      // Validate message history (no system messages, toolCallId consistency, no duplicates)
+      const historyError = validateMessageHistory(input.messages);
+      if (historyError) {
+        logRequestWarn(ctx.log, { error: historyError }, "VALIDATION_ERROR");
+        return NextResponse.json(
+          { error: "Invalid message history", details: historyError },
+          { status: 400 }
+        );
+      }
+
       // Log request received (billingAccountId will be resolved in facade, log after validation)
       const handlerStartMs = performance.now();
 
@@ -261,6 +388,65 @@ export const POST = wrapRouteHandlerWithLogging(
         // Use assistant-stream package for streaming
         // No custom SSE events - use official helper only
         const response = createAssistantStreamResponse(async (controller) => {
+          // Helper: finalize tool-call substream with result, then close.
+          // Encapsulates setResponse + close to prevent partial finalization bugs.
+          // assistant-stream requires explicit close() after setResponse() to:
+          // - Finalize the tool-call substream (emit part-finish)
+          // - Preserve chunk ordering (result before message-finish)
+          // - Allow the merger to complete and close the main stream
+          //
+          // TODO(assistant-stream): The current API is a footgun - setResponse() does NOT
+          // finalize the tool-call substream. Consider wrapping assistant-stream or submitting
+          // upstream PR to make setResponse() auto-close, or provide a finalizeWithResponse() method.
+          // See: https://github.com/assistant-ui/assistant-ui/issues/XXX
+          async function finalizeToolCall(
+            toolCtrl: ReturnType<typeof controller.addToolCallPart>,
+            toolCallId: string,
+            result: ReadonlyJSONValue,
+            aborted: boolean
+          ): Promise<void> {
+            // Phase 1: Set the response (enqueues result chunk)
+            try {
+              await toolCtrl.setResponse({ result });
+            } catch (err) {
+              const isClosedError =
+                err instanceof Error &&
+                (err.message.includes("Controller is already closed") ||
+                  (err as NodeJS.ErrnoException).code === "ERR_INVALID_STATE");
+              if (isClosedError && aborted) {
+                ctx.log.debug(
+                  { toolCallId, phase: "setResponse" },
+                  "tool_call skipped (client abort)"
+                );
+                return;
+              }
+              throw err;
+            }
+
+            // Phase 2: Close the substream (finalizes ordering)
+            try {
+              await toolCtrl.close();
+            } catch (err) {
+              const isClosedError =
+                err instanceof Error &&
+                (err.message.includes("Controller is already closed") ||
+                  (err as NodeJS.ErrnoException).code === "ERR_INVALID_STATE");
+              if (isClosedError && aborted) {
+                ctx.log.debug(
+                  { toolCallId, phase: "close" },
+                  "tool_call close skipped (client abort)"
+                );
+              } else {
+                // Log non-abort close errors at warn for visibility
+                ctx.log.warn(
+                  { toolCallId, reqId: ctx.reqId, aborted, err },
+                  "tool_call close failed"
+                );
+              }
+              // Don't throw - close errors shouldn't abort the stream
+            }
+          }
+
           try {
             // Track tool call controllers for setting results
             const toolCallControllers = new Map<
@@ -269,28 +455,53 @@ export const POST = wrapRouteHandlerWithLogging(
             >();
 
             for await (const event of deltaStream) {
+              // Guard: stop writing if client aborted
+              if (request.signal.aborted) break;
+
               if (event.type === "text_delta") {
                 controller.appendText(event.delta);
               } else if (event.type === "tool_call_start") {
                 // MVP: Stream tool lifecycle to UI
+                // NOTE: Do NOT pass args to addToolCallPart - it closes argsText immediately,
+                // causing setResponse() to fail (double-close). Manually append args instead.
+                ctx.log.info(
+                  { toolCallId: event.toolCallId, toolName: event.toolName },
+                  "tool_call_start received, creating controller"
+                );
                 const toolCtrl = controller.addToolCallPart({
                   toolCallId: event.toolCallId,
                   toolName: event.toolName,
-                  args: event.args as Parameters<
-                    typeof controller.addToolCallPart
-                  >[0] extends { args: infer A }
-                    ? A
-                    : never,
                 });
+                // Stream args text without closing (finalizeToolCall will close)
+                if (event.args != null) {
+                  // Invariant: assistant-stream must provide argsText.append
+                  if (typeof toolCtrl.argsText?.append !== "function") {
+                    throw new Error(
+                      "assistant-stream API contract violated: toolCtrl.argsText.append is not a function"
+                    );
+                  }
+                  toolCtrl.argsText.append(JSON.stringify(event.args));
+                }
                 toolCallControllers.set(event.toolCallId, toolCtrl);
               } else if (event.type === "tool_call_result") {
-                // Set tool result (completes the tool call in UI)
                 const toolCtrl = toolCallControllers.get(event.toolCallId);
-                toolCtrl?.setResponse({
-                  result: event.result as Parameters<
-                    NonNullable<typeof toolCtrl>["setResponse"]
-                  >[0]["result"],
-                });
+                if (!toolCtrl) {
+                  ctx.log.warn(
+                    { toolCallId: event.toolCallId },
+                    "tool_call_result without matching tool_call_start"
+                  );
+                  continue;
+                }
+                await finalizeToolCall(
+                  toolCtrl,
+                  event.toolCallId,
+                  event.result as ReadonlyJSONValue,
+                  request.signal.aborted
+                );
+                ctx.log.info(
+                  { toolCallId: event.toolCallId },
+                  "tool_call_result completed"
+                );
               }
             }
 

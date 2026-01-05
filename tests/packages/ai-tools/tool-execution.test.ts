@@ -33,10 +33,10 @@ async function executeToolWithValidation<
 ): Promise<{ ok: true; value: TRedacted } | { ok: false; error: string }> {
   const { contract, implementation } = tool;
 
-  // 1. Validate input
+  // 1. Validate input via Zod schema
   let validatedInput: TInput;
   try {
-    validatedInput = contract.validateInput(rawArgs);
+    validatedInput = contract.inputSchema.parse(rawArgs) as TInput;
   } catch (err) {
     return {
       ok: false,
@@ -55,10 +55,10 @@ async function executeToolWithValidation<
     };
   }
 
-  // 3. Validate output
+  // 3. Validate output via Zod schema
   let validatedOutput: TOutput;
   try {
-    validatedOutput = contract.validateOutput(rawOutput);
+    validatedOutput = contract.outputSchema.parse(rawOutput) as TOutput;
   } catch (err) {
     return {
       ok: false,
@@ -95,18 +95,18 @@ describe("ai-tools integration: tool execution lifecycle", () => {
     }
   });
 
-  it("handles null/undefined args gracefully", async () => {
+  it("rejects null/undefined args (Zod strict validation)", async () => {
     const resultNull = await executeToolWithValidation(
       getCurrentTimeBoundTool,
       null
     );
-    expect(resultNull.ok).toBe(true);
+    expect(resultNull.ok).toBe(false);
 
     const resultUndefined = await executeToolWithValidation(
       getCurrentTimeBoundTool,
       undefined
     );
-    expect(resultUndefined.ok).toBe(true);
+    expect(resultUndefined.ok).toBe(false);
   });
 
   it("returns error for invalid input", async () => {

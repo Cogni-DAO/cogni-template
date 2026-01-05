@@ -11,6 +11,13 @@
  * @public
  */
 
+// Schema compilation
+export {
+  type ToToolSpecResult,
+  type ToToolSpecsResult,
+  toToolSpec,
+  toToolSpecs,
+} from "./schema";
 // Tools
 export {
   GET_CURRENT_TIME_NAME,

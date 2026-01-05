@@ -6,6 +6,7 @@
     { "path": "./packages/ai-core" },
     { "path": "./packages/ai-tools" },
     { "path": "./packages/aragon-osx" },
-    { "path": "./packages/cogni-contracts" }
+    { "path": "./packages/cogni-contracts" },
+    { "path": "./packages/langgraph-graphs" }
   ]
 }

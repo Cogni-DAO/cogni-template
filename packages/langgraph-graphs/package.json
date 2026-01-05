@@ -1,5 +1,5 @@
 {
-  "name": "@cogni/ai-tools",
+  "name": "@cogni/langgraph-graphs",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -8,6 +8,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime/index.d.ts",
+      "import": "./dist/runtime/index.js"
+    },
+    "./graphs": {
+      "types": "./dist/graphs/index.d.ts",
+      "import": "./dist/graphs/index.js"
     }
   },
   "types": "./dist/index.d.ts",
@@ -23,10 +31,11 @@
     "test:ci": "vitest run --config vitest.config.ts"
   },
   "dependencies": {
+    "@langchain/core": "^1.1.8",
+    "@langchain/langgraph": "^1.0.7",
     "@cogni/ai-core": "workspace:*",
-    "@types/json-schema": "^7.0.15",
-    "zod": "^3.24.1",
-    "zod-to-json-schema": "^3.24.1"
+    "@cogni/ai-tools": "workspace:*",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "tsup": "^8.5.1",

@@ -12,6 +12,8 @@
  * @public
  */
 
+import { z } from "zod";
+
 import type { Message, MessageToolCall } from "@/core";
 import type {
   AiEvent,
@@ -45,6 +47,30 @@ export interface TestToolRedacted {
   result: string;
 }
 
+// Schemas for test tools
+const TestToolInputSchema = z.object({
+  value: z.string(),
+});
+
+const TestToolOutputSchema = z.object({
+  result: z.string(),
+  secret: z.string(),
+});
+
+// Throwing variants for error testing
+const ThrowingInputSchema = z
+  .object({
+    value: z.string(),
+  })
+  .refine(() => false, { message: "Input validation failed" });
+
+const ThrowingOutputSchema = z
+  .object({
+    result: z.string(),
+    secret: z.string(),
+  })
+  .refine(() => false, { message: "Output validation failed" });
+
 /**
  * Create a test tool contract with configurable behavior.
  */
@@ -59,26 +85,13 @@ export function createTestToolContract(
   const name = options.name ?? TEST_TOOL_NAME;
   return {
     name,
-    validateInput: (input: unknown): TestToolInput => {
-      if (options.validateInputThrows) {
-        throw new Error("Input validation failed");
-      }
-      const obj = input as Record<string, unknown>;
-      if (typeof obj?.value !== "string") {
-        throw new Error("Missing required field: value");
-      }
-      return { value: obj.value };
-    },
-    validateOutput: (output: unknown): TestToolOutput => {
-      if (options.validateOutputThrows) {
-        throw new Error("Output validation failed");
-      }
-      const obj = output as Record<string, unknown>;
-      return {
-        result: String(obj?.result ?? ""),
-        secret: String(obj?.secret ?? ""),
-      };
-    },
+    description: "A test tool for testing",
+    inputSchema: options.validateInputThrows
+      ? ThrowingInputSchema
+      : TestToolInputSchema,
+    outputSchema: options.validateOutputThrows
+      ? ThrowingOutputSchema
+      : TestToolOutputSchema,
     redact: (output: TestToolOutput): TestToolRedacted => {
       return { result: output.result };
     },

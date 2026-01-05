@@ -198,6 +198,8 @@
         "packages/ai-tools/vitest.config.ts",
         "packages/aragon-osx/tsup.config.ts",
         "packages/cogni-contracts/tsup.config.ts",
+        "packages/langgraph-graphs/tsup.config.ts",
+        "packages/langgraph-graphs/vitest.config.ts",
         "vitest.workspace.ts"
       ],
       "linter": {

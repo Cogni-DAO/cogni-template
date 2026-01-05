@@ -91,10 +91,10 @@ export function createToolRunner<
 
     const { contract, implementation } = boundTool;
 
-    // 1. Validate args
+    // 1. Validate args via inputSchema
     let validatedInput: unknown;
     try {
-      validatedInput = contract.validateInput(rawArgs);
+      validatedInput = contract.inputSchema.parse(rawArgs);
     } catch (err) {
       const safeMessage =
         err instanceof Error ? err.message : "Invalid tool arguments";
@@ -142,10 +142,10 @@ export function createToolRunner<
       };
     }
 
-    // 3. Validate result
+    // 3. Validate result via outputSchema
     let validatedOutput: unknown;
     try {
-      validatedOutput = contract.validateOutput(rawOutput);
+      validatedOutput = contract.outputSchema.parse(rawOutput);
     } catch (err) {
       const safeMessage =
         err instanceof Error ? err.message : "Invalid tool output";

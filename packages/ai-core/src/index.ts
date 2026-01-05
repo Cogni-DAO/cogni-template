@@ -26,5 +26,13 @@ export type {
   ToolCallStartEvent,
   UsageReportEvent,
 } from "./events/ai-events";
+// Tooling types
+export type {
+  RedactionMode,
+  ToolErrorCode,
+  ToolInvocationRecord,
+  ToolRedactionConfig,
+  ToolSpec,
+} from "./tooling/types";
 // Usage types
 export type { ExecutorType, UsageFact } from "./usage/usage";

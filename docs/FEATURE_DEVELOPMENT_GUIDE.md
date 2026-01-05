@@ -4,11 +4,27 @@
 
 Every non-trivial feature follows:
 **contracts → core → ports → features → adapters → app → UI**.
-Imports point inward only.
+Imports point inward only. `packages/` are external libraries (like npm deps) — they never import from `src/`.
 
 ## Layer Import Policy
 
 See [ARCHITECTURE.md Enforcement Rules](ARCHITECTURE.md#enforcement-rules) for canonical import patterns and entry points.
+
+## Packages
+
+Internal packages under `packages/` are treated like external npm dependencies:
+
+| Package                   | Purpose                                                           |
+| ------------------------- | ----------------------------------------------------------------- |
+| `@cogni/ai-core`          | AI primitives: AiEvent, UsageFact, ToolSpec, ToolInvocationRecord |
+| `@cogni/ai-tools`         | Tool contracts and pure implementations                           |
+| `@cogni/langgraph-graphs` | LangGraph runtime, graph factories                                |
+| `@cogni/cogni-contracts`  | Smart contract ABIs and types                                     |
+| `@cogni/aragon-osx`       | Aragon DAO/OSx integration                                        |
+
+Packages may import from each other and external deps. Never from `src/`.
+
+All AI functionality in `src/` must flow through ports (`GraphExecutorPort`, `LlmCaller`) for billing and telemetry.
 
 ## Minimal Feature Workflow (Gated)
 
@@ -50,12 +66,15 @@ For any new UI components, follow the [UI Implementation Guide](UI_IMPLEMENTATIO
 
 **Route**: `app/api/<feature>/<action>/route.ts` importing the contract and feature service only.
 
+**Package module**: `packages/<pkg>/src/<domain>/<name>.ts` with barrel export via subpath.
+
 ## Prohibited Shortcuts
 
 - [ ] No app or features importing from adapters.
 - [ ] No adapter importing from app, features, or UI.
 - [ ] No business logic in routes, adapters, or UI.
 - [ ] No UI accessing ports directly.
+- [ ] No packages importing from `src/`.
 
 ## Docs Anchors
 

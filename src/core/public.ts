@@ -38,7 +38,12 @@ export {
   usdCentsToCredits,
   usdToCredits,
 } from "./billing/pricing";
-export type { Conversation, Message, MessageRole } from "./chat/model";
+export type {
+  Conversation,
+  Message,
+  MessageRole,
+  MessageToolCall,
+} from "./chat/model";
 export {
   assertMessageLength,
   ChatErrorCode,
