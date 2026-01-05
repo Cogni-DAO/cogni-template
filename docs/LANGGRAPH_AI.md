@@ -93,11 +93,38 @@ import {
 13. **CORRELATION_ID_PROPAGATION**: Adapters must use `req.caller.traceId` and `req.ingressRequestId` from GraphRunRequest. Never generate new trace/request IDs in adapters or runners.
 14. **ASSISTANT_FINAL_REQUIRED**: All executors must emit exactly one `assistant_final` event per run with the complete assistant response. Required for USAGE_HISTORY persistence. InProc extracts from graph state; Server extracts from final SDK message.
 
+15. **SUBSCRIBER_FANOUT_NON_BLOCKING**: RunEventRelay fans out via per-subscriber bounded queues. Slow subscribers (History, Billing) never block UI streaming. Each subscriber runs to completion independently.
+
+---
+
+## P0 Persistence Integration
+
+> **Principle:** Prove runner correctness (AiEvent sequence) before persistence infrastructure.
+
+Persistence is handled by parallel stream subscribers—runner owns event emission, not storage:
+
+| Subscriber            | Event              | Action                                      |
+| --------------------- | ------------------ | ------------------------------------------- |
+| **BillingSubscriber** | `usage_report`     | `commitUsageFact()` → charge_receipts       |
+| **HistorySubscriber** | `assistant_final`  | `persistArtifact()` → run_artifacts (cache) |
+| **UI Subscriber**     | `text_delta`, etc. | Forward to client (may disconnect)          |
+
+**Key contracts from [USAGE_HISTORY.md](USAGE_HISTORY.md):**
+
+- **NO_DELTA_STORAGE**: P0 persists only user input + assistant final output. No streaming deltas.
+- **ARTIFACTS_ARE_CACHE**: `run_artifacts` is best-effort transcript cache, not source of truth. For `langgraph_server`, LangGraph owns canonical thread state.
+- **REDACT_BEFORE_PERSIST**: Masking applied before `content_hash` computation and storage. Single redaction boundary.
+- **TENANT_SCOPED**: All artifacts include `account_id`. RLS enforces isolation. `UNIQUE(account_id, run_id, artifact_key)` for idempotency.
+
+**Runner responsibility:** Emit `assistant_final` with complete content. HistoryWriter persists directly—no delta assembly required.
+
 ---
 
 ## InProc Execution Path
 
-InProc executes LangGraph within the Next.js process with billing through the adapter layer.
+InProc executes LangGraph within the Next.js server runtime with billing through the adapter layer.
+
+> **Scaling limitation:** InProc runs inside the Next.js Node.js process. Long-running graph executions consume server resources and block the event loop during LLM calls. P0 accepts this tradeoff for simplicity. P2+ moves execution to a worker service for horizontal scaling.
 
 ### Data Flow
 
@@ -134,7 +161,9 @@ InProc executes LangGraph within the Next.js process with billing through the ad
 
 ### CompletionUnitLLM
 
-`CompletionUnitLLM` (`runtime/completion-unit-llm.ts`) is a LangChain `BaseChatModel` wrapper that routes LLM calls through injected `CompletionFn`:
+`CompletionUnitLLM` (`runtime/completion-unit-llm.ts`) is a LangChain `BaseChatModel` wrapper that routes LLM calls through injected `CompletionFn`.
+
+> **Canonical location:** `CompletionFn`, `CompletionResult`, `Message`, and `MessageToolCall` are currently defined in `@cogni/langgraph-graphs/runtime/completion-unit-llm.ts`. This is tech debt—ideally these types belong in `@cogni/ai-core` per package structure. P0 accepts current location; migration tracked in checklist.
 
 ```typescript
 export class CompletionUnitLLM extends BaseChatModel {
@@ -189,45 +218,13 @@ export function createInProcChatRunner(opts: {
 
 ---
 
-## Server Execution Path
+## Server Execution Path (P1 — Deferred)
 
-Server path calls external LangGraph Agent Server via SDK. See [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) for infrastructure details.
+Server path is deferred until InProc proves correctness. See [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) for infrastructure details.
 
-### Data Flow
+**Summary:** LangGraphServerAdapter calls external LangGraph Server via SDK. Server owns thread state/checkpoints and routes LLM through LiteLLM proxy.
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│ Facade / AI Runtime                                                  │
-│ - Creates GraphRunRequest with messages, model, caller               │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ LangGraphServerAdapter                                               │
-│ - Derives tenant-scoped thread_id (UUIDv5)                           │
-│ - Calls SDK client.runs.stream()                                     │
-│ - Translates messages-tuple chunks → AiEvents                        │
-│ - Emits usage_report with accumulated tokens                         │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ LangGraph Server (External Process)                                  │
-│ - Executes graph, owns thread state/checkpoints                      │
-│ - Routes LLM calls through LiteLLM proxy                             │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### Billing Contract Divergence (P0 Known Issue)
-
-| Field                       | InProc | Server |
-| --------------------------- | ------ | ------ |
-| usageUnitId (litellmCallId) | Yes    | No     |
-| costUsd                     | Yes    | No     |
-| model (resolved)            | Yes    | No     |
-| inputTokens / outputTokens  | Yes    | Yes    |
-
-**Decision needed:** Mark server path non-reconcilable for P0, OR enhance server to emit full billing facts.
+**P0 blocker:** Server lacks billing-grade `UsageFact` fields (`usageUnitId`, `costUsd`, resolved `model`). Cannot be customer-billable path until resolved.
 
 ---
 
@@ -324,26 +321,15 @@ const tools = toLangChainTools({
 
 ### LangChain Tool Wrapping
 
-```typescript
-// packages/langgraph-graphs/src/runtime/langchain-tools.ts
-type ToolExecFn = (params: {
-  toolName: string;
-  args: unknown;
-  toolCallId: string;
-}) => Promise<ToolExecResult>;
+`toLangChainTool()` wraps contracts for LangGraph execution. The exec function routes through `toolRunner.exec()` for validation, redaction, and event emission.
 
-export function toLangChainTool(opts: {
-  contract: ToolContract;
-  exec: ToolExecFn;
-}): StructuredToolInterface;
+**toolCallId handling:**
 
-export function toLangChainTools(opts: {
-  contracts: ToolContract[];
-  exec: ToolExecFn;
-}): StructuredToolInterface[];
-```
+- **P0**: `toolRunner.exec()` generates UUID if model's `tool_call_id` not provided
+- **Invariant**: `TOOLCALLID_STABLE` — same ID across `tool_call_start` → `tool_call_result`
+- **Deferred**: Model `tool_call_id` propagation from LangChain callback context (not impossible, just not P0)
 
-**Note:** Wrapper generates `toolCallId` per invocation and passes it to `exec`. No `eventSink` — toolRunner owns event emission via the `emit` callback bound at runner level.
+**Event emission:** No `eventSink` in wrapper — toolRunner owns event emission via the `emit` callback bound at runner level.
 
 ---
 
@@ -368,102 +354,99 @@ The `langgraph-server` package re-exports graphs from `@cogni/langgraph-graphs/g
 
 ## Implementation Checklist
 
-### P0: Package Foundation (Phase 1 — Current)
+> **Principle:** Prove correctness (runner emits right AiEvents) before infra (worker/queue/persistence).
+
+### P0: Package Foundation (Phase 1 — ✅ Complete)
 
 **@cogni/ai-core canonical types:**
 
 - [x] `AiEvent` union type (events/ai-events.ts)
 - [x] `UsageFact`, `ExecutorType` (usage/usage.ts)
-- [ ] `CompletionFn`, `CompletionResult` — **tech debt: currently defined in langgraph-graphs**
-- [ ] `Message`, `MessageToolCall` — **tech debt: currently defined in langgraph-graphs**
+- [ ] `CompletionFn`, `CompletionResult` — **tech debt: defined in langgraph-graphs**
+- [ ] `Message`, `MessageToolCall` — **tech debt: defined in langgraph-graphs**
 
 **@cogni/langgraph-graphs package structure:**
 
 - [x] Package scaffolding (package.json, tsconfig.json, tsup.config.ts, vitest.config.ts)
-- [x] Root tsconfig.json project reference added
-- [x] Root package.json workspace dependency added
-- [x] Biome noDefaultExport override for config files
-- [x] Dependency-cruiser rule: PACKAGES_NO_SRC_IMPORTS (`:365-375`)
-- [x] Biome rule: NO_LANGCHAIN_IN_SRC (via noRestrictedImports `:68-69`)
+- [x] Biome rule: NO_LANGCHAIN_IN_SRC (via noRestrictedImports)
+- [x] Dependency-cruiser rule: PACKAGES_NO_SRC_IMPORTS
 
-**Runtime utilities (`/runtime` subpath):**
+**Runtime utilities (`/runtime` subpath) — ✅ Complete:**
 
 - [x] `CompletionUnitLLM` — BaseChatModel wrapper with injected CompletionFn
 - [x] `toBaseMessage()` / `fromBaseMessage()` — Message format converters
 - [x] `toLangChainTool()` / `toLangChainTools()` — Tool contract → StructuredTool wrappers
-- [x] `AsyncQueue` — Sync-push async-iterate queue for invoke() pattern
+- [x] `AsyncQueue` — Sync-push async-iterate queue (5 unit tests passing)
 
-**Graph factories (`/graphs` subpath):**
+**Graph factories (`/graphs` subpath) — ✅ Complete:**
 
-- [x] `createChatGraph(llm, tools)` — React agent factory
+- [x] `createChatGraph(llm, tools)` — React agent factory using createReactAgent
 - [x] `CHAT_GRAPH_NAME` constant
 
-**Tests:**
+### P0: InProc Runner (Phase 2 — Current)
 
-- [x] AsyncQueue unit tests (5 passing)
-- [ ] CompletionUnitLLM unit tests
-- [ ] Message converter unit tests
-- [ ] Tool wrapper unit tests
+**Implementation sequence:**
 
-### P0: InProc Execution Path (Phase 2)
+1. **Phase 2a: Package smoke test**
+   - [ ] Create `/inproc` subpath export in package.json
+   - [ ] Implement `createInProcChatRunner()` in `packages/langgraph-graphs/src/inproc/runner.ts`
+   - [ ] Add conformance test: verify AiEvent sequence (`text_delta`\*, `usage_report`, `assistant_final`, `done`)
+   - [ ] Verify exactly one `assistant_final` event per run
 
-> **✅ RESOLVED:** Removed depcruiser rule `no-src-to-langgraph-graphs`.
-> NO_LANGCHAIN_IN_SRC is enforced via Biome `noRestrictedImports` which blocks
-> `@langchain/**` imports in `src/`. The adapter layer (`src/adapters/server/ai/`)
-> CAN import from `@cogni/langgraph-graphs` — only the LangChain packages themselves are blocked.
+2. **Phase 2b: Route wiring (non-throwaway)**
+   - [ ] Wire via `graphResolver` in bootstrap factory
+   - [ ] Route stays pure translator (AiEvent → assistant-stream)
+   - [ ] Add grep test: `@langchain` only in `packages/langgraph-graphs/`
+   - [ ] Delete deprecated `executeChatGraph()` after E2E passes
 
-- [x] Resolve depcruiser rule conflict (removed rule, Biome enforces NO_LANGCHAIN_IN_SRC)
-- [ ] Create `/inproc` subpath export in package.json
-- [ ] Implement `createInProcChatRunner()` in `packages/langgraph-graphs/src/inproc/runner.ts`
-- [ ] Create `langgraph-runner.ts` thin adapter in `src/` (NO `@langchain` imports)
-- [ ] Wire `createLangGraphRunner()` in bootstrap factory
-- [ ] Add grep test: `@langchain` only in `packages/langgraph-graphs/`
+3. **Phase 2c: Tool events**
+   - [ ] Wire `toolExec` via `createToolExecFn` factory pattern
+   - [ ] Add stack test: `tool_call_start`/`tool_call_result` events emitted
 
-### P0: Server Path (Phase 3)
+**Deferred (Phase 2d+):**
 
-- [ ] Create `LangGraphServerAdapter` implementing `GraphExecutorPort`
-- [ ] Implement `thread_id` derivation (UUIDv5, tenant-scoped)
-- [ ] Implement SDK streaming with usage accumulation
-- [ ] Resolve billing contract divergence (missing usageUnitId/costUsd)
+- [ ] DB persistence (`ai_runs` + `ai_run_events` tables)
+- [ ] Worker service (move execution off Next.js)
 
-### P0: InProc Token Streaming (SINGLE_AIEVENT_CONTRACT)
+### P1: Server Path (Deferred)
 
-InProc uses `graph.invoke()` + AsyncQueue pattern (NOT `streamEvents`). Tokens flow from `CompletionUnitLLM` → queue → AiEvent yield. Server keeps SDK SSE streaming.
+Server path is deferred until InProc proves correctness. See [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md).
+
+**Known billing gap:** Server lacks `usageUnitId` and `costUsd` from LiteLLM headers. Cannot be customer-billable until resolved.
+
+### P0: Token Streaming Notes
+
+InProc uses `graph.invoke()` + AsyncQueue pattern (NOT `streamEvents`). Token flow:
+
+- `CompletionUnitLLM._generate()` → `tokenSink.push()` (sync) → AsyncQueue → yield AiEvent
+- P0 common subset: `text_delta`, `usage_report`, `assistant_final`, `done`
+- Tool events (`tool_call_start`, `tool_call_result`) are InProc-only for P0
 
 **Translation Ownership:**
 
-| Component             | Owns                                                                        | Shared Helpers                                                        |
-| --------------------- | --------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| **Server Adapter**    | Maps SDK chunks → AiEvent (SDK handles SSE parsing)                         | Content extraction, AiEvent constructors                              |
-| **InProc Runner**     | Token queue lifecycle, `invoke()` orchestration, `assistant_final` emission | Content extraction, AiEvent constructors                              |
-| **Shared (runtime/)** | —                                                                           | `extractTextContent()`, `createTextDeltaEvent()`, `accumulateUsage()` |
+| Component             | Owns                                                                        |
+| --------------------- | --------------------------------------------------------------------------- |
+| **Server Adapter**    | Maps SDK chunks → AiEvent (SDK handles SSE parsing)                         |
+| **InProc Runner**     | Token queue lifecycle, `invoke()` orchestration, `assistant_final` emission |
+| **Shared (runtime/)** | `extractTextContent()`, `createTextDeltaEvent()`, `accumulateUsage()`       |
 
-**Token Flow:**
-
-- InProc: `CompletionUnitLLM._generate()` → `tokenSink.push()` (sync) → AsyncQueue → yield AiEvent
-- Server: SDK `client.runs.stream()` → SDK chunk → `mapChunkToAiEvent()` → yield AiEvent
-- P0 common subset: `text_delta`, `usage_report`, `assistant_final`, `done` (tool events InProc-only)
-
-**Remaining:**
-
-- [ ] Factor shared helper functions: `extractTextContent()`, `accumulateUsage()`
-- [ ] Add conformance test: same prompt → both paths emit comparable AiEvent sequences
-- [ ] Verify stack tests: `text_delta` events appear BEFORE `done` event
-
-### P0: Tool Support
+### P0: Tool Support (✅ Infrastructure Complete)
 
 - [x] Create `packages/ai-tools` package (NO `@langchain`, NO `src` imports)
 - [x] Move tool contracts + pure implementations to `packages/ai-tools`
 - [x] Create `toLangChainTool()` wrapper in `packages/langgraph-graphs/src/runtime/`
 - [x] Update `createChatGraph(llm, tools)` to accept injected tools
-- [ ] Wire `toolExec` function in `langgraph-runner.ts` (passes to package APIs)
-- [ ] Add stack test: tool_call_start/tool_call_result events emitted
 
-### P1: Multi-Graph Support
+Remaining wiring tracked in Phase 2c above.
 
-- [ ] Add second graph type to prove pattern
-- [ ] Document graph registration workflow
-- [ ] Add eval harness for graph comparison
+### P1+: Future Work
+
+- [ ] Multi-graph support (add second graph type to prove pattern)
+- [ ] Server path billing parity (usageUnitId, costUsd from LiteLLM headers)
+- [ ] Durable event log (`ai_run_events` table for replay)
+- [ ] Worker service (move execution off Next.js)
+- [ ] Shared helper extraction: `extractTextContent()`, `accumulateUsage()`
+- [ ] Conformance test: same prompt → both paths emit comparable AiEvent sequences
 
 ---
 
@@ -499,5 +482,5 @@ InProc uses `graph.invoke()` + AsyncQueue pattern (NOT `streamEvents`). Tokens f
 
 ---
 
-**Last Updated**: 2026-01-04
-**Status**: Draft (Rev 9 - Phase 2 InProc runner implementation in progress)
+**Last Updated**: 2026-01-05
+**Status**: Draft (Rev 10 - Phase 1 complete, Phase 2 implementation sequence defined)

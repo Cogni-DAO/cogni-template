@@ -87,6 +87,17 @@ One canonical way to run LangGraph graphs (dev, container, hosted) such that:
 
 18. **USAGE_EMIT_ON_FINAL_ONLY**: For `langgraph_server`, emit `usage_report` only at completion (after final LLM response). If usage/cost unavailable, complete UI response but emit `billing_failed` metric and mark run unbilled for reconciliation. Never fail user-visible response due to missing billing data.
 
+**Billing Contract Divergence (P0 Known Issue):**
+
+| Field                       | InProc | Server | Notes                              |
+| --------------------------- | ------ | ------ | ---------------------------------- |
+| usageUnitId (litellmCallId) | Yes    | No     | Requires `x-litellm-call-id`       |
+| costUsd                     | Yes    | No     | Requires `x-litellm-response-cost` |
+| model (resolved)            | Yes    | No     | Requires resolved model from proxy |
+| inputTokens / outputTokens  | Yes    | Yes    | Available from response body       |
+
+**P0 decision:** Server path is internal/experimental only. Cannot be customer-billable until billing parity achieved.
+
 ### Type Translation
 
 19. **AI_CORE_IS_CANONICAL_OUTPUT**: The adapter emits only ai-core events (P0):
@@ -565,5 +576,5 @@ When this spec is implemented, you can validate quickly:
 
 ---
 
-**Last Updated**: 2025-12-29
-**Status**: Draft (P0 Design) — External Runtime + SDK-based streaming
+**Last Updated**: 2026-01-05
+**Status**: Draft (P0 Design) — External Runtime + SDK-based streaming; billing parity gap documented
