@@ -25,7 +25,7 @@ import type { aiCompletionOperation } from "@/contracts/ai.completion.v1.contrac
 import { mapAccountsPortErrorToFeature } from "@/features/accounts/public";
 // Import from public.server.ts - never from services/* directly (dep-cruiser enforced)
 import {
-  createChatRunner,
+  createLangGraphChatRunner,
   type MessageDto,
   toCoreMessages,
 } from "@/features/ai/public.server";
@@ -128,12 +128,12 @@ export async function completionStream(
   const { accountService, clock } = resolveAiAdapterDeps();
   const { executeStream } = await import("@/features/ai/public.server");
 
-  // Build graph resolver: "chat" → chat runner, else undefined (falls back to default)
-  // Resolver receives adapter from bootstrap, facade imports createChatRunner from features
+  // Build graph resolver: "chat" → LangGraph runner, else undefined (falls back to default)
+  // Resolver receives adapter from bootstrap, facade imports runner from features
   const graphResolver = (
     graphName: string,
-    adapter: Parameters<typeof createChatRunner>[0]
-  ) => (graphName === "chat" ? createChatRunner(adapter) : undefined);
+    adapter: Parameters<typeof createLangGraphChatRunner>[0]
+  ) => (graphName === "chat" ? createLangGraphChatRunner(adapter) : undefined);
 
   // Create graph executor via bootstrap factory with resolver
   const graphExecutor = createInProcGraphExecutor(executeStream, graphResolver);

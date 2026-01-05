@@ -34,10 +34,12 @@ export interface ToolExecResult {
 /**
  * Exec function signature for tool execution.
  * Injected at runtime — routes through toolRunner for validation/redaction.
+ * toolCallId is optional — toolRunner generates if not provided (per TOOLCALLID_STABLE).
  */
 export type ToolExecFn = (
   name: string,
-  args: unknown
+  args: unknown,
+  toolCallId?: string
 ) => Promise<ToolExecResult>;
 
 /**
@@ -91,7 +93,9 @@ export function toLangChainTool(
     description: contract.description,
     schema: contract.inputSchema,
     func: async (args: unknown): Promise<string> => {
-      const result = await exec(contract.name, args);
+      // P0: toolRunner generates canonical toolCallId (per TOOLCALLID_STABLE)
+      // P1: extract providerToolCallId from AIMessage.tool_calls in runner layer
+      const result = await exec(contract.name, args, undefined);
 
       if (result.ok) {
         return JSON.stringify(result.value);

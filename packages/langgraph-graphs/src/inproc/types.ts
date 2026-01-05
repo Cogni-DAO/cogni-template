@@ -16,11 +16,14 @@
 import type { AiEvent } from "@cogni/ai-core";
 import type { ToolContract } from "@cogni/ai-tools";
 
-import type { CompletionFn } from "../runtime/completion-unit-llm";
+import type {
+  CompletionFn,
+  CompletionResult,
+} from "../runtime/completion-unit-llm";
 import type { Message } from "../runtime/message-converters";
 
 // Re-export for convenience
-export type { CompletionFn, Message };
+export type { CompletionFn, CompletionResult, Message };
 
 /**
  * Result from tool execution via exec function.
@@ -36,10 +39,14 @@ export interface ToolExecResult {
 /**
  * Tool execution function signature.
  * Called by LangChain tool wrapper, routes through toolRunner.
+ *
+ * Per TOOLCALLID_STABLE: toolRunner generates canonical toolCallId if undefined.
+ * P1 will add providerToolCallId from AIMessage.tool_calls for correlation.
  */
 export type ToolExecFn = (
   name: string,
-  args: unknown
+  args: unknown,
+  toolCallId?: string
 ) => Promise<ToolExecResult>;
 
 /**

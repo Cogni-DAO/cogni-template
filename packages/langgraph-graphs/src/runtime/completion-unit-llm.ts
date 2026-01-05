@@ -23,8 +23,12 @@ import {
 import type { BaseMessage } from "@langchain/core/messages";
 import { AIMessage } from "@langchain/core/messages";
 import type { ChatGenerationChunk, ChatResult } from "@langchain/core/outputs";
+import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 
 import { fromBaseMessage, type Message } from "./message-converters";
+
+/** OpenAI tool format - matches LlmToolDefinition in ports */
+type OpenAIToolDef = ReturnType<typeof convertToOpenAITool>;
 
 /**
  * Completion function signature injected from adapter.
@@ -85,6 +89,8 @@ export class CompletionUnitLLM extends BaseChatModel {
   private completionFn: CompletionFn;
   private modelId: string;
   private tokenSink?: TokenSink;
+  /** Bound tools in OpenAI format, set via bindTools() */
+  private boundTools?: OpenAIToolDef[];
   private collectedUsage: {
     promptTokens: number;
     completionTokens: number;
@@ -97,12 +103,14 @@ export class CompletionUnitLLM extends BaseChatModel {
   constructor(
     completionFn: CompletionFn,
     modelId: string,
-    tokenSink?: TokenSink
+    tokenSink?: TokenSink,
+    boundTools?: OpenAIToolDef[]
   ) {
     super({});
     this.completionFn = completionFn;
     this.modelId = modelId;
     this.tokenSink = tokenSink;
+    this.boundTools = boundTools;
   }
 
   _llmType(): string {
@@ -122,11 +130,13 @@ export class CompletionUnitLLM extends BaseChatModel {
     const appMessages = messages.map(fromBaseMessage);
 
     // Call completion function with abort signal per CANCEL_PROPAGATION
+    // Per TOOLS_VIA_BINDTOOLS: pass bound tools to completionFn
     const { stream, final } = this.completionFn({
       messages: appMessages,
       model: this.modelId,
       abortSignal: options?.signal,
-      // Tools are handled by LangGraph, not passed here
+      ...(this.boundTools &&
+        this.boundTools.length > 0 && { tools: this.boundTools }),
     });
 
     // Drain stream, pushing tokens to sink (SYNC!)
@@ -151,12 +161,13 @@ export class CompletionUnitLLM extends BaseChatModel {
     }
 
     // Build AIMessage from result
+    // Default empty arguments to "{}" to handle tools with no parameters
     const aiMessage = new AIMessage({
       content: result.content ?? "",
       tool_calls: result.toolCalls?.map((tc) => ({
         id: tc.id,
         name: tc.name,
-        args: JSON.parse(tc.arguments) as Record<string, unknown>,
+        args: JSON.parse(tc.arguments || "{}") as Record<string, unknown>,
         type: "tool_call" as const,
       })),
     });
@@ -209,14 +220,23 @@ export class CompletionUnitLLM extends BaseChatModel {
 
   /**
    * Bind tools to this model instance.
-   * Required by LangGraph for tool-using agents.
-   * Note: Tools are handled by LangGraph agent, not passed to completion.
+   * Converts LangChain tools to OpenAI format and returns a new instance.
+   * Per TOOLS_VIA_BINDTOOLS: bound tools are passed to completionFn in _generate().
    */
   bindTools(
-    _tools: unknown[],
+    tools: unknown[],
     _kwargs?: Partial<BaseChatModelCallOptions>
   ): this {
-    // Tools are handled by LangGraph agent, not passed to completion
-    return this;
+    // Convert LangChain tools to OpenAI function-calling format
+    const openAITools = tools.map((tool) =>
+      convertToOpenAITool(tool as Parameters<typeof convertToOpenAITool>[0])
+    );
+    // Return new instance with tools bound (immutable pattern per LangChain convention)
+    return new CompletionUnitLLM(
+      this.completionFn,
+      this.modelId,
+      this.tokenSink,
+      openAITools
+    ) as this;
   }
 }
