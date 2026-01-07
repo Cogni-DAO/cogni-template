@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-23
+- **Last reviewed:** 2026-01-07
 - **Status:** stable
 
 ## Purpose
@@ -32,11 +32,14 @@ Graph runner factories for MVP tool use. Creates thin wrappers around graph exec
 
 ## Public Surface
 
-- **Exports:** `createChatRunner` (factory for chat graph runner)
+- **Exports:**
+  - `createChatRunner` — Factory for MVP chat graph runner
+  - `createLangGraphChatRunner` — Factory for LangGraph InProc runner with tool calling
+  - `CompletionUnitAdapter` — Interface for completion unit execution
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** chat.runner.ts (exported via public.server.ts)
+- **Files considered API:** chat.runner.ts, langgraph-chat.runner.ts (exported via public.server.ts)
 
 ## Ports
 
@@ -89,6 +92,6 @@ const graphResolver = (graphName, adapter) =>
 
 ## Notes
 
-- MVP: Only chat runner exists (will be replaced by @cogni/langgraph-graphs)
-- Per LANGGRAPH_OWNS_GRAPHS: Migrating to LangGraph package graphs
+- Two runners: `chat.runner.ts` (MVP), `langgraph-chat.runner.ts` (LangGraph InProc)
 - Resolver receives adapter at call time (solves circular dependency)
+- **P1 arch debt**: `langgraph-chat.runner.ts` contains LangGraph-specific wiring that belongs in adapters layer. See [LANGGRAPH_AI.md Known Issues](../../../../docs/LANGGRAPH_AI.md#known-issues) for split plan.

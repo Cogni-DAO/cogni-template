@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-05
+- **Last reviewed:** 2026-01-07
 - **Status:** draft
 
 ## Purpose
@@ -43,8 +43,13 @@ LangGraph graph definitions and runtime utilities for agentic AI execution. Cont
 
 - **Exports (subpaths):**
   - `@cogni/langgraph-graphs` — Barrel re-export of common types
+  - `@cogni/langgraph-graphs/inproc` — InProc execution runner:
+    - `createInProcChatRunner()` — InProc graph runner factory for Next.js server runtime
+    - `InProcRunnerOptions`, `InProcGraphRequest`, `GraphResult` — Runner types
+    - `CompletionFn`, `CompletionResult` — Injected completion function types
+    - `ToolExecFn`, `ToolExecResult` — Tool execution types
   - `@cogni/langgraph-graphs/runtime` — LangChain utilities:
-    - `toLangChainTool()` — Convert BoundTool to LangChain StructuredTool
+    - `toLangChainTools()` — Convert tool contracts to LangChain DynamicStructuredTool
     - `CompletionUnitLLM` — BaseChatModel wrapper for billing integration
     - `toBaseMessage()`, `fromBaseMessage()` — Message converters
     - `AsyncQueue` — Simple async queue for streaming
@@ -53,7 +58,7 @@ LangGraph graph definitions and runtime utilities for agentic AI execution. Cont
     - `CHAT_GRAPH_NAME` — Graph name constant
 - **CLI:** none
 - **Env/Config keys:** none (all deps injected)
-- **Files considered API:** `index.ts`, `runtime/index.ts`, `graphs/index.ts`
+- **Files considered API:** `index.ts`, `inproc/index.ts`, `runtime/index.ts`, `graphs/index.ts`
 
 ## Ports
 

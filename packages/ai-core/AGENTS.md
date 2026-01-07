@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-05
+- **Last reviewed:** 2026-01-07
 - **Status:** draft
 
 ## Purpose
@@ -40,8 +40,8 @@ Executor-agnostic AI primitives for cross-process communication. Defines `AiEven
 ## Public Surface
 
 - **Exports:**
-  - `AiEvent` - Union of streaming event types (text_delta, usage_report, done, error)
-  - `TextDeltaEvent`, `UsageReportEvent`, `DoneEvent`, `ErrorEvent` - Individual event types
+  - `AiEvent` - Union of streaming event types (text_delta, usage_report, assistant_final, done, error)
+  - `TextDeltaEvent`, `UsageReportEvent`, `AssistantFinalEvent`, `DoneEvent`, `ErrorEvent` - Individual event types
   - `ToolCallStartEvent`, `ToolCallResultEvent` - Tool execution events
   - `UsageFact` - Billing fact emitted per LLM call
   - `ExecutorType` - Executor discriminator ("langgraph_server" | "claude_sdk" | "inproc")

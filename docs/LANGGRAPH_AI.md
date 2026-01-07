@@ -472,6 +472,12 @@ Remaining wiring tracked in Phase 2c above.
 
 - [ ] **P1: Tool call ID architecture** — P0 workaround generates canonical `toolCallId` at adapter finalization (`src/adapters/server/ai/litellm.adapter.ts:662`) using `acc.id || randomUUID()`. This works but conflates `providerToolCallId` (optional, for telemetry) with `canonicalToolCallId` (required, for correlation). P1 should: (1) preserve `providerToolCallId` as optional metadata, (2) generate `canonicalToolCallId` at tool invocation boundary in graph layer, (3) use canonical ID consistently for `assistant.tool_calls[].id` and `tool.tool_call_id`.
 
+- [ ] **P1: Runner/Adapter architecture split** — Current `langgraph-chat.runner.ts` violates layer boundaries. Issues:
+  - [ ] **Rename/split**: Workflow runner should be generic `chat.runner.ts` depending ONLY on `GraphExecutorPort` + ports types
+  - [ ] **Move LangGraph specifics**: `createInProcChatRunner`/`CompletionFn`/`createToolExecFn`/`toolContracts` wiring belongs in `src/adapters/server/ai/langgraph/langgraph-inproc.executor-adapter.ts`
+  - [ ] **Fix arch boundary**: Move `AiEvent` + `createToolRunner` interface to ports/shared or `@cogni/ai-core` so adapters can legally import (adapters must not import `@/features/**`)
+  - [ ] **Naming rule**: Files named `*langgraph*` should contain zero workflow policy (no tool registry, no attempt policy, no request mapping beyond protocol translation)
+
 ---
 
 ## Related Documents
@@ -485,5 +491,5 @@ Remaining wiring tracked in Phase 2c above.
 
 ---
 
-**Last Updated**: 2026-01-05
+**Last Updated**: 2026-01-07
 **Status**: Draft (Rev 10 - Phase 1 complete, Phase 2 implementation sequence defined)
