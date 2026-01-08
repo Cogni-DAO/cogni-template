@@ -420,32 +420,34 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern per feedback. This 
 **Phase 3b: Move LangGraph Wiring to Adapters**
 
 - [ ] Create `src/adapters/server/ai/langgraph/` directory
-- [ ] Move `langgraph-chat.runner.ts` → `adapters/langgraph/chat.graph.ts` (rename per naming rule)
 - [ ] Move `tool-runner.ts` → `src/shared/ai/tool-runner.ts`
-- [ ] Create `langgraph/tool-registry.ts` for graph-specific tool bindings
-- [ ] Delete `src/features/ai/runners/` after move
+- [ ] Delete `src/features/ai/runners/` (logic absorbed by provider)
 - [ ] Verify dep-cruiser: no adapters→features imports
+- NOTE: NO per-graph adapter files — graphs remain in `packages/langgraph-graphs/`
+- NOTE: NO tool-registry — graphs import ToolContracts directly; policy enforced in tool-runner
 
-**Phase 3c: Thread/Run-Shaped Port (LangGraph Server Parity)**
+**Phase 3c: Provider + Aggregator (P0 Scope)**
 
-- [ ] Create `GraphProvider` interface with `listGraphs()`, `createThread()`, `createRun()`, `streamRun()`
+- [ ] Create internal `GraphProvider` interface in `src/adapters/server/ai/graph-provider.ts`
 - [ ] Create `AggregatingGraphExecutor` implementing aggregation
-- [ ] Implement `LangGraphInProcProvider` (threads/runs ephemeral but ID-shaped)
-- [ ] Route/UI uses `threadId` + `runId` flow (even if ephemeral)
+- [ ] Implement `LangGraphInProcProvider` with injected registry
+- [ ] Provider uses `Map<graphName, { toolContracts, graphFactory }>`
+- NOTE: Thread/run-shaped API (`createThread()`, `createRun()`, `streamRun()`) deferred to P1
 
 **Phase 3d: Composition Root Wiring**
 
 - [ ] Create injectable `graph-registry.ts` (no hard-coded const)
-- [ ] Remove `graphResolver` param from `createInProcGraphExecutor()`
-- [ ] Update `completion.server.ts` to be graph-agnostic
+- [ ] Remove `graphResolver` param from `createInProcGraphExecutor()` — facade is graph-agnostic
+- [ ] Update `completion.server.ts` to delete all graph selection logic
 
 **Non-Regression:**
 
 - Do NOT change `toolCallId` behavior or tool schema shapes
 - Relocate + rewire imports only; no runtime logic changes
 
-**Deferred (Phase 4+):**
+**Deferred (P1+):**
 
+- [ ] Thread/run-shaped port API (requires run persistence)
 - [ ] DB persistence (`ai_runs` + `ai_run_events` tables)
 - [ ] Worker service (move execution off Next.js)
 
@@ -484,8 +486,7 @@ Remaining wiring tracked in Phase 2c above.
 
 - [ ] Create `packages/langgraph-graphs/src/graphs/research/` (Graph #2 factory)
 - [ ] Implement `createResearchGraph()` in package
-- [ ] Create `adapters/server/ai/langgraph/research.graph.ts` binding
-- [ ] Register `langgraph:research` in injectable registry
+- [ ] Add `langgraph:research` entry to injectable registry (NOT a separate adapter file)
 - [ ] Expose via `listGraphs()` on aggregator
 - [ ] UI adds graph selector → sends `graphId` when creating run
 - [ ] E2E test: verify graph switching works
@@ -523,10 +524,10 @@ Remaining wiring tracked in Phase 2c above.
 - [ ] **P1: Tool call ID architecture** — P0 workaround generates canonical `toolCallId` at adapter finalization (`src/adapters/server/ai/litellm.adapter.ts:662`) using `acc.id || randomUUID()`. This works but conflates `providerToolCallId` (optional, for telemetry) with `canonicalToolCallId` (required, for correlation). P1 should: (1) preserve `providerToolCallId` as optional metadata, (2) generate `canonicalToolCallId` at tool invocation boundary in graph layer, (3) use canonical ID consistently for `assistant.tool_calls[].id` and `tool.tool_call_id`.
 
 - [ ] **P0: Runner/Adapter architecture split** — Current `langgraph-chat.runner.ts` violates layer boundaries. **Now tracked in Phase 3 checklist above.** Summary:
-  - [ ] **Rename/move**: `langgraph-chat.runner.ts` → `adapters/langgraph/chat.graph.ts` (graph implementation, not feature runner)
+  - [ ] **Delete runner**: `langgraph-chat.runner.ts` → delete; logic absorbed by `LangGraphInProcProvider`
   - [ ] **Move tool-runner**: `features/ai/tool-runner.ts` → `shared/ai/tool-runner.ts` (adapters can import shared/)
   - [ ] **Fix types**: Move `ToolExecFn`/`EmitAiEvent` to `@cogni/ai-core` so adapters can legally import
-  - [ ] **Naming rule**: Files named `*langgraph*` should contain zero workflow policy (no tool registry, no attempt policy)
+  - [ ] **No per-graph files**: Provider uses injected registry, not per-graph adapter modules
 
 ---
 
@@ -542,4 +543,4 @@ Remaining wiring tracked in Phase 2c above.
 ---
 
 **Last Updated**: 2026-01-08
-**Status**: Draft (Rev 11 - Phase 2 complete, Phase 3 architecture refactor defined)
+**Status**: Draft (Rev 12 - Phase 3 aligned with GRAPH_EXECUTION.md; deferred thread/run to P1; removed per-graph adapter files)

@@ -24,7 +24,8 @@
 9. **BINDING_IN_COMPOSITION_ROOT**: Tool binding (connecting contracts to ports/deps) occurs only in composition roots: `src/bootstrap/**` (Next.js) or `packages/langgraph-server/**` (LangGraph Server). Features and packages never instantiate bound tools.
 
 10. **TOOL_SEMANTICS_CANONICAL**: The canonical tool types are semantic, not wire-format-specific:
-    - `ToolSpec { name, description, inputSchema: JSONSchema7, redaction }` — tool definition (compiled schema, no Zod runtime)
+    - `ToolSpec { name, description, inputSchema: JSONSchema7, redaction, effect }` — tool definition (compiled schema, no Zod runtime)
+    - `ToolEffect = 'read_only' | 'state_change' | 'external_side_effect'` — side-effect level for policy
     - `ToolInvocationRecord { toolCallId, name, args, result, error, startedAt, endedAt, raw?: unknown }` — execution record
       `inputSchema` must conform to P0-supported JSONSchema subset; disallow `oneOf`/`anyOf`/`allOf`/`not`/`if-then-else`/`patternProperties`/complex `$ref`. Enforced by `validateToolSchemaP0()` tests.
       `raw` preserves provider-native payload for observability only; must be redacted/omitted from UI/logs, and must never influence execution or billing.
@@ -39,6 +40,22 @@
 14. **NO_MANUAL_SCHEMA_DUPLICATION**: No hand-written JSON Schema objects alongside Zod schemas. The `parameters` field in wire DTOs must be derived from the contract's Zod schema via `getToolJsonSchema(contract)`. Manual duplication causes drift.
 
 15. **GOLDEN_FIXTURES_ENFORCE_WIRE_FORMAT**: Golden fixture tests enforce wire conformance per adapter: exact key sets (no extra keys), required fields for tool definitions, correct delta assembly, and correct result message formation. Tests assert structure, not JSON key ordering.
+
+16. **TOOL_ID_NAMESPACED**: Tool IDs use namespaced format to prevent collisions: `core:get_current_time`, `mcp:<server>:<tool>`. Core tools use `core:` prefix. MCP-discovered tools use `mcp:<serverId>:<toolName>`. This enables safe aggregation from multiple tool sources.
+
+17. **EFFECT_TYPED**: Every `ToolContract` declares its effect level via `effect: ToolEffect`:
+    - `read_only` — pure computation or read-only data access
+    - `state_change` — modifies application state (DB writes, file writes)
+    - `external_side_effect` — calls external services, sends emails, triggers webhooks
+      Policy may require approval for `state_change` or `external_side_effect` tools.
+
+18. **CATALOG_IS_EXPLICIT**: The model only sees tools from the `ToolCatalog` compiled at request time. Graphs define their `graphTools[]`; bootstrap compiles these into a catalog. No tools outside the catalog are exposed to the LLM.
+
+19. **POLICY_IS_DATA**: Enabling/disabling a tool is a config change, not a code change. `ToolPolicy` is a data structure with explicit allowlists and limits. No bespoke conditionals scattered across tool code.
+
+20. **DENY_BY_DEFAULT**: If a tool is not explicitly enabled by `ToolPolicy.allowedTools`, `toolRunner.exec()` rejects the call with error code `policy_denied`. Unknown or disabled tools fail loudly, never pass silently.
+
+21. **MCP_UNTRUSTED_BY_DEFAULT**: MCP-discovered tools are treated as untrusted. They must be explicitly allowlisted per server and per tool. Newly discovered tools (via `tools/list_changed`) are NOT auto-enabled; policy must be updated explicitly. See [MCP security guidance](https://modelcontextprotocol.io/docs/concepts/security).
 
 ---
 
@@ -123,14 +140,53 @@ Per invariants **TOOL_SEMANTICS_CANONICAL**, **WIRE_FORMATS_ARE_ADAPTERS**, **OP
 - [ ] Observability [observability.md](../.agent/workflows/observability.md)
 - [ ] Documentation [document.md](../.agent/workflows/document.md)
 
-### P1: Tool Ecosystem
+### P0: Tool Policy Enforcement
+
+Per invariants **EFFECT_TYPED**, **POLICY_IS_DATA**, **DENY_BY_DEFAULT**, **TOOL_ID_NAMESPACED**:
+
+- [ ] Add `ToolEffect` type to `@cogni/ai-core/tooling/types.ts`
+- [ ] Add `effect: ToolEffect` field to `ToolContract` in `@cogni/ai-tools`
+- [ ] Add `effect: ToolEffect` field to `ToolSpec` in `@cogni/ai-core`
+- [ ] Update existing tools with effect declarations (`get_current_time` → `read_only`)
+- [ ] Create `ToolPolicy` interface in `src/shared/ai/tool-policy.ts`
+- [ ] Create `ToolCatalog` interface in `src/shared/ai/tool-catalog.ts`
+- [ ] Update `toolRunner.exec()` to accept and enforce `ToolPolicy`
+- [ ] Add `policy_denied` to `ToolErrorCode` union
+- [ ] Add namespace prefix to tool names (`core:get_current_time`)
+- [ ] Add test: deny-by-default (unknown tool name must fail)
+- [ ] Add test: policy filter (tool in contracts but not in policy must not execute)
+
+### P1: Tool Ecosystem + ToolCatalog
 
 - [ ] `GraphLlmCaller` type enforcement (graphRunId requires graph_name + graph_version)
 - [ ] Include tools in `promptHash` computation (canonical tool schema)
 - [ ] `ToolFallback.tsx` for unregistered tool names
 - [ ] Tool telemetry in `ai_invocation_summaries` (tool_calls count, latency)
+- [ ] ToolCatalog becomes first-class (UI rendering, agent discovery)
+- [ ] Tenant/role-based ToolPolicy via config (use Casbin if complex)
+- [ ] Human-in-the-loop approval for `state_change`/`external_side_effect` tools
 
-### P2: Advanced (Do NOT Build Yet)
+### P2: MCP + Dynamic Tool Sources
+
+Per invariant **MCP_UNTRUSTED_BY_DEFAULT**:
+
+- [ ] Create `ToolProvider` interface: `StaticToolProvider` + `McpToolProvider`
+- [ ] MCP tool discovery via `tools/list` (read-only; no auto-enable)
+- [ ] Handle `tools/list_changed`: refresh catalog, keep policy unchanged
+- [ ] MCP tool ID format: `mcp:<serverId>:<toolName>`
+- [ ] Add test: MCP drift (newly discovered tool not enabled until policy changes)
+- [ ] Consider OPA/Cedar if centralized policy infrastructure needed
+
+### P3: Graph-as-Tool (Subagents)
+
+- [ ] Create `GraphTool` contract: implementation calls `GraphExecutorPort.runGraph()`
+- [ ] Enforce `allowedGraphs` allowlist
+- [ ] Enforce `maxDepth = 1` (no recursive subgraphs in P3)
+- [ ] Enforce strict budgets (time/tokens/USD)
+- [ ] Enforce bounded output (summary-first)
+- [ ] LangGraph interrupts for human-in-the-loop approval
+
+### PX: Advanced (Do NOT Build Yet)
 
 - [ ] Multi-tool parallel execution
 - [ ] Tool result streaming (partial results)
@@ -158,6 +214,9 @@ Per invariants **TOOL_SEMANTICS_CANONICAL**, **WIRE_FORMATS_ARE_ADAPTERS**, **OP
 | `src/features/ai/components/tools/ToolFallback.tsx`  | New: generic tool result UI component (optional for MVP)                             |
 | `tests/contracts/openai-tool-wire-format.test.ts`    | New: golden fixture tests for OpenAI wire format conformance                         |
 | `tests/contracts/tool-invocation-record.test.ts`     | New: semantic record lifecycle tests                                                 |
+| `src/shared/ai/tool-policy.ts`                       | New: `ToolPolicy` interface for deny-by-default enforcement                          |
+| `src/shared/ai/tool-catalog.ts`                      | New: `ToolCatalog` interface for explicit tool visibility                            |
+| `tests/unit/ai/tool-policy.test.ts`                  | New: deny-by-default + policy filter tests                                           |
 
 ---
 
@@ -167,12 +226,14 @@ Per invariants **TOOL_SEMANTICS_CANONICAL**, **WIRE_FORMATS_ARE_ADAPTERS**, **OP
 
 | Layer            | Location                               | Owns                                                                   |
 | ---------------- | -------------------------------------- | ---------------------------------------------------------------------- |
-| Semantic types   | `@cogni/ai-core/tooling/types.ts`      | `ToolSpec` (JSONSchema7), `ToolInvocationRecord` (with `raw`) — no Zod |
-| Contract         | `@cogni/ai-tools/tools/*.ts`           | Zod schema, allowlist, name, description, redaction                    |
+| Semantic types   | `@cogni/ai-core/tooling/types.ts`      | `ToolSpec`, `ToolEffect`, `ToolInvocationRecord` (with `raw`) — no Zod |
+| Contract         | `@cogni/ai-tools/tools/*.ts`           | Zod schema, allowlist, name, description, effect, redaction            |
 | Implementation   | `@cogni/ai-tools/tools/*.ts`           | `execute(ctx, args)` — IO via injected capabilities                    |
 | Schema compiler  | `@cogni/ai-tools/schema.ts`            | `toToolSpec(contract)` — compiles Zod → ToolSpec with JSONSchema7      |
 | Wire encoder     | `src/adapters/server/ai/*-encoder.ts`  | `ToolSpec` → provider wire format (OpenAI, Anthropic)                  |
 | Wire decoder     | `src/adapters/server/ai/*-decoder.ts`  | Provider response → `ToolInvocationRecord` + AiEvents                  |
+| Policy           | `src/shared/ai/tool-policy.ts`         | `ToolPolicy` — allowlist, effect requirements, budgets                 |
+| Catalog          | `src/shared/ai/tool-catalog.ts`        | `ToolCatalog` — explicit tool visibility for LLM                       |
 | Capability iface | `@cogni/ai-tools/capabilities/*.ts`    | Minimal interfaces tools depend on (e.g., Clock)                       |
 | LangChain wrap   | `@cogni/langgraph-graphs/runtime/`     | `toLangChainTool()` converter (delegates to toolRunner)                |
 | Binding (Next)   | `src/bootstrap/**`                     | Wire capabilities → adapters for Next.js runtime                       |
@@ -189,7 +250,73 @@ Per invariants **TOOL_SEMANTICS_CANONICAL**, **WIRE_FORMATS_ARE_ADAPTERS**, **OP
 
 **Note:** Per **TOOL_SEMANTICS_CANONICAL** and **WIRE_FORMATS_ARE_ADAPTERS**, the canonical types are semantic (not wire-format-specific). OpenAI function-calling is P0 via `OpenAIToolEncoder`/`OpenAIToolDecoder`. Future Anthropic adapter would add `AnthropicToolEncoder`/`AnthropicToolDecoder` mapping `tool_use`/`tool_result` content blocks to the same `ToolInvocationRecord`, preserving rich attachments in `raw`.
 
-### 2. assistant-stream Tool API
+### 2. Tool Policy Architecture (P0)
+
+Per invariants **EFFECT_TYPED**, **CATALOG_IS_EXPLICIT**, **POLICY_IS_DATA**, **DENY_BY_DEFAULT**:
+
+```typescript
+// @cogni/ai-core/tooling/types.ts
+type ToolEffect = 'read_only' | 'state_change' | 'external_side_effect';
+
+// @cogni/ai-tools/types.ts (ToolContract adds effect)
+interface ToolContract<...> {
+  name: string;
+  description: string;
+  inputSchema: ZodSchema;
+  outputSchema: ZodSchema;
+  effect: ToolEffect;         // NEW: required
+  redaction: RedactionConfig;
+}
+
+// src/shared/ai/tool-policy.ts (P0 implementation)
+type ToolPolicyDecision = 'allow' | 'deny' | 'require_approval';
+
+interface ToolPolicy {
+  /** Explicit allowlist of tool IDs that may execute */
+  allowedTools: readonly string[];
+  /** Effects that require approval before execution (P1: human-in-the-loop) */
+  requireApprovalForEffects?: readonly ToolEffect[];
+  /** Runtime budgets per tool invocation */
+  budgets?: {
+    maxRuntimeMs?: number;
+    maxResultBytes?: number;
+  };
+  /** Decide if a tool invocation is allowed. ONLY called by toolRunner.exec(). */
+  decide(toolId: string, effect: ToolEffect): ToolPolicyDecision;
+}
+
+// src/shared/ai/tool-catalog.ts (P0 implementation)
+/**
+ * ToolCatalog: the per-request set of tools exposed to the model.
+ * Built at bootstrap by compiling graph's ToolContracts AFTER policy filtering.
+ * The model ONLY sees tools in this catalog — no surprise tools.
+ */
+interface ToolCatalog {
+  /** Tools exposed to the model for this request (post-policy filtering) */
+  readonly tools: ReadonlyMap<string, ToolSpec>;
+  /** Get tool by ID; returns undefined if not in catalog */
+  get(toolId: string): ToolSpec | undefined;
+  /** List all tool specs (for LLM tool parameter) */
+  list(): readonly ToolSpec[];
+}
+```
+
+**P0 workflow:**
+
+1. Graph defines `graphTools: ToolContract[]` by importing from `@cogni/ai-tools`
+2. `ToolPolicy` loaded from config (P0: static allowlist)
+3. Bootstrap compiles `graphTools` → filters by `policy.allowedTools` → `ToolCatalog`
+4. LLM receives only tools in `ToolCatalog` (model never sees denied tools)
+5. `toolRunner.exec(toolId, args, policy)` calls `policy.decide(toolId, effect)`:
+   - `allow` → execute tool
+   - `deny` → error code `policy_denied`
+   - `require_approval` → P1: human-in-the-loop interrupt
+
+**Enforcement is ONLY in `toolRunner.exec()`.** No scattered policy checks.
+
+**No tool registry service in P0.** Graphs import their tools directly. Tool bindings live in composition roots (`src/bootstrap/ai/tool-bindings.ts`), not adapter-scoped files.
+
+### 3. assistant-stream Tool API
 
 Route uses `assistant-stream` controller API. See `finalizeToolCall()` in `route.ts` for the correct pattern.
 
@@ -197,7 +324,7 @@ Route uses `assistant-stream` controller API. See `finalizeToolCall()` in `route
 
 **Never** invent custom SSE events. Use official helper only.
 
-### 3. Agentic Loop (chat.graph.ts)
+### 4. Agentic Loop (chat.graph.ts)
 
 **Critical:** Graph calls `completion.executeStream()`, never `llmService` directly. This keeps billing/telemetry/promptHash centralized.
 
@@ -230,7 +357,7 @@ Route uses `assistant-stream` controller API. See `finalizeToolCall()` in `route
 
 **Finalization:** Emit exactly one `done` event and resolve `final` exactly once—regardless of how many tool loops occurred. No side effects attached to stream iteration.
 
-### 4. OpenAI Tool Call SSE Format
+### 5. OpenAI Tool Call SSE Format
 
 LiteLLM streams tool calls as incremental deltas:
 
@@ -245,7 +372,7 @@ LiteLLM streams tool calls as incremental deltas:
 
 Accumulate by `index`, parse complete JSON when done.
 
-### 5. Tool UI Location
+### 6. Tool UI Location
 
 Tool components in `features/ai/components/tools/`. Kit cannot import features.
 
@@ -258,7 +385,7 @@ export const GenerateTitleToolUI = makeAssistantToolUI({
 });
 ```
 
-### 6. Completion Contract for Tool Calls
+### 7. Completion Contract for Tool Calls
 
 The `LlmCompletionResult` contract for tool calls:
 
@@ -267,7 +394,7 @@ The `LlmCompletionResult` contract for tool calls:
 - Graph must NOT attempt to parse or execute tools until `final` resolves
 - Adapter resets assembly state between `completionStream()` calls (per **ADAPTER_ASSEMBLES_TOOLCALLS**)
 
-### 7. Tool Argument Parse Errors
+### 8. Tool Argument Parse Errors
 
 When `toolCall.function.arguments` is invalid JSON:
 
@@ -314,5 +441,5 @@ When `toolCall.function.arguments` is invalid JSON:
 
 ---
 
-**Last Updated**: 2026-01-05
-**Status**: Draft (aligned with LANGGRAPH_AI.md)
+**Last Updated**: 2026-01-08
+**Status**: Draft (Rev 2 - Added ToolEffect, ToolPolicy, ToolCatalog; deny-by-default; MCP/graph-as-tool roadmap)
