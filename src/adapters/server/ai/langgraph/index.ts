@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@adapters/server/ai/langgraph`
+ * Purpose: Barrel export for LangGraph adapter components.
+ * Scope: Re-exports provider, catalog types. Isolates LangGraph concerns. Does NOT export @langchain/* types.
+ * Invariants:
+ *   - NO_LANGCHAIN_IN_ADAPTERS_ROOT: LangChain imports only in this directory
+ * Side-effects: none
+ * Links: GRAPH_EXECUTION.md, LANGGRAPH_AI.md
+ * @public
+ */
+
+// Catalog types (generic, no inproc imports)
+export type {
+  AnyBoundTool,
+  LangGraphCatalog,
+  LangGraphCatalogEntry,
+} from "./catalog";
+
+// Provider
+export {
+  type CompletionUnitAdapter,
+  LANGGRAPH_PROVIDER_ID,
+  LangGraphInProcProvider,
+} from "./inproc.provider";
