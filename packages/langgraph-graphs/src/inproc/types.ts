@@ -15,6 +15,9 @@
 
 import type { AiEvent } from "@cogni/ai-core";
 import type { ToolContract } from "@cogni/ai-tools";
+import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import type { BaseMessage } from "@langchain/core/messages";
+import type { StructuredToolInterface } from "@langchain/core/tools";
 
 import type {
   CompletionFn,
@@ -25,6 +28,42 @@ import type { Message } from "../runtime/message-converters";
 
 // Re-export for convenience
 export type { CompletionFn, CompletionResult, Message, ToolCall };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Graph Factory Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Options passed to graph factory functions.
+ * Minimal interface that all graph factories must accept.
+ */
+export interface CreateGraphOptions {
+  /** LLM instance (typically CompletionUnitLLM for billing) */
+  readonly llm: BaseChatModel;
+  /** Tools wrapped via toLangChainTools() */
+  readonly tools: StructuredToolInterface[];
+}
+
+/**
+ * Minimal structural interface for compiled graphs.
+ * Exposes only invoke() method — LangGraph internals don't leak.
+ */
+export interface CompiledGraph {
+  invoke(
+    input: { messages: BaseMessage[] },
+    config?: { signal?: AbortSignal }
+  ): Promise<{ messages: BaseMessage[] }>;
+}
+
+/**
+ * Graph factory function signature.
+ * Used by LangGraphInProcProvider to create graphs from catalog entries.
+ *
+ * Each graph type exports a factory matching this signature:
+ * - createChatGraph: Creates React agent for chat
+ * - createResearchGraph: Creates research agent (Phase 5)
+ */
+export type CreateGraphFn = (opts: CreateGraphOptions) => CompiledGraph;
 
 /**
  * Result from tool execution via exec function.
@@ -63,11 +102,14 @@ export interface InProcGraphRequest {
 }
 
 /**
- * Options for createInProcChatRunner.
+ * Options for createInProcGraphRunner.
  * Runner creates queue internally, passes emit to createToolExecFn.
  * Generic TTool allows src/ to specify LlmToolDefinition while package defaults to unknown.
  */
 export interface InProcRunnerOptions<TTool = unknown> {
+  /** Graph factory from catalog - creates compiled graph with LLM and tools */
+  readonly createGraph: CreateGraphFn;
+
   /** Per-LLM-call completion function (called N times in agentic loop) */
   readonly completionFn: CompletionFn<TTool>;
 

@@ -2,20 +2,20 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/langgraph-graphs/inproc/runner`
- * Purpose: InProc graph execution runner for Next.js server runtime.
- * Scope: Creates queue, wires dependencies, executes graph, emits events. Does NOT import from src/.
+ * Module: `@cogni/langgraph-graphs/inproc/generic-runner`
+ * Purpose: Generic graph runner that accepts a graph factory.
+ * Scope: Creates queue, wires dependencies, executes graph. Does NOT import from src/.
  * Invariants:
  *   - SINGLE_QUEUE_PER_RUN: Runner creates queue, passes emit to createToolExecFn
- *   - ASSISTANT_FINAL_REQUIRED: Emits exactly one assistant_final event on success; none on error
- *   - NO_AWAIT_IN_TOKEN_PATH: tokenSink.push() is synchronous
- *   - RESULT_REFLECTS_OUTCOME: final.ok matches stream success/failure
+ *   - ASSISTANT_FINAL_REQUIRED: Emits exactly one assistant_final event on success
+ *   - PACKAGES_NO_SRC_IMPORTS: No imports from src/**
  * Side-effects: IO (executes graph, emits events)
- * Links: LANGGRAPH_AI.md
+ * Links: LANGGRAPH_AI.md, GRAPH_EXECUTION.md
  * @public
  */
 
 import type { AiEvent } from "@cogni/ai-core";
+import type { ToolContract } from "@cogni/ai-tools";
 import type { BaseMessage } from "@langchain/core/messages";
 
 import { AsyncQueue } from "../runtime/async-queue";
@@ -23,11 +23,40 @@ import { CompletionUnitLLM } from "../runtime/completion-unit-llm";
 import { toLangChainTools } from "../runtime/langchain-tools";
 import { toBaseMessage } from "../runtime/message-converters";
 
-import type { CompletionFn, GraphResult, InProcRunnerOptions } from "./types";
+import type {
+  CompiledGraph,
+  CompletionFn,
+  CreateGraphFn,
+  GraphResult,
+  InProcGraphRequest,
+  ToolExecFn,
+} from "./types";
+
+/**
+ * Options for generic graph runner.
+ * Similar to InProcRunnerOptions but uses CreateGraphFn instead of toolContracts.
+ */
+export interface GenericRunnerOptions<TTool = unknown> {
+  /** Per-LLM-call completion function */
+  readonly completionFn: CompletionFn<TTool>;
+
+  /** Factory that receives emit callback and returns ToolExecFn */
+  readonly createToolExecFn: (emit: (e: AiEvent) => void) => ToolExecFn;
+
+  /** Graph factory function (from catalog entry) */
+  readonly graphFactory: CreateGraphFn;
+
+  /** Tool contracts for LangChain wrapping */
+  readonly toolContracts: ReadonlyArray<
+    ToolContract<string, unknown, unknown, unknown>
+  >;
+
+  /** Graph execution request */
+  readonly request: InProcGraphRequest;
+}
 
 /**
  * Extract text content from final assistant message.
- * LangGraph returns messages array; last message is assistant response.
  */
 function extractAssistantContent(messages: BaseMessage[]): string {
   if (messages.length === 0) return "";
@@ -56,27 +85,24 @@ function extractAssistantContent(messages: BaseMessage[]): string {
 }
 
 /**
- * Create InProc graph runner.
+ * Create generic graph runner.
  *
- * Generic runner that accepts a graph factory from the catalog.
- * All LangChain logic is contained here — callers don't need LangChain imports.
+ * Unlike createInProcChatRunner which is hardcoded to chat graph,
+ * this accepts a graphFactory parameter for any graph type.
  *
- * Per SINGLE_QUEUE_PER_RUN: Runner creates queue internally.
- * Per ASSISTANT_FINAL_REQUIRED: Emits exactly one assistant_final event.
- *
- * @param opts - Runner options including graph factory
+ * @param opts - Runner options with graph factory
  * @returns { stream, final } - AsyncIterable of events and Promise of result
  */
-export function createInProcGraphRunner<TTool = unknown>(
-  opts: InProcRunnerOptions<TTool>
+export function createGenericGraphRunner<TTool = unknown>(
+  opts: GenericRunnerOptions<TTool>
 ): {
   stream: AsyncIterable<AiEvent>;
   final: Promise<GraphResult>;
 } {
   const {
-    createGraph,
     completionFn,
     createToolExecFn,
+    graphFactory,
     toolContracts,
     request,
   } = opts;
@@ -90,18 +116,22 @@ export function createInProcGraphRunner<TTool = unknown>(
 
   const tokenSink = { push: emit };
   const toolExecFn = createToolExecFn(emit);
-  // Cast: CompletionUnitLLM converts tools to OpenAI format internally; tool type erased at boundary
+
+  // Create LLM with completion function
   const llm = new CompletionUnitLLM(
     completionFn as CompletionFn<unknown>,
     request.model,
     tokenSink
   );
+
+  // Create LangChain tools
   const tools = toLangChainTools({
     contracts: toolContracts,
     exec: toolExecFn,
   });
-  // Use factory from catalog instead of hardcoded createChatGraph
-  const graph = createGraph({ llm, tools });
+
+  // Create graph using factory
+  const graph: CompiledGraph = graphFactory({ llm, tools });
 
   const final = (async (): Promise<GraphResult> => {
     try {
