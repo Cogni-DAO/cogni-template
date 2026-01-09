@@ -182,6 +182,30 @@ describe("features/ai/tool-runner", () => {
         expect(result.errorCode).toBe("policy_denied");
       }
     });
+
+    it("returns ok:false with errorCode 'policy_denied' when effect requires approval (P0 behavior)", async () => {
+      // Arrange - tool is in allowlist but effect requires approval
+      const boundTool = createTestBoundTool({ effect: "state_change" });
+      const collector = createEventCollector();
+      const approvalPolicy = createToolAllowlistPolicy([TEST_TOOL_NAME], {
+        requireApprovalForEffects: ["state_change"],
+      });
+      const runner = createToolRunner(
+        { [TEST_TOOL_NAME]: boundTool },
+        collector.emit,
+        { policy: approvalPolicy, ctx: TEST_CTX }
+      );
+
+      // Act
+      const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
+
+      // Assert - P0: require_approval treated as deny
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.errorCode).toBe("policy_denied");
+        expect(result.safeMessage).toContain("not allowed by current policy");
+      }
+    });
   });
 
   describe("event emission", () => {

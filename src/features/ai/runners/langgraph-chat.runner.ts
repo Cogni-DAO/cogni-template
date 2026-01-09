@@ -60,6 +60,10 @@ const CHAT_GRAPH_TOOL_CONTRACTS = [getCurrentTimeContract];
 /**
  * Policy for chat graph tools.
  * Per DENY_BY_DEFAULT: only explicitly allowed tools can execute.
+ *
+ * TODO(P1): Load from graph config or policy store instead of hardcoding.
+ * This violates POLICY_IS_DATA but is acceptable for P0 bootstrap.
+ * See TOOL_USE_SPEC.md P1 checklist: "Tenant/role-based ToolPolicy via config"
  */
 const CHAT_GRAPH_POLICY = createToolAllowlistPolicy([GET_CURRENT_TIME_NAME]);
 

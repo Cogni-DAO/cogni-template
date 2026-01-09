@@ -10,7 +10,7 @@
  *   - TOOLCALL_ID_STABLE: Same toolCallId across start→result
  *   - TOOLRUNNER_ALLOWLIST_HARD_FAIL: Missing allowlist or redaction failure → error event
  *   - TOOLRUNNER_RESULT_SHAPE: Returns {ok:true, value} | {ok:false, errorCode, safeMessage}
- *   - TOOLRUNNER_PIPELINE_ORDER: policy check → validate args → execute → validate result → redact → emit → return
+ *   - TOOLRUNNER_PIPELINE_ORDER: tool lookup → policy check → validate args → execute → validate result → redact → emit → return
  *   - DENY_BY_DEFAULT: Default to DenyAllPolicy if no policy provided
  * Side-effects: none (AiEvent emission via injected callback is caller's responsibility)
  * Notes: Per AI_SETUP_SPEC.md P1 invariants. Moved from features/ai to shared/ai per TOOL_EXEC_TYPES_IN_AI_CORE.
@@ -90,7 +90,8 @@ export function createToolRunner<
 >(boundTools: TTools, emit: EmitAiEvent, config?: ToolRunnerConfig) {
   // Default to DENY_ALL_POLICY per DENY_BY_DEFAULT invariant
   const policy = config?.policy ?? DENY_ALL_POLICY;
-  const ctx = config?.ctx ?? { runId: "unknown" };
+  // Default ctx for P0; P1+ will require explicit ctx for tenant/role-based policy
+  const ctx = config?.ctx ?? { runId: "toolrunner_default" };
   /**
    * Execute a tool by name with given arguments.
    * Follows fixed pipeline per TOOLRUNNER_PIPELINE_ORDER.

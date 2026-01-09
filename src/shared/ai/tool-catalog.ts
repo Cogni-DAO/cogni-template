@@ -17,7 +17,7 @@
 
 import type { ToolSpec } from "@cogni/ai-core";
 
-import type { ToolPolicy } from "./tool-policy";
+import type { ToolPolicy, ToolPolicyContext } from "./tool-policy";
 
 /**
  * Tool catalog: the per-request set of tools exposed to the model.
@@ -67,27 +67,39 @@ export const EMPTY_CATALOG: ToolCatalog = Object.freeze({
   list: () => FROZEN_EMPTY_ARRAY,
 });
 
+/** Default context for catalog construction (bootstrap-time filtering) */
+const DEFAULT_CATALOG_CTX: ToolPolicyContext = { runId: "catalog_bootstrap" };
+
 /**
  * Create a tool catalog from specs, filtered by policy.
- * Only tools in policy.allowedTools are included in the catalog.
+ * Uses policy.decide() to determine visibility — tools that would be denied
+ * or require approval are excluded from the catalog.
  *
  * Double enforcement pattern:
  * 1. This function filters which tools the LLM sees (visibility)
  * 2. toolRunner.exec() re-checks policy at runtime (defense in depth)
  *
+ * P0: Both 'deny' and 'require_approval' decisions exclude the tool from catalog.
+ * This prevents the LLM from seeing tools it cannot execute, avoiding retry spam.
+ *
  * Note: Filters by ToolSpec.name which IS the canonical toolId per TOOL_ID_NAMESPACED.
  *
  * @param specs - All available tool specs (from graph's compiled ToolContracts)
  * @param policy - Policy for filtering visibility
+ * @param ctx - Optional context for policy decisions (defaults to bootstrap context)
  * @returns ToolCatalog with only allowed tools
  */
 export function createToolCatalog(
   specs: readonly ToolSpec[],
-  policy: ToolPolicy
+  policy: ToolPolicy,
+  ctx: ToolPolicyContext = DEFAULT_CATALOG_CTX
 ): ToolCatalog {
-  const allowedSet = new Set(policy.allowedTools);
-  // Filter by spec.name which is the canonical toolId
-  const filteredSpecs = specs.filter((spec) => allowedSet.has(spec.name));
+  // Filter using policy.decide() — only 'allow' decisions pass
+  const filteredSpecs = specs.filter((spec) => {
+    const decision = policy.decide(ctx, spec.name, spec.effect);
+    // P0: require_approval treated as deny (human-in-the-loop is P1)
+    return decision === "allow";
+  });
 
   if (filteredSpecs.length === 0) {
     return EMPTY_CATALOG;
@@ -100,9 +112,10 @@ export function createToolCatalog(
   // Cache the list for repeated calls
   const cachedList = Object.freeze([...toolsMap.values()]);
 
-  return {
+  // Freeze for consistency with EMPTY_CATALOG
+  return Object.freeze({
     tools: toolsMap,
     get: (toolId: string) => toolsMap.get(toolId),
     list: () => cachedList,
-  };
+  });
 }

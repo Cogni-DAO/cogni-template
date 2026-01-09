@@ -155,6 +155,8 @@ Per invariants **EFFECT_TYPED**, **POLICY_IS_DATA**, **DENY_BY_DEFAULT**, **TOOL
 - [x] Add namespace prefix to tool names (`core__get_current_time`)
 - [x] Add test: deny-by-default (unknown tool name must fail)
 - [x] Add test: policy filter (tool in contracts but not in policy must not execute)
+- [x] Add test: require_approval treated as deny in P0 (tool-runner.test.ts)
+- [x] Add test: catalog filtering uses policy.decide() (tool-catalog.test.ts)
 
 ### P1: Tool Ecosystem + ToolCatalog
 
@@ -280,6 +282,11 @@ interface ToolContract<...> {
 // src/shared/ai/tool-policy.ts (P0 implementation)
 type ToolPolicyDecision = 'allow' | 'deny' | 'require_approval';
 
+/** Minimal context for policy decisions. P0: runId only. P1+: add caller, tenant, role. */
+interface ToolPolicyContext {
+  readonly runId: string;
+}
+
 interface ToolPolicy {
   /** Explicit allowlist of tool IDs that may execute */
   allowedTools: readonly string[];
@@ -290,15 +297,16 @@ interface ToolPolicy {
     maxRuntimeMs?: number;
     maxResultBytes?: number;
   };
-  /** Decide if a tool invocation is allowed. ONLY called by toolRunner.exec(). */
-  decide(toolId: string, effect: ToolEffect): ToolPolicyDecision;
+  /** Decide if a tool invocation is allowed. Called by createToolCatalog() and toolRunner.exec(). */
+  decide(ctx: ToolPolicyContext, toolId: string, effect: ToolEffect): ToolPolicyDecision;
 }
 
 // src/shared/ai/tool-catalog.ts (P0 implementation)
 /**
  * ToolCatalog: the per-request set of tools exposed to the model.
- * Built at bootstrap by compiling graph's ToolContracts AFTER policy filtering.
- * The model ONLY sees tools in this catalog — no surprise tools.
+ * Built by compiling graph's ToolContracts AFTER policy.decide() filtering.
+ * The model ONLY sees tools where policy.decide() returns 'allow'.
+ * P0: Both 'deny' and 'require_approval' exclude tools from catalog.
  */
 interface ToolCatalog {
   /** Tools exposed to the model for this request (post-policy filtering) */
@@ -313,15 +321,17 @@ interface ToolCatalog {
 **P0 workflow:**
 
 1. Graph defines `graphTools: ToolContract[]` by importing from `@cogni/ai-tools`
-2. `ToolPolicy` loaded from config (P0: static allowlist)
-3. Bootstrap compiles `graphTools` → filters by `policy.allowedTools` → `ToolCatalog`
+2. `ToolPolicy` loaded from config (P0: hardcoded allowlist with TODO for P1 config loading)
+3. `createToolCatalog(specs, policy)` calls `policy.decide()` for each tool:
+   - Only tools where `decide()` returns `'allow'` are included
+   - P0: `'deny'` and `'require_approval'` both exclude tools from catalog
 4. LLM receives only tools in `ToolCatalog` (model never sees denied tools)
-5. `toolRunner.exec(toolId, args, policy)` calls `policy.decide(toolId, effect)`:
+5. `toolRunner.exec(toolId, args)` calls `policy.decide(ctx, toolId, effect)` at runtime:
    - `allow` → execute tool
    - `deny` → error code `policy_denied`
-   - `require_approval` → P1: human-in-the-loop interrupt
+   - `require_approval` → P0: treated as deny; P1: human-in-the-loop interrupt
 
-**Enforcement is ONLY in `toolRunner.exec()`.** No scattered policy checks.
+**Double enforcement:** Catalog filters visibility; toolRunner enforces at runtime (defense in depth).
 
 **No tool registry service in P0.** Graphs import their tools directly. Tool bindings live in composition roots (`src/bootstrap/ai/tool-bindings.ts`), not adapter-scoped files.
 
