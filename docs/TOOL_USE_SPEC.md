@@ -224,21 +224,21 @@ Per invariant **MCP_UNTRUSTED_BY_DEFAULT**:
 
 ### 1. Tool Architecture
 
-| Layer            | Location                               | Owns                                                                   |
-| ---------------- | -------------------------------------- | ---------------------------------------------------------------------- |
-| Semantic types   | `@cogni/ai-core/tooling/types.ts`      | `ToolSpec`, `ToolEffect`, `ToolInvocationRecord` (with `raw`) — no Zod |
-| Contract         | `@cogni/ai-tools/tools/*.ts`           | Zod schema, allowlist, name, description, effect, redaction            |
-| Implementation   | `@cogni/ai-tools/tools/*.ts`           | `execute(ctx, args)` — IO via injected capabilities                    |
-| Schema compiler  | `@cogni/ai-tools/schema.ts`            | `toToolSpec(contract)` — compiles Zod → ToolSpec with JSONSchema7      |
-| Wire encoder     | `src/adapters/server/ai/*-encoder.ts`  | `ToolSpec` → provider wire format (OpenAI, Anthropic)                  |
-| Wire decoder     | `src/adapters/server/ai/*-decoder.ts`  | Provider response → `ToolInvocationRecord` + AiEvents                  |
-| Policy           | `src/shared/ai/tool-policy.ts`         | `ToolPolicy` — allowlist, effect requirements, budgets                 |
-| Catalog          | `src/shared/ai/tool-catalog.ts`        | `ToolCatalog` — explicit tool visibility for LLM                       |
-| Capability iface | `@cogni/ai-tools/capabilities/*.ts`    | Minimal interfaces tools depend on (e.g., Clock)                       |
-| LangChain wrap   | `@cogni/langgraph-graphs/runtime/`     | `toLangChainTool()` converter (delegates to toolRunner)                |
-| Binding (Next)   | `src/bootstrap/**`                     | Wire capabilities → adapters for Next.js runtime                       |
-| Binding (Server) | `packages/langgraph-server/bootstrap/` | Wire capabilities → adapters for LangGraph Server                      |
-| IO Adapter       | `src/adapters/server/**`               | Capability implementation                                              |
+| Layer            | Location                               | Owns                                                                        |
+| ---------------- | -------------------------------------- | --------------------------------------------------------------------------- |
+| Semantic types   | `@cogni/ai-core/tooling/types.ts`      | `ToolSpec`, `ToolEffect`, `ToolExecResult`, `ToolInvocationRecord` — no Zod |
+| Contract         | `@cogni/ai-tools/tools/*.ts`           | Zod schema, allowlist, name, description, effect, redaction                 |
+| Implementation   | `@cogni/ai-tools/tools/*.ts`           | `execute(ctx, args)` — IO via injected capabilities                         |
+| Schema compiler  | `@cogni/ai-tools/schema.ts`            | `toToolSpec(contract)` — compiles Zod → ToolSpec with JSONSchema7           |
+| Wire encoder     | `src/adapters/server/ai/*-encoder.ts`  | `ToolSpec` → provider wire format (OpenAI, Anthropic)                       |
+| Wire decoder     | `src/adapters/server/ai/*-decoder.ts`  | Provider response → `ToolInvocationRecord` + AiEvents                       |
+| Policy           | `src/shared/ai/tool-policy.ts`         | `ToolPolicy` — allowlist, effect requirements, budgets                      |
+| Catalog          | `src/shared/ai/tool-catalog.ts`        | `ToolCatalog` — explicit tool visibility for LLM                            |
+| Capability iface | `@cogni/ai-tools/capabilities/*.ts`    | Minimal interfaces tools depend on (e.g., Clock)                            |
+| LangChain wrap   | `@cogni/langgraph-graphs/runtime/`     | `toLangChainTool()` converter (delegates to toolRunner)                     |
+| Binding (Next)   | `src/bootstrap/**`                     | Wire capabilities → adapters for Next.js runtime                            |
+| Binding (Server) | `packages/langgraph-server/bootstrap/` | Wire capabilities → adapters for LangGraph Server                           |
+| IO Adapter       | `src/adapters/server/**`               | Capability implementation                                                   |
 
 **Rules:**
 
@@ -257,6 +257,15 @@ Per invariants **EFFECT_TYPED**, **CATALOG_IS_EXPLICIT**, **POLICY_IS_DATA**, **
 ```typescript
 // @cogni/ai-core/tooling/types.ts
 type ToolEffect = 'read_only' | 'state_change' | 'external_side_effect';
+
+/** Result of toolRunner.exec() — includes toolCallId for correlation */
+interface ToolExecResult {
+  readonly toolCallId: string;  // Always present (generated if not provided)
+  readonly ok: boolean;
+  readonly value?: unknown;     // Any JSON-serializable value (not Record<string, unknown>)
+  readonly errorCode?: ToolErrorCode;
+  readonly safeMessage?: string;
+}
 
 // @cogni/ai-tools/types.ts (ToolContract adds effect)
 interface ToolContract<...> {

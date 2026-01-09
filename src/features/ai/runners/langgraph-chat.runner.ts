@@ -38,7 +38,7 @@ import type {
   LlmToolDefinition,
 } from "@/ports";
 
-import { createToolRunner } from "../tool-runner";
+import { createToolRunner } from "@/shared/ai/tool-runner";
 import type { AiEvent } from "../types";
 
 type AnyBoundTool = BoundTool<

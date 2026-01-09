@@ -23,11 +23,11 @@ import {
 } from "@tests/_fakes";
 import { describe, expect, it } from "vitest";
 
-import { createToolRunner } from "@/features/ai/tool-runner";
 import type {
   ToolCallResultEvent,
   ToolCallStartEvent,
 } from "@/features/ai/types";
+import { createToolRunner } from "@/shared/ai/tool-runner";
 
 describe("features/ai/tool-runner", () => {
   describe("exec()", () => {

@@ -22,7 +22,7 @@
 import type { Message } from "@/core";
 import type { LlmToolCall, LlmToolDefinition } from "@/ports";
 
-import type { ToolRunner } from "../tool-runner";
+import type { ToolRunner } from "@/shared/ai/tool-runner";
 import type {
   AiEvent,
   ToolCallResultEvent,

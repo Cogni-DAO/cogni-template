@@ -84,6 +84,12 @@ export {
   TxHashAlreadyBoundPortError,
 } from "./payment-attempt.port";
 export type {
+  EmitAiEvent,
+  ToolEffect,
+  ToolExecFn,
+  ToolExecResult,
+} from "./tool-exec.port";
+export type {
   TokenBalance,
   TreasuryReadPort,
   TreasurySnapshot,

@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@features/ai/tool-runner`
+ * Module: `@shared/ai/tool-runner`
  * Purpose: Tool execution with AiEvent emission and payload redaction.
  * Scope: Sole owner of toolCallId generation; executes tools via injected implementations. Does not import adapters.
  * Invariants:
@@ -12,18 +12,17 @@
  *   - TOOLRUNNER_RESULT_SHAPE: Returns {ok:true, value} | {ok:false, errorCode, safeMessage}
  *   - TOOLRUNNER_PIPELINE_ORDER: validate args → execute → validate result → redact → emit → return
  * Side-effects: none (AiEvent emission via injected callback is caller's responsibility)
- * Notes: Per AI_SETUP_SPEC.md P1 invariants
- * Links: types.ts, ai_runtime.ts, AI_SETUP_SPEC.md
+ * Notes: Per AI_SETUP_SPEC.md P1 invariants. Moved from features/ai to shared/ai per TOOL_EXEC_TYPES_IN_AI_CORE.
+ * Links: @cogni/ai-core, @cogni/ai-tools, AI_SETUP_SPEC.md
  * @public
  */
 
 import type {
-  AiEvent,
-  BoundTool,
+  EmitAiEvent,
   ToolCallResultEvent,
   ToolCallStartEvent,
-  ToolResult,
-} from "./types";
+} from "@cogni/ai-core";
+import type { BoundTool, ToolResult } from "@cogni/ai-tools";
 
 /** Charset for provider-compatible tool call IDs */
 const TOOL_ID_CHARS =
@@ -37,12 +36,6 @@ function generateToolCallId(): string {
   for (const b of bytes) id += TOOL_ID_CHARS[b % TOOL_ID_CHARS.length];
   return id;
 }
-
-/**
- * Callback for emitting AiEvents during tool execution.
- * Used by tool-runner to stream events to runtime.
- */
-export type EmitAiEvent = (event: AiEvent) => void;
 
 /**
  * Options for tool execution.
@@ -220,3 +213,6 @@ export function createToolRunner<
  * Type for the tool runner instance.
  */
 export type ToolRunner = ReturnType<typeof createToolRunner>;
+
+// Re-export EmitAiEvent for convenience (canonical source is @cogni/ai-core)
+export type { EmitAiEvent } from "@cogni/ai-core";

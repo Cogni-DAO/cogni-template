@@ -14,6 +14,13 @@
  * @public
  */
 
+// Tool runner (for bootstrap wiring)
+export type {
+  EmitAiEvent,
+  ToolExecOptions,
+  ToolRunner,
+} from "@/shared/ai/tool-runner";
+export { createToolRunner } from "@/shared/ai/tool-runner";
 // Chat graph runners (for facade to build resolver)
 export { createChatRunner } from "./runners/chat.runner";
 export {
@@ -38,6 +45,3 @@ export {
   type MessageDto,
   toCoreMessages,
 } from "./services/mappers";
-export type { EmitAiEvent, ToolExecOptions, ToolRunner } from "./tool-runner";
-// Tool runner (for bootstrap wiring)
-export { createToolRunner } from "./tool-runner";

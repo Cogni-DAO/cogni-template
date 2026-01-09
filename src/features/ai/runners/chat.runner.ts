@@ -29,12 +29,12 @@ import type {
   LlmToolDefinition,
 } from "@/ports";
 
+import { createToolRunner } from "@/shared/ai/tool-runner";
 import {
   type ChatGraphDeps,
   type CompletionUnitFn,
   executeChatGraph,
 } from "../graphs/chat.graph";
-import { createToolRunner } from "../tool-runner";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Inline Tool Binding (temporary - will move to src/bootstrap/ai/)

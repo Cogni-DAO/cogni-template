@@ -417,13 +417,13 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern per feedback. This 
 - [x] Add `effect: ToolEffect` field to `ToolContract` in `@cogni/ai-tools`
 - [x] Add `policy_denied` to `ToolErrorCode` union
 - [x] Export from `@cogni/ai-core` barrel
-- [ ] Create `src/ports/tool-exec.port.ts` re-exporting from `@cogni/ai-core`
+- [x] Create `src/ports/tool-exec.port.ts` re-exporting from `@cogni/ai-core`
 - [ ] Define/retain exactly one `CompletionFinalResult` union — delete duplicates
 
 **Phase 3b: Move LangGraph Wiring to Adapters**
 
 - [ ] Create `src/adapters/server/ai/langgraph/` directory
-- [ ] Move `tool-runner.ts` → `src/shared/ai/tool-runner.ts`
+- [x] Move `tool-runner.ts` → `src/shared/ai/tool-runner.ts`
 - [ ] Delete `src/features/ai/runners/` (logic absorbed by provider)
 - [ ] Verify dep-cruiser: no adapters→features imports
 - NOTE: NO per-graph adapter files — graphs remain in `packages/langgraph-graphs/`

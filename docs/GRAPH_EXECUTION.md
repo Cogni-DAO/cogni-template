@@ -196,7 +196,7 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 - [x] Add `effect: ToolEffect` field to `ToolContract` in `@cogni/ai-tools`
 - [x] Add `policy_denied` to `ToolErrorCode` union
 - [x] Export from `@cogni/ai-core` barrel
-- [ ] Create `src/ports/tool-exec.port.ts` re-exporting from `@cogni/ai-core`
+- [x] Create `src/ports/tool-exec.port.ts` re-exporting from `@cogni/ai-core`
 - [ ] Define/retain exactly one `CompletionFinalResult` union (`ok:true | ok:false`) — delete all duplicates
 - [ ] Ensure failures use the union, not fake usage/finishReason patches
 - [ ] Verify single run streaming event contract used by both InProc and future Server adapter
@@ -204,8 +204,8 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 **Phase 2: Move LangGraph Wiring to Adapters**
 
 - [ ] Create `src/adapters/server/ai/langgraph/` directory
-- [ ] Move `features/ai/tool-runner.ts` → `src/shared/ai/tool-runner.ts` (adapters can import shared/)
-- [ ] Update imports in moved files to use `@cogni/ai-core` for tool exec types
+- [x] Move `features/ai/tool-runner.ts` → `src/shared/ai/tool-runner.ts` (adapters can import shared/)
+- [x] Update imports in moved files to use `@cogni/ai-core` for tool exec types
 - [ ] Delete `src/features/ai/runners/` directory (logic absorbed by provider)
 - [ ] Verify dep-cruiser passes (no adapters→features imports)
 - NOTE: NO per-graph adapter files — graphs remain in `packages/langgraph-graphs/`
