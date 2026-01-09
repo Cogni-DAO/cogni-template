@@ -41,14 +41,14 @@ vi.mock("@/bootstrap/container", () => ({
 
 // Mock the graph executor factory (stable boundary per UNIFIED_GRAPH_EXECUTOR)
 vi.mock("@/bootstrap/graph-executor.factory", () => ({
-  createInProcGraphExecutor: vi.fn(),
+  createGraphExecutor: vi.fn(),
 }));
 
 import { resolveAiAdapterDeps } from "@/bootstrap/container";
-import { createInProcGraphExecutor } from "@/bootstrap/graph-executor.factory";
+import { createGraphExecutor } from "@/bootstrap/graph-executor.factory";
 
 const mockResolveAiAdapterDeps = vi.mocked(resolveAiAdapterDeps);
-const mockCreateInProcGraphExecutor = vi.mocked(createInProcGraphExecutor);
+const mockCreateGraphExecutor = vi.mocked(createGraphExecutor);
 
 /**
  * Create a fake GraphExecutorPort for testing.
@@ -124,7 +124,7 @@ describe("app/_facades/ai/completion.server", () => {
         responseContent: "AI response",
         requestId: "req-123",
       });
-      mockCreateInProcGraphExecutor.mockReturnValue(fakeExecutor);
+      mockCreateGraphExecutor.mockReturnValue(fakeExecutor);
 
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
@@ -206,7 +206,7 @@ describe("app/_facades/ai/completion.server", () => {
           };
         },
       };
-      mockCreateInProcGraphExecutor.mockReturnValue(errorExecutor);
+      mockCreateGraphExecutor.mockReturnValue(errorExecutor);
 
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
@@ -245,7 +245,7 @@ describe("app/_facades/ai/completion.server", () => {
         responseContent: "Response",
         requestId: "req-456",
       });
-      mockCreateInProcGraphExecutor.mockReturnValue(fakeExecutor);
+      mockCreateGraphExecutor.mockReturnValue(fakeExecutor);
 
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
@@ -259,7 +259,7 @@ describe("app/_facades/ai/completion.server", () => {
       await completion(input, testCtx);
 
       // Assert - Factory must be called to create executor
-      expect(mockCreateInProcGraphExecutor).toHaveBeenCalledTimes(1);
+      expect(mockCreateGraphExecutor).toHaveBeenCalledTimes(1);
     });
 
     it("should set timestamps consistently from clock", async () => {
@@ -289,7 +289,7 @@ describe("app/_facades/ai/completion.server", () => {
         responseContent: "Response",
         requestId: "req-456",
       });
-      mockCreateInProcGraphExecutor.mockReturnValue(fakeExecutor);
+      mockCreateGraphExecutor.mockReturnValue(fakeExecutor);
 
       const testCtx: RequestContext = {
         log: makeNoopLogger(),
