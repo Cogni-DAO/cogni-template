@@ -21,6 +21,10 @@ import {
 } from "@cogni/ai-tools";
 
 import { CHAT_GRAPH_NAME, createChatGraph } from "./graphs/chat/graph";
+import {
+  createPondererGraph,
+  PONDERER_GRAPH_NAME,
+} from "./graphs/ponderer/graph";
 import type { CreateGraphFn } from "./inproc/types";
 
 /**
@@ -69,16 +73,46 @@ export const LANGGRAPH_CATALOG: Readonly<Record<string, CatalogEntry>> = {
     graphFactory: createChatGraph,
   },
 
-  // Phase 5: Add research graph here
-  // [RESEARCH_GRAPH_NAME]: {
-  //   displayName: "Research",
-  //   description: "Research agent with web search and summarization",
-  //   boundTools: { ... },
-  //   graphFactory: createResearchGraph,
-  // },
+  /**
+   * Ponderer graph - philosophical thinker agent.
+   * Same tools as chat, but with philosophical system prompt.
+   */
+  [PONDERER_GRAPH_NAME]: {
+    displayName: "Ponderer",
+    description: "Philosophical thinker with concise, profound responses",
+    boundTools: {
+      [GET_CURRENT_TIME_NAME]: getCurrentTimeBoundTool as AnyBoundTool,
+    },
+    graphFactory: createPondererGraph,
+  },
 } as const;
 
 /**
- * Type helper for catalog entry lookup.
+ * Type helper for catalog entry lookup (short names).
  */
 export type LangGraphCatalogKeys = keyof typeof LANGGRAPH_CATALOG;
+
+/**
+ * LangGraph provider ID for namespacing.
+ */
+export const LANGGRAPH_PROVIDER_ID = "langgraph" as const;
+
+/**
+ * Fully-qualified graph IDs satisfying GraphId from @cogni/ai-core.
+ * Per GRAPH_ID_NAMESPACED: format is ${providerId}:${graphName}
+ */
+export const LANGGRAPH_GRAPH_IDS = {
+  chat: `${LANGGRAPH_PROVIDER_ID}:${CHAT_GRAPH_NAME}`,
+  ponderer: `${LANGGRAPH_PROVIDER_ID}:${PONDERER_GRAPH_NAME}`,
+} as const;
+
+/**
+ * Union type of all valid LangGraph graph IDs.
+ */
+export type LangGraphGraphId =
+  (typeof LANGGRAPH_GRAPH_IDS)[keyof typeof LANGGRAPH_GRAPH_IDS];
+
+/**
+ * Default graph ID.
+ */
+export const DEFAULT_LANGGRAPH_GRAPH_ID = LANGGRAPH_GRAPH_IDS.chat;

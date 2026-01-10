@@ -15,7 +15,14 @@
  */
 
 // Re-export catalog (single source of truth for graph definitions)
-export { LANGGRAPH_CATALOG, type LangGraphCatalogKeys } from "./catalog";
+export {
+  DEFAULT_LANGGRAPH_GRAPH_ID,
+  LANGGRAPH_CATALOG,
+  LANGGRAPH_GRAPH_IDS,
+  LANGGRAPH_PROVIDER_ID,
+  type LangGraphCatalogKeys,
+  type LangGraphGraphId,
+} from "./catalog";
 
 // Re-export graph constants and factories
 export { CHAT_GRAPH_NAME } from "./graphs/index";

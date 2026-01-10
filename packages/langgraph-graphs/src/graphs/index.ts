@@ -21,3 +21,11 @@ export {
   type CreateChatGraphOptions,
   createChatGraph,
 } from "./chat/graph";
+
+// Ponderer graph (philosophical thinker)
+export {
+  type CreatePondererGraphOptions,
+  createPondererGraph,
+  PONDERER_GRAPH_NAME,
+  type PondererGraph,
+} from "./ponderer/graph";
