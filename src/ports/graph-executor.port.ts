@@ -14,9 +14,13 @@
  * @public
  */
 
+import type { AiExecutionErrorCode } from "@cogni/ai-core";
 import type { Message } from "@/core";
 import type { AiEvent } from "@/types/ai-events";
 import type { LlmCaller } from "./llm.port";
+
+// Re-export canonical error code type from ai-core
+export type { AiExecutionErrorCode } from "@cogni/ai-core";
 
 /**
  * Request to execute a graph.
@@ -56,7 +60,7 @@ export interface GraphFinal {
   /** How the graph finished */
   readonly finishReason?: string;
   /** Error type if not ok */
-  readonly error?: "timeout" | "aborted" | "internal";
+  readonly error?: AiExecutionErrorCode;
 }
 
 /**

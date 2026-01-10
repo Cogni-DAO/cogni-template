@@ -39,3 +39,5 @@ export {
   type MessageDto,
   toCoreMessages,
 } from "./services/mappers";
+// Preflight credit check (for facade-level gating before graph execution)
+export { preflightCreditCheck } from "./services/preflight-credit-check";

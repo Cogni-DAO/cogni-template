@@ -17,18 +17,19 @@
 
 import type { Logger } from "pino";
 
-import type {
-  AccountService,
-  AiTelemetryPort,
-  ChatDeltaEvent,
-  Clock,
-  CompletionFinalResult,
-  GraphExecutorPort,
-  GraphFinal,
-  GraphRunRequest,
-  GraphRunResult,
-  LangfusePort,
-  LlmService,
+import {
+  type AccountService,
+  type AiTelemetryPort,
+  type ChatDeltaEvent,
+  type Clock,
+  type CompletionFinalResult,
+  type GraphExecutorPort,
+  type GraphFinal,
+  type GraphRunRequest,
+  type GraphRunResult,
+  isInsufficientCreditsPortError,
+  type LangfusePort,
+  type LlmService,
 } from "@/ports";
 import type { RequestContext } from "@/shared/observability";
 import { makeLogger } from "@/shared/observability";
@@ -236,7 +237,9 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
       "InProcGraphExecutorAdapter.executeCompletionUnit"
     );
 
-    // Create completion promise lazily
+    // Create completion promise lazily, with error classification at the boundary.
+    // Per structural fix: classify InsufficientCreditsPortError while still typed,
+    // then propagate as errorCode data instead of letting it become "internal".
     const completionPromiseHolder: {
       promise?: ReturnType<CompletionStreamFn>;
     } = {};
@@ -256,6 +259,25 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
           ...(abortSignal && { abortSignal }),
           ...(tools && { tools }),
           ...(toolChoice && { toolChoice }),
+        }).catch((error: unknown) => {
+          // Classify at typed boundary: convert InsufficientCreditsPortError to typed result
+          if (isInsufficientCreditsPortError(error)) {
+            this.log.debug(
+              { runId, billingAccountId: caller.billingAccountId },
+              "Insufficient credits - returning typed error result"
+            );
+            // Return typed error result instead of throwing
+            const errorStream = (async function* () {
+              // Empty stream - error is in final
+            })();
+            const errorFinal: Promise<CompletionFinalResult> = Promise.resolve({
+              ok: false as const,
+              requestId: ingressRequestId,
+              error: "insufficient_credits" as const,
+            });
+            return { stream: errorStream, final: errorFinal };
+          }
+          throw error;
         });
       }
       return completionPromiseHolder.promise;

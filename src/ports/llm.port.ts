@@ -12,6 +12,7 @@
  * @public
  */
 
+import type { AiExecutionErrorCode } from "@cogni/ai-core";
 import type { Message } from "@/core";
 
 // Re-export Message for adapters
@@ -166,7 +167,7 @@ export type CompletionFinalResult =
   | {
       readonly ok: false;
       readonly requestId: string;
-      readonly error: "timeout" | "aborted" | "internal";
+      readonly error: AiExecutionErrorCode;
     };
 
 /**

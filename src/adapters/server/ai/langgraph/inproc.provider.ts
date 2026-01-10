@@ -20,6 +20,7 @@ import {
   type CompletionFn,
   type CreateGraphFn,
   createInProcGraphRunner,
+  type GraphResult,
   type InProcGraphRequest,
   LANGGRAPH_CATALOG,
   type ToolExecFn,
@@ -281,27 +282,18 @@ export class LangGraphInProcProvider implements GraphProvider {
 
   /**
    * Map package GraphResult to port GraphFinal.
+   * GraphResult.error is now AiExecutionErrorCode - direct passthrough.
    */
   private async mapToGraphFinal(
-    final: Promise<{
-      ok: boolean;
-      usage?: { promptTokens: number; completionTokens: number };
-      error?: string;
-    }>,
+    final: Promise<GraphResult>,
     runId: string,
     requestId: string
   ): Promise<GraphFinal> {
     const result = await final;
 
     if (!result.ok) {
-      const errorCode =
-        result.error === "aborted"
-          ? "aborted"
-          : result.error?.includes("timeout")
-            ? "timeout"
-            : "internal";
-
-      return { ok: false, runId, requestId, error: errorCode };
+      // Direct passthrough - GraphResult.error is already AiExecutionErrorCode
+      return { ok: false, runId, requestId, error: result.error ?? "internal" };
     }
 
     // Use explicit conditional for exactOptionalPropertyTypes

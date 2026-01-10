@@ -15,7 +15,6 @@
 export { SOURCE_SYSTEMS, type SourceSystem } from "./billing/source-system";
 // Context types
 export type { RunContext } from "./context/run-context";
-
 // Event types
 export type {
   AiEvent,
@@ -27,6 +26,8 @@ export type {
   ToolCallStartEvent,
   UsageReportEvent,
 } from "./events/ai-events";
+// Execution types
+export type { AiExecutionErrorCode } from "./execution/error-codes";
 // Tooling types
 export type {
   EmitAiEvent,

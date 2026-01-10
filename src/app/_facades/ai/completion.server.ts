@@ -23,8 +23,16 @@ import { resolveAiAdapterDeps } from "@/bootstrap/container";
 import { createGraphExecutor } from "@/bootstrap/graph-executor.factory";
 import type { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
 import { mapAccountsPortErrorToFeature } from "@/features/accounts/public";
+// Types from client-safe barrel (types only, no runtime)
+import type { AiEvent, StreamFinalResult } from "@/features/ai/public";
 // Import from public.server.ts - never from services/* directly (dep-cruiser enforced)
-import { type MessageDto, toCoreMessages } from "@/features/ai/public.server";
+import {
+  createAiRuntime,
+  executeStream,
+  type MessageDto,
+  preflightCreditCheck,
+  toCoreMessages,
+} from "@/features/ai/public.server";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { LlmCaller } from "@/ports";
 import {
@@ -77,7 +85,8 @@ export async function completion(
     const result = await final;
 
     if (!result.ok) {
-      // Map error result to thrown error for route handler
+      // Preflight handles insufficient_credits before execution starts.
+      // Any error here is from graph execution itself.
       throw new Error(`Completion failed: ${result.error}`);
     }
 
@@ -116,14 +125,13 @@ export async function completionStream(
   input: CompletionInput & { abortSignal?: AbortSignal },
   ctx: RequestContext
 ): Promise<{
-  stream: AsyncIterable<import("@/features/ai/public").AiEvent>;
-  final: Promise<import("@/features/ai/public").StreamFinalResult>;
+  stream: AsyncIterable<AiEvent>;
+  final: Promise<StreamFinalResult>;
 }> {
   // Per UNIFIED_GRAPH_EXECUTOR: use bootstrap factory (app → bootstrap → adapters)
   // Facade CANNOT import adapters - architecture boundary enforced by depcruise
   // Per PROVIDER_AGGREGATION: AggregatingGraphExecutor routes by graphId to providers
   const { accountService, clock } = resolveAiAdapterDeps();
-  const { executeStream } = await import("@/features/ai/public.server");
 
   // Create graph executor via bootstrap factory
   // Routing is handled by AggregatingGraphExecutor - facade is graph-agnostic
@@ -158,8 +166,16 @@ export async function completionStream(
   const coreMessages = toCoreMessages(input.messages, timestamp);
 
   try {
-    // Import from public.server.ts - never from services/* directly
-    const { createAiRuntime } = await import("@/features/ai/public.server");
+    // PREFLIGHT: Check credits BEFORE graph execution starts.
+    // This ensures InsufficientCreditsPortError propagates to facade's try/catch
+    // instead of getting normalized to "internal" inside the graph execution chain.
+    await preflightCreditCheck({
+      billingAccountId: billingAccount.id,
+      messages: coreMessages,
+      model: input.model,
+      accountService,
+    });
+
     const aiRuntime = createAiRuntime({
       graphExecutor,
       accountService,

@@ -125,7 +125,7 @@ export function createInProcGraphRunner<TTool = unknown>(
 
       emit({ type: "error", error: isAbort ? "aborted" : message });
 
-      return { ok: false, error: isAbort ? "aborted" : message };
+      return { ok: false, error: isAbort ? "aborted" : "internal" };
     } finally {
       queue.close();
     }

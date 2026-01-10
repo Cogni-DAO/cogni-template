@@ -44,6 +44,17 @@ vi.mock("@/bootstrap/graph-executor.factory", () => ({
   createGraphExecutor: vi.fn(),
 }));
 
+// Mock preflightCreditCheck to avoid serverEnv access in contract tests
+// Preserves other exports from public.server.ts (createAiRuntime, toCoreMessages, etc.)
+vi.mock("@/features/ai/public.server", async (importOriginal) => {
+  const original =
+    await importOriginal<typeof import("@/features/ai/public.server")>();
+  return {
+    ...original,
+    preflightCreditCheck: vi.fn().mockResolvedValue(undefined),
+  };
+});
+
 import { resolveAiAdapterDeps } from "@/bootstrap/container";
 import { createGraphExecutor } from "@/bootstrap/graph-executor.factory";
 

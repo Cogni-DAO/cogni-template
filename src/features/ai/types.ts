@@ -34,6 +34,9 @@ export type {
   UsageReportEvent,
 } from "@/types/ai-events";
 
+// Import shared execution error code from ports layer
+import type { AiExecutionErrorCode } from "@/ports";
+
 /**
  * Stream final result - discriminated union for ok/error paths.
  * Per assistant-stream: route must emit FinishMessage with real usage/finishReason.
@@ -64,5 +67,5 @@ export type StreamFinalResult =
   | {
       readonly ok: false;
       readonly requestId: string;
-      readonly error: "timeout" | "aborted" | "internal";
+      readonly error: AiExecutionErrorCode;
     };

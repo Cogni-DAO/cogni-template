@@ -37,6 +37,7 @@ export {
 } from "./ai-telemetry.port";
 export type { Clock } from "./clock.port";
 export type {
+  AiExecutionErrorCode,
   GraphExecutorPort,
   GraphFinal,
   GraphRunRequest,

@@ -16,11 +16,12 @@
  * @public
  */
 
-import { ESTIMATED_USD_PER_1K_TOKENS } from "@/core";
+import { ESTIMATED_USD_PER_1K_TOKENS, type Message } from "@/core";
 import type { AccountService } from "@/ports";
 import { InsufficientCreditsPortError } from "@/ports";
 import { isModelFree } from "@/shared/ai/model-catalog.server";
 import { calculateDefaultLlmCharge } from "./llmPricingPolicy";
+import { prepareMessages } from "./message-preparation";
 
 /**
  * Estimate cost in credits for pre-flight gating.
@@ -83,4 +84,40 @@ export async function validateCreditsUpperBound(
       currentBalance
     );
   }
+}
+
+/**
+ * Parameters for facade-level preflight credit check.
+ */
+export interface PreflightCreditCheckParams {
+  readonly billingAccountId: string;
+  readonly messages: Message[];
+  readonly model: string;
+  readonly accountService: AccountService;
+}
+
+/**
+ * Facade-level preflight credit check.
+ *
+ * Combines message preparation (for token estimation) with credit validation.
+ * Call this BEFORE starting graph execution to ensure InsufficientCreditsPortError
+ * propagates directly to the facade's error handler.
+ *
+ * @throws InsufficientCreditsPortError if balance < estimated cost
+ */
+export async function preflightCreditCheck(
+  params: PreflightCreditCheckParams
+): Promise<void> {
+  const { billingAccountId, messages, model, accountService } = params;
+
+  // Prepare messages to get token estimate
+  const { estimatedTokensUpperBound } = prepareMessages(messages, model);
+
+  // Validate credits using upper-bound estimate
+  await validateCreditsUpperBound(
+    billingAccountId,
+    estimatedTokensUpperBound,
+    model,
+    accountService
+  );
 }

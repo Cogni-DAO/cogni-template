@@ -13,7 +13,7 @@
  * @public
  */
 
-import type { AiEvent } from "@cogni/ai-core";
+import type { AiEvent, AiExecutionErrorCode } from "@cogni/ai-core";
 import type { ToolContract } from "@cogni/ai-tools";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { BaseMessage } from "@langchain/core/messages";
@@ -139,5 +139,5 @@ export interface GraphResult {
     readonly completionTokens: number;
   };
   readonly finishReason?: string;
-  readonly error?: string;
+  readonly error?: AiExecutionErrorCode;
 }
