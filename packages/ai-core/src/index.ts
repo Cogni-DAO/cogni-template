@@ -28,6 +28,8 @@ export type {
 } from "./events/ai-events";
 // Execution types
 export type { AiExecutionErrorCode } from "./execution/error-codes";
+// Graph types
+export type { GraphId } from "./graph/graph-id";
 // Tooling types
 export type {
   EmitAiEvent,
