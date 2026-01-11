@@ -49,6 +49,8 @@
 
 20. **CATALOG_STATIC_IN_P0**: P0 uses static catalog exported by `@cogni/langgraph-graphs`. Runtime graph discovery/registration is deferred to P1/P2. Adding a graph requires updating the package export, not runtime registration.
 
+21. **GRAPH_OWNS_MESSAGES**: Graphs are the single authority for all messages they construct — system prompts, multi-node context, tool instructions, etc. The completion/execution layer (`executeStream`) must pass messages through unmodified — no filtering, no injection. Security filtering of untrusted client input (stripping system messages) happens at the HTTP/API boundary before `GraphExecutorPort.runGraph()` is called, not in the execution layer.
+
 ---
 
 ## Graph Catalog & Provider Architecture
@@ -272,6 +274,7 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 - [ ] Add `graph_runs` table for run persistence (enables attempt semantics)
 - [ ] Add `attempt-semantics.test.ts`: resume does not change attempt
 - [ ] Add stack test: graph emits `usage_report`, billing records charge
+- [ ] Replace hardcoded UI graph list with API fetch from `GraphExecutorPort.listGraphs()`
 
 **Note:** Graph-specific integration tests are documented in [LANGGRAPH_AI.md](LANGGRAPH_AI.md) and [LANGGRAPH_TESTING.md](LANGGRAPH_TESTING.md).
 

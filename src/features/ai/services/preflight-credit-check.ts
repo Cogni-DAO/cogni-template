@@ -16,12 +16,15 @@
  * @public
  */
 
-import { ESTIMATED_USD_PER_1K_TOKENS, type Message } from "@/core";
+import {
+  ESTIMATED_USD_PER_1K_TOKENS,
+  estimateTotalTokens,
+  type Message,
+} from "@/core";
 import type { AccountService } from "@/ports";
 import { InsufficientCreditsPortError } from "@/ports";
 import { isModelFree } from "@/shared/ai/model-catalog.server";
 import { calculateDefaultLlmCharge } from "./llmPricingPolicy";
-import { prepareMessages } from "./message-preparation";
 
 /**
  * Estimate cost in credits for pre-flight gating.
@@ -99,9 +102,9 @@ export interface PreflightCreditCheckParams {
 /**
  * Facade-level preflight credit check.
  *
- * Combines message preparation (for token estimation) with credit validation.
- * Call this BEFORE starting graph execution to ensure InsufficientCreditsPortError
- * propagates directly to the facade's error handler.
+ * Best-effort estimate from user/assistant messages + fixed buffer.
+ * Per GRAPH_OWNS_MESSAGES: does not assume any system prompt — graphs own their prompts.
+ * This is a rough pre-check, not a guarantee. Post-call metering is source of truth.
  *
  * @throws InsufficientCreditsPortError if balance < estimated cost
  */
@@ -110,10 +113,11 @@ export async function preflightCreditCheck(
 ): Promise<void> {
   const { billingAccountId, messages, model, accountService } = params;
 
-  // Prepare messages to get token estimate
-  const { estimatedTokensUpperBound } = prepareMessages(messages, model);
+  // Estimate from user/assistant messages only + small buffer for graph overhead
+  const GRAPH_OVERHEAD_BUFFER = 500;
+  const baseTokens = estimateTotalTokens(messages);
+  const estimatedTokensUpperBound = baseTokens + GRAPH_OVERHEAD_BUFFER;
 
-  // Validate credits using upper-bound estimate
   await validateCreditsUpperBound(
     billingAccountId,
     estimatedTokensUpperBound,
