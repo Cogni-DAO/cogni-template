@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-10
+- **Last reviewed:** 2026-01-11
 - **Status:** draft
 
 ## Purpose
@@ -57,7 +57,8 @@ LangGraph graph definitions and runtime utilities for agentic AI execution. Cont
     - `AsyncQueue` — Simple async queue for streaming
   - `@cogni/langgraph-graphs/graphs` — Graph factories:
     - `createChatGraph()` — Simple React agent factory
-    - `CHAT_GRAPH_NAME` — Graph name constant
+    - `createPondererGraph()` — Philosophical thinker agent factory
+    - `CHAT_GRAPH_NAME`, `PONDERER_GRAPH_NAME` — Graph name constants
 - **CLI:** none
 - **Env/Config keys:** none (all deps injected)
 - **Files considered API:** `index.ts`, `inproc/index.ts`, `runtime/index.ts`, `graphs/index.ts`

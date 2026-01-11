@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-12-23
+- **Last reviewed:** 2026-01-11
 - **Status:** stable
 
 ## Purpose
@@ -37,7 +37,8 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 - **Exports (via public.ts/public.server.ts):**
   - `ChatRuntimeProvider` (chat runtime state)
   - `ModelPicker` (model selection dialog)
-  - `ChatComposerExtras` (composer toolbar with model selection)
+  - `ChatComposerExtras` (composer toolbar with model and graph selection)
+  - `GraphPicker` (graph/agent selection dialog)
   - `useModels` (React Query hook for models list)
   - `getPreferredModelId`, `setPreferredModelId`, `validatePreferredModel` (localStorage preferences)
   - `StreamFinalResult` (discriminated union for stream completion: ok with usage/finishReason, or error)
