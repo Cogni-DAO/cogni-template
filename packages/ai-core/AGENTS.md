@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-07
+- **Last reviewed:** 2026-01-12
 - **Status:** draft
 
 ## Purpose
@@ -50,9 +50,11 @@ Executor-agnostic AI primitives for cross-process communication. Defines `AiEven
   - `ToolSpec` - Canonical tool definition (JSONSchema7 inputSchema)
   - `ToolInvocationRecord` - Tool execution record (timing, result, error)
   - `ToolRedactionConfig` - Redaction config for tool output
+  - `AiExecutionErrorCode` - Canonical error codes (invalid_request, timeout, aborted, internal, insufficient_credits)
+  - `GraphId` - Namespaced graph identifier type (format: `${providerId}:${graphName}`)
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** `index.ts`, `events/*.ts`, `usage/*.ts`, `context/*.ts`, `billing/*.ts`, `tooling/*.ts`
+- **Files considered API:** `index.ts`, `events/*.ts`, `usage/*.ts`, `context/*.ts`, `billing/*.ts`, `tooling/*.ts`, `execution/*.ts`, `graph/*.ts`
 
 ## Ports
 

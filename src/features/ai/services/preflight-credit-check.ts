@@ -16,7 +16,11 @@
  * @public
  */
 
-import { ESTIMATED_USD_PER_1K_TOKENS } from "@/core";
+import {
+  ESTIMATED_USD_PER_1K_TOKENS,
+  estimateTotalTokens,
+  type Message,
+} from "@/core";
 import type { AccountService } from "@/ports";
 import { InsufficientCreditsPortError } from "@/ports";
 import { isModelFree } from "@/shared/ai/model-catalog.server";
@@ -83,4 +87,41 @@ export async function validateCreditsUpperBound(
       currentBalance
     );
   }
+}
+
+/**
+ * Parameters for facade-level preflight credit check.
+ */
+export interface PreflightCreditCheckParams {
+  readonly billingAccountId: string;
+  readonly messages: Message[];
+  readonly model: string;
+  readonly accountService: AccountService;
+}
+
+/**
+ * Facade-level preflight credit check.
+ *
+ * Best-effort estimate from user/assistant messages + fixed buffer.
+ * Per GRAPH_OWNS_MESSAGES: does not assume any system prompt — graphs own their prompts.
+ * This is a rough pre-check, not a guarantee. Post-call metering is source of truth.
+ *
+ * @throws InsufficientCreditsPortError if balance < estimated cost
+ */
+export async function preflightCreditCheck(
+  params: PreflightCreditCheckParams
+): Promise<void> {
+  const { billingAccountId, messages, model, accountService } = params;
+
+  // Estimate from user/assistant messages only + small buffer for graph overhead
+  const GRAPH_OVERHEAD_BUFFER = 500;
+  const baseTokens = estimateTotalTokens(messages);
+  const estimatedTokensUpperBound = baseTokens + GRAPH_OVERHEAD_BUFFER;
+
+  await validateCreditsUpperBound(
+    billingAccountId,
+    estimatedTokensUpperBound,
+    model,
+    accountService
+  );
 }

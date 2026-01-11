@@ -18,7 +18,6 @@
 import type { AiEvent } from "@cogni/ai-core";
 import type { BaseMessage } from "@langchain/core/messages";
 
-import { createChatGraph } from "../graphs/chat/graph";
 import { AsyncQueue } from "../runtime/async-queue";
 import { CompletionUnitLLM } from "../runtime/completion-unit-llm";
 import { toLangChainTools } from "../runtime/langchain-tools";
@@ -57,21 +56,30 @@ function extractAssistantContent(messages: BaseMessage[]): string {
 }
 
 /**
- * Create InProc chat runner.
+ * Create InProc graph runner.
+ *
+ * Generic runner that accepts a graph factory from the catalog.
+ * All LangChain logic is contained here — callers don't need LangChain imports.
  *
  * Per SINGLE_QUEUE_PER_RUN: Runner creates queue internally.
  * Per ASSISTANT_FINAL_REQUIRED: Emits exactly one assistant_final event.
  *
- * @param opts - Runner options
+ * @param opts - Runner options including graph factory
  * @returns { stream, final } - AsyncIterable of events and Promise of result
  */
-export function createInProcChatRunner<TTool = unknown>(
+export function createInProcGraphRunner<TTool = unknown>(
   opts: InProcRunnerOptions<TTool>
 ): {
   stream: AsyncIterable<AiEvent>;
   final: Promise<GraphResult>;
 } {
-  const { completionFn, createToolExecFn, toolContracts, request } = opts;
+  const {
+    createGraph,
+    completionFn,
+    createToolExecFn,
+    toolContracts,
+    request,
+  } = opts;
 
   // SINGLE_QUEUE_PER_RUN: Runner creates queue, all events flow here
   const queue = new AsyncQueue<AiEvent>();
@@ -92,7 +100,8 @@ export function createInProcChatRunner<TTool = unknown>(
     contracts: toolContracts,
     exec: toolExecFn,
   });
-  const graph = createChatGraph({ llm, tools });
+  // Use factory from catalog instead of hardcoded graph
+  const graph = createGraph({ llm, tools });
 
   const final = (async (): Promise<GraphResult> => {
     try {
@@ -111,12 +120,13 @@ export function createInProcChatRunner<TTool = unknown>(
 
       return { ok: true, usage, finishReason: "stop" };
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
       const isAbort = error instanceof Error && error.name === "AbortError";
+      const code = isAbort ? "aborted" : "internal";
 
-      emit({ type: "error", error: isAbort ? "aborted" : message });
+      // Per ERROR_NORMALIZATION: emit code only, not message
+      emit({ type: "error", error: code });
 
-      return { ok: false, error: isAbort ? "aborted" : message };
+      return { ok: false, error: code };
     } finally {
       queue.close();
     }

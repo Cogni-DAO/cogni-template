@@ -77,7 +77,7 @@ Per invariants **TOOL_SEMANTICS_CANONICAL**, **WIRE_FORMATS_ARE_ADAPTERS**, **OP
 - [x] Add `zod-to-json-schema` dependency
 - [x] Create `toToolSpec(contract)` in `@cogni/ai-tools/schema.ts` — compiles contract → `ToolSpec` with JSONSchema7
 - [ ] P0 schema subset validation (rejects oneOf/anyOf/allOf/not/if-then-else/patternProperties) — deferred post-P0
-- [ ] Remove manual JSON Schema in `chat.runner.ts` — use `toToolSpec()` output
+- [x] ~~Remove manual JSON Schema in `chat.runner.ts`~~ — runners deleted; `LangGraphInProcProvider` uses `toToolSpec()` via package
 
 **OpenAI wire adapter (`src/adapters/server/ai/`):**
 
@@ -197,28 +197,28 @@ Per invariant **MCP_UNTRUSTED_BY_DEFAULT**:
 
 ## File Pointers (P0)
 
-| File                                                 | Change                                                                               |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `src/contracts/ai.chat.v1.contract.ts`               | Extended: tool-call/tool-result parts, JSONValue, cross-field validation             |
-| `src/app/api/v1/ai/chat/route.ts`                    | Extended: `toMessageDtos()` handles tool messages, `validateToolCallIdConsistency()` |
-| `tests/contract/ai.chat.v1.contract.test.ts`         | New: regression tests for tool message validation                                    |
-| `@cogni/ai-core/tooling/types.ts`                    | New: `ToolSpec`, `ToolInvocationRecord` — canonical semantic types                   |
-| `@cogni/ai-tools/schema.ts`                          | New: `toToolSpec(contract)` — compiles Zod contract → ToolSpec                       |
-| `src/adapters/server/ai/openai-tool-encoder.ts`      | New: `OpenAIToolEncoder(ToolSpec)` → `tools[]`                                       |
-| `src/adapters/server/ai/openai-tool-decoder.ts`      | New: `OpenAIToolDecoder(stream)` → `ToolInvocationRecord` + AiEvents                 |
-| `src/adapters/server/ai/litellm.adapter.ts`          | Use encoder/decoder; parse `delta.tool_calls` in SSE stream                          |
-| `src/features/ai/runners/chat.runner.ts`             | Remove manual JSON Schema, use `toToolSpec()` output                                 |
-| `@cogni/ai-tools/tools/get-current-time.ts`          | Contract + implementation with capability injection                                  |
-| `@cogni/ai-tools/capabilities/*.ts`                  | Capability interfaces (e.g., Clock) for tool IO                                      |
-| `@cogni/langgraph-graphs/runtime/langchain-tools.ts` | `toLangChainTool()` wrapper for LangGraph execution                                  |
-| `src/bootstrap/ai/tools.bindings.ts`                 | Bind capabilities → adapters for Next.js runtime                                     |
-| `src/app/api/v1/ai/chat/route.ts`                    | Uncomment `addToolCallPart()` handling (lines 275-285)                               |
-| `src/features/ai/components/tools/ToolFallback.tsx`  | New: generic tool result UI component (optional for MVP)                             |
-| `tests/contracts/openai-tool-wire-format.test.ts`    | New: golden fixture tests for OpenAI wire format conformance                         |
-| `tests/contracts/tool-invocation-record.test.ts`     | New: semantic record lifecycle tests                                                 |
-| `src/shared/ai/tool-policy.ts`                       | New: `ToolPolicy` interface for deny-by-default enforcement                          |
-| `src/shared/ai/tool-catalog.ts`                      | New: `ToolCatalog` interface for explicit tool visibility                            |
-| `tests/unit/ai/tool-policy.test.ts`                  | New: deny-by-default + policy filter tests                                           |
+| File                                                  | Change                                                                               |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `src/contracts/ai.chat.v1.contract.ts`                | Extended: tool-call/tool-result parts, JSONValue, cross-field validation             |
+| `src/app/api/v1/ai/chat/route.ts`                     | Extended: `toMessageDtos()` handles tool messages, `validateToolCallIdConsistency()` |
+| `tests/contract/ai.chat.v1.contract.test.ts`          | New: regression tests for tool message validation                                    |
+| `@cogni/ai-core/tooling/types.ts`                     | New: `ToolSpec`, `ToolInvocationRecord` — canonical semantic types                   |
+| `@cogni/ai-tools/schema.ts`                           | New: `toToolSpec(contract)` — compiles Zod contract → ToolSpec                       |
+| `src/adapters/server/ai/openai-tool-encoder.ts`       | New: `OpenAIToolEncoder(ToolSpec)` → `tools[]`                                       |
+| `src/adapters/server/ai/openai-tool-decoder.ts`       | New: `OpenAIToolDecoder(stream)` → `ToolInvocationRecord` + AiEvents                 |
+| `src/adapters/server/ai/litellm.adapter.ts`           | Use encoder/decoder; parse `delta.tool_calls` in SSE stream                          |
+| `src/adapters/server/ai/langgraph/inproc.provider.ts` | Uses tool contracts from catalog; schemas compiled via `@cogni/ai-tools`             |
+| `@cogni/ai-tools/tools/get-current-time.ts`           | Contract + implementation with capability injection                                  |
+| `@cogni/ai-tools/capabilities/*.ts`                   | Capability interfaces (e.g., Clock) for tool IO                                      |
+| `@cogni/langgraph-graphs/runtime/langchain-tools.ts`  | `toLangChainTool()` wrapper for LangGraph execution                                  |
+| `src/bootstrap/ai/tools.bindings.ts`                  | Bind capabilities → adapters for Next.js runtime                                     |
+| `src/app/api/v1/ai/chat/route.ts`                     | Uncomment `addToolCallPart()` handling (lines 275-285)                               |
+| `src/features/ai/components/tools/ToolFallback.tsx`   | New: generic tool result UI component (optional for MVP)                             |
+| `tests/contracts/openai-tool-wire-format.test.ts`     | New: golden fixture tests for OpenAI wire format conformance                         |
+| `tests/contracts/tool-invocation-record.test.ts`      | New: semantic record lifecycle tests                                                 |
+| `src/shared/ai/tool-policy.ts`                        | New: `ToolPolicy` interface for deny-by-default enforcement                          |
+| `src/shared/ai/tool-catalog.ts`                       | New: `ToolCatalog` interface for explicit tool visibility                            |
+| `tests/unit/ai/tool-policy.test.ts`                   | New: deny-by-default + policy filter tests                                           |
 
 ---
 

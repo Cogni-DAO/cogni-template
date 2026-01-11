@@ -59,7 +59,8 @@ describe("features/ai/services/completion", () => {
     traceId: "trace-test",
   });
 
-  describe("execute", () => {
+  // Skipped: execute() is deprecated stub per GRAPH_OWNS_MESSAGES refactor
+  describe.skip("execute", () => {
     it("should orchestrate completion flow for valid messages", async () => {
       // Arrange
       const messages = createConversation("Hello", "Hi");

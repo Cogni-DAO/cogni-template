@@ -12,12 +12,15 @@
  */
 
 // Runner
-export { createInProcChatRunner } from "./runner";
+export { createInProcGraphRunner } from "./runner";
 
 // Types
 export type {
+  CompiledGraph,
   CompletionFn,
   CompletionResult,
+  CreateGraphFn,
+  CreateGraphOptions,
   GraphResult,
   InProcGraphRequest,
   InProcRunnerOptions,

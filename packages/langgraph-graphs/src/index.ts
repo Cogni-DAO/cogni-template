@@ -14,8 +14,34 @@
  * @public
  */
 
+// Re-export catalog (single source of truth for graph definitions)
+export {
+  DEFAULT_LANGGRAPH_GRAPH_ID,
+  LANGGRAPH_CATALOG,
+  LANGGRAPH_GRAPH_IDS,
+  LANGGRAPH_PROVIDER_ID,
+  type LangGraphCatalogKeys,
+  type LangGraphGraphId,
+} from "./catalog";
+
 // Re-export graph constants and factories
-export { CHAT_GRAPH_NAME } from "./graphs/index";
+export { POET_GRAPH_NAME } from "./graphs/index";
+
+// Re-export inproc runner (all LangChain logic contained in package)
+export { createInProcGraphRunner } from "./inproc/runner";
+
+// Re-export inproc types for provider to use
+export type {
+  CompletionFn,
+  CompletionResult,
+  CreateGraphFn,
+  GraphResult,
+  InProcGraphRequest,
+  InProcRunnerOptions,
+  Message,
+  ToolExecFn,
+  ToolExecResult,
+} from "./inproc/types";
 
 // Re-export runtime types (interfaces only, not implementations)
-export type { Message, ToLangChainToolOptions } from "./runtime/index";
+export type { ToLangChainToolOptions } from "./runtime/index";

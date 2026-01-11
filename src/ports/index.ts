@@ -12,6 +12,7 @@
  * @public
  */
 
+export type { GraphId } from "@cogni/ai-core";
 export {
   type AccountService,
   type BillingAccount,
@@ -37,6 +38,7 @@ export {
 } from "./ai-telemetry.port";
 export type { Clock } from "./clock.port";
 export type {
+  AiExecutionErrorCode,
   GraphExecutorPort,
   GraphFinal,
   GraphRunRequest,
@@ -55,6 +57,7 @@ export type {
   LlmToolCallDelta,
   LlmToolChoice,
   LlmToolDefinition,
+  Message,
 } from "./llm.port";
 export type {
   InstantQueryParams,

@@ -3,21 +3,35 @@
 
 /**
  * Module: `@cogni/langgraph-graphs/graphs`
- * Purpose: Barrel export for graph factories.
- * Scope: Graph creation functions. Does NOT include runners (those live in src/).
+ * Purpose: Barrel export for graph factories and shared types.
+ * Scope: Graph creation functions and type definitions. Does NOT include runners (those live in src/).
  * Invariants:
  *   - Graphs are pure factories — no side effects, no env reads
  *   - All LangChain graph creation code lives here
- *   - Runners in src/ wire dependencies and execute graphs
+ *   - Shared types prevent per-graph interface duplication
  * Side-effects: none
- * Links: LANGGRAPH_AI.md
+ * Links: LANGGRAPH_AI.md, AGENT_DEVELOPMENT_GUIDE.md
  * @public
  */
 
-// Chat graph
+// Poet graph (poetic AI assistant)
 export {
-  CHAT_GRAPH_NAME,
-  type ChatGraph,
-  type CreateChatGraphOptions,
-  createChatGraph,
-} from "./chat/graph";
+  createPoetGraph,
+  POET_GRAPH_NAME,
+  type PoetGraph,
+} from "./poet/graph";
+// Ponderer graph (philosophical thinker)
+export {
+  createPondererGraph,
+  PONDERER_GRAPH_NAME,
+  type PondererGraph,
+} from "./ponderer/graph";
+// Shared graph types
+export {
+  asInvokableGraph,
+  type CreateReactAgentGraphOptions,
+  type GraphInvokeOptions,
+  type InvokableGraph,
+  type MessageGraphInput,
+  type MessageGraphOutput,
+} from "./types";

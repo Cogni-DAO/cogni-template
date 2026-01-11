@@ -15,6 +15,7 @@
  * @public
  */
 
+import type { AiExecutionErrorCode } from "../execution/error-codes";
 import type { UsageFact } from "../usage/usage";
 
 /**
@@ -94,13 +95,15 @@ export interface DoneEvent {
 
 /**
  * Stream error.
- * Emitted by runtime when an unrecoverable error occurs during streaming.
- * Terminal event: uiStream returns immediately after yielding this.
+ * Emitted at GraphExecutor boundary when an unrecoverable error occurs.
+ * Terminal event: stream must emit DoneEvent after this.
+ *
+ * Per ERROR_NORMALIZATION: error is a typed code, not a freeform string.
+ * Details belong in logs, not in the event stream.
  */
 export interface ErrorEvent {
   readonly type: "error";
-  /** Error message or code */
-  readonly error: string;
+  readonly error: AiExecutionErrorCode;
 }
 
 /**

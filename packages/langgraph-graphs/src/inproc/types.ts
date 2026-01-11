@@ -8,14 +8,21 @@
  * Invariants:
  *   - PACKAGES_NO_SRC_IMPORTS: No imports from src/**
  *   - Single queue pattern: runner creates queue, passes emit to caller's factory
+ *   - LANGCHAIN_ALIGNED: Graph types aligned with graphs/types.ts
  * Side-effects: none
  * Links: LANGGRAPH_AI.md
  * @public
  */
 
-import type { AiEvent } from "@cogni/ai-core";
+import type { AiEvent, AiExecutionErrorCode } from "@cogni/ai-core";
 import type { ToolContract } from "@cogni/ai-tools";
-
+// Import shared graph types from graphs/types.ts (single source of truth)
+import type {
+  CreateReactAgentGraphOptions,
+  InvokableGraph,
+  MessageGraphInput,
+  MessageGraphOutput,
+} from "../graphs/types";
 import type {
   CompletionFn,
   CompletionResult,
@@ -25,6 +32,35 @@ import type { Message } from "../runtime/message-converters";
 
 // Re-export for convenience
 export type { CompletionFn, CompletionResult, Message, ToolCall };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Graph Factory Types (aliased from graphs/types.ts)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Options passed to graph factory functions.
+ * Alias to shared CreateReactAgentGraphOptions.
+ */
+export type CreateGraphOptions = CreateReactAgentGraphOptions;
+
+/**
+ * Minimal structural interface for compiled graphs.
+ * Alias to shared InvokableGraph with message-based I/O.
+ */
+export type CompiledGraph = InvokableGraph<
+  MessageGraphInput,
+  MessageGraphOutput
+>;
+
+/**
+ * Graph factory function signature.
+ * Used by LangGraphInProcProvider to create graphs from catalog entries.
+ *
+ * Each graph type exports a factory matching this signature:
+ * - createPoetGraph: Creates React agent for poet
+ * - createResearchGraph: Creates research agent (Phase 5)
+ */
+export type CreateGraphFn = (opts: CreateGraphOptions) => CompiledGraph;
 
 /**
  * Result from tool execution via exec function.
@@ -63,11 +99,14 @@ export interface InProcGraphRequest {
 }
 
 /**
- * Options for createInProcChatRunner.
+ * Options for createInProcGraphRunner.
  * Runner creates queue internally, passes emit to createToolExecFn.
  * Generic TTool allows src/ to specify LlmToolDefinition while package defaults to unknown.
  */
 export interface InProcRunnerOptions<TTool = unknown> {
+  /** Graph factory from catalog - creates compiled graph with LLM and tools */
+  readonly createGraph: CreateGraphFn;
+
   /** Per-LLM-call completion function (called N times in agentic loop) */
   readonly completionFn: CompletionFn<TTool>;
 
@@ -97,5 +136,5 @@ export interface GraphResult {
     readonly completionTokens: number;
   };
   readonly finishReason?: string;
-  readonly error?: string;
+  readonly error?: AiExecutionErrorCode;
 }

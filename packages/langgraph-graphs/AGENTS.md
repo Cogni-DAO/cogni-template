@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-07
+- **Last reviewed:** 2026-01-12
 - **Status:** draft
 
 ## Purpose
@@ -42,20 +42,26 @@ LangGraph graph definitions and runtime utilities for agentic AI execution. Cont
 ## Public Surface
 
 - **Exports (subpaths):**
-  - `@cogni/langgraph-graphs` — Barrel re-export of common types
+  - `@cogni/langgraph-graphs` — Barrel re-export of common types plus:
+    - `LANGGRAPH_CATALOG` — Graph catalog with registered graphs and metadata
   - `@cogni/langgraph-graphs/inproc` — InProc execution runner:
-    - `createInProcChatRunner()` — InProc graph runner factory for Next.js server runtime
+    - `createInProcGraphRunner()` — Generic InProc graph runner factory
     - `InProcRunnerOptions`, `InProcGraphRequest`, `GraphResult` — Runner types
     - `CompletionFn`, `CompletionResult` — Injected completion function types
+    - `CreateGraphFn`, `CreateGraphOptions` — Graph factory types
     - `ToolExecFn`, `ToolExecResult` — Tool execution types
   - `@cogni/langgraph-graphs/runtime` — LangChain utilities:
     - `toLangChainTools()` — Convert tool contracts to LangChain DynamicStructuredTool
     - `CompletionUnitLLM` — BaseChatModel wrapper for billing integration
     - `toBaseMessage()`, `fromBaseMessage()` — Message converters
     - `AsyncQueue` — Simple async queue for streaming
-  - `@cogni/langgraph-graphs/graphs` — Graph factories:
-    - `createChatGraph()` — Simple React agent factory
-    - `CHAT_GRAPH_NAME` — Graph name constant
+  - `@cogni/langgraph-graphs/graphs` — Graph factories and shared types:
+    - `createPoetGraph()`, `createPondererGraph()` — React agent factories
+    - `POET_GRAPH_NAME`, `PONDERER_GRAPH_NAME` — Graph name constants
+    - `InvokableGraph<I,O>` — Type firewall (Pick<RunnableInterface, "invoke">)
+    - `GraphInvokeOptions` — Alias to Partial<RunnableConfig>
+    - `CreateReactAgentGraphOptions` — Base factory options
+    - `asInvokableGraph()` — Centralized cast with runtime assertion
 - **CLI:** none
 - **Env/Config keys:** none (all deps injected)
 - **Files considered API:** `index.ts`, `inproc/index.ts`, `runtime/index.ts`, `graphs/index.ts`
@@ -93,12 +99,12 @@ pnpm --filter @cogni/langgraph-graphs test
 ## Change Protocol
 
 - Update this file when public exports change
-- Changes to graph contracts require updating `src/features/ai/runners/`
+- Changes to graph contracts require updating `src/adapters/server/ai/langgraph/inproc.provider.ts`
 - Coordinate with LANGGRAPH_AI.md invariants
 
 ## Notes
 
 - Per NO_LANGCHAIN_IN_SRC: `src/**` cannot import `@langchain/*` — only this package
 - Per PACKAGES_NO_SRC_IMPORTS: This package cannot import from `src/**`
-- Runners that wire this package live in `src/features/ai/runners/`
+- `LangGraphInProcProvider` in `src/adapters/server/ai/langgraph/` wires this package
 - Package isolation enables LangGraph Server to import graphs without Next.js deps

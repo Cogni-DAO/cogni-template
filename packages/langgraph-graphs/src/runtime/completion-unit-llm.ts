@@ -151,15 +151,26 @@ export class CompletionUnitLLM extends BaseChatModel {
         this.boundTools.length > 0 && { tools: this.boundTools }),
     });
 
+    // CRITICAL: Register guard immediately to prevent unhandled rejection.
+    // stream and final share the same underlying promise - if one rejects,
+    // both do. Without this guard, final may reject before/independently of
+    // stream iteration, causing unhandled rejection.
+    const finalGuard = final.catch(() => undefined);
+
     // Drain stream, pushing tokens to sink (SYNC!)
-    for await (const event of stream) {
-      if (this.tokenSink) {
-        // Push is synchronous per NO_AWAIT_IN_TOKEN_PATH
-        this.tokenSink.push(event);
+    try {
+      for await (const event of stream) {
+        if (this.tokenSink) {
+          // Push is synchronous per NO_AWAIT_IN_TOKEN_PATH
+          this.tokenSink.push(event);
+        }
       }
+    } finally {
+      // Ensure finalGuard is awaited even on error path
+      await finalGuard;
     }
 
-    // Await final result
+    // Await final result (success path)
     const result = await final;
 
     if (!result.ok) {

@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-12-23
+- **Last reviewed:** 2026-01-12
 - **Status:** stable
 
 ## Purpose
@@ -37,24 +37,23 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 - **Exports (via public.ts/public.server.ts):**
   - `ChatRuntimeProvider` (chat runtime state)
   - `ModelPicker` (model selection dialog)
-  - `ChatComposerExtras` (composer toolbar with model selection)
+  - `ChatComposerExtras` (composer toolbar with model and graph selection)
+  - `GraphPicker` (graph/agent selection dialog)
   - `useModels` (React Query hook for models list)
   - `getPreferredModelId`, `setPreferredModelId`, `validatePreferredModel` (localStorage preferences)
   - `StreamFinalResult` (discriminated union for stream completion: ok with usage/finishReason, or error)
   - `AiEvent` (union of all AI runtime events: text_delta, tool events, done)
   - `createAiRuntime` (AI runtime orchestrator via public.server.ts)
-  - `toolRunner` (tool execution; owns toolCallId; emits tool lifecycle AiEvents)
-  - `createChatRunner` (graph runner factory for chat graph, via public.server.ts)
+  - `createToolRunner` (tool execution factory; owns toolCallId; emits tool lifecycle AiEvents)
 - **Routes:**
   - `/api/v1/ai/completion` (POST) - text completion with credits metering
   - `/api/v1/ai/chat` (POST) - chat endpoint (P1: consumes AiEvents, maps to assistant-stream format)
   - `/api/v1/ai/models` (GET) - list available models with tier info
   - `/api/v1/activity` (GET) - usage statistics and logs
 - **Subdirectories:**
-  - `runners/` - Graph runner factories for bootstrap wiring. See [runners/AGENTS.md](./runners/AGENTS.md).
+  - Note: `runners/` and `graphs/` DELETED — logic absorbed by `LangGraphInProcProvider` in adapters layer.
   - Note: Tool contracts live in `@cogni/ai-tools` package (per TOOLS_IN_PACKAGES invariant).
-  - `graphs/` - Graph definitions (chat.graph.ts with agentic tool loop)
-  - Note: LangGraph graphs live in `apps/langgraph-service/` (external process), NOT here. See [LANGGRAPH_SERVER.md](../../../docs/LANGGRAPH_SERVER.md).
+  - Note: LangGraph graphs live in `packages/langgraph-graphs/` — provider wires them via catalog. See [LANGGRAPH_AI.md](../../../docs/LANGGRAPH_AI.md).
   - `services/` - AI service modules:
     - `completion.ts` - Orchestrator with internal DRY helpers (execute, executeStream)
     - `message-preparation.ts` - Message filtering, validation, fallbackPromptHash
@@ -66,7 +65,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
     - `run-id-factory.ts` - Run identity factory (P0: runId = reqId)
     - `llmPricingPolicy.ts` - Pricing markup calculation
 - **Env/Config keys:** `LITELLM_BASE_URL`, `DEFAULT_MODEL` (via serverEnv)
-- **Files considered API:** public.ts, public.server.ts, types.ts, services/ai_runtime.ts, tool-runner.ts, runners/chat.runner.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
+- **Files considered API:** public.ts, public.server.ts, types.ts, services/ai_runtime.ts, chat/providers/ChatRuntimeProvider.client.tsx, components/\*, hooks/\*
 
 ## Ports
 
@@ -90,8 +89,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - Create Langfuse traces for observability (optional, env-gated)
   - Provide createAiRuntime as single AI entrypoint via GraphExecutorPort
   - Use RunEventRelay for pump+fanout pattern (billing independent of UI)
-  - Execute tools via toolRunner — owns toolCallId, emits AiEvents, redacts payloads
-  - Provide graph runner factories via createChatRunner (for bootstrap wiring)
+  - Execute tools via createToolRunner — owns toolCallId, emits AiEvents, redacts payloads
 
 - **This feature does not:**
   - Implement LLM adapters (owned by adapters/server/ai)

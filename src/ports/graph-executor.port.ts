@@ -14,9 +14,13 @@
  * @public
  */
 
+import type { AiExecutionErrorCode } from "@cogni/ai-core";
 import type { Message } from "@/core";
 import type { AiEvent } from "@/types/ai-events";
 import type { LlmCaller } from "./llm.port";
+
+// Re-export canonical error code type from ai-core
+export type { AiExecutionErrorCode } from "@cogni/ai-core";
 
 /**
  * Request to execute a graph.
@@ -34,7 +38,11 @@ export interface GraphRunRequest {
   readonly caller: LlmCaller;
   /** Optional abort signal for cancellation */
   readonly abortSignal?: AbortSignal;
-  /** Graph name to execute (default: "chat") */
+  /**
+   * Fully-qualified graph ID (e.g., "langgraph:poet").
+   * Required - executor fails fast if not provided.
+   * Per GRAPH_ID_NAMESPACED: format is ${providerId}:${graphName}
+   */
   readonly graphName?: string;
 }
 
@@ -56,7 +64,7 @@ export interface GraphFinal {
   /** How the graph finished */
   readonly finishReason?: string;
   /** Error type if not ok */
-  readonly error?: "timeout" | "aborted" | "internal";
+  readonly error?: AiExecutionErrorCode;
 }
 
 /**

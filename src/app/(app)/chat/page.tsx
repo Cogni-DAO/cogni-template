@@ -30,12 +30,14 @@ import { toErrorAlertProps } from "@/features/ai/chat/utils/toErrorAlertProps";
 import {
   ChatComposerExtras,
   ChatErrorBubble,
+  DEFAULT_GRAPH_ID,
   getPreferredModelId,
   pickDefaultModel,
   setPreferredModelId,
   useModels,
 } from "@/features/ai/public";
 import { useCreditsSummary } from "@/features/payments/public";
+import type { GraphId } from "@/ports";
 
 const ChatWelcomeWithHint = () => (
   <div className="mx-auto flex h-full w-full max-w-[var(--thread-max-width)] flex-col items-center justify-center">
@@ -65,6 +67,7 @@ export default function ChatPage(): ReactNode {
 
   // State
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  const [selectedGraph, setSelectedGraph] = useState(DEFAULT_GRAPH_ID);
   const [chatError, setChatError] = useState<ChatError | null>(null);
   const [isBlocked, setIsBlocked] = useState(false);
 
@@ -130,6 +133,11 @@ export default function ChatPage(): ReactNode {
     setPreferredModelId(modelId);
     setIsBlocked(false);
     setChatError(null);
+  }, []);
+
+  // Graph change handler
+  const handleGraphChange = useCallback((graphId: GraphId) => {
+    setSelectedGraph(graphId);
   }, []);
 
   // Error handler from provider
@@ -216,6 +224,7 @@ export default function ChatPage(): ReactNode {
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <ChatRuntimeProvider
         selectedModel={selectedModel}
+        selectedGraph={selectedGraph}
         defaultModelId={uiDefaultModelId}
         onAuthExpired={() => signOut()}
         onError={handleError}
@@ -228,6 +237,8 @@ export default function ChatPage(): ReactNode {
               onModelChange={handleModelChange}
               defaultModelId={uiDefaultModelId}
               balance={balance}
+              selectedGraph={selectedGraph}
+              onGraphChange={handleGraphChange}
             />
           }
           errorMessage={

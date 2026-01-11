@@ -231,8 +231,9 @@ export const AssistantUiInputSchema = z.object({
   system: z.string().optional(),
   /** Tools (optional, ignored for now) */
   tools: z.record(z.string(), z.unknown()).optional(),
-  /** Graph name to execute (default: "chat") */
-  graphName: z.string().default("chat"),
+  /** Graph name to execute (default: "poet") */
+  // TODO: Remove default - require explicit graphName, fail fast if missing
+  graphName: z.string().default("poet"),
 });
 
 export const aiChatOperation = {

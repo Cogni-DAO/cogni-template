@@ -20,6 +20,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useCallback, useEffect, useRef } from "react";
 
 import type { ChatError } from "@/contracts/error.chat.v1.contract";
+import type { GraphId } from "@/ports";
 import * as clientLogger from "@/shared/observability/client";
 import { EVENT_NAMES } from "@/shared/observability/events";
 
@@ -35,6 +36,7 @@ export interface ChatRuntimeRef {
 interface ChatRuntimeProviderProps {
   children: ReactNode;
   selectedModel: string;
+  selectedGraph: GraphId;
   defaultModelId: string;
   onAuthExpired?: () => void;
   onError?: (error: ChatError) => void;
@@ -43,17 +45,23 @@ interface ChatRuntimeProviderProps {
 export function ChatRuntimeProvider({
   children,
   selectedModel,
+  selectedGraph,
   defaultModelId,
   onAuthExpired,
   onError,
 }: ChatRuntimeProviderProps) {
   const queryClient = useQueryClient();
   const selectedModelRef = useRef(selectedModel);
+  const selectedGraphRef = useRef(selectedGraph);
 
-  // Keep ref in sync
+  // Keep refs in sync
   useEffect(() => {
     selectedModelRef.current = selectedModel;
   }, [selectedModel]);
+
+  useEffect(() => {
+    selectedGraphRef.current = selectedGraph;
+  }, [selectedGraph]);
 
   // Handle response errors
   const handleResponse = useCallback(
@@ -100,6 +108,7 @@ export function ChatRuntimeProvider({
     api: "/api/v1/ai/chat",
     body: {
       model: selectedModel,
+      graphName: selectedGraph,
     },
     onResponse: handleResponse,
     onFinish: handleFinish,

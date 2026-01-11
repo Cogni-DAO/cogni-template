@@ -96,8 +96,16 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
     // Create RunContext for relay subscribers (per RELAY_PROVIDES_CONTEXT)
     const runContext: RunContext = { runId, attempt, ingressRequestId };
 
+    // Per GRAPH_ID_NAMESPACED: graphIds are ${providerId}:${graphName}
+    // P0: LangGraph is sole provider, so we namespace here. Default graph is 'poet'.
+    // Already-namespaced IDs pass through; raw names get "langgraph:" prefix.
+    // TODO: Remove default - if no graphName passed, fail fast instead of defaulting
+    const resolvedGraphId = graphName?.includes(":")
+      ? graphName
+      : `langgraph:${graphName ?? "poet"}`;
+
     log.debug(
-      { runId, ingressRequestId, model, graphName },
+      { runId, ingressRequestId, model, graphName: resolvedGraphId },
       "runChatStream starting"
     );
 
@@ -109,7 +117,7 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
       model,
       caller,
       ...(abortSignal && { abortSignal }),
-      ...(graphName && { graphName }),
+      graphName: resolvedGraphId,
     });
 
     // Create RunEventRelay for pump+fanout pattern (context provided to subscribers)
@@ -232,7 +240,7 @@ class RunEventRelay {
       // Emit error event so uiStream terminates on protocol
       const errorEvent: AiEvent = {
         type: "error",
-        error: err instanceof Error ? err.message : "pump_error",
+        error: "internal",
       };
       this.uiQueue.push(errorEvent);
       this.notifyUi();

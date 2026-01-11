@@ -3,10 +3,9 @@
 
 /**
  * Module: `@adapters/server/ai/inproc-graph`
- * Purpose: In-process graph executor adapter wrapping existing LLM completion flow.
- * Scope: Implements GraphExecutorPort for direct LLM calls. Does not handle multi-step graphs (P1).
+ * Purpose: In-process graph executor adapter providing completion units for graph providers.
+ * Scope: Provides executeCompletionUnit() for LangGraphInProcProvider. Also implements GraphExecutorPort for default completion path. Does NOT import @langchain/*.
  * Invariants:
- *   - UNIFIED_GRAPH_EXECUTOR: All execution flows through GraphExecutorPort
  *   - GRAPH_LLM_VIA_COMPLETION: Delegates to completion.executeStream for billing/telemetry
  *   - P0_ATTEMPT_FREEZE: attempt is always 0 (no run persistence)
  *   - GRAPH_FINALIZATION_ONCE: Exactly one done event and final resolution per run
@@ -18,18 +17,19 @@
 
 import type { Logger } from "pino";
 
-import type {
-  AccountService,
-  AiTelemetryPort,
-  ChatDeltaEvent,
-  Clock,
-  CompletionFinalResult,
-  GraphExecutorPort,
-  GraphFinal,
-  GraphRunRequest,
-  GraphRunResult,
-  LangfusePort,
-  LlmService,
+import {
+  type AccountService,
+  type AiTelemetryPort,
+  type ChatDeltaEvent,
+  type Clock,
+  type CompletionFinalResult,
+  type GraphExecutorPort,
+  type GraphFinal,
+  type GraphRunRequest,
+  type GraphRunResult,
+  isInsufficientCreditsPortError,
+  type LangfusePort,
+  type LlmService,
 } from "@/ports";
 import type { RequestContext } from "@/shared/observability";
 import { makeLogger } from "@/shared/observability";
@@ -121,43 +121,20 @@ export type CompletionStreamFn = (
 ) => Promise<CompletionStreamResult>;
 
 /**
- * Graph runner function signature.
- * Runners implement graph-specific orchestration logic.
- * Defined in adapter to avoid features importing from adapters.
- */
-export type GraphRunnerFn = (req: GraphRunRequest) => GraphRunResult;
-
-/**
- * Interface for completion unit execution capability.
- * Used by graph runners to access LLM execution.
- */
-export type CompletionUnitExecutor = Pick<
-  InProcGraphExecutorAdapter,
-  "executeCompletionUnit"
->;
-
-/**
- * Graph resolver function signature.
- * Returns a runner for a given graphName, or undefined for default behavior.
- * Receives adapter reference for runners that need executeCompletionUnit.
- */
-export type GraphResolverFn = (
-  graphName: string,
-  adapter: CompletionUnitExecutor
-) => GraphRunnerFn | undefined;
-
-/**
  * In-process graph executor adapter.
- * Wraps existing completion flow behind GraphExecutorPort interface.
- * Routes to graph runners via injected resolver, falls back to default completion.
+ *
+ * Primary purpose: Provides executeCompletionUnit() for LangGraphInProcProvider.
+ * Secondary: Implements GraphExecutorPort.runGraph() for default completion path.
+ *
+ * Per PROVIDER_AGGREGATION: Graph routing is handled by AggregatingGraphExecutor.
+ * This adapter no longer does graph routing — providers use executeCompletionUnit directly.
  */
 export class InProcGraphExecutorAdapter implements GraphExecutorPort {
   private readonly log: Logger;
 
   constructor(
     private readonly deps: InProcGraphExecutorDeps,
-    private readonly completionStream: CompletionStreamFn,
-    private readonly graphResolver?: GraphResolverFn
+    private readonly completionStream: CompletionStreamFn
   ) {
     this.log = makeLogger({ component: "InProcGraphExecutorAdapter" });
   }
@@ -166,42 +143,23 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
    * Execute a graph with the given request.
    * Returns immediately with stream handle; execution happens on consumption.
    *
+   * NOTE: This method provides a simple single-completion path.
+   * For multi-step graph execution, use LangGraphInProcProvider instead.
+   *
    * Per GRAPH_EXECUTION.md:
    * - P0_ATTEMPT_FREEZE: attempt is always 0
    * - GRAPH_LLM_VIA_COMPLETION: delegates to completion.executeStream
    * - Emits usage_report event before done for billing subscriber
-   *
-   * Graph routing: If graphResolver is injected and returns a runner for
-   * req.graphName, delegates to that runner. Otherwise uses default completion path.
    */
   runGraph(req: GraphRunRequest): GraphRunResult {
-    const {
-      runId,
-      ingressRequestId,
-      messages,
-      model,
-      caller,
-      abortSignal,
-      graphName,
-    } = req;
+    const { runId, ingressRequestId, messages, model, caller, abortSignal } =
+      req;
     const attempt = 0; // P0_ATTEMPT_FREEZE
 
     this.log.debug(
-      { runId, attempt, model, graphName, messageCount: messages.length },
-      "InProcGraphExecutorAdapter.runGraph starting"
+      { runId, attempt, model, messageCount: messages.length },
+      "InProcGraphExecutorAdapter.runGraph starting (default completion path)"
     );
-
-    // Check for custom graph runner
-    if (this.graphResolver && graphName) {
-      const runner = this.graphResolver(graphName, this);
-      if (runner) {
-        this.log.debug(
-          { runId, graphName },
-          "Delegating to custom graph runner"
-        );
-        return runner(req);
-      }
-    }
 
     // Default: single completion path
     // Create RequestContext for completion layer
@@ -279,7 +237,9 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
       "InProcGraphExecutorAdapter.executeCompletionUnit"
     );
 
-    // Create completion promise lazily
+    // Create completion promise lazily, with error classification at the boundary.
+    // Per structural fix: classify InsufficientCreditsPortError while still typed,
+    // then propagate as errorCode data instead of letting it become "internal".
     const completionPromiseHolder: {
       promise?: ReturnType<CompletionStreamFn>;
     } = {};
@@ -299,6 +259,25 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
           ...(abortSignal && { abortSignal }),
           ...(tools && { tools }),
           ...(toolChoice && { toolChoice }),
+        }).catch((error: unknown) => {
+          // Classify at typed boundary: convert InsufficientCreditsPortError to typed result
+          if (isInsufficientCreditsPortError(error)) {
+            this.log.debug(
+              { runId, billingAccountId: caller.billingAccountId },
+              "Insufficient credits - returning typed error result"
+            );
+            // Return typed error result instead of throwing
+            const errorStream = (async function* () {
+              // Empty stream - error is in final
+            })();
+            const errorFinal: Promise<CompletionFinalResult> = Promise.resolve({
+              ok: false as const,
+              requestId: ingressRequestId,
+              error: "insufficient_credits" as const,
+            });
+            return { stream: errorStream, final: errorFinal };
+          }
+          throw error;
         });
       }
       return completionPromiseHolder.promise;

@@ -97,6 +97,31 @@ import {
 
 ---
 
+## Type Boundaries (Phase 3+)
+
+When implementing GraphProvider and catalog infrastructure, respect these boundaries:
+
+| Type                                              | Defined In                       | Used By                                   |
+| ------------------------------------------------- | -------------------------------- | ----------------------------------------- |
+| `GraphRunRequest`, `GraphRunResult`               | `@/ports`                        | `GraphExecutorPort`, `GraphProvider`      |
+| `GraphDescriptor`, `GraphCapabilities`            | `graph-provider.ts`              | All providers, aggregator                 |
+| `LangGraphCatalogEntry<T>`, `LangGraphCatalog<T>` | `langgraph/catalog.ts`           | `LangGraphInProcProvider` only            |
+| `CreateGraphFn`                                   | `@cogni/langgraph-graphs/inproc` | `LangGraphInProcProvider` only (internal) |
+
+**Key Rules:**
+
+1. **NO_PARALLEL_REQUEST_TYPES**: `GraphProvider.runGraph()` uses `GraphRunRequest`/`GraphRunResult` from `@/ports`. Do not create provider-specific request/result types.
+
+2. **CATALOG_DECOUPLED_FROM_EXECUTION_MODE**: `langgraph/catalog.ts` does NOT import from `@cogni/langgraph-graphs/inproc`. Catalog uses generic `TFactory` type; provider binds concrete type internally.
+
+3. **CATALOG_VS_REGISTRY**: Use "Catalog" for static collections built at bootstrap. Reserve "Registry" for systems supporting runtime registration/discovery lifecycle.
+
+4. **PROVIDER_SPECIFIC_CATALOG**: `LangGraphCatalog` is specific to LangGraph providers. `LangGraphServerProvider` (P2) discovers graphs remotely and does NOT use catalog types — only shares `GraphDescriptor` shapes.
+
+5. **CATALOG_SINGLE_SOURCE_OF_TRUTH**: The catalog is exported by `@cogni/langgraph-graphs`, not constructed in `bootstrap/container.ts`. Bootstrap imports and injects; it does not build per-graph entries. Adding a graph means adding to the package export.
+
+---
+
 ## P0 Persistence Integration
 
 > **Principle:** Prove runner correctness (AiEvent sequence) before persistence infrastructure.
@@ -230,12 +255,28 @@ Server path is deferred until InProc proves correctness. See [LANGGRAPH_SERVER.m
 
 ## Creating a New Graph
 
-### 1. Create Graph Folder
+> **Quick Start:** See [AGENT_DEVELOPMENT_GUIDE.md](AGENT_DEVELOPMENT_GUIDE.md) for step-by-step Tier 1 instructions.
+
+### Tier 1: Single-Node Agent (Default)
+
+For simple agents with one ReAct loop, use minimal structure:
 
 ```
 packages/langgraph-graphs/src/graphs/my-agent/
-├── graph.ts    # createMyAgentGraph(llm, tools) factory
-├── llm.ts      # LLM config for this graph
+├── graph.ts      # createMyAgentGraph(llm, tools) factory
+└── prompts.ts    # System prompt constant(s)
+```
+
+**Template:** Copy from `ponderer/`. Graph imports prompt from `prompts.ts` and uses it directly (no override mechanism).
+
+### Tier 2: Composed Graphs (Future)
+
+For multi-node graphs with custom routing, per-node models, or subgraph composition:
+
+```
+packages/langgraph-graphs/src/graphs/my-agent/
+├── graph.ts    # createMyAgentGraph(llm, tools) factory — wiring only
+├── llm.ts      # LLM config / model provider for this graph
 ├── tools.ts    # Tool selection (imports from @cogni/ai-tools, wraps via toLangChainTools)
 ├── prompts.ts  # System prompts
 └── index.ts    # Barrel export
@@ -243,7 +284,13 @@ packages/langgraph-graphs/src/graphs/my-agent/
 
 **Note:** `tools.ts` imports contracts from `@cogni/ai-tools` and wraps them for this graph. It does NOT define tool contracts.
 
-### 2. Export from Graphs Barrel
+### Deprecation Warning
+
+> **`createReactAgent` from `@langchain/langgraph/prebuilt` is deprecated/migrated.**
+> LangGraph v1 moves this to `langchain` package. Pin versions in `package.json`.
+> Future migration to `createAgent` from `langchain` is expected.
+
+### 1. Export from Graphs Barrel
 
 ```typescript
 // packages/langgraph-graphs/src/graphs/index.ts
@@ -252,18 +299,19 @@ export { myAgentGraph } from "./my-agent";
 
 Runners import only from `@cogni/langgraph-graphs/graphs` (never internals).
 
-### 3. Update InProc Resolver
+### 2. Add Catalog Entry (InProc)
 
 ```typescript
-// src/bootstrap/graph-executor.factory.ts
-const graphResolver: GraphResolverFn = (graphId, adapter) => {
-  if (graphId === "chat") return createChatRunner(adapter);
-  if (graphId === "my-agent") return createMyAgentRunner(adapter);
-  return undefined;
-};
+// packages/langgraph-graphs/src/catalog.ts
+[MY_AGENT_GRAPH_NAME]: {
+  displayName: "My Agent",
+  description: "What this agent does",
+  boundTools: { [GET_CURRENT_TIME_NAME]: getCurrentTimeBoundTool },
+  graphFactory: createMyAgentGraph,
+},
 ```
 
-### 4. (If Server) Add to langgraph.json
+### 3. (If Server) Add to langgraph.json
 
 ```json
 // packages/langgraph-server/langgraph.json
@@ -398,13 +446,13 @@ The `langgraph-server` package re-exports graphs from `@cogni/langgraph-graphs/g
    - [x] Wire via `graphResolver` in bootstrap factory
    - [x] Route stays pure translator (AiEvent → assistant-stream)
    - [ ] Add grep test: `@langchain` only in `packages/langgraph-graphs/`
-   - [ ] Delete deprecated `executeChatGraph()` after E2E passes
+   - [x] Delete deprecated `executeChatGraph()` — removed with `src/features/ai/graphs/` directory
 
 3. **Phase 2c: Tool events** — ✅ Complete (pending tests)
    - [x] Wire `toolExec` via `createToolExecFn` factory pattern
    - [ ] Add stack test: `tool_call_start`/`tool_call_result` events emitted
 
-### P0: Architecture Refactor (Phase 3 — Current)
+### P0: Architecture Refactor (Phase 3 — ✅ Complete)
 
 > See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) for full checklist with file tree map.
 
@@ -422,26 +470,26 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern per feedback. This 
 
 **Phase 3b: Move LangGraph Wiring to Adapters**
 
-- [ ] Create `src/adapters/server/ai/langgraph/` directory
+- [x] Create `src/adapters/server/ai/langgraph/` directory
 - [x] Move `tool-runner.ts` → `src/shared/ai/tool-runner.ts`
-- [ ] Delete `src/features/ai/runners/` (logic absorbed by provider)
-- [ ] Verify dep-cruiser: no adapters→features imports
+- [x] Delete `src/features/ai/runners/` (logic absorbed by provider)
+- [x] Verify dep-cruiser: no adapters→features imports
 - NOTE: NO per-graph adapter files — graphs remain in `packages/langgraph-graphs/`
 - NOTE: NO tool-registry — graphs import ToolContracts directly; policy enforced in tool-runner
 
 **Phase 3c: Provider + Aggregator (P0 Scope)**
 
-- [ ] Create internal `GraphProvider` interface in `src/adapters/server/ai/graph-provider.ts`
-- [ ] Create `AggregatingGraphExecutor` implementing aggregation
-- [ ] Implement `LangGraphInProcProvider` with injected registry
-- [ ] Provider uses `Map<graphName, { toolContracts, graphFactory }>`
+- [x] Create internal `GraphProvider` interface in `src/adapters/server/ai/graph-provider.ts`
+- [x] Create `AggregatingGraphExecutor` implementing aggregation
+- [x] Implement `LangGraphInProcProvider` with injected catalog
+- [x] Provider uses `LangGraphCatalog<CreateGraphFn>` imported from `@cogni/langgraph-graphs`
 - NOTE: Thread/run-shaped API (`createThread()`, `createRun()`, `streamRun()`) deferred to P1
 
 **Phase 3d: Composition Root Wiring**
 
-- [ ] Create injectable `graph-registry.ts` (no hard-coded const)
-- [ ] Remove `graphResolver` param from `createInProcGraphExecutor()` — facade is graph-agnostic
-- [ ] Update `completion.server.ts` to delete all graph selection logic
+- [x] Import catalog from `@cogni/langgraph-graphs` (provider imports internally, not bootstrap)
+- [x] Remove `graphResolver` param — renamed to `createGraphExecutor()` (facade is graph-agnostic)
+- [x] Update `completion.server.ts` to delete all graph selection logic
 
 **Non-Regression:**
 
@@ -485,11 +533,11 @@ InProc uses `graph.invoke()` + AsyncQueue pattern (NOT `streamEvents`). Token fl
 
 Remaining wiring tracked in Phase 2c above.
 
-### P0: Graph #2 Enablement (Phase 4 — After Architecture Refactor)
+### P0: Graph #2 Enablement (Phase 4 — Ready)
 
 - [ ] Create `packages/langgraph-graphs/src/graphs/research/` (Graph #2 factory)
 - [ ] Implement `createResearchGraph()` in package
-- [ ] Add `langgraph:research` entry to injectable registry (NOT a separate adapter file)
+- [ ] Add `langgraph:research` entry to catalog exported by `@cogni/langgraph-graphs` (single source of truth)
 - [ ] Expose via `listGraphs()` on aggregator
 - [ ] UI adds graph selector → sends `graphId` when creating run
 - [ ] E2E test: verify graph switching works
@@ -526,16 +574,17 @@ Remaining wiring tracked in Phase 2c above.
 
 - [ ] **P1: Tool call ID architecture** — P0 workaround generates canonical `toolCallId` at adapter finalization (`src/adapters/server/ai/litellm.adapter.ts:662`) using `acc.id || randomUUID()`. This works but conflates `providerToolCallId` (optional, for telemetry) with `canonicalToolCallId` (required, for correlation). P1 should: (1) preserve `providerToolCallId` as optional metadata, (2) generate `canonicalToolCallId` at tool invocation boundary in graph layer, (3) use canonical ID consistently for `assistant.tool_calls[].id` and `tool.tool_call_id`.
 
-- [ ] **P0: Runner/Adapter architecture split** — Current `langgraph-chat.runner.ts` violates layer boundaries. **Now tracked in Phase 3 checklist above.** Summary:
-  - [ ] **Delete runner**: `langgraph-chat.runner.ts` → delete; logic absorbed by `LangGraphInProcProvider`
-  - [ ] **Move tool-runner**: `features/ai/tool-runner.ts` → `shared/ai/tool-runner.ts` (adapters can import shared/)
-  - [ ] **Fix types**: Move `ToolExecFn`/`EmitAiEvent` to `@cogni/ai-core` so adapters can legally import
-  - [ ] **No per-graph files**: Provider uses injected registry, not per-graph adapter modules
+- [x] **P0: Runner/Adapter architecture split** — ~~Current `langgraph-chat.runner.ts` violates layer boundaries.~~ **RESOLVED in Phase 3.** Summary:
+  - [x] **Delete runner**: `langgraph-chat.runner.ts` → deleted; logic absorbed by `LangGraphInProcProvider`
+  - [x] **Move tool-runner**: `features/ai/tool-runner.ts` → `shared/ai/tool-runner.ts` (adapters can import shared/)
+  - [x] **Fix types**: `ToolExecFn`/`EmitAiEvent` moved to `@cogni/ai-core`; adapters import legally
+  - [x] **No per-graph files**: Provider uses imported catalog from `@cogni/langgraph-graphs`
 
 ---
 
 ## Related Documents
 
+- [AGENT_DEVELOPMENT_GUIDE.md](AGENT_DEVELOPMENT_GUIDE.md) — Quick start for adding new agent graphs
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Executor-agnostic billing, tracking, UI/UX patterns
 - [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) — Infrastructure: Docker, Redis, container deployment
 - [LANGGRAPH_TESTING.md](LANGGRAPH_TESTING.md) — Testing strategy for both executors
@@ -545,5 +594,5 @@ Remaining wiring tracked in Phase 2c above.
 
 ---
 
-**Last Updated**: 2026-01-08
-**Status**: Draft (Rev 12 - Phase 3 aligned with GRAPH_EXECUTION.md; deferred thread/run to P1; removed per-graph adapter files)
+**Last Updated**: 2026-01-11
+**Status**: Draft (Rev 14 - Tier 1/2 structure; AGENT_DEVELOPMENT_GUIDE.md added)

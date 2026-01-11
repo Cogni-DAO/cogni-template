@@ -3,31 +3,58 @@
 
 /**
  * Module: `@features/ai/chat/components/ChatComposerExtras`
- * Purpose: Provides composer toolbar extras for chat including model selection.
+ * Purpose: Provides composer toolbar extras for chat including model and graph selection.
  * Scope: Smart component managing model selection state, localStorage persistence, and API data synchronization. Does not implement model fetching or localStorage utilities (delegates to hooks and preferences module).
  * Invariants: Validates localStorage preference against API models.
  * Side-effects: global (localStorage via preferences module), IO (API fetch via useModels hook)
  * Notes: Designed to be passed as composerLeft slot to kit Thread.
- * Links: ModelPicker component, useModels hook, model-preference module
+ * Links: ModelPicker component, GraphPicker component, useModels hook, model-preference module
  * @public
  */
 
 "use client";
 
 import { useEffect, useState } from "react";
-
+import {
+  type GraphOption,
+  GraphPicker,
+} from "@/features/ai/components/GraphPicker";
 import { ModelPicker } from "@/features/ai/components/ModelPicker";
 import { useModels } from "@/features/ai/hooks/useModels";
 import {
   setPreferredModelId,
   validatePreferredModel,
 } from "@/features/ai/preferences/model-preference";
+import type { GraphId } from "@/ports";
+
+/**
+ * TODO: P1 - Replace hardcoded graphs with API fetch from GraphExecutorPort.listGraphs()
+ * Per CATALOG_STATIC_IN_P0: graphs are static, no runtime discovery yet.
+ * See GRAPH_EXECUTION.md Phase 5 checklist.
+ */
+const AVAILABLE_GRAPHS: readonly GraphOption[] = [
+  {
+    graphId: "langgraph:poet" satisfies GraphId,
+    displayName: "Poet",
+    description: "Poetic AI assistant with structured verse",
+  },
+  {
+    graphId: "langgraph:ponderer" satisfies GraphId,
+    displayName: "Ponderer",
+    description: "Philosophical thinker",
+  },
+];
+
+/** Default graph ID - exported for page initialization */
+export const DEFAULT_GRAPH_ID: GraphId = "langgraph:poet";
 
 export interface ChatComposerExtrasProps {
   selectedModel: string;
   onModelChange: (model: string) => void;
   defaultModelId: string;
   balance?: number;
+  selectedGraph?: GraphId;
+  onGraphChange?: (graphId: GraphId) => void;
 }
 
 export function ChatComposerExtras({
@@ -35,6 +62,8 @@ export function ChatComposerExtras({
   onModelChange,
   defaultModelId,
   balance = 0,
+  selectedGraph = DEFAULT_GRAPH_ID,
+  onGraphChange,
 }: Readonly<ChatComposerExtrasProps>) {
   const modelsQuery = useModels();
   const [localModel, setLocalModel] = useState(selectedModel);
@@ -57,13 +86,25 @@ export function ChatComposerExtras({
     onModelChange(modelId);
   };
 
+  const handleGraphChange = (graphId: GraphId) => {
+    onGraphChange?.(graphId);
+  };
+
   return (
-    <ModelPicker
-      models={modelsQuery.data?.models ?? []}
-      value={localModel}
-      onValueChange={handleModelChange}
-      disabled={modelsQuery.isLoading || modelsQuery.isError}
-      balance={balance}
-    />
+    <div className="flex items-center gap-1">
+      <ModelPicker
+        models={modelsQuery.data?.models ?? []}
+        value={localModel}
+        onValueChange={handleModelChange}
+        disabled={modelsQuery.isLoading || modelsQuery.isError}
+        balance={balance}
+      />
+      <GraphPicker
+        graphs={AVAILABLE_GRAPHS}
+        value={selectedGraph}
+        onValueChange={handleGraphChange}
+        disabled={!onGraphChange}
+      />
+    </div>
   );
 }

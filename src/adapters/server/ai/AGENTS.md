@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-23
+- **Last reviewed:** 2026-01-12
 - **Status:** stable
 
 ## Purpose
 
-AI service adapters including LiteLLM completion/streaming, usage telemetry, and in-process graph execution.
+AI service adapters including LiteLLM completion/streaming, usage telemetry, and in-process graph execution via GraphProvider + AggregatingGraphExecutor pattern.
 
 ## Pointers
 
@@ -34,11 +34,11 @@ AI service adapters including LiteLLM completion/streaming, usage telemetry, and
 
 ## Public Surface
 
-- **Exports:** LiteLlmAdapter (LlmService), LiteLlmActivityUsageAdapter (ActivityUsagePort), LiteLlmUsageServiceAdapter (UsageService), InProcGraphExecutorAdapter (GraphExecutorPort), CompletionUnitExecutor (type), GraphResolverFn (type), LangGraphServerAdapter (GraphExecutorPort, P1)
+- **Exports:** LiteLlmAdapter (LlmService), LiteLlmActivityUsageAdapter (ActivityUsagePort), LiteLlmUsageServiceAdapter (UsageService), InProcGraphExecutorAdapter (GraphExecutorPort), AggregatingGraphExecutor (multi-provider routing), GraphProvider (interface), LangGraphInProcProvider (implements GraphProvider)
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** LITELLM_BASE_URL, LITELLM_MASTER_KEY (model param required - no env fallback)
-- **Files considered API:** litellm.adapter.ts, litellm.activity-usage.adapter.ts, litellm.usage-service.adapter.ts, inproc-graph.adapter.ts, langgraph-server.adapter.ts (P1)
+- **Files considered API:** litellm.adapter.ts, litellm.activity-usage.adapter.ts, litellm.usage-service.adapter.ts, inproc-graph.adapter.ts, aggregating-executor.ts, graph-provider.ts, langgraph/inproc.provider.ts
 - **Streaming:** completionStream() supports SSE streaming via eventsource-parser with robustness against malformed chunks
 
 ## Ports (optional)
@@ -49,7 +49,7 @@ AI service adapters including LiteLLM completion/streaming, usage telemetry, and
 
 ## Responsibilities
 
-- This directory **does**: Implement LlmService for AI completions and streaming (with tool message format support); implement ActivityUsagePort for LiteLLM usage logs (read-only, powers Activity dashboard); implement UsageService adapter mapping usage logs to usage stats; implement GraphExecutorPort for in-process graph execution (wraps completion flow); expose CompletionUnitExecutor interface for graph runners
+- This directory **does**: Implement LlmService for AI completions and streaming (with tool message format support); implement ActivityUsagePort for LiteLLM usage logs (read-only, powers Activity dashboard); implement UsageService adapter mapping usage logs to usage stats; implement GraphExecutorPort via AggregatingGraphExecutor (routes graphId to providers); provide GraphProvider interface and LangGraphInProcProvider implementation (wires @cogni/langgraph-graphs catalog)
 - This directory **does not**: Handle authentication, rate limiting, timestamps, or write charge receipts to DB
 
 ## Usage
@@ -72,7 +72,8 @@ pnpm test tests/integration/ai/
 - getSpendLogs avoids date params (cause aggregation), fetches individual logs, filters in-memory by timestamp
 - Bounded scan validation: throws TooManyLogsError (422) if range incomplete after MAX_LOGS_PER_RANGE fetch
 - Tool message format: liteLlmMessages includes tool_calls (assistant) and tool_call_id (tool role) for agentic loop
-- GraphResolverFn receives (graphName, adapter) - adapter passed at call time to solve circular dependency
+- GraphProvider pattern: providerId prefixes graphId (e.g., "langgraph:poet"); AggregatingGraphExecutor routes to registered providers
+- langgraph/ subdirectory: LangGraphInProcProvider wires @cogni/langgraph-graphs catalog to GraphProvider interface
 
 ## Dependencies
 

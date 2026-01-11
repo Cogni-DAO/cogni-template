@@ -75,3 +75,32 @@ export function createContainerMock(deps: AiAdapterDeps) {
     resolveAiAdapterDeps: () => deps,
   };
 }
+
+/**
+ * Create the mock object for vi.doMock("@/bootstrap/graph-executor.factory", ...).
+ * Returns a factory that creates a mock GraphExecutorPort.
+ *
+ * @returns Mock module shape for @/bootstrap/graph-executor.factory
+ */
+export function createGraphExecutorFactoryMock() {
+  return {
+    createGraphExecutor: () => ({
+      runGraph: () => {
+        const stream = (async function* () {
+          yield { type: "text_delta" as const, delta: "Test response" };
+          yield { type: "done" as const };
+        })();
+
+        const final = Promise.resolve({
+          ok: true as const,
+          runId: "test-run-id",
+          requestId: "test-req-id",
+          finishReason: "stop" as const,
+        });
+
+        return { stream, final };
+      },
+      listGraphs: () => [],
+    }),
+  };
+}

@@ -18,8 +18,11 @@
 // Model selection rules (re-exported from core for app layer access)
 export { pickDefaultModel } from "@/core";
 export type { ChatComposerExtrasProps } from "./components/ChatComposerExtras";
-// Model selection components
-export { ChatComposerExtras } from "./components/ChatComposerExtras";
+// Model/graph selection components
+export {
+  ChatComposerExtras,
+  DEFAULT_GRAPH_ID,
+} from "./components/ChatComposerExtras";
 // Chat error components
 export type { ChatErrorBubbleProps } from "./components/ChatErrorBubble";
 export { ChatErrorBubble } from "./components/ChatErrorBubble";

@@ -15,6 +15,7 @@
 import { TEST_MODEL_ID } from "@tests/_fakes";
 import {
   createContainerMock,
+  createGraphExecutorFactoryMock,
   createMockAiAdapterDeps,
   setupCompletionFacadeTest,
 } from "@tests/_fixtures/ai/completion-facade-setup";
@@ -40,6 +41,11 @@ describe("completion facade contract", () => {
 
     // Mock bootstrap container with proper AiAdapterDeps shape
     vi.doMock("@/bootstrap/container", () => createContainerMock(mockDeps));
+
+    // Mock graph executor factory to avoid real LangGraph execution
+    vi.doMock("@/bootstrap/graph-executor.factory", () =>
+      createGraphExecutorFactoryMock()
+    );
 
     // Mock auth mapping
     vi.doMock("@/lib/auth/mapping", () => ({
@@ -86,6 +92,11 @@ describe("completion facade contract", () => {
 
     // Mock bootstrap container with proper AiAdapterDeps shape
     vi.doMock("@/bootstrap/container", () => createContainerMock(mockDeps));
+
+    // Mock graph executor factory to avoid real LangGraph execution
+    vi.doMock("@/bootstrap/graph-executor.factory", () =>
+      createGraphExecutorFactoryMock()
+    );
 
     vi.doMock("@/lib/auth/mapping", () => ({
       getOrCreateBillingAccountForUser: vi

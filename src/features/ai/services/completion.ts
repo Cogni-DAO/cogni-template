@@ -4,14 +4,16 @@
 /**
  * Module: `@features/ai/services/completion`
  * Purpose: Use case orchestration for AI completion with dual-cost billing.
- * Scope: Coordinate core rules, port calls, record usage, return StreamFinalResult. Does not handle authentication or rate limiting.
+ * Scope: Execute LLM calls, record usage/metrics/telemetry. Does not handle auth or message filtering.
  * Invariants:
  * - Only imports core, ports, shared - never contracts or adapters
- * - Pre-call credit check enforced; post-call billing never blocks response
+ * - GRAPH_OWNS_MESSAGES: Messages pass through unchanged; graphs own system prompts
+ * - Credit check at facade level (preflightCreditCheck), not in executeStream
+ * - Post-call billing via RunEventRelay → usage_report events
  * - request_id is stable per request entry (ctx.reqId), NOT regenerated per LLM call
  * Side-effects: IO (via ports)
- * Notes: Uses adapter promptHash when available (canonical); logs warnings when cost is zero; post-call billing errors swallowed to preserve UX
- * Links: Called by API routes, uses core domain and ports, types/billing.ts (categorization)
+ * Notes: Uses adapter promptHash when available (canonical); fallback hash for error-path only
+ * Links: Called by adapters via GraphExecutorPort, uses core domain and ports
  * @public
  */
 
@@ -30,14 +32,17 @@ import type {
 } from "@/ports";
 import { LlmError } from "@/ports";
 import {
+  computePromptHash,
+  DEFAULT_MAX_TOKENS,
+  DEFAULT_TEMPERATURE,
+} from "@/shared/ai/prompt-hash";
+import {
   type AiLlmCallEvent,
   classifyLlmError,
   type RequestContext,
 } from "@/shared/observability";
 // recordBilling removed: billing now via RunEventRelay + commitUsageFact (GRAPH_EXECUTION.md)
-import { prepareMessages } from "./message-preparation";
 import { recordMetrics } from "./metrics";
-import { validateCreditsUpperBound } from "./preflight-credit-check";
 import { recordTelemetry } from "./telemetry";
 
 // ============================================================================
@@ -217,81 +222,26 @@ async function handleLlmError(
 // Public API (frozen signatures per API_FROZEN invariant)
 // ============================================================================
 
+/**
+ * @deprecated Dead code - facade's completion() uses completionStream() per UNIFIED_GRAPH_EXECUTOR.
+ * TODO: Delete this function or refactor to call executeStream() and drain events.
+ * Do not maintain parallel implementations - they will diverge on prompt/billing behavior.
+ */
 export async function execute(
-  messages: Message[],
-  model: string,
-  llmService: LlmService,
-  accountService: AccountService,
-  clock: Clock,
-  caller: LlmCaller,
-  ctx: RequestContext,
-  aiTelemetry: AiTelemetryPort,
-  langfuse: LangfusePort | undefined
+  _messages: Message[],
+  _model: string,
+  _llmService: LlmService,
+  _accountService: AccountService,
+  _clock: Clock,
+  _caller: LlmCaller,
+  _ctx: RequestContext,
+  _aiTelemetry: AiTelemetryPort,
+  _langfuse: LangfusePort | undefined
 ): Promise<{ message: Message; requestId: string }> {
-  const log = ctx.log.child({ feature: "ai.completion" });
-
-  // Prepare messages + get fallback hash
-  const {
-    messages: finalMessages,
-    fallbackPromptHash,
-    estimatedTokensUpperBound,
-  } = prepareMessages(messages, model);
-
-  // Pre-flight credit check (upper-bound estimate)
-  await validateCreditsUpperBound(
-    caller.billingAccountId,
-    estimatedTokensUpperBound,
-    model,
-    accountService
+  // TODO: Refactor to call executeStream() and drain events, or delete entirely.
+  throw new Error(
+    "execute() is deprecated. Use executeStream() via GraphExecutorPort instead."
   );
-
-  // Per spec: request_id is stable per request entry (from ctx.reqId)
-  const requestId = ctx.reqId;
-  // Per AI_SETUP_SPEC.md: invocation_id is unique per LLM call attempt
-  const invocationId = randomUUID();
-  const llmStart = performance.now();
-
-  // Build shared context for post-call handling
-  const postCallContext: PostCallContext = {
-    invocationId,
-    requestId,
-    traceId: ctx.traceId,
-    routeId: ctx.routeId,
-    fallbackPromptHash,
-    requestedModel: model,
-    llmStart,
-    caller,
-    provenance: "response",
-    accountService,
-    aiTelemetry,
-    langfuse,
-  };
-
-  // Execute LLM call
-  log.debug({ messageCount: finalMessages.length }, "calling LLM");
-  let result: LlmCompletionResult;
-  try {
-    result = await llmService.completion({
-      messages: finalMessages,
-      model,
-      caller,
-    });
-  } catch (error) {
-    await handleLlmError(error, postCallContext, log);
-    throw error;
-  }
-
-  // Handle success (metrics, billing, telemetry)
-  await handleLlmSuccess(result, postCallContext, log);
-
-  // Feature sets timestamp after completion using injected clock
-  return {
-    message: {
-      ...result.message,
-      timestamp: clock.now(),
-    },
-    requestId,
-  };
 }
 
 export interface ExecuteStreamParams {
@@ -311,6 +261,12 @@ export interface ExecuteStreamParams {
   toolChoice?: import("@/ports").LlmToolChoice;
 }
 
+/**
+ * Execute streaming LLM completion.
+ *
+ * Per GRAPH_OWNS_MESSAGES: This is a pure executor. Messages pass through unchanged.
+ * Credit check happens at facade level (preflightCreditCheck), not here.
+ */
 export async function executeStream({
   messages,
   model,
@@ -330,20 +286,14 @@ export async function executeStream({
 }> {
   const log = ctx.log.child({ feature: "ai.completion.stream" });
 
-  // Prepare messages + get fallback hash
-  const {
-    messages: finalMessages,
-    fallbackPromptHash,
-    estimatedTokensUpperBound,
-  } = prepareMessages(messages, model);
-
-  // Pre-flight credit check (upper-bound estimate)
-  await validateCreditsUpperBound(
-    caller.billingAccountId,
-    estimatedTokensUpperBound,
+  // Fallback hash for error-path telemetry only (adapter provides canonical hash on success).
+  // Uses defaults; may not match actual provider params. Acceptable for error-path approximation.
+  const fallbackPromptHash = computePromptHash({
     model,
-    accountService
-  );
+    messages: messages.map((m) => ({ role: m.role, content: m.content })),
+    temperature: DEFAULT_TEMPERATURE,
+    maxTokens: DEFAULT_MAX_TOKENS,
+  });
 
   // Per spec: request_id is stable per request entry (from ctx.reqId)
   const requestId = ctx.reqId;
@@ -367,10 +317,11 @@ export async function executeStream({
     langfuse,
   };
 
-  log.debug({ messageCount: finalMessages.length }, "starting LLM stream");
+  log.debug({ messageCount: messages.length }, "starting LLM stream");
 
+  // Per GRAPH_OWNS_MESSAGES: pass messages through unchanged
   const { stream, final } = await llmService.completionStream({
-    messages: finalMessages,
+    messages,
     model,
     caller,
     ...(abortSignal && { abortSignal }),

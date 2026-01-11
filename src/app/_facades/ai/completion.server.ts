@@ -20,13 +20,17 @@
 import type { z } from "zod";
 
 import { resolveAiAdapterDeps } from "@/bootstrap/container";
-import { createInProcGraphExecutor } from "@/bootstrap/graph-executor.factory";
+import { createGraphExecutor } from "@/bootstrap/graph-executor.factory";
 import type { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
 import { mapAccountsPortErrorToFeature } from "@/features/accounts/public";
+// Types from client-safe barrel (types only, no runtime)
+import type { AiEvent, StreamFinalResult } from "@/features/ai/public";
 // Import from public.server.ts - never from services/* directly (dep-cruiser enforced)
 import {
-  createLangGraphChatRunner,
+  createAiRuntime,
+  executeStream,
   type MessageDto,
+  preflightCreditCheck,
   toCoreMessages,
 } from "@/features/ai/public.server";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
@@ -43,7 +47,7 @@ interface CompletionInput {
   messages: MessageDto[];
   model: string;
   sessionUser: SessionUser;
-  /** Graph name to execute (default: "chat") */
+  /** Graph name to execute (default: "poet") */
   graphName?: string;
 }
 
@@ -81,7 +85,8 @@ export async function completion(
     const result = await final;
 
     if (!result.ok) {
-      // Map error result to thrown error for route handler
+      // Preflight handles insufficient_credits before execution starts.
+      // Any error here is from graph execution itself.
       throw new Error(`Completion failed: ${result.error}`);
     }
 
@@ -120,23 +125,17 @@ export async function completionStream(
   input: CompletionInput & { abortSignal?: AbortSignal },
   ctx: RequestContext
 ): Promise<{
-  stream: AsyncIterable<import("@/features/ai/public").AiEvent>;
-  final: Promise<import("@/features/ai/public").StreamFinalResult>;
+  stream: AsyncIterable<AiEvent>;
+  final: Promise<StreamFinalResult>;
 }> {
   // Per UNIFIED_GRAPH_EXECUTOR: use bootstrap factory (app → bootstrap → adapters)
   // Facade CANNOT import adapters - architecture boundary enforced by depcruise
+  // Per PROVIDER_AGGREGATION: AggregatingGraphExecutor routes by graphId to providers
   const { accountService, clock } = resolveAiAdapterDeps();
-  const { executeStream } = await import("@/features/ai/public.server");
 
-  // Build graph resolver: "chat" → LangGraph runner, else undefined (falls back to default)
-  // Resolver receives adapter from bootstrap, facade imports runner from features
-  const graphResolver = (
-    graphName: string,
-    adapter: Parameters<typeof createLangGraphChatRunner>[0]
-  ) => (graphName === "chat" ? createLangGraphChatRunner(adapter) : undefined);
-
-  // Create graph executor via bootstrap factory with resolver
-  const graphExecutor = createInProcGraphExecutor(executeStream, graphResolver);
+  // Create graph executor via bootstrap factory
+  // Routing is handled by AggregatingGraphExecutor - facade is graph-agnostic
+  const graphExecutor = createGraphExecutor(executeStream);
 
   const billingAccount = await getOrCreateBillingAccountForUser(
     accountService,
@@ -167,8 +166,16 @@ export async function completionStream(
   const coreMessages = toCoreMessages(input.messages, timestamp);
 
   try {
-    // Import from public.server.ts - never from services/* directly
-    const { createAiRuntime } = await import("@/features/ai/public.server");
+    // PREFLIGHT: Check credits BEFORE graph execution starts.
+    // This ensures InsufficientCreditsPortError propagates to facade's try/catch
+    // instead of getting normalized to "internal" inside the graph execution chain.
+    await preflightCreditCheck({
+      billingAccountId: billingAccount.id,
+      messages: coreMessages,
+      model: input.model,
+      accountService,
+    });
+
     const aiRuntime = createAiRuntime({
       graphExecutor,
       accountService,

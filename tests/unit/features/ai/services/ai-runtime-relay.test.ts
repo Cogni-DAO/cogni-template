@@ -182,7 +182,7 @@ describe("RunEventRelay race conditions", () => {
 
     const events: AiEvent[] = [
       { type: "text_delta", delta: "Partial" } satisfies TextDeltaEvent,
-      { type: "error", error: "upstream_failed" } satisfies ErrorEvent,
+      { type: "error", error: "internal" } satisfies ErrorEvent,
     ];
 
     const graphExecutor = createImmediateGraphExecutor(events);
@@ -218,7 +218,7 @@ describe("RunEventRelay race conditions", () => {
     });
     expect(collectedEvents[1]).toEqual({
       type: "error",
-      error: "upstream_failed",
+      error: "internal",
     });
   });
 
