@@ -19,6 +19,8 @@ import type { BaseMessage } from "@langchain/core/messages";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
+import { CHAT_SYSTEM_PROMPT } from "./prompts";
+
 /**
  * Graph name constant for routing.
  */
@@ -32,8 +34,6 @@ export interface CreateChatGraphOptions {
   readonly llm: BaseChatModel;
   /** Tools wrapped via toLangChainTools() */
   readonly tools: StructuredToolInterface[];
-  /** Optional system prompt */
-  readonly systemPrompt?: string;
 }
 
 /**
@@ -71,7 +71,7 @@ export interface ChatGraph {
  * ```
  */
 export function createChatGraph(opts: CreateChatGraphOptions): ChatGraph {
-  const { llm, tools, systemPrompt } = opts;
+  const { llm, tools } = opts;
 
   // Use LangGraph's prebuilt React agent
   // This handles the standard ReAct loop:
@@ -81,7 +81,7 @@ export function createChatGraph(opts: CreateChatGraphOptions): ChatGraph {
   const agent = createReactAgent({
     llm,
     tools,
-    ...(systemPrompt ? { messageModifier: systemPrompt } : {}),
+    messageModifier: CHAT_SYSTEM_PROMPT,
   });
 
   // Cast to our minimal structural interface

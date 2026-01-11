@@ -19,25 +19,12 @@ import type { BaseMessage } from "@langchain/core/messages";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
+import { PONDERER_SYSTEM_PROMPT } from "./prompts";
+
 /**
  * Graph name constant for routing.
  */
 export const PONDERER_GRAPH_NAME = "ponderer" as const;
-
-/**
- * System prompt for the philosophical ponderer.
- * Concise, thoughtful, draws from philosophical traditions.
- */
-const PONDERER_SYSTEM_PROMPT = `You are a philosophical thinker who gives concise, profound responses.
-
-Guidelines:
-- Be brief but substantive. One clear insight beats many vague ones.
-- Draw from philosophical traditions when relevant, but don't lecture.
-- Question assumptions. Reframe problems when useful.
-- Prefer clarity over complexity. If an idea needs jargon, it needs more thought.
-- When asked practical questions, ground philosophy in action.
-
-Respond like a wise friend who happens to have read deeply—not a professor.`;
 
 /**
  * Options for createPondererGraph.
