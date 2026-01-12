@@ -125,6 +125,8 @@ export function createInProcGraphRunner<TTool = unknown>(
 
       // Per ERROR_NORMALIZATION: emit code only, not message
       emit({ type: "error", error: code });
+      // Per GRAPH_FINALIZATION_ONCE: always emit done as final event
+      emit({ type: "done" });
 
       return { ok: false, error: code };
     } finally {

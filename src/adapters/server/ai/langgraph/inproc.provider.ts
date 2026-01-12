@@ -154,13 +154,15 @@ export class LangGraphInProcProvider implements GraphProvider {
     const graphName = this.extractGraphName(graphId);
     if (!graphName) {
       this.log.error({ runId, graphId }, "Invalid graphId format");
-      return this.createErrorResult(runId, ingressRequestId);
+      // Client error: malformed graphId
+      return this.createErrorResult(runId, ingressRequestId, "invalid_request");
     }
 
     const entry = this.catalog[graphName] as ProviderCatalogEntry | undefined;
     if (!entry) {
       this.log.error({ runId, graphName }, "Graph not found in catalog");
-      return this.createErrorResult(runId, ingressRequestId);
+      // Client error: graph doesn't exist
+      return this.createErrorResult(runId, ingressRequestId, "not_found");
     }
 
     this.log.debug(

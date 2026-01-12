@@ -16,6 +16,7 @@
 /**
  * Canonical error codes for AI execution failures.
  * - invalid_request: Required input missing or malformed (client error)
+ * - not_found: Requested resource (e.g., graph) does not exist (client error)
  * - timeout: Request exceeded time limit
  * - aborted: Request was cancelled (e.g., AbortSignal)
  * - internal: Unexpected error during execution (server fault)
@@ -23,6 +24,7 @@
  */
 export type AiExecutionErrorCode =
   | "invalid_request"
+  | "not_found"
   | "timeout"
   | "aborted"
   | "internal"
