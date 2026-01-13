@@ -27,29 +27,33 @@
 
 11. **BILLABLE_AI_THROUGH_EXECUTOR**: Production code paths that emit `UsageFact` must execute via `AiRuntimeService` → `GraphExecutorPort`. Direct `completion.executeStream()` calls outside executor internals bypass billing/telemetry pipeline and are prohibited. Enforced by stack test (`no-direct-completion-executestream.stack.test.ts`).
 
-12. **P0_MINIMAL_PORT**: P0 `GraphExecutorPort` exposes only `runGraph()`. Thread/run-shaped primitives (`createThread()`, `createRun()`, `streamRun()`) are provider-internal in P0; promote to external port in P1 when run persistence lands. `listGraphs()` may be added for discovery but is not required for P0.
+12. **P0_MINIMAL_PORT**: P0 `GraphExecutorPort` exposes `runGraph()` and `listGraphs()`. Thread/run-shaped primitives (`createThread()`, `createRun()`, `streamRun()`) are provider-internal in P0; promote to external port in P1 when run persistence lands.
 
-13. **GRAPH_ID_NAMESPACED**: Graph IDs are globally unique and stable, namespaced as `${providerId}:${graphName}` (e.g., `langgraph:poet`, `claude_agents:planner`).
+13. **DISCOVERY_NO_EXECUTION_DEPS**: Discovery providers do not require execution infrastructure. `LangGraphCatalogProvider` reads from catalog but cannot execute. Routes use discovery factories, not execution factories.
 
-14. **PROVIDER_AGGREGATION**: `AggregatingGraphExecutor` routes `graphId → GraphProvider`. App uses only the aggregator; no facade-level graph conditionals.
+14. **COMPLETION_UNIT_NOT_PORT**: `InProcGraphExecutorAdapter` is a `CompletionUnitAdapter`, not a `GraphExecutorPort`. It provides `executeCompletionUnit()` for providers but does not implement the full port interface.
 
-15. **CATALOG_INJECTED**: Graph catalog is injected into providers, not hard-coded. Catalog entries must be pure factories (adapter-injected deps only) for deterministic testing.
+15. **GRAPH_ID_NAMESPACED**: Graph IDs are globally unique and stable, namespaced as `${providerId}:${graphName}` (e.g., `langgraph:poet`, `claude_agents:planner`).
 
-16. **NO_LANGCHAIN_IN_ADAPTERS_ROOT**: LangChain imports are isolated to `src/adapters/server/ai/langgraph/**`. Other adapter code must not import `@langchain/*`.
+16. **PROVIDER_AGGREGATION**: `AggregatingGraphExecutor` routes `graphId → GraphProvider`. App uses only the aggregator; no facade-level graph conditionals.
 
-17. **TOOL_EXEC_TYPES_IN_AI_CORE**: `ToolExecFn`, `ToolExecResult`, `EmitAiEvent` are canonical in `@cogni/ai-core`. `src/ports` re-exports. Adapters import from `@cogni/ai-core` or `@/ports`.
+17. **CATALOG_INJECTED**: Graph catalog is injected into providers, not hard-coded. Catalog entries must be pure factories (adapter-injected deps only) for deterministic testing.
 
-18. **FANOUT_LOSSINESS**: StreamDriver fans out to subscribers with different guarantees:
+18. **NO_LANGCHAIN_IN_ADAPTERS_ROOT**: LangChain imports are isolated to `src/adapters/server/ai/langgraph/**`. Other adapter code must not import `@langchain/*`.
+
+19. **TOOL_EXEC_TYPES_IN_AI_CORE**: `ToolExecFn`, `ToolExecResult`, `EmitAiEvent` are canonical in `@cogni/ai-core`. `src/ports` re-exports. Adapters import from `@cogni/ai-core` or `@/ports`.
+
+20. **FANOUT_LOSSINESS**: StreamDriver fans out to subscribers with different guarantees:
     - **Billing subscriber**: Unbounded queue, never drops events, runs to completion. This is authoritative.
     - **UI subscriber**: Bounded queue, may disconnect; driver continues regardless. Best-effort delivery.
     - **History subscriber**: Bounded queue, may drop on backpressure. Best-effort cache.
       Only billing is lossless; UI/History are best-effort.
 
-19. **USAGE_UNIT_ID_MANDATORY**: For billable paths, adapters MUST provide `usageUnitId` in `UsageFact`. The fallback path (generating `MISSING:${runId}/${callIndex}`) is an ERROR condition that logs `billing.missing_usage_unit_id` metric and must be investigated. This is NOT a normal operation path.
+21. **USAGE_UNIT_ID_MANDATORY**: For billable paths, adapters MUST provide `usageUnitId` in `UsageFact`. The fallback path (generating `MISSING:${runId}/${callIndex}`) is an ERROR condition that logs `billing.missing_usage_unit_id` metric and must be investigated. This is NOT a normal operation path.
 
-20. **CATALOG_STATIC_IN_P0**: P0 uses static catalog exported by `@cogni/langgraph-graphs`. Runtime graph discovery/registration is deferred to P1/P2. Adding a graph requires updating the package export, not runtime registration.
+22. **CATALOG_STATIC_IN_P0**: P0 uses static catalog exported by `@cogni/langgraph-graphs`. Runtime graph discovery/registration is deferred to P1/P2. Adding a graph requires updating the package export, not runtime registration.
 
-21. **GRAPH_OWNS_MESSAGES**: Graphs are the single authority for all messages they construct — system prompts, multi-node context, tool instructions, etc. The completion/execution layer (`executeStream`) must pass messages through unmodified — no filtering, no injection. Security filtering of untrusted client input (stripping system messages) happens at the HTTP/API boundary before `GraphExecutorPort.runGraph()` is called, not in the execution layer.
+23. **GRAPH_OWNS_MESSAGES**: Graphs are the single authority for all messages they construct — system prompts, multi-node context, tool instructions, etc. The completion/execution layer (`executeStream`) must pass messages through unmodified — no filtering, no injection. Security filtering of untrusted client input (stripping system messages) happens at the HTTP/API boundary before `GraphExecutorPort.runGraph()` is called, not in the execution layer.
 
 ---
 
@@ -95,11 +99,12 @@ src/
 │   # NOTE: GraphProvider is INTERNAL to adapters in P0, not a public port
 │
 ├── adapters/server/ai/
-│   ├── inproc-graph.adapter.ts               # InProcGraphExecutorAdapter (refactored)
-│   ├── aggregating-executor.ts               # NEW: AggregatingGraphExecutor
-│   └── langgraph/                            # NEW: LangGraph-specific bindings
+│   ├── inproc-graph.adapter.ts               # CompletionUnitAdapter (NOT GraphExecutorPort)
+│   ├── aggregating-executor.ts               # AggregatingGraphExecutor
+│   └── langgraph/                            # LangGraph-specific bindings
 │       ├── index.ts                          # Barrel export
 │       ├── catalog.ts                        # LangGraphCatalog<TFactory> types (no inproc imports)
+│       ├── catalog.provider.ts               # LangGraphCatalogProvider (discovery-only) ✓
 │       └── inproc.provider.ts                # LangGraphInProcProvider with injected catalog
 │   # NOTE: NO per-graph files — graphs live in packages/
 │   # NOTE: NO tool-registry — graphs import ToolContracts directly; policy in tool-runner
@@ -116,7 +121,8 @@ src/
 │
 ├── bootstrap/
 │   ├── container.ts                          # Wires providers + aggregator
-│   └── graph-executor.factory.ts             # SIMPLIFIED: no graphResolver param
+│   ├── graph-executor.factory.ts             # Execution factory (requires completion deps)
+│   └── graph-discovery.ts                    # Discovery factory (no execution deps) ✓
 │
 └── app/_facades/ai/
     └── completion.server.ts                  # Graph-agnostic (no graph selection logic)
@@ -156,6 +162,44 @@ class AggregatingGraphExecutor implements GraphExecutorPort {
   // Routes to provider based on graphId prefix
 }
 ```
+
+---
+
+## Graph Discovery
+
+> See [AGENT_DISCOVERY.md](AGENT_DISCOVERY.md) for full discovery architecture.
+
+Discovery is decoupled from execution. Routes use discovery factories that don't require execution infrastructure.
+
+### Discovery Pipeline
+
+```
+Route (/api/v1/ai/graphs)
+     │
+     ▼
+listGraphsForApi() [bootstrap/graph-discovery.ts]
+     │
+     ▼
+AggregatingGraphExecutor.listGraphs()
+     │
+     ▼
+GraphProvider[].listGraphs() (fanout)
+     │
+     └──► LangGraphCatalogProvider → reads LANGGRAPH_CATALOG
+```
+
+### Provider Types
+
+| Provider                   | Purpose        | runGraph()                  |
+| -------------------------- | -------------- | --------------------------- |
+| `LangGraphCatalogProvider` | Discovery-only | Throws                      |
+| `LangGraphInProcProvider`  | Execution      | Executes via package runner |
+
+### Key Invariants
+
+- **DISCOVERY_NO_EXECUTION_DEPS**: Discovery providers don't require `CompletionStreamFn`
+- **REGISTRY_SEPARATION**: Discovery providers never in execution registry
+- **COMPLETION_UNIT_NOT_PORT**: `InProcGraphExecutorAdapter` is `CompletionUnitAdapter`, not `GraphExecutorPort`
 
 ---
 
@@ -254,7 +298,18 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 - [x] Remove `graphResolver` parameter — renamed to `createGraphExecutor()` (facade is graph-agnostic)
 - [x] Update `completion.server.ts` facade: delete all graph selection logic
 
-**Phase 5: Graph #2 Enablement**
+**Phase 5: Graph Discovery Pipeline (✅ Complete)**
+
+> See [AGENT_DISCOVERY.md](AGENT_DISCOVERY.md) for full architecture.
+
+- [x] Create `LangGraphCatalogProvider` (discovery-only, throws on `runGraph()`)
+- [x] Create `src/bootstrap/graph-discovery.ts` with `listGraphsForApi()`
+- [x] Update `/api/v1/ai/graphs` route to use `listGraphsForApi()`
+- [x] Remove `GraphExecutorPort` from `InProcGraphExecutorAdapter` (make it `CompletionUnitAdapter` only)
+- [x] Update `src/adapters/server/index.ts` exports
+- [x] Update deadlock test to use `executeCompletionUnit` not `runGraph`
+
+**Phase 6: Graph #2 Enablement**
 
 - [ ] Create `packages/langgraph-graphs/src/graphs/research/` (Graph #2 factory)
 - [ ] Implement `createResearchGraph()` in package
@@ -733,6 +788,7 @@ interface GraphDeps {
 
 ## Related Documents
 
+- [AGENT_DISCOVERY.md](AGENT_DISCOVERY.md) — Discovery pipeline, provider types
 - [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) — Owner vs Actor tenancy rules (`account_id` in relay context)
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — P1 invariants, telemetry
 - [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Graph architecture, anti-patterns
@@ -743,5 +799,5 @@ interface GraphDeps {
 
 ---
 
-**Last Updated**: 2026-01-10
-**Status**: Draft (Rev 11 - Phase 3 complete; preflight credit check added; AiExecutionErrorCode in ai-core)
+**Last Updated**: 2026-01-13
+**Status**: Draft (Rev 12 - Phase 5 discovery pipeline; AGENT_DISCOVERY.md added)
