@@ -137,4 +137,6 @@ export interface GraphResult {
   };
   readonly finishReason?: string;
   readonly error?: AiExecutionErrorCode;
+  /** Final assistant response content (for trace output) */
+  readonly content?: string;
 }

@@ -164,7 +164,8 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
     // Default: single completion path
     // Create RequestContext for completion layer
     // Per RUNID_IS_CANONICAL: reqId = ingressRequestId (delivery correlation), not runId
-    const ctx = this.createRequestContext(ingressRequestId);
+    // Per GENERATION_UNDER_EXISTING_TRACE: use caller.traceId for Langfuse correlation
+    const ctx = this.createRequestContext(ingressRequestId, caller.traceId);
 
     // Start completion asynchronously
     // The completion promise is created lazily when the stream is consumed
@@ -224,7 +225,8 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
     } = params;
     const { runId, attempt, ingressRequestId } = runContext;
 
-    const ctx = this.createRequestContext(ingressRequestId);
+    // Per GENERATION_UNDER_EXISTING_TRACE: use caller.traceId for Langfuse correlation
+    const ctx = this.createRequestContext(ingressRequestId, caller.traceId);
 
     this.log.debug(
       {
@@ -372,28 +374,19 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
   /**
    * Create RequestContext for completion layer.
    * Uses ingressRequestId as reqId (delivery-layer correlation).
+   * Uses caller's traceId for Langfuse correlation (GENERATION_UNDER_EXISTING_TRACE).
    */
-  private createRequestContext(ingressRequestId: string): RequestContext {
+  private createRequestContext(
+    ingressRequestId: string,
+    traceId: string
+  ): RequestContext {
     return {
       log: this.log.child({ ingressRequestId }),
       reqId: ingressRequestId,
-      traceId: this.generateTraceId(),
+      traceId, // Use caller's traceId for Langfuse correlation
       routeId: "graph.inproc",
       clock: this.deps.clock,
     };
-  }
-
-  /**
-   * Generate a trace ID for distributed tracing.
-   * Format: 32 hex chars (128 bits) per W3C Trace Context.
-   */
-  private generateTraceId(): string {
-    // Simple random trace ID for P0; production would use OTel SDK
-    const bytes = new Uint8Array(16);
-    crypto.getRandomValues(bytes);
-    return Array.from(bytes)
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
   }
 
   /**
@@ -489,6 +482,7 @@ export class InProcGraphExecutorAdapter implements GraphExecutorPort {
           completionTokens: result.usage.completionTokens,
         },
         finishReason: result.finishReason,
+        ...(result.content && { content: result.content }),
       };
     }
 

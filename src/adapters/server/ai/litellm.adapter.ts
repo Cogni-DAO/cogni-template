@@ -119,7 +119,14 @@ export class LiteLlmAdapter implements LlmService {
     const maxTokens = params.maxTokens ?? DEFAULT_MAX_TOKENS;
 
     // Extract caller data for user attribution and correlation (cost tracking in LiteLLM)
-    const { billingAccountId, requestId, traceId } = params.caller;
+    const {
+      billingAccountId,
+      requestId,
+      traceId,
+      sessionId,
+      userId,
+      maskContent,
+    } = params.caller;
 
     // Canonical messages for prompt hash (role + content only per AI_SETUP_SPEC.md)
     const canonicalMessages = params.messages.map((msg) => ({
@@ -168,7 +175,11 @@ export class LiteLlmAdapter implements LlmService {
       metadata: {
         cogni_billing_account_id: billingAccountId,
         request_id: requestId,
-        trace_id: traceId,
+        // existing_trace_id: attach observations to decorator's trace without modifying it
+        existing_trace_id: traceId,
+        ...(sessionId && { session_id: sessionId }),
+        ...(userId && { trace_user_id: userId }),
+        ...(maskContent && { mask_input: true, mask_output: true }),
       },
     };
 
@@ -207,6 +218,17 @@ export class LiteLlmAdapter implements LlmService {
     // Handle HTTP errors with typed LlmError (per AI_SETUP_SPEC.md)
     if (!response.ok) {
       const kind = classifyLlmErrorFromStatus(response.status);
+      // Structured boundary log: status, kind, correlation IDs (no raw provider message)
+      logger.warn(
+        {
+          statusCode: response.status,
+          kind,
+          requestId,
+          traceId,
+          model,
+        },
+        "adapter.litellm.http_error"
+      );
       throw new LlmError(
         `LiteLLM API error: ${response.status} ${response.statusText}`,
         kind,
@@ -310,7 +332,14 @@ export class LiteLlmAdapter implements LlmService {
     const model = params.model;
     const temperature = params.temperature ?? DEFAULT_TEMPERATURE;
     const maxTokens = params.maxTokens ?? DEFAULT_MAX_TOKENS;
-    const { billingAccountId, requestId, traceId } = params.caller;
+    const {
+      billingAccountId,
+      requestId,
+      traceId,
+      sessionId,
+      userId,
+      maskContent,
+    } = params.caller;
 
     // Canonical messages for prompt hash (role + content only per AI_SETUP_SPEC.md)
     const canonicalMessages = params.messages.map((msg) => ({
@@ -360,7 +389,11 @@ export class LiteLlmAdapter implements LlmService {
       metadata: {
         cogni_billing_account_id: billingAccountId,
         request_id: requestId,
-        trace_id: traceId,
+        // existing_trace_id: attach observations to decorator's trace without modifying it
+        existing_trace_id: traceId,
+        ...(sessionId && { session_id: sessionId }),
+        ...(userId && { trace_user_id: userId }),
+        ...(maskContent && { mask_input: true, mask_output: true }),
       },
       stream: true,
       stream_options: { include_usage: true }, // Request usage in stream if supported
@@ -426,6 +459,17 @@ export class LiteLlmAdapter implements LlmService {
     // Handle HTTP errors with typed LlmError (per AI_SETUP_SPEC.md)
     if (!response.ok) {
       const kind = classifyLlmErrorFromStatus(response.status);
+      // Structured boundary log: status, kind, correlation IDs (no raw provider message)
+      logger.warn(
+        {
+          statusCode: response.status,
+          kind,
+          requestId,
+          traceId,
+          model,
+        },
+        "adapter.litellm.stream_http_error"
+      );
       throw new LlmError(
         `LiteLLM API error: ${response.status} ${response.statusText}`,
         kind,
@@ -531,6 +575,18 @@ export class LiteLlmAdapter implements LlmService {
                   const errorKind = statusCode
                     ? classifyLlmErrorFromStatus(statusCode)
                     : "unknown";
+                  // Structured boundary log: status, kind, correlation IDs (no raw provider message)
+                  logger.warn(
+                    {
+                      statusCode,
+                      kind: errorKind,
+                      requestId,
+                      traceId,
+                      model,
+                      litellmCallId: litellmRequestId,
+                    },
+                    "adapter.litellm.sse_error"
+                  );
                   yield { type: "error", error: errorText } as const;
                   deferred.reject(
                     new LlmError(errorText, errorKind, statusCode)

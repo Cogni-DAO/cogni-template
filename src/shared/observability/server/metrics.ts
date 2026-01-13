@@ -12,6 +12,7 @@
  * @public
  */
 
+import type { AiExecutionErrorCode } from "@cogni/ai-core";
 import type { Counter, Histogram, Registry } from "prom-client";
 import client from "prom-client";
 
@@ -128,15 +129,10 @@ export const aiLlmCostUsdTotal = getOrCreateCounter(
 // =============================================================================
 
 /**
- * Error codes for LLM failures (low cardinality).
- * Used for alerting on provider issues.
+ * Re-export AiExecutionErrorCode for metrics consumers.
+ * Per ERROR_NORMALIZATION_ONCE: metrics receives pre-normalized codes, no introspection.
  */
-export type LlmErrorCode =
-  | "timeout"
-  | "rate_limit"
-  | "provider_error"
-  | "abort"
-  | "unknown";
+export type { AiExecutionErrorCode };
 
 export const aiLlmErrorsTotal = getOrCreateCounter(
   "ai_llm_errors_total",
@@ -166,17 +162,4 @@ export function statusBucket(status: number): "2xx" | "4xx" | "5xx" {
   if (status >= 200 && status < 300) return "2xx";
   if (status >= 400 && status < 500) return "4xx";
   return "5xx";
-}
-
-/**
- * Classify LLM error into low-cardinality error code.
- */
-export function classifyLlmError(error: unknown): LlmErrorCode {
-  if (error instanceof Error) {
-    if (error.name === "AbortError") return "abort";
-    if (error.message.includes("timeout")) return "timeout";
-    if (error.message.includes("429")) return "rate_limit";
-    if (error.message.includes("LiteLLM")) return "provider_error";
-  }
-  return "unknown";
 }

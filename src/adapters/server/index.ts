@@ -43,10 +43,15 @@ export {
 export { LiteLlmActivityUsageAdapter } from "./ai/litellm.activity-usage.adapter";
 export { LiteLlmAdapter } from "./ai/litellm.adapter";
 export { LiteLlmUsageServiceAdapter } from "./ai/litellm.usage-service.adapter";
+export type { ObservabilityDecoratorConfig } from "./ai/observability-executor.decorator";
+// Observability decorator for Langfuse traces
+export { ObservabilityGraphExecutorDecorator } from "./ai/observability-executor.decorator";
 export { DrizzleAiTelemetryAdapter } from "./ai-telemetry/drizzle.adapter";
 export {
+  type CreateTraceWithIOParams,
   LangfuseAdapter,
   type LangfuseAdapterConfig,
+  type LangfuseSpanHandle,
 } from "./ai-telemetry/langfuse.adapter";
 export { type Database, getDb } from "./db/client";
 export {

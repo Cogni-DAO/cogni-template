@@ -5,8 +5,8 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-12-23
-- **Status:** draft
+- **Last reviewed:** 2026-01-12
+- **Status:** stable
 
 ## Purpose
 
@@ -44,6 +44,7 @@ Bottom-of-tree type definitions. TS utility types, branded types, ambient global
   - `billing.ts` - Re-exports SourceSystem from @cogni/ai-core; defines ChargeReason
   - `usage.ts` - Re-exports UsageFact, ExecutorType from @cogni/ai-core
   - `ai-events.ts` - Re-exports AiEvent union from @cogni/ai-core
+  - `ai-span.ts` - AiSpanPort, AiSpanHandle (provider-agnostic span interface for tool instrumentation)
   - `run-context.ts` - Re-exports RunContext from @cogni/ai-core
   - `next-auth.d.ts` - NextAuth session extensions
 - **Routes:** none

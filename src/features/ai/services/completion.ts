@@ -11,13 +11,15 @@
  * - Credit check at facade level (preflightCreditCheck), not in executeStream
  * - Post-call billing via RunEventRelay → usage_report events
  * - request_id is stable per request entry (ctx.reqId), NOT regenerated per LLM call
+ * - ERROR_NORMALIZATION_ONCE: Connection-time errors caught and normalized via try/catch
  * Side-effects: IO (via ports)
  * Notes: Uses adapter promptHash when available (canonical); fallback hash for error-path only
- * Links: Called by adapters via GraphExecutorPort, uses core domain and ports
+ * Links: Called by adapters via GraphExecutorPort, uses core domain and ports, ERROR_HANDLING_ARCHITECTURE.md
  * @public
  */
 
 import { randomUUID } from "node:crypto";
+import { isLlmError, normalizeErrorToExecutionCode } from "@cogni/ai-core";
 import type { Logger } from "pino";
 import type { Message } from "@/core";
 import type { StreamFinalResult } from "@/features/ai/types";
@@ -30,17 +32,12 @@ import type {
   LlmCompletionResult,
   LlmService,
 } from "@/ports";
-import { LlmError } from "@/ports";
 import {
   computePromptHash,
   DEFAULT_MAX_TOKENS,
   DEFAULT_TEMPERATURE,
 } from "@/shared/ai/prompt-hash";
-import {
-  type AiLlmCallEvent,
-  classifyLlmError,
-  type RequestContext,
-} from "@/shared/observability";
+import type { AiLlmCallEvent, RequestContext } from "@/shared/observability";
 // recordBilling removed: billing now via RunEventRelay + commitUsageFact (GRAPH_EXECUTION.md)
 import { recordMetrics } from "./metrics";
 import { recordTelemetry } from "./telemetry";
@@ -189,18 +186,20 @@ async function handleLlmError(
 
   const durationMs = performance.now() - llmStart;
 
-  // Record error metric
-  const errorCode = classifyLlmError(error);
+  // Normalize error ONCE at this boundary
+  const executionCode = normalizeErrorToExecutionCode(error);
+
+  // Record error metric with normalized code
   await recordMetrics({
     model: requestedModel,
     durationMs,
     isError: true,
-    errorCode,
+    errorCode: executionCode,
   });
 
   // Record error telemetry
   const latencyMs = Math.max(0, Math.round(durationMs));
-  const errorKind = error instanceof LlmError ? error.kind : "unknown";
+  const errorKind = isLlmError(error) ? error.kind : "unknown";
   await recordTelemetry(
     {
       invocationId,
@@ -320,14 +319,43 @@ export async function executeStream({
   log.debug({ messageCount: messages.length }, "starting LLM stream");
 
   // Per GRAPH_OWNS_MESSAGES: pass messages through unchanged
-  const { stream, final } = await llmService.completionStream({
-    messages,
-    model,
-    caller,
-    ...(abortSignal && { abortSignal }),
-    ...(tools && tools.length > 0 && { tools }),
-    ...(toolChoice && { toolChoice }),
-  });
+  // Wrap in try/catch for connection-time errors (e.g., 429 before stream starts)
+  let stream: AsyncIterable<import("@/ports").ChatDeltaEvent>;
+  let final: Promise<import("@/ports").LlmCompletionResult>;
+
+  try {
+    const result = await llmService.completionStream({
+      messages,
+      model,
+      caller,
+      ...(abortSignal && { abortSignal }),
+      ...(tools && tools.length > 0 && { tools }),
+      ...(toolChoice && { toolChoice }),
+    });
+    stream = result.stream;
+    final = result.final;
+  } catch (error) {
+    // Connection-time error (e.g., HTTP 429 before streaming starts)
+    log.error({ err: error, requestId }, "Stream connection failed");
+    await handleLlmError(error, postCallContext, log);
+
+    // Create error stream that emits error + done
+    const errorCode = normalizeErrorToExecutionCode(error);
+    const errorStream = (async function* () {
+      yield { type: "error" as const, error: errorCode };
+      yield { type: "done" as const };
+    })();
+
+    // Return normalized error result
+    return {
+      stream: errorStream,
+      final: Promise.resolve({
+        ok: false as const,
+        requestId,
+        error: errorCode,
+      }),
+    };
+  }
 
   // Wrap final promise to handle billing/telemetry
   // INVARIANT: STREAMING_SIDE_EFFECTS_ONCE - side effects fire ONLY from this promise
@@ -354,7 +382,7 @@ export async function executeStream({
         finishReason: result.finishReason ?? "stop",
       };
 
-      // Add billing fields and tool calls only when present (exactOptionalPropertyTypes compliance)
+      // Add billing fields, tool calls, and content when present (exactOptionalPropertyTypes compliance)
       return {
         ...baseResult,
         ...(modelId && { model: modelId }),
@@ -364,18 +392,19 @@ export async function executeStream({
         ...(result.litellmCallId && { litellmCallId: result.litellmCallId }),
         ...(result.toolCalls &&
           result.toolCalls.length > 0 && { toolCalls: result.toolCalls }),
+        ...(result.message?.content && { content: result.message.content }),
       };
     })
     .catch(async (error) => {
       log.error({ err: error, requestId }, "Stream execution failed");
       await handleLlmError(error, postCallContext, log);
 
-      // Return discriminated union instead of throwing
-      const isAborted = error instanceof Error && error.name === "AbortError";
+      // Return discriminated union with normalized error code
+      // Per ERROR_NORMALIZATION_ONCE: normalize here, propagate everywhere
       return {
         ok: false as const,
         requestId,
-        error: isAborted ? ("aborted" as const) : ("internal" as const),
+        error: normalizeErrorToExecutionCode(error),
       };
     });
 

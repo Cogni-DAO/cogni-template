@@ -3,21 +3,22 @@
 
 /**
  * Module: `@features/ai/services/telemetry`
- * Purpose: Record AI invocation to DB and Langfuse.
- * Scope: Create Langfuse trace, record generation metrics, write to ai_invocation_summaries. Does NOT perform billing or LLM calls.
+ * Purpose: Record AI invocation to DB (ai_invocation_summaries).
+ * Scope: Write invocation metrics to DB. Does NOT create Langfuse traces or generations (decorator + LiteLLM handle that).
  * Invariants:
  *   - Called on BOTH success AND error paths
  *   - PROMPTHASH_DUAL_RESOLUTION: resolvedPromptHash = canonicalPromptHash ?? fallbackPromptHash
- *   - Langfuse flush is fire-and-forget (never awaited on request path)
+ *   - LITELLM_OWNS_GENERATIONS: LiteLLM->Langfuse callback creates generation observations
  *   - Never throws (telemetry should not block response)
- * Side-effects: IO (writes to DB via AiTelemetryPort, Langfuse via LangfusePort)
- * Notes: Per COMPLETION_REFACTOR_PLAN.md P2 extraction. P1-ready with graph fields.
+ * Side-effects: IO (writes to DB via AiTelemetryPort)
+ * Notes: Decorator creates trace; LiteLLM creates generations; this service only records to DB.
  * Links: completion.ts, ports/ai-telemetry.port.ts, AI_SETUP_SPEC.md
  * @public
  */
 
+import type { LlmErrorKind } from "@cogni/ai-core";
 import type { Logger } from "pino";
-import type { AiTelemetryPort, LangfusePort, LlmErrorKind } from "@/ports";
+import type { AiTelemetryPort, LangfusePort } from "@/ports";
 import { serverEnv } from "@/shared/env";
 
 /**
@@ -69,21 +70,21 @@ export interface TelemetryContextError extends TelemetryContextBase {
 export type TelemetryContext = TelemetryContextSuccess | TelemetryContextError;
 
 /**
- * Record AI invocation telemetry to DB and Langfuse.
+ * Record AI invocation telemetry to DB.
  *
  * Called on both success and error paths.
  * Never throws - telemetry should not block user response.
  *
  * Invariants:
  * - PROMPTHASH_DUAL_RESOLUTION: resolvedPromptHash = canonicalPromptHash ?? fallbackPromptHash
- * - Langfuse flush is fire-and-forget (never awaited on request path)
+ * - LITELLM_OWNS_GENERATIONS: LiteLLM->Langfuse callback handles generation observations
  * - Never throws (catches all errors internally)
  *
  * @param context - Telemetry context from LLM result
  * @param aiTelemetry - DB telemetry port
- * @param langfuse - Optional Langfuse port (env-gated)
+ * @param langfuse - Optional Langfuse port (used only for traceId correlation in DB)
  * @param log - Logger for error reporting
- * @returns langfuseTraceId if created, undefined otherwise
+ * @returns langfuseTraceId if Langfuse enabled, undefined otherwise
  */
 export async function recordTelemetry(
   context: TelemetryContext,
@@ -110,51 +111,13 @@ export async function recordTelemetry(
   const resolvedModel =
     status === "success" ? (context.resolvedModel ?? model) : model;
 
-  // Create Langfuse trace first to capture langfuseTraceId for DB record
-  let langfuseTraceId: string | undefined;
-  if (langfuse) {
-    try {
-      langfuseTraceId = await langfuse.createTrace(traceId, {
-        requestId,
-        model: resolvedModel,
-        promptHash: resolvedPromptHash,
-      });
-
-      if (status === "success") {
-        langfuse.recordGeneration(traceId, {
-          model: resolvedModel,
-          status: "success",
-          latencyMs,
-          ...(context.usage?.promptTokens !== undefined
-            ? { tokensIn: context.usage.promptTokens }
-            : {}),
-          ...(context.usage?.completionTokens !== undefined
-            ? { tokensOut: context.usage.completionTokens }
-            : {}),
-          ...(context.providerCostUsd !== undefined
-            ? { providerCostUsd: context.providerCostUsd }
-            : {}),
-        });
-      } else {
-        langfuse.recordGeneration(traceId, {
-          model,
-          status: "error",
-          errorCode: context.errorCode,
-          latencyMs,
-        });
-      }
-
-      // Flush in background (never await on request path per spec)
-      langfuse
-        .flush()
-        .catch((err) => log.warn({ err }, "Langfuse flush failed"));
-    } catch {
-      // Langfuse failure shouldn't block request - DB telemetry still written
-      langfuseTraceId = undefined;
-    }
-  }
+  // LiteLLM->Langfuse integration handles generation observations (success_callback)
+  // We only record to DB here; decorator handles trace lifecycle
 
   // Record to DB
+  // langfuseTraceId = traceId when Langfuse is enabled (trace created by decorator)
+  const langfuseTraceId = langfuse ? traceId : undefined;
+
   try {
     if (status === "success") {
       await aiTelemetry.recordInvocation({

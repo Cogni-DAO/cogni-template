@@ -9,12 +9,17 @@
  *   - NO_DIRECT_MODEL_CALLS: All LLM calls go through injected CompletionFn
  *   - NO_AWAIT_IN_TOKEN_PATH: tokenSink.push() is synchronous
  *   - Token streaming via tokenSink injection in _generate()
+ *   - THROWS_AI_EXECUTION_ERROR: On completion failure, throws AiExecutionError with structured code
  * Side-effects: none (effects via injected deps)
- * Links: LANGGRAPH_AI.md, GRAPH_EXECUTION.md
+ * Links: LANGGRAPH_AI.md, ERROR_HANDLING_ARCHITECTURE.md
  * @public
  */
 
-import type { AiEvent } from "@cogni/ai-core";
+import {
+  type AiEvent,
+  AiExecutionError,
+  isAiExecutionErrorCode,
+} from "@cogni/ai-core";
 import type { CallbackManagerForLLMRun } from "@langchain/core/callbacks/manager";
 import {
   BaseChatModel,
@@ -103,10 +108,10 @@ export class CompletionUnitLLM extends BaseChatModel {
   private tokenSink?: TokenSink;
   /** Bound tools in OpenAI format, set via bindTools() */
   private boundTools?: OpenAIToolDef[];
-  private collectedUsage: {
-    promptTokens: number;
-    completionTokens: number;
-  } = { promptTokens: 0, completionTokens: 0 };
+  /** Accumulated usage across all LLM calls. Undefined until first call reports usage. */
+  private collectedUsage:
+    | { promptTokens: number; completionTokens: number }
+    | undefined = undefined;
 
   static lc_name(): string {
     return "CompletionUnitLLM";
@@ -174,11 +179,19 @@ export class CompletionUnitLLM extends BaseChatModel {
     const result = await final;
 
     if (!result.ok) {
-      throw new Error(result.error ?? "Completion failed");
+      // Throw AiExecutionError with structured code for proper normalization
+      const code =
+        result.error && isAiExecutionErrorCode(result.error)
+          ? result.error
+          : "internal";
+      throw new AiExecutionError(code, `Completion failed: ${code}`);
     }
 
-    // Accumulate usage
+    // Accumulate usage (initialize on first call with usage)
     if (result.usage) {
+      if (this.collectedUsage === undefined) {
+        this.collectedUsage = { promptTokens: 0, completionTokens: 0 };
+      }
       this.collectedUsage.promptTokens += result.usage.promptTokens;
       this.collectedUsage.completionTokens += result.usage.completionTokens;
     }
@@ -224,17 +237,19 @@ export class CompletionUnitLLM extends BaseChatModel {
 
   /**
    * Get accumulated usage across all LLM calls.
-   * Used for final usage_report emission.
+   * Returns undefined if no calls reported usage.
    */
-  getCollectedUsage(): { promptTokens: number; completionTokens: number } {
-    return { ...this.collectedUsage };
+  getCollectedUsage():
+    | { promptTokens: number; completionTokens: number }
+    | undefined {
+    return this.collectedUsage ? { ...this.collectedUsage } : undefined;
   }
 
   /**
    * Reset collected usage (for testing).
    */
   resetUsage(): void {
-    this.collectedUsage = { promptTokens: 0, completionTokens: 0 };
+    this.collectedUsage = undefined;
   }
 
   /**

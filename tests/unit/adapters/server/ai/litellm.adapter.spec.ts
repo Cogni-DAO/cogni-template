@@ -95,7 +95,7 @@ describe("LiteLlmAdapter", () => {
             metadata: {
               cogni_billing_account_id: "test-user-123",
               request_id: "req-test-abc",
-              trace_id: "trace-test-xyz",
+              existing_trace_id: "trace-test-xyz",
             },
           }),
           signal: expect.any(AbortSignal),
@@ -131,7 +131,7 @@ describe("LiteLlmAdapter", () => {
         metadata: {
           cogni_billing_account_id: "test-user-123",
           request_id: "req-test-abc",
-          trace_id: "trace-test-xyz",
+          existing_trace_id: "trace-test-xyz",
         },
       });
     });
@@ -416,7 +416,7 @@ describe("LiteLlmAdapter", () => {
       expect(requestBody.metadata).toEqual({
         cogni_billing_account_id: "acc-123",
         request_id: "req-correlation-test",
-        trace_id: "trace-correlation-test",
+        existing_trace_id: "trace-correlation-test",
       });
     });
   });

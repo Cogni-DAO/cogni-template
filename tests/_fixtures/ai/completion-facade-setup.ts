@@ -80,6 +80,9 @@ export function createContainerMock(deps: AiAdapterDeps) {
  * Create the mock object for vi.doMock("@/bootstrap/graph-executor.factory", ...).
  * Returns a factory that creates a mock GraphExecutorPort.
  *
+ * Per ASSISTANT_FINAL_REQUIRED: success mocks MUST emit exactly one
+ * assistant_final event before done. Violating this masks contract bugs.
+ *
  * @returns Mock module shape for @/bootstrap/graph-executor.factory
  */
 export function createGraphExecutorFactoryMock() {
@@ -88,6 +91,8 @@ export function createGraphExecutorFactoryMock() {
       runGraph: () => {
         const stream = (async function* () {
           yield { type: "text_delta" as const, delta: "Test response" };
+          // ASSISTANT_FINAL_REQUIRED: exactly one before done on success
+          yield { type: "assistant_final" as const, content: "Test response" };
           yield { type: "done" as const };
         })();
 

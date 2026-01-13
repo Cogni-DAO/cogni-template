@@ -439,18 +439,19 @@ The `langgraph-server` package re-exports graphs from `@cogni/langgraph-graphs/g
    - [x] Create `/inproc` subpath export in package.json
    - [x] Implement `createInProcChatRunner()` in `packages/langgraph-graphs/src/inproc/runner.ts`
    - [x] Add `AssistantFinalEvent` to `@cogni/ai-core` AiEvent union
-   - [ ] Add conformance test: verify AiEvent sequence (`text_delta`\*, `usage_report`, `assistant_final`, `done`)
-   - [ ] Verify exactly one `assistant_final` event per run
+   - [x] Add conformance test: verify AiEvent sequence (`text_delta`\*, `usage_report`, `assistant_final`, `done`)
+   - [x] Verify exactly one `assistant_final` event per run
 
-2. **Phase 2b: Route wiring** — ✅ Complete (pending tests)
+2. **Phase 2b: Route wiring** — ✅ Complete
    - [x] Wire via `graphResolver` in bootstrap factory
    - [x] Route stays pure translator (AiEvent → assistant-stream)
-   - [ ] Add grep test: `@langchain` only in `packages/langgraph-graphs/`
+   - [x] Add grep test: `@langchain` only in `packages/langgraph-graphs/`
    - [x] Delete deprecated `executeChatGraph()` — removed with `src/features/ai/graphs/` directory
 
-3. **Phase 2c: Tool events** — ✅ Complete (pending tests)
+3. **Phase 2c: Tool events** — ✅ Complete
    - [x] Wire `toolExec` via `createToolExecFn` factory pattern
-   - [ ] Add stack test: `tool_call_start`/`tool_call_result` events emitted
+   - [x] Add integration test: `tool_call_start`/`tool_call_result` events emitted (package seam test)
+   - [ ] TODO: Add stack test with catalog mock + stateful CompletionUnitAdapter (validates full provider path)
 
 ### P0: Architecture Refactor (Phase 3 — ✅ Complete)
 

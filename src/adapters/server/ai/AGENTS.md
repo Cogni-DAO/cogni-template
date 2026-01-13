@@ -34,11 +34,11 @@ AI service adapters including LiteLLM completion/streaming, usage telemetry, and
 
 ## Public Surface
 
-- **Exports:** LiteLlmAdapter (LlmService), LiteLlmActivityUsageAdapter (ActivityUsagePort), LiteLlmUsageServiceAdapter (UsageService), InProcGraphExecutorAdapter (GraphExecutorPort), AggregatingGraphExecutor (multi-provider routing), GraphProvider (interface), LangGraphInProcProvider (implements GraphProvider)
+- **Exports:** LiteLlmAdapter (LlmService), LiteLlmActivityUsageAdapter (ActivityUsagePort), LiteLlmUsageServiceAdapter (UsageService), InProcGraphExecutorAdapter (GraphExecutorPort), AggregatingGraphExecutor (multi-provider routing), GraphProvider (interface), LangGraphInProcProvider (implements GraphProvider), ObservabilityGraphExecutorDecorator (wraps GraphExecutorPort with Langfuse traces)
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** LITELLM_BASE_URL, LITELLM_MASTER_KEY (model param required - no env fallback)
-- **Files considered API:** litellm.adapter.ts, litellm.activity-usage.adapter.ts, litellm.usage-service.adapter.ts, inproc-graph.adapter.ts, aggregating-executor.ts, graph-provider.ts, langgraph/inproc.provider.ts
+- **Files considered API:** litellm.adapter.ts, litellm.activity-usage.adapter.ts, litellm.usage-service.adapter.ts, inproc-graph.adapter.ts, aggregating-executor.ts, graph-provider.ts, langgraph/inproc.provider.ts, observability-executor.decorator.ts
 - **Streaming:** completionStream() supports SSE streaming via eventsource-parser with robustness against malformed chunks
 
 ## Ports (optional)

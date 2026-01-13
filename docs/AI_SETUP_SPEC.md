@@ -29,15 +29,48 @@
 
 ### Correlation ID Map
 
-| ID                  | Scope                     | Purpose                                                 |
-| ------------------- | ------------------------- | ------------------------------------------------------- |
-| `request_id`        | One per inbound request   | Primary join across all systems                         |
-| `trace_id`          | One per distributed trace | OTel backbone; 32-hex                                   |
-| `span_id`           | One per operation         | Tracing UI only; **do NOT persist as durable join key** |
-| `invocation_id`     | One per LLM call attempt  | Idempotency key; UNIQUE in ai_invocation_summaries      |
-| `graph_run_id`      | One per graph execution   | Groups multiple LLM calls within a request              |
-| `langfuse_trace_id` | Langfuse-specific         | Optional debug join; equals trace_id when enabled       |
-| `litellm_call_id`   | LiteLLM call ID           | Join to /spend/logs; may be null on errors              |
+| ID                  | Scope                     | Purpose                                                  |
+| ------------------- | ------------------------- | -------------------------------------------------------- |
+| `request_id`        | One per inbound request   | Primary join across all systems                          |
+| `trace_id`          | One per distributed trace | OTel backbone; 32-hex                                    |
+| `span_id`           | One per operation         | Tracing UI only; **do NOT persist as durable join key**  |
+| `invocation_id`     | One per LLM call attempt  | Idempotency key; UNIQUE in ai_invocation_summaries       |
+| `graph_run_id`      | One per graph execution   | Groups multiple LLM calls within a request               |
+| `langfuse_trace_id` | Langfuse-specific         | Equals trace_id when valid 32-hex; logged for debug join |
+| `litellm_call_id`   | LiteLLM call ID           | Join to /spend/logs; may be null on errors               |
+
+### Langfuse Visibility Contract
+
+**Purpose:** Langfuse is canonical for prompt/response visibility + tool usage. Logs contain IDs only; Langfuse contains scrubbed content.
+
+**Invariants:**
+
+- **LANGFUSE_IS_VISIBILITY_SURFACE:** Prompts/responses visible ONLY in Langfuse (scrubbed), never in Loki
+- **LANGFUSE_TRACE_ID_STRATEGY:** Use OTel `trace_id` as Langfuse trace ID if valid 32-hex; otherwise generate + store otelTraceId in metadata
+- **LANGFUSE_TOOL_VISIBILITY:** Every tool execution creates Langfuse span with scrubbed args/result and policy decision
+- **LANGFUSE_NON_NULL_IO:** Root trace must have non-null input (on create) and output (on terminal)
+
+**What Langfuse Captures (that logs do not):**
+
+| Data                  | Langfuse           | Loki Logs   |
+| --------------------- | ------------------ | ----------- |
+| Last user message     | Scrubbed text      | Hash only   |
+| Assistant response    | Scrubbed text      | Hash only   |
+| Tool args/results     | Scrubbed summaries | Never       |
+| Tool policy decisions | Per-span metadata  | Never       |
+| Token usage           | On generation      | Counts only |
+
+**Tool Span Contract:**
+
+| Field      | Content                                                              |
+| ---------- | -------------------------------------------------------------------- |
+| `name`     | `tool:<toolName>`                                                    |
+| `input`    | Scrubbed args + argHash + bytes                                      |
+| `output`   | Scrubbed result + resultHash + bytes OR `{decision: 'deny', reason}` |
+| `metadata` | `{toolCallId, effect, durationMs, policyDecision}`                   |
+| `level`    | `DEFAULT` / `WARNING` (deny) / `ERROR`                               |
+
+**See:** [OBSERVABILITY.md](OBSERVABILITY.md#langfuse-integration-ai-trace-visibility) for full implementation checklist
 
 **ID Categories:**
 

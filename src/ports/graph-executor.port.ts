@@ -65,6 +65,8 @@ export interface GraphFinal {
   readonly finishReason?: string;
   /** Error type if not ok */
   readonly error?: AiExecutionErrorCode;
+  /** Final assistant response content (for trace output) */
+  readonly content?: string;
 }
 
 /**

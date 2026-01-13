@@ -64,6 +64,7 @@
     "sourcecred:load": "dotenv -e .env.local -- docker compose -f platform/infra/services/sourcecred/docker-compose.sourcecred.yml run --rm sourcecred yarn load",
     "sourcecred:up": "dotenv -e .env.local -- docker compose -f platform/infra/services/sourcecred/docker-compose.sourcecred.yml up -d",
     "sourcecred:down": "dotenv -e .env.local -- docker compose -f platform/infra/services/sourcecred/docker-compose.sourcecred.yml down",
+    "langfuse:trace": "dotenv -e .env.local -- sh -c 'curl -s -u \"${LANGFUSE_PUBLIC_KEY}:${LANGFUSE_SECRET_KEY}\" \"${LANGFUSE_BASE_URL}/api/public/traces?limit=1\" | jq .'",
     "packages:build": "pnpm -r --filter \"./packages/**\" build && tsc -b && pnpm packages:validate",
     "packages:validate": "tsx --tsconfig tsconfig.scripts.json scripts/validate-package-declarations.ts",
     "packages:clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo",

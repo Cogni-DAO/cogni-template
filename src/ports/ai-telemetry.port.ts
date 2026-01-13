@@ -4,72 +4,17 @@
 /**
  * Module: `@ports/ai-telemetry.port`
  * Purpose: Port interfaces for AI invocation telemetry and Langfuse integration.
- * Scope: Define AiTelemetryPort, LangfusePort, and typed LlmError for error classification. Does NOT contain implementations.
+ * Scope: Define AiTelemetryPort, LangfusePort interfaces. Does NOT contain implementations.
  * Invariants:
  *   - AiTelemetryPort always wired (DB writes even without Langfuse)
  *   - LangfusePort optional (only when LANGFUSE_SECRET_KEY set)
- *   - LlmError provides typed error classification from status codes
  * Side-effects: none (interfaces only)
- * Notes: Per AI_SETUP_SPEC.md P0 scope
+ * Notes: Per AI_SETUP_SPEC.md P0 scope. LlmError types moved to llm.port.ts.
  * Links: AI_SETUP_SPEC.md, completion.ts, DrizzleAiTelemetryAdapter
  * @public
  */
 
-/**
- * Error classification kinds for LLM failures.
- * Derived from HTTP status codes, not string heuristics.
- *
- * Per AI_SETUP_SPEC.md error_code mapping:
- * - timeout: kind='timeout' OR status=408
- * - rate_limited: status=429
- * - provider_4xx: status 400-499 (excluding 408, 429)
- * - provider_5xx: status 500-599
- * - aborted: AbortError from AbortSignal
- * - unknown: All other errors
- */
-export type LlmErrorKind =
-  | "timeout"
-  | "rate_limited"
-  | "provider_4xx"
-  | "provider_5xx"
-  | "aborted"
-  | "unknown";
-
-/**
- * Typed error for LLM adapter failures.
- * Thrown by litellm.adapter on HTTP errors.
- * Used by completion.ts to extract error_code for telemetry.
- */
-export class LlmError extends Error {
-  readonly kind: LlmErrorKind;
-  readonly status: number | undefined;
-
-  constructor(message: string, kind: LlmErrorKind, status?: number) {
-    super(message);
-    this.name = "LlmError";
-    this.kind = kind;
-    this.status = status;
-  }
-}
-
-/**
- * Classify LlmError kind from HTTP status code.
- * Per AI_SETUP_SPEC.md: classification from status codes, NOT string heuristics.
- */
-export function classifyLlmErrorFromStatus(status: number): LlmErrorKind {
-  if (status === 408) return "timeout";
-  if (status === 429) return "rate_limited";
-  if (status >= 400 && status < 500) return "provider_4xx";
-  if (status >= 500 && status < 600) return "provider_5xx";
-  return "unknown";
-}
-
-/**
- * Type guard for LlmError.
- */
-export function isLlmError(error: unknown): error is LlmError {
-  return error instanceof LlmError;
-}
+import type { LlmErrorKind } from "./llm.port";
 
 /**
  * Invocation status for telemetry recording.
@@ -129,8 +74,39 @@ export interface AiTelemetryPort {
 }
 
 /**
+ * Parameters for creating a trace with full I/O context.
+ * Per LANGFUSE_NON_NULL_IO: input is set at creation; output on terminal.
+ */
+export interface CreateTraceWithIOParams {
+  traceId: string;
+  sessionId?: string;
+  userId?: string;
+  input: unknown;
+  tags: string[];
+  metadata: Record<string, unknown>;
+}
+
+/**
+ * Span handle for tool instrumentation.
+ * Per LANGFUSE_TOOL_SPANS_NOT_LOGS: spans visible in Langfuse, not logged.
+ */
+export interface LangfuseSpanHandle {
+  spanId: string;
+  end: (params: {
+    output?: unknown;
+    level?: "DEFAULT" | "WARNING" | "ERROR";
+    metadata?: Record<string, unknown>;
+  }) => void;
+}
+
+/**
  * Port for optional Langfuse SDK integration.
  * Only wired when LANGFUSE_SECRET_KEY is set.
+ *
+ * Per OBSERVABILITY.md#langfuse-integration:
+ * - Creates trace with scrubbed input at start
+ * - Updates trace with scrubbed output on terminal
+ * - Tool spans for tool execution tracking
  */
 export interface LangfusePort {
   /**
@@ -153,9 +129,10 @@ export interface LangfusePort {
 
   /**
    * Record generation metrics on the trace.
+   * Per GENERATION_UNDER_EXISTING_TRACE: attaches to trace created by decorator.
    *
    * @param traceId - The trace to update
-   * @param generation - Generation metrics
+   * @param generation - Generation metrics and optional content
    */
   recordGeneration(
     traceId: string,
@@ -167,6 +144,10 @@ export interface LangfusePort {
       providerCostUsd?: number;
       status: InvocationStatus;
       errorCode?: LlmErrorKind;
+      /** Optional scrubbed input for generation visibility */
+      input?: unknown;
+      /** Optional scrubbed output for generation visibility */
+      output?: unknown;
     }
   ): void;
 
@@ -175,4 +156,41 @@ export interface LangfusePort {
    * Only call if trace was created; never await on request path.
    */
   flush(): Promise<void>;
+
+  // =========================================================================
+  // Extended methods for ObservabilityGraphExecutorDecorator + ToolRunner
+  // Per OBSERVABILITY.md#langfuse-integration
+  // =========================================================================
+
+  /**
+   * Create a Langfuse trace with full I/O context.
+   * Per LANGFUSE_NON_NULL_IO: input is set at creation; output on terminal.
+   *
+   * @param params - Trace creation params with input and metadata
+   * @returns The trace ID (same as input traceId)
+   */
+  createTraceWithIO(params: CreateTraceWithIOParams): string;
+
+  /**
+   * Update trace output on terminal resolution.
+   * Per LANGFUSE_TERMINAL_ONCE_GUARD: called exactly once per trace.
+   *
+   * @param traceId - The trace to update
+   * @param output - Scrubbed output content
+   */
+  updateTraceOutput(traceId: string, output: unknown): void;
+
+  /**
+   * Create a span for tool execution.
+   * Per LANGFUSE_TOOL_SPANS_NOT_LOGS: tool spans visible in Langfuse, not logged.
+   *
+   * @param params - Span creation params
+   * @returns Span handle with end() method
+   */
+  startSpan(params: {
+    traceId: string;
+    name: string;
+    input?: unknown;
+    metadata?: Record<string, unknown>;
+  }): LangfuseSpanHandle;
 }

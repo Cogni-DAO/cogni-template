@@ -175,7 +175,9 @@ clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, { messageId });
 
 **Core metrics:** `http_requests_total`, `http_request_duration_ms`, `ai_chat_stream_duration_ms`, `ai_llm_call_duration_ms`, `ai_llm_tokens_total`, `ai_llm_cost_usd_total`, `ai_llm_errors_total`
 
-**Labels:** All low-cardinality—`route` (routeId), `method`, `status` (2xx/4xx/5xx), `provider`, `model_class` (free/standard/premium), `code` (error type)
+**Labels:** All low-cardinality—`route` (routeId), `method`, `status` (2xx/4xx/5xx), `provider`, `model_class` (free/standard/premium), `code` (`AiExecutionErrorCode` — pre-normalized, no heuristics)
+
+**Error Metrics:** `ai_llm_errors_total` receives pre-normalized `AiExecutionErrorCode` from the completion layer. Metrics never introspect error objects or use string heuristics. See [ERROR_HANDLING_ARCHITECTURE.md](ERROR_HANDLING_ARCHITECTURE.md#ai-execution-errors).
 
 ---
 
@@ -201,6 +203,90 @@ clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, { messageId });
 3. **Fail-closed reqId:** logEvent() throws if reqId missing (never emit malformed events)
 4. **No sensitive data:** Redact paths cover passwords, keys, tokens; never log prompts or full request bodies
 5. **Streaming determinism:** Every SSE request emits exactly one terminal event (completed OR finalization_lost)
+
+---
+
+## Langfuse Integration (AI Trace Visibility)
+
+**Purpose:** Langfuse is the canonical visibility surface for prompts/responses + tool usage + outcomes. Logs (Loki) contain only IDs/hashes; Langfuse contains scrubbed content for debugging.
+
+**Architecture:** App creates trace (scrubbed I/O) via `ObservabilityGraphExecutorDecorator`; LiteLLM creates generation observations (full messages, tokens, latency) via its `success_callback: ["langfuse"]` integration. Generations attach to app trace via `existing_trace_id` in LiteLLM metadata.
+
+### Langfuse Invariants
+
+1. **LANGFUSE_NO_PROMPTS_IN_LOKI:** Prompts/responses only in Langfuse (scrubbed), never in Loki logs
+2. **LANGFUSE_SCRUB_BEFORE_SEND:** All content passes through structured redaction before Langfuse transmission
+3. **LANGFUSE_OTEL_TRACE_CORRELATION:** Use OTel `ctx.traceId` as Langfuse trace ID; validate 32-hex or fallback with correlation
+4. **LANGFUSE_TERMINAL_ONCE_GUARD:** Exactly one terminal outcome per trace (success/error/aborted/finalization_lost); atomic guard prevents duplicates
+5. **LANGFUSE_TOOL_SPANS_NOT_LOGS:** Tool executions create Langfuse spans, NOT log events (keep 2-4 events per request)
+6. **LANGFUSE_SESSION_LIMIT:** sessionId <=200 chars; truncate or reject before sending
+7. **LANGFUSE_USER_OPT_OUT:** Per-user `maskContent=true` sends hashes only (no readable content)
+8. **LANGFUSE_PAYLOAD_CAPS:** Hard limits on trace/generation/tool span I/O size; exceeded => summary + hash + bytes only
+
+### Trace Contract
+
+| Field       | Source                                                  | Requirement                                                              |
+| ----------- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `id`        | `ctx.traceId` (OTel)                                    | 32-hex validated; fallback generates ID + stores otelTraceId in metadata |
+| `sessionId` | `caller.sessionId`                                      | <=200 chars; truncate if exceeded                                        |
+| `userId`    | `caller.userId`                                         | Stable internal ID (not email); in metadata, NOT as tag                  |
+| `input`     | Scrubbed messages                                       | Non-null; last user message + structure (scrubbed)                       |
+| `output`    | Scrubbed response                                       | Non-null; set on terminal outcome (scrubbed)                             |
+| `tags`      | `[providerId, graphId, env]`                            | Low-cardinality only; NO userId                                          |
+| `metadata`  | `{runId, reqId, graphId, providerId, billingAccountId}` | Correlation keys                                                         |
+
+### Terminal States (exactly one per trace)
+
+| State               | Condition                                  | Timer                                     |
+| ------------------- | ------------------------------------------ | ----------------------------------------- |
+| `success`           | `assistant_final` emitted before `done`    | —                                         |
+| `error`             | Exception thrown or error event            | —                                         |
+| `aborted`           | AbortSignal fired                          | —                                         |
+| `finalization_lost` | 15s after `done` without `assistant_final` | Starts on `done`, cleared on any terminal |
+
+### Scrubbing Policy
+
+**Structured redaction (not regex-only):**
+
+- Redact by key name: `token`, `secret`, `key`, `password`, `auth`, `cookie`, `bearer`
+- Recurse objects with maxDepth limit
+- Apply regex scrubs to string leaves (API keys, emails, cards)
+- Always compute hash of raw serialized input for log correlation
+
+**Payload limits:**
+
+- Trace input/output: 50KB max; exceeded => `{summary, hash, bytes}`
+- Generation input/output: 100KB max; exceeded => `{summary, hash, bytes}`
+- Tool span input/output: 10KB max; exceeded => `{summary, hash, bytes}`
+
+### Log Events (2-4 per request)
+
+| Event                      | Fields                                     | When                   |
+| -------------------------- | ------------------------------------------ | ---------------------- |
+| `langfuse.trace_created`   | `reqId, traceId, langfuseTraceId, graphId` | On `runGraph()` start  |
+| `langfuse.trace_completed` | `reqId, traceId, langfuseTraceId, outcome` | On terminal resolution |
+
+**NOT logged:** Tool span creation/completion (visible in Langfuse UI only)
+
+### Implementation Status
+
+- [x] Add `LANGFUSE_TRACE_CREATED`, `LANGFUSE_TRACE_COMPLETED` to `EVENT_NAMES` (`src/shared/observability/events/index.ts`)
+- [x] Create structured redaction utility (`src/shared/ai/langfuse-scrubbing.ts`)
+- [x] Create `ObservabilityGraphExecutorDecorator` (`src/adapters/server/ai/observability-executor.decorator.ts`)
+- [x] Add `startSpan()`, `updateTraceOutput()` to `LangfuseAdapter` (`src/adapters/server/ai-telemetry/langfuse.adapter.ts`)
+- [x] Add span infrastructure to `createToolRunner()` (`src/shared/ai/tool-runner.ts`) — wiring deferred (tool visibility via generation messages)
+- [x] Add `sessionId`, `userId`, `maskContent` to `LlmCaller` interface (`src/ports/llm.port.ts`)
+- [x] Wire decorator in `graph-executor.factory.ts` (`src/bootstrap/graph-executor.factory.ts`)
+- [x] Validate traceId format (32-hex) with fallback (`src/adapters/server/ai/observability-executor.decorator.ts`)
+- [x] Add stack test: trace with non-null IO and terminal outcome (`tests/stack/ai/langfuse-observability.stack.test.ts`)
+
+### Langfuse API Verification
+
+Query recent traces (requires `LANGFUSE_*` vars in `.env.local`):
+
+```bash
+pnpm langfuse:trace
+```
 
 ---
 

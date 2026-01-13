@@ -76,6 +76,10 @@ export const EVENT_NAMES = {
 
   // Test Events
   TEST_EVENT: "TEST_EVENT",
+
+  // Langfuse Lifecycle (per OBSERVABILITY.md#langfuse-integration)
+  LANGFUSE_TRACE_CREATED: "langfuse.trace_created",
+  LANGFUSE_TRACE_COMPLETED: "langfuse.trace_completed",
 } as const;
 
 export type EventName = (typeof EVENT_NAMES)[keyof typeof EVENT_NAMES];

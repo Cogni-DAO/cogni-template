@@ -3,14 +3,15 @@
 
 /**
  * Module: `@bootstrap/graph-executor.factory`
- * Purpose: Factory for creating GraphExecutorPort implementations.
+ * Purpose: Factory for creating GraphExecutorPort implementations with observability.
  * Scope: Bridges app layer (facades) to adapters layer via bootstrap. Does not contain business logic.
  * Invariants:
  *   - Facade NEVER imports adapters directly (use this factory)
  *   - Per UNIFIED_GRAPH_EXECUTOR: all graph execution flows through GraphExecutorPort
  *   - Per PROVIDER_AGGREGATION: AggregatingGraphExecutor routes to providers
+ *   - Per LANGFUSE_INTEGRATION: ObservabilityGraphExecutorDecorator wraps for Langfuse traces
  * Side-effects: none
- * Links: container.ts, AggregatingGraphExecutor, GRAPH_EXECUTION.md
+ * Links: container.ts, AggregatingGraphExecutor, GRAPH_EXECUTION.md, OBSERVABILITY.md
  * @public
  */
 
@@ -19,11 +20,12 @@ import {
   type CompletionStreamFn,
   InProcGraphExecutorAdapter,
   LangGraphInProcProvider,
+  ObservabilityGraphExecutorDecorator,
 } from "@/adapters/server";
 
 import type { GraphExecutorPort } from "@/ports";
 
-import { resolveAiAdapterDeps } from "./container";
+import { getContainer, resolveAiAdapterDeps } from "./container";
 
 /**
  * Factory for creating AggregatingGraphExecutor with all configured providers.
@@ -41,6 +43,7 @@ export function createGraphExecutor(
   completionStreamFn: CompletionStreamFn
 ): GraphExecutorPort {
   const deps = resolveAiAdapterDeps();
+  const container = getContainer();
 
   // Create InProcGraphExecutorAdapter for completion units
   const inprocAdapter = new InProcGraphExecutorAdapter(
@@ -54,7 +57,16 @@ export function createGraphExecutor(
   // Create aggregating executor with all providers
   const aggregator = new AggregatingGraphExecutor([langGraphProvider]);
 
-  return aggregator;
+  // Wrap with observability decorator for Langfuse traces
+  // Per OBSERVABILITY.md#langfuse-integration: creates trace with I/O, handles terminal states
+  const decorated = new ObservabilityGraphExecutorDecorator(
+    aggregator,
+    container.langfuse,
+    { finalizationTimeoutMs: 15_000 },
+    container.log
+  );
+
+  return decorated;
 }
 
 /**

@@ -117,8 +117,49 @@ try {
 - **Debugging**: Full error context preserved from adapter to HTTP response
 - **Testing**: Easy to mock and assert specific error conditions at each layer
 
+## AI Execution Errors
+
+AI/LLM errors follow a specialized pattern with **single-point normalization** to stable error codes.
+
+**Error Types (all in `@cogni/ai-core`):**
+
+- `LlmError` — Thrown by adapters; captures `kind` (timeout, rate_limited, provider_4xx, etc.) and optional HTTP `status`
+- `AiExecutionError` — Carries structured `code` field through call chains (thrown by CompletionUnitLLM)
+- `AiExecutionErrorCode` — Stable contract: `invalid_request`, `not_found`, `timeout`, `aborted`, `rate_limit`, `internal`, `insufficient_credits`
+
+**Error Flow:**
+
+1. Adapter throws `LlmError` with kind + status at HTTP/SSE boundary
+2. `CompletionUnitLLM` catches, throws `AiExecutionError` with structured code
+3. Graph runner catches, calls `normalizeErrorToExecutionCode()` for any error type
+4. `completion.ts` catches connection-time errors, normalizes via same function
+5. Returns `{ ok: false, error: AiExecutionErrorCode }` to all consumers
+6. Metrics, logs, and responses consume the pre-normalized code
+
+**Invariants:**
+
+- **ERROR_NORMALIZATION_ONCE:** `normalizeErrorToExecutionCode()` is the single source of truth
+- **NO_RAW_THROW_PAST_COMPLETION:** `completion.ts` catches all errors, normalizes, returns structured result
+- **METRICS_NO_HEURISTICS:** Metrics receive pre-normalized codes, never introspect error objects
+
+**Normalization Priority:** AbortError → AiExecutionError.code → LlmError (status 429/408 → kind fallback) → "internal"
+
+**Structured Boundary Logging:** Adapters emit `adapter.litellm.http_error` / `adapter.litellm.sse_error` with `{statusCode, kind, requestId, traceId, model}`. Raw provider messages stay in Langfuse only.
+
+**Import Paths:**
+
+| Consumer | Import From                                                                        |
+| -------- | ---------------------------------------------------------------------------------- |
+| Packages | `@cogni/ai-core` — canonical source for all error types and normalization          |
+| Features | `@cogni/ai-core` — `normalizeErrorToExecutionCode`, `isLlmError`, `LlmError`       |
+| Adapters | `@/ports` — re-exports from `@cogni/ai-core` (arch constraint: adapters use ports) |
+| Metrics  | Receives `AiExecutionErrorCode` directly (no error introspection)                  |
+
+---
+
 ## Notes
 
-- Core should not depend on port errors - core domain logic remains infrastructure-agnostic
-- Ports + port errors are used exclusively between adapters and features in this architecture
+- Core should not depend on port errors — core domain logic remains infrastructure-agnostic
+- Ports + port errors are used exclusively between adapters and features
 - Feature error algebras provide stable contracts that isolate app routes from domain changes
+- AI errors use `AiExecutionErrorCode` as the stable contract across the system

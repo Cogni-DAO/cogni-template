@@ -154,13 +154,15 @@ export class LangGraphInProcProvider implements GraphProvider {
     const graphName = this.extractGraphName(graphId);
     if (!graphName) {
       this.log.error({ runId, graphId }, "Invalid graphId format");
-      return this.createErrorResult(runId, ingressRequestId);
+      // Client error: malformed graphId
+      return this.createErrorResult(runId, ingressRequestId, "invalid_request");
     }
 
     const entry = this.catalog[graphName] as ProviderCatalogEntry | undefined;
     if (!entry) {
       this.log.error({ runId, graphName }, "Graph not found in catalog");
-      return this.createErrorResult(runId, ingressRequestId);
+      // Client error: graph doesn't exist
+      return this.createErrorResult(runId, ingressRequestId, "not_found");
     }
 
     this.log.debug(
@@ -269,7 +271,7 @@ export class LangGraphInProcProvider implements GraphProvider {
           if (!r.ok) return { ok: false as const, error: r.error };
           return {
             ok: true as const,
-            content: "",
+            content: r.content ?? "",
             ...(r.toolCalls && { toolCalls: r.toolCalls }),
             ...(r.usage && { usage: r.usage }),
             ...(r.finishReason && { finishReason: r.finishReason }),
@@ -295,22 +297,14 @@ export class LangGraphInProcProvider implements GraphProvider {
       return { ok: false, runId, requestId, error: result.error ?? "internal" };
     }
 
-    // Use explicit conditional for exactOptionalPropertyTypes
-    if (result.usage !== undefined) {
-      return {
-        ok: true,
-        runId,
-        requestId,
-        finishReason: "stop",
-        usage: result.usage,
-      };
-    }
-
+    // Conditional spreads for exactOptionalPropertyTypes
     return {
       ok: true,
       runId,
       requestId,
       finishReason: "stop",
+      ...(result.usage !== undefined && { usage: result.usage }),
+      ...(result.content !== undefined && { content: result.content }),
     };
   }
 

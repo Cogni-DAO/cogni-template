@@ -25,6 +25,13 @@ import type {
 } from "@cogni/ai-core";
 import type { BoundTool, ToolResult } from "@cogni/ai-tools";
 
+import type { AiSpanPort } from "@/types/ai-span";
+
+import {
+  applyToolMaskingPreference,
+  scrubToolInput,
+  scrubToolOutput,
+} from "./langfuse-scrubbing";
 import {
   DENY_ALL_POLICY,
   type ToolPolicy,
@@ -67,6 +74,24 @@ export interface ToolRunnerConfig {
    * Default: { runId: 'unknown' }
    */
   readonly ctx?: ToolPolicyContext;
+
+  /**
+   * Optional span port for tool instrumentation.
+   * Per LANGFUSE_TOOL_SPANS_NOT_LOGS: spans visible in observability surface, not logged.
+   */
+  readonly spanPort?: AiSpanPort;
+
+  /**
+   * Trace ID for span correlation.
+   * Required if spanPort is provided.
+   */
+  readonly traceId?: string;
+
+  /**
+   * Per-user content masking preference.
+   * If true, tool args/results are hashed only, not scrubbed content.
+   */
+  readonly maskContent?: boolean;
 }
 
 /**
@@ -92,9 +117,15 @@ export function createToolRunner<
   const policy = config?.policy ?? DENY_ALL_POLICY;
   // Default ctx for P0; P1+ will require explicit ctx for tenant/role-based policy
   const ctx = config?.ctx ?? { runId: "toolrunner_default" };
+  // Span instrumentation (optional)
+  const spanPort = config?.spanPort;
+  const traceId = config?.traceId;
+  const maskContent = config?.maskContent ?? false;
+
   /**
    * Execute a tool by name with given arguments.
    * Follows fixed pipeline per TOOLRUNNER_PIPELINE_ORDER.
+   * Creates span for tool visibility (if spanPort provided).
    *
    * @param toolName - Name of the tool to execute
    * @param rawArgs - Raw arguments to pass to the tool
@@ -108,6 +139,41 @@ export function createToolRunner<
   ): Promise<ToolResult<Record<string, unknown>>> {
     // Generate stable toolCallId (model-provided or 9-char alphanumeric)
     const toolCallId = options?.modelToolCallId ?? generateToolCallId();
+    const execStartTime = performance.now();
+
+    // Create span for tool (if configured)
+    // Per LANGFUSE_TOOL_SPANS_NOT_LOGS: spans visible in observability surface, NOT logged
+    const scrubbedInput = scrubToolInput(rawArgs);
+    const scrubbedSpanInput = applyToolMaskingPreference(
+      scrubbedInput,
+      maskContent
+    );
+    const span =
+      spanPort && traceId
+        ? spanPort.startSpan({
+            traceId,
+            name: `tool:${toolName}`,
+            input: scrubbedSpanInput,
+            metadata: { toolCallId },
+          })
+        : undefined;
+
+    /**
+     * End Langfuse span with output and metadata.
+     */
+    const endSpan = (
+      output: unknown,
+      level: "DEFAULT" | "WARNING" | "ERROR" = "DEFAULT",
+      extraMetadata?: Record<string, unknown>
+    ): void => {
+      if (!span) return;
+      const durationMs = performance.now() - execStartTime;
+      span.end({
+        output,
+        level,
+        metadata: { durationMs, ...extraMetadata },
+      });
+    };
 
     // Look up bound tool
     const boundTool = boundTools[toolName];
@@ -119,6 +185,7 @@ export function createToolRunner<
         isError: true,
       };
       emit(errorEvent);
+      endSpan({ errorCode: "unavailable" }, "ERROR");
       return {
         ok: false,
         errorCode: "unavailable",
@@ -139,6 +206,11 @@ export function createToolRunner<
         isError: true,
       };
       emit(errorEvent);
+      // Per LANGFUSE_TOOL_VISIBILITY: record policy decision
+      endSpan({ decision: "deny", reason: "policy_denied" }, "WARNING", {
+        policyDecision: "deny",
+        effect: contract.effect,
+      });
       return {
         ok: false,
         errorCode: "policy_denied",
@@ -160,6 +232,7 @@ export function createToolRunner<
         isError: true,
       };
       emit(errorEvent);
+      endSpan({ errorCode: "validation", message: safeMessage }, "ERROR");
       return {
         ok: false,
         errorCode: "validation",
@@ -190,6 +263,9 @@ export function createToolRunner<
         isError: true,
       };
       emit(errorEvent);
+      endSpan({ errorCode: "execution", message: safeMessage }, "ERROR", {
+        effect: contract.effect,
+      });
       return {
         ok: false,
         errorCode: "execution",
@@ -211,6 +287,7 @@ export function createToolRunner<
         isError: true,
       };
       emit(errorEvent);
+      endSpan({ errorCode: "validation", message: safeMessage }, "ERROR");
       return {
         ok: false,
         errorCode: "validation",
@@ -235,6 +312,7 @@ export function createToolRunner<
         isError: true,
       };
       emit(errorEvent);
+      endSpan({ errorCode: "redaction_failed" }, "ERROR");
       return {
         ok: false,
         errorCode: "redaction_failed",
@@ -250,7 +328,18 @@ export function createToolRunner<
     };
     emit(resultEvent);
 
-    // 8. Return result
+    // 8. End span with success
+    const scrubbedOutput = scrubToolOutput(redactedOutput);
+    const scrubbedSpanOutput = applyToolMaskingPreference(
+      scrubbedOutput,
+      maskContent
+    );
+    endSpan(scrubbedSpanOutput, "DEFAULT", {
+      effect: contract.effect,
+      policyDecision: "allow",
+    });
+
+    // 9. Return result
     return {
       ok: true,
       value: redactedOutput,

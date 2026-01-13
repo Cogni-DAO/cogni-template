@@ -152,6 +152,10 @@ export async function completionStream(
     virtualKeyId: billingAccount.defaultVirtualKeyId,
     requestId: ctx.reqId,
     traceId: ctx.traceId,
+    userId: input.sessionUser.id,
+    // TODO(P1): Add sessionId from tenant-scoped threadId when USAGE_HISTORY.md threadId support lands.
+    // Per TENANT_SCOPED_THREAD_ID: sessionId = `${billingAccount.id}:${input.threadId}` (client-provided).
+    // Do NOT generate random sessionId per request - defeats Langfuse session grouping purpose.
   };
 
   const enrichedCtx: RequestContext = {
