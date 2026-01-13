@@ -90,7 +90,7 @@ function createTestRequest(
       requestId: "test-req",
       traceId: "00000000000000000000000000000000",
     },
-    graphName: "langgraph:poet",
+    graphId: "langgraph:poet",
     ...overrides,
   };
 }
@@ -109,7 +109,7 @@ describe("LangGraphInProcProvider", () => {
       const mockAdapter = createMockAdapter({ events: adapterEvents });
       const provider = new LangGraphInProcProvider(mockAdapter);
 
-      const request = createTestRequest({ graphName: "langgraph:poet" });
+      const request = createTestRequest({ graphId: "langgraph:poet" });
       const { stream, final } = provider.runGraph(request);
 
       const events = await collectEvents(stream);
@@ -146,7 +146,7 @@ describe("LangGraphInProcProvider", () => {
 
       // Request with graph not in catalog
       const request = createTestRequest({
-        graphName: "langgraph:nonexistent_graph",
+        graphId: "langgraph:nonexistent_graph",
       });
       const { stream, final } = provider.runGraph(request);
 
@@ -178,7 +178,7 @@ describe("LangGraphInProcProvider", () => {
 
       // Request with wrong provider prefix
       const request = createTestRequest({
-        graphName: "wrong_provider:poet",
+        graphId: "wrong_provider:poet",
       });
       const { stream, final } = provider.runGraph(request);
 
