@@ -17,7 +17,7 @@
 import type { AgentDescriptor } from "@/ports";
 
 // Re-export port types for provider implementations
-export type { AgentCapabilities, AgentDescriptor } from "@/ports";
+export type { AgentDescriptor } from "@/ports";
 
 /**
  * Internal interface for agent catalog providers.

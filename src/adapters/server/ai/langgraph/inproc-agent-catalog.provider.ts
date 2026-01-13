@@ -17,7 +17,7 @@
 
 import { LANGGRAPH_CATALOG } from "@cogni/langgraph-graphs";
 
-import type { AgentCapabilities, AgentDescriptor } from "@/ports";
+import type { AgentDescriptor } from "@/ports";
 
 import type { AgentCatalogProvider } from "../agent-catalog.provider";
 
@@ -53,6 +53,7 @@ export class LangGraphInProcAgentCatalogProvider
   /**
    * Build agent descriptors from catalog entries.
    * Per P0_AGENT_GRAPH_IDENTITY: agentId === graphId.
+   * Per LANGGRAPH_SERVER_ALIGNED: uses 'name' field (not displayName).
    */
   private buildDescriptors(): readonly AgentDescriptor[] {
     return Object.entries(LANGGRAPH_CATALOG).map(([graphName, entry]) => {
@@ -60,23 +61,10 @@ export class LangGraphInProcAgentCatalogProvider
       return {
         agentId: graphId, // P0: agentId === graphId
         graphId,
-        displayName: entry.displayName,
+        name: entry.displayName, // LANGGRAPH_SERVER_ALIGNED: maps to 'name'
         description: entry.description,
-        capabilities: this.inferCapabilities(),
       };
     });
-  }
-
-  /**
-   * Infer capabilities for catalog agents.
-   * Conservative defaults per CAPABILITIES_CONSERVATIVE.
-   */
-  private inferCapabilities(): AgentCapabilities {
-    return {
-      supportsStreaming: true,
-      supportsTools: true,
-      supportsMemory: false, // P0: no thread persistence
-    };
   }
 
   /**

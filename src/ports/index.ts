@@ -26,11 +26,7 @@ export {
   isVirtualKeyNotFoundPortError,
   VirtualKeyNotFoundPortError,
 } from "./accounts.port";
-export type {
-  AgentCapabilities,
-  AgentCatalogPort,
-  AgentDescriptor,
-} from "./agent-catalog.port";
+export type { AgentCatalogPort, AgentDescriptor } from "./agent-catalog.port";
 export type {
   AiTelemetryPort,
   CreateTraceWithIOParams,

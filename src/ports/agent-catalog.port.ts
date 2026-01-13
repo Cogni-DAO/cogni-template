@@ -9,23 +9,11 @@
  *   - DISCOVERY_NO_EXECUTION_DEPS: Discovery does not require execution infrastructure
  *   - P0_AGENT_GRAPH_IDENTITY: agentId === graphId (one agent per graph)
  *   - UI_ONLY_TALKS_TO_PORT: UI calls listAgents() via port; does not know providers
+ *   - LANGGRAPH_SERVER_ALIGNED: Field names match LangGraph Server assistant model
  * Side-effects: none (interface only)
  * Links: AGENT_DISCOVERY.md, ai.agents.v1.contract.ts
  * @public
  */
-
-/**
- * Agent capabilities exposed in descriptor.
- * Used for UI display and feature gating.
- */
-export interface AgentCapabilities {
-  /** Whether the agent supports streaming responses */
-  readonly supportsStreaming: boolean;
-  /** Whether the agent supports tool execution */
-  readonly supportsTools: boolean;
-  /** Whether the agent supports thread persistence (memory) */
-  readonly supportsMemory: boolean;
-}
 
 /**
  * Agent descriptor for discovery and UI display.
@@ -34,7 +22,12 @@ export interface AgentCapabilities {
  * Per P0_AGENT_GRAPH_IDENTITY: agentId === graphId in P0.
  * P1+: agentId becomes stable and may reference multiple assistants per graph.
  *
+ * Per LANGGRAPH_SERVER_ALIGNED: field names match LangGraph Server assistant model.
+ * - name (not displayName) matches LangGraph Server
+ * - description is nullable (LangGraph Server allows null)
+ *
  * graphId format is "${providerId}:${graphName}" (e.g., "langgraph:poet").
+ * For providerId='langgraph', the suffix after ':' maps to LangGraph Server graph_id.
  */
 export interface AgentDescriptor {
   /**
@@ -46,14 +39,13 @@ export interface AgentDescriptor {
   /**
    * Internal graph reference for routing.
    * Format: "${providerId}:${graphName}" (e.g., "langgraph:poet").
+   * For providerId='langgraph', suffix after ':' maps to LangGraph Server graph_id.
    */
   readonly graphId: string;
-  /** Human-readable name for UI display */
-  readonly displayName: string;
-  /** Description of what this agent does */
-  readonly description: string;
-  /** Agent capabilities */
-  readonly capabilities: AgentCapabilities;
+  /** Human-readable name (matches LangGraph Server 'name' field) */
+  readonly name: string;
+  /** Description of what this agent does (nullable per LangGraph Server) */
+  readonly description: string | null;
 }
 
 /**

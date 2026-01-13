@@ -30,15 +30,16 @@ import { cn } from "@/shared/util/cn";
 
 /**
  * Graph descriptor for UI display.
- * Matches GraphDescriptor from adapter layer but simplified for UI.
+ * Matches AgentDescriptor from port layer.
+ * Per LANGGRAPH_SERVER_ALIGNED: uses 'name' field.
  */
 export interface GraphOption {
   /** Fully-qualified graph ID (e.g., "langgraph:poet") */
   readonly graphId: GraphId;
-  /** Human-readable name */
-  readonly displayName: string;
-  /** Short description */
-  readonly description: string;
+  /** Human-readable name (matches LangGraph Server 'name' field) */
+  readonly name: string;
+  /** Short description (nullable per LangGraph Server) */
+  readonly description: string | null;
 }
 
 export interface GraphPickerProps {
@@ -57,7 +58,7 @@ export function GraphPicker({
   const [open, setOpen] = useState(false);
 
   const selectedGraph = graphs.find((g) => g.graphId === value);
-  const displayName = selectedGraph?.displayName || "Select agent";
+  const displayName = selectedGraph?.name || "Select agent";
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -127,11 +128,13 @@ export function GraphPicker({
                   <Bot className="size-5 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium text-sm">
-                      {graph.displayName}
+                      {graph.name}
                     </div>
-                    <div className="truncate text-muted-foreground text-xs">
-                      {graph.description}
-                    </div>
+                    {graph.description && (
+                      <div className="truncate text-muted-foreground text-xs">
+                        {graph.description}
+                      </div>
+                    )}
                   </div>
                   {isSelected && (
                     <Check className="size-4 shrink-0 text-primary" />

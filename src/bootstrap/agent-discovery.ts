@@ -46,12 +46,12 @@ export function createAgentCatalog(): {
  * Per DISCOVERY_PIPELINE: Route calls this helper,
  * which uses aggregator to fan out to providers.
  *
- * @returns Array of agent descriptors sorted by displayName
+ * @returns Array of agent descriptors sorted by name
  */
 export function listAgentsForApi(): readonly AgentDescriptor[] {
   const catalog = createAgentCatalog();
   const agents = catalog.listAgents();
 
-  // Sort by displayName for stable UI rendering
-  return [...agents].sort((a, b) => a.displayName.localeCompare(b.displayName));
+  // Sort by name for stable UI rendering
+  return [...agents].sort((a, b) => a.name.localeCompare(b.name));
 }

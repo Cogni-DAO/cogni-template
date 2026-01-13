@@ -59,17 +59,14 @@ describe("AggregatingAgentCatalog", () => {
       expect(agents[0].agentId).toBe(agents[0].graphId); // P0 invariant
     });
 
-    it("includes capabilities in agent descriptors", () => {
+    it("includes name and description in agent descriptors (LANGGRAPH_SERVER_ALIGNED)", () => {
       const provider = createMockAgentCatalogProvider("langgraph", ["poet"]);
       const catalog = new AggregatingAgentCatalog([provider]);
 
       const agents = catalog.listAgents();
 
-      expect(agents[0].capabilities).toEqual({
-        supportsStreaming: true,
-        supportsTools: true,
-        supportsMemory: false,
-      });
+      expect(agents[0].name).toBe("Poet");
+      expect(agents[0].description).toBe("Test poet agent");
     });
   });
 });

@@ -206,23 +206,19 @@ export function createMockGraphProvider(
 /**
  * Create a mock AgentCatalogProvider for discovery tests.
  * Per P0_AGENT_GRAPH_IDENTITY: agentId === graphId.
+ * Per LANGGRAPH_SERVER_ALIGNED: uses 'name' field (not displayName).
  */
 export function createMockAgentCatalogProvider(
   providerId: string,
   agentNames: string[]
 ): AgentCatalogProvider {
-  const agentDescriptors: AgentDescriptor[] = agentNames.map((name) => {
-    const graphId = `${providerId}:${name}`;
+  const agentDescriptors: AgentDescriptor[] = agentNames.map((agentName) => {
+    const graphId = `${providerId}:${agentName}`;
     return {
       agentId: graphId, // P0: agentId === graphId
       graphId,
-      displayName: name.charAt(0).toUpperCase() + name.slice(1),
-      description: `Test ${name} agent`,
-      capabilities: {
-        supportsStreaming: true,
-        supportsTools: true,
-        supportsMemory: false,
-      },
+      name: agentName.charAt(0).toUpperCase() + agentName.slice(1),
+      description: `Test ${agentName} agent`,
     };
   });
 
@@ -231,6 +227,6 @@ export function createMockAgentCatalogProvider(
     listAgents: () => agentDescriptors,
     canHandle: (graphId: string) =>
       graphId.startsWith(`${providerId}:`) &&
-      agentNames.some((name) => graphId === `${providerId}:${name}`),
+      agentNames.some((agentName) => graphId === `${providerId}:${agentName}`),
   };
 }
