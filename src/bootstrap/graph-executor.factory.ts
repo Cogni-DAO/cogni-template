@@ -62,10 +62,7 @@ export function createGraphExecutor(
   const decorated = new ObservabilityGraphExecutorDecorator(
     aggregator,
     container.langfuse,
-    {
-      environment: container.config.DEPLOY_ENVIRONMENT,
-      finalizationTimeoutMs: 15_000,
-    },
+    { finalizationTimeoutMs: 15_000 },
     container.log
   );
 

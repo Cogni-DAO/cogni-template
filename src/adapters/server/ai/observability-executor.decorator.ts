@@ -48,8 +48,6 @@ interface TerminalState {
  * Configuration for the observability decorator.
  */
 export interface ObservabilityDecoratorConfig {
-  /** Deploy environment from DEPLOY_ENVIRONMENT */
-  environment: string;
   /** Finalization lost timeout in ms (default: 15000) */
   finalizationTimeoutMs?: number;
 }
@@ -69,7 +67,7 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
   constructor(
     private readonly inner: GraphExecutorPort,
     private readonly langfuse: LangfusePort | undefined,
-    private readonly config: ObservabilityDecoratorConfig,
+    config: ObservabilityDecoratorConfig,
     private readonly log: Logger
   ) {
     this.finalizationTimeoutMs = config.finalizationTimeoutMs ?? 15_000;
@@ -118,7 +116,7 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
           ...(sessionId && { sessionId }),
           ...(caller.userId && { userId: caller.userId }),
           input: finalInput,
-          tags: [providerId, graphName ?? "unknown", this.config.environment],
+          tags: [providerId, graphName ?? "unknown"],
           metadata: {
             runId,
             reqId: ingressRequestId,
