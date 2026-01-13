@@ -15,7 +15,16 @@
 import type { AiExecutionErrorCode } from "@cogni/ai-core";
 import type { Message } from "@/core";
 
-// Re-export Message for adapters
+// Re-export types used in port interfaces
+export type { AiExecutionErrorCode } from "@cogni/ai-core";
+// Re-export LLM error types for adapters (adapters can only import from ports)
+export {
+  classifyLlmErrorFromStatus,
+  isLlmError,
+  LlmError,
+  type LlmErrorKind,
+  normalizeErrorToExecutionCode,
+} from "@cogni/ai-core";
 export type { Message } from "@/core";
 
 // ─────────────────────────────────────────────────────────────────────────────

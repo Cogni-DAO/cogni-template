@@ -22,15 +22,14 @@ export { logEvent } from "./logEvent";
 export type { Logger } from "./logger";
 export { makeLogger, makeNoopLogger } from "./logger";
 export {
+  type AiExecutionErrorCode,
   aiChatStreamDurationMs,
   aiLlmCallDurationMs,
   aiLlmCostUsdTotal,
   aiLlmErrorsTotal,
   aiLlmTokensTotal,
-  classifyLlmError,
   httpRequestDurationMs,
   httpRequestsTotal,
-  type LlmErrorCode,
   metricsRegistry,
   publicRateLimitExceededTotal,
   statusBucket,

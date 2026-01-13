@@ -4,72 +4,17 @@
 /**
  * Module: `@ports/ai-telemetry.port`
  * Purpose: Port interfaces for AI invocation telemetry and Langfuse integration.
- * Scope: Define AiTelemetryPort, LangfusePort, and typed LlmError for error classification. Does NOT contain implementations.
+ * Scope: Define AiTelemetryPort, LangfusePort interfaces. Does NOT contain implementations.
  * Invariants:
  *   - AiTelemetryPort always wired (DB writes even without Langfuse)
  *   - LangfusePort optional (only when LANGFUSE_SECRET_KEY set)
- *   - LlmError provides typed error classification from status codes
  * Side-effects: none (interfaces only)
- * Notes: Per AI_SETUP_SPEC.md P0 scope
+ * Notes: Per AI_SETUP_SPEC.md P0 scope. LlmError types moved to llm.port.ts.
  * Links: AI_SETUP_SPEC.md, completion.ts, DrizzleAiTelemetryAdapter
  * @public
  */
 
-/**
- * Error classification kinds for LLM failures.
- * Derived from HTTP status codes, not string heuristics.
- *
- * Per AI_SETUP_SPEC.md error_code mapping:
- * - timeout: kind='timeout' OR status=408
- * - rate_limited: status=429
- * - provider_4xx: status 400-499 (excluding 408, 429)
- * - provider_5xx: status 500-599
- * - aborted: AbortError from AbortSignal
- * - unknown: All other errors
- */
-export type LlmErrorKind =
-  | "timeout"
-  | "rate_limited"
-  | "provider_4xx"
-  | "provider_5xx"
-  | "aborted"
-  | "unknown";
-
-/**
- * Typed error for LLM adapter failures.
- * Thrown by litellm.adapter on HTTP errors.
- * Used by completion.ts to extract error_code for telemetry.
- */
-export class LlmError extends Error {
-  readonly kind: LlmErrorKind;
-  readonly status: number | undefined;
-
-  constructor(message: string, kind: LlmErrorKind, status?: number) {
-    super(message);
-    this.name = "LlmError";
-    this.kind = kind;
-    this.status = status;
-  }
-}
-
-/**
- * Classify LlmError kind from HTTP status code.
- * Per AI_SETUP_SPEC.md: classification from status codes, NOT string heuristics.
- */
-export function classifyLlmErrorFromStatus(status: number): LlmErrorKind {
-  if (status === 408) return "timeout";
-  if (status === 429) return "rate_limited";
-  if (status >= 400 && status < 500) return "provider_4xx";
-  if (status >= 500 && status < 600) return "provider_5xx";
-  return "unknown";
-}
-
-/**
- * Type guard for LlmError.
- */
-export function isLlmError(error: unknown): error is LlmError {
-  return error instanceof LlmError;
-}
+import type { LlmErrorKind } from "./llm.port";
 
 /**
  * Invocation status for telemetry recording.

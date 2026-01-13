@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-12
+- **Last reviewed:** 2026-01-13
 - **Status:** draft
 
 ## Purpose
 
-Executor-agnostic AI primitives for cross-process communication. Defines `AiEvent`, `UsageFact`, `ExecutorType`, `RunContext`, and `SourceSystem`. Used by Next.js app and all `GraphExecutorPort` adapters (InProc, LangGraph Server, Claude SDK).
+Executor-agnostic AI primitives, and minimal type helpers for cross-process communication. Defines `AiEvent`, `UsageFact`, `ExecutorType`, `RunContext`, and `SourceSystem`. Used by Next.js app and all `GraphExecutorPort` adapters (InProc, LangGraph Server, Claude SDK).
 
 ## Pointers
 
@@ -35,7 +35,7 @@ Executor-agnostic AI primitives for cross-process communication. Defines `AiEven
 }
 ```
 
-**External deps:** `json-schema` (types only). Pure TypeScript types.
+**External deps:** `json-schema` (types only). Types and minimal runtime utilities (no I/O).
 
 ## Public Surface
 
@@ -50,7 +50,10 @@ Executor-agnostic AI primitives for cross-process communication. Defines `AiEven
   - `ToolSpec` - Canonical tool definition (JSONSchema7 inputSchema)
   - `ToolInvocationRecord` - Tool execution record (timing, result, error)
   - `ToolRedactionConfig` - Redaction config for tool output
-  - `AiExecutionErrorCode` - Canonical error codes (invalid_request, timeout, aborted, internal, insufficient_credits)
+  - `AiExecutionErrorCode`, `AI_EXECUTION_ERROR_CODES` - Canonical error codes and runtime array
+  - `AiExecutionError`, `isAiExecutionError` - Structured error class and type guard
+  - `isAiExecutionErrorCode`, `normalizeErrorToExecutionCode` - Validation and normalization utilities
+  - `LlmError`, `LlmErrorKind`, `isLlmError`, `classifyLlmErrorFromStatus` - LLM adapter error types
   - `GraphId` - Namespaced graph identifier type (format: `${providerId}:${graphName}`)
 - **CLI:** none
 - **Env/Config keys:** none
@@ -63,7 +66,7 @@ Executor-agnostic AI primitives for cross-process communication. Defines `AiEven
 
 ## Responsibilities
 
-- This directory **does**: Define cross-process AI event and billing types
+- This directory **does**: Define cross-process AI event, billing, and error types; provide type guards and error normalization utilities
 - This directory **does not**: Implement business logic, make I/O calls, depend on src/
 
 ## Usage
@@ -75,9 +78,10 @@ pnpm --filter @cogni/ai-core build
 
 ## Standards
 
-- Pure type definitions only (no runtime logic beyond const arrays)
+- Types and minimal runtime utilities (type guards, error class, normalization)
 - All exports must work in both browser and Node.js
 - SINGLE_SOURCE_OF_TRUTH: These types must NOT be redefined elsewhere
+- ERROR_NORMALIZATION_ONCE: normalizeErrorToExecutionCode() is the canonical normalizer
 
 ## Dependencies
 

@@ -10,12 +10,13 @@
  *   - ASSISTANT_FINAL_REQUIRED: Emits exactly one assistant_final event on success; none on error
  *   - NO_AWAIT_IN_TOKEN_PATH: tokenSink.push() is synchronous
  *   - RESULT_REFLECTS_OUTCOME: final.ok matches stream success/failure
+ *   - ERROR_NORMALIZATION_ONCE: Catch block uses normalizeErrorToExecutionCode()
  * Side-effects: IO (executes graph, emits events)
- * Links: LANGGRAPH_AI.md
+ * Links: LANGGRAPH_AI.md, ERROR_HANDLING_ARCHITECTURE.md
  * @public
  */
 
-import type { AiEvent } from "@cogni/ai-core";
+import { type AiEvent, normalizeErrorToExecutionCode } from "@cogni/ai-core";
 import type { BaseMessage } from "@langchain/core/messages";
 
 import { AsyncQueue } from "../runtime/async-queue";
@@ -126,8 +127,9 @@ export function createInProcGraphRunner<TTool = unknown>(
         ...(usage !== undefined && { usage }),
       };
     } catch (error) {
-      const isAbort = error instanceof Error && error.name === "AbortError";
-      const code = isAbort ? "aborted" : "internal";
+      // Normalize error using duck-typed LlmError detection (kind/status properties)
+      // Per ERROR_NORMALIZATION_ONCE: normalize at catch boundary
+      const code = normalizeErrorToExecutionCode(error);
 
       // Per ERROR_NORMALIZATION: emit code only, not message
       emit({ type: "error", error: code });

@@ -16,8 +16,9 @@
  * @public
  */
 
+import type { LlmErrorKind } from "@cogni/ai-core";
 import type { Logger } from "pino";
-import type { AiTelemetryPort, LangfusePort, LlmErrorKind } from "@/ports";
+import type { AiTelemetryPort, LangfusePort } from "@/ports";
 import { serverEnv } from "@/shared/env";
 
 /**

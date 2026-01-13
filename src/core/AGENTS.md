@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-30
+- **Last reviewed:** 2026-01-13
 - **Status:** draft
 
 ## Purpose

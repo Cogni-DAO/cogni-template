@@ -10,20 +10,22 @@
  *   - LANGFUSE_TERMINAL_ONCE_GUARD: Exactly one terminal outcome per trace
  *   - LANGFUSE_NON_NULL_IO: Non-null input at start, non-null output on terminal
  *   - LANGFUSE_SCRUB_BEFORE_SEND: All content scrubbed before Langfuse
+ *   - ERROR_NORMALIZATION_ONCE: Catch block uses normalizeErrorToExecutionCode()
  * Side-effects: IO (Langfuse API calls via adapter)
- * Links: OBSERVABILITY.md#langfuse-integration, LangfuseAdapter
+ * Links: OBSERVABILITY.md#langfuse-integration, LangfuseAdapter, ERROR_HANDLING_ARCHITECTURE.md
  * @public
  */
 
 import { randomUUID } from "node:crypto";
 
 import type { Logger } from "pino";
-import type {
-  GraphExecutorPort,
-  GraphFinal,
-  GraphRunRequest,
-  GraphRunResult,
-  LangfusePort,
+import {
+  type GraphExecutorPort,
+  type GraphFinal,
+  type GraphRunRequest,
+  type GraphRunResult,
+  type LangfusePort,
+  normalizeErrorToExecutionCode,
 } from "@/ports";
 import {
   applyUserMaskingPreference,
@@ -78,7 +80,7 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
    * Wraps inner executor, creates trace, handles terminal state.
    */
   runGraph(req: GraphRunRequest): GraphRunResult {
-    const { runId, graphName, messages, caller, ingressRequestId } = req;
+    const { runId, graphName, messages, model, caller, ingressRequestId } = req;
 
     // Extract providerId from graphName (e.g., "langgraph:poet" → "langgraph")
     const providerId = graphName?.split(":")[0] ?? "unknown";
@@ -122,6 +124,7 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
             reqId: ingressRequestId,
             graphId: graphName,
             providerId,
+            model,
             billingAccountId: caller.billingAccountId,
             ...(otelTraceIdForMetadata && {
               otelTraceId: otelTraceIdForMetadata,
@@ -267,11 +270,13 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
         }
         return final;
       })
-      .catch(async (err: Error) => {
+      .catch(async (err: unknown) => {
         handleStreamEnd();
-        const isAbort = err?.name === "AbortError";
-        await resolveTerminal(isAbort ? "aborted" : "error", {
-          error: isAbort ? "aborted" : "internal",
+        // Normalize error using typed LlmError when available (e.g., rate_limit, timeout)
+        // Per ERROR_NORMALIZATION_ONCE: this is the last common point before the route
+        const errorCode = normalizeErrorToExecutionCode(err);
+        await resolveTerminal(errorCode === "aborted" ? "aborted" : "error", {
+          error: errorCode,
         });
         throw err;
       });

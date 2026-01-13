@@ -9,12 +9,17 @@
  *   - NO_DIRECT_MODEL_CALLS: All LLM calls go through injected CompletionFn
  *   - NO_AWAIT_IN_TOKEN_PATH: tokenSink.push() is synchronous
  *   - Token streaming via tokenSink injection in _generate()
+ *   - THROWS_AI_EXECUTION_ERROR: On completion failure, throws AiExecutionError with structured code
  * Side-effects: none (effects via injected deps)
- * Links: LANGGRAPH_AI.md, GRAPH_EXECUTION.md
+ * Links: LANGGRAPH_AI.md, ERROR_HANDLING_ARCHITECTURE.md
  * @public
  */
 
-import type { AiEvent } from "@cogni/ai-core";
+import {
+  type AiEvent,
+  AiExecutionError,
+  isAiExecutionErrorCode,
+} from "@cogni/ai-core";
 import type { CallbackManagerForLLMRun } from "@langchain/core/callbacks/manager";
 import {
   BaseChatModel,
@@ -174,7 +179,12 @@ export class CompletionUnitLLM extends BaseChatModel {
     const result = await final;
 
     if (!result.ok) {
-      throw new Error(result.error ?? "Completion failed");
+      // Throw AiExecutionError with structured code for proper normalization
+      const code =
+        result.error && isAiExecutionErrorCode(result.error)
+          ? result.error
+          : "internal";
+      throw new AiExecutionError(code, `Completion failed: ${code}`);
     }
 
     // Accumulate usage (initialize on first call with usage)

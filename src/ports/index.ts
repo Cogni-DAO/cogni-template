@@ -26,17 +26,13 @@ export {
   isVirtualKeyNotFoundPortError,
   VirtualKeyNotFoundPortError,
 } from "./accounts.port";
-export {
-  type AiTelemetryPort,
-  type CreateTraceWithIOParams,
-  classifyLlmErrorFromStatus,
-  type InvocationStatus,
-  isLlmError,
-  type LangfusePort,
-  type LangfuseSpanHandle,
-  LlmError,
-  type LlmErrorKind,
-  type RecordInvocationParams,
+export type {
+  AiTelemetryPort,
+  CreateTraceWithIOParams,
+  InvocationStatus,
+  LangfusePort,
+  LangfuseSpanHandle,
+  RecordInvocationParams,
 } from "./ai-telemetry.port";
 export type { Clock } from "./clock.port";
 export type {
@@ -46,20 +42,27 @@ export type {
   GraphRunRequest,
   GraphRunResult,
 } from "./graph-executor.port";
-export type {
-  ChatDeltaEvent,
-  CompletionFinalResult,
-  CompletionStreamParams,
-  GraphLlmCaller,
-  JsonSchemaObject,
-  LlmCaller,
-  LlmCompletionResult,
-  LlmService,
-  LlmToolCall,
-  LlmToolCallDelta,
-  LlmToolChoice,
-  LlmToolDefinition,
-  Message,
+// LlmError types re-exported for adapters (adapters can only import from ports)
+// Features should import directly from @/core
+export {
+  type ChatDeltaEvent,
+  type CompletionFinalResult,
+  type CompletionStreamParams,
+  classifyLlmErrorFromStatus,
+  type GraphLlmCaller,
+  isLlmError,
+  type JsonSchemaObject,
+  type LlmCaller,
+  type LlmCompletionResult,
+  LlmError,
+  type LlmErrorKind,
+  type LlmService,
+  type LlmToolCall,
+  type LlmToolCallDelta,
+  type LlmToolChoice,
+  type LlmToolDefinition,
+  type Message,
+  normalizeErrorToExecutionCode,
 } from "./llm.port";
 export type {
   InstantQueryParams,

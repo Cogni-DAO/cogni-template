@@ -52,7 +52,8 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
   - LangfusePort (createTrace, createTraceWithIO, updateTraceOutput, startSpan, recordGeneration, flush for optional Langfuse integration)
   - Clock (now)
   - Port-level errors (InsufficientCreditsPortError, BillingAccountNotFoundPortError, VirtualKeyNotFoundPortError, PaymentAttemptNotFoundPortError, TxHashAlreadyBoundPortError, ActivityUsageUnavailableError)
-  - LlmError, LlmErrorKind (typed error classification from status codes)
+  - LlmError, LlmErrorKind, isLlmError (typed error classification from status codes)
+  - normalizeErrorToExecutionCode (error-to-code normalization, re-exported for adapters)
   - LlmToolDefinition, LlmToolCall, LlmToolChoice (tool calling types)
   - Types (ChargeReceiptParams, ChargeReceiptProvenance, LlmCaller, BillingAccount, CreditLedgerEntry, CreatePaymentAttemptParams, LogPaymentEventParams, VerificationResult, VerificationStatus, CompletionStreamParams)
 - **Routes:** none

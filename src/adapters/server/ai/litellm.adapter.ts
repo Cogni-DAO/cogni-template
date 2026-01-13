@@ -218,6 +218,17 @@ export class LiteLlmAdapter implements LlmService {
     // Handle HTTP errors with typed LlmError (per AI_SETUP_SPEC.md)
     if (!response.ok) {
       const kind = classifyLlmErrorFromStatus(response.status);
+      // Structured boundary log: status, kind, correlation IDs (no raw provider message)
+      logger.warn(
+        {
+          statusCode: response.status,
+          kind,
+          requestId,
+          traceId,
+          model,
+        },
+        "adapter.litellm.http_error"
+      );
       throw new LlmError(
         `LiteLLM API error: ${response.status} ${response.statusText}`,
         kind,
@@ -448,6 +459,17 @@ export class LiteLlmAdapter implements LlmService {
     // Handle HTTP errors with typed LlmError (per AI_SETUP_SPEC.md)
     if (!response.ok) {
       const kind = classifyLlmErrorFromStatus(response.status);
+      // Structured boundary log: status, kind, correlation IDs (no raw provider message)
+      logger.warn(
+        {
+          statusCode: response.status,
+          kind,
+          requestId,
+          traceId,
+          model,
+        },
+        "adapter.litellm.stream_http_error"
+      );
       throw new LlmError(
         `LiteLLM API error: ${response.status} ${response.statusText}`,
         kind,
@@ -553,6 +575,18 @@ export class LiteLlmAdapter implements LlmService {
                   const errorKind = statusCode
                     ? classifyLlmErrorFromStatus(statusCode)
                     : "unknown";
+                  // Structured boundary log: status, kind, correlation IDs (no raw provider message)
+                  logger.warn(
+                    {
+                      statusCode,
+                      kind: errorKind,
+                      requestId,
+                      traceId,
+                      model,
+                      litellmCallId: litellmRequestId,
+                    },
+                    "adapter.litellm.sse_error"
+                  );
                   yield { type: "error", error: errorText } as const;
                   deferred.reject(
                     new LlmError(errorText, errorKind, statusCode)

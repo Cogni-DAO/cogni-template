@@ -32,7 +32,7 @@ export type {
   PaymentsStatusReadEvent,
   PaymentsVerifiedEvent,
 } from "./events/payments";
-export type { LlmErrorCode, Logger } from "./server";
+export type { AiExecutionErrorCode, Logger } from "./server";
 // Server-side logging
 export {
   aiChatStreamDurationMs,
@@ -40,7 +40,6 @@ export {
   aiLlmCostUsdTotal,
   aiLlmErrorsTotal,
   aiLlmTokensTotal,
-  classifyLlmError,
   httpRequestDurationMs,
   httpRequestsTotal,
   logEvent,

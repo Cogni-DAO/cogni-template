@@ -16,6 +16,7 @@
  * @public
  */
 
+import type { AiExecutionErrorCode } from "@cogni/ai-core";
 import { getModelClass } from "@/shared/ai/model-catalog.server";
 import {
   aiLlmCallDurationMs,
@@ -26,6 +27,7 @@ import {
 
 /**
  * Context for recording LLM metrics.
+ * Per ERROR_NORMALIZATION_ONCE: errorCode is pre-normalized AiExecutionErrorCode.
  */
 export interface MetricsContext {
   readonly model: string;
@@ -33,7 +35,8 @@ export interface MetricsContext {
   readonly tokensUsed?: number;
   readonly providerCostUsd?: number;
   readonly isError: boolean;
-  readonly errorCode?: string;
+  /** Pre-normalized error code from completion boundary */
+  readonly errorCode?: AiExecutionErrorCode;
 }
 
 /**
