@@ -478,11 +478,11 @@ Extract cross-process types to `packages/ai-core/` so `packages/langgraph-server
 
 ### 1. Adapter Selection
 
-| Executor Type      | Adapter                      | Use Case                         |
-| ------------------ | ---------------------------- | -------------------------------- |
-| `langgraph_server` | `LangGraphServerAdapter`     | LangGraph graphs (canonical)     |
-| `claude_sdk`       | `ClaudeSdkAdapter`           | Claude Agents SDK (P2)           |
-| `inproc`           | `InProcGraphExecutorAdapter` | Direct LLM completion (fallback) |
+| Executor Type      | Adapter                       | Use Case                         |
+| ------------------ | ----------------------------- | -------------------------------- |
+| `langgraph_server` | `LangGraphServerAdapter`      | LangGraph graphs (canonical)     |
+| `claude_sdk`       | `ClaudeSdkAdapter`            | Claude Agents SDK (P2)           |
+| `inproc`           | `InProcCompletionUnitAdapter` | Direct LLM completion (fallback) |
 
 **Rule:** Config-driven selection in P0. `graphName` maps to adapter + assistant ID.
 

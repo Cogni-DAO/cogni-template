@@ -10,6 +10,7 @@
  *   - UNIFIED_GRAPH_EXECUTOR: All graphs flow through GraphExecutorPort
  *   - GRAPH_ID_NAMESPACED: graphId format is ${providerId}:${graphName}
  * Side-effects: none (delegates to providers)
+ * Notes: Discovery (listAgents) is in AggregatingAgentCatalog, not here.
  * Links: GRAPH_EXECUTION.md, graph-provider.ts
  * @public
  */
@@ -24,7 +25,7 @@ import type {
 } from "@/ports";
 import { makeLogger } from "@/shared/observability";
 
-import type { GraphDescriptor, GraphProvider } from "./graph-provider";
+import type { GraphProvider } from "./graph-provider";
 
 /**
  * Aggregating graph executor that routes to providers by graphId.
@@ -34,6 +35,8 @@ import type { GraphDescriptor, GraphProvider } from "./graph-provider";
  *
  * Per GRAPH_ID_NAMESPACED: graphId format is "${providerId}:${graphName}".
  * The aggregator routes based on the providerId prefix.
+ *
+ * Note: Discovery (listing agents) is in AggregatingAgentCatalog.
  */
 export class AggregatingGraphExecutor implements GraphExecutorPort {
   private readonly log: Logger;
@@ -48,15 +51,9 @@ export class AggregatingGraphExecutor implements GraphExecutorPort {
     this.providers = providers;
     this.log = makeLogger({ component: "AggregatingGraphExecutor" });
 
-    // Log registered providers and their graphs
-    const graphCount = providers.reduce(
-      (sum, p) => sum + p.listGraphs().length,
-      0
-    );
     this.log.debug(
       {
         providerCount: providers.length,
-        graphCount,
         providers: providers.map((p) => p.providerId),
       },
       "AggregatingGraphExecutor initialized"
@@ -64,45 +61,27 @@ export class AggregatingGraphExecutor implements GraphExecutorPort {
   }
 
   /**
-   * List all available graphs from all providers.
-   * Used for discovery and UI graph selector.
-   */
-  listGraphs(): readonly GraphDescriptor[] {
-    return this.providers.flatMap((p) => p.listGraphs());
-  }
-
-  /**
    * Execute a graph run by routing to appropriate provider.
    *
    * Routing strategy:
-   * 1. If graphName is provided, try to find provider that can handle it
+   * 1. Use graphId to find provider that can handle it
    * 2. Provider.canHandle() checks if graphId matches provider's graphs
    *
    * Per UNIFIED_GRAPH_EXECUTOR: all execution flows through this method.
    */
   runGraph(req: GraphRunRequest): GraphRunResult {
-    const { runId, graphName } = req;
+    const { runId, graphId } = req;
 
     this.log.debug(
-      { runId, graphName },
+      { runId, graphId },
       "AggregatingGraphExecutor.runGraph routing"
     );
 
-    // Validate required input
-    if (!graphName) {
-      this.log.warn({ runId }, "graphName is required but was not provided");
-      return this.createErrorResult(
-        runId,
-        req.ingressRequestId,
-        "invalid_request"
-      );
-    }
-
     // Find provider that can handle this graphId
-    const provider = this.providers.find((p) => p.canHandle(graphName));
+    const provider = this.providers.find((p) => p.canHandle(graphId));
     if (provider) {
       this.log.debug(
-        { runId, graphName, providerId: provider.providerId },
+        { runId, graphId, providerId: provider.providerId },
         "Routing to provider"
       );
       return provider.runGraph(req);
@@ -112,7 +91,7 @@ export class AggregatingGraphExecutor implements GraphExecutorPort {
     this.log.error(
       {
         runId,
-        graphName,
+        graphId,
         availableProviders: this.providers.map((p) => p.providerId),
       },
       "No provider found for graphId"

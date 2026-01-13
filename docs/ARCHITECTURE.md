@@ -298,7 +298,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 [x] ├── adapters/ # infrastructure implementations (no UI)
 [x] │ ├── server/
 [x] │ │ ├── ai/litellm.adapter.ts # LLM completion service
-[x] │ │ ├── ai/inproc-graph.adapter.ts # InProcGraphExecutorAdapter (unified execution)
+[x] │ │ ├── ai/inproc-completion-unit.adapter.ts # InProcCompletionUnitAdapter (completion unit execution)
 [x] │ │ ├── ai/litellm.activity-usage.adapter.ts # Activity dashboard (LiteLLM /spend/logs)
 [x] │ │ ├── ai/litellm.usage-service.adapter.ts # UsageService bridge
 [x] │ │ ├── accounts/ # account service implementation

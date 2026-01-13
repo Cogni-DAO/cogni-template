@@ -11,6 +11,7 @@
  *   - CATALOG_SINGLE_SOURCE_OF_TRUTH: Uses catalog from @cogni/langgraph-graphs
  *   - DENY_BY_DEFAULT: Tool policy explicitly provided per graph
  * Side-effects: IO (executes graphs via package runner)
+ * Notes: Discovery is in LangGraphInProcAgentCatalogProvider, not here.
  * Links: GRAPH_EXECUTION.md, LANGGRAPH_AI.md
  * @internal
  */
@@ -40,12 +41,8 @@ import { createToolAllowlistPolicy } from "@/shared/ai/tool-policy";
 import { createToolRunner } from "@/shared/ai/tool-runner";
 import { makeLogger } from "@/shared/observability";
 
-import type {
-  GraphCapabilities,
-  GraphDescriptor,
-  GraphProvider,
-} from "../graph-provider";
-import type { CompletionUnitParams } from "../inproc-graph.adapter";
+import type { GraphProvider } from "../graph-provider";
+import type { CompletionUnitParams } from "../inproc-completion-unit.adapter";
 
 import type { AnyBoundTool, LangGraphCatalog } from "./catalog";
 
@@ -56,7 +53,7 @@ export const LANGGRAPH_PROVIDER_ID = "langgraph" as const;
 
 /**
  * Adapter interface for executing completion units.
- * Matches InProcGraphExecutorAdapter.executeCompletionUnit signature.
+ * Matches InProcCompletionUnitAdapter.executeCompletionUnit signature.
  */
 export interface CompletionUnitAdapter {
   executeCompletionUnit(params: CompletionUnitParams): {
@@ -84,11 +81,12 @@ interface ProviderCatalogEntry {
  *
  * Per GRAPH_LLM_VIA_COMPLETION: all LLM calls go through adapter.executeCompletionUnit
  * for billing/telemetry centralization.
+ *
+ * Note: Discovery (listAgents) is in LangGraphInProcAgentCatalogProvider.
  */
 export class LangGraphInProcProvider implements GraphProvider {
   readonly providerId = LANGGRAPH_PROVIDER_ID;
   private readonly log: Logger;
-  private readonly graphDescriptors: readonly GraphDescriptor[];
   private readonly catalog: LangGraphCatalog<CreateGraphFn>;
 
   constructor(private readonly adapter: CompletionUnitAdapter) {
@@ -97,44 +95,13 @@ export class LangGraphInProcProvider implements GraphProvider {
     // Use catalog from package (single source of truth)
     this.catalog = LANGGRAPH_CATALOG as LangGraphCatalog<CreateGraphFn>;
 
-    // Build descriptors from catalog entries
-    this.graphDescriptors = this.buildDescriptors();
-
     this.log.debug(
       {
-        graphCount: this.graphDescriptors.length,
+        graphCount: Object.keys(this.catalog).length,
         graphs: Object.keys(this.catalog),
       },
       "LangGraphInProcProvider initialized"
     );
-  }
-
-  /**
-   * Build graph descriptors from catalog entries.
-   */
-  private buildDescriptors(): readonly GraphDescriptor[] {
-    return Object.entries(this.catalog).map(([graphName, entry]) => ({
-      graphId: `${this.providerId}:${graphName}`,
-      displayName: entry.displayName,
-      description: entry.description,
-      capabilities: this.inferCapabilities(),
-    }));
-  }
-
-  /**
-   * Infer capabilities for InProc graphs.
-   * All LangGraph InProc graphs have same capabilities in P0.
-   */
-  private inferCapabilities(): GraphCapabilities {
-    return {
-      supportsStreaming: true,
-      supportsTools: true,
-      supportsMemory: false, // P0: no thread persistence
-    };
-  }
-
-  listGraphs(): readonly GraphDescriptor[] {
-    return this.graphDescriptors;
   }
 
   canHandle(graphId: string): boolean {
@@ -146,9 +113,15 @@ export class LangGraphInProcProvider implements GraphProvider {
   }
 
   runGraph(req: GraphRunRequest): GraphRunResult {
-    const { runId, ingressRequestId, messages, model, caller, abortSignal } =
-      req;
-    const graphId = req.graphName;
+    const {
+      runId,
+      ingressRequestId,
+      messages,
+      model,
+      caller,
+      abortSignal,
+      graphId,
+    } = req;
 
     // Extract graph name from graphId (e.g., "langgraph:poet" → "poet")
     const graphName = this.extractGraphName(graphId);
@@ -230,9 +203,7 @@ export class LangGraphInProcProvider implements GraphProvider {
    * Extract graph name from namespaced graphId.
    * Per GRAPH_ID_NAMESPACED: "langgraph:poet" → "poet"
    */
-  private extractGraphName(graphId: string | undefined): string | undefined {
-    if (!graphId) return undefined;
-
+  private extractGraphName(graphId: string): string | undefined {
     const prefix = `${this.providerId}:`;
     if (graphId.startsWith(prefix)) {
       return graphId.slice(prefix.length);

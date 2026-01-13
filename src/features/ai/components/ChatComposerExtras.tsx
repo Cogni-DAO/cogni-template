@@ -28,19 +28,19 @@ import {
 import type { GraphId } from "@/ports";
 
 /**
- * TODO: P1 - Replace hardcoded graphs with API fetch from GraphExecutorPort.listGraphs()
+ * TODO: P1 - Replace hardcoded graphs with API fetch from /api/v1/ai/agents
  * Per CATALOG_STATIC_IN_P0: graphs are static, no runtime discovery yet.
- * See GRAPH_EXECUTION.md Phase 5 checklist.
+ * See AGENT_DISCOVERY.md Phase 2 checklist.
  */
 const AVAILABLE_GRAPHS: readonly GraphOption[] = [
   {
     graphId: "langgraph:poet" satisfies GraphId,
-    displayName: "Poet",
+    name: "Poet",
     description: "Poetic AI assistant with structured verse",
   },
   {
     graphId: "langgraph:ponderer" satisfies GraphId,
-    displayName: "Ponderer",
+    name: "Ponderer",
     description: "Philosophical thinker",
   },
 ];

@@ -15,29 +15,32 @@
 export type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 export { DrizzleAccountService } from "./accounts/drizzle.adapter";
 export { DrizzleUsageAdapter } from "./accounts/drizzle.usage.adapter";
+export type { AgentCatalogProvider } from "./ai/agent-catalog.provider";
+// Agent discovery infrastructure
+export { AggregatingAgentCatalog } from "./ai/aggregating-agent-catalog";
 // Graph execution infrastructure
 export { AggregatingGraphExecutor } from "./ai/aggregating-executor";
-export type {
-  GraphCapabilities,
-  GraphDescriptor,
-  GraphProvider,
-} from "./ai/graph-provider";
+export type { GraphProvider } from "./ai/graph-provider";
 export {
   type CompletionStreamFn,
   type CompletionStreamParams,
   type CompletionStreamResult,
   type CompletionUnitParams,
   type CompletionUnitResult,
-  InProcGraphExecutorAdapter,
-  type InProcGraphExecutorDeps,
-} from "./ai/inproc-graph.adapter";
-// LangGraph provider
+  InProcCompletionUnitAdapter,
+  type InProcCompletionUnitDeps,
+} from "./ai/inproc-completion-unit.adapter";
+// LangGraph providers
 export {
   type AnyBoundTool,
   type CompletionUnitAdapter,
+  // Discovery-only provider (no execution deps)
+  LANGGRAPH_INPROC_AGENT_CATALOG_PROVIDER_ID,
+  // Execution provider (requires CompletionUnitAdapter)
   LANGGRAPH_PROVIDER_ID,
   type LangGraphCatalog,
   type LangGraphCatalogEntry,
+  LangGraphInProcAgentCatalogProvider,
   LangGraphInProcProvider,
 } from "./ai/langgraph";
 export { LiteLlmActivityUsageAdapter } from "./ai/litellm.activity-usage.adapter";

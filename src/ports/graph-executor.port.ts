@@ -9,8 +9,10 @@
  * - UNIFIED_GRAPH_EXECUTOR: All graph execution flows through this port
  * - GRAPH_FINALIZATION_ONCE: Exactly one done event and final resolution per run
  * - P0_ATTEMPT_FREEZE: attempt is always 0 in P0
+ * - GRAPH_ID_NAMESPACED: graphId format is ${providerId}:${graphName}
  * Side-effects: none (interface only)
- * Links: InProcGraphExecutorAdapter, GRAPH_EXECUTION.md, @/types/ai-events.ts
+ * Notes: Discovery (listAgents) is in AgentCatalogPort, not here.
+ * Links: InProcCompletionUnitAdapter, GRAPH_EXECUTION.md, @/types/ai-events.ts
  * @public
  */
 
@@ -39,11 +41,11 @@ export interface GraphRunRequest {
   /** Optional abort signal for cancellation */
   readonly abortSignal?: AbortSignal;
   /**
-   * Fully-qualified graph ID (e.g., "langgraph:poet").
+   * Fully-qualified graph ID for routing (e.g., "langgraph:poet").
    * Required - executor fails fast if not provided.
    * Per GRAPH_ID_NAMESPACED: format is ${providerId}:${graphName}
    */
-  readonly graphName?: string;
+  readonly graphId: string;
 }
 
 /**
@@ -86,6 +88,8 @@ export interface GraphRunResult {
  *
  * Non-async method: returns stream handle immediately.
  * Actual execution happens as the stream is consumed.
+ *
+ * Note: Discovery (listing agents) is in AgentCatalogPort, not here.
  */
 export interface GraphExecutorPort {
   /**

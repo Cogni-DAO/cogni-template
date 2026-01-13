@@ -143,3 +143,90 @@ export function createModelsMultipleFree(): ModelsOutput {
     defaultFreeModelId: "gpt-4o-mini",
   };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Graph Execution Fixtures
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { vi } from "vitest";
+
+import type { AgentCatalogProvider } from "@/adapters/server/ai/agent-catalog.provider";
+import type { GraphProvider } from "@/adapters/server/ai/graph-provider";
+import type { AgentDescriptor, GraphRunRequest } from "@/ports";
+
+/**
+ * Create a minimal GraphRunRequest for testing.
+ * Default graphId is "langgraph:poet".
+ */
+export function createTestGraphRunRequest(
+  overrides: Partial<GraphRunRequest> = {}
+): GraphRunRequest {
+  return {
+    runId: "test-run-id",
+    ingressRequestId: "test-ingress-id",
+    messages: [],
+    model: "test-model",
+    caller: {
+      billingAccountId: "test-billing",
+      virtualKeyId: "test-vkey",
+      requestId: "test-req",
+      traceId: "00000000000000000000000000000000",
+    },
+    graphId: "langgraph:poet",
+    ...overrides,
+  };
+}
+
+/**
+ * Create a mock GraphProvider for execution tests.
+ * Note: GraphProvider no longer has listGraphs - discovery is in AgentCatalogProvider.
+ */
+export function createMockGraphProvider(
+  providerId: string,
+  graphNames: string[]
+): GraphProvider {
+  return {
+    providerId,
+    canHandle: (graphId: string) =>
+      graphId.startsWith(`${providerId}:`) &&
+      graphNames.some((name) => graphId === `${providerId}:${name}`),
+    runGraph: vi.fn().mockReturnValue({
+      stream: (async function* () {
+        yield { type: "done" };
+      })(),
+      final: Promise.resolve({ ok: true, runId: "test", requestId: "test" }),
+    }),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Agent Catalog Fixtures (Discovery)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Create a mock AgentCatalogProvider for discovery tests.
+ * Per P0_AGENT_GRAPH_IDENTITY: agentId === graphId.
+ * Per LANGGRAPH_SERVER_ALIGNED: uses 'name' field (not displayName).
+ */
+export function createMockAgentCatalogProvider(
+  providerId: string,
+  agentNames: string[]
+): AgentCatalogProvider {
+  const agentDescriptors: AgentDescriptor[] = agentNames.map((agentName) => {
+    const graphId = `${providerId}:${agentName}`;
+    return {
+      agentId: graphId, // P0: agentId === graphId
+      graphId,
+      name: agentName.charAt(0).toUpperCase() + agentName.slice(1),
+      description: `Test ${agentName} agent`,
+    };
+  });
+
+  return {
+    providerId,
+    listAgents: () => agentDescriptors,
+    canHandle: (graphId: string) =>
+      graphId.startsWith(`${providerId}:`) &&
+      agentNames.some((agentName) => graphId === `${providerId}:${agentName}`),
+  };
+}

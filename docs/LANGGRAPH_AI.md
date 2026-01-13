@@ -9,10 +9,10 @@
 
 LangGraph graphs can execute via two paths:
 
-| Path       | Adapter                      | Use Case                                             |
-| ---------- | ---------------------------- | ---------------------------------------------------- |
-| **InProc** | `InProcGraphExecutorAdapter` | Next.js process; billing via executeCompletionUnit() |
-| **Server** | `LangGraphServerAdapter`     | External LangGraph Server container                  |
+| Path       | Adapter                       | Use Case                                             |
+| ---------- | ----------------------------- | ---------------------------------------------------- |
+| **InProc** | `InProcCompletionUnitAdapter` | Next.js process; billing via executeCompletionUnit() |
+| **Server** | `LangGraphServerAdapter`      | External LangGraph Server container                  |
 
 **Key Principle:** All AI execution flows through `GraphExecutorPort`. The executor choice is an implementation detail behind the unified interface. See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) for billing/tracking patterns.
 
@@ -89,7 +89,7 @@ import {
 9. **NO_AWAIT_IN_TOKEN_PATH**: The path from LLM token emission to AiEvent yield must not await I/O or slow operations. Use synchronous queue push to prevent backpressure-induced stream aborts.
 10. **NO_DIRECT_MODEL_CALLS_IN_INPROC_GRAPH_CODE**: In InProc execution, all model calls must go through `CompletionUnitLLM` (via injected `CompletionFn`). No direct `ChatOpenAI`/`initChatModel`/provider SDK calls in graph or tool code. This ensures billing/streaming/telemetry are never bypassed.
 11. **INTERNAL_DRAIN_BEFORE_RESOLVE**: CompletionUnitLLM must drain provider stream before resolving its internal promise. This is an implementation detail; consumers may cancel early per CANCEL_PROPAGATION.
-12. **SINGLE_QUEUE_PER_RUN**: Each graph run owns exactly one AsyncQueue. Tool events and LLM events flow to the same queue. The runner creates the queue and binds emit callbacks; adapters (`InProcGraphExecutorAdapter`, `LangGraphServerAdapter`) do not create queues.
+12. **SINGLE_QUEUE_PER_RUN**: Each graph run owns exactly one AsyncQueue. Tool events and LLM events flow to the same queue. The runner creates the queue and binds emit callbacks; adapters (`InProcCompletionUnitAdapter`, `LangGraphServerAdapter`) do not create queues.
 13. **CORRELATION_ID_PROPAGATION**: Adapters must use `req.caller.traceId` and `req.ingressRequestId` from GraphRunRequest. Never generate new trace/request IDs in adapters or runners.
 14. **ASSISTANT_FINAL_REQUIRED**: On success, all executors must emit exactly one `assistant_final` event with the complete assistant response. On error, no `assistant_final` is emitted (there is no complete response to persist). InProc extracts from graph state; Server extracts from final SDK message.
 
@@ -168,7 +168,7 @@ InProc executes LangGraph within the Next.js server runtime with billing through
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│ InProcGraphExecutorAdapter                                           │
+│ InProcCompletionUnitAdapter                                           │
 │ - Wraps executeCompletionUnit → ai-core CompletionFn                 │
 │ - Calls createInProcChatRunner() from package                        │
 └─────────────────────────────────────────────────────────────────────┘

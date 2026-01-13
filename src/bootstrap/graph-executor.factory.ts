@@ -18,7 +18,7 @@
 import {
   AggregatingGraphExecutor,
   type CompletionStreamFn,
-  InProcGraphExecutorAdapter,
+  InProcCompletionUnitAdapter,
   LangGraphInProcProvider,
   ObservabilityGraphExecutorDecorator,
 } from "@/adapters/server";
@@ -45,8 +45,8 @@ export function createGraphExecutor(
   const deps = resolveAiAdapterDeps();
   const container = getContainer();
 
-  // Create InProcGraphExecutorAdapter for completion units
-  const inprocAdapter = new InProcGraphExecutorAdapter(
+  // Create InProcCompletionUnitAdapter for completion units
+  const inprocAdapter = new InProcCompletionUnitAdapter(
     deps,
     completionStreamFn
   );

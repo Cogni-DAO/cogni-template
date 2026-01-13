@@ -8,7 +8,7 @@
  * Invariants:
  *   - NO_LANGCHAIN_IN_ADAPTERS_ROOT: LangChain imports only in this directory
  * Side-effects: none
- * Links: GRAPH_EXECUTION.md, LANGGRAPH_AI.md
+ * Links: GRAPH_EXECUTION.md, LANGGRAPH_AI.md, AGENT_DISCOVERY.md
  * @public
  */
 
@@ -18,10 +18,14 @@ export type {
   LangGraphCatalog,
   LangGraphCatalogEntry,
 } from "./catalog";
-
-// Provider
+// Execution provider (requires CompletionUnitAdapter)
 export {
   type CompletionUnitAdapter,
   LANGGRAPH_PROVIDER_ID,
   LangGraphInProcProvider,
 } from "./inproc.provider";
+// Discovery-only provider (no execution deps)
+export {
+  LANGGRAPH_PROVIDER_ID as LANGGRAPH_INPROC_AGENT_CATALOG_PROVIDER_ID,
+  LangGraphInProcAgentCatalogProvider,
+} from "./inproc-agent-catalog.provider";

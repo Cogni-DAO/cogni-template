@@ -2,20 +2,19 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/unit/adapters/server/ai/inproc-graph.deadlock.spec`
- * Purpose: Test that InProcGraphExecutorAdapter does not deadlock when final requires stream close.
- * Scope: Reproduces the deadlock where awaiting final inside for-await prevents done emission. Does NOT test happy-path streaming or error flows.
- * Invariants: GRAPH_FINALIZATION_ONCE (graph emits exactly one done event)
+ * Module: `@tests/unit/adapters/server/ai/inproc-completion-unit.deadlock.spec`
+ * Purpose: Test that InProcCompletionUnitAdapter.executeCompletionUnit does not deadlock when final requires stream close.
+ * Scope: Reproduces the deadlock where awaiting final inside for-await prevents stream completion. Does NOT test happy-path streaming or error flows.
+ * Invariants: NO_AWAIT_FINAL_IN_LOOP (must break out of for-await before awaiting final)
  * Side-effects: none
- * Links: GRAPH_EXECUTION.md, inproc-graph.adapter.ts
+ * Links: GRAPH_EXECUTION.md, AGENT_DISCOVERY.md, inproc-completion-unit.adapter.ts
  * @internal
  */
 
 import { describe, expect, it } from "vitest";
 
-import { InProcGraphExecutorAdapter } from "@/adapters/server/ai/inproc-graph.adapter";
+import { InProcCompletionUnitAdapter } from "@/adapters/server/ai/inproc-completion-unit.adapter";
 import type { ChatDeltaEvent } from "@/ports";
-import { makeNoopLogger } from "@/shared/observability";
 import type { AiEvent } from "@/types/ai-events";
 
 /**
@@ -51,14 +50,13 @@ function createDeadlockProneCompletion() {
   // Final only resolves AFTER iterator is closed (simulates LiteLLM finally block)
   const final = iteratorClosedPromise.then(() => ({
     ok: true as const,
-    message: { role: "assistant" as const, content: "Hello world" },
-    promptHash: "hash123",
-    resolvedProvider: "test",
-    resolvedModel: "test-model",
+    requestId: "req-123",
+    content: "Hello world",
     usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 },
-    finishReason: "stop",
+    finishReason: "stop" as const,
     litellmCallId: "call-123",
     providerCostUsd: 0.001,
+    model: "test-model",
   }));
 
   return {
@@ -67,23 +65,30 @@ function createDeadlockProneCompletion() {
   };
 }
 
-describe("InProcGraphExecutorAdapter deadlock prevention", () => {
-  it("does not deadlock when final requires stream close (GRAPH_FINALIZATION_ONCE)", async () => {
-    // This test FAILS with current code (deadlock) and PASSES after fix.
+describe("InProcCompletionUnitAdapter deadlock prevention", () => {
+  it("executeCompletionUnit does not deadlock when final requires stream close (NO_AWAIT_FINAL_IN_LOOP)", async () => {
+    // This test FAILS with buggy code (deadlock) and PASSES with correct code.
     //
     // The bug: adapter awaits `final` inside the for-await loop when it sees `done`.
     // But `final` only resolves when the iterator closes (in finally block).
     // The iterator can't close because we're blocked on `await final`.
-    // Result: deadlock, `done` event never emitted to downstream.
+    // Result: deadlock, stream never completes.
+    //
+    // Per COMPLETION_UNIT_NOT_PORT: InProcCompletionUnitAdapter provides
+    // executeCompletionUnit() for providers, not runGraph().
 
-    const adapter = new InProcGraphExecutorAdapter(
-      { log: makeNoopLogger() },
+    const adapter = new InProcCompletionUnitAdapter(
+      {
+        llmService: {} as never, // Not used in this test
+        accountService: {} as never,
+        clock: {} as never,
+        aiTelemetry: {} as never,
+        langfuse: undefined,
+      },
       async () => createDeadlockProneCompletion()
     );
 
-    const result = adapter.runGraph({
-      runId: "run-123",
-      ingressRequestId: "req-123",
+    const result = adapter.executeCompletionUnit({
       messages: [{ role: "user", content: "test" }],
       model: "test-model",
       caller: {
@@ -91,6 +96,11 @@ describe("InProcGraphExecutorAdapter deadlock prevention", () => {
         virtualKeyId: "vk-123",
         requestId: "req-123",
         traceId: "trace-123",
+      },
+      runContext: {
+        runId: "run-123",
+        attempt: 0,
+        ingressRequestId: "req-123",
       },
     });
 
@@ -118,18 +128,21 @@ describe("InProcGraphExecutorAdapter deadlock prevention", () => {
     expect(outcome).toBe("completed");
     expect(elapsedMs).toBeLessThan(TIMEOUT_MS);
 
-    // Assert: received all events including done
+    // Assert: received text_delta and usage_report events
     const eventTypes = collectedEvents.map((e) => e.type);
     expect(eventTypes).toContain("text_delta");
-    expect(eventTypes).toContain("done");
 
-    // Assert: done is the last event (per GRAPH_FINALIZATION_ONCE)
-    expect(collectedEvents[collectedEvents.length - 1].type).toBe("done");
+    // Note: executeCompletionUnit does NOT emit "done" - caller handles that
+    // per COMPLETION_UNIT_NOT_PORT invariant. It only emits text_delta + usage_report.
+    expect(eventTypes).not.toContain("done");
 
-    // Assert: usage_report emitted before done (billing flow)
-    const doneIndex = eventTypes.indexOf("done");
+    // Assert: usage_report is emitted (billing flow)
     const usageIndex = eventTypes.indexOf("usage_report");
     expect(usageIndex).toBeGreaterThan(-1);
-    expect(usageIndex).toBeLessThan(doneIndex);
+
+    // Assert: usage_report is the last event (no done from completion unit)
+    expect(collectedEvents[collectedEvents.length - 1].type).toBe(
+      "usage_report"
+    );
   });
 });
