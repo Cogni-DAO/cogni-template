@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@adapters/server/ai/inproc-graph`
- * Purpose: In-process completion unit adapter for graph providers.
+ * Module: `@adapters/server/ai/inproc-completion-unit`
+ * Purpose: Adapter used by graph providers to execute completion units with app billing/telemetry.
  * Scope: Provides executeCompletionUnit() for LangGraphInProcProvider. Does NOT implement GraphExecutorPort. Does NOT import @langchain/*.
  * Invariants:
  *   - COMPLETION_UNIT_NOT_PORT: This is a CompletionUnitAdapter, not GraphExecutorPort
@@ -38,10 +38,10 @@ import type {
 import type { UsageFact } from "@/types/usage";
 
 /**
- * Dependencies for InProcGraphExecutorAdapter.
+ * Dependencies for InProcCompletionUnitAdapter.
  * All required for delegation to completion.executeStream.
  */
-export interface InProcGraphExecutorDeps {
+export interface InProcCompletionUnitDeps {
   readonly llmService: LlmService;
   readonly accountService: AccountService;
   readonly clock: Clock;
@@ -51,7 +51,7 @@ export interface InProcGraphExecutorDeps {
 
 /**
  * Completion stream result shape.
- * Includes billing fields for GraphExecutorAdapter to emit usage_report.
+ * Includes billing fields for adapter to emit usage_report.
  * Uses CompletionFinalResult from ports (canonical discriminated union).
  */
 export interface CompletionStreamResult {
@@ -125,14 +125,14 @@ export type CompletionStreamFn = (
  * Per PROVIDER_AGGREGATION: Graph routing is handled by AggregatingGraphExecutor.
  * This adapter provides the completion unit execution that providers use internally.
  */
-export class InProcGraphExecutorAdapter {
+export class InProcCompletionUnitAdapter {
   private readonly log: Logger;
 
   constructor(
-    private readonly deps: InProcGraphExecutorDeps,
+    private readonly deps: InProcCompletionUnitDeps,
     private readonly completionStream: CompletionStreamFn
   ) {
-    this.log = makeLogger({ component: "InProcGraphExecutorAdapter" });
+    this.log = makeLogger({ component: "InProcCompletionUnitAdapter" });
   }
 
   /**
@@ -166,7 +166,7 @@ export class InProcGraphExecutorAdapter {
         messageCount: messages.length,
         hasTools: !!tools,
       },
-      "InProcGraphExecutorAdapter.executeCompletionUnit"
+      "InProcCompletionUnitAdapter.executeCompletionUnit"
     );
 
     // Create completion promise lazily, with error classification at the boundary.

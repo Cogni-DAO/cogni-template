@@ -50,7 +50,7 @@ GraphProvider[].listGraphs() (fanout)
 - [x] Create `LangGraphCatalogProvider` (discovery-only, no execution deps)
 - [x] Create `src/bootstrap/graph-discovery.ts` with `listGraphsForApi()`
 - [x] Update route to use `listGraphsForApi()` instead of direct catalog import
-- [x] Remove `GraphExecutorPort` from `InProcGraphExecutorAdapter` (it's a `CompletionUnitAdapter`)
+- [x] Remove `GraphExecutorPort` from `InProcCompletionUnitAdapter` (it's a `CompletionUnitAdapter`)
 - [x] Keep `DEFAULT_LANGGRAPH_GRAPH_ID` as app default (temporary, from package)
 
 ### Phase 1: Discovery/Execution Split
@@ -87,7 +87,7 @@ src/
 ├── adapters/server/ai/
 │   ├── graph-provider.ts          # GraphProvider interface (internal)
 │   ├── aggregating-executor.ts    # AggregatingGraphExecutor
-│   ├── inproc-graph.adapter.ts    # CompletionUnitAdapter (NOT GraphExecutorPort)
+│   ├── inproc-completion-unit.adapter.ts # CompletionUnitAdapter (NOT GraphExecutorPort)
 │   └── langgraph/
 │       ├── catalog.provider.ts    # LangGraphCatalogProvider (discovery-only)
 │       └── inproc.provider.ts     # LangGraphInProcProvider (execution)

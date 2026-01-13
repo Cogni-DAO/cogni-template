@@ -2,18 +2,18 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@tests/unit/adapters/server/ai/inproc-graph.deadlock.spec`
- * Purpose: Test that InProcGraphExecutorAdapter.executeCompletionUnit does not deadlock when final requires stream close.
+ * Module: `@tests/unit/adapters/server/ai/inproc-completion-unit.deadlock.spec`
+ * Purpose: Test that InProcCompletionUnitAdapter.executeCompletionUnit does not deadlock when final requires stream close.
  * Scope: Reproduces the deadlock where awaiting final inside for-await prevents stream completion. Does NOT test happy-path streaming or error flows.
  * Invariants: NO_AWAIT_FINAL_IN_LOOP (must break out of for-await before awaiting final)
  * Side-effects: none
- * Links: GRAPH_EXECUTION.md, AGENT_DISCOVERY.md, inproc-graph.adapter.ts
+ * Links: GRAPH_EXECUTION.md, AGENT_DISCOVERY.md, inproc-completion-unit.adapter.ts
  * @internal
  */
 
 import { describe, expect, it } from "vitest";
 
-import { InProcGraphExecutorAdapter } from "@/adapters/server/ai/inproc-graph.adapter";
+import { InProcCompletionUnitAdapter } from "@/adapters/server/ai/inproc-completion-unit.adapter";
 import type { ChatDeltaEvent } from "@/ports";
 import type { AiEvent } from "@/types/ai-events";
 
@@ -65,7 +65,7 @@ function createDeadlockProneCompletion() {
   };
 }
 
-describe("InProcGraphExecutorAdapter deadlock prevention", () => {
+describe("InProcCompletionUnitAdapter deadlock prevention", () => {
   it("executeCompletionUnit does not deadlock when final requires stream close (NO_AWAIT_FINAL_IN_LOOP)", async () => {
     // This test FAILS with buggy code (deadlock) and PASSES with correct code.
     //
@@ -74,10 +74,10 @@ describe("InProcGraphExecutorAdapter deadlock prevention", () => {
     // The iterator can't close because we're blocked on `await final`.
     // Result: deadlock, stream never completes.
     //
-    // Per COMPLETION_UNIT_NOT_PORT: InProcGraphExecutorAdapter provides
+    // Per COMPLETION_UNIT_NOT_PORT: InProcCompletionUnitAdapter provides
     // executeCompletionUnit() for providers, not runGraph().
 
-    const adapter = new InProcGraphExecutorAdapter(
+    const adapter = new InProcCompletionUnitAdapter(
       {
         llmService: {} as never, // Not used in this test
         accountService: {} as never,

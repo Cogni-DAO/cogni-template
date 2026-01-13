@@ -28,9 +28,9 @@ export {
   type CompletionStreamResult,
   type CompletionUnitParams,
   type CompletionUnitResult,
-  InProcGraphExecutorAdapter,
-  type InProcGraphExecutorDeps,
-} from "./ai/inproc-graph.adapter";
+  InProcCompletionUnitAdapter,
+  type InProcCompletionUnitDeps,
+} from "./ai/inproc-completion-unit.adapter";
 // LangGraph providers
 export {
   type AnyBoundTool,

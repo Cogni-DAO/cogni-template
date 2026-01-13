@@ -45,7 +45,7 @@ import type {
   GraphDescriptor,
   GraphProvider,
 } from "../graph-provider";
-import type { CompletionUnitParams } from "../inproc-graph.adapter";
+import type { CompletionUnitParams } from "../inproc-completion-unit.adapter";
 
 import type { AnyBoundTool, LangGraphCatalog } from "./catalog";
 
@@ -56,7 +56,7 @@ export const LANGGRAPH_PROVIDER_ID = "langgraph" as const;
 
 /**
  * Adapter interface for executing completion units.
- * Matches InProcGraphExecutorAdapter.executeCompletionUnit signature.
+ * Matches InProcCompletionUnitAdapter.executeCompletionUnit signature.
  */
 export interface CompletionUnitAdapter {
   executeCompletionUnit(params: CompletionUnitParams): {

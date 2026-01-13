@@ -10,7 +10,7 @@
  *   - Direct completion.executeStream() calls outside executor internals bypass billing/telemetry pipeline
  * Side-effects: IO (grep subprocess)
  * Notes: Complements ONE_LEDGER_WRITER. Catches call sites that would silently skip billing.
- * Links: GRAPH_EXECUTION.md, inproc-graph.adapter.ts, completion.ts
+ * Links: GRAPH_EXECUTION.md, inproc-completion-unit.adapter.ts, completion.ts
  * @public
  */
 
@@ -24,8 +24,8 @@ import { describe, expect, it } from "vitest";
 const ALLOWLIST = [
   // Definition of executeStream itself
   "src/features/ai/services/completion.ts",
-  // InProcGraphExecutorAdapter wraps executeStream for GraphExecutorPort
-  "src/adapters/server/ai/inproc-graph.adapter.ts",
+  // InProcCompletionUnitAdapter wraps executeStream for completion units
+  "src/adapters/server/ai/inproc-completion-unit.adapter.ts",
 ];
 
 describe("BILLABLE_AI_THROUGH_EXECUTOR Invariant", () => {

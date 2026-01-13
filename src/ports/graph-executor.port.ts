@@ -12,7 +12,7 @@
  * - GRAPH_ID_NAMESPACED: graphId format is ${providerId}:${graphName}
  * - UI_ONLY_TALKS_TO_PORT: UI calls listGraphs() via port; does not know providers
  * Side-effects: none (interface only)
- * Links: InProcGraphExecutorAdapter, GRAPH_EXECUTION.md, @/types/ai-events.ts
+ * Links: InProcCompletionUnitAdapter, GRAPH_EXECUTION.md, @/types/ai-events.ts
  * @public
  */
 
