@@ -78,7 +78,7 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
    * Wraps inner executor, creates trace, handles terminal state.
    */
   runGraph(req: GraphRunRequest): GraphRunResult {
-    const { runId, graphName, messages, caller, ingressRequestId } = req;
+    const { runId, graphName, messages, model, caller, ingressRequestId } = req;
 
     // Extract providerId from graphName (e.g., "langgraph:poet" → "langgraph")
     const providerId = graphName?.split(":")[0] ?? "unknown";
@@ -122,6 +122,7 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
             reqId: ingressRequestId,
             graphId: graphName,
             providerId,
+            model,
             billingAccountId: caller.billingAccountId,
             ...(otelTraceIdForMetadata && {
               otelTraceId: otelTraceIdForMetadata,
