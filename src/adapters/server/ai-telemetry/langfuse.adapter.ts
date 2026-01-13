@@ -29,8 +29,7 @@ export interface LangfuseAdapterConfig {
   publicKey: string;
   secretKey: string;
   baseUrl?: string;
-  /** Deploy environment (e.g., "local", "preview", "production") for trace filtering */
-  environment?: string;
+  // Note: environment is read by Langfuse SDK from LANGFUSE_TRACING_ENVIRONMENT env var
 }
 
 // Re-export port types for convenience (canonical source is @/ports)
@@ -49,15 +48,13 @@ export type { CreateTraceWithIOParams, LangfuseSpanHandle };
 export class LangfuseAdapter implements LangfusePort {
   private readonly langfuse: Langfuse;
   private readonly activeTraces = new Set<string>();
-  readonly environment: string;
 
   constructor(config: LangfuseAdapterConfig) {
-    this.environment = config.environment ?? "local";
+    // Environment is read automatically by Langfuse SDK from LANGFUSE_TRACING_ENVIRONMENT env var
     this.langfuse = new Langfuse({
       publicKey: config.publicKey,
       secretKey: config.secretKey,
       ...(config.baseUrl ? { baseUrl: config.baseUrl } : {}),
-      ...(config.environment ? { environment: config.environment } : {}),
     });
   }
 

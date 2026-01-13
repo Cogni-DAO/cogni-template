@@ -9,6 +9,21 @@
 
 model_list:
   # ===== FREE MODELS =====
+  # All validated for tool support via OpenRouter API (2026-01-13)
+  # Rate limits: 50 req/day (free plan) or 1000 req/day (>=$10 credits)
+
+  # Google
+  - model_name: gemini-2-flash
+    litellm_params:
+      model: openrouter/google/gemini-2.0-flash-exp:free
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Gemini 2.0 Flash"
+      is_free: true
+      provider_key: "google"
+      metadata:
+        cogni:
+          default_free: true
 
   # Mistral
   - model_name: devstral
@@ -20,38 +35,35 @@ model_list:
       is_free: true
       provider_key: "mistral"
 
-  # Kimi (MoonshotAI)
-  - model_name: kimi-k2
+  # Qwen
+  - model_name: qwen3-coder
     litellm_params:
-      model: openrouter/moonshotai/kimi-k2:free
+      model: openrouter/qwen/qwen3-coder:free
       api_key: "os.environ/OPENROUTER_API_KEY"
     model_info:
-      display_name: "Kimi K2 Free"
+      display_name: "Qwen3 Coder"
       is_free: true
-      provider_key: "kimi"
+      provider_key: "qwen"
 
-  # Amazon
-  - model_name: nova-2-lite
+  # Llama (Meta)
+  - model_name: llama-3.3-70b
     litellm_params:
-      model: openrouter/amazon/nova-2-lite-v1:free
+      model: openrouter/meta-llama/llama-3.3-70b-instruct:free
       api_key: "os.environ/OPENROUTER_API_KEY"
     model_info:
-      display_name: "Nova 2 Lite"
+      display_name: "Llama 3.3 70B"
       is_free: true
-      provider_key: "amazon"
-      metadata:
-        cogni:
-          default_free: true
+      provider_key: "llama"
 
-  # OpenAI
-  - model_name: gpt-oss-20b
+  # NVIDIA
+  - model_name: nemotron-nano-30b
     litellm_params:
-      model: openrouter/openai/gpt-oss-20b:free
+      model: openrouter/nvidia/nemotron-3-nano-30b-a3b:free
       api_key: "os.environ/OPENROUTER_API_KEY"
     model_info:
-      display_name: "GPT OSS 20B"
+      display_name: "Nemotron Nano 30B"
       is_free: true
-      provider_key: "openai"
+      provider_key: "nvidia"
 
   # ===== PAID MODELS =====
   # OpenAI

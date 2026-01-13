@@ -194,14 +194,13 @@ function createContainer(): Container {
   const aiTelemetry = new DrizzleAiTelemetryAdapter(db);
 
   // Langfuse: only wired when LANGFUSE_SECRET_KEY is set (optional)
-  // Environment passed for trace filtering (separates dev/preview/prod data)
+  // Environment read by SDK from LANGFUSE_TRACING_ENVIRONMENT env var
   const langfuse: Container["langfuse"] =
     env.LANGFUSE_SECRET_KEY && env.LANGFUSE_PUBLIC_KEY
       ? new LangfuseAdapter({
           publicKey: env.LANGFUSE_PUBLIC_KEY,
           secretKey: env.LANGFUSE_SECRET_KEY,
           ...(env.LANGFUSE_BASE_URL ? { baseUrl: env.LANGFUSE_BASE_URL } : {}),
-          environment: env.DEPLOY_ENVIRONMENT ?? "local",
         })
       : undefined;
 

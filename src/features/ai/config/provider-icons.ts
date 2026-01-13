@@ -19,9 +19,11 @@ import { AnthropicIcon } from "../icons/providers/AnthropicIcon";
 import { DeepSeekIcon } from "../icons/providers/DeepSeekIcon";
 import { GeminiIcon } from "../icons/providers/GeminiIcon";
 import { KimiIcon } from "../icons/providers/KimiIcon";
+import { LlamaIcon } from "../icons/providers/LlamaIcon";
 import { MinimaxIcon } from "../icons/providers/MinimaxIcon";
 import { MistralIcon } from "../icons/providers/MistralIcon";
 import { NovaIcon } from "../icons/providers/NovaIcon";
+import { NvidiaIcon } from "../icons/providers/NvidiaIcon";
 import { OpenAIIcon } from "../icons/providers/OpenAIIcon";
 import { QwenIcon } from "../icons/providers/QwenIcon";
 import { XAIIcon } from "../icons/providers/XAIIcon";
@@ -40,6 +42,8 @@ const PROVIDER_ICONS = {
   kimi: KimiIcon,
   minimax: MinimaxIcon,
   mistral: MistralIcon,
+  nvidia: NvidiaIcon,
+  llama: LlamaIcon,
   openai: OpenAIIcon,
   qwen: QwenIcon,
   xai: XAIIcon,
