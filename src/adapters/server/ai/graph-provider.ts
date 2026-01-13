@@ -10,14 +10,12 @@
  *   - NO_PARALLEL_REQUEST_TYPES: runGraph uses GraphRunRequest/GraphRunResult from @/ports
  *   - GRAPH_ID_NAMESPACED: graphId format is ${providerId}:${graphName}
  * Side-effects: none
+ * Notes: Discovery is in AgentCatalogProvider, not here.
  * Links: GRAPH_EXECUTION.md, aggregating-executor.ts
  * @internal
  */
 
-import type { GraphDescriptor, GraphRunRequest, GraphRunResult } from "@/ports";
-
-// Re-export port types for provider implementations
-export type { GraphCapabilities, GraphDescriptor } from "@/ports";
+import type { GraphRunRequest, GraphRunResult } from "@/ports";
 
 /**
  * Internal interface for graph execution providers.
@@ -27,16 +25,12 @@ export type { GraphCapabilities, GraphDescriptor } from "@/ports";
  *
  * Per NO_PARALLEL_REQUEST_TYPES: runGraph uses same types as GraphExecutorPort.
  * Thread/run-shaped API (createThread, createRun, streamRun) deferred to P1.
+ *
+ * Note: Discovery (listAgents) is in AgentCatalogProvider, not here.
  */
 export interface GraphProvider {
   /** Provider identifier (e.g., "langgraph", "claude_sdk") */
   readonly providerId: string;
-
-  /**
-   * List all graphs available from this provider.
-   * Used for discovery and UI graph selector.
-   */
-  listGraphs(): readonly GraphDescriptor[];
 
   /**
    * Check if this provider handles the given graphId.

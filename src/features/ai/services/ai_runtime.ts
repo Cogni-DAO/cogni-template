@@ -117,7 +117,7 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
       model,
       caller,
       ...(abortSignal && { abortSignal }),
-      graphName: resolvedGraphId,
+      graphId: resolvedGraphId,
     });
 
     // Create RunEventRelay for pump+fanout pattern (context provided to subscribers)

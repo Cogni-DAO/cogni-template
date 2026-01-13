@@ -12,6 +12,7 @@
  *   - LANGFUSE_SCRUB_BEFORE_SEND: All content scrubbed before Langfuse
  *   - ERROR_NORMALIZATION_ONCE: Catch block uses normalizeErrorToExecutionCode()
  * Side-effects: IO (Langfuse API calls via adapter)
+ * Notes: Discovery (listAgents) is in AgentCatalogPort, not here.
  * Links: OBSERVABILITY.md#langfuse-integration, LangfuseAdapter, ERROR_HANDLING_ARCHITECTURE.md
  * @public
  */
@@ -20,7 +21,6 @@ import { randomUUID } from "node:crypto";
 
 import type { Logger } from "pino";
 import {
-  type GraphDescriptor,
   type GraphExecutorPort,
   type GraphFinal,
   type GraphRunRequest,
@@ -63,6 +63,8 @@ export interface ObservabilityDecoratorConfig {
  * - Updates trace with scrubbed output on terminal
  * - Handles all 4 terminal states: success, error, aborted, finalization_lost
  * - Once-guard ensures exactly one terminal outcome per trace
+ *
+ * Note: Discovery (listAgents) is in AgentCatalogPort, not here.
  */
 export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
   private readonly finalizationTimeoutMs: number;
@@ -81,10 +83,10 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
    * Wraps inner executor, creates trace, handles terminal state.
    */
   runGraph(req: GraphRunRequest): GraphRunResult {
-    const { runId, graphName, messages, model, caller, ingressRequestId } = req;
+    const { runId, graphId, messages, model, caller, ingressRequestId } = req;
 
-    // Extract providerId from graphName (e.g., "langgraph:poet" → "langgraph")
-    const providerId = graphName?.split(":")[0] ?? "unknown";
+    // Extract providerId from graphId (e.g., "langgraph:poet" → "langgraph")
+    const providerId = graphId.split(":")[0] ?? "unknown";
 
     // Validate traceId - use OTel if valid, otherwise generate with correlation
     let traceId: string;
@@ -119,11 +121,11 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
           ...(sessionId && { sessionId }),
           ...(caller.userId && { userId: caller.userId }),
           input: finalInput,
-          tags: [providerId, graphName ?? "unknown"],
+          tags: [providerId, graphId],
           metadata: {
             runId,
             reqId: ingressRequestId,
-            graphId: graphName,
+            graphId,
             providerId,
             model,
             billingAccountId: caller.billingAccountId,
@@ -139,14 +141,14 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
             reqId: ingressRequestId,
             traceId,
             langfuseTraceId,
-            graphId: graphName,
+            graphId,
             event: EVENT_NAMES.LANGFUSE_TRACE_CREATED,
           },
           EVENT_NAMES.LANGFUSE_TRACE_CREATED
         );
       } catch (error) {
         this.log.error(
-          { err: error, runId, graphName },
+          { err: error, runId, graphId },
           "Failed to create Langfuse trace"
         );
       }
@@ -325,13 +327,5 @@ export class ObservabilityGraphExecutorDecorator implements GraphExecutorPort {
         };
       },
     };
-  }
-
-  /**
-   * Delegate listGraphs to inner executor.
-   * Per UI_ONLY_TALKS_TO_PORT: UI calls this method via port; does not know providers.
-   */
-  listGraphs(): readonly GraphDescriptor[] {
-    return this.inner.listGraphs();
   }
 }
