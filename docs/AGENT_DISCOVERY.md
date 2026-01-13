@@ -37,11 +37,11 @@ AgentCatalogProvider[].listAgents() (fanout)
 
 5. **AGENT_ID_STABLE**: `agentId` format is `${providerId}:${graphName}` (e.g., `langgraph:poet`). Stable across execution backends.
 
-6. **CAPABILITIES_CONSERVATIVE**: Only set capability flags for what is truly supported. Do not guess or over-promise.
+6. **LANGGRAPH_SERVER_ALIGNED**: Field names match LangGraph Server assistant model (`name`, nullable `description`). No bespoke `capabilities` in P0.
 
 7. **DEDUPE_BY_AGENTID**: If multiple providers return the same `agentId`, log error and prefer first provider in registry order.
 
-8. **SORT_FOR_STABILITY**: Output sorted by `displayName` (or `agentId`) for stable UI rendering.
+8. **SORT_FOR_STABILITY**: Output sorted by `name` (or `agentId`) for stable UI rendering.
 
 ---
 
@@ -50,7 +50,7 @@ AgentCatalogProvider[].listAgents() (fanout)
 ### Phase 0: MVP (✅ Complete)
 
 - [x] Create `AgentCatalogPort` interface in `src/ports/agent-catalog.port.ts`
-- [x] Create `AgentDescriptor` with `agentId`, `graphId`, `displayName`, `description`, `capabilities`
+- [x] Create `AgentDescriptor` with `agentId`, `graphId`, `name`, `description` (nullable)
 - [x] Create `LangGraphInProcAgentCatalogProvider` (discovery-only, no execution deps)
 - [x] Create `src/bootstrap/agent-discovery.ts` with `listAgentsForApi()`
 - [x] Create `/api/v1/ai/agents` route using `listAgentsForApi()`
@@ -146,27 +146,45 @@ class LangGraphInProcProvider implements GraphProvider {
 
 ## AgentDescriptor Shape
 
-`AgentDescriptor` aligns with LangGraph Server's "Assistant" concept:
-
-- **P0**: `agentId === graphId` (enforced by `P0_AGENT_GRAPH_IDENTITY` invariant)
-- **P1+**: `agentId` becomes stable, may reference multiple assistants per graph
+`AgentDescriptor` aligns with LangGraph Server's assistant model (`POST /assistants/search`):
 
 ```typescript
-// src/ports/agent-catalog.port.ts
+// src/ports/agent-catalog.port.ts (P0)
 interface AgentDescriptor {
   agentId: string; // Stable identifier (P0: === graphId)
-  graphId: string; // Internal routing reference
-  displayName: string;
-  description: string;
-  capabilities: AgentCapabilities;
+  graphId: string; // Internal routing: "${providerId}:${graphName}"
+  name: string; // Matches LangGraph Server 'name'
+  description: string | null; // Nullable per LangGraph Server
 }
 
 // GET /api/v1/ai/agents response
 interface ListAgentsResponse {
   agents: AgentDescriptor[];
-  defaultAgentId: string;
+  defaultAgentId: string | null;
 }
 ```
+
+---
+
+## LangGraph Server Alignment Roadmap
+
+LangGraph Server `POST /assistants/search` returns these fields per assistant:
+
+| LangGraph Server Field                | Our Field        | P0 Status                              |
+| ------------------------------------- | ---------------- | -------------------------------------- |
+| `assistant_id` (UUID)                 | —                | P1+: expose when multi-assistant lands |
+| `graph_id` (string)                   | `graphId` suffix | ✅ graphId = `langgraph:{graph_id}`    |
+| `name`                                | `name`           | ✅ aligned                             |
+| `description`                         | `description`    | ✅ aligned (nullable)                  |
+| `config`                              | —                | P1+: if UI needs config exposure       |
+| `metadata`                            | —                | P1+: extensible metadata               |
+| `version`, `created_at`, `updated_at` | —                | P2+: versioning support                |
+
+**P0 simplifications:**
+
+- `agentId === graphId` (one agent per graph, no assistant variants)
+- No `capabilities` field (was bespoke, not LangGraph Server aligned)
+- No `providerRef` (deferred to P3 multi-adapter)
 
 ---
 
