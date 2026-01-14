@@ -15,9 +15,7 @@
  * @public
  */
 
-import type { ToolSpec } from "@cogni/ai-core";
-
-import type { ToolPolicy, ToolPolicyContext } from "./tool-policy";
+import type { ToolPolicy, ToolPolicyContext, ToolSpec } from "@cogni/ai-core";
 
 /**
  * Tool catalog: the per-request set of tools exposed to the model.

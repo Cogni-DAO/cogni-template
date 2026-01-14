@@ -107,9 +107,13 @@ export function createInProcGraphRunner<TTool = unknown>(
   const final = (async (): Promise<GraphResult> => {
     try {
       const messages = request.messages.map(toBaseMessage);
+      // toolIds comes from GraphRunConfig via request.configurable, NOT derived from contracts
       const result = await graph.invoke(
         { messages },
-        { signal: request.abortSignal }
+        {
+          signal: request.abortSignal,
+          configurable: request.configurable,
+        }
       );
 
       const assistantContent = extractAssistantContent(result.messages);

@@ -15,16 +15,13 @@
  * @internal
  */
 
+import { createToolAllowlistPolicy, DENY_ALL_POLICY } from "@cogni/ai-core";
 import {
   createEventCollector,
   createTestBoundTool,
   TEST_TOOL_NAME,
 } from "@tests/_fakes/ai/tool-builders";
 import { describe, expect, it, vi } from "vitest";
-import {
-  createToolAllowlistPolicy,
-  DENY_ALL_POLICY,
-} from "@/shared/ai/tool-policy";
 import { createToolRunner } from "@/shared/ai/tool-runner";
 
 // ─────────────────────────────────────────────────────────────────────────────

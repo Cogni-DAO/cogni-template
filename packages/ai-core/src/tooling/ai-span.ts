@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@types/ai-span`
+ * Module: `@cogni/ai-core/tooling/ai-span`
  * Purpose: Provider-agnostic span interface for AI tool instrumentation.
  * Scope: Minimal interface for span creation and completion. Does not depend on any provider SDK.
  * Invariants: Pure types, no runtime dependencies

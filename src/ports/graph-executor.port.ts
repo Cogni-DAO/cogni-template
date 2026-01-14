@@ -46,6 +46,12 @@ export interface GraphRunRequest {
    * Per GRAPH_ID_NAMESPACED: format is ${providerId}:${graphName}
    */
   readonly graphId: string;
+  /**
+   * Per-run tool allowlist from GraphRunConfig.
+   * Tools not in this list receive policy_denied error.
+   * If undefined, falls back to catalog default (P0 acceptable, logs warning).
+   */
+  readonly toolIds?: readonly string[];
 }
 
 /**

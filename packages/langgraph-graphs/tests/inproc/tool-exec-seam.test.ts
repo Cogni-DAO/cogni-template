@@ -261,6 +261,8 @@ describe("Runner ToolExecFn seam (integration)", () => {
           runId: TEST_RUN_ID,
           messages: [{ role: "user", content: "Echo hello world" }],
           model: TEST_MODEL,
+          // Must pass toolIds for wrapper deny-by-default check
+          configurable: { toolIds: [TEST_TOOL_NAME] },
         },
       });
 
@@ -314,7 +316,15 @@ describe("Runner ToolExecFn seam (integration)", () => {
   });
 
   describe("non-allowlisted tool", () => {
-    it("denies and does not execute implementation", async () => {
+    /**
+     * When a tool is not in configurable.toolIds, the wrapper short-circuits
+     * and returns a policy_denied JSON string directly to LangGraph.
+     *
+     * This is by design: wrapper is a cheap prefilter that doesn't emit events.
+     * The JSON response goes back to the LLM, which handles it gracefully.
+     * Real event emission happens in ToolRunner (when exec() is called).
+     */
+    it("denies at wrapper level without calling exec", async () => {
       // Create spy for tool execution
       const executeSpy = vi
         .fn()
@@ -346,30 +356,29 @@ describe("Runner ToolExecFn seam (integration)", () => {
           runId: TEST_RUN_ID,
           messages: [{ role: "user", content: "Use denied tool" }],
           model: TEST_MODEL,
+          // Only TEST_TOOL_NAME in toolIds - DENIED_TOOL_NAME will be rejected by wrapper
+          configurable: { toolIds: [TEST_TOOL_NAME] },
         },
       });
 
       const events = await collectEvents(stream);
-      await final;
+      const result = await final;
 
       const dones = events.filter((e) => e.type === "done");
-      const toolResults = events.filter((e) => e.type === "tool_call_result");
 
-      // Tool implementation was NOT called (policy denied)
+      // Tool implementation was NOT called (wrapper short-circuited)
       expect(executeSpy).not.toHaveBeenCalled();
 
-      // done is last
+      // Graph completed successfully (done is last event)
       expect(dones).toHaveLength(1);
       expect(events[events.length - 1]).toEqual({ type: "done" });
 
-      // Should have a tool_call_result with error
-      expect(toolResults.length).toBeGreaterThanOrEqual(1);
-      const errorResult = toolResults[0] as {
-        type: "tool_call_result";
-        isError?: boolean;
-        result?: { error?: string };
-      };
-      expect(errorResult.isError).toBe(true);
+      // Graph result is ok (LLM received policy_denied JSON and responded)
+      expect(result.ok).toBe(true);
+
+      // NOTE: No tool_call_result event expected - wrapper denial doesn't emit events.
+      // The policy_denied JSON is returned directly to LangGraph as "tool output",
+      // which the LLM handles gracefully in the next turn.
     });
   });
 });

@@ -16,6 +16,7 @@
  * @public
  */
 
+import { createToolAllowlistPolicy } from "@cogni/ai-core";
 import {
   createEventCollector,
   createTestBoundTool,
@@ -23,12 +24,10 @@ import {
   TEST_TOOL_NAME,
 } from "@tests/_fakes";
 import { describe, expect, it } from "vitest";
-
 import type {
   ToolCallResultEvent,
   ToolCallStartEvent,
 } from "@/features/ai/types";
-import { createToolAllowlistPolicy } from "@/shared/ai/tool-policy";
 import { createToolRunner } from "@/shared/ai/tool-runner";
 
 /**

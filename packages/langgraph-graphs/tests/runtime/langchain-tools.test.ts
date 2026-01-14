@@ -112,8 +112,11 @@ describe("toLangChainTools", () => {
     expect(tools).toHaveLength(1);
     const wrappedTool = tools[0];
 
-    // Invoke the wrapped tool
-    await wrappedTool.invoke({ value: "hello" });
+    // Invoke the wrapped tool with toolIds in configurable (required for deny-by-default)
+    await wrappedTool.invoke(
+      { value: "hello" },
+      { configurable: { toolIds: ["test_tool"] } }
+    );
 
     // Verify events were emitted
     const startEvents = collector.events.filter(

@@ -18,25 +18,22 @@
  * @public
  */
 
-import type {
-  EmitAiEvent,
-  ToolCallResultEvent,
-  ToolCallStartEvent,
+import type { AiSpanPort } from "@cogni/ai-core";
+import {
+  DENY_ALL_POLICY,
+  type EmitAiEvent,
+  type ToolCallResultEvent,
+  type ToolCallStartEvent,
+  type ToolPolicy,
+  type ToolPolicyContext,
 } from "@cogni/ai-core";
 import type { BoundTool, ToolResult } from "@cogni/ai-tools";
-
-import type { AiSpanPort } from "@/types/ai-span";
 
 import {
   applyToolMaskingPreference,
   scrubToolInput,
   scrubToolOutput,
 } from "./langfuse-scrubbing";
-import {
-  DENY_ALL_POLICY,
-  type ToolPolicy,
-  type ToolPolicyContext,
-} from "./tool-policy";
 
 /** Charset for provider-compatible tool call IDs */
 const TOOL_ID_CHARS =

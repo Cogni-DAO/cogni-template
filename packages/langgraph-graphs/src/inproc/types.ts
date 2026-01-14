@@ -14,7 +14,7 @@
  * @public
  */
 
-import type { AiEvent, AiExecutionErrorCode } from "@cogni/ai-core";
+import type { AiEvent, AiExecutionErrorCode, ToolExecFn } from "@cogni/ai-core";
 import type { ToolContract } from "@cogni/ai-tools";
 // Import shared graph types from graphs/types.ts (single source of truth)
 import type {
@@ -62,29 +62,8 @@ export type CompiledGraph = InvokableGraph<
  */
 export type CreateGraphFn = (opts: CreateGraphOptions) => CompiledGraph;
 
-/**
- * Result from tool execution via exec function.
- * Matches toolRunner.exec() return shape.
- */
-export interface ToolExecResult {
-  readonly ok: boolean;
-  readonly value?: unknown;
-  readonly errorCode?: string;
-  readonly safeMessage?: string;
-}
-
-/**
- * Tool execution function signature.
- * Called by LangChain tool wrapper, routes through toolRunner.
- *
- * Per TOOLCALLID_STABLE: toolRunner generates canonical toolCallId if undefined.
- * P1 will add providerToolCallId from AIMessage.tool_calls for correlation.
- */
-export type ToolExecFn = (
-  name: string,
-  args: unknown,
-  toolCallId?: string
-) => Promise<ToolExecResult>;
+// Re-export canonical types from ai-core (per TOOL_EXEC_TYPES_IN_AI_CORE)
+export type { ToolExecFn, ToolExecResult } from "@cogni/ai-core";
 
 /**
  * Graph request (subset of GraphRunRequest, no src imports).
@@ -96,6 +75,12 @@ export interface InProcGraphRequest {
   readonly abortSignal?: AbortSignal;
   readonly traceId?: string;
   readonly ingressRequestId?: string;
+  /**
+   * RunnableConfig.configurable passed to graph.invoke().
+   * Must include toolIds from GraphRunConfig for TOOLS_DENY_BY_DEFAULT.
+   * Provider is responsible for populating this from GraphRunConfig.
+   */
+  readonly configurable?: { toolIds?: readonly string[] };
 }
 
 /**

@@ -50,6 +50,16 @@ export {
 } from "./execution/llm-errors";
 // Graph types
 export type { GraphId } from "./graph/graph-id";
+// Span types (observability)
+export type { AiSpanHandle, AiSpanPort } from "./tooling/ai-span";
+// Tool policy (runtime)
+export {
+  createToolAllowlistPolicy,
+  DENY_ALL_POLICY,
+  type ToolPolicy,
+  type ToolPolicyContext,
+  type ToolPolicyDecision,
+} from "./tooling/runtime/tool-policy";
 // Tooling types
 export type {
   EmitAiEvent,

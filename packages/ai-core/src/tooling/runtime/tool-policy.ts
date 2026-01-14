@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@shared/ai/tool-policy`
+ * Module: `@cogni/ai-core/tooling/runtime/tool-policy`
  * Purpose: Tool policy interface and default implementations for deny-by-default enforcement.
  * Scope: Policy decision logic only. Does not execute tools or touch IO.
  * Invariants:
@@ -14,7 +14,7 @@
  * @public
  */
 
-import type { ToolEffect } from "@cogni/ai-core";
+import type { ToolEffect } from "../types";
 
 /**
  * Minimal context for policy decisions.

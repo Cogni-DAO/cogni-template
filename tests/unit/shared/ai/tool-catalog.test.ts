@@ -15,13 +15,9 @@
  */
 
 import type { ToolSpec } from "@cogni/ai-core";
+import { createToolAllowlistPolicy, DENY_ALL_POLICY } from "@cogni/ai-core";
 import { describe, expect, it } from "vitest";
-
 import { createToolCatalog, EMPTY_CATALOG } from "@/shared/ai/tool-catalog";
-import {
-  createToolAllowlistPolicy,
-  DENY_ALL_POLICY,
-} from "@/shared/ai/tool-policy";
 
 // Test tool specs
 const READ_ONLY_TOOL: ToolSpec = {

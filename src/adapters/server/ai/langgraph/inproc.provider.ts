@@ -17,6 +17,7 @@
  */
 
 import type { AiEvent } from "@cogni/ai-core";
+import { createToolAllowlistPolicy } from "@cogni/ai-core";
 import {
   type CompletionFn,
   type CreateGraphFn,
@@ -27,7 +28,6 @@ import {
   type ToolExecFn,
 } from "@cogni/langgraph-graphs";
 import type { Logger } from "pino";
-
 import type {
   AiExecutionErrorCode,
   CompletionFinalResult,
@@ -37,7 +37,6 @@ import type {
   LlmToolDefinition,
   Message,
 } from "@/ports";
-import { createToolAllowlistPolicy } from "@/shared/ai/tool-policy";
 import { createToolRunner } from "@/shared/ai/tool-runner";
 import { makeLogger } from "@/shared/observability";
 
@@ -146,20 +145,27 @@ export class LangGraphInProcProvider implements GraphProvider {
     // Create completion function wrapping adapter
     const completionFn = this.createCompletionFn(req);
 
+    // toolIds from request (set at ingress from user permissions)
+    // Fall back to catalog tools if not provided (P0 acceptable)
+    const catalogToolIds: readonly string[] = Object.keys(entry.boundTools);
+    const toolIds: readonly string[] = req.toolIds ?? catalogToolIds;
+    if (!req.toolIds) {
+      this.log.warn(
+        { runId, graphName, catalogToolIds },
+        "No toolIds in request; using catalog default (P0 fallback)"
+      );
+    }
+
     // Create tool execution function factory
+    // Uses same toolIds for ToolRunner policy as configurable
     const createToolExecFn = (emit: (e: AiEvent) => void): ToolExecFn => {
-      const toolNames = Object.keys(entry.boundTools);
-      const policy = createToolAllowlistPolicy(toolNames);
+      const policy = createToolAllowlistPolicy(toolIds);
       const toolRunner = createToolRunner(entry.boundTools, emit, {
         policy,
         ctx: { runId },
       });
 
-      return async (
-        name: string,
-        args: unknown,
-        toolCallId?: string
-      ): Promise<{ ok: boolean; value?: unknown; errorCode?: string }> => {
+      return async (name, args, toolCallId) => {
         const result =
           toolCallId !== undefined
             ? await toolRunner.exec(name, args, { modelToolCallId: toolCallId })
@@ -182,6 +188,8 @@ export class LangGraphInProcProvider implements GraphProvider {
       ...(abortSignal !== undefined && { abortSignal }),
       ...(caller.traceId !== undefined && { traceId: caller.traceId }),
       ...(ingressRequestId !== undefined && { ingressRequestId }),
+      // Pass same toolIds to configurable (wrapper early-deny matches ToolRunner policy)
+      configurable: { toolIds },
     };
 
     // Delegate to package runner — all LangChain logic is there
