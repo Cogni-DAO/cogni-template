@@ -418,5 +418,23 @@ module.exports = {
     // NOTE: NO_LANGCHAIN_IN_SRC is enforced via Biome noRestrictedImports
     // (biome/base.json) which blocks @langchain/** imports in src/.
     // src/ CAN import from @cogni/langgraph-graphs for InProc execution path.
+
+    // =========================================================================
+    // ai-core kernel boundary (AI_CORE_IS_KERNEL)
+    // =========================================================================
+
+    // ai-core cannot import ai-tools (ai-core defines interfaces; ai-tools implements)
+    {
+      name: "no-ai-core-to-ai-tools",
+      severity: "error",
+      from: {
+        path: "^packages/ai-core/",
+      },
+      to: {
+        path: "^packages/ai-tools/",
+      },
+      comment:
+        "ai-core defines runtime interfaces; ai-tools implements them. No reverse dependency.",
+    },
   ],
 };
