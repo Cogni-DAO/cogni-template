@@ -14,6 +14,7 @@
  * @public
  */
 
+import type { ToolExecFn } from "@cogni/ai-core";
 import type { ToolContract } from "@cogni/ai-tools";
 import {
   DynamicStructuredTool,
@@ -21,26 +22,8 @@ import {
 } from "@langchain/core/tools";
 import type { z } from "zod";
 
-/**
- * Result from tool execution via exec function.
- */
-export interface ToolExecResult {
-  readonly ok: boolean;
-  readonly value?: unknown;
-  readonly errorCode?: string;
-  readonly safeMessage?: string;
-}
-
-/**
- * Exec function signature for tool execution.
- * Injected at runtime — routes through toolRunner for validation/redaction.
- * toolCallId is optional — toolRunner generates if not provided (per TOOLCALLID_STABLE).
- */
-export type ToolExecFn = (
-  name: string,
-  args: unknown,
-  toolCallId?: string
-) => Promise<ToolExecResult>;
+// Re-export canonical types for consumers (per TOOL_EXEC_TYPES_IN_AI_CORE)
+export type { ToolExecFn, ToolExecResult } from "@cogni/ai-core";
 
 /**
  * Options for toLangChainTool().
@@ -100,9 +83,10 @@ export function toLangChainTool(
       if (result.ok) {
         return JSON.stringify(result.value);
       }
+      // Discriminated union guarantees errorCode and safeMessage exist when ok=false
       return JSON.stringify({
-        error: result.errorCode ?? "execution",
-        message: result.safeMessage ?? "Tool execution failed",
+        error: result.errorCode,
+        message: result.safeMessage,
       });
     },
   });

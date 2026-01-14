@@ -11,6 +11,16 @@
  * @public
  */
 
+// Tool catalog
+export {
+  type CatalogBoundTool,
+  createToolCatalog,
+  getToolById,
+  getToolIds,
+  hasToolId,
+  TOOL_CATALOG,
+  type ToolCatalog,
+} from "./catalog";
 // Schema compilation
 export {
   type ToToolSpecResult,

@@ -13,6 +13,12 @@
 
 // Billing types
 export { SOURCE_SYSTEMS, type SourceSystem } from "./billing/source-system";
+// Configurable types
+export {
+  type GraphRunConfig,
+  GraphRunConfigSchema,
+  type PartialGraphRunConfig,
+} from "./configurable/graph-run-config";
 // Context types
 export type { RunContext } from "./context/run-context";
 // Event types

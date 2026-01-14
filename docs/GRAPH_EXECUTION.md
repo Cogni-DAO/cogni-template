@@ -11,14 +11,7 @@
 | **Invariants 24-31** | 📋 Contract    | Compiled exports + configurable; impl in progress |
 | **P1 Checklist**     | 📋 Contract    | Run persistence, compiled graph migration         |
 
-**Open Work (P0 blockers before production):**
-
-- [ ] `GraphConfigurable` schema in `@cogni/ai-core`
-- [ ] `InProcRuntime` with `AsyncLocalStorage`
-- [ ] `TOOL_CATALOG` in `@cogni/ai-tools/catalog.ts`
-- [ ] Fix `toLangChainTool` to accept config + check `toolIds` allowlist
-- [ ] Refactor one graph (ponderer) to compiled no-arg export
-- [ ] Prove in `langgraph dev`
+**Open Work:** See [P1: Compiled Graph Execution](#p1-compiled-graph-execution) checklist.
 
 ---
 
@@ -383,17 +376,17 @@ Migrate all graphs to compiled exports + `RunnableConfig.configurable`. Enables 
 
 **Type Placement:**
 
-| Type                | Package                                  | Rationale                                                   |
-| ------------------- | ---------------------------------------- | ----------------------------------------------------------- |
-| `GraphConfigurable` | `@cogni/ai-core`                         | JSON-serializable; shared across all adapters               |
-| `InProcRuntime`     | `packages/langgraph-graphs/src/runtime/` | LangGraph-specific; holds `completionFn`, `tokenSink`       |
-| `TOOL_CATALOG`      | `@cogni/ai-tools/catalog.ts`             | Canonical tool registry; `langgraph-graphs` wraps from here |
+| Type             | Package                                  | Rationale                                                   |
+| ---------------- | ---------------------------------------- | ----------------------------------------------------------- |
+| `GraphRunConfig` | `@cogni/ai-core`                         | JSON-serializable; shared across all adapters               |
+| `InProcRuntime`  | `packages/langgraph-graphs/src/runtime/` | LangGraph-specific; holds `completionFn`, `tokenSink`       |
+| `TOOL_CATALOG`   | `@cogni/ai-tools/catalog.ts`             | Canonical tool registry; `langgraph-graphs` wraps from here |
 
 **Implementation Checklist:**
 
-- [ ] Define `GraphConfigurable` schema in `@cogni/ai-core` (Zod): `model`, `runId`, `attempt`, `billingAccountId`, `virtualKeyId`, `traceId?`, `toolIds?`
-- [ ] Create `InProcRuntime` with `AsyncLocalStorage` in `packages/langgraph-graphs/src/runtime/`
-- [ ] Add `TOOL_CATALOG: Record<string, BoundTool>` to `@cogni/ai-tools/catalog.ts`
+- [x] Define `GraphRunConfig` schema in `@cogni/ai-core` (Zod): `model`, `runId`, `attempt`, `billingAccountId`, `virtualKeyId`, `traceId?`, `toolIds?`
+- [x] Create `InProcRuntime` with `AsyncLocalStorage` in `packages/langgraph-graphs/src/runtime/`
+- [x] Add `TOOL_CATALOG: Record<string, BoundTool>` to `@cogni/ai-tools/catalog.ts`
 - [ ] Fix `toLangChainTool` to accept `config` param, check `configurable.toolIds` allowlist, return `policy_denied` via `ToolExecResult`
 - [ ] Refactor `ponderer` graph to compiled no-arg export with one tool (proof of concept)
 - [ ] Prove end-to-end in `langgraph dev`: compiled export + configurable model + tool by ID
@@ -843,7 +836,7 @@ await myGraph.invoke(messages, {
     model: "gpt-4o",
     runId: "run-123",
     toolIds: ["get_current_time", "web_search"],
-    // ... GraphConfigurable fields (JSON-serializable)
+    // ... GraphRunConfig fields (JSON-serializable)
   },
 });
 ```

@@ -22,6 +22,13 @@ export {
   type CompletionResult,
   CompletionUnitLLM,
 } from "./completion-unit-llm";
+// InProc runtime context (ALS-based)
+export {
+  getInProcRuntime,
+  hasInProcRuntime,
+  type InProcRuntime,
+  runWithInProcContext,
+} from "./inproc-runtime";
 // Tool wrappers
 export {
   type ToLangChainToolOptions,

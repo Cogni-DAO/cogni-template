@@ -20,8 +20,14 @@ import type { ToolEffect } from "@cogni/ai-core";
 import type { z } from "zod";
 
 /**
- * Tool execution result shape.
- * Per TOOLRUNNER_RESULT_SHAPE: exec() returns this discriminated union.
+ * Tool implementation result shape (pre-redaction).
+ *
+ * NOTE: Intentionally separate from `ToolExecResult` in @cogni/ai-core.
+ * - `ToolResult<T>` (here): Raw result from tool implementation, before redaction
+ * - `ToolExecResult<T>` (ai-core): Result after toolRunner pipeline (validated, redacted)
+ *
+ * The types are structurally identical but semantically distinct layers.
+ * Do not unify — this separation enables future divergence if needed.
  */
 export type ToolResult<T> =
   | { readonly ok: true; readonly value: T }

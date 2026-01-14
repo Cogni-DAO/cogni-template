@@ -39,7 +39,7 @@ packages/
 │   └── src/
 │       ├── events/ai-events.ts       # AiEvent union
 │       ├── usage/usage.ts            # UsageFact, ExecutorType
-│       └── configurable/             # GraphConfigurable schema
+│       └── configurable/             # GraphRunConfig schema
 │
 ├── ai-tools/                         # Pure tool definitions (NO LangChain)
 │   └── src/
@@ -99,7 +99,7 @@ import {
 | Type                                | Defined In             | Used By                              |
 | ----------------------------------- | ---------------------- | ------------------------------------ |
 | `GraphRunRequest`, `GraphRunResult` | `@/ports`              | `GraphExecutorPort`, `GraphProvider` |
-| `GraphConfigurable`                 | `@cogni/ai-core`       | All adapters, graphs                 |
+| `GraphRunConfig`                    | `@cogni/ai-core`       | All adapters, graphs                 |
 | `LangGraphCatalogEntry`             | `langgraph/catalog.ts` | `LangGraphInProcProvider`            |
 
 **Key Rules:**
@@ -313,18 +313,7 @@ The `langgraph-server` package re-exports graphs from `@cogni/langgraph-graphs/g
 
 ## Implementation Checklist
 
-> See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) for full P1 checklist on compiled graph migration.
-
-### Current Gaps
-
-- [ ] Define `GraphConfigurable` schema in `@cogni/ai-core`
-- [ ] Create `InProcRuntime` with `AsyncLocalStorage`
-- [ ] Add `TOOL_CATALOG` to `@cogni/ai-tools/catalog.ts`
-- [ ] Fix `toLangChainTool` to accept `config` param, check `configurable.toolIds` allowlist
-- [ ] Refactor existing graphs to compiled no-arg exports
-- [ ] Prove end-to-end in `langgraph dev`
-- [ ] Delete legacy factory exports and dev.ts workaround
-- [ ] Move `CompletionFn`, `Message` types to `@cogni/ai-core`
+See [GRAPH_EXECUTION.md § P1: Compiled Graph Execution](GRAPH_EXECUTION.md#p1-compiled-graph-execution) for the canonical checklist.
 
 ### P1: Server Path
 

@@ -1,0 +1,123 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@cogni/ai-tools/tests/catalog`
+ * Purpose: Unit tests for TOOL_CATALOG and createToolCatalog.
+ * Scope: Tests catalog construction, collision detection, and lookup functions. Does not test tool execution.
+ * Invariants: TOOL_ID_STABILITY - duplicate IDs throw at construction.
+ * Side-effects: none
+ * Links: src/catalog.ts, TOOL_USE_SPEC.md
+ * @internal
+ */
+
+import { describe, expect, it } from "vitest";
+
+import {
+  type CatalogBoundTool,
+  createToolCatalog,
+  getToolById,
+  getToolIds,
+  hasToolId,
+  TOOL_CATALOG,
+} from "../src/catalog";
+import { getCurrentTimeBoundTool } from "../src/tools/get-current-time";
+
+describe("TOOL_CATALOG", () => {
+  it("contains core__get_current_time", () => {
+    expect(hasToolId("core__get_current_time")).toBe(true);
+    expect(getToolById("core__get_current_time")).toBeDefined();
+  });
+
+  it("returns undefined for unknown tool ID", () => {
+    expect(getToolById("unknown__tool")).toBeUndefined();
+  });
+
+  it("hasToolId returns false for unknown tool", () => {
+    expect(hasToolId("unknown__tool")).toBe(false);
+  });
+
+  it("getToolIds returns all registered tool IDs", () => {
+    const ids = getToolIds();
+    expect(ids).toContain("core__get_current_time");
+    expect(Array.isArray(ids)).toBe(true);
+  });
+
+  it("catalog is frozen (immutable)", () => {
+    expect(Object.isFrozen(TOOL_CATALOG)).toBe(true);
+  });
+});
+
+describe("createToolCatalog", () => {
+  it("creates catalog from array of tools", () => {
+    const catalog = createToolCatalog([
+      getCurrentTimeBoundTool as CatalogBoundTool,
+    ]);
+
+    expect("core__get_current_time" in catalog).toBe(true);
+    expect(Object.isFrozen(catalog)).toBe(true);
+  });
+
+  it("creates empty catalog from empty array", () => {
+    const catalog = createToolCatalog([]);
+    expect(Object.keys(catalog)).toHaveLength(0);
+  });
+
+  /**
+   * TOOL_ID_STABILITY: Duplicate tool IDs throw at construction time.
+   * This is the critical invariant test.
+   */
+  it("throws on duplicate tool ID (TOOL_ID_STABILITY)", () => {
+    const duplicateTool: CatalogBoundTool = {
+      contract: {
+        name: "core__get_current_time", // Duplicate ID
+        description: "Duplicate tool",
+        effect: "read_only",
+        inputSchema: { parse: (x: unknown) => x } as never,
+        outputSchema: { parse: (x: unknown) => x } as never,
+        redact: (x: unknown) => x as Record<string, unknown>,
+        allowlist: [],
+      },
+      implementation: {
+        execute: async () => ({}),
+      },
+    };
+
+    expect(() =>
+      createToolCatalog([
+        getCurrentTimeBoundTool as CatalogBoundTool,
+        duplicateTool,
+      ])
+    ).toThrow(/TOOL_ID_STABILITY.*Duplicate tool ID.*core__get_current_time/);
+  });
+
+  it("error message includes tool ID on collision", () => {
+    const tool1: CatalogBoundTool = {
+      contract: {
+        name: "test__duplicate",
+        description: "First tool",
+        effect: "read_only",
+        inputSchema: { parse: (x: unknown) => x } as never,
+        outputSchema: { parse: (x: unknown) => x } as never,
+        redact: (x: unknown) => x as Record<string, unknown>,
+        allowlist: [],
+      },
+      implementation: { execute: async () => ({}) },
+    };
+
+    const tool2: CatalogBoundTool = {
+      contract: {
+        name: "test__duplicate", // Same ID
+        description: "Second tool",
+        effect: "read_only",
+        inputSchema: { parse: (x: unknown) => x } as never,
+        outputSchema: { parse: (x: unknown) => x } as never,
+        redact: (x: unknown) => x as Record<string, unknown>,
+        allowlist: [],
+      },
+      implementation: { execute: async () => ({}) },
+    };
+
+    expect(() => createToolCatalog([tool1, tool2])).toThrow("test__duplicate");
+  });
+});
