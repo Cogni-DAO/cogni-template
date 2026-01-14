@@ -15,6 +15,7 @@
  * @internal
  */
 
+import { LANGGRAPH_CATALOG } from "@cogni/langgraph-graphs";
 // biome-ignore lint/style/noRestrictedImports: SDK allowed in langgraph dev adapter per OFFICIAL_SDK_ONLY invariant
 import type { Client } from "@langchain/langgraph-sdk";
 import type { Logger } from "pino";
@@ -148,8 +149,31 @@ export class LangGraphDevProvider implements GraphProvider {
     threadId: string,
     threadMetadata: { billingAccountId: string; threadKey: string }
   ): GraphRunResult {
-    const { runId, ingressRequestId, messages, caller } = req;
+    const { runId, ingressRequestId, messages, caller, toolIds } = req;
     const attempt = 0; // P0_ATTEMPT_FREEZE
+
+    // P0 Contract: undefined => catalog default, [] => deny-all, [...] => exact
+    const entry = LANGGRAPH_CATALOG[graphName];
+    let resolvedToolIds: readonly string[];
+
+    if (!entry) {
+      // Config bug: graph in availableGraphs but not in catalog
+      this.log.error(
+        { runId, graphName },
+        "Graph missing from LANGGRAPH_CATALOG; defaulting to deny-all"
+      );
+      resolvedToolIds = [];
+    } else if (toolIds === undefined) {
+      // undefined => catalog default (all bound tools for this graph)
+      resolvedToolIds = Object.keys(entry.boundTools);
+      this.log.debug(
+        { runId, graphName, resolvedToolIds },
+        "toolIds undefined; using catalog default per P0 contract"
+      );
+    } else {
+      // [] or [...] => use exactly as provided (includes explicit deny-all)
+      resolvedToolIds = toolIds;
+    }
 
     // Shared state for deriving final result
     const state = {
@@ -172,7 +196,8 @@ export class LangGraphDevProvider implements GraphProvider {
       { runId, attempt, caller },
       state,
       runId,
-      ingressRequestId
+      ingressRequestId,
+      resolvedToolIds
     );
 
     return { stream, final };
@@ -183,6 +208,9 @@ export class LangGraphDevProvider implements GraphProvider {
    *
    * Single-consumer pattern: only one iteration over the SDK stream.
    * Final state is derived from events as they're yielded.
+   *
+   * Per TOOL_CONFIG_PROPAGATION: passes toolIds via config.configurable
+   * for wrapper authorization check.
    */
   private async *createStreamWithFinalState(
     graphName: string,
@@ -196,7 +224,8 @@ export class LangGraphDevProvider implements GraphProvider {
       resolve: null | ((final: import("@/ports").GraphFinal) => void);
     },
     runId: string,
-    requestId: string
+    requestId: string,
+    resolvedToolIds: readonly string[]
   ): AsyncIterable<AiEvent> {
     try {
       // Ensure thread exists (idempotent create)
@@ -207,9 +236,15 @@ export class LangGraphDevProvider implements GraphProvider {
       });
 
       // Start streaming run
+      // Per TOOL_CONFIG_PROPAGATION: toolIds passed via configurable for wrapper check
       const sdkStream = this.client.runs.stream(threadId, graphName, {
         input: { messages },
         streamMode: ["messages-tuple"],
+        config: {
+          configurable: {
+            toolIds: [...resolvedToolIds],
+          },
+        },
       });
 
       // Translate SDK stream to AiEvents

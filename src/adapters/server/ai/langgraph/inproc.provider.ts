@@ -144,8 +144,8 @@ export class LangGraphInProcProvider implements GraphProvider {
     // Create completion function wrapping adapter
     const completionFn = this.createCompletionFn(req);
 
-    // toolIds from request (set at ingress from user permissions)
-    // Fall back to catalog tools if not provided (P0 acceptable)
+    // P0 Contract: undefined => catalog default, [] => deny-all, [...] => exact
+    // TODO: Align log level/message with DevProvider (debug, "per P0 contract")
     const catalogToolIds: readonly string[] = Object.keys(entry.boundTools);
     const toolIds: readonly string[] = req.toolIds ?? catalogToolIds;
     if (!req.toolIds) {

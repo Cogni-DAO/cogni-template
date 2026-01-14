@@ -8,15 +8,20 @@
  * Invariants:
  *   - Only used by langgraph.json for dev server
  *   - Uses LiteLLM via ChatOpenAI adapter
- *   - Empty tools array (tools not needed for dev server schema inspection)
+ *   - TOOL_SAME_PATH_ALL_EXECUTORS: Tools bound at compile time, policy via configurable.toolIds
+ *   - TOOLS_VIA_TOOLRUNNER: Tool execution through createDevToolExecFn
  * Side-effects: process.env
- * Links: LANGGRAPH_SERVER.md
+ * Links: LANGGRAPH_SERVER.md, TOOL_USE_SPEC.md
  * @internal
  */
 
 import { ChatOpenAI } from "@langchain/openai";
 
-import { createPoetGraph } from "./graph";
+import { LANGGRAPH_CATALOG } from "../../catalog";
+import { createDevToolExecFn } from "../../runtime/dev-tool-exec";
+import { toLangChainTools } from "../../runtime/langchain-tools";
+
+import { createPoetGraph, POET_GRAPH_NAME } from "./graph";
 
 /**
  * Create LLM configured for LiteLLM proxy.
@@ -39,10 +44,39 @@ function createDevLLM(): ChatOpenAI {
 }
 
 /**
+ * Get bound tools for poet graph from catalog.
+ * Per CATALOG_SINGLE_SOURCE_OF_TRUTH: Tools defined in catalog, not here.
+ */
+const catalogEntry = LANGGRAPH_CATALOG[POET_GRAPH_NAME];
+if (!catalogEntry) {
+  throw new Error(`Catalog entry not found for graph: ${POET_GRAPH_NAME}`);
+}
+const boundTools = catalogEntry.boundTools;
+
+/**
+ * Create tool execution function for dev server.
+ * Per TOOLS_VIA_TOOLRUNNER: Delegates to createToolRunner.
+ */
+const devToolExecFn = createDevToolExecFn(boundTools);
+
+/**
+ * Convert tool contracts to LangChain format.
+ * Per TOOL_CONFIG_PROPAGATION: Wrapper checks configurable.toolIds at runtime.
+ */
+const toolContracts = Object.values(boundTools).map((bt) => bt.contract);
+const tools = toLangChainTools({
+  contracts: toolContracts,
+  exec: devToolExecFn,
+});
+
+/**
  * Pre-compiled poet graph for LangGraph dev server.
  * Exported as `poet` to match langgraph.json graph name.
+ *
+ * Tools are bound at compile time. Runtime authorization via
+ * RunnableConfig.configurable.toolIds (passed from LangGraphDevProvider).
  */
 export const poet = createPoetGraph({
   llm: createDevLLM(),
-  tools: [], // No tools for dev server MVP
+  tools,
 });
