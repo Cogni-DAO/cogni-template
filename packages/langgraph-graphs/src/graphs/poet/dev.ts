@@ -15,6 +15,7 @@
  * @internal
  */
 
+import { type CatalogBoundTool, TOOL_CATALOG } from "@cogni/ai-tools";
 import { ChatOpenAI } from "@langchain/openai";
 
 import { LANGGRAPH_CATALOG } from "../../catalog";
@@ -45,13 +46,21 @@ function createDevLLM(): ChatOpenAI {
 
 /**
  * Get bound tools for poet graph from catalog.
- * Per CATALOG_SINGLE_SOURCE_OF_TRUTH: Tools defined in catalog, not here.
+ * Per TOOL_CATALOG_IS_CANONICAL: Resolve tools from TOOL_CATALOG by ID.
  */
 const catalogEntry = LANGGRAPH_CATALOG[POET_GRAPH_NAME];
 if (!catalogEntry) {
   throw new Error(`Catalog entry not found for graph: ${POET_GRAPH_NAME}`);
 }
-const boundTools = catalogEntry.boundTools;
+// Resolve boundTools from TOOL_CATALOG (per TOOL_CATALOG_IS_CANONICAL)
+const boundTools: Readonly<Record<string, CatalogBoundTool>> =
+  Object.fromEntries(
+    catalogEntry.toolIds
+      .map((id) => [id, TOOL_CATALOG[id]] as const)
+      .filter(
+        (entry): entry is [string, CatalogBoundTool] => entry[1] !== undefined
+      )
+  );
 
 /**
  * Create tool execution function for dev server.

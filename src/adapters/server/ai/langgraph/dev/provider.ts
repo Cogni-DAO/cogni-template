@@ -10,6 +10,7 @@
  *   - MUTUAL_EXCLUSION: Either this or InProc registered, never both
  *   - OFFICIAL_SDK_ONLY: Uses @langchain/langgraph-sdk Client
  *   - THREAD_ID_IS_UUID: Thread IDs are UUIDv5
+ *   - TOOL_CATALOG_IS_CANONICAL: Reads entry.toolIds for default catalog tools
  * Side-effects: IO (network calls to langgraph dev server)
  * Links: LANGGRAPH_SERVER.md (MVP section), graph-provider.ts
  * @internal
@@ -164,8 +165,8 @@ export class LangGraphDevProvider implements GraphProvider {
       );
       resolvedToolIds = [];
     } else if (toolIds === undefined) {
-      // undefined => catalog default (all bound tools for this graph)
-      resolvedToolIds = Object.keys(entry.boundTools);
+      // undefined => catalog default (per TOOL_CATALOG_IS_CANONICAL)
+      resolvedToolIds = entry.toolIds;
       this.log.debug(
         { runId, graphName, resolvedToolIds },
         "toolIds undefined; using catalog default per P0 contract"

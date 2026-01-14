@@ -94,6 +94,7 @@ pnpm --filter @cogni/langgraph-graphs test
 - Message types compatible with `src/core/chat/model.ts` (will migrate to ai-core)
 - Tools wrapped via `toLangChainTool()` must delegate to injected exec function
 - TOOLS_DENY_BY_DEFAULT: toLangChainTool checks configurable.toolIds; returns policy_denied if not in list
+- TOOL_CATALOG_IS_CANONICAL: `LANGGRAPH_CATALOG` entries use `toolIds: string[]` references; providers resolve from `TOOL_CATALOG`
 - Dev entrypoints (`dev.ts`) read process.env for LiteLLM config — only for `langgraph dev` server use
 
 ## Dependencies

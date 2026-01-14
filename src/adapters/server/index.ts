@@ -32,7 +32,6 @@ export {
 } from "./ai/inproc-completion-unit.adapter";
 // LangGraph providers
 export {
-  type AnyBoundTool,
   type CompletionUnitAdapter,
   // Dev server providers (langgraph dev, port 2024)
   createLangGraphDevClient,

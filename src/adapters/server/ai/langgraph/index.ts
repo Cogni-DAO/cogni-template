@@ -13,11 +13,7 @@
  */
 
 // Catalog types (generic, no inproc imports)
-export type {
-  AnyBoundTool,
-  LangGraphCatalog,
-  LangGraphCatalogEntry,
-} from "./catalog";
+export type { LangGraphCatalog, LangGraphCatalogEntry } from "./catalog";
 export type {
   LangGraphDevClientConfig,
   LangGraphDevProviderConfig,

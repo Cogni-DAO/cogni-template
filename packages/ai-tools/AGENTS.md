@@ -43,6 +43,7 @@ Pure tool definitions for AI agent execution. Defines `ToolContract`, `ToolImple
   - `ToolContract` - Tool definition interface (name, inputSchema, outputSchema, redact)
   - `ToolImplementation` - Pure execute function interface
   - `BoundTool` - Contract + implementation bundled together
+  - `CatalogBoundTool` - Type alias for TOOL_CATALOG entries (type-erased BoundTool)
   - `ToolResult`, `ToolErrorCode` - Execution result types
   - `getCurrentTimeBoundTool` - First tool implementation
   - `GET_CURRENT_TIME_NAME` - Tool name constant

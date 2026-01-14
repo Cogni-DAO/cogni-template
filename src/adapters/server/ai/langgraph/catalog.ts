@@ -9,23 +9,11 @@
  *   - CATALOG_DECOUPLED_FROM_EXECUTION_MODE: No inproc imports
  *   - CATALOG_VS_REGISTRY: Static collection built at bootstrap, not runtime registration
  *   - PROVIDER_SPECIFIC_CATALOG: Used only by LangGraphInProcProvider
+ *   - TOOL_CATALOG_IS_CANONICAL: Tools referenced by ID, resolved from TOOL_CATALOG
  * Side-effects: none
  * Links: GRAPH_EXECUTION.md, LANGGRAPH_AI.md, inproc.provider.ts
  * @internal
  */
-
-import type { BoundTool } from "@cogni/ai-tools";
-
-/**
- * Generic bound tool type for catalog entries.
- * Erases specific type parameters for storage flexibility.
- */
-export type AnyBoundTool = BoundTool<
-  string,
-  unknown,
-  unknown,
-  Record<string, unknown>
->;
 
 /**
  * Catalog entry for a LangGraph graph.
@@ -35,6 +23,9 @@ export type AnyBoundTool = BoundTool<
  *
  * Per CATALOG_DECOUPLED_FROM_EXECUTION_MODE: this type does NOT depend on
  * @cogni/langgraph-graphs/inproc. Provider binds concrete type internally.
+ *
+ * Per TOOL_CATALOG_IS_CANONICAL: graphs reference tools by ID. Providers
+ * resolve BoundTool instances from TOOL_CATALOG at runtime.
  */
 export interface LangGraphCatalogEntry<TFactory> {
   /** Human-readable name for UI display */
@@ -42,11 +33,10 @@ export interface LangGraphCatalogEntry<TFactory> {
   /** Description of what this graph does */
   readonly description: string;
   /**
-   * Bound tools available to this graph.
-   * BoundTool contains both contract (for LangGraph wrapping) and implementation (for execution).
-   * Provider extracts contracts via: Object.values(boundTools).map(bt => bt.contract)
+   * Tool IDs available to this graph.
+   * Per TOOL_CATALOG_IS_CANONICAL: providers resolve BoundTool from TOOL_CATALOG.
    */
-  readonly boundTools: Readonly<Record<string, AnyBoundTool>>;
+  readonly toolIds: readonly string[];
   /** Graph factory function (opaque — only provider interprets this) */
   readonly graphFactory: TFactory;
 }

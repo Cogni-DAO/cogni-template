@@ -14,11 +14,7 @@
  * @public
  */
 
-import {
-  type BoundTool,
-  GET_CURRENT_TIME_NAME,
-  getCurrentTimeBoundTool,
-} from "@cogni/ai-tools";
+import { GET_CURRENT_TIME_NAME } from "@cogni/ai-tools";
 
 import { createPoetGraph, POET_GRAPH_NAME } from "./graphs/poet/graph";
 import {
@@ -28,24 +24,16 @@ import {
 import type { CreateGraphFn } from "./inproc/types";
 
 /**
- * Generic bound tool type for catalog entries.
- * Matches the type in adapter's catalog.ts for structural compatibility.
- */
-type AnyBoundTool = BoundTool<
-  string,
-  unknown,
-  unknown,
-  Record<string, unknown>
->;
-
-/**
  * Catalog entry shape.
- * Matches LangGraphCatalogEntry<CreateGraphFn> from adapter.
+ *
+ * Per TOOL_CATALOG_IS_CANONICAL: graphs reference tools by ID, not by BoundTool.
+ * Providers resolve tools from TOOL_CATALOG using these IDs.
  */
 interface CatalogEntry {
   readonly displayName: string;
   readonly description: string;
-  readonly boundTools: Readonly<Record<string, AnyBoundTool>>;
+  /** Tool IDs this graph may use. Providers resolve from TOOL_CATALOG. */
+  readonly toolIds: readonly string[];
   readonly graphFactory: CreateGraphFn;
 }
 
@@ -67,9 +55,7 @@ export const LANGGRAPH_CATALOG: Readonly<Record<string, CatalogEntry>> = {
   [POET_GRAPH_NAME]: {
     displayName: "Poet",
     description: "Poetic AI assistant with structured verse responses",
-    boundTools: {
-      [GET_CURRENT_TIME_NAME]: getCurrentTimeBoundTool as AnyBoundTool,
-    },
+    toolIds: [GET_CURRENT_TIME_NAME],
     graphFactory: createPoetGraph,
   },
 
@@ -80,9 +66,7 @@ export const LANGGRAPH_CATALOG: Readonly<Record<string, CatalogEntry>> = {
   [PONDERER_GRAPH_NAME]: {
     displayName: "Ponderer",
     description: "Philosophical thinker with concise, profound responses",
-    boundTools: {
-      [GET_CURRENT_TIME_NAME]: getCurrentTimeBoundTool as AnyBoundTool,
-    },
+    toolIds: [GET_CURRENT_TIME_NAME],
     graphFactory: createPondererGraph,
   },
 } as const;
