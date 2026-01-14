@@ -246,7 +246,7 @@
     "tailwindcss": "^4.1.16",
     "tsx": "^4.20.6",
     "typescript": "^5",
-    "undici": "^7.16.0",
+    "undici": "^7.18.2",
     "vite-tsconfig-paths": "^5.1.4",
     "vitest": "^4.0.7",
     "yaml": "^2.6.1"
