@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-01-15
+- **Last reviewed:** 2026-01-19
 - **Status:** stable
 
 ## Purpose
@@ -58,6 +58,12 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
   - normalizeErrorToExecutionCode (error-to-code normalization, re-exported for adapters)
   - LlmToolDefinition, LlmToolCall, LlmToolChoice (tool calling types)
   - Types (ChargeReceiptParams, ChargeReceiptProvenance, LlmCaller, BillingAccount, CreditLedgerEntry, CreatePaymentAttemptParams, LogPaymentEventParams, VerificationResult, VerificationStatus, CompletionStreamParams)
+  - JobQueuePort (enqueueJob for scheduler-agnostic job queuing)
+  - ExecutionGrantPort (createGrant, validateGrant, validateGrantForGraph, deleteGrant)
+  - ScheduleManagerPort (schedule CRUD, findStaleSchedules, updateNextRunAt/updateLastRunAt)
+  - ScheduleRunRepository (run ledger: createRun, markRunStarted, markRunCompleted)
+  - Grant errors (GrantNotFoundError, GrantExpiredError, GrantRevokedError, GrantScopeMismatchError)
+  - Schedule errors (ScheduleNotFoundError, ScheduleAccessDeniedError, InvalidCronExpressionError, InvalidTimezoneError)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config:** none

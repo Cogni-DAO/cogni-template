@@ -92,6 +92,42 @@ export {
   type PaymentErrorCode,
   TxHashAlreadyBoundPortError,
 } from "./payment-attempt.port";
+export {
+  type ExecutionGrant,
+  type ExecutionGrantPort,
+  GrantExpiredError,
+  GrantNotFoundError,
+  GrantRevokedError,
+  GrantScopeMismatchError,
+  isGrantExpiredError,
+  isGrantNotFoundError,
+  isGrantRevokedError,
+  isGrantScopeMismatchError,
+} from "./scheduling/execution-grant.port";
+// Scheduling ports
+export type {
+  EnqueueJobParams,
+  JobQueuePort,
+} from "./scheduling/job-queue.port";
+export {
+  type CreateScheduleInput,
+  InvalidCronExpressionError,
+  InvalidTimezoneError,
+  isInvalidCronExpressionError,
+  isInvalidTimezoneError,
+  isScheduleAccessDeniedError,
+  isScheduleNotFoundError,
+  ScheduleAccessDeniedError,
+  type ScheduleManagerPort,
+  ScheduleNotFoundError,
+  type ScheduleSpec,
+  type UpdateScheduleInput,
+} from "./scheduling/schedule-manager.port";
+export type {
+  ScheduleRun,
+  ScheduleRunRepository,
+  ScheduleRunStatus,
+} from "./scheduling/schedule-run.port";
 export type {
   EmitAiEvent,
   ToolEffect,
