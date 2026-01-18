@@ -17,7 +17,11 @@ import type { Logger } from "pino";
 import {
   DrizzleAccountService,
   DrizzleAiTelemetryAdapter,
+  DrizzleExecutionGrantAdapter,
+  DrizzleJobQueueAdapter,
   DrizzlePaymentAttemptRepository,
+  DrizzleScheduleManagerAdapter,
+  DrizzleScheduleRunAdapter,
   EvmRpcOnChainVerifierAdapter,
   getDb,
   LangfuseAdapter,
@@ -41,11 +45,15 @@ import type {
   AccountService,
   AiTelemetryPort,
   Clock,
+  ExecutionGrantPort,
+  JobQueuePort,
   LangfusePort,
   LlmService,
   MetricsQueryPort,
   OnChainVerifier,
   PaymentAttemptRepository,
+  ScheduleManagerPort,
+  ScheduleRunRepository,
   TreasuryReadPort,
   UsageLogEntry,
   UsageLogsByRangeParams,
@@ -82,6 +90,11 @@ export interface Container {
   aiTelemetry: AiTelemetryPort;
   /** Langfuse tracer - undefined when LANGFUSE_SECRET_KEY not set */
   langfuse: LangfusePort | undefined;
+  // Scheduling ports
+  jobQueue: JobQueuePort;
+  executionGrantPort: ExecutionGrantPort;
+  scheduleRunRepository: ScheduleRunRepository;
+  scheduleManager: ScheduleManagerPort;
 }
 
 // Feature-specific dependency types
@@ -206,6 +219,16 @@ function createContainer(): Container {
 
   const clock = new SystemClock();
 
+  // Scheduling adapters
+  const jobQueue = new DrizzleJobQueueAdapter(db);
+  const executionGrantPort = new DrizzleExecutionGrantAdapter(db);
+  const scheduleRunRepository = new DrizzleScheduleRunAdapter(db);
+  const scheduleManager = new DrizzleScheduleManagerAdapter(
+    db,
+    jobQueue,
+    executionGrantPort
+  );
+
   // Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
   const config: ContainerConfig = {
     unhandledErrorPolicy: env.isProd ? "respond_500" : "rethrow",
@@ -234,6 +257,10 @@ function createContainer(): Container {
     treasuryReadPort,
     aiTelemetry,
     langfuse,
+    jobQueue,
+    executionGrantPort,
+    scheduleRunRepository,
+    scheduleManager,
   };
 }
 
@@ -256,6 +283,30 @@ export function resolveActivityDeps(): ActivityDeps {
   const container = getContainer();
   return {
     usageService: container.usageService as ActivityDeps["usageService"],
+    accountService: container.accountService,
+  };
+}
+
+/**
+ * Scheduling dependencies for worker task execution.
+ * Used by scheduler-worker package.
+ */
+export type SchedulingDeps = Pick<
+  Container,
+  | "jobQueue"
+  | "executionGrantPort"
+  | "scheduleRunRepository"
+  | "scheduleManager"
+  | "accountService"
+>;
+
+export function resolveSchedulingDeps(): SchedulingDeps {
+  const container = getContainer();
+  return {
+    jobQueue: container.jobQueue,
+    executionGrantPort: container.executionGrantPort,
+    scheduleRunRepository: container.scheduleRunRepository,
+    scheduleManager: container.scheduleManager,
     accountService: container.accountService,
   };
 }

@@ -71,4 +71,9 @@ export { ViemTreasuryAdapter } from "./onchain/viem-treasury.adapter";
 export { DrizzlePaymentAttemptRepository } from "./payments/drizzle-payment-attempt.adapter";
 export { EvmRpcOnChainVerifierAdapter } from "./payments/evm-rpc-onchain-verifier.adapter";
 export { PonderOnChainVerifierAdapter } from "./payments/ponder-onchain-verifier.adapter";
+// Scheduling adapters
+export { DrizzleExecutionGrantAdapter } from "./scheduling/drizzle-grant.adapter";
+export { DrizzleJobQueueAdapter } from "./scheduling/drizzle-job-queue.adapter";
+export { DrizzleScheduleRunAdapter } from "./scheduling/drizzle-run.adapter";
+export { DrizzleScheduleManagerAdapter } from "./scheduling/drizzle-schedule.adapter";
 export { SystemClock } from "./time/system.adapter";
