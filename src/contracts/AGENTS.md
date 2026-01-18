@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2026-01-14
+- **Last reviewed:** 2026-01-19
 - **Status:** draft
 
 ## Purpose
@@ -37,7 +37,7 @@ Single source of truth for externally callable operations. Each file defines an 
 
 ## Public Surface
 
-- **Exports:** ai.completion.v1, ai.chat.v1 (AssistantUiInputSchema, AssistantUiInput, AssistantUiMessage), ai.agents.v1 (AgentDescriptor, AgentsOutput), ai.models.v1, error.chat.v1, payments.intent.v1, payments.submit.v1, payments.status.v1, payments.credits.confirm.v1, payments.credits.summary.v1, analytics.summary.v1, meta.livez.read.v1, meta.readyz.read.v1, meta.route-manifest.read.v1; http/router.v1.ts (ts-rest contracts); http/openapi.v1.ts (OpenAPI generation)
+- **Exports:** ai.completion.v1, ai.chat.v1 (AssistantUiInputSchema, AssistantUiInput, AssistantUiMessage), ai.agents.v1 (AgentDescriptor, AgentsOutput), ai.models.v1, error.chat.v1, payments.intent.v1, payments.submit.v1, payments.status.v1, payments.credits.confirm.v1, payments.credits.summary.v1, analytics.summary.v1, meta.livez.read.v1, meta.readyz.read.v1, meta.route-manifest.read.v1, schedules.create.v1, schedules.list.v1, schedules.update.v1, schedules.delete.v1; http/router.v1.ts (ts-rest contracts); http/openapi.v1.ts (OpenAPI generation)
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none
