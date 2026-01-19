@@ -22,8 +22,8 @@ export const tsupConfig = defineConfig({
   clean: false, // preserve .d.ts files from tsc -b
   sourcemap: true,
   platform: "node",
-  // Externalize runtime deps (they're installed in node_modules)
-  external: ["graphile-worker", "cron-parser"],
+  // Externalize all runtime deps (they're installed in node_modules)
+  external: ["graphile-worker", "cron-parser", "zod", "crypto"],
 });
 
 export default tsupConfig;

@@ -22,6 +22,7 @@ node_modules
 
 # production
 /build
+/dist
 
 # misc
 .DS_Store
@@ -48,6 +49,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# package build output
+packages/*/dist
 
 # Terraform
 *.tfstate

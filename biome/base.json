@@ -200,7 +200,10 @@
         "packages/cogni-contracts/tsup.config.ts",
         "packages/langgraph-graphs/tsup.config.ts",
         "packages/langgraph-graphs/vitest.config.ts",
-        "vitest.workspace.ts"
+        "packages/scheduler-worker/tsup.config.ts",
+        "packages/scheduler-worker/vitest.config.ts",
+        "vitest.workspace.ts",
+        "tsup.scripts.config.ts"
       ],
       "linter": {
         "rules": {
