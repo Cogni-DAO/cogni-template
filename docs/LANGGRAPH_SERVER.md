@@ -103,14 +103,14 @@ This document covers two execution backends for LangGraph graphs:
 
 ### MVP Known Limitations
 
-| Limitation                | Impact                                      | Resolution                                   |
-| ------------------------- | ------------------------------------------- | -------------------------------------------- |
-| No `usageUnitId`          | Billing uses fallback path                  | P1: LiteLLM header capture                   |
-| No `costUsd`              | Cannot bill accurately                      | P1: LiteLLM header capture                   |
-| In-memory only            | No persistence across restarts              | P1: Postgres checkpointer                    |
-| Manual catalog sync       | Must update both catalog and langgraph.json | P1: Build-time generation                    |
-| Hardcoded model in dev.ts | Client's requested model ignored            | P1: LangGraph configurable pattern           |
-| Late tool_call visibility | Tool may execute before chunk arrives       | Accumulator tolerates; emits coherent events |
+| Limitation                | Impact                                      | Resolution                             |
+| ------------------------- | ------------------------------------------- | -------------------------------------- |
+| No `usageUnitId`          | Billing uses fallback path                  | P1: LiteLLM header capture             |
+| No `costUsd`              | Cannot bill accurately                      | P1: LiteLLM header capture             |
+| In-memory only            | No persistence across restarts              | P1: Postgres checkpointer              |
+| Manual catalog sync       | Must update both catalog and langgraph.json | P1: Build-time generation              |
+| Hardcoded model in dev.ts | Client's requested model ignored            | P1: LangGraph configurable pattern     |
+| Late tool_call visibility | Tool may execute before chunk arrives       | Buffered; 64KB args / 100 pending caps |
 
 ### MVP Catalog Alignment
 
@@ -244,7 +244,7 @@ One canonical way to run LangGraph graphs (dev, container, hosted) such that:
 
 23. **P0_NO_GDPR_DELETE**: P0 does NOT provide compliant user data deletion. LangGraph checkpoint deletion is a P1 requirement. Document this explicitly.
 
-24. **P0_NO_TOOL_EVENT_STREAMING**: For `langgraph_server` in P0, tool execution happens entirely within LangGraph Server. Adapter emits `text_delta`, `assistant_final`, `usage_report`, `done` only—no `tool_call_start`/`tool_call_result` events. Tool event streaming is `inproc` executor only until P1.
+24. **DEV_TOOL_EVENT_STREAMING**: Dev adapter emits `tool_call_start`/`tool_call_result` events with chunk buffering. Accumulates `tool_call_chunks` by `(messageId, index)` until parseable. Buffer caps: 64KB args, 100 pending results.
 
 ---
 
