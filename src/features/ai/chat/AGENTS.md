@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-12-06
+- **Last reviewed:** 2026-01-20
 - **Status:** draft
 - **Parent:** [features/ai](../AGENTS.md)
 
@@ -70,22 +70,16 @@ Chat subfeature of AI - provides assistant-ui integration for conversational AI 
 
 ## Implementation Status
 
-**v0 (Current):**
+**v1 (Current):**
 
-- ✅ assistant-ui integration with useExternalStoreRuntime
-- ✅ /api/v1/ai/chat endpoint (non-streaming, streaming-ready structure)
+- ✅ assistant-ui integration with useDataStreamRuntime
+- ✅ /api/v1/ai/chat endpoint with SSE streaming
+- ✅ Token-by-token rendering via assistant-stream
+- ✅ Multi-turn conversation state via threadId
+- ✅ Tool call visualization (tool_call_start/tool_call_result events)
 - ✅ Custom welcome copy with 3 suggestions
 - ✅ Conditional credits hint
-- ✅ Client-generated threadId (v2 persistence ready)
-- ✅ Ref-based state management (no stale closures)
-- ✅ Request deduplication via seenClientRequestIds
 - ✅ Zod runtime validation (route input + client output)
-
-**v1 (Planned):**
-
-- ⏳ Streaming responses via SSE
-- ⏳ Token-by-token rendering
-- ⏳ Stop/abort generating
 
 **v2 (Planned):**
 
@@ -93,6 +87,7 @@ Chat subfeature of AI - provides assistant-ui integration for conversational AI 
 - ⏳ Thread routing /chat/[threadId]
 - ⏳ Thread list/history
 - ⏳ Context window optimization
+- ⏳ Stop/abort generating
 
 **Critical v2 Note:** Message storage + context optimization required. Current implementation sends all messages on every request (unbounded growth). v2 needs smart windowing, summarization, or embedding-based retrieval.
 

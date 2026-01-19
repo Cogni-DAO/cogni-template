@@ -3,12 +3,14 @@
 
 /**
  * Module: `@features/chat/providers/ChatRuntimeProvider`
- * Purpose: Runtime provider for chat using assistant-ui streaming.
- * Scope: Feature-local provider. Uses useDataStreamRuntime for streaming. Does not persist messages or manage auth.
- * Invariants: All types from contract via z.infer
+ * Purpose: Runtime provider for chat using assistant-ui streaming with multi-turn state.
+ * Scope: Feature-local provider. Uses useDataStreamRuntime for streaming. Manages threadId state for LangGraph Server conversation continuity. Does not persist messages or manage auth.
+ * Invariants:
+ *   - BODY_IS_OBJECT: body must be object (not function) per assistant-ui limitation
+ *   - THREAD_STATE_BY_KEY: threadId stored in threadIdByStateKey map for future thread switching
  * Side-effects: IO (fetch to /api/v1/ai/chat via runtime)
- * Notes: Uses @assistant-ui/react-data-stream
- * Links: Uses ai.chat.v1 contract, assistant-stream on server
+ * Notes: Uses @assistant-ui/react-data-stream; captures X-Thread-Id from response header
+ * Links: ai.chat.v1 contract, chat/AGENTS.md (Thread State Management)
  * @public
  */
 

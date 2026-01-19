@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-15
+- **Last reviewed:** 2026-01-20
 - **Status:** draft
 
 ## Purpose
@@ -65,8 +65,10 @@ LANGGRAPH_DEV_URL=http://localhost:2024
 
 - STABLE_GRAPH_IDS: graphIds are `langgraph:{graphName}` regardless of backend
 - THREAD_ID_IS_UUID: Thread IDs are UUIDv5 derived from `(billingAccountId, threadKey)`
+- THREAD_KEY_REQUIRED: threadKey required for stateful conversations
 - SDK_CHUNK_SHAPE: SDK stream uses `chunk.event` + `chunk.data` (not `event.type`)
-- MVP: No tool calling, no billing parity (see LANGGRAPH_SERVER.md limitations)
+- DEV_TOOL_EVENT_STREAMING: Emits tool_call_start/tool_call_result with chunk buffering (64KB args, 100 pending)
+- MVP: No billing parity (see LANGGRAPH_SERVER.md limitations)
 
 ## Dependencies
 
