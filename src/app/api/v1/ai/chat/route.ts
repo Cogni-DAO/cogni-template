@@ -361,6 +361,9 @@ export const POST = wrapRouteHandlerWithLogging(
 
         if (!sessionUser) throw new Error("sessionUser required");
 
+        // Generate threadId if not provided (for multi-turn conversation state)
+        const threadId = input.threadId ?? crypto.randomUUID();
+
         const streamStartMs = performance.now();
 
         const { stream: deltaStream, final } = await completionStream(
@@ -370,6 +373,7 @@ export const POST = wrapRouteHandlerWithLogging(
             sessionUser,
             abortSignal: request.signal,
             graphName: input.graphName,
+            threadId,
           },
           ctx
         );
@@ -566,9 +570,12 @@ export const POST = wrapRouteHandlerWithLogging(
         });
 
         // Convert Response to NextResponse for Next.js compatibility
+        // Include threadId header for client to reuse in subsequent requests
+        const headers = new Headers(response.headers);
+        headers.set("X-Thread-Id", threadId);
         return new NextResponse(response.body, {
           status: response.status,
-          headers: response.headers,
+          headers,
         });
       }
     } catch (error) {

@@ -66,22 +66,24 @@ This document covers two execution backends for LangGraph graphs:
 
 1. **STABLE_GRAPH_IDS**: GraphIds are `langgraph:{graphName}` regardless of backend (InProc or Dev)
 2. **MUTUAL_EXCLUSION**: Register exactly one `langgraph` provider per aggregator (InProc XOR Dev)
-3. **THREAD_ID_IS_UUID**: Thread IDs must be UUIDv5 derived from `(billingAccountId, threadKey)`
+3. **THREAD_KEY_REQUIRED**: `threadKey` is required; derive `threadId` deterministically from `(billingAccountId, threadKey)`. Always send only new user input; server owns thread state. Tools work per-run.
 4. **SDK_CHUNK_SHAPE**: SDK stream uses `chunk.event` + `chunk.data` (not `event.type`)
 5. **CATALOG_MANUAL_SYNC_P0**: `LANGGRAPH_CATALOG` and `langgraph.json` manually synced in MVP
+6. **DUAL_RUN_IDS**: Our `runId` (billing/trace) is distinct from LangGraph `run_id` (reconnection/resume). Capture LangGraph `run_id` from the `metadata` stream event if `joinStream`/`lastEventId` reconnection is needed.
 
 ### MVP File Pointers
 
-| File                                                             | Purpose                                        |
-| ---------------------------------------------------------------- | ---------------------------------------------- |
-| `src/adapters/server/ai/langgraph/dev/provider.ts`               | `LangGraphDevProvider` (execution)             |
-| `src/adapters/server/ai/langgraph/dev/agent-catalog.provider.ts` | `LangGraphDevAgentCatalogProvider` (discovery) |
-| `src/adapters/server/ai/langgraph/dev/client.ts`                 | SDK client factory                             |
-| `src/adapters/server/ai/langgraph/dev/thread.ts`                 | UUIDv5 thread derivation                       |
-| `src/adapters/server/ai/langgraph/dev/stream-translator.ts`      | SDK → AiEvent translation                      |
-| `packages/langgraph-graphs/langgraph.json`                       | Graph registration for dev server              |
-| `src/bootstrap/graph-executor.factory.ts`                        | Env-based provider selection                   |
-| `src/bootstrap/agent-discovery.ts`                               | Env-based provider selection                   |
+| File                                                             | Purpose                                           |
+| ---------------------------------------------------------------- | ------------------------------------------------- |
+| `src/adapters/server/ai/langgraph/dev/provider.ts`               | `LangGraphDevProvider` (execution)                |
+| `src/adapters/server/ai/langgraph/dev/agent-catalog.provider.ts` | `LangGraphDevAgentCatalogProvider` (discovery)    |
+| `src/adapters/server/ai/langgraph/dev/client.ts`                 | SDK client factory                                |
+| `src/adapters/server/ai/langgraph/dev/thread.ts`                 | UUIDv5 thread derivation                          |
+| `src/adapters/server/ai/langgraph/dev/stream-translator.ts`      | SDK → AiEvent translation                         |
+| `src/adapters/server/ai/langgraph/dev/stream-accumulator.ts`     | Message accumulation by ID, tool event extraction |
+| `packages/langgraph-graphs/langgraph.json`                       | Graph registration for dev server                 |
+| `src/bootstrap/graph-executor.factory.ts`                        | Env-based provider selection                      |
+| `src/bootstrap/agent-discovery.ts`                               | Env-based provider selection                      |
 
 ### MVP Implementation Checklist
 
@@ -101,16 +103,14 @@ This document covers two execution backends for LangGraph graphs:
 
 ### MVP Known Limitations
 
-| Limitation                | Impact                                      | Resolution                          |
-| ------------------------- | ------------------------------------------- | ----------------------------------- |
-| **No tool calling**       | Agents cannot use tools (major regression)  | P1: LangGraph configurable pattern  |
-| No `usageUnitId`          | Billing uses fallback path                  | P1: LiteLLM header capture          |
-| No `costUsd`              | Cannot bill accurately                      | P1: LiteLLM header capture          |
-| No tool event streaming   | Tools run server-side only                  | P1: Tool event translation          |
-| In-memory only            | No persistence across restarts              | P1: Postgres checkpointer           |
-| Manual catalog sync       | Must update both catalog and langgraph.json | P1: Build-time generation           |
-| Hardcoded model in dev.ts | Client's requested model ignored            | P1: LangGraph configurable pattern  |
-| Non-AI messages dropped   | Only `type: "ai"` chunks extracted          | P1: Read SDK docs, handle all types |
+| Limitation                | Impact                                      | Resolution                                   |
+| ------------------------- | ------------------------------------------- | -------------------------------------------- |
+| No `usageUnitId`          | Billing uses fallback path                  | P1: LiteLLM header capture                   |
+| No `costUsd`              | Cannot bill accurately                      | P1: LiteLLM header capture                   |
+| In-memory only            | No persistence across restarts              | P1: Postgres checkpointer                    |
+| Manual catalog sync       | Must update both catalog and langgraph.json | P1: Build-time generation                    |
+| Hardcoded model in dev.ts | Client's requested model ignored            | P1: LangGraph configurable pattern           |
+| Late tool_call visibility | Tool may execute before chunk arrives       | Accumulator tolerates; emits coherent events |
 
 ### MVP Catalog Alignment
 
@@ -186,7 +186,7 @@ One canonical way to run LangGraph graphs (dev, container, hosted) such that:
    - Else fallback to a deterministic key for "ephemeral" (not runId unless you explicitly want "each run is a new thread")
    - If you really want stateless P0: `runs.stream(null, ...)` exists. That's valid, but it deliberately drops conversation continuity.
 
-9. **LANGGRAPH_IS_CANONICAL_STATE**: For `langgraph_server` executor, LangGraph Server owns canonical thread state/checkpoints. Any local `run_artifacts` are cache only—never reconstruct conversation from them.
+9. **LANGGRAPH_IS_CANONICAL_STATE**: For `langgraph_server` executor, LangGraph Server owns canonical thread state/checkpoints. Any local `run_artifacts` are cache only—never reconstruct conversation from them. When `threadKey` provided, send only new user input (server has prior context).
 
 ### Billing + Per-User Credentials
 

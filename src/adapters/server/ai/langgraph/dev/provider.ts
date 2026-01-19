@@ -9,7 +9,8 @@
  *   - STABLE_GRAPH_IDS: providerId = "langgraph" (same as InProc)
  *   - MUTUAL_EXCLUSION: Either this or InProc registered, never both
  *   - OFFICIAL_SDK_ONLY: Uses @langchain/langgraph-sdk Client
- *   - THREAD_ID_IS_UUID: Thread IDs are UUIDv5
+ *   - THREAD_KEY_REQUIRED: threadKey required; derive threadId deterministically
+ *   - STATEFUL_ONLY: Always send only last user message; server owns thread state
  *   - TOOL_CATALOG_IS_CANONICAL: Reads entry.toolIds for default catalog tools
  * Side-effects: IO (network calls to langgraph dev server)
  * Links: LANGGRAPH_SERVER.md (MVP section), graph-provider.ts
@@ -97,10 +98,20 @@ export class LangGraphDevProvider implements GraphProvider {
    * Execute a graph run via langgraph dev server.
    *
    * Per OFFICIAL_SDK_ONLY: uses Client.runs.stream().
-   * Per THREAD_ID_IS_UUID: derives UUIDv5 thread ID.
+   * Per THREAD_KEY_REQUIRED: threadKey must be provided.
+   * Per STATEFUL_ONLY: send only last user message; server owns thread state.
    */
   runGraph(req: GraphRunRequest): GraphRunResult {
-    const { runId, ingressRequestId, graphId, caller } = req;
+    const { runId, ingressRequestId, graphId, caller, threadKey } = req;
+
+    // Per THREAD_KEY_REQUIRED: fail fast if not provided
+    if (!threadKey) {
+      this.log.error(
+        { runId, graphId },
+        "threadKey required for LangGraph Server"
+      );
+      return this.createErrorResult(runId, ingressRequestId, "invalid_request");
+    }
 
     // Extract graph name from graphId
     const graphName = this.extractGraphName(graphId);
@@ -115,12 +126,11 @@ export class LangGraphDevProvider implements GraphProvider {
     }
 
     this.log.debug(
-      { runId, graphName, messageCount: req.messages.length },
+      { runId, graphName, threadKey, messageCount: req.messages.length },
       "LangGraphDevProvider.runGraph starting"
     );
 
-    // Derive thread ID (UUIDv5)
-    const threadKey = runId; // P0: each run is a new thread (ephemeral)
+    // Derive thread ID (UUIDv5) from (billingAccountId, threadKey)
     const threadId = deriveThreadUuid(caller.billingAccountId, threadKey);
     const threadMetadata = buildThreadMetadata(
       caller.billingAccountId,
@@ -236,10 +246,22 @@ export class LangGraphDevProvider implements GraphProvider {
         metadata: threadMetadata,
       });
 
+      // Per STATEFUL_ONLY: send only last user message; server owns thread state
+      const lastUserMessage = [...messages]
+        .reverse()
+        .find((m) => m.role === "user");
+      if (!lastUserMessage) {
+        this.log.error(
+          { runId: ctx.runId },
+          "No user message found in request"
+        );
+        throw new Error("No user message found");
+      }
+
       // Start streaming run
       // Per TOOL_CONFIG_PROPAGATION: toolIds passed via configurable for wrapper check
       const sdkStream = this.client.runs.stream(threadId, graphName, {
-        input: { messages },
+        input: { messages: [lastUserMessage] },
         streamMode: ["messages-tuple"],
         config: {
           configurable: {

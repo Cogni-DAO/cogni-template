@@ -234,6 +234,12 @@ export const AssistantUiInputSchema = z.object({
   /** Graph name to execute (default: "poet") */
   // TODO: Remove default - require explicit graphName, fail fast if missing
   graphName: z.string().default("poet"),
+  /**
+   * Thread ID for multi-turn conversation state.
+   * If absent, server generates one and returns it.
+   * Client should reuse for subsequent messages in same conversation.
+   */
+  threadId: z.string().max(MAX_ID_CHARS).optional(),
 });
 
 export const aiChatOperation = {

@@ -49,6 +49,11 @@ interface CompletionInput {
   sessionUser: SessionUser;
   /** Graph name to execute (default: "poet") */
   graphName?: string;
+  /**
+   * Thread ID for multi-turn conversation state.
+   * If absent, server generates one.
+   */
+  threadId?: string;
 }
 
 // Type-level enforcement: facade MUST return exact contract shape
@@ -193,6 +198,7 @@ export async function completionStream(
         caller,
         ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
         ...(input.graphName ? { graphName: input.graphName } : {}),
+        ...(input.threadId ? { threadKey: input.threadId } : {}),
       },
       enrichedCtx
     );
