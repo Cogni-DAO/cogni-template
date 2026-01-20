@@ -520,5 +520,35 @@ module.exports = {
       comment:
         "Worker has no db-schema dep; gets schema transitively through db-client",
     },
+
+    // =========================================================================
+    // Services internal clean architecture (opt-in when folders exist)
+    // =========================================================================
+
+    // core/ and ports/ cannot import from adapters/
+    {
+      name: "no-service-core-or-ports-to-adapters",
+      severity: "error",
+      from: {
+        path: "^services/[^/]+/src/(core|ports)/",
+      },
+      to: {
+        path: "^services/[^/]+/src/adapters/",
+      },
+      comment: "core/ports cannot depend on adapters (clean architecture)",
+    },
+
+    // adapters/ cannot import main.ts (composition root)
+    {
+      name: "no-service-adapters-to-main",
+      severity: "error",
+      from: {
+        path: "^services/[^/]+/src/adapters/",
+      },
+      to: {
+        path: "^services/[^/]+/src/main\\.ts$",
+      },
+      comment: "adapters must not import the composition root",
+    },
   ],
 };

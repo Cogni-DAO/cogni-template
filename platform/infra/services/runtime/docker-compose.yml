@@ -49,6 +49,25 @@ services:
       litellm:
         condition: service_healthy
 
+  scheduler-worker:
+    image: ${SCHEDULER_WORKER_IMAGE:-scheduler-worker-local}
+    build:
+      context: ../../../..
+      dockerfile: ./services/scheduler-worker/Dockerfile
+    restart: unless-stopped
+    networks:
+      - internal
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - DATABASE_URL=${DATABASE_URL}
+      - LOG_LEVEL=${PINO_LOG_LEVEL:-info}
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-5}
+      - SERVICE_NAME=scheduler-worker
+      - HEALTH_PORT=9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   litellm:
     image: ghcr.io/berriai/litellm@sha256:7e7816d58c265c182be5f3568ed8e5d999f11a5deda1d85e8e347a18bc578f64
     restart: unless-stopped

@@ -526,6 +526,10 @@ importers:
         version: 5.9.3
 
   packages/scheduler-core:
+    dependencies:
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
     devDependencies:
       tsup:
         specifier: ^8.5.1

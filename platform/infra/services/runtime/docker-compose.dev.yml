@@ -47,6 +47,28 @@ services:
       litellm:
         condition: service_healthy
 
+  scheduler-worker:
+    image: ${SCHEDULER_WORKER_IMAGE:-scheduler-worker-local}
+    build:
+      context: ../../../..
+      dockerfile: ./services/scheduler-worker/Dockerfile
+    container_name: scheduler-worker
+    restart: unless-stopped
+    networks:
+      - cogni-edge
+      - internal
+    environment:
+      - NODE_ENV=${NODE_ENV:-production}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}
+      - LOG_LEVEL=${PINO_LOG_LEVEL:-info}
+      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-5}
+      - WORKER_POLL_INTERVAL=${WORKER_POLL_INTERVAL:-1000}
+      - SERVICE_NAME=scheduler-worker
+      - HEALTH_PORT=9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   litellm:
     image: ghcr.io/berriai/litellm@sha256:7e7816d58c265c182be5f3568ed8e5d999f11a5deda1d85e8e347a18bc578f64
     container_name: litellm
