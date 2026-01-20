@@ -204,13 +204,13 @@ billing.ts     → imports from refs, extends with billing-specific tables
 
 Update all existing imports in `src/` to use new packages directly:
 
-- [ ] Find all `@/types/scheduling` imports → change to `@cogni/scheduler-core`
-- [ ] Find all `@/ports/scheduling` imports → change to `@cogni/scheduler-core`
-- [ ] Find all `@/adapters/server/scheduling` imports → change to `@cogni/db-client`
-- [ ] Find all `@/shared/db/schema.scheduling` imports → change to `@cogni/db-schema/scheduling`
-- [ ] Update `src/bootstrap/container.ts` to use new packages
-- [ ] Update `src/ports/index.ts` to re-export from `@cogni/scheduler-core`
-- [ ] Update `src/shared/db/schema.ts` barrel to import from `@cogni/db-schema`
+- [x] Find all `@/types/scheduling` imports → change to `@cogni/scheduler-core`
+- [x] Find all `@/ports/scheduling` imports → change to `@cogni/scheduler-core`
+- [x] Find all `@/adapters/server/scheduling` imports → change to `@cogni/db-client`
+- [x] Find all `@/shared/db/schema.scheduling` imports → change to `@cogni/db-schema/scheduling`
+- [x] Update `src/bootstrap/container.ts` to use new packages
+- [x] Update `src/ports/index.ts` to re-export from `@cogni/scheduler-core`
+- [x] Update `src/shared/db/schema.ts` barrel to import from `@cogni/db-schema`
 
 ### Phase 4: Configuration Updates
 
@@ -238,10 +238,10 @@ Update all existing imports in `src/` to use new packages directly:
 - [ ] Delete `packages/scheduler-worker/` (entire directory)
 - [ ] Delete `src/scripts/run-scheduler-worker.ts`
 - [ ] Delete `src/scripts/` directory (if empty)
-- [ ] Delete `src/types/scheduling.ts`
-- [ ] Delete `src/ports/scheduling/` directory
-- [ ] Delete `src/adapters/server/scheduling/` directory
-- [ ] Delete `src/shared/db/schema.scheduling.ts`
+- [x] Delete `src/types/scheduling.ts`
+- [x] Delete `src/ports/scheduling/` directory
+- [x] Delete `src/adapters/server/scheduling/` directory
+- [x] Delete `src/shared/db/schema.scheduling.ts`
 
 ### Phase 6: CI/CD Integration
 
