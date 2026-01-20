@@ -12,6 +12,14 @@
  * @public
  */
 
+// Scheduling adapters - re-exported from @cogni/db-client package
+export {
+  DrizzleExecutionGrantAdapter,
+  DrizzleJobQueueAdapter,
+  DrizzleScheduleManagerAdapter,
+  DrizzleScheduleRunAdapter,
+  type LoggerLike,
+} from "@cogni/db-client";
 export type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
 export { DrizzleAccountService } from "./accounts/drizzle.adapter";
 export { DrizzleUsageAdapter } from "./accounts/drizzle.usage.adapter";
@@ -71,9 +79,4 @@ export { ViemTreasuryAdapter } from "./onchain/viem-treasury.adapter";
 export { DrizzlePaymentAttemptRepository } from "./payments/drizzle-payment-attempt.adapter";
 export { EvmRpcOnChainVerifierAdapter } from "./payments/evm-rpc-onchain-verifier.adapter";
 export { PonderOnChainVerifierAdapter } from "./payments/ponder-onchain-verifier.adapter";
-// Scheduling adapters
-export { DrizzleExecutionGrantAdapter } from "./scheduling/drizzle-grant.adapter";
-export { DrizzleJobQueueAdapter } from "./scheduling/drizzle-job-queue.adapter";
-export { DrizzleScheduleRunAdapter } from "./scheduling/drizzle-run.adapter";
-export { DrizzleScheduleManagerAdapter } from "./scheduling/drizzle-schedule.adapter";
 export { SystemClock } from "./time/system.adapter";

@@ -219,14 +219,25 @@ function createContainer(): Container {
 
   const clock = new SystemClock();
 
-  // Scheduling adapters
-  const jobQueue = new DrizzleJobQueueAdapter(db);
-  const executionGrantPort = new DrizzleExecutionGrantAdapter(db);
-  const scheduleRunRepository = new DrizzleScheduleRunAdapter(db);
+  // Scheduling adapters (from @cogni/db-client)
+  // Per architecture rule: composition root injects loggers via child()
+  const jobQueue = new DrizzleJobQueueAdapter(
+    db,
+    log.child({ component: "DrizzleJobQueueAdapter" })
+  );
+  const executionGrantPort = new DrizzleExecutionGrantAdapter(
+    db,
+    log.child({ component: "DrizzleExecutionGrantAdapter" })
+  );
+  const scheduleRunRepository = new DrizzleScheduleRunAdapter(
+    db,
+    log.child({ component: "DrizzleScheduleRunAdapter" })
+  );
   const scheduleManager = new DrizzleScheduleManagerAdapter(
     db,
     jobQueue,
-    executionGrantPort
+    executionGrantPort,
+    log.child({ component: "DrizzleScheduleManagerAdapter" })
   );
 
   // Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
