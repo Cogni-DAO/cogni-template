@@ -30,16 +30,16 @@ const MAX_TOOL_RESULT_CHARS = 32768;
 const MAX_ID_CHARS = 128;
 
 /**
- * Max threadId length - app-level routing key, not internal ID.
+ * Max stateKey length - app-level conversation routing key.
  * Separate from MAX_ID_CHARS to allow reasonable client-provided keys.
  */
-const MAX_THREAD_ID_CHARS = 512;
+const MAX_STATE_KEY_CHARS = 512;
 
 /**
- * Safe character pattern for threadId - prevents log injection.
+ * Safe character pattern for stateKey - prevents log injection.
  * Allows: alphanumeric, dots, underscores, colons, hyphens.
  */
-const THREAD_ID_SAFE_PATTERN = /^[A-Za-z0-9._:-]+$/;
+const STATE_KEY_SAFE_PATTERN = /^[A-Za-z0-9._:-]+$/;
 
 /**
  * JSON-serializable value schema (recursive).
@@ -247,15 +247,16 @@ export const AssistantUiInputSchema = z.object({
   // TODO: Remove default - require explicit graphName, fail fast if missing
   graphName: z.string().default("poet"),
   /**
-   * Thread ID for multi-turn conversation state.
-   * If absent, server generates one and returns it.
+   * Conversation state key for multi-turn conversations.
+   * If absent, server generates one and returns it via X-State-Key header.
    * Client should reuse for subsequent messages in same conversation.
    * Must contain only safe characters: alphanumeric, dots, underscores, colons, hyphens.
+   * Note: This is an app-level key, NOT a provider-specific thread_id.
    */
-  threadId: z
+  stateKey: z
     .string()
-    .max(MAX_THREAD_ID_CHARS)
-    .regex(THREAD_ID_SAFE_PATTERN, "threadId must contain only safe characters")
+    .max(MAX_STATE_KEY_CHARS)
+    .regex(STATE_KEY_SAFE_PATTERN, "stateKey must contain only safe characters")
     .optional(),
 });
 
@@ -266,8 +267,8 @@ export const aiChatOperation = {
     "Send chat messages and receive streaming responses via assistant-stream",
   input: AssistantUiInputSchema,
   output: z.object({
-    /** Echo back threadId (v0: same as input, v2: from DB) */
-    threadId: z.string(),
+    /** Echo back stateKey for client reuse */
+    stateKey: z.string(),
     /** Assistant message with server-assigned requestId for billing reference */
     message: ChatMessageSchema.required({ requestId: true }),
   }),

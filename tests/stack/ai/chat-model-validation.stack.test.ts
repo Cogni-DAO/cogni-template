@@ -82,7 +82,7 @@ describe("Chat Model Validation Stack Test", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        threadId: randomUUID(),
+        stateKey: randomUUID(),
         clientRequestId: randomUUID(),
         messages: [
           {
@@ -114,7 +114,7 @@ describe("Chat Model Validation Stack Test", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        threadId: randomUUID(),
+        stateKey: randomUUID(),
         clientRequestId: randomUUID(),
         messages: [
           {

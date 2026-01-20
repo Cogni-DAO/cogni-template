@@ -127,7 +127,7 @@ describe("Chat Tool Replay", () => {
 
     // Replay payload: user → assistant(tool-call) → tool(tool-result) → user
     const replayPayload = {
-      threadId: TEST_THREAD_ID,
+      stateKey: TEST_THREAD_ID,
       clientRequestId: TEST_CLIENT_REQUEST_ID,
       model: TEST_MODEL,
       stream: true,
@@ -312,7 +312,7 @@ describe("Chat Tool Replay", () => {
 
     // Payload with tool-result referencing unknown toolCallId
     const invalidPayload = {
-      threadId: TEST_THREAD_ID,
+      stateKey: TEST_THREAD_ID,
       clientRequestId: TEST_CLIENT_REQUEST_ID,
       model: TEST_MODEL,
       stream: true,
@@ -357,7 +357,7 @@ describe("Chat Tool Replay", () => {
 
     // Payload with duplicate tool-results
     const duplicatePayload = {
-      threadId: TEST_THREAD_ID,
+      stateKey: TEST_THREAD_ID,
       clientRequestId: TEST_CLIENT_REQUEST_ID,
       model: TEST_MODEL,
       stream: true,

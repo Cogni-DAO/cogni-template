@@ -67,7 +67,7 @@ describe("Chat Streaming", () => {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        threadId: randomUUID(),
+        stateKey: randomUUID(),
         clientRequestId: randomUUID(),
         model: defaultModelId,
         stream: true,
@@ -174,7 +174,7 @@ describe("Chat Streaming", () => {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        threadId: randomUUID(),
+        stateKey: randomUUID(),
         clientRequestId: randomUUID(),
         model: defaultModelId,
         stream: true,
@@ -258,7 +258,7 @@ describe("Chat Streaming", () => {
       },
       signal: ac.signal,
       body: JSON.stringify({
-        threadId: randomUUID(),
+        stateKey: randomUUID(),
         clientRequestId: randomUUID(),
         model: defaultModelId,
         stream: true,

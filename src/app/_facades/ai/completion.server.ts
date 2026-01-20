@@ -52,31 +52,31 @@ interface CompletionInput {
   /** Graph name to execute (default: "poet") */
   graphName?: string;
   /**
-   * Thread ID for multi-turn conversation state.
+   * Conversation state key for multi-turn conversations.
    * If absent, server generates one.
    */
-  threadId?: string;
+  stateKey?: string;
 }
 
 // Type-level enforcement: facade MUST return exact contract shape
 type CompletionOutput = z.infer<typeof aiCompletionOperation.output>;
 
 /**
- * Derive Langfuse sessionId from billingAccountId + threadId.
+ * Derive Langfuse sessionId from billingAccountId + stateKey.
  * Uses SHA-256 hash to ensure:
  * - Deterministic: same inputs → same sessionId (stable grouping)
- * - Bounded: fixed output length regardless of threadId length
- * - Safe: no PII or log-injection risk from raw threadId
+ * - Bounded: fixed output length regardless of stateKey length
+ * - Safe: no PII or log-injection risk from raw stateKey
  *
- * Format: `ba:{billingAccountId}:t:{sha256(threadId)[0:32]}`
+ * Format: `ba:{billingAccountId}:s:{sha256(stateKey)[0:32]}`
  * Truncation to 200 chars happens at Langfuse sink boundary.
  */
-function deriveSessionId(billingAccountId: string, threadId: string): string {
-  const threadHash = createHash("sha256")
-    .update(threadId)
+function deriveSessionId(billingAccountId: string, stateKey: string): string {
+  const stateKeyHash = createHash("sha256")
+    .update(stateKey)
     .digest("hex")
     .slice(0, 32);
-  return `ba:${billingAccountId}:t:${threadHash}`;
+  return `ba:${billingAccountId}:s:${stateKeyHash}`;
 }
 
 /**
@@ -178,10 +178,10 @@ export async function completionStream(
     requestId: ctx.reqId,
     traceId: ctx.traceId,
     userId: input.sessionUser.id,
-    // Derive sessionId from threadId for Langfuse session grouping
+    // Derive sessionId from stateKey for Langfuse session grouping
     // Hash ensures deterministic, bounded, log-safe output; truncation at sink
-    ...(input.threadId && {
-      sessionId: deriveSessionId(billingAccount.id, input.threadId),
+    ...(input.stateKey && {
+      sessionId: deriveSessionId(billingAccount.id, input.stateKey),
     }),
   };
 
@@ -220,7 +220,7 @@ export async function completionStream(
         caller,
         ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
         ...(input.graphName ? { graphName: input.graphName } : {}),
-        ...(input.threadId ? { stateKey: input.threadId } : {}),
+        ...(input.stateKey ? { stateKey: input.stateKey } : {}),
       },
       enrichedCtx
     );

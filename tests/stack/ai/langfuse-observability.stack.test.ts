@@ -197,7 +197,7 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          threadId: randomUUID(),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
           model: modelId,
           stream: true,
@@ -263,7 +263,7 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          threadId: randomUUID(),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
           model: modelId,
           stream: true,
@@ -329,7 +329,7 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          threadId: randomUUID(),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
           model: modelId,
           stream: true,
@@ -385,15 +385,15 @@ describe("Langfuse Observability Stack Tests", () => {
       const modelsRes = await modelsGET(modelsReq);
       const { defaultPreferredModelId: modelId } = await modelsRes.json();
 
-      // Use a very long threadId (which becomes sessionId)
-      const longThreadId = "a".repeat(300);
+      // Use a very long stateKey (which becomes sessionId via hash)
+      const longStateKey = "a".repeat(300);
 
       // Act
       const req = new NextRequest("http://localhost:3000/api/v1/ai/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          threadId: longThreadId,
+          stateKey: longStateKey,
           clientRequestId: randomUUID(),
           model: modelId,
           stream: true,
@@ -454,7 +454,7 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          threadId: randomUUID(),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
           model: modelId,
           stream: true,
@@ -513,7 +513,7 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          threadId: randomUUID(),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
           model: modelId,
           stream: true,
@@ -572,7 +572,7 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          threadId: randomUUID(),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
           model: modelId,
           stream: true,
@@ -634,7 +634,7 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          threadId: randomUUID(),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
           model: modelId,
           stream: true,
@@ -698,7 +698,7 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          threadId: randomUUID(),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
           model: modelId,
           stream: true,
@@ -773,7 +773,7 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          threadId: randomUUID(),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
           model: modelId,
           stream: true,
@@ -846,7 +846,7 @@ describe("Langfuse Observability Stack Tests", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          threadId: randomUUID(),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
           model: modelId,
           stream: true,

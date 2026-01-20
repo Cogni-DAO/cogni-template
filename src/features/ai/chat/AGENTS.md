@@ -75,7 +75,7 @@ Chat subfeature of AI - provides assistant-ui integration for conversational AI 
 - ✅ assistant-ui integration with useDataStreamRuntime
 - ✅ /api/v1/ai/chat endpoint with SSE streaming
 - ✅ Token-by-token rendering via assistant-stream
-- ✅ Multi-turn conversation state via threadId
+- ✅ Multi-turn conversation state via stateKey
 - ✅ Tool call visualization (tool_call_start/tool_call_result events)
 - ✅ Custom welcome copy with 3 suggestions
 - ✅ Conditional credits hint
@@ -84,7 +84,7 @@ Chat subfeature of AI - provides assistant-ui integration for conversational AI 
 **v2 (Planned):**
 
 - ⏳ Database persistence
-- ⏳ Thread routing /chat/[threadId]
+- ⏳ Thread routing /chat/[stateKey]
 - ⏳ Thread list/history
 - ⏳ Context window optimization
 - ⏳ Stop/abort generating
@@ -97,26 +97,26 @@ Chat subfeature of AI - provides assistant-ui integration for conversational AI 
 
 **Contract:**
 
-- Request: `threadId?: string` in JSON body (optional)
-- Response: `X-Thread-Id` header (always returned)
-- Server generates `threadId` if absent; client reuses for multi-turn
+- Request: `stateKey?: string` in JSON body (optional)
+- Response: `X-State-Key` header (always returned)
+- Server generates `stateKey` if absent; client reuses for multi-turn
 
 **UI State Pattern:**
 
 ```typescript
-// Future-safe: keyed by stateKey for thread switching/forks
-const [threadIdByStateKey, setThreadIdByStateKey] = useState<Record<string, string>>({});
+// Future-safe: map pattern for thread switching/forks
+const [stateKeyMap, setStateKeyMap] = useState<Record<string, string>>({});
 const activeStateKey = "default"; // Placeholder for future state/thread selection
-const threadId = threadIdByStateKey[activeStateKey];
+const stateKey = stateKeyMap[activeStateKey];
 
 // body MUST be object (assistant-ui limitation), not function
-body: { model, graphName, ...(threadId ? { threadId } : {}) }
+body: { model, graphName, ...(stateKey ? { stateKey } : {}) }
 
-// onResponse captures server-generated threadId
-setThreadIdByStateKey(prev => ({ ...prev, [activeStateKey]: newThreadId }));
+// onResponse captures server-generated stateKey
+setStateKeyMap(prev => ({ ...prev, [activeStateKey]: newStateKey }));
 ```
 
-**Why `threadIdByStateKey` map (not single state)?**
+**Why `stateKeyMap` (not single state)?**
 
 - Trivially migrates when thread list/switching added
 - Supports forks/reruns (multiple states per session)
@@ -124,18 +124,20 @@ setThreadIdByStateKey(prev => ({ ...prev, [activeStateKey]: newThreadId }));
 
 ### Naming Convention
 
-| Layer        | Field       | Notes                                              |
-| ------------ | ----------- | -------------------------------------------------- |
-| UI State     | `stateKey`  | App-level key for state/thread selection           |
-| API/Contract | `threadId`  | Client-facing identifier sent to server            |
-| Port/Adapter | `stateKey`  | Internal; derive UUIDv5 from (accountId, stateKey) |
-| LangGraph    | `thread_id` | UUID format required by LangGraph API              |
+| Layer        | Field       | Notes                                                     |
+| ------------ | ----------- | --------------------------------------------------------- |
+| UI State     | `stateKey`  | App-level key for state/thread selection                  |
+| API/Contract | `stateKey`  | Client-facing conversation key (provider-agnostic)        |
+| Port/Adapter | `stateKey`  | Passed through; adapter decides semantics                 |
+| LangGraph    | `thread_id` | UUID format derived from (accountId, stateKey) by adapter |
+| Claude SDK   | `sessionId` | Claude Agents SDK uses sessionId for conversation state   |
+| Langfuse     | `sessionId` | Derived via hash: `ba:{accountId}:s:{sha256(stateKey)}`   |
 
-**TODO(P1):** Consider unifying port/adapter to `threadId` to reduce translation.
+**Note:** `stateKey` is canonical at Cogni boundaries; providers derive their own identifiers internally.
 
 ### Progression
 
-| Phase  | Capability                          | threadId Ownership                   |
+| Phase  | Capability                          | stateKey Ownership                   |
 | ------ | ----------------------------------- | ------------------------------------ |
 | **P0** | Single conversation, no persistence | ChatRuntimeProvider local state      |
 | **P1** | Thread list UI, URL routing         | Lift to page-level state or context  |
