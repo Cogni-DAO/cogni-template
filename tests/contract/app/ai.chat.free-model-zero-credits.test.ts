@@ -154,7 +154,7 @@ describe("POST /api/v1/ai/chat - Free Model Zero Credits", () => {
         const response = await fetch({
           method: "POST",
           body: JSON.stringify({
-            threadId: "test-thread",
+            stateKey: "test-thread",
             clientRequestId: "00000000-0000-4000-8000-000000000001",
             messages: [
               {
@@ -190,7 +190,7 @@ describe("POST /api/v1/ai/chat - Free Model Zero Credits", () => {
         const response = await fetch({
           method: "POST",
           body: JSON.stringify({
-            threadId: "test-thread",
+            stateKey: "test-thread",
             clientRequestId: "00000000-0000-4000-8000-000000000002",
             messages: [
               {

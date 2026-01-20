@@ -66,22 +66,24 @@ This document covers two execution backends for LangGraph graphs:
 
 1. **STABLE_GRAPH_IDS**: GraphIds are `langgraph:{graphName}` regardless of backend (InProc or Dev)
 2. **MUTUAL_EXCLUSION**: Register exactly one `langgraph` provider per aggregator (InProc XOR Dev)
-3. **THREAD_ID_IS_UUID**: Thread IDs must be UUIDv5 derived from `(billingAccountId, threadKey)`
+3. **THREAD_KEY_REQUIRED**: `stateKey` is required; derive `threadId` deterministically from `(billingAccountId, stateKey)`. Always send only new user input; server owns thread state. Tools work per-run.
 4. **SDK_CHUNK_SHAPE**: SDK stream uses `chunk.event` + `chunk.data` (not `event.type`)
 5. **CATALOG_MANUAL_SYNC_P0**: `LANGGRAPH_CATALOG` and `langgraph.json` manually synced in MVP
+6. **DUAL_RUN_IDS**: Our `runId` (billing/trace) is distinct from LangGraph `run_id` (reconnection/resume). Capture LangGraph `run_id` from the `metadata` stream event if `joinStream`/`lastEventId` reconnection is needed.
 
 ### MVP File Pointers
 
-| File                                                             | Purpose                                        |
-| ---------------------------------------------------------------- | ---------------------------------------------- |
-| `src/adapters/server/ai/langgraph/dev/provider.ts`               | `LangGraphDevProvider` (execution)             |
-| `src/adapters/server/ai/langgraph/dev/agent-catalog.provider.ts` | `LangGraphDevAgentCatalogProvider` (discovery) |
-| `src/adapters/server/ai/langgraph/dev/client.ts`                 | SDK client factory                             |
-| `src/adapters/server/ai/langgraph/dev/thread.ts`                 | UUIDv5 thread derivation                       |
-| `src/adapters/server/ai/langgraph/dev/stream-translator.ts`      | SDK → AiEvent translation                      |
-| `packages/langgraph-graphs/langgraph.json`                       | Graph registration for dev server              |
-| `src/bootstrap/graph-executor.factory.ts`                        | Env-based provider selection                   |
-| `src/bootstrap/agent-discovery.ts`                               | Env-based provider selection                   |
+| File                                                             | Purpose                                           |
+| ---------------------------------------------------------------- | ------------------------------------------------- |
+| `src/adapters/server/ai/langgraph/dev/provider.ts`               | `LangGraphDevProvider` (execution)                |
+| `src/adapters/server/ai/langgraph/dev/agent-catalog.provider.ts` | `LangGraphDevAgentCatalogProvider` (discovery)    |
+| `src/adapters/server/ai/langgraph/dev/client.ts`                 | SDK client factory                                |
+| `src/adapters/server/ai/langgraph/dev/thread.ts`                 | UUIDv5 thread derivation                          |
+| `src/adapters/server/ai/langgraph/dev/stream-translator.ts`      | SDK → AiEvent translation                         |
+| `src/adapters/server/ai/langgraph/dev/stream-accumulator.ts`     | Message accumulation by ID, tool event extraction |
+| `packages/langgraph-graphs/langgraph.json`                       | Graph registration for dev server                 |
+| `src/bootstrap/graph-executor.factory.ts`                        | Env-based provider selection                      |
+| `src/bootstrap/agent-discovery.ts`                               | Env-based provider selection                      |
 
 ### MVP Implementation Checklist
 
@@ -101,16 +103,14 @@ This document covers two execution backends for LangGraph graphs:
 
 ### MVP Known Limitations
 
-| Limitation                | Impact                                      | Resolution                          |
-| ------------------------- | ------------------------------------------- | ----------------------------------- |
-| **No tool calling**       | Agents cannot use tools (major regression)  | P1: LangGraph configurable pattern  |
-| No `usageUnitId`          | Billing uses fallback path                  | P1: LiteLLM header capture          |
-| No `costUsd`              | Cannot bill accurately                      | P1: LiteLLM header capture          |
-| No tool event streaming   | Tools run server-side only                  | P1: Tool event translation          |
-| In-memory only            | No persistence across restarts              | P1: Postgres checkpointer           |
-| Manual catalog sync       | Must update both catalog and langgraph.json | P1: Build-time generation           |
-| Hardcoded model in dev.ts | Client's requested model ignored            | P1: LangGraph configurable pattern  |
-| Non-AI messages dropped   | Only `type: "ai"` chunks extracted          | P1: Read SDK docs, handle all types |
+| Limitation                | Impact                                      | Resolution                             |
+| ------------------------- | ------------------------------------------- | -------------------------------------- |
+| No `usageUnitId`          | Billing uses fallback path                  | P1: LiteLLM header capture             |
+| No `costUsd`              | Cannot bill accurately                      | P1: LiteLLM header capture             |
+| In-memory only            | No persistence across restarts              | P1: Postgres checkpointer              |
+| Manual catalog sync       | Must update both catalog and langgraph.json | P1: Build-time generation              |
+| Hardcoded model in dev.ts | Client's requested model ignored            | P1: LangGraph configurable pattern     |
+| Late tool_call visibility | Tool may execute before chunk arrives       | Buffered; 64KB args / 100 pending caps |
 
 ### MVP Catalog Alignment
 
@@ -174,7 +174,7 @@ One canonical way to run LangGraph graphs (dev, container, hosted) such that:
 6. **THREAD_ID_TENANT_SCOPED**: For stateful runs, thread identity is derived server-side as UUIDv5:
 
    ```
-   thread_id = uuidv5("${billingAccountId}:${threadKey}", COGNI_THREAD_NAMESPACE)
+   thread_id = uuidv5("${billingAccountId}:${stateKey}", COGNI_THREAD_NAMESPACE)
    ```
 
    Per LangGraph API: `thread_id` must be UUID format. Never accept raw `thread_id` from the client. LangGraph persistence is keyed on `thread_id`—this is the privacy boundary. See `src/adapters/server/ai/langgraph/dev/thread.ts`.
@@ -182,11 +182,11 @@ One canonical way to run LangGraph graphs (dev, container, hosted) such that:
 7. **THREAD_MUST_EXIST_IF_THREAD_ID_IS_STRING**: If you pass a string `threadId` to `runs.stream()`, you must ensure the thread exists first (idempotently). Use the SDK thread create with "do nothing if exists".
 
 8. **P0_THREAD_POLICY**: P0 supports stateful threads (because your product needs multi-turn).
-   - If `threadKey` is present → reuse thread
+   - If `stateKey` is present → reuse thread
    - Else fallback to a deterministic key for "ephemeral" (not runId unless you explicitly want "each run is a new thread")
    - If you really want stateless P0: `runs.stream(null, ...)` exists. That's valid, but it deliberately drops conversation continuity.
 
-9. **LANGGRAPH_IS_CANONICAL_STATE**: For `langgraph_server` executor, LangGraph Server owns canonical thread state/checkpoints. Any local `run_artifacts` are cache only—never reconstruct conversation from them.
+9. **LANGGRAPH_IS_CANONICAL_STATE**: For `langgraph_server` executor, LangGraph Server owns canonical thread state/checkpoints. Any local `run_artifacts` are cache only—never reconstruct conversation from them. When `stateKey` provided, send only new user input (server has prior context).
 
 ### Billing + Per-User Credentials
 
@@ -244,7 +244,7 @@ One canonical way to run LangGraph graphs (dev, container, hosted) such that:
 
 23. **P0_NO_GDPR_DELETE**: P0 does NOT provide compliant user data deletion. LangGraph checkpoint deletion is a P1 requirement. Document this explicitly.
 
-24. **P0_NO_TOOL_EVENT_STREAMING**: For `langgraph_server` in P0, tool execution happens entirely within LangGraph Server. Adapter emits `text_delta`, `assistant_final`, `usage_report`, `done` only—no `tool_call_start`/`tool_call_result` events. Tool event streaming is `inproc` executor only until P1.
+24. **DEV_TOOL_EVENT_STREAMING**: Dev adapter emits `tool_call_start`/`tool_call_result` events with chunk buffering. Accumulates `tool_call_chunks` by `(messageId, index)` until parseable. Buffer caps: 64KB args, 100 pending results.
 
 ---
 
@@ -254,7 +254,7 @@ One canonical way to run LangGraph graphs (dev, container, hosted) such that:
 
 - `runId`, `attempt`, `ingressRequestId`, `caller` (billingAccountId, virtualKeyId, traceId)
 - `messages[]`, `model`, `graphName?`
-- `threadKey?` (server-derived; never client-supplied)
+- `stateKey?` (server-derived; never client-supplied)
 
 ### GraphRunResult
 
@@ -329,7 +329,7 @@ In other words: graphs are parameterized by runtime config, not `.env` alone.
 interface LangGraphRunRequest {
   accountId: string; // Tenant ID for thread_id derivation
   runId: string; // Unique run ID (Next.js generates)
-  threadKey?: string; // Optional thread key for continuation
+  stateKey?: string; // Optional thread key for continuation
   model: string; // LiteLLM alias (from allowlist)
   messages: Array<{ role: string; content: string }>;
   requestId: string; // Correlation ID
@@ -358,7 +358,7 @@ interface LangGraphRunRequest {
 ### Thread ID derivation (inside service)
 
 ```typescript
-const threadId = `${request.accountId}:${request.threadKey ?? request.runId}`;
+const threadId = `${request.accountId}:${request.stateKey ?? request.runId}`;
 ```
 
 ---
@@ -519,8 +519,8 @@ Extract cross-process types to `packages/ai-core/` so `packages/langgraph-server
 #### Step 7: Minimal Graph + Endpoint
 
 - [ ] Create chat graph in `packages/langgraph-graphs/graphs/chat/`
-- [ ] Expose run endpoint accepting: `{ accountId, runId, threadKey?, model, messages[], requestId, traceId }`
-- [ ] Derive `thread_id` server-side as `${accountId}:${threadKey || runId}`
+- [ ] Expose run endpoint accepting: `{ accountId, runId, stateKey?, model, messages[], requestId, traceId }`
+- [ ] Derive `thread_id` server-side as `${accountId}:${stateKey || runId}`
 - [ ] Return SSE stream with text deltas + final message + done
 
 #### Step 8: LangGraphServerAdapter
@@ -621,7 +621,7 @@ Per LangGraph API: `thread_id` must be `string<uuid>` format. Use UUIDv5 for det
 
 **Implementation:** `src/adapters/server/ai/langgraph/dev/thread.ts`
 
-**Derivation:** `uuidv5("${billingAccountId}:${threadKey}", COGNI_THREAD_NAMESPACE)`
+**Derivation:** `uuidv5("${billingAccountId}:${stateKey}", COGNI_THREAD_NAMESPACE)`
 
 **Why UUIDv5?** LangGraph API requires UUID format. Deterministic derivation ensures same thread across restarts.
 

@@ -3,12 +3,14 @@
 
 /**
  * Module: `@features/chat/providers/ChatRuntimeProvider`
- * Purpose: Runtime provider for chat using assistant-ui streaming.
- * Scope: Feature-local provider. Uses useDataStreamRuntime for streaming. Does not persist messages or manage auth.
- * Invariants: All types from contract via z.infer
+ * Purpose: Runtime provider for chat using assistant-ui streaming with multi-turn state.
+ * Scope: Feature-local provider. Uses useDataStreamRuntime for streaming. Manages threadId state for LangGraph Server conversation continuity. Does not persist messages or manage auth.
+ * Invariants:
+ *   - BODY_IS_OBJECT: body must be object (not function) per assistant-ui limitation
+ *   - THREAD_STATE_BY_KEY: threadId stored in threadIdByStateKey map for future thread switching
  * Side-effects: IO (fetch to /api/v1/ai/chat via runtime)
- * Notes: Uses @assistant-ui/react-data-stream
- * Links: Uses ai.chat.v1 contract, assistant-stream on server
+ * Notes: Uses @assistant-ui/react-data-stream; captures X-Thread-Id from response header
+ * Links: ai.chat.v1 contract, chat/AGENTS.md (Thread State Management)
  * @public
  */
 
@@ -17,7 +19,13 @@
 import { AssistantRuntimeProvider } from "@assistant-ui/react";
 import { useDataStreamRuntime } from "@assistant-ui/react-data-stream";
 import { useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useCallback, useEffect, useRef } from "react";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type { ChatError } from "@/contracts/error.chat.v1.contract";
 import type { GraphId } from "@/ports";
@@ -54,6 +62,13 @@ export function ChatRuntimeProvider({
   const selectedModelRef = useRef(selectedModel);
   const selectedGraphRef = useRef(selectedGraph);
 
+  // State key for multi-turn conversations
+  // Map pattern preserved for future thread switching/forks support (see chat/AGENTS.md)
+  // Server generates stateKey on first request, we capture from X-State-Key and reuse
+  const [stateKeyMap, setStateKeyMap] = useState<Record<string, string>>({});
+  const activeStateKey = "default"; // Placeholder for future state/thread selection
+  const stateKey = stateKeyMap[activeStateKey];
+
   // Keep refs in sync
   useEffect(() => {
     selectedModelRef.current = selectedModel;
@@ -63,9 +78,19 @@ export function ChatRuntimeProvider({
     selectedGraphRef.current = selectedGraph;
   }, [selectedGraph]);
 
-  // Handle response errors
+  // Handle response - capture stateKey and handle errors
   const handleResponse = useCallback(
     async (response: Response) => {
+      // Capture stateKey from response header for multi-turn continuity
+      // Server generates stateKey on first request, we reuse it for subsequent requests
+      const newStateKey = response.headers.get("X-State-Key");
+      if (newStateKey && newStateKey !== stateKey) {
+        setStateKeyMap((prev) => ({
+          ...prev,
+          [activeStateKey]: newStateKey,
+        }));
+      }
+
       if (response.status === 401) {
         onAuthExpired?.();
         throw new Error("Unauthorized");
@@ -96,7 +121,7 @@ export function ChatRuntimeProvider({
         throw new Error(body.error || "Request failed");
       }
     },
-    [defaultModelId, onAuthExpired, onError]
+    [defaultModelId, onAuthExpired, onError, stateKey]
   );
 
   // Handle stream finish - invalidate credits query
@@ -106,9 +131,12 @@ export function ChatRuntimeProvider({
 
   const runtime = useDataStreamRuntime({
     api: "/api/v1/ai/chat",
+    // body must be object (not function) - assistant-ui limitation
+    // stateKey from state; state change triggers re-render with new body
     body: {
       model: selectedModel,
       graphName: selectedGraph,
+      ...(stateKey ? { stateKey } : {}),
     },
     onResponse: handleResponse,
     onFinish: handleFinish,

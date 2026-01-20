@@ -9,7 +9,8 @@
  *   - STABLE_GRAPH_IDS: providerId = "langgraph" (same as InProc)
  *   - MUTUAL_EXCLUSION: Either this or InProc registered, never both
  *   - OFFICIAL_SDK_ONLY: Uses @langchain/langgraph-sdk Client
- *   - THREAD_ID_IS_UUID: Thread IDs are UUIDv5
+ *   - THREAD_KEY_REQUIRED: stateKey required; derive threadId deterministically
+ *   - STATEFUL_ONLY: Always send only last user message; server owns thread state
  *   - TOOL_CATALOG_IS_CANONICAL: Reads entry.toolIds for default catalog tools
  * Side-effects: IO (network calls to langgraph dev server)
  * Links: LANGGRAPH_SERVER.md (MVP section), graph-provider.ts
@@ -97,10 +98,20 @@ export class LangGraphDevProvider implements GraphProvider {
    * Execute a graph run via langgraph dev server.
    *
    * Per OFFICIAL_SDK_ONLY: uses Client.runs.stream().
-   * Per THREAD_ID_IS_UUID: derives UUIDv5 thread ID.
+   * Per THREAD_KEY_REQUIRED: stateKey must be provided.
+   * Per STATEFUL_ONLY: send only last user message; server owns thread state.
    */
   runGraph(req: GraphRunRequest): GraphRunResult {
-    const { runId, ingressRequestId, graphId, caller } = req;
+    const { runId, ingressRequestId, graphId, caller, stateKey } = req;
+
+    // Per THREAD_KEY_REQUIRED: fail fast if not provided
+    if (!stateKey) {
+      this.log.error(
+        { runId, graphId },
+        "stateKey required for LangGraph Server"
+      );
+      return this.createErrorResult(runId, ingressRequestId, "invalid_request");
+    }
 
     // Extract graph name from graphId
     const graphName = this.extractGraphName(graphId);
@@ -115,16 +126,15 @@ export class LangGraphDevProvider implements GraphProvider {
     }
 
     this.log.debug(
-      { runId, graphName, messageCount: req.messages.length },
+      { runId, graphName, stateKey, messageCount: req.messages.length },
       "LangGraphDevProvider.runGraph starting"
     );
 
-    // Derive thread ID (UUIDv5)
-    const threadKey = runId; // P0: each run is a new thread (ephemeral)
-    const threadId = deriveThreadUuid(caller.billingAccountId, threadKey);
+    // Derive thread ID (UUIDv5) from (billingAccountId, stateKey)
+    const threadId = deriveThreadUuid(caller.billingAccountId, stateKey);
     const threadMetadata = buildThreadMetadata(
       caller.billingAccountId,
-      threadKey
+      stateKey
     );
 
     // Create stream and final promise
@@ -148,7 +158,7 @@ export class LangGraphDevProvider implements GraphProvider {
     req: GraphRunRequest,
     graphName: string,
     threadId: string,
-    threadMetadata: { billingAccountId: string; threadKey: string }
+    threadMetadata: { billingAccountId: string; stateKey: string }
   ): GraphRunResult {
     const { runId, ingressRequestId, messages, caller, toolIds } = req;
     const attempt = 0; // P0_ATTEMPT_FREEZE
@@ -216,7 +226,7 @@ export class LangGraphDevProvider implements GraphProvider {
   private async *createStreamWithFinalState(
     graphName: string,
     threadId: string,
-    threadMetadata: { billingAccountId: string; threadKey: string },
+    threadMetadata: { billingAccountId: string; stateKey: string },
     messages: GraphRunRequest["messages"],
     ctx: { runId: string; attempt: number; caller: GraphRunRequest["caller"] },
     state: {
@@ -236,10 +246,22 @@ export class LangGraphDevProvider implements GraphProvider {
         metadata: threadMetadata,
       });
 
+      // Per STATEFUL_ONLY: send only last user message; server owns thread state
+      const lastUserMessage = [...messages]
+        .reverse()
+        .find((m) => m.role === "user");
+      if (!lastUserMessage) {
+        this.log.error(
+          { runId: ctx.runId },
+          "No user message found in request"
+        );
+        throw new Error("No user message found");
+      }
+
       // Start streaming run
       // Per TOOL_CONFIG_PROPAGATION: toolIds passed via configurable for wrapper check
       const sdkStream = this.client.runs.stream(threadId, graphName, {
-        input: { messages },
+        input: { messages: [lastUserMessage] },
         streamMode: ["messages-tuple"],
         config: {
           configurable: {

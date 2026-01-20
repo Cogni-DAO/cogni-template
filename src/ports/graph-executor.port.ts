@@ -52,6 +52,13 @@ export interface GraphRunRequest {
    * If undefined, falls back to catalog default (P0 acceptable, logs warning).
    */
   readonly toolIds?: readonly string[];
+  /**
+   * Thread key for multi-turn conversation state.
+   * Semantics are adapter-specific:
+   * - InProc: ignored (no thread state. should become required soon)
+   * - LangGraph Server: required (derive threadId, send only new input)
+   */
+  readonly stateKey?: string;
 }
 
 /**

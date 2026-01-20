@@ -54,7 +54,7 @@ Assumption: "If it streamed out, I can just shove it back in next turn."
 Reality: Streaming output is an event protocol; next-turn input is a strict message protocol.
 ```
 
-The thread identity resets every run (`threadKey = runId`), forcing us to replay history. Replaying history is where format/order mismatches cut us.
+The thread identity resets every run (`stateKey = runId`), forcing us to replay history. Replaying history is where format/order mismatches cut us.
 
 ## Why InProc Works
 

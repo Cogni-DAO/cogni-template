@@ -17,6 +17,8 @@
  * @public
  */
 
+import { createHash } from "node:crypto";
+
 import type { z } from "zod";
 
 import { resolveAiAdapterDeps } from "@/bootstrap/container";
@@ -49,10 +51,33 @@ interface CompletionInput {
   sessionUser: SessionUser;
   /** Graph name to execute (default: "poet") */
   graphName?: string;
+  /**
+   * Conversation state key for multi-turn conversations.
+   * If absent, server generates one.
+   */
+  stateKey?: string;
 }
 
 // Type-level enforcement: facade MUST return exact contract shape
 type CompletionOutput = z.infer<typeof aiCompletionOperation.output>;
+
+/**
+ * Derive Langfuse sessionId from billingAccountId + stateKey.
+ * Uses SHA-256 hash to ensure:
+ * - Deterministic: same inputs → same sessionId (stable grouping)
+ * - Bounded: fixed output length regardless of stateKey length
+ * - Safe: no PII or log-injection risk from raw stateKey
+ *
+ * Format: `ba:{billingAccountId}:s:{sha256(stateKey)[0:32]}`
+ * Truncation to 200 chars happens at Langfuse sink boundary.
+ */
+function deriveSessionId(billingAccountId: string, stateKey: string): string {
+  const stateKeyHash = createHash("sha256")
+    .update(stateKey)
+    .digest("hex")
+    .slice(0, 32);
+  return `ba:${billingAccountId}:s:${stateKeyHash}`;
+}
 
 /**
  * Non-streaming AI completion.
@@ -153,9 +178,11 @@ export async function completionStream(
     requestId: ctx.reqId,
     traceId: ctx.traceId,
     userId: input.sessionUser.id,
-    // TODO(P1): Add sessionId from tenant-scoped threadId when USAGE_HISTORY.md threadId support lands.
-    // Per TENANT_SCOPED_THREAD_ID: sessionId = `${billingAccount.id}:${input.threadId}` (client-provided).
-    // Do NOT generate random sessionId per request - defeats Langfuse session grouping purpose.
+    // Derive sessionId from stateKey for Langfuse session grouping
+    // Hash ensures deterministic, bounded, log-safe output; truncation at sink
+    ...(input.stateKey && {
+      sessionId: deriveSessionId(billingAccount.id, input.stateKey),
+    }),
   };
 
   const enrichedCtx: RequestContext = {
@@ -193,6 +220,7 @@ export async function completionStream(
         caller,
         ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
         ...(input.graphName ? { graphName: input.graphName } : {}),
+        ...(input.stateKey ? { stateKey: input.stateKey } : {}),
       },
       enrichedCtx
     );

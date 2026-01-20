@@ -145,7 +145,7 @@ Deploy LangGraph Server as external runtime; implement adapter; preserve unified
 **Runtime Boundary:**
 
 - [ ] **RUNTIME_IS_EXTERNAL**: Next.js never imports graph modules. All graph code in `apps/langgraph-service/`. `LangGraphServerAdapter` calls external service.
-- [ ] **THREAD_ID_TENANT_SCOPED**: `thread_id` derived server-side as `${accountId}:${threadKey}`. Never accept raw thread_id from client.
+- [ ] **THREAD_ID_TENANT_SCOPED**: `thread_id` derived server-side as `${accountId}:${stateKey}`. Never accept raw thread_id from client.
 - [ ] **EXECUTOR_TYPE_REQUIRED**: `UsageFact.executorType` is required. All billing/history logic must be executor-agnostic.
 
 **Billing & Telemetry:**

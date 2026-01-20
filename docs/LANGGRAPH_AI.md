@@ -198,7 +198,7 @@ const { completionFn, tokenSink } = getInProcRuntime();
 
 Server path is deferred until InProc proves correctness. See [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) for infrastructure details.
 
-**Summary:** LangGraphServerAdapter calls external LangGraph Server via SDK. Server owns thread state/checkpoints and routes LLM through LiteLLM proxy.
+**Summary:** LangGraphServerAdapter calls external LangGraph Server via SDK. Server owns thread state/checkpoints and routes LLM through LiteLLM proxy. `stateKey` is required; send only new user input; server owns thread state. Tools work per-run. InProc path ignores `stateKey` (no thread persistence).
 
 **P0 blocker:** Server lacks billing-grade `UsageFact` fields (`usageUnitId`, `costUsd`, resolved `model`). Cannot be customer-billable path until resolved.
 

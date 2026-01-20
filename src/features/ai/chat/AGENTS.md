@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2025-12-06
+- **Last reviewed:** 2026-01-20
 - **Status:** draft
 - **Parent:** [features/ai](../AGENTS.md)
 
@@ -70,31 +70,78 @@ Chat subfeature of AI - provides assistant-ui integration for conversational AI 
 
 ## Implementation Status
 
-**v0 (Current):**
+**v1 (Current):**
 
-- ✅ assistant-ui integration with useExternalStoreRuntime
-- ✅ /api/v1/ai/chat endpoint (non-streaming, streaming-ready structure)
+- ✅ assistant-ui integration with useDataStreamRuntime
+- ✅ /api/v1/ai/chat endpoint with SSE streaming
+- ✅ Token-by-token rendering via assistant-stream
+- ✅ Multi-turn conversation state via stateKey
+- ✅ Tool call visualization (tool_call_start/tool_call_result events)
 - ✅ Custom welcome copy with 3 suggestions
 - ✅ Conditional credits hint
-- ✅ Client-generated threadId (v2 persistence ready)
-- ✅ Ref-based state management (no stale closures)
-- ✅ Request deduplication via seenClientRequestIds
 - ✅ Zod runtime validation (route input + client output)
-
-**v1 (Planned):**
-
-- ⏳ Streaming responses via SSE
-- ⏳ Token-by-token rendering
-- ⏳ Stop/abort generating
 
 **v2 (Planned):**
 
 - ⏳ Database persistence
-- ⏳ Thread routing /chat/[threadId]
+- ⏳ Thread routing /chat/[stateKey]
 - ⏳ Thread list/history
 - ⏳ Context window optimization
+- ⏳ Stop/abort generating
 
 **Critical v2 Note:** Message storage + context optimization required. Current implementation sends all messages on every request (unbounded growth). v2 needs smart windowing, summarization, or embedding-based retrieval.
+
+## Thread State Management
+
+### P0 Design (Current)
+
+**Contract:**
+
+- Request: `stateKey?: string` in JSON body (optional)
+- Response: `X-State-Key` header (always returned)
+- Server generates `stateKey` if absent; client reuses for multi-turn
+
+**UI State Pattern:**
+
+```typescript
+// Future-safe: map pattern for thread switching/forks
+const [stateKeyMap, setStateKeyMap] = useState<Record<string, string>>({});
+const activeStateKey = "default"; // Placeholder for future state/thread selection
+const stateKey = stateKeyMap[activeStateKey];
+
+// body MUST be object (assistant-ui limitation), not function
+body: { model, graphName, ...(stateKey ? { stateKey } : {}) }
+
+// onResponse captures server-generated stateKey
+setStateKeyMap(prev => ({ ...prev, [activeStateKey]: newStateKey }));
+```
+
+**Why `stateKeyMap` (not single state)?**
+
+- Trivially migrates when thread list/switching added
+- Supports forks/reruns (multiple states per session)
+- No refactor needed for v2 state store
+
+### Naming Convention
+
+| Layer        | Field       | Notes                                                     |
+| ------------ | ----------- | --------------------------------------------------------- |
+| UI State     | `stateKey`  | App-level key for state/thread selection                  |
+| API/Contract | `stateKey`  | Client-facing conversation key (provider-agnostic)        |
+| Port/Adapter | `stateKey`  | Passed through; adapter decides semantics                 |
+| LangGraph    | `thread_id` | UUID format derived from (accountId, stateKey) by adapter |
+| Claude SDK   | `sessionId` | Claude Agents SDK uses sessionId for conversation state   |
+| Langfuse     | `sessionId` | Derived via hash: `ba:{accountId}:s:{sha256(stateKey)}`   |
+
+**Note:** `stateKey` is canonical at Cogni boundaries; providers derive their own identifiers internally.
+
+### Progression
+
+| Phase  | Capability                          | stateKey Ownership                   |
+| ------ | ----------------------------------- | ------------------------------------ |
+| **P0** | Single conversation, no persistence | ChatRuntimeProvider local state      |
+| **P1** | Thread list UI, URL routing         | Lift to page-level state or context  |
+| **P2** | Persistence, forks, history         | Conversation store (Zustand/context) |
 
 ## Usage
 

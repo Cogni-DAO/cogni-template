@@ -96,7 +96,7 @@ describe("ZDR Passthrough", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        threadId: randomUUID(),
+        stateKey: randomUUID(),
         clientRequestId: randomUUID(),
         model: "claude-sonnet-4.5", // ZDR-enabled in litellm.config.yaml
         stream: false,

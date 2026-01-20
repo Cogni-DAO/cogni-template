@@ -30,6 +30,18 @@ const MAX_TOOL_RESULT_CHARS = 32768;
 const MAX_ID_CHARS = 128;
 
 /**
+ * Max stateKey length - app-level conversation routing key.
+ * Separate from MAX_ID_CHARS to allow reasonable client-provided keys.
+ */
+const MAX_STATE_KEY_CHARS = 512;
+
+/**
+ * Safe character pattern for stateKey - prevents log injection.
+ * Allows: alphanumeric, dots, underscores, colons, hyphens.
+ */
+const STATE_KEY_SAFE_PATTERN = /^[A-Za-z0-9._:-]+$/;
+
+/**
  * JSON-serializable value schema (recursive).
  * Prevents cyclic/BigInt/Date payloads that would cause serialization errors.
  * Uses finite() to reject NaN/Infinity which JSON.stringify converts to null.
@@ -234,6 +246,18 @@ export const AssistantUiInputSchema = z.object({
   /** Graph name to execute (default: "poet") */
   // TODO: Remove default - require explicit graphName, fail fast if missing
   graphName: z.string().default("poet"),
+  /**
+   * Conversation state key for multi-turn conversations.
+   * If absent, server generates one and returns it via X-State-Key header.
+   * Client should reuse for subsequent messages in same conversation.
+   * Must contain only safe characters: alphanumeric, dots, underscores, colons, hyphens.
+   * Note: This is an app-level key, NOT a provider-specific thread_id.
+   */
+  stateKey: z
+    .string()
+    .max(MAX_STATE_KEY_CHARS)
+    .regex(STATE_KEY_SAFE_PATTERN, "stateKey must contain only safe characters")
+    .optional(),
 });
 
 export const aiChatOperation = {
@@ -243,8 +267,8 @@ export const aiChatOperation = {
     "Send chat messages and receive streaming responses via assistant-stream",
   input: AssistantUiInputSchema,
   output: z.object({
-    /** Echo back threadId (v0: same as input, v2: from DB) */
-    threadId: z.string(),
+    /** Echo back stateKey for client reuse */
+    stateKey: z.string(),
     /** Assistant message with server-assigned requestId for billing reference */
     message: ChatMessageSchema.required({ requestId: true }),
   }),

@@ -361,6 +361,9 @@ export const POST = wrapRouteHandlerWithLogging(
 
         if (!sessionUser) throw new Error("sessionUser required");
 
+        // Generate stateKey if not provided (for multi-turn conversation state)
+        const stateKey = input.stateKey ?? crypto.randomUUID();
+
         const streamStartMs = performance.now();
 
         const { stream: deltaStream, final } = await completionStream(
@@ -370,6 +373,7 @@ export const POST = wrapRouteHandlerWithLogging(
             sessionUser,
             abortSignal: request.signal,
             graphName: input.graphName,
+            stateKey,
           },
           ctx
         );
@@ -566,9 +570,12 @@ export const POST = wrapRouteHandlerWithLogging(
         });
 
         // Convert Response to NextResponse for Next.js compatibility
+        // Include stateKey header for client to reuse in subsequent requests
+        const headers = new Headers(response.headers);
+        headers.set("X-State-Key", stateKey);
         return new NextResponse(response.body, {
           status: response.status,
-          headers: response.headers,
+          headers,
         });
       }
     } catch (error) {

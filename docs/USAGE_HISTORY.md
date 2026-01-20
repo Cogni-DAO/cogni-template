@@ -33,7 +33,7 @@
 
 14. **REDACT_BEFORE_PERSIST**: HistoryWriterSubscriber applies masking before computing `content_hash` and before calling `persistArtifact()`. Same masking applies before any logs/traces. Single redaction boundary—no downstream masking. Regex masking is best-effort (secrets-first: API keys, tokens). **Stored content may still contain PII**—retention and deletion must treat all content as personal data.
 
-15. **TENANT_SCOPED_THREAD_ID**: LangGraph `thread_id` MUST be tenant-scoped: `${accountId}:${threadKey}`. This ensures checkpoint isolation—checkpoints contain real state and may include PII. Isolating only artifacts is insufficient.
+15. **TENANT_SCOPED_THREAD_ID**: LangGraph `thread_id` MUST be tenant-scoped: `${accountId}:${stateKey}`. This ensures checkpoint isolation—checkpoints contain real state and may include PII. Isolating only artifacts is insufficient.
 
 16. **EXECUTOR_TYPE_REQUIRED**: `UsageFact.executorType` is required (`langgraph_server` | `claude_sdk` | `inproc`). History/billing logic must be executor-agnostic. P0: Store in `run_artifacts.metadata.executorType`; defer column migration until indexing need.
 
@@ -87,7 +87,7 @@ Persist user input and assistant final output per run. No tool call/result stora
 
 #### Thread ID Scoping (TENANT_SCOPED_THREAD_ID)
 
-- [ ] Enforce `thread_id = ${accountId}:${threadKey}` format in `AiRuntimeService`
+- [ ] Enforce `thread_id = ${accountId}:${stateKey}` format in `AiRuntimeService`
 - [ ] Add contract test: LangGraph runs require tenant-scoped thread_id
 
 #### Chores

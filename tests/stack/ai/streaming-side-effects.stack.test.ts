@@ -85,7 +85,7 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          threadId: randomUUID(),
+          stateKey: randomUUID(),
           clientRequestId: `side-effects-test-${testId}`,
           model: defaultModelId,
           stream: true,
@@ -173,7 +173,7 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          threadId: randomUUID(),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
           model: defaultModelId,
           stream: true,
@@ -275,7 +275,7 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
         headers: { "content-type": "application/json" },
         signal: ac.signal,
         body: JSON.stringify({
-          threadId: randomUUID(),
+          stateKey: randomUUID(),
           clientRequestId: randomUUID(),
           model: defaultModelId,
           stream: true,

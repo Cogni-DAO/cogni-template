@@ -29,7 +29,7 @@ const COGNI_THREAD_NAMESPACE = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
  */
 export interface ThreadMetadata {
   readonly billingAccountId: string;
-  readonly threadKey: string;
+  readonly stateKey: string;
 }
 
 /**
@@ -39,14 +39,14 @@ export interface ThreadMetadata {
  * Per THREAD_ID_TENANT_SCOPED: Uses billingAccountId as tenant isolation.
  *
  * @param billingAccountId - Tenant identifier
- * @param threadKey - Thread identifier within tenant (or runId for ephemeral)
+ * @param stateKey - Thread identifier within tenant (or runId for ephemeral)
  * @returns UUIDv5 derived from inputs
  */
 export function deriveThreadUuid(
   billingAccountId: string,
-  threadKey: string
+  stateKey: string
 ): string {
-  const input = `${billingAccountId}:${threadKey}`;
+  const input = `${billingAccountId}:${stateKey}`;
   return uuidv5(input, COGNI_THREAD_NAMESPACE);
 }
 
@@ -54,15 +54,15 @@ export function deriveThreadUuid(
  * Build thread metadata for storage with thread.
  *
  * @param billingAccountId - Tenant identifier
- * @param threadKey - Thread identifier
+ * @param stateKey - Thread identifier
  * @returns Metadata object for thread creation
  */
 export function buildThreadMetadata(
   billingAccountId: string,
-  threadKey: string
+  stateKey: string
 ): ThreadMetadata {
   return {
     billingAccountId,
-    threadKey,
+    stateKey,
   };
 }
