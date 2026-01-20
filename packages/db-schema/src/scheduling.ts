@@ -16,6 +16,7 @@
  * @public
  */
 
+import { SCHEDULE_RUN_STATUSES } from "@cogni/scheduler-core";
 import {
   boolean,
   index,
@@ -27,10 +28,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-
-import { SCHEDULE_RUN_STATUSES } from "@/types/scheduling";
-import { users } from "./schema.auth";
-import { billingAccounts } from "./schema.billing";
+import { billingAccounts, users } from "./refs";
 
 /**
  * Execution grants - durable authorization for scheduled graph execution.

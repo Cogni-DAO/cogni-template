@@ -13,17 +13,26 @@
  * @public
  */
 
+import { scheduleRuns } from "@cogni/db-schema/scheduling";
+
+import type { ScheduleRun, ScheduleRunRepository } from "@cogni/scheduler-core";
 import { eq } from "drizzle-orm";
-
-import type { Database } from "@/adapters/server/db/client";
-import type { ScheduleRun, ScheduleRunRepository } from "@/ports";
-import { scheduleRuns } from "@/shared/db";
-import { makeLogger } from "@/shared/observability";
-
-const logger = makeLogger({ component: "DrizzleScheduleRunAdapter" });
+import type { Database, LoggerLike } from "../client";
 
 export class DrizzleScheduleRunAdapter implements ScheduleRunRepository {
-  constructor(private readonly db: Database) {}
+  private readonly logger: LoggerLike;
+
+  constructor(
+    private readonly db: Database,
+    logger?: LoggerLike
+  ) {
+    this.logger = logger ?? {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      debug: () => {},
+    };
+  }
 
   async createRun(params: {
     scheduleId: string;
@@ -44,7 +53,7 @@ export class DrizzleScheduleRunAdapter implements ScheduleRunRepository {
       throw new Error("Failed to create run record");
     }
 
-    logger.debug(
+    this.logger.debug(
       { runId: params.runId, scheduleId: params.scheduleId },
       "Created run record"
     );
@@ -62,7 +71,7 @@ export class DrizzleScheduleRunAdapter implements ScheduleRunRepository {
       })
       .where(eq(scheduleRuns.runId, runId));
 
-    logger.debug({ runId }, "Marked run as started");
+    this.logger.debug({ runId }, "Marked run as started");
   }
 
   async markRunCompleted(
@@ -79,7 +88,7 @@ export class DrizzleScheduleRunAdapter implements ScheduleRunRepository {
       })
       .where(eq(scheduleRuns.runId, runId));
 
-    logger.info({ runId, status }, "Marked run as completed");
+    this.logger.info({ runId, status }, "Marked run as completed");
   }
 
   private toRun(row: typeof scheduleRuns.$inferSelect): ScheduleRun {

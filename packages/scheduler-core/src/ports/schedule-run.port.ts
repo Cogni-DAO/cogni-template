@@ -15,10 +15,10 @@
  */
 
 // Re-export types for adapter convenience
-export type { ScheduleRun, ScheduleRunStatus } from "@/types/scheduling";
+export type { ScheduleRun, ScheduleRunStatus } from "../types";
 
 // Import for local use in interface
-import type { ScheduleRun } from "@/types/scheduling";
+import type { ScheduleRun } from "../types";
 
 /**
  * Schedule run repository for execution ledger.

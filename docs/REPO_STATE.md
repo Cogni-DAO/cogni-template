@@ -1,7 +1,7 @@
 # Repository State Summary
 
-**Assessment Date:** 2025-12-11
-**Core Mission:** Crypto-metered AI infrastructure where users pay DAO wallet → get credits → consume LLM → billing tracked with dual-cost accounting
+**Assessment Date:** 2026-01-20
+**Core Mission:** Crypto-metered AI infrastructure where users pay DAO wallet → get credits → consume LLM → billing tracked with dual-cost accounting. Empowering both System-tenant governance AI runs, and user-tenant useful AI services.
 
 **Related Documentation:**
 
@@ -14,6 +14,21 @@
 - [On-Chain Readers](./ONCHAIN_READERS.md) - Treasury snapshots and token ownership intelligence (v2/v3)
 - [Chain Configuration](./CHAIN_CONFIG.md) - Policy for binding Web2 code to DAO-approved actions
 - [Observability](./OBSERVABILITY.md) - Logging and monitoring infrastructure
+
+### Spec Implementation Priority
+
+| Priority | Spec                                                          | Status         | Enables                                                   |
+| -------- | ------------------------------------------------------------- | -------------- | --------------------------------------------------------- |
+| **1**    | [Scheduler Service Refactor](./SCHEDULER_SERVICE_REFACTOR.md) | 🔄 In Progress | Package boundaries (db-schema, db-client, scheduler-core) |
+| **2**    | [Graph Execution](./GRAPH_EXECUTION.md)                       | 🔄 P1 Pending  | Core execution envelope, billing, compiled exports        |
+| **3**    | [System Tenant Design](./SYSTEM_TENANT_DESIGN.md)             | 📋 Draft       | Governance loops, PolicyResolverPort, multi-tenancy       |
+| **4**    | [Tool Use Spec](./TOOL_USE_SPEC.md)                           | 🔄 70% Done    | Wire adapters, policy enforcement, idempotency            |
+| **5**    | [Human-in-the-Loop](./HUMAN_IN_THE_LOOP.md)                   | 📋 Draft       | Interrupt/resume, approval gates                          |
+| **6**    | [Scheduler Spec](./SCHEDULER_SPEC.md)                         | 📋 Contract    | Scheduled graph execution, ExecutionGrant                 |
+| **7**    | [LangGraph Server](./LANGGRAPH_SERVER.md)                     | 📋 Contract    | Server deployment mode (P1 for scale)                     |
+| **8**    | [Accounts Design](./ACCOUNTS_DESIGN.md) (App API Keys)        | 📋 Roadmap     | Per-user API keys, per-key spend attribution              |
+
+**Legend:** 📋 Draft/Contract | 🔄 In Progress | ✅ Complete
 
 ### Overall Assessment
 

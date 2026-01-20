@@ -13,9 +13,8 @@
  * @public
  */
 
-import { and, eq, isNull } from "drizzle-orm";
+import { executionGrants } from "@cogni/db-schema/scheduling";
 
-import type { Database } from "@/adapters/server/db/client";
 import {
   type ExecutionGrant,
   type ExecutionGrantPort,
@@ -23,14 +22,24 @@ import {
   GrantNotFoundError,
   GrantRevokedError,
   GrantScopeMismatchError,
-} from "@/ports";
-import { executionGrants } from "@/shared/db";
-import { makeLogger } from "@/shared/observability";
-
-const logger = makeLogger({ component: "DrizzleExecutionGrantAdapter" });
+} from "@cogni/scheduler-core";
+import { and, eq, isNull } from "drizzle-orm";
+import type { Database, LoggerLike } from "../client";
 
 export class DrizzleExecutionGrantAdapter implements ExecutionGrantPort {
-  constructor(private readonly db: Database) {}
+  private readonly logger: LoggerLike;
+
+  constructor(
+    private readonly db: Database,
+    logger?: LoggerLike
+  ) {
+    this.logger = logger ?? {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      debug: () => {},
+    };
+  }
 
   async createGrant(input: {
     userId: string;
@@ -52,7 +61,7 @@ export class DrizzleExecutionGrantAdapter implements ExecutionGrantPort {
       throw new Error("Failed to create execution grant");
     }
 
-    logger.info(
+    this.logger.info(
       { grantId: row.id, userId: input.userId },
       "Created execution grant"
     );
@@ -106,7 +115,7 @@ export class DrizzleExecutionGrantAdapter implements ExecutionGrantPort {
         and(eq(executionGrants.id, grantId), isNull(executionGrants.revokedAt))
       );
 
-    logger.info({ grantId }, "Revoked execution grant");
+    this.logger.info({ grantId }, "Revoked execution grant");
   }
 
   async deleteGrant(grantId: string): Promise<void> {
@@ -114,7 +123,7 @@ export class DrizzleExecutionGrantAdapter implements ExecutionGrantPort {
       .delete(executionGrants)
       .where(eq(executionGrants.id, grantId));
 
-    logger.info({ grantId }, "Deleted execution grant");
+    this.logger.info({ grantId }, "Deleted execution grant");
   }
 
   private toGrant(row: typeof executionGrants.$inferSelect): ExecutionGrant {

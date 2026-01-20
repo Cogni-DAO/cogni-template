@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@types/scheduling`
+ * Module: `@cogni/scheduler-core/types`
  * Purpose: Shared scheduling type definitions and constants (logic-free).
  * Scope: Defines ExecutionGrant, ScheduleSpec, ScheduleRun types and status enums. Does not contain logic.
  * Invariants:
@@ -10,7 +10,7 @@
  * - FORBIDDEN: functions, computations, validation logic, or business rules
  * - Grant scopes constrain which graphIds can be executed (GRANT_SCOPES_CONSTRAIN_GRAPHS)
  * Side-effects: none (constants and types only)
- * Links: docs/SCHEDULER_SPEC.md, schema.scheduling.ts, ports/schedule-manager.port.ts
+ * Links: docs/SCHEDULER_SPEC.md, docs/SCHEDULER_SERVICE_REFACTOR.md
  * @public
  */
 

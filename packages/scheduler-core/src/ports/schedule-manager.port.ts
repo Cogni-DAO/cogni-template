@@ -14,10 +14,10 @@
  * @public
  */
 
-import type { ScheduleSpec } from "@/types/scheduling";
+import type { ScheduleSpec } from "../types";
 
 // Re-export type for adapter convenience
-export type { ScheduleSpec } from "@/types/scheduling";
+export type { ScheduleSpec } from "../types";
 
 /**
  * Port-level error thrown when schedule is not found.

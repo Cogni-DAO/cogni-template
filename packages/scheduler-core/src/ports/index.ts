@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@ports/scheduling`
+ * Module: `@cogni/scheduler-core/ports`
  * Purpose: Scheduling ports barrel export.
  * Scope: Re-exports all scheduling port interfaces and errors. Does not contain implementations.
  * Invariants: All exports are interfaces or error classes only.

@@ -14,10 +14,7 @@
  * @public
  */
 
-import cronParser from "cron-parser";
-import { and, eq, isNull, lt, or } from "drizzle-orm";
-
-import type { Database } from "@/adapters/server/db/client";
+import { schedules } from "@cogni/db-schema/scheduling";
 import {
   type CreateScheduleInput,
   type ExecutionGrantPort,
@@ -29,18 +26,27 @@ import {
   ScheduleNotFoundError,
   type ScheduleSpec,
   type UpdateScheduleInput,
-} from "@/ports";
-import { schedules } from "@/shared/db";
-import { makeLogger } from "@/shared/observability";
-
-const logger = makeLogger({ component: "DrizzleScheduleManagerAdapter" });
+} from "@cogni/scheduler-core";
+import cronParser from "cron-parser";
+import { and, eq, isNull, lt, or } from "drizzle-orm";
+import type { Database, LoggerLike } from "../client";
 
 export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
+  private readonly logger: LoggerLike;
+
   constructor(
     private readonly db: Database,
     private readonly jobQueue: JobQueuePort,
-    private readonly grantPort: ExecutionGrantPort
-  ) {}
+    private readonly grantPort: ExecutionGrantPort,
+    logger?: LoggerLike
+  ) {
+    this.logger = logger ?? {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      debug: () => {},
+    };
+  }
 
   async createSchedule(
     callerUserId: string,
@@ -90,7 +96,7 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
         queueName: row.id,
       });
 
-      logger.info(
+      this.logger.info(
         { scheduleId: row.id, graphId: input.graphId, nextRunAt },
         "Created schedule"
       );
@@ -98,7 +104,7 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
       return this.toSpec(row);
     } catch (error) {
       // Atomicity cleanup: hard-delete the orphan grant (per C1)
-      logger.warn(
+      this.logger.warn(
         { grantId: grant.id },
         "Cleaning up orphan grant after schedule creation failure"
       );
@@ -192,7 +198,7 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
       throw new ScheduleNotFoundError(scheduleId);
     }
 
-    logger.info({ scheduleId, patch }, "Updated schedule");
+    this.logger.info({ scheduleId, patch }, "Updated schedule");
 
     return this.toSpec(row);
   }
@@ -217,7 +223,7 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
       await tx.delete(schedules).where(eq(schedules.id, scheduleId));
     });
 
-    logger.info({ scheduleId }, "Deleted schedule");
+    this.logger.info({ scheduleId }, "Deleted schedule");
   }
 
   async updateNextRunAt(scheduleId: string, nextRunAt: Date): Promise<void> {

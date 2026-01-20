@@ -454,5 +454,65 @@ module.exports = {
       comment:
         "ai-core defines runtime interfaces; ai-tools implements them. No reverse dependency.",
     },
+
+    // =========================================================================
+    // Scheduler package boundary rules (per SCHEDULER_SERVICE_REFACTOR.md)
+    // =========================================================================
+
+    // db-schema: refs is the root — imports nothing from other slices
+    {
+      name: "no-refs-to-slices",
+      severity: "error",
+      from: {
+        path: "^packages/db-schema/src/refs",
+      },
+      to: {
+        path: "^packages/db-schema/src/(scheduling|auth|billing|ai)",
+      },
+      comment: "refs.ts is the FK root; must not import from domain slices",
+    },
+
+    // db-schema: slices cannot import each other (only refs allowed)
+    {
+      name: "no-cross-slice-schema-imports",
+      severity: "error",
+      from: {
+        path: "^packages/db-schema/src/(scheduling|auth|billing|ai)\\.ts$",
+      },
+      to: {
+        path: "^packages/db-schema/src/(scheduling|auth|billing|ai)\\.ts$",
+      },
+      comment: "Domain slices import from /refs only, never from each other",
+    },
+
+    // db-client must only be imported in server layers (prevent client bundle pollution)
+    // Allowed: bootstrap, adapters, app/api (server routes), app/_facades, app/_lib
+    // Blocked: features (may be used client-side), components, core, etc.
+    {
+      name: "db-client-server-only",
+      severity: "error",
+      from: {
+        path: "^src/(features|components|core|styles|assets)/",
+      },
+      to: {
+        path: "^packages/db-client/",
+      },
+      comment:
+        "db-client contains postgres/drizzle; only server layers may import",
+    },
+
+    // scheduler-worker service cannot import db-schema directly (transitive through db-client only)
+    {
+      name: "scheduler-worker-no-direct-schema",
+      severity: "error",
+      from: {
+        path: "^services/scheduler-worker/",
+      },
+      to: {
+        path: "^packages/db-schema/",
+      },
+      comment:
+        "Worker has no db-schema dep; gets schema transitively through db-client",
+    },
   ],
 };

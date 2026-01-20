@@ -13,16 +13,24 @@
  * @public
  */
 
+import type { EnqueueJobParams, JobQueuePort } from "@cogni/scheduler-core";
 import { sql } from "drizzle-orm";
-
-import type { Database } from "@/adapters/server/db/client";
-import type { EnqueueJobParams, JobQueuePort } from "@/ports";
-import { makeLogger } from "@/shared/observability";
-
-const logger = makeLogger({ component: "DrizzleJobQueueAdapter" });
+import type { Database, LoggerLike } from "../client";
 
 export class DrizzleJobQueueAdapter implements JobQueuePort {
-  constructor(private readonly db: Database) {}
+  private readonly logger: LoggerLike;
+
+  constructor(
+    private readonly db: Database,
+    logger?: LoggerLike
+  ) {
+    this.logger = logger ?? {
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+      debug: () => {},
+    };
+  }
 
   async enqueueJob(params: EnqueueJobParams): Promise<void> {
     const { taskId, payload, runAt, jobKey, queueName } = params;
@@ -30,7 +38,7 @@ export class DrizzleJobQueueAdapter implements JobQueuePort {
     // Convert Date to ISO string for PostgreSQL timestamp compatibility
     const runAtIso = runAt.toISOString();
 
-    logger.debug({ taskId, jobKey, runAt: runAtIso }, "Enqueuing job");
+    this.logger.debug({ taskId, jobKey, runAt: runAtIso }, "Enqueuing job");
 
     // Build payload as JSON string for Graphile Worker
     const payloadJson = JSON.stringify(payload);
@@ -62,14 +70,14 @@ export class DrizzleJobQueueAdapter implements JobQueuePort {
         `);
       }
 
-      logger.info({ taskId, jobKey }, "Job enqueued");
+      this.logger.info({ taskId, jobKey }, "Job enqueued");
     } catch (error) {
       // Log the full error including the cause (actual PostgreSQL error)
       const cause =
         error instanceof Error
           ? (error as Error & { cause?: unknown }).cause
           : undefined;
-      logger.error(
+      this.logger.error(
         {
           taskId,
           jobKey,

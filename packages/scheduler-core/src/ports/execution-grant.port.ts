@@ -14,10 +14,10 @@
  * @public
  */
 
-import type { ExecutionGrant } from "@/types/scheduling";
+import type { ExecutionGrant } from "../types";
 
 // Re-export type for adapter convenience
-export type { ExecutionGrant } from "@/types/scheduling";
+export type { ExecutionGrant } from "../types";
 
 /**
  * Port-level error thrown when grant is not found.

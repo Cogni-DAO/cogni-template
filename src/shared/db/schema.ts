@@ -11,7 +11,8 @@
  * @public
  */
 
+// Scheduling schema - re-exported from @cogni/db-schema package
+export * from "@cogni/db-schema/scheduling";
 export * from "./schema.ai";
 export * from "./schema.auth";
 export * from "./schema.billing";
-export * from "./schema.scheduling";
