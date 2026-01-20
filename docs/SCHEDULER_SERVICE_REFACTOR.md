@@ -1,0 +1,313 @@
+# Scheduler Worker Service Refactor
+
+> Transform scheduler-worker from workaround architecture into standalone service with proper package boundaries.
+
+## End State
+
+```
+packages/scheduler-core/     # Types + port interfaces (pure contracts)
+packages/db-schema/          # Canonical schema with subpath exports
+packages/db-client/          # Drizzle client factory + adapters
+services/scheduler-worker/   # Deployable service (task logic + Dockerfile)
+```
+
+**Delete entirely (no shims):**
+
+- `packages/scheduler-worker/` → contents move to `services/scheduler-worker/`
+- `src/scripts/run-scheduler-worker.ts` → replaced by service entry point
+- `src/scripts/` directory → remove layer from dependency-cruiser
+- `src/types/scheduling.ts` → moved to `@cogni/scheduler-core`
+- `src/ports/scheduling/` → moved to `@cogni/scheduler-core`
+- `src/adapters/server/scheduling/` → moved to `@cogni/db-client`
+- `src/shared/db/schema.scheduling.ts` → moved to `@cogni/db-schema`
+
+---
+
+## Approval Gates
+
+| Gate                 | Requirement                                                                                               |
+| -------------------- | --------------------------------------------------------------------------------------------------------- |
+| **1. Workspace**     | `pnpm-workspace.yaml` includes `services/*`; CI builds via `pnpm -r --filter`                             |
+| **2. Schema Slices** | `db-schema` subpath exports are real slices (separate entrypoints); depcruise forbids cross-slice imports |
+| **3. Worker Deps**   | Worker imports schema ONLY through `@cogni/db-client`, never `@cogni/db-schema` directly                  |
+| **4. No Shims**      | Clean migration — update all imports in `src/` directly, no re-export shims                               |
+
+---
+
+## Dependency Graph
+
+```
+services/scheduler-worker/
+    ├── @cogni/scheduler-core (types + ports)
+    └── @cogni/db-client (client + adapters)
+            └── @cogni/db-schema/scheduling (transitive only)
+
+src/ (Next.js app)
+    ├── @cogni/scheduler-core
+    ├── @cogni/db-client
+    └── @cogni/db-schema/* (all slices - direct dep)
+```
+
+**Key constraints:**
+
+- Worker does NOT list `@cogni/db-schema` in package.json — transitive through db-client only
+- db-client re-exports ONLY scheduling slice, not auth/billing
+
+---
+
+## Package Specifications
+
+### `packages/scheduler-core/`
+
+**Purpose:** Types + port interfaces only (no implementations)
+
+**Exports:** `ExecutionGrant`, `ScheduleSpec`, `ScheduleRun`, port interfaces, error classes
+
+**Invariants:**
+
+- FORBIDDEN: `@/`, `src/`, drizzle-orm, any I/O
+- ALLOWED: Pure TypeScript types/interfaces only
+
+### `packages/db-schema/`
+
+**Purpose:** Canonical schema source of truth with domain subpath exports
+
+**Subpath exports (separate entrypoints, not barrel re-exports):**
+
+- `@cogni/db-schema/scheduling` → execution_grants, schedules, schedule_runs
+- `@cogni/db-schema/auth` → users table
+- `@cogni/db-schema/billing` → billing_accounts table
+- `@cogni/db-schema/refs` → shared FK reference types (userId, billingAccountId)
+
+**FK Reference Pattern:** Create `src/refs.ts` exporting minimal types/constants needed for cross-slice FK references. Scheduling imports from `@cogni/db-schema/refs`, not from `/auth` or `/billing` directly.
+
+**Invariants:**
+
+- FORBIDDEN: `@/`, `src/`, business logic, adapters
+- FORBIDDEN: Cross-slice imports (scheduling cannot import auth/billing directly)
+- ALLOWED: drizzle-orm table definitions, imports from `/refs` for FK types
+
+### `packages/db-client/`
+
+**Purpose:** Drizzle client factory + scheduling adapters
+
+**Exports:**
+
+- `createDbClient(connectionString: string)` — connection string injected, never from env
+- Scheduling adapters implementing `@cogni/scheduler-core` ports
+- Re-exports ONLY `@cogni/db-schema/scheduling` (not all slices)
+
+**Invariants:**
+
+- FORBIDDEN: `@/shared/env`, `process.env`, Next.js imports
+- FORBIDDEN: Re-exporting auth/billing schema slices (prevents "everything reachable" smell)
+- ALLOWED: `@cogni/scheduler-core`, `@cogni/db-schema/*`, drizzle-orm
+
+### `services/scheduler-worker/`
+
+**Purpose:** Standalone deployable worker service
+
+**Contains:** Entry point, task logic, cron utils, Zod schemas, Dockerfile, tests
+
+**Dependencies:** `@cogni/scheduler-core`, `@cogni/db-client`, graphile-worker, pino, zod
+
+**NOT a dependency:** `@cogni/db-schema` — schema is transitive through db-client only
+
+**Invariants:**
+
+- FORBIDDEN: Any `src/` imports, `@/` aliases
+- FORBIDDEN: `@cogni/db-schema` in package.json (prevents accidental direct imports)
+- ALLOWED: `@cogni/scheduler-core`, `@cogni/db-client`, graphile-worker
+
+---
+
+## Implementation Checklist
+
+### Phase 1: Create Packages
+
+#### `packages/scheduler-core/`
+
+- [ ] Create `package.json` with name `@cogni/scheduler-core`
+- [ ] Create `tsconfig.json` with composite mode
+- [ ] Create `tsup.config.ts`
+- [ ] Create `vitest.config.ts`
+- [ ] Create `src/index.ts` (barrel export)
+- [ ] Create `src/types.ts` (from `src/types/scheduling.ts`)
+- [ ] Create `src/ports/*.ts` (from `src/ports/scheduling/*.ts`)
+- [ ] Create `src/errors.ts` (consolidated error classes)
+- [ ] Add to root `tsconfig.json` references
+- [ ] Add to root `package.json` dependencies
+- [ ] Add to `biome/base.json` noDefaultExport override (tsup + vitest configs)
+- [ ] Add dependency-cruiser rule: `no-scheduler-core-to-src`
+
+#### `packages/db-schema/`
+
+- [ ] Create `package.json` with subpath exports (separate entrypoints per slice)
+- [ ] Create `tsconfig.json` with composite mode
+- [ ] Create `tsup.config.ts` with multiple entry points
+- [ ] Create `src/refs.ts` (shared FK reference types: userId, billingAccountId)
+- [ ] Create `src/scheduling.ts` (from `src/shared/db/schema.scheduling.ts`, imports from refs)
+- [ ] Create `src/auth.ts` (users table)
+- [ ] Create `src/billing.ts` (billing_accounts table)
+- [ ] NO barrel index.ts — slices are separate entrypoints
+- [ ] Add to root `tsconfig.json` references
+- [ ] Add to root `package.json` dependencies
+- [ ] Add to `biome/base.json` noDefaultExport override
+- [ ] Add dependency-cruiser rule: `no-db-schema-to-src`
+- [ ] Add dependency-cruiser rule: `no-cross-slice-schema-imports` (scheduling → auth/billing forbidden)
+
+#### `packages/db-client/`
+
+- [ ] Create `package.json` depending on `@cogni/scheduler-core`, `@cogni/db-schema`
+- [ ] Create `tsconfig.json` with composite mode
+- [ ] Create `tsup.config.ts`
+- [ ] Create `vitest.config.ts`
+- [ ] Create `src/client.ts` with `createDbClient(connectionString)`
+- [ ] Create `src/adapters/*.ts` (from `src/adapters/server/scheduling/*.ts`)
+- [ ] Create `src/index.ts` — exports client, adapters, and re-exports scheduling schema
+- [ ] Add to root `tsconfig.json` references
+- [ ] Add to root `package.json` dependencies
+- [ ] Add to `biome/base.json` noDefaultExport override
+- [ ] Add dependency-cruiser rule: `no-db-client-to-src`
+
+### Phase 2: Create Service
+
+#### `services/scheduler-worker/`
+
+- [ ] Verify `pnpm-workspace.yaml` includes `services/*`
+- [ ] Create `package.json` as workspace package (`@cogni/scheduler-worker-service`)
+- [ ] Create `tsconfig.json`
+- [ ] Create `Dockerfile` (multi-stage build)
+- [ ] Create `AGENTS.md`
+- [ ] Move `packages/scheduler-worker/src/worker.ts` → `src/worker.ts`
+- [ ] Move `packages/scheduler-worker/src/tasks/*` → `src/tasks/*`
+- [ ] Move `packages/scheduler-worker/src/schemas/*` → `src/schemas/*`
+- [ ] Move `packages/scheduler-worker/src/utils/*` → `src/utils/*`
+- [ ] Create `src/main.ts` (entry point with signal handling)
+- [ ] Create `src/config.ts` (Zod env schema)
+- [ ] Move `packages/scheduler-worker/tests/*` → `tests/*`
+- [ ] Update all imports to use `@cogni/scheduler-core`, `@cogni/db-client`
+- [ ] Verify NO direct `@cogni/db-schema` imports
+
+### Phase 3: Update src/ Imports (No Shims)
+
+Update all existing imports in `src/` to use new packages directly:
+
+- [ ] Find all `@/types/scheduling` imports → change to `@cogni/scheduler-core`
+- [ ] Find all `@/ports/scheduling` imports → change to `@cogni/scheduler-core`
+- [ ] Find all `@/adapters/server/scheduling` imports → change to `@cogni/db-client`
+- [ ] Find all `@/shared/db/schema.scheduling` imports → change to `@cogni/db-schema/scheduling`
+- [ ] Update `src/bootstrap/container.ts` to use new packages
+- [ ] Update `src/ports/index.ts` to re-export from `@cogni/scheduler-core`
+- [ ] Update `src/shared/db/schema.ts` barrel to import from `@cogni/db-schema`
+
+### Phase 4: Configuration Updates
+
+- [ ] Update root `tsconfig.json` — remove `packages/scheduler-worker` reference
+- [ ] Update root `package.json` — remove `@cogni/scheduler-worker` dependency
+- [ ] Update `biome/base.json` — remove `packages/scheduler-worker` entries
+- [ ] Update `.dependency-cruiser.cjs`:
+  - [ ] Remove `scripts` layer from srcLayers
+  - [ ] Remove scripts allowed rule
+  - [ ] Add rule: `no-scheduler-core-to-src`
+  - [ ] Add rule: `no-db-schema-to-src`
+  - [ ] Add rule: `no-db-client-to-src`
+  - [ ] Add rule: `no-cross-slice-schema-imports`
+  - [ ] Add rule: `scheduler-worker-no-direct-schema`
+- [ ] Update `docker-compose.dev.yml` — add scheduler-worker service
+- [ ] Update `vitest.workspace.ts` — remove scheduler-worker package
+- [ ] Update root `package.json` scripts — `scheduler:dev` points to service
+
+### Phase 5: Deletions
+
+> **Gate:** Run `pnpm arch:check && pnpm typecheck` BEFORE deletions to verify import rewrites are complete.
+
+- [ ] Delete `packages/scheduler-worker/` (entire directory)
+- [ ] Delete `src/scripts/run-scheduler-worker.ts`
+- [ ] Delete `src/scripts/` directory (if empty)
+- [ ] Delete `src/types/scheduling.ts`
+- [ ] Delete `src/ports/scheduling/` directory
+- [ ] Delete `src/adapters/server/scheduling/` directory
+- [ ] Delete `src/shared/db/schema.scheduling.ts`
+
+### Phase 6: CI/CD Integration
+
+> First `services/` entry. Future dev identifies all integration points.
+
+- [ ] Verify `pnpm -r --filter "@cogni/scheduler-worker-service" build` works in CI
+- [ ] Add service to Docker build matrix (if applicable)
+- [ ] Document service deployment in `platform/runbooks/`
+- [ ] Update `docs/ENVIRONMENTS.md` with scheduler-worker env vars
+- [ ] Update `docs/ARCHITECTURE.md` services section
+- [ ] Consider: separate CI workflow for services vs packages?
+
+### Phase 7: Validation
+
+- [ ] `pnpm install` — workspace resolves correctly
+- [ ] `pnpm packages:build` — all packages build
+- [ ] `pnpm arch:check` — no boundary violations
+- [ ] `pnpm typecheck` — no type errors
+- [ ] `pnpm test` — all tests pass
+- [ ] Service starts locally and connects to DB
+- [ ] Verify depcruise catches violations (test with intentional bad import)
+
+---
+
+## Dependency-Cruiser Rules
+
+```javascript
+// scheduler-core cannot import from src/
+{
+  name: "no-scheduler-core-to-src",
+  severity: "error",
+  from: { path: "^packages/scheduler-core/" },
+  to: { path: "^src/" }
+},
+
+// db-schema cannot import from src/
+{
+  name: "no-db-schema-to-src",
+  severity: "error",
+  from: { path: "^packages/db-schema/" },
+  to: { path: "^src/" }
+},
+
+// db-schema: scheduling slice can only import from refs, not auth/billing
+{
+  name: "no-cross-slice-schema-imports",
+  severity: "error",
+  from: { path: "^packages/db-schema/src/scheduling" },
+  to: { path: "^packages/db-schema/src/(auth|billing)" },
+  comment: "Scheduling imports FK types from /refs only, never from /auth or /billing directly"
+},
+
+// db-client cannot import from src/
+{
+  name: "no-db-client-to-src",
+  severity: "error",
+  from: { path: "^packages/db-client/" },
+  to: { path: "^src/" }
+},
+
+// scheduler-worker cannot import db-schema (transitive through db-client only)
+{
+  name: "scheduler-worker-no-direct-schema",
+  severity: "error",
+  from: { path: "^services/scheduler-worker/" },
+  to: { path: "^packages/db-schema/" },
+  comment: "Worker has no db-schema dep; gets schema transitively through db-client"
+}
+```
+
+---
+
+## Related Docs
+
+- [SCHEDULER_SPEC.md](SCHEDULER_SPEC.md) — Scheduler invariants and schema
+- [PACKAGES_ARCHITECTURE.md](PACKAGES_ARCHITECTURE.md) — Package rules and CI/CD checklist
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Hexagonal pattern
+
+---
+
+**Status:** Approved for implementation
+**Last Updated:** 2025-01-20
