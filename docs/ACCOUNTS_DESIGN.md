@@ -85,7 +85,7 @@ This is what exists _right now_ in code, not what we want later.
 
 ## Tables (Target)
 
-- `billing_accounts(id, owner_user_id, balance_credits, created_at, updated_at)`
+- `billing_accounts(id, owner_user_id, is_system_tenant, balance_credits, created_at, updated_at)` — `is_system_tenant` boolean (default false)
 - `app_api_keys(id, billing_account_id, key_hash, last4, label, active, created_at, revoked_at)`
 - `litellm_key_refs(id, billing_account_id, app_api_key_id UNIQUE, litellm_key_ref/material, label, active, created_at, revoked_at)`
 - `credit_ledger(id, billing_account_id, app_api_key_id?, amount, balance_after, reason, reference, metadata, created_at)`
@@ -120,9 +120,12 @@ This is what exists _right now_ in code, not what we want later.
 
 ### System Tenant
 
-- `account_type='system'` for purely internal governance/automation runs
+- `is_system_tenant=true` for purely internal governance/automation runs
+- System tenant has explicit tool allowlists (no wildcards) and high spend caps (not unlimited)
 - System tenant may have different retention defaults (policy-driven)
 - **Forbidden:** Customer message content in system tenant
+
+→ See: [System Tenant Design](SYSTEM_TENANT_DESIGN.md) for full implementation spec including policy resolution, tool policy, and governance loop execution.
 
 ---
 
