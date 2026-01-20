@@ -14,10 +14,11 @@
  * @internal
  */
 
+import { SCHEDULER_TASK_IDS } from "@cogni/scheduler-core";
 import { type Runner, run, type TaskList } from "graphile-worker";
 
-import { createExecuteScheduledRunTask } from "./tasks/execute-run";
-import { createReconcileSchedulesTask } from "./tasks/reconcile";
+import { createExecuteScheduledRunTask } from "./tasks/execute-run.js";
+import { createReconcileSchedulesTask } from "./tasks/reconcile.js";
 
 /**
  * Logger interface expected by the worker.
@@ -143,11 +144,11 @@ export async function startSchedulerWorker(
 
   // Create task list with injected deps
   const taskList: TaskList = {
-    execute_scheduled_run: createExecuteScheduledRunTask({
+    [SCHEDULER_TASK_IDS.EXECUTE_SCHEDULED_RUN]: createExecuteScheduledRunTask({
       ...deps,
       logger,
     }),
-    reconcile_schedules: createReconcileSchedulesTask({
+    [SCHEDULER_TASK_IDS.RECONCILE_SCHEDULES]: createReconcileSchedulesTask({
       ...deps,
       logger,
     }),
@@ -164,7 +165,7 @@ export async function startSchedulerWorker(
   // Trigger initial reconciliation on startup (per RECONCILER_GUARANTEES_CHAIN)
   logger.info({}, "Running initial reconciliation");
   await runner.addJob(
-    "reconcile_schedules",
+    SCHEDULER_TASK_IDS.RECONCILE_SCHEDULES,
     {},
     { jobKey: "reconciler", jobKeyMode: "replace" }
   );

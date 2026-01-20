@@ -13,10 +13,13 @@
  * @internal
  */
 
+import {
+  ReconcileSchedulesPayloadSchema,
+  SCHEDULER_TASK_IDS,
+} from "@cogni/scheduler-core";
 import type { Task } from "graphile-worker";
 
-import { ReconcileSchedulesPayloadSchema } from "../schemas/payloads";
-import { computeNextCronTime } from "../utils/cron";
+import { computeNextCronTime } from "../utils/cron.js";
 
 const RECONCILE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -53,7 +56,7 @@ export function createReconcileSchedulesTask(deps: {
 
       // Enqueue with job_key for idempotency (no duplicates)
       await deps.enqueueJob({
-        taskId: "execute_scheduled_run",
+        taskId: SCHEDULER_TASK_IDS.EXECUTE_SCHEDULED_RUN,
         payload: {
           scheduleId: schedule.id,
           scheduledFor: nextRunAt.toISOString(),
@@ -77,7 +80,7 @@ export function createReconcileSchedulesTask(deps: {
 
     // Self-reschedule in 5 minutes (per RECONCILER_GUARANTEES_CHAIN)
     await deps.enqueueJob({
-      taskId: "reconcile_schedules",
+      taskId: SCHEDULER_TASK_IDS.RECONCILE_SCHEDULES,
       payload: {},
       runAt: new Date(Date.now() + RECONCILE_INTERVAL_MS),
       jobKey: "reconciler",

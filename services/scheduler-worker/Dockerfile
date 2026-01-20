@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 # Multi-stage Dockerfile for scheduler-worker service
-# Builds a minimal production image with bundled JS
+# Model B: transpile-only + runtime node_modules (avoids ESM bundling issues with pino)
 
 # ============================================================
 # Stage 1: Build
@@ -28,7 +28,7 @@ COPY packages/db-schema/package.json packages/db-schema/
 COPY packages/db-client/package.json packages/db-client/
 COPY services/scheduler-worker/package.json services/scheduler-worker/
 
-# Install only dependencies needed for this service (not entire workspace)
+# Install all dependencies (dev + prod) for build
 RUN pnpm install --frozen-lockfile --filter @cogni/scheduler-worker-service...
 
 # Copy source files for packages that need to be built
@@ -37,11 +37,14 @@ COPY packages/db-schema packages/db-schema
 COPY packages/db-client packages/db-client
 COPY services/scheduler-worker services/scheduler-worker
 
-# Build packages in dependency order
+# Build packages in dependency order (transpile-only for service)
 RUN pnpm --filter @cogni/scheduler-core build && \
     pnpm --filter @cogni/db-schema build && \
     pnpm --filter @cogni/db-client build && \
     pnpm --filter @cogni/scheduler-worker-service build
+
+# Prune to production dependencies only
+RUN pnpm prune --prod
 
 # ============================================================
 # Stage 2: Production
@@ -55,11 +58,25 @@ USER worker
 
 WORKDIR /app
 
-# Copy only the bundled output
-COPY --from=builder --chown=worker:nodejs /app/services/scheduler-worker/dist ./dist
+# Copy transpiled output and node_modules (Model B)
+# TODO: Replace this fragile multi-copy approach with `pnpm deploy` once we can
+# run it without resolving the full workspace root (blocked by @cogni/ai-core etc).
+# Current approach copies both root and service node_modules to preserve pnpm symlinks.
+COPY --from=builder --chown=worker:nodejs /app/services/scheduler-worker/dist ./services/scheduler-worker/dist
+COPY --from=builder --chown=worker:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=worker:nodejs /app/services/scheduler-worker/node_modules ./services/scheduler-worker/node_modules
+COPY --from=builder --chown=worker:nodejs /app/packages/scheduler-core/dist ./packages/scheduler-core/dist
+COPY --from=builder --chown=worker:nodejs /app/packages/db-schema/dist ./packages/db-schema/dist
+COPY --from=builder --chown=worker:nodejs /app/packages/db-client/dist ./packages/db-client/dist
+# Copy package.json files for module resolution
+COPY --from=builder --chown=worker:nodejs /app/services/scheduler-worker/package.json ./services/scheduler-worker/
+COPY --from=builder --chown=worker:nodejs /app/packages/scheduler-core/package.json ./packages/scheduler-core/
+COPY --from=builder --chown=worker:nodejs /app/packages/db-schema/package.json ./packages/db-schema/
+COPY --from=builder --chown=worker:nodejs /app/packages/db-client/package.json ./packages/db-client/
 
-# No Docker HEALTHCHECK - use K8s probes instead (per SERVICES_ARCHITECTURE.md)
+WORKDIR /app/services/scheduler-worker
 
 ENV NODE_ENV=production
 
+# NOTE: No HEALTHCHECK instruction — probes defined in K8s manifests or Compose
 CMD ["node", "dist/main.js"]

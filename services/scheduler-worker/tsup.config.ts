@@ -14,16 +14,13 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/main.ts"],
+  entry: ["src/**/*.ts"], // Transpile all source files
   format: ["esm"],
-  bundle: true,
+  bundle: false, // Model B: transpile-only, node_modules copied to Docker image
   splitting: false,
   dts: false,
   clean: true,
   sourcemap: true,
   platform: "node",
   target: "node20",
-  // Bundle all deps for Docker image (except native modules)
-  noExternal: [/.*/],
-  external: ["postgres"],
 });

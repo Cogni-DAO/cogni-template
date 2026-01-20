@@ -21,22 +21,25 @@ import {
   DrizzleScheduleManagerAdapter,
   DrizzleScheduleRunAdapter,
 } from "@cogni/db-client";
-import pino from "pino";
 
-import { loadConfig } from "./config";
-import { startSchedulerWorker } from "./worker";
+import { loadConfig } from "./config.js";
+import { type HealthState, startHealthServer } from "./health.js";
+import { flushLogger, makeLogger } from "./observability/logger.js";
+import { startSchedulerWorker } from "./worker.js";
 
 async function main(): Promise<void> {
   // Load and validate config
   const config = loadConfig();
 
   // Create logger (composition root owns logger creation)
-  const logger = pino({
-    level: config.LOG_LEVEL,
-    name: config.SERVICE_NAME,
-  });
+  const logger = makeLogger();
 
   logger.info({ logLevel: config.LOG_LEVEL }, "Starting scheduler worker");
+
+  // Health state for readiness probes
+  const healthState: HealthState = { ready: false };
+  startHealthServer(healthState, config.HEALTH_PORT);
+  logger.info({ port: config.HEALTH_PORT }, "Health server started");
 
   // Create database client
   const db = createDbClient(config.DATABASE_URL);
@@ -110,12 +113,14 @@ async function main(): Promise<void> {
     pollInterval: config.WORKER_POLL_INTERVAL,
   });
 
+  // Mark ready after worker starts
+  healthState.ready = true;
   logger.info(
     {
       concurrency: config.WORKER_CONCURRENCY,
       pollInterval: config.WORKER_POLL_INTERVAL,
     },
-    "Scheduler worker started"
+    "Scheduler worker started, ready for traffic"
   );
 
   // Graceful shutdown
@@ -127,14 +132,17 @@ async function main(): Promise<void> {
       return;
     }
     shuttingDown = true;
+    healthState.ready = false; // Stop accepting new work
     logger.info({ signal }, "Received signal, shutting down");
 
     try {
       await worker.stop();
-      logger.info({}, "Scheduler worker stopped");
+      logger.info("Scheduler worker stopped");
+      flushLogger();
       process.exit(0);
-    } catch (error) {
-      logger.error({ error }, "Error during shutdown");
+    } catch (err) {
+      logger.error({ err }, "Error during shutdown");
+      flushLogger();
       process.exit(1);
     }
   };
@@ -143,7 +151,10 @@ async function main(): Promise<void> {
   process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
-main().catch((error) => {
-  console.error("Fatal error:", error);
+const bootLogger = makeLogger({ phase: "boot" });
+
+main().catch((err) => {
+  bootLogger.fatal({ err }, "Fatal error during startup");
+  flushLogger();
   process.exit(1);
 });
