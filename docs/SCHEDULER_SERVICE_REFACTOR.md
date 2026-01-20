@@ -136,28 +136,29 @@ billing.ts     → imports from refs, extends with billing-specific tables
 
 #### `packages/scheduler-core/`
 
-- [ ] Create `package.json` with name `@cogni/scheduler-core`
-- [ ] Create `tsconfig.json` with composite mode
-- [ ] Create `tsup.config.ts`
+- [x] Create `package.json` with name `@cogni/scheduler-core`
+- [x] Create `tsconfig.json` with composite mode
+- [x] Create `tsup.config.ts`
 - [ ] Create `vitest.config.ts`
-- [ ] Create `src/index.ts` (barrel export)
-- [ ] Create `src/types.ts` (from `src/types/scheduling.ts`)
-- [ ] Create `src/ports/*.ts` (from `src/ports/scheduling/*.ts`)
-- [ ] Create `src/errors.ts` (consolidated error classes)
-- [ ] Add to root `tsconfig.json` references
-- [ ] Add to root `package.json` dependencies
-- [ ] Add to `biome/base.json` noDefaultExport override (tsup + vitest configs)
+- [x] Create `src/index.ts` (barrel export)
+- [x] Create `src/types.ts` (from `src/types/scheduling.ts`)
+- [x] Create `src/ports/*.ts` (from `src/ports/scheduling/*.ts`)
+- [x] Create `src/ports/index.ts` (ports barrel - errors consolidated in port files)
+- [x] Add to root `tsconfig.json` references
+- [x] Add to root `package.json` dependencies
+- [x] Add to `biome/base.json` noDefaultExport override (tsup config)
 - [ ] Add dependency-cruiser rule: `no-scheduler-core-to-src`
 
 #### `packages/db-schema/`
 
-- [ ] Create `package.json` with subpath exports (separate entrypoints per slice)
-- [ ] Create `tsconfig.json` with composite mode
-- [ ] Create `tsup.config.ts` with multiple entry points
-- [ ] Create `src/refs.ts` (FK target table objects: users, billingAccounts — canonical home)
+- [x] Create `package.json` with subpath exports (separate entrypoints per slice)
+- [x] Create `tsconfig.json` with composite mode
+- [x] Create `tsup.config.ts` with multiple entry points
+- [x] Create `src/refs.ts` (FK target table objects: users, billingAccounts — canonical home)
 - [ ] Create `src/scheduling.ts` (from `src/shared/db/schema.scheduling.ts`, imports table objects from refs)
 - [ ] Create `src/auth.ts` (auth-specific tables, imports refs)
 - [ ] Create `src/billing.ts` (billing-specific tables, imports refs)
+- [ ] Create `src/ai.ts` (ai telemetry tables)
 - [ ] NO barrel index.ts — slices are separate entrypoints
 - [ ] Add to root `tsconfig.json` references
 - [ ] Add to root `package.json` dependencies

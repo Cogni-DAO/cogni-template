@@ -1,0 +1,45 @@
+{
+  "name": "@cogni/db-schema",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./refs": {
+      "types": "./dist/refs.d.ts",
+      "import": "./dist/refs.js"
+    },
+    "./scheduling": {
+      "types": "./dist/scheduling.d.ts",
+      "import": "./dist/scheduling.js"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "import": "./dist/auth.js"
+    },
+    "./billing": {
+      "types": "./dist/billing.d.ts",
+      "import": "./dist/billing.js"
+    },
+    "./ai": {
+      "types": "./dist/ai.d.ts",
+      "import": "./dist/ai.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "postbuild": "node -e \"const fs=require('fs'); if(!fs.existsSync('dist/refs.js')){console.error('ERROR: dist/refs.js missing'); process.exit(1)}\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@cogni/scheduler-core": "workspace:*",
+    "drizzle-orm": "^0.44.7"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^5"
+  }
+}

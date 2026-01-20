@@ -200,6 +200,8 @@
         "packages/cogni-contracts/tsup.config.ts",
         "packages/langgraph-graphs/tsup.config.ts",
         "packages/langgraph-graphs/vitest.config.ts",
+        "packages/scheduler-core/tsup.config.ts",
+        "packages/db-schema/tsup.config.ts",
         "packages/scheduler-worker/tsup.config.ts",
         "packages/scheduler-worker/vitest.config.ts",
         "vitest.workspace.ts",
