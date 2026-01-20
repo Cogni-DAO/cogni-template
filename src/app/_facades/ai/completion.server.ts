@@ -17,6 +17,8 @@
  * @public
  */
 
+import { createHash } from "node:crypto";
+
 import type { z } from "zod";
 
 import { resolveAiAdapterDeps } from "@/bootstrap/container";
@@ -58,6 +60,24 @@ interface CompletionInput {
 
 // Type-level enforcement: facade MUST return exact contract shape
 type CompletionOutput = z.infer<typeof aiCompletionOperation.output>;
+
+/**
+ * Derive Langfuse sessionId from billingAccountId + threadId.
+ * Uses SHA-256 hash to ensure:
+ * - Deterministic: same inputs → same sessionId (stable grouping)
+ * - Bounded: fixed output length regardless of threadId length
+ * - Safe: no PII or log-injection risk from raw threadId
+ *
+ * Format: `ba:{billingAccountId}:t:{sha256(threadId)[0:32]}`
+ * Truncation to 200 chars happens at Langfuse sink boundary.
+ */
+function deriveSessionId(billingAccountId: string, threadId: string): string {
+  const threadHash = createHash("sha256")
+    .update(threadId)
+    .digest("hex")
+    .slice(0, 32);
+  return `ba:${billingAccountId}:t:${threadHash}`;
+}
 
 /**
  * Non-streaming AI completion.
@@ -158,9 +178,11 @@ export async function completionStream(
     requestId: ctx.reqId,
     traceId: ctx.traceId,
     userId: input.sessionUser.id,
-    // TODO(P1): Add sessionId from tenant-scoped threadId when USAGE_HISTORY.md threadId support lands.
-    // Per TENANT_SCOPED_THREAD_ID: sessionId = `${billingAccount.id}:${input.threadId}` (client-provided).
-    // Do NOT generate random sessionId per request - defeats Langfuse session grouping purpose.
+    // Derive sessionId from threadId for Langfuse session grouping
+    // Hash ensures deterministic, bounded, log-safe output; truncation at sink
+    ...(input.threadId && {
+      sessionId: deriveSessionId(billingAccount.id, input.threadId),
+    }),
   };
 
   const enrichedCtx: RequestContext = {

@@ -30,6 +30,18 @@ const MAX_TOOL_RESULT_CHARS = 32768;
 const MAX_ID_CHARS = 128;
 
 /**
+ * Max threadId length - app-level routing key, not internal ID.
+ * Separate from MAX_ID_CHARS to allow reasonable client-provided keys.
+ */
+const MAX_THREAD_ID_CHARS = 512;
+
+/**
+ * Safe character pattern for threadId - prevents log injection.
+ * Allows: alphanumeric, dots, underscores, colons, hyphens.
+ */
+const THREAD_ID_SAFE_PATTERN = /^[A-Za-z0-9._:-]+$/;
+
+/**
  * JSON-serializable value schema (recursive).
  * Prevents cyclic/BigInt/Date payloads that would cause serialization errors.
  * Uses finite() to reject NaN/Infinity which JSON.stringify converts to null.
@@ -238,8 +250,13 @@ export const AssistantUiInputSchema = z.object({
    * Thread ID for multi-turn conversation state.
    * If absent, server generates one and returns it.
    * Client should reuse for subsequent messages in same conversation.
+   * Must contain only safe characters: alphanumeric, dots, underscores, colons, hyphens.
    */
-  threadId: z.string().max(MAX_ID_CHARS).optional(),
+  threadId: z
+    .string()
+    .max(MAX_THREAD_ID_CHARS)
+    .regex(THREAD_ID_SAFE_PATTERN, "threadId must contain only safe characters")
+    .optional(),
 });
 
 export const aiChatOperation = {
