@@ -25,12 +25,13 @@ services/scheduler-worker/   # Deployable service (task logic + Dockerfile)
 
 ## Approval Gates
 
-| Gate                 | Requirement                                                                                               |
-| -------------------- | --------------------------------------------------------------------------------------------------------- |
-| **1. Workspace**     | `pnpm-workspace.yaml` includes `services/*`; CI builds via `pnpm -r --filter`                             |
-| **2. Schema Slices** | `db-schema` subpath exports are real slices (separate entrypoints); depcruise forbids cross-slice imports |
-| **3. Worker Deps**   | Worker imports schema ONLY through `@cogni/db-client`, never `@cogni/db-schema` directly                  |
-| **4. No Shims**      | Clean migration — update all imports in `src/` directly, no re-export shims                               |
+| Gate                   | Requirement                                                                                              |
+| ---------------------- | -------------------------------------------------------------------------------------------------------- |
+| **1. Workspace**       | `pnpm-workspace.yaml` includes `services/*`; CI builds via `pnpm -r --filter`                            |
+| **2. Schema Slices**   | `db-schema` subpath exports are real slices; refs owns FK targets; depcruise forbids cross-slice imports |
+| **3. Worker Deps**     | Worker imports schema ONLY through `@cogni/db-client`, never `@cogni/db-schema` directly                 |
+| **4. No Shims**        | Clean migration — update all imports in `src/` directly, no re-export shims                              |
+| **5. Server Boundary** | `db-client` only importable from server layers; depcruise prevents client bundle pollution               |
 
 ---
 
@@ -74,18 +75,26 @@ src/ (Next.js app)
 
 **Subpath exports (separate entrypoints, not barrel re-exports):**
 
-- `@cogni/db-schema/scheduling` → execution_grants, schedules, schedule_runs
-- `@cogni/db-schema/auth` → users table
-- `@cogni/db-schema/billing` → billing_accounts table
-- `@cogni/db-schema/refs` → shared FK reference types (userId, billingAccountId)
+- `@cogni/db-schema/refs` → **FK target tables**: users, billing_accounts (canonical home)
+- `@cogni/db-schema/scheduling` → execution_grants, schedules, schedule_runs (imports refs for FKs)
+- `@cogni/db-schema/auth` → auth-specific tables (imports refs for users)
+- `@cogni/db-schema/billing` → billing-specific tables (imports refs for billing_accounts)
 
-**FK Reference Pattern:** Create `src/refs.ts` exporting minimal types/constants needed for cross-slice FK references. Scheduling imports from `@cogni/db-schema/refs`, not from `/auth` or `/billing` directly.
+**FK Reference Pattern:** `refs.ts` owns the actual table objects that are FK targets across slices. Domain slices import table objects from `/refs` for their FK constraints. This inverts ownership — shared tables live in refs, domain slices extend them.
+
+```
+refs.ts        → exports: users, billingAccounts (table objects)
+scheduling.ts  → imports from refs, defines: executionGrants, schedules, scheduleRuns
+auth.ts        → imports from refs, extends with auth-specific tables
+billing.ts     → imports from refs, extends with billing-specific tables
+```
 
 **Invariants:**
 
 - FORBIDDEN: `@/`, `src/`, business logic, adapters
-- FORBIDDEN: Cross-slice imports (scheduling cannot import auth/billing directly)
-- ALLOWED: drizzle-orm table definitions, imports from `/refs` for FK types
+- FORBIDDEN: Circular imports (refs imports nothing from other slices)
+- FORBIDDEN: scheduling/auth/billing importing each other directly
+- ALLOWED: All slices import from `/refs` for FK table objects
 
 ### `packages/db-client/`
 
@@ -145,16 +154,17 @@ src/ (Next.js app)
 - [ ] Create `package.json` with subpath exports (separate entrypoints per slice)
 - [ ] Create `tsconfig.json` with composite mode
 - [ ] Create `tsup.config.ts` with multiple entry points
-- [ ] Create `src/refs.ts` (shared FK reference types: userId, billingAccountId)
-- [ ] Create `src/scheduling.ts` (from `src/shared/db/schema.scheduling.ts`, imports from refs)
-- [ ] Create `src/auth.ts` (users table)
-- [ ] Create `src/billing.ts` (billing_accounts table)
+- [ ] Create `src/refs.ts` (FK target table objects: users, billingAccounts — canonical home)
+- [ ] Create `src/scheduling.ts` (from `src/shared/db/schema.scheduling.ts`, imports table objects from refs)
+- [ ] Create `src/auth.ts` (auth-specific tables, imports refs)
+- [ ] Create `src/billing.ts` (billing-specific tables, imports refs)
 - [ ] NO barrel index.ts — slices are separate entrypoints
 - [ ] Add to root `tsconfig.json` references
 - [ ] Add to root `package.json` dependencies
 - [ ] Add to `biome/base.json` noDefaultExport override
 - [ ] Add dependency-cruiser rule: `no-db-schema-to-src`
-- [ ] Add dependency-cruiser rule: `no-cross-slice-schema-imports` (scheduling → auth/billing forbidden)
+- [ ] Add dependency-cruiser rule: `no-cross-slice-schema-imports`
+- [ ] Add dependency-cruiser rule: `no-refs-to-slices` (refs imports nothing)
 
 #### `packages/db-client/`
 
@@ -211,8 +221,10 @@ Update all existing imports in `src/` to use new packages directly:
   - [ ] Remove scripts allowed rule
   - [ ] Add rule: `no-scheduler-core-to-src`
   - [ ] Add rule: `no-db-schema-to-src`
-  - [ ] Add rule: `no-db-client-to-src`
+  - [ ] Add rule: `no-refs-to-slices`
   - [ ] Add rule: `no-cross-slice-schema-imports`
+  - [ ] Add rule: `no-db-client-to-src`
+  - [ ] Add rule: `db-client-server-only` (prevent client bundle pollution)
   - [ ] Add rule: `scheduler-worker-no-direct-schema`
 - [ ] Update `docker-compose.dev.yml` — add scheduler-worker service
 - [ ] Update `vitest.workspace.ts` — remove scheduler-worker package
@@ -272,13 +284,22 @@ Update all existing imports in `src/` to use new packages directly:
   to: { path: "^src/" }
 },
 
-// db-schema: scheduling slice can only import from refs, not auth/billing
+// db-schema: refs is the root — imports nothing from other slices
+{
+  name: "no-refs-to-slices",
+  severity: "error",
+  from: { path: "^packages/db-schema/src/refs" },
+  to: { path: "^packages/db-schema/src/(scheduling|auth|billing)" },
+  comment: "refs.ts is the FK root; must not import from domain slices"
+},
+
+// db-schema: slices cannot import each other (only refs allowed)
 {
   name: "no-cross-slice-schema-imports",
   severity: "error",
-  from: { path: "^packages/db-schema/src/scheduling" },
-  to: { path: "^packages/db-schema/src/(auth|billing)" },
-  comment: "Scheduling imports FK types from /refs only, never from /auth or /billing directly"
+  from: { path: "^packages/db-schema/src/(scheduling|auth|billing)" },
+  to: { path: "^packages/db-schema/src/(scheduling|auth|billing)" },
+  comment: "Domain slices import from /refs only, never from each other"
 },
 
 // db-client cannot import from src/
@@ -287,6 +308,15 @@ Update all existing imports in `src/` to use new packages directly:
   severity: "error",
   from: { path: "^packages/db-client/" },
   to: { path: "^src/" }
+},
+
+// db-client must only be imported in server layers (prevent client bundle pollution)
+{
+  name: "db-client-server-only",
+  severity: "error",
+  from: { path: "^src/(?!bootstrap|adapters|app/api|app/_facades|app/_lib)" },
+  to: { path: "^packages/db-client/" },
+  comment: "db-client contains postgres/drizzle; only server layers may import"
 },
 
 // scheduler-worker cannot import db-schema (transitive through db-client only)
