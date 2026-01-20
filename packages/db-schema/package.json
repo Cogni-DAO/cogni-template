@@ -4,6 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "sideEffects": false,
+  "types": "./dist/refs.d.ts",
   "exports": {
     "./refs": {
       "types": "./dist/refs.d.ts",

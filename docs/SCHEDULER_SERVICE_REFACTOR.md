@@ -155,14 +155,14 @@ billing.ts     → imports from refs, extends with billing-specific tables
 - [x] Create `tsconfig.json` with composite mode
 - [x] Create `tsup.config.ts` with multiple entry points
 - [x] Create `src/refs.ts` (FK target table objects: users, billingAccounts — canonical home)
-- [ ] Create `src/scheduling.ts` (from `src/shared/db/schema.scheduling.ts`, imports table objects from refs)
-- [ ] Create `src/auth.ts` (auth-specific tables, imports refs)
-- [ ] Create `src/billing.ts` (billing-specific tables, imports refs)
-- [ ] Create `src/ai.ts` (ai telemetry tables)
-- [ ] NO barrel index.ts — slices are separate entrypoints
-- [ ] Add to root `tsconfig.json` references
-- [ ] Add to root `package.json` dependencies
-- [ ] Add to `biome/base.json` noDefaultExport override
+- [x] Create `src/scheduling.ts` (from `src/shared/db/schema.scheduling.ts`, imports table objects from refs)
+- [x] Create `src/auth.ts` (re-exports users from refs)
+- [x] Create `src/billing.ts` (billing-specific tables, imports refs)
+- [x] Create `src/ai.ts` (ai telemetry tables)
+- [x] NO barrel index.ts — slices are separate entrypoints
+- [x] Add to root `tsconfig.json` references
+- [x] Add to root `package.json` dependencies
+- [x] Add to `biome/base.json` noDefaultExport override
 - [ ] Add dependency-cruiser rule: `no-db-schema-to-src`
 - [ ] Add dependency-cruiser rule: `no-cross-slice-schema-imports`
 - [ ] Add dependency-cruiser rule: `no-refs-to-slices` (refs imports nothing)

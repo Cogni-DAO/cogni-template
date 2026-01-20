@@ -35,6 +35,9 @@ importers:
       '@cogni/cogni-contracts':
         specifier: workspace:*
         version: link:packages/cogni-contracts
+      '@cogni/db-schema':
+        specifier: workspace:*
+        version: link:packages/db-schema
       '@cogni/langgraph-graphs':
         specifier: workspace:*
         version: link:packages/langgraph-graphs
@@ -445,6 +448,22 @@ importers:
         version: 2.39.3(bufferutil@4.0.9)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.1.13)
 
   packages/cogni-contracts:
+    devDependencies:
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.1)
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  packages/db-schema:
+    dependencies:
+      '@cogni/scheduler-core':
+        specifier: workspace:*
+        version: link:../scheduler-core
+      drizzle-orm:
+        specifier: ^0.44.7
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@types/pg@8.16.0)(pg@8.17.1)(postgres@3.4.7)
     devDependencies:
       tsup:
         specifier: ^8.5.1

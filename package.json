@@ -134,6 +134,7 @@
     "@cogni/ai-tools": "workspace:*",
     "@cogni/aragon-osx": "workspace:*",
     "@cogni/cogni-contracts": "workspace:*",
+    "@cogni/db-schema": "workspace:*",
     "@cogni/langgraph-graphs": "workspace:*",
     "@cogni/scheduler-core": "workspace:*",
     "@cogni/scheduler-worker": "workspace:*",

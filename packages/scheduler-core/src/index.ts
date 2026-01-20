@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/scheduler-core`
  * Purpose: Scheduler core types and port interfaces.
- * Scope: Pure types and interfaces for scheduling domain - no implementations.
+ * Scope: Pure types and interfaces for scheduling domain. Does not contain implementations or I/O.
  * Invariants:
  * - FORBIDDEN: `@/`, `src/`, drizzle-orm, any I/O
  * - ALLOWED: Pure TypeScript types/interfaces only
