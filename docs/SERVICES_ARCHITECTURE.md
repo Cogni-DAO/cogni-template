@@ -20,6 +20,15 @@ The `services/` directory contains **standalone deployable services**—Node.js 
 
 > **Note:** K8s `Job`/`CronJob` is reserved for finite batch tasks, not queue workers. Workers deploy as `Deployment` with horizontal scaling.
 
+**Worker vs HTTP services:**
+
+| Service Type | HTTP Server Needed | Health Endpoint   |
+| ------------ | ------------------ | ----------------- |
+| HTTP API     | Yes (Fastify, etc) | Same server       |
+| Queue Worker | **No**             | Minimal node:http |
+
+Worker services (like `scheduler-worker`) do **not** require a product HTTP server—only a minimal health endpoint for orchestrator probes. Use `node:http` directly; do not add Fastify/Express unless serving product traffic.
+
 ## When to Create a Service
 
 Create a service when the code:
@@ -42,13 +51,16 @@ services/<name>/
 │   ├── config.ts            # Zod env schema
 │   ├── health.ts            # /livez, /readyz handlers
 │   ├── worker.ts            # Main worker logic (or server.ts for HTTP)
+│   ├── observability/       # Logging infrastructure
+│   │   ├── logger.ts        # makeLogger() factory (pino)
+│   │   └── redact.ts        # Redaction paths
 │   └── ...                  # Service-specific modules
 ├── tests/
 │   └── ...                  # Service-specific tests
-├── Dockerfile               # Multi-stage build
+├── Dockerfile               # Multi-stage build (Model B)
 ├── package.json             # name: @cogni/<name>-service
-├── tsconfig.json            # Extends root, composite mode
-├── tsup.config.ts           # Bundle to dist/
+├── tsconfig.json            # Standalone (NOT added to root references)
+├── tsup.config.ts           # Transpile-only (bundle: false)
 ├── vitest.config.ts         # Test config
 └── AGENTS.md                # Service documentation
 ```
@@ -81,10 +93,42 @@ When creating a new service, complete these items in order:
 ### 2. TypeScript Configuration
 
 - [ ] Create `tsconfig.json` (standalone, does NOT extend root or use composite mode—services are isolated)
-- [ ] Create `tsup.config.ts` with `platform: "node"`, entry: `["src/main.ts"]`
+- [ ] Create `tsup.config.ts` for **transpile-only** (Model B):
+
+  ```typescript
+  import { defineConfig } from "tsup";
+
+  export default defineConfig({
+    entry: ["src/**/*.ts"], // Transpile all source files
+    format: ["esm"],
+    bundle: false, // Model B: transpile-only, node_modules copied to Docker image
+    splitting: false,
+    dts: false,
+    clean: true,
+    sourcemap: true,
+    platform: "node",
+    target: "node20",
+  });
+  ```
+
 - [ ] Add to `biome/base.json` noDefaultExport override (tsup + vitest configs)
 
 > **Note:** Services do NOT get added to root `tsconfig.json` references. Unlike packages (which produce declarations consumed by other packages), services are standalone processes with their own isolated build.
+>
+> **Why `bundle: false`:** ESM bundling breaks libs like pino that use dynamic requires (`Dynamic require of "os" is not supported`). Transpile-only preserves imports, resolved at runtime via node_modules.
+
+**ESM relative import rule:** All relative imports in service source files **must include `.js` extensions**:
+
+```typescript
+// ✅ Correct - ESM requires .js extension
+import { loadConfig } from "./config.js";
+import { startHealthServer } from "./health.js";
+
+// ❌ Wrong - will fail at runtime with ERR_MODULE_NOT_FOUND
+import { loadConfig } from "./config";
+```
+
+This is a Node.js ESM requirement when using `bundle: false`. TypeScript resolves `.js` to `.ts` during compilation, but the output keeps `.js` which Node.js needs.
 
 ### 3. Environment Configuration
 
@@ -121,31 +165,34 @@ When creating a new service, complete these items in order:
 
 ### 4. Health Endpoints
 
-- [ ] Create `src/health.ts` with `/livez` and `/readyz`:
+- [ ] Create `src/health.ts` using minimal `node:http` (no framework):
 
   ```typescript
   /**
-   * Health endpoints for orchestrator probes (K8s, Compose healthcheck, etc).
-   *
-   * /livez  - 200 if process running, not wedged. Low-cost check.
-   * /readyz - 200 only if dependencies OK (DB, etc), not draining.
+   * Health endpoints for orchestrator probes.
+   * Uses raw node:http — do NOT add Fastify/Express for workers.
    */
+  import { createServer, type Server } from "node:http";
 
   export interface HealthState {
     ready: boolean; // Set false during drain/shutdown
-    dbConnected: boolean;
   }
 
-  export function createHealthHandlers(state: HealthState) {
-    return {
-      livez: () => ({ status: 200, body: "ok" }),
-      readyz: () => {
-        if (!state.ready || !state.dbConnected) {
-          return { status: 503, body: "not ready" };
-        }
-        return { status: 200, body: "ok" };
-      },
-    };
+  export function startHealthServer(state: HealthState, port: number): Server {
+    const server = createServer((req, res) => {
+      if (req.url === "/livez") {
+        res.writeHead(200, { "Content-Type": "text/plain" });
+        res.end("ok");
+      } else if (req.url === "/readyz") {
+        const status = state.ready ? 200 : 503;
+        res.writeHead(status, { "Content-Type": "text/plain" });
+        res.end(state.ready ? "ok" : "not ready");
+      } else {
+        res.writeHead(404).end("not found");
+      }
+    });
+    server.listen(port);
+    return server;
   }
   ```
 
@@ -156,10 +203,15 @@ When creating a new service, complete these items in order:
 | `/livez`  | Process alive, not deadlocked | `livenessProbe`  | Minimal |
 | `/readyz` | Ready to accept work (DB OK)  | `readinessProbe` | Low     |
 
-**Environment behavior:**
+**Health check ownership (where to define probes):**
 
-- **Kubernetes:** Probes control routing and restarts automatically
-- **Docker Compose:** Probes only matter if wired via `healthcheck:`; workers must gate job-claiming in-process regardless
+| Environment    | Where to Define        | Notes                                              |
+| -------------- | ---------------------- | -------------------------------------------------- |
+| Kubernetes     | K8s manifests          | `livenessProbe`, `readinessProbe` in pod spec      |
+| Docker Compose | `healthcheck:` in YAML | Only if needed for `depends_on: condition:`        |
+| Dockerfile     | **Do NOT define**      | No `HEALTHCHECK` instruction—defer to orchestrator |
+
+> **Dockerfile HEALTHCHECK is forbidden:** It bakes probe logic into the image, preventing orchestrator-specific tuning. Probes belong in deployment manifests (K8s) or compose files, not the image.
 
 **Worker readiness invariant:** For queue workers, `ready=false` must **gate the poll/claim loop**, not just HTTP traffic. When `ready=false`:
 
@@ -168,8 +220,6 @@ When creating a new service, complete these items in order:
 - Only after drain completes does the process exit
 
 Workers must stop claiming new jobs immediately on SIGTERM regardless of orchestrator—do not rely on external routing semantics.
-
-**Do NOT use:** Docker HEALTHCHECK with `pgrep` — it proves nothing about actual health.
 
 ### 5. Entry Point with Signal Handling
 
@@ -240,16 +290,14 @@ Workers must stop claiming new jobs immediately on SIGTERM regardless of orchest
 
 **Packaging models:** Choose exactly one per service:
 
-| Model                       | Description                        | When to Use                                   | Runtime Copies            |
-| --------------------------- | ---------------------------------- | --------------------------------------------- | ------------------------- |
-| **A: Bundled** (default)    | tsup bundles all deps into `dist/` | Workers, simple services without native deps  | Only `dist/`              |
-| **B: Runtime node_modules** | Full workspace install at runtime  | Services with native deps or dynamic requires | `dist/` + `node_modules/` |
+| Model                          | Description                            | When to Use                           | Runtime Copies            |
+| ------------------------------ | -------------------------------------- | ------------------------------------- | ------------------------- |
+| **B: Runtime node_modules** ⭐ | tsup transpile-only + node_modules     | Default for all services              | `dist/` + `node_modules/` |
+| **A: Bundled**                 | tsup bundles all deps into single file | Only if you need single-file artifact | Only `dist/`              |
 
-> **Default to Model A.** Model B is a fallback when bundling fails (native modules, dynamic imports). The templates below show both; use the one matching your model.
+> **Default to Model B.** ESM bundling with pino and other libs that use dynamic requires causes runtime errors (`Dynamic require of "os" is not supported`). Model B (transpile-only) avoids these issues. Model A is only for advanced cases requiring single-file output (must use CJS format if bundling).
 
 - [ ] Create multi-stage `Dockerfile`:
-
-  **Model A (Bundled — preferred for workers):**
 
   > **Reference implementation:** `services/scheduler-worker/Dockerfile`
 
@@ -257,7 +305,7 @@ Workers must stop claiming new jobs immediately on SIGTERM regardless of orchest
   # syntax=docker/dockerfile:1
 
   # ============================================================================
-  # Builder: compile and bundle TypeScript
+  # Stage 1: Builder — install deps, build packages, prune to prod
   # ============================================================================
   FROM node:20-bookworm-slim AS builder
 
@@ -270,108 +318,51 @@ Workers must stop claiming new jobs immediately on SIGTERM regardless of orchest
   WORKDIR /app
 
   # Copy workspace config for dependency resolution
-  COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+  COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
   COPY packages/<dep1>/package.json packages/<dep1>/
   COPY packages/<dep2>/package.json packages/<dep2>/
   COPY services/<name>/package.json services/<name>/
 
-  # Install only dependencies needed for this service (not entire workspace)
+  # Install all dependencies (dev + prod) for build
   RUN pnpm install --frozen-lockfile --filter @cogni/<name>-service...
 
-  # Copy source and build
+  # Copy source files for packages that need to be built
   COPY packages/<dep1> packages/<dep1>
   COPY packages/<dep2> packages/<dep2>
   COPY services/<name> services/<name>
 
-  # Build packages in dependency order, then the service
+  # Build packages in dependency order (transpile-only for service)
   RUN pnpm --filter @cogni/<dep1> build && \
       pnpm --filter @cogni/<dep2> build && \
       pnpm --filter @cogni/<name>-service build
 
-  # ============================================================================
-  # Runtime: minimal production image (bundled — no node_modules needed)
-  # ============================================================================
-  FROM node:20-bookworm-slim AS runtime
+  # Prune to production dependencies only
+  RUN pnpm prune --prod --filter @cogni/<name>-service...
 
-  # OCI labels for traceability
-  LABEL org.opencontainers.image.source="https://github.com/Cogni-DAO/cogni-template"
-  LABEL org.opencontainers.image.description="<name> service"
+  # ============================================================================
+  # Stage 2: Runner — minimal production image with node_modules
+  # ============================================================================
+  FROM node:20-bookworm-slim AS runner
 
   # Security: non-root user
-  RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs nodejs
-  USER nodejs
+  RUN addgroup --system --gid 1001 nodejs && \
+      adduser --system --uid 1001 worker
+  USER worker
   WORKDIR /app
 
-  # Copy only the bundled artifact
-  COPY --from=builder --chown=nodejs:nodejs /app/services/<name>/dist ./dist
-
-  ENV NODE_ENV=production
-
-  # No HEALTHCHECK - use K8s probes instead
-  CMD ["node", "dist/main.js"]
-  ```
-
-  **Model B (Runtime node_modules — fallback for native deps):**
-
-  ```dockerfile
-  # syntax=docker/dockerfile:1
-
-  # ============================================================================
-  # Base: shared Node.js setup
-  # ============================================================================
-  FROM node:20-bookworm-slim AS base
-
-  # Build tools for native modules
-  RUN apt-get update && apt-get install -y --no-install-recommends \
-      python3 make g++ && rm -rf /var/lib/apt/lists/*
-
-  # Pin pnpm to match root package.json packageManager field
-  RUN corepack enable && corepack prepare pnpm@9.12.2 --activate
-  WORKDIR /app
-
-  # ============================================================================
-  # Dependencies: install production deps
-  # ============================================================================
-  FROM base AS deps
-  COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-  COPY packages/ ./packages/
-  COPY services/<name>/package.json ./services/<name>/
-  RUN pnpm install --frozen-lockfile --prod --filter @cogni/<name>-service...
-
-  # ============================================================================
-  # Builder: compile TypeScript
-  # ============================================================================
-  FROM base AS builder
-  COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
-  COPY packages/ ./packages/
-  COPY services/<name>/ ./services/<name>/
-  RUN pnpm install --frozen-lockfile --filter @cogni/<name>-service...
-  RUN pnpm --filter @cogni/<name>-service build
-
-  # ============================================================================
-  # Runtime: production image with node_modules
-  # ============================================================================
-  FROM node:20-bookworm-slim AS runtime
-
-  # OCI labels for traceability
-  LABEL org.opencontainers.image.source="https://github.com/Cogni-DAO/cogni-template"
-  LABEL org.opencontainers.image.description="<name> service"
-
-  # Security: non-root user
-  RUN groupadd -g 1001 nodejs && useradd -u 1001 -g nodejs nodejs
-  USER nodejs
-  WORKDIR /app
-
-  # Copy runtime artifacts (Model B: includes node_modules)
-  COPY --from=deps --chown=nodejs:nodejs /app/node_modules ./node_modules
-  COPY --from=deps --chown=nodejs:nodejs /app/services/<name>/node_modules ./services/<name>/node_modules
-  COPY --from=builder --chown=nodejs:nodejs /app/services/<name>/dist ./services/<name>/dist
-  COPY --from=builder --chown=nodejs:nodejs /app/packages/*/dist ./packages/
+  # Copy transpiled output, node_modules, and package.json files for resolution
+  COPY --from=builder --chown=worker:nodejs /app/services/<name>/dist ./services/<name>/dist
+  COPY --from=builder --chown=worker:nodejs /app/services/<name>/package.json ./services/<name>/
+  COPY --from=builder --chown=worker:nodejs /app/node_modules ./node_modules
+  COPY --from=builder --chown=worker:nodejs /app/packages/<dep1>/dist ./packages/<dep1>/dist
+  COPY --from=builder --chown=worker:nodejs /app/packages/<dep1>/package.json ./packages/<dep1>/
+  COPY --from=builder --chown=worker:nodejs /app/packages/<dep2>/dist ./packages/<dep2>/dist
+  COPY --from=builder --chown=worker:nodejs /app/packages/<dep2>/package.json ./packages/<dep2>/
 
   WORKDIR /app/services/<name>
   ENV NODE_ENV=production
 
-  # No HEALTHCHECK - use K8s probes instead
+  # NOTE: No HEALTHCHECK instruction — probes defined in K8s manifests or Compose
   CMD ["node", "dist/main.js"]
   ```
 
@@ -385,7 +376,7 @@ Workers must stop claiming new jobs immediately on SIGTERM regardless of orchest
 - Use multi-stage to minimize final image size
 - Add OCI labels (`org.opencontainers.image.*`)
 - Run as non-root user
-- Do NOT use Docker HEALTHCHECK with `pgrep` (K8s probes handle health)
+- **No HEALTHCHECK in Dockerfile** — probes are orchestrator concerns, defined in K8s manifests or Compose files
 
 ### 7. Security Defaults (K8s)
 
@@ -426,11 +417,22 @@ volumes:
 
 ### 9. Repo Integration
 
+**Dev stack integration** (required):
+
+- [ ] Add service to `dev:infra` script in root `package.json` (appends to compose service list)
+- [ ] Add to `docker-compose.dev.yml` (see template below)
+
+**Individual service scripts** (optional, for isolated development):
+
 - [ ] Add root scripts to `package.json`:
   ```json
   "<name>:build": "pnpm --filter @cogni/<name>-service build",
-  "<name>:dev": "dotenv -e .env.local -- pnpm --filter @cogni/<name>-service dev"
+  "<name>:dev": "dotenv -e .env.local -- pnpm --filter @cogni/<name>-service dev",
+  "<name>:docker:build": "docker build -f services/<name>/Dockerfile -t <name>-local ."
   ```
+
+> **Note:** The primary dev workflow is `pnpm dev:stack` which starts all services via compose. Individual `<name>:dev` scripts are useful for debugging a single service in isolation but are not required for MVP.
+
 - [ ] Add to `docker-compose.dev.yml`:
   ```yaml
   <name>:
@@ -468,6 +470,52 @@ volumes:
   - Deployment notes
 - [ ] Update `docs/ENVIRONMENTS.md` with service env vars
 - [ ] Update this table in "Existing Services" section below
+
+---
+
+## Internal Boundaries (Clean Architecture) — Optional
+
+For complex services, use hexagonal/clean architecture folders within the service:
+
+```
+services/<name>/src/
+├── core/           # Pure business logic (no I/O, no framework)
+├── ports/          # Interfaces for external dependencies
+├── adapters/       # Implementations of ports (DB, HTTP, etc.)
+├── main.ts         # Composition root (wires adapters to ports)
+├── config.ts       # Environment config
+└── health.ts       # Health endpoints
+```
+
+**Folder rules (enforced by dependency-cruiser when folders exist):**
+
+| From        | Can Import                     | Cannot Import          |
+| ----------- | ------------------------------ | ---------------------- |
+| `core/`     | `core/`, `ports/`              | `adapters/`, `main.ts` |
+| `ports/`    | `ports/`, `core/`              | `adapters/`, `main.ts` |
+| `adapters/` | `adapters/`, `ports/`, `core/` | `main.ts`              |
+| `main.ts`   | Everything                     | —                      |
+
+> **Activation:** These rules are **opt-in**. Dependency-cruiser only enforces them when the `core/` or `ports/` folders exist in a service.
+
+**When to use:**
+
+- Service has complex business logic worth isolating
+- Multiple adapter implementations (e.g., real DB vs in-memory for tests)
+- Team wants strong decoupling guarantees
+
+**When to skip:**
+
+- Simple workers with minimal logic (current `scheduler-worker`)
+- Startup/MVP phase where structure is evolving
+
+---
+
+## Contracts
+
+**Only needed for HTTP services.** Services exposing HTTP APIs should have a `src/contracts/` folder following the same pattern as `src/contracts/*.contract.ts` in the app.
+
+Worker services (like `scheduler-worker`) don't need contracts—job payloads live in the domain's core package (e.g., `@cogni/scheduler-core`).
 
 ---
 

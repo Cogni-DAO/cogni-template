@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/scheduler-core/payloads`
  * Purpose: Zod schemas for Graphile Worker job payloads.
- * Scope: Shared contract between job producers and consumers.
+ * Scope: Shared contract between job producers and consumers. Does not contain task implementations.
  * Invariants:
  * - Producer validates before enqueue
  * - Consumer validates at task entry
