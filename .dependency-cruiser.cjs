@@ -262,6 +262,12 @@ module.exports = {
       to: { path: "^packages/" },
     },
 
+    // services/ can import within itself (internal)
+    {
+      from: { path: "^services/" },
+      to: { path: "^services/" },
+    },
+
     // Files not in a known layer are caught by the forbidden `no-unknown-layer` rule below.
   ],
 

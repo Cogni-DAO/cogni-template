@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/scheduler-worker/schemas/payloads`
+ * Module: `@cogni/scheduler-worker-service/schemas/payloads`
  * Purpose: Zod schemas for Graphile Worker task payloads.
  * Scope: Validates payloads at task entry. Does not contain task logic.
  * Invariants:

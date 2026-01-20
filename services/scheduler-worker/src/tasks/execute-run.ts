@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/scheduler-worker/tasks/execute-run`
+ * Module: `@cogni/scheduler-worker-service/tasks/execute-run`
  * Purpose: Graphile Worker task for executing scheduled graph runs.
  * Scope: Loads schedule, validates grant, creates run record, enqueues next run. Does not contain graph execution logic.
  * Invariants:

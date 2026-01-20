@@ -123,6 +123,7 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   "postcss.config.mjs",
   "public",
   "scripts",
+  "services",
   "sonar-project.properties",
   "src",
   "tailwind.config.ts",

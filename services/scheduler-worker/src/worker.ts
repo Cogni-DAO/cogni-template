@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/scheduler-worker/worker`
+ * Module: `@cogni/scheduler-worker-service/worker`
  * Purpose: Graphile Worker bootstrap and lifecycle management.
  * Scope: Starts worker with injected dependencies, handles shutdown. Does not contain task logic.
  * Invariants:

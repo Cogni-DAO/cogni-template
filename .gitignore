@@ -96,3 +96,4 @@ id_*
 # Protect keys directory but allow .pub files
 platform/infra/providers/cherry/base/keys/*
 !platform/infra/providers/cherry/base/keys/*.pub
+services/*/dist

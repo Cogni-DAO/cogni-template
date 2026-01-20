@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/scheduler-worker/tasks/reconcile`
+ * Module: `@cogni/scheduler-worker-service/tasks/reconcile`
  * Purpose: Graphile Worker task for reconciling stale schedules.
  * Scope: Finds schedules with stale next_run_at and re-enqueues them. Does not execute graphs.
  * Invariants:

@@ -1,0 +1,29 @@
+{
+  "name": "@cogni/scheduler-worker-service",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsup",
+    "postbuild": "node -e \"const fs=require('fs'); if(!fs.existsSync('dist/main.js')){console.error('ERROR: dist/main.js missing'); process.exit(1)}\"",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js"
+  },
+  "dependencies": {
+    "@cogni/db-client": "workspace:*",
+    "@cogni/scheduler-core": "workspace:*",
+    "cron-parser": "^4.9.0",
+    "graphile-worker": "^0.16.6",
+    "pino": "^9.6.0",
+    "postgres": "^3.4.5",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5",
+    "vitest": "^3.0.0"
+  }
+}
