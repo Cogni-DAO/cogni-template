@@ -18,6 +18,22 @@ import { afterEach, beforeAll, vi } from "vitest";
 
 import { initOtelSdk } from "@/instrumentation";
 
+// Set test tooling environment IMMEDIATELY at module load time
+// (before test file imports resolve - needed for contract tests that import route handlers)
+// Do NOT set APP_ENV here - let test suites control it for adapter wiring tests
+// Do NOT set DATABASE_URL or DB_* here - stack tests use .env.test values
+Object.assign(process.env, {
+  NODE_ENV: "test",
+  VITEST: "true", // Canonical test-runner signal - silences makeLogger() regardless of APP_ENV
+  // Disable external service calls for unit tests
+  DISABLE_TELEMETRY: "true",
+  DISABLE_EXTERNAL_CALLS: "true",
+  // Temporal vars required by container - provide defaults for unit/contract tests
+  // Stack tests override these via .env.test
+  TEMPORAL_ADDRESS: process.env.TEMPORAL_ADDRESS ?? "localhost:7233",
+  TEMPORAL_NAMESPACE: process.env.TEMPORAL_NAMESPACE ?? "test-namespace",
+});
+
 // Minimal RainbowKit mock to prevent browser-only dependencies from loading in Node
 vi.mock("@rainbow-me/rainbowkit", () => ({
   getDefaultConfig: vi.fn(() => ({
@@ -50,16 +66,6 @@ let localhostAgent: Agent;
 let dispatcher: Dispatcher;
 
 beforeAll(async () => {
-  // Set test tooling environment
-  // Do NOT set APP_ENV here - let test suites control it for adapter wiring tests
-  Object.assign(process.env, {
-    NODE_ENV: "test",
-    VITEST: "true", // Canonical test-runner signal - silences makeLogger() regardless of APP_ENV
-    // Disable external service calls for unit tests
-    DISABLE_TELEMETRY: "true",
-    DISABLE_EXTERNAL_CALLS: "true",
-  });
-
   // Initialize OTel SDK for stack tests that assert trace_id
   // Uses same codepath as production (instrumentation.ts) per AI_SETUP_SPEC.md
   // failOnError: false allows graceful degradation in test environment

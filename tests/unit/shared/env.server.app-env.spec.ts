@@ -12,6 +12,10 @@
  * @public
  */
 
+import {
+  BASE_VALID_ENV,
+  PRODUCTION_VALID_ENV,
+} from "@tests/_fixtures/env/base-env";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const ORIGINAL_ENV = process.env;
@@ -29,15 +33,8 @@ describe("serverEnv APP_ENV validation", () => {
 
   it("allows APP_ENV=test", async () => {
     Object.assign(process.env, {
+      ...BASE_VALID_ENV,
       NODE_ENV: "development",
-      APP_ENV: "test",
-      POSTGRES_USER: "postgres",
-      POSTGRES_PASSWORD: "postgres",
-      POSTGRES_DB: "test_db",
-      DB_HOST: "localhost",
-      LITELLM_MASTER_KEY: "test-key",
-      AUTH_SECRET: "x".repeat(32),
-      SCHEDULER_API_TOKEN: "x".repeat(32),
     });
 
     const { serverEnv } = await import("@/shared/env/server");
@@ -47,15 +44,8 @@ describe("serverEnv APP_ENV validation", () => {
 
   it("allows APP_ENV=production", async () => {
     Object.assign(process.env, {
+      ...PRODUCTION_VALID_ENV,
       NODE_ENV: "production",
-      APP_ENV: "production",
-      POSTGRES_USER: "postgres",
-      POSTGRES_PASSWORD: "postgres",
-      POSTGRES_DB: "test_db",
-      DB_HOST: "postgres",
-      LITELLM_MASTER_KEY: "test-key",
-      AUTH_SECRET: "x".repeat(32),
-      SCHEDULER_API_TOKEN: "x".repeat(32),
     });
 
     const { serverEnv } = await import("@/shared/env/server");
