@@ -36,7 +36,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@cogni/scheduler-core": "workspace:*",
     "drizzle-orm": "^0.44.7"
   },
   "devDependencies": {
