@@ -20,8 +20,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "@/adapters/server/db/client";
 import { confirmCreditsPaymentFacade } from "@/app/_facades/payments/credits.server";
-import { users } from "@/shared/db/schema.auth";
-import { billingAccounts, creditLedger } from "@/shared/db/schema.billing";
+import { billingAccounts, creditLedger, users } from "@/shared/db/schema";
 
 describe("Credits confirm stack (idempotent on clientPaymentId)", () => {
   it("applies credits once per clientPaymentId and returns consistent balance", async () => {

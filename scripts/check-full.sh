@@ -227,6 +227,14 @@ pnpm test:contract
 step_duration=$(($(date +%s) - step_start))
 echo "    ✓ Passed (${step_duration}s)"
 
+# Services local tests (standalone service unit tests)
+echo ""
+echo "  → test:services:local"
+step_start=$(date +%s)
+pnpm test:services:local
+step_duration=$(($(date +%s) - step_start))
+echo "    ✓ Passed (${step_duration}s)"
+
 # Stack tests (full HTTP + DB)
 echo ""
 echo "  → test:stack:docker"

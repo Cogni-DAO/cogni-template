@@ -244,15 +244,15 @@ Current: 31 invariants spread across document.
 
 ## OSS Alternatives Summary
 
-| Problem                | Current Approach      | OSS Alternative          | Effort to Adopt |
-| ---------------------- | --------------------- | ------------------------ | --------------- |
-| Durable scheduling     | Graphile + reconciler | Temporal.io              | Medium          |
-| Streaming with billing | Custom StreamDriver   | Vercel AI SDK            | Low             |
-| Tool wire encoding     | Custom encoders       | LangChain (already used) | None            |
-| OAuth connection mgmt  | Not designed          | Nango                    | Medium          |
-| Job queuing            | Graphile Worker       | BullMQ                   | Low             |
+| Problem                | Current Approach      | OSS Alternative          | Decision                |
+| ---------------------- | --------------------- | ------------------------ | ----------------------- |
+| Durable scheduling     | Graphile + reconciler | Temporal.io              | ✅ **APPROVED** for P1  |
+| Streaming with billing | Custom StreamDriver   | Vercel AI SDK            | Evaluate later          |
+| Tool wire encoding     | Custom encoders       | LangChain (already used) | Use LangChain           |
+| OAuth connection mgmt  | Not designed          | Nango                    | Evaluate (not for POC)  |
+| Job queuing            | Graphile Worker       | BullMQ                   | N/A (Temporal replaces) |
 
-**Recommendation**: Evaluate Temporal.io and Nango before building more custom infrastructure. Both have permissive licenses and strong communities.
+**Decision**: Temporal.io approved for scheduling migration (P1). See [SCHEDULER_SPEC.md](../SCHEDULER_SPEC.md) for design.
 
 ---
 
@@ -267,7 +267,7 @@ Current: 31 invariants spread across document.
 
 ### Short-term (P1 Scope)
 
-5. [ ] Evaluate Temporal.io for scheduling — POC with simple cron workflow
+5. [x] Evaluate Temporal.io for scheduling — **APPROVED** (see SCHEDULER_SPEC.md)
 6. [ ] Evaluate Nango for connection management — POC with GitHub OAuth
 7. [ ] Consolidate GRAPH_EXECUTION invariants from 31 to ~8 groups
 8. [ ] Remove `attempt` field from P0 schemas (add back in P1 with persistence)

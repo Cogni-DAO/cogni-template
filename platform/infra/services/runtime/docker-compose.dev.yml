@@ -37,6 +37,7 @@ services:
       - PINO_LOG_LEVEL=${PINO_LOG_LEVEL:-info}
       # Optional vars - pass-through only if set in host (absent = undefined, not empty string)
       - METRICS_TOKEN
+      - SCHEDULER_API_TOKEN
       - LANGFUSE_PUBLIC_KEY
       - LANGFUSE_SECRET_KEY
       - LANGFUSE_BASE_URL

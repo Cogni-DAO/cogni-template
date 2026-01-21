@@ -133,6 +133,7 @@
         "tests/**/*.ts",
         "scripts/**/*.{ts,js,cjs,mjs}",
         "docs/templates/**/*.ts",
+        "services/**/*.ts",
         "**/*.config.ts",
         "**/*.config.js",
         "**/*.config.cjs",
@@ -153,6 +154,7 @@
         "playwright.config.ts",
         "tests/**/*.{ts,tsx}",
         "scripts/**/*.{ts,js,cjs,mjs}",
+        "services/**/*.ts",
         "**/*.config.ts",
         "**/*.config.js",
         "**/*.config.cjs",
@@ -200,10 +202,10 @@
         "packages/cogni-contracts/tsup.config.ts",
         "packages/langgraph-graphs/tsup.config.ts",
         "packages/langgraph-graphs/vitest.config.ts",
-        "packages/scheduler-worker/tsup.config.ts",
-        "packages/scheduler-worker/vitest.config.ts",
-        "vitest.workspace.ts",
-        "tsup.scripts.config.ts"
+        "packages/scheduler-core/tsup.config.ts",
+        "packages/db-client/tsup.config.ts",
+        "packages/db-schema/tsup.config.ts",
+        "vitest.workspace.ts"
       ],
       "linter": {
         "rules": {

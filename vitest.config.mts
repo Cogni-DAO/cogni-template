@@ -30,6 +30,7 @@ export default defineConfig({
     include: [
       "tests/**/*.{test,spec}.{ts,tsx}",
       "packages/*/tests/**/*.{test,spec}.{ts,tsx}",
+      "services/*/tests/**/*.{test,spec}.{ts,tsx}",
     ],
     exclude: [
       "node_modules",

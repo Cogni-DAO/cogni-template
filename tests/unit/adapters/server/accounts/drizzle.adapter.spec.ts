@@ -44,6 +44,9 @@ const mockDb = {
     billingAccounts: {
       findFirst: vi.fn(),
     },
+    virtualKeys: {
+      findFirst: vi.fn(),
+    },
   },
   // biome-ignore lint/suspicious/noExplicitAny: Mocking complex DB type
 } as unknown as any; // Cast to any to avoid strict type checks for now
@@ -57,12 +60,67 @@ describe("DrizzleAccountService", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDb.query.billingAccounts.findFirst.mockReset();
+    mockDb.query.virtualKeys.findFirst.mockReset();
     mockTx.query.billingAccounts.findFirst.mockReset();
     mockTx.query.virtualKeys.findFirst.mockReset();
     mockTx.query.chargeReceipts.findFirst.mockReset();
     mockTx.returning.mockReset();
     mockTx.onConflictDoNothing.mockReset().mockReturnThis();
     service = new DrizzleAccountService(mockDb);
+  });
+
+  describe("getBillingAccountById", () => {
+    it("returns billing account with default virtual key when both exist", async () => {
+      // Mock finding account
+      mockDb.query.billingAccounts.findFirst.mockResolvedValue({
+        id: "acc-123",
+        ownerUserId: "user-456",
+        balanceCredits: 100000n,
+      });
+
+      // Mock finding default virtual key
+      mockDb.query.virtualKeys.findFirst.mockResolvedValue({
+        id: "vk-789",
+        billingAccountId: "acc-123",
+        isDefault: true,
+      });
+
+      const result = await service.getBillingAccountById("acc-123");
+
+      expect(result).toEqual({
+        id: "acc-123",
+        ownerUserId: "user-456",
+        balanceCredits: 100000,
+        defaultVirtualKeyId: "vk-789",
+      });
+    });
+
+    it("returns null when billing account not found", async () => {
+      mockDb.query.billingAccounts.findFirst.mockResolvedValue(null);
+
+      const result = await service.getBillingAccountById("nonexistent");
+
+      expect(result).toBeNull();
+      // Should not attempt to fetch virtual key
+      expect(mockDb.query.virtualKeys.findFirst).not.toHaveBeenCalled();
+    });
+
+    it("returns null when billing account exists but has no default virtual key", async () => {
+      // Mock finding account
+      mockDb.query.billingAccounts.findFirst.mockResolvedValue({
+        id: "acc-123",
+        ownerUserId: "user-456",
+        balanceCredits: 100000n,
+      });
+
+      // Mock no default virtual key found
+      mockDb.query.virtualKeys.findFirst.mockResolvedValue(null);
+
+      const result = await service.getBillingAccountById("acc-123");
+
+      expect(result).toBeNull();
+    });
   });
 
   describe("recordChargeReceipt", () => {

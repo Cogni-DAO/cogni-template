@@ -12,13 +12,13 @@
  * @public
  */
 
+import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { Logger } from "pino";
-
 import {
   DrizzleAccountService,
   DrizzleAiTelemetryAdapter,
   DrizzleExecutionGrantAdapter,
-  DrizzleJobQueueAdapter,
+  DrizzleExecutionRequestAdapter,
   DrizzlePaymentAttemptRepository,
   DrizzleScheduleManagerAdapter,
   DrizzleScheduleRunAdapter,
@@ -30,7 +30,9 @@ import {
   LiteLlmUsageServiceAdapter,
   type MimirAdapterConfig,
   MimirMetricsAdapter,
+  NoOpScheduleControlAdapter,
   SystemClock,
+  TemporalScheduleControlAdapter,
   ViemEvmOnchainClient,
   ViemTreasuryAdapter,
 } from "@/adapters/server";
@@ -46,7 +48,7 @@ import type {
   AiTelemetryPort,
   Clock,
   ExecutionGrantPort,
-  JobQueuePort,
+  ExecutionRequestPort,
   LangfusePort,
   LlmService,
   MetricsQueryPort,
@@ -91,8 +93,9 @@ export interface Container {
   /** Langfuse tracer - undefined when LANGFUSE_SECRET_KEY not set */
   langfuse: LangfusePort | undefined;
   // Scheduling ports
-  jobQueue: JobQueuePort;
+  scheduleControl: ScheduleControlPort;
   executionGrantPort: ExecutionGrantPort;
+  executionRequestPort: ExecutionRequestPort;
   scheduleRunRepository: ScheduleRunRepository;
   scheduleManager: ScheduleManagerPort;
 }
@@ -219,14 +222,44 @@ function createContainer(): Container {
 
   const clock = new SystemClock();
 
-  // Scheduling adapters
-  const jobQueue = new DrizzleJobQueueAdapter(db);
-  const executionGrantPort = new DrizzleExecutionGrantAdapter(db);
-  const scheduleRunRepository = new DrizzleScheduleRunAdapter(db);
+  // Scheduling adapters (from @cogni/db-client)
+  // Per architecture rule: composition root injects loggers via child()
+
+  // ScheduleControlPort: test uses NoOp, production uses Temporal (or NoOp if not configured)
+  // Per SCHEDULER_SPEC.md: APP_ENV=test → NoOp, else → Temporal if configured
+  const scheduleControl: ScheduleControlPort = env.isTestMode
+    ? new NoOpScheduleControlAdapter()
+    : (() => {
+        if (!env.TEMPORAL_ADDRESS || !env.TEMPORAL_NAMESPACE) {
+          log.warn(
+            "TEMPORAL_ADDRESS/NAMESPACE not configured; using NoOp schedule control (schedules will be DB-only)"
+          );
+          return new NoOpScheduleControlAdapter();
+        }
+        return new TemporalScheduleControlAdapter({
+          address: env.TEMPORAL_ADDRESS,
+          namespace: env.TEMPORAL_NAMESPACE,
+          taskQueue: env.TEMPORAL_TASK_QUEUE,
+        });
+      })();
+
+  const executionGrantPort = new DrizzleExecutionGrantAdapter(
+    db,
+    log.child({ component: "DrizzleExecutionGrantAdapter" })
+  );
+  const executionRequestPort = new DrizzleExecutionRequestAdapter(
+    db,
+    log.child({ component: "DrizzleExecutionRequestAdapter" })
+  );
+  const scheduleRunRepository = new DrizzleScheduleRunAdapter(
+    db,
+    log.child({ component: "DrizzleScheduleRunAdapter" })
+  );
   const scheduleManager = new DrizzleScheduleManagerAdapter(
     db,
-    jobQueue,
-    executionGrantPort
+    scheduleControl,
+    executionGrantPort,
+    log.child({ component: "DrizzleScheduleManagerAdapter" })
   );
 
   // Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
@@ -257,8 +290,9 @@ function createContainer(): Container {
     treasuryReadPort,
     aiTelemetry,
     langfuse,
-    jobQueue,
+    scheduleControl,
     executionGrantPort,
+    executionRequestPort,
     scheduleRunRepository,
     scheduleManager,
   };
@@ -288,12 +322,12 @@ export function resolveActivityDeps(): ActivityDeps {
 }
 
 /**
- * Scheduling dependencies for worker task execution.
- * Used by scheduler-worker package.
+ * Scheduling dependencies for CRUD operations.
+ * Used by schedule routes.
  */
 export type SchedulingDeps = Pick<
   Container,
-  | "jobQueue"
+  | "scheduleControl"
   | "executionGrantPort"
   | "scheduleRunRepository"
   | "scheduleManager"
@@ -303,7 +337,7 @@ export type SchedulingDeps = Pick<
 export function resolveSchedulingDeps(): SchedulingDeps {
   const container = getContainer();
   return {
-    jobQueue: container.jobQueue,
+    scheduleControl: container.scheduleControl,
     executionGrantPort: container.executionGrantPort,
     scheduleRunRepository: container.scheduleRunRepository,
     scheduleManager: container.scheduleManager,

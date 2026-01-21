@@ -21,8 +21,12 @@ import { getDb } from "@/adapters/server/db/client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST } from "@/app/api/v1/ai/completion/route";
 import type { SessionUser } from "@/shared/auth/session";
-import { billingAccounts, users, virtualKeys } from "@/shared/db/schema";
-import { aiInvocationSummaries } from "@/shared/db/schema.ai";
+import {
+  aiInvocationSummaries,
+  billingAccounts,
+  users,
+  virtualKeys,
+} from "@/shared/db/schema";
 
 // Mock getSessionUser to simulate authenticated session
 vi.mock("@/app/_lib/auth/session", () => ({

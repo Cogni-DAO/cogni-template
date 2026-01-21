@@ -90,6 +90,12 @@ export const serverSchema = z.object({
   // Note: PROMETHEUS_* vars are Alloy-only (infra); app only needs the scrape token.
   METRICS_TOKEN: z.string().min(32).optional(),
 
+  // Scheduler API token - Bearer auth for scheduler-worker → internal graph execution API
+  // Per SCHEDULER_SPEC.md: scheduler worker authenticates via shared secret to call
+  // POST /api/internal/graphs/{graphId}/runs. Min 32 chars to reduce weak-token risk.
+  // Required: Internal execution API will not function without this token.
+  SCHEDULER_API_TOKEN: z.string().min(32),
+
   // Public Analytics (Stage 9.5) - Mimir queries for public /analytics page
   // Optional: only required when analytics feature is enabled
   MIMIR_URL: z.string().url().optional(),
@@ -116,6 +122,13 @@ export const serverSchema = z.object({
   // When set, graph execution uses langgraph dev server instead of in-process
   // Per LANGGRAPH_SERVER.md MVP: default port 2024 for langgraph dev
   LANGGRAPH_DEV_URL: z.string().url().optional(),
+
+  // Temporal (Schedule orchestration) - Optional
+  // Per SCHEDULER_SPEC.md: Required for non-test environments to use Temporal schedules
+  // If not set in non-test mode, falls back to NoOp adapter with warning
+  TEMPORAL_ADDRESS: z.string().optional(), // e.g., "localhost:7233" or "temporal:7233"
+  TEMPORAL_NAMESPACE: z.string().optional(), // e.g., "cogni-test" or "cogni-production"
+  TEMPORAL_TASK_QUEUE: z.string().default("scheduler-tasks"),
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {

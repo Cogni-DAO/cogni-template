@@ -8,6 +8,8 @@
     { "path": "./packages/aragon-osx" },
     { "path": "./packages/cogni-contracts" },
     { "path": "./packages/langgraph-graphs" },
-    { "path": "./packages/scheduler-worker" }
+    { "path": "./packages/db-client" },
+    { "path": "./packages/db-schema" },
+    { "path": "./packages/scheduler-core" }
   ]
 }

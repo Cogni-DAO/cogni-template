@@ -57,6 +57,36 @@ type CreditLedgerRow = typeof creditLedger.$inferSelect;
 export class DrizzleAccountService implements AccountService {
   constructor(private readonly db: Database) {}
 
+  async getBillingAccountById(
+    billingAccountId: string
+  ): Promise<BillingAccount | null> {
+    const account = await this.db.query.billingAccounts.findFirst({
+      where: eq(billingAccounts.id, billingAccountId),
+    });
+
+    if (!account) {
+      return null;
+    }
+
+    const defaultKey = await this.db.query.virtualKeys.findFirst({
+      where: and(
+        eq(virtualKeys.billingAccountId, billingAccountId),
+        eq(virtualKeys.isDefault, true)
+      ),
+    });
+
+    if (!defaultKey) {
+      return null;
+    }
+
+    return {
+      id: account.id,
+      ownerUserId: account.ownerUserId,
+      balanceCredits: this.toNumber(account.balanceCredits),
+      defaultVirtualKeyId: defaultKey.id,
+    };
+  }
+
   async getOrCreateBillingAccountForUser({
     userId,
     displayName,

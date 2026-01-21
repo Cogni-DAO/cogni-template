@@ -81,7 +81,7 @@ describe("Payment Routes HTTP Contract Tests", () => {
 
   afterEach(async () => {
     // Cleanup cascades to billing/payment_attempts via FK
-    const { users } = await import("@/shared/db/schema.auth");
+    const { users } = await import("@/shared/db/schema");
     await db.delete(users).where(eq(users.id, testUserId));
     resetTestOnChainVerifier();
   });
@@ -403,9 +403,9 @@ describe("Payment Routes HTTP Contract Tests", () => {
 
       // Cleanup user2
       await db
-        .delete((await import("@/shared/db/schema.auth")).users)
+        .delete((await import("@/shared/db/schema")).users)
         .where(
-          eq((await import("@/shared/db/schema.auth")).users.id, user2.user.id)
+          eq((await import("@/shared/db/schema")).users.id, user2.user.id)
         );
     });
 

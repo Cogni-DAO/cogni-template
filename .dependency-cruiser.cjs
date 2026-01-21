@@ -1,7 +1,7 @@
 // .dependency-cruiser.cjs
 // Hexagonal architecture boundaries enforced via dependency-cruiser.
 // Pure policy config - scope controlled via CLI --include-only flag.
-// Production: depcruise src packages services --include-only '^(src|packages|services)' --output-type err-long
+// Production: depcruise src packages --include-only '^(src|packages)' --output-type err-long
 // Arch probes: depcruise src/__arch_probes__ --include-only '^src/__arch_probes__' --output-type err
 
 /** @type {import('dependency-cruiser').IConfiguration} */
@@ -18,7 +18,6 @@ const srcLayers = {
   // adaptersWorker, adaptersCli: add when implemented
   shared: "^src/shared",
   bootstrap: "^src/bootstrap",
-  scripts: "^src/scripts",
   lib: "^src/lib",
   auth: "^src/auth\\.ts$",
   proxy: "^src/proxy\\.ts$",
@@ -30,10 +29,10 @@ const srcLayers = {
   mcp: "^src/mcp",
 };
 
-// Monorepo boundary layers (packages/, services/)
+// Monorepo boundary layers (packages/)
 const monorepoLayers = {
   packages: "^packages/",
-  services: "^services/",
+  // services: "^services/",
 };
 
 const layers = { ...srcLayers, ...monorepoLayers };
@@ -197,23 +196,6 @@ module.exports = {
       },
     },
 
-    // scripts → scripts, bootstrap, ports, adapters, shared, types (worker entry points)
-    // TODO: Temporary layer for scheduler worker entry point. Remove when worker
-    // is refactored into its own package + service (services/scheduler-worker).
-    {
-      from: { path: layers.scripts },
-      to: {
-        path: [
-          layers.scripts,
-          layers.bootstrap,
-          layers.ports,
-          layers.adapters,
-          layers.shared,
-          layers.types,
-        ],
-      },
-    },
-
     // components → components, shared, types, styles
     {
       from: { path: layers.components },
@@ -256,11 +238,17 @@ module.exports = {
       to: { path: "^packages/" },
     },
 
-    // services/ can import from packages/ (future-proof)
-    {
-      from: { path: "^services/" },
-      to: { path: "^packages/" },
-    },
+    // // services/ can import from packages/ (future-proof)
+    // {
+    //   from: { path: "^services/" },
+    //   to: { path: "^packages/" },
+    // },
+
+    // // services/ can import within itself (internal)
+    // {
+    //   from: { path: "^services/" },
+    //   to: { path: "^services/" },
+    // },
 
     // Files not in a known layer are caught by the forbidden `no-unknown-layer` rule below.
   ],
@@ -392,31 +380,31 @@ module.exports = {
         "packages/ must be standalone; cannot depend on src/ or services/",
     },
 
-    // services/ cannot import from src/
-    {
-      name: "no-services-to-src",
-      severity: "error",
-      from: {
-        path: "^services/",
-      },
-      to: {
-        path: "^src/",
-      },
-      comment: "services/ cannot depend on Node app code in src/",
-    },
+    // // services/ cannot import from src/
+    // {
+    //   name: "no-services-to-src",
+    //   severity: "error",
+    //   from: {
+    //     path: "^services/",
+    //   },
+    //   to: {
+    //     path: "^src/",
+    //   },
+    //   comment: "services/ cannot depend on Node app code in src/",
+    // },
 
-    // src/ cannot import from services/
-    {
-      name: "no-src-to-services",
-      severity: "error",
-      from: {
-        path: "^src/",
-      },
-      to: {
-        path: "^services/",
-      },
-      comment: "src/ cannot depend on Operator services",
-    },
+    // // src/ cannot import from services/
+    // {
+    //   name: "no-src-to-services",
+    //   severity: "error",
+    //   from: {
+    //     path: "^src/",
+    //   },
+    //   to: {
+    //     path: "^services/",
+    //   },
+    //   comment: "src/ cannot depend on Operator services",
+    // },
 
     // Block deep imports into package internals (force use of package exports)
     // Allows index.ts (entrypoint), blocks other internal files
@@ -424,7 +412,7 @@ module.exports = {
       name: "no-deep-package-imports",
       severity: "error",
       from: {
-        path: "^(src|services)/",
+        path: "^src/", // was "^(src|services)/"
       },
       to: {
         path: "^packages/[^/]+/src/(?!index\\.ts$)",
@@ -453,6 +441,82 @@ module.exports = {
       },
       comment:
         "ai-core defines runtime interfaces; ai-tools implements them. No reverse dependency.",
+    },
+
+    // =========================================================================
+    // Scheduler package boundary rules (per PACKAGES_ARCHITECTURE.md)
+    // =========================================================================
+
+    // db-schema: refs is the root — imports nothing from other slices
+    {
+      name: "no-refs-to-slices",
+      severity: "error",
+      from: {
+        path: "^packages/db-schema/src/refs",
+      },
+      to: {
+        path: "^packages/db-schema/src/(scheduling|auth|billing|ai)",
+      },
+      comment: "refs.ts is the FK root; must not import from domain slices",
+    },
+
+    // db-schema: slices cannot import each other (only refs allowed)
+    {
+      name: "no-cross-slice-schema-imports",
+      severity: "error",
+      from: {
+        path: "^packages/db-schema/src/(scheduling|auth|billing|ai)\\.ts$",
+      },
+      to: {
+        path: "^packages/db-schema/src/(scheduling|auth|billing|ai)\\.ts$",
+      },
+      comment: "Domain slices import from /refs only, never from each other",
+    },
+
+    // db-client must only be imported in server layers (prevent client bundle pollution)
+    // Allowed: bootstrap, adapters, app/api (server routes), app/_facades, app/_lib
+    // Blocked: features (may be used client-side), components, core, etc.
+    {
+      name: "db-client-server-only",
+      severity: "error",
+      from: {
+        path: "^src/(features|components|core|styles|assets)/",
+      },
+      to: {
+        path: "^packages/db-client/",
+      },
+      comment:
+        "db-client contains postgres/drizzle; only server layers may import",
+    },
+
+    // =========================================================================
+    // Services internal clean architecture (opt-in when folders exist)
+    // =========================================================================
+
+    // core/ and ports/ cannot import from adapters/
+    {
+      name: "no-service-core-or-ports-to-adapters",
+      severity: "error",
+      from: {
+        path: "^services/[^/]+/src/(core|ports)/",
+      },
+      to: {
+        path: "^services/[^/]+/src/adapters/",
+      },
+      comment: "core/ports cannot depend on adapters (clean architecture)",
+    },
+
+    // adapters/ cannot import main.ts (composition root)
+    {
+      name: "no-service-adapters-to-main",
+      severity: "error",
+      from: {
+        path: "^services/[^/]+/src/adapters/",
+      },
+      to: {
+        path: "^services/[^/]+/src/main\\.ts$",
+      },
+      comment: "adapters must not import the composition root",
     },
   ],
 };

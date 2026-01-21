@@ -14,4 +14,3 @@
 
 export * from "./db-url";
 export * from "./schema";
-export * from "./schema.auth";

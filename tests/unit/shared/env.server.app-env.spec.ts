@@ -37,6 +37,7 @@ describe("serverEnv APP_ENV validation", () => {
       DB_HOST: "localhost",
       LITELLM_MASTER_KEY: "test-key",
       AUTH_SECRET: "x".repeat(32),
+      SCHEDULER_API_TOKEN: "x".repeat(32),
     });
 
     const { serverEnv } = await import("@/shared/env/server");
@@ -54,6 +55,7 @@ describe("serverEnv APP_ENV validation", () => {
       DB_HOST: "postgres",
       LITELLM_MASTER_KEY: "test-key",
       AUTH_SECRET: "x".repeat(32),
+      SCHEDULER_API_TOKEN: "x".repeat(32),
     });
 
     const { serverEnv } = await import("@/shared/env/server");

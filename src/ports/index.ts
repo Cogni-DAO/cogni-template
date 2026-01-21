@@ -13,6 +13,47 @@
  */
 
 export type { GraphId } from "@cogni/ai-core";
+// Scheduling ports - re-exported from @cogni/scheduler-core package
+export {
+  type CreateScheduleInput,
+  type CreateScheduleParams,
+  type ExecutionGrant,
+  type ExecutionGrantPort,
+  type ExecutionOutcome,
+  type ExecutionRequest,
+  type ExecutionRequestPort,
+  GrantExpiredError,
+  GrantNotFoundError,
+  GrantRevokedError,
+  GrantScopeMismatchError,
+  type IdempotencyCheckResult,
+  InvalidCronExpressionError,
+  InvalidTimezoneError,
+  isGrantExpiredError,
+  isGrantNotFoundError,
+  isGrantRevokedError,
+  isGrantScopeMismatchError,
+  isInvalidCronExpressionError,
+  isInvalidTimezoneError,
+  isScheduleAccessDeniedError,
+  isScheduleControlConflictError,
+  isScheduleControlNotFoundError,
+  isScheduleControlUnavailableError,
+  isScheduleNotFoundError,
+  ScheduleAccessDeniedError,
+  ScheduleControlConflictError,
+  ScheduleControlNotFoundError,
+  type ScheduleControlPort,
+  ScheduleControlUnavailableError,
+  type ScheduleDescription,
+  type ScheduleManagerPort,
+  ScheduleNotFoundError,
+  type ScheduleRun,
+  type ScheduleRunRepository,
+  type ScheduleRunStatus,
+  type ScheduleSpec,
+  type UpdateScheduleInput,
+} from "@cogni/scheduler-core";
 export {
   type AccountService,
   type BillingAccount,
@@ -92,42 +133,6 @@ export {
   type PaymentErrorCode,
   TxHashAlreadyBoundPortError,
 } from "./payment-attempt.port";
-export {
-  type ExecutionGrant,
-  type ExecutionGrantPort,
-  GrantExpiredError,
-  GrantNotFoundError,
-  GrantRevokedError,
-  GrantScopeMismatchError,
-  isGrantExpiredError,
-  isGrantNotFoundError,
-  isGrantRevokedError,
-  isGrantScopeMismatchError,
-} from "./scheduling/execution-grant.port";
-// Scheduling ports
-export type {
-  EnqueueJobParams,
-  JobQueuePort,
-} from "./scheduling/job-queue.port";
-export {
-  type CreateScheduleInput,
-  InvalidCronExpressionError,
-  InvalidTimezoneError,
-  isInvalidCronExpressionError,
-  isInvalidTimezoneError,
-  isScheduleAccessDeniedError,
-  isScheduleNotFoundError,
-  ScheduleAccessDeniedError,
-  type ScheduleManagerPort,
-  ScheduleNotFoundError,
-  type ScheduleSpec,
-  type UpdateScheduleInput,
-} from "./scheduling/schedule-manager.port";
-export type {
-  ScheduleRun,
-  ScheduleRunRepository,
-  ScheduleRunStatus,
-} from "./scheduling/schedule-run.port";
 export type {
   EmitAiEvent,
   ToolEffect,
