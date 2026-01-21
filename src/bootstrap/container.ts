@@ -30,7 +30,6 @@ import {
   LiteLlmUsageServiceAdapter,
   type MimirAdapterConfig,
   MimirMetricsAdapter,
-  NoOpScheduleControlAdapter,
   SystemClock,
   TemporalScheduleControlAdapter,
   ViemEvmOnchainClient,
@@ -225,23 +224,20 @@ function createContainer(): Container {
   // Scheduling adapters (from @cogni/db-client)
   // Per architecture rule: composition root injects loggers via child()
 
-  // ScheduleControlPort: test uses NoOp, production uses Temporal (or NoOp if not configured)
-  // Per SCHEDULER_SPEC.md: APP_ENV=test → NoOp, else → Temporal if configured
-  const scheduleControl: ScheduleControlPort = env.isTestMode
-    ? new NoOpScheduleControlAdapter()
-    : (() => {
-        if (!env.TEMPORAL_ADDRESS || !env.TEMPORAL_NAMESPACE) {
-          log.warn(
-            "TEMPORAL_ADDRESS/NAMESPACE not configured; using NoOp schedule control (schedules will be DB-only)"
-          );
-          return new NoOpScheduleControlAdapter();
-        }
-        return new TemporalScheduleControlAdapter({
-          address: env.TEMPORAL_ADDRESS,
-          namespace: env.TEMPORAL_NAMESPACE,
-          taskQueue: env.TEMPORAL_TASK_QUEUE,
-        });
-      })();
+  // ScheduleControlPort: Temporal is required infrastructure
+  // Per SCHEDULER_SPEC.md: TEMPORAL_ADDRESS + TEMPORAL_NAMESPACE must be configured
+  if (!env.TEMPORAL_ADDRESS || !env.TEMPORAL_NAMESPACE) {
+    throw new Error(
+      "TEMPORAL_ADDRESS and TEMPORAL_NAMESPACE are required. " +
+        "Start Temporal with: pnpm dev:infra"
+    );
+  }
+  const scheduleControl: ScheduleControlPort =
+    new TemporalScheduleControlAdapter({
+      address: env.TEMPORAL_ADDRESS,
+      namespace: env.TEMPORAL_NAMESPACE,
+      taskQueue: env.TEMPORAL_TASK_QUEUE,
+    });
 
   const executionGrantPort = new DrizzleExecutionGrantAdapter(
     db,

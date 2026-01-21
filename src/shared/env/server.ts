@@ -123,11 +123,11 @@ export const serverSchema = z.object({
   // Per LANGGRAPH_SERVER.md MVP: default port 2024 for langgraph dev
   LANGGRAPH_DEV_URL: z.string().url().optional(),
 
-  // Temporal (Schedule orchestration) - Optional
-  // Per SCHEDULER_SPEC.md: Required for non-test environments to use Temporal schedules
-  // If not set in non-test mode, falls back to NoOp adapter with warning
-  TEMPORAL_ADDRESS: z.string().optional(), // e.g., "localhost:7233" or "temporal:7233"
-  TEMPORAL_NAMESPACE: z.string().optional(), // e.g., "cogni-test" or "cogni-production"
+  // Temporal (Schedule orchestration) - Required
+  // Per SCHEDULER_SPEC.md: Temporal is required infrastructure, no fallback
+  // Start Temporal with: pnpm dev:infra
+  TEMPORAL_ADDRESS: z.string().min(1), // e.g., "localhost:7233" or "temporal:7233"
+  TEMPORAL_NAMESPACE: z.string().min(1), // e.g., "cogni-test" or "cogni-production"
   TEMPORAL_TASK_QUEUE: z.string().default("scheduler-tasks"),
 });
 

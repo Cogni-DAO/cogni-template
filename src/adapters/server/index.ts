@@ -81,7 +81,6 @@ export { EvmRpcOnChainVerifierAdapter } from "./payments/evm-rpc-onchain-verifie
 export { PonderOnChainVerifierAdapter } from "./payments/ponder-onchain-verifier.adapter";
 // Temporal adapters - schedule control
 export {
-  NoOpScheduleControlAdapter,
   TemporalScheduleControlAdapter,
   type TemporalScheduleControlConfig,
 } from "./temporal";
