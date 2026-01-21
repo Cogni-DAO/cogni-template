@@ -360,11 +360,13 @@
 | Schedule already paused (no-op)  | Success (idempotent)              |
 | Schedule already deleted (no-op) | Success (idempotent)              |
 
-**3. Docker Infrastructure:**
+**3. Docker Infrastructure:** ✅
 
-- [ ] Add `temporal` + `temporal-ui` + `temporal-postgres` to docker-compose (temporalio/docker-compose pinned)
+- [x] Add `temporal` + `temporal-ui` + `temporal-postgres` to docker-compose (temporalio/docker-compose v1.29.1 pinned)
 - [x] Add env vars: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE=cogni-{APP_ENV}`, `TEMPORAL_TASK_QUEUE=scheduler-tasks`
-- [ ] Health checks for temporal service
+- [x] Health checks for temporal service (gRPC health via `temporal operator cluster health`)
+- [x] Add `TEMPORAL_DB_USER`, `TEMPORAL_DB_PASSWORD` to deploy.sh + GitHub workflows
+- [x] Sync dev + prod compose files
 
 **4. CRUD Integration (failure semantics defined):** ✅
 
@@ -456,5 +458,5 @@
 
 ---
 
-**Last Updated**: 2026-01-21
-**Status**: P0 internal execution API complete; P1 Temporal migration is next
+**Last Updated**: 2026-01-22
+**Status**: P1 Docker infrastructure complete; Worker service is next
