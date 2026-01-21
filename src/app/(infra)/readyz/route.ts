@@ -3,10 +3,10 @@
 
 /**
  * Module: `@app/readyz`
- * Purpose: HTTP endpoint providing readiness check with full validation (env, secrets, EVM RPC config).
- * Scope: Returns service readiness status; validates env, runtime secrets, and EVM RPC URL. MVP: env+secrets+RPC config only. Does not check DB connectivity yet.
- * Invariants: Always returns valid readyz schema; force-dynamic runtime; returns 503 if env/secrets/RPC config invalid.
- * Side-effects: IO (HTTP response, structured logging)
+ * Purpose: HTTP endpoint providing readiness check with full validation (env, secrets, EVM RPC, Temporal).
+ * Scope: Returns service readiness status; validates env, runtime secrets, EVM RPC connectivity, and Temporal connectivity. Does not check DB connectivity yet.
+ * Invariants: Always returns valid readyz schema; force-dynamic runtime; returns 503 if env/secrets/infra connectivity invalid.
+ * Side-effects: IO (HTTP response, structured logging, network calls to RPC and Temporal)
  * Notes: Used by Docker HEALTHCHECK, deployment validation, K8s readiness probes.
  *        HTTP status is primary truth: 200 = ready, 503 = not ready.
  *        Logs readiness failures for deployment debugging.

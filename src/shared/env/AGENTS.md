@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-10
+- **Last reviewed:** 2026-01-22
 - **Status:** draft
 
 ## Purpose
@@ -42,7 +42,7 @@ Single source of truth for environment variables. Lazy validation with Zod preve
 
 - `server.ts`: serverEnv() (unified lazy function)
 - `client.ts`: clientEnv (typed object)
-- `invariants.ts`: assertEnvInvariants(), assertRuntimeSecrets(), RuntimeSecretError
+- `invariants.ts`: assertEnvInvariants(), assertRuntimeSecrets(), assertEvmRpcConfig(), assertEvmRpcConnectivity(), assertTemporalConnectivity(), RuntimeSecretError, InfraConnectivityError
 - `index.ts`: re-exports + getEnv, requireEnv
 
 **Files considered API:** server.ts, client.ts, index.ts
@@ -79,6 +79,12 @@ Unified serverEnv() provides all vars:
 Constructed:
 
 - DATABASE*URL (built from POSTGRES*\_ and DB\_\_ components)
+
+Temporal (required infrastructure):
+
+- TEMPORAL_ADDRESS (required, e.g., localhost:7233)
+- TEMPORAL_NAMESPACE (required, e.g., cogni-test)
+- TEMPORAL_TASK_QUEUE (optional, default scheduler-tasks)
 
 Optional:
 

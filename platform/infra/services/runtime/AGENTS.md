@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-06
+- **Last reviewed:** 2026-01-22
 - **Status:** draft
 
 ## Purpose
 
-Production runtime configuration directory copied to VM hosts for container orchestration and database initialization. Contains app + postgres + litellm + alloy services. Edge (Caddy) is in separate `../edge/` project.
+Production runtime configuration directory copied to VM hosts for container orchestration and database initialization. Contains app + postgres + litellm + alloy + temporal services. Edge (Caddy) is in separate `../edge/` project.
 
 ## Pointers
 
@@ -36,7 +36,7 @@ Production runtime configuration directory copied to VM hosts for container orch
 - **Exports:** none
 - **Routes (if any):** none
 - **CLI (if any):** docker-compose commands
-- **Env/Config keys:** `APP_IMAGE`, `MIGRATOR_IMAGE`, `APP_ENV`, `DEPLOY_ENVIRONMENT`, `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, `DATABASE_URL`, `APP_BASE_URL`, `NEXTAUTH_URL`, `AUTH_SECRET`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `LITELLM_DATABASE_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`, `LANGFUSE_TRACING_ENVIRONMENT` (derived from DEPLOY_ENVIRONMENT), `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY`, `METRICS_TOKEN` (app+alloy), `PROMETHEUS_REMOTE_WRITE_URL` (alloy), `PROMETHEUS_USERNAME` (alloy), `PROMETHEUS_PASSWORD` (alloy)
+- **Env/Config keys:** `APP_IMAGE`, `MIGRATOR_IMAGE`, `APP_ENV`, `DEPLOY_ENVIRONMENT`, `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_NAME`, `DATABASE_URL`, `APP_BASE_URL`, `NEXTAUTH_URL`, `AUTH_SECRET`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `LITELLM_DATABASE_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`, `LANGFUSE_TRACING_ENVIRONMENT` (derived from DEPLOY_ENVIRONMENT), `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY`, `METRICS_TOKEN` (app+alloy), `PROMETHEUS_REMOTE_WRITE_URL` (alloy), `PROMETHEUS_USERNAME` (alloy), `PROMETHEUS_PASSWORD` (alloy), `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, `TEMPORAL_DB_USER`, `TEMPORAL_DB_PASSWORD`, `TEMPORAL_DB_HOST`, `TEMPORAL_DB_PORT`
 - **Files considered API:** `docker-compose.yml`, `postgres-init/*.sh`, `configs/alloy-config.alloy`
 
 ## Ports (optional)
@@ -47,7 +47,7 @@ Production runtime configuration directory copied to VM hosts for container orch
 
 ## Responsibilities
 
-- This directory **does**: Provide production runtime configuration copied to VM hosts for deployment (app, postgres, litellm, alloy). Includes LiteLLM networking + database wiring in dev stack.
+- This directory **does**: Provide production runtime configuration copied to VM hosts for deployment (app, postgres, litellm, alloy, temporal). Includes LiteLLM networking + database wiring in dev stack.
 - This directory **does not**: Handle TLS termination (see `../edge/`), build-time configuration, or development-only settings
 
 ## Usage
@@ -111,3 +111,11 @@ docker compose --project-name cogni-runtime logs -f app
 - Environment variables: `DEPLOY_ENVIRONMENT`, `LOKI_WRITE_URL`, `LOKI_USERNAME`, `LOKI_PASSWORD`
 - Metrics: App exposes `/api/metrics` (auth via `METRICS_TOKEN`); Alloy scrapes and ships to Mimir (via `PROMETHEUS_*`)
 - Verify in Alloy UI (http://127.0.0.1:12345) and Grafana Cloud
+
+**Temporal Services:**
+
+- `temporal-postgres`: Dedicated Postgres for Temporal (not shared with app DB)
+- `temporal`: Temporal server with auto-setup (handles schema migrations), pinned to v1.29.1
+- `temporal-ui`: Web UI for debugging schedules (localhost:8233)
+- Namespace auto-created via `DEFAULT_NAMESPACE=cogni-{APP_ENV}`
+- Port forwarding: 127.0.0.1:7233 (gRPC), 127.0.0.1:8233 (UI)

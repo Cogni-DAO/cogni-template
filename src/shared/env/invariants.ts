@@ -3,12 +3,12 @@
 
 /**
  * Module: `@shared/env/invariants`
- * Purpose: Fail-fast validation of runtime secrets and cross-field env invariants beyond Zod schema.
- * Scope: Runtime secret checks (adapter boundaries only) and cross-field validations. Does NOT validate during Next.js build/SSG.
- * Invariants: Throws RuntimeSecretError on missing secrets; memoizes production only; never runs at module init.
- * Side-effects: none
- * Notes: Call assertRuntimeSecrets() from adapter methods and runtime endpoints only, never from build-reachable code.
- * Links: src/shared/env/server.ts, src/adapters/server/ai/litellm.adapter.ts, src/app/(infra)/readyz/route.ts
+ * Purpose: Fail-fast validation of runtime secrets, infrastructure connectivity, and cross-field env invariants.
+ * Scope: Runtime secret checks, infrastructure health probes (Temporal, EVM RPC), cross-field validations. Does NOT validate during Next.js build/SSG.
+ * Invariants: Throws RuntimeSecretError on missing secrets; throws InfraConnectivityError on unreachable infra; memoizes production only.
+ * Side-effects: IO (network calls for connectivity checks)
+ * Notes: Call assert* functions from adapter methods and runtime endpoints only, never from build-reachable code.
+ * Links: src/shared/env/server.ts, src/app/(infra)/readyz/route.ts, docs/SCHEDULER_SPEC.md
  * @public
  */
 
