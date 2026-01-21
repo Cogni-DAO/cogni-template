@@ -275,14 +275,16 @@
 - [x] Routes: `/api/v1/schedules` CRUD endpoints
 - [x] Package extraction complete
 
-### P0: Internal Execution API (Blocker)
+### P0: Internal Execution API (Complete)
 
-- [ ] `POST /api/internal/graphs/{graphId}/runs` — service-auth endpoint
-- [ ] Auth: Bearer `INTERNAL_API_TOKEN`, constant-time compare
-- [ ] Re-validate grant (validity + scope) — defense-in-depth
-- [ ] Request: `{ executionGrantId, input }` → Response: `{ runId, traceId, ok, errorCode? }`
-- [ ] Create `execution_requests` table with `request_hash`
-- [ ] On conflict: if `request_hash` matches return cached; if differs return 422
+- [x] `POST /api/internal/graphs/{graphId}/runs` — service-auth endpoint
+- [x] Auth: Bearer `SCHEDULER_API_TOKEN`, constant-time compare
+- [x] Re-validate grant (validity + scope) — defense-in-depth
+- [x] Request: `{ executionGrantId, input }` → Response: `{ runId, traceId, ok, errorCode? }`
+- [x] Create `execution_requests` table with `request_hash`
+- [x] On conflict: if `request_hash` matches return cached; if differs return 422
+- [x] Add `AccountService.getBillingAccountById` for grant → virtualKeyId resolution
+- [x] Stack tests for auth, idempotency, and grant validation
 
 ### P1: Temporal Migration
 
@@ -379,4 +381,4 @@
 ---
 
 **Last Updated**: 2026-01-21
-**Status**: P0 internal execution API is blocker; P1 Temporal migration planned
+**Status**: P0 internal execution API complete; P1 Temporal migration is next
