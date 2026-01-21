@@ -80,6 +80,19 @@ export class RuntimeSecretError extends Error {
 }
 
 /**
+ * Typed error for required infrastructure connectivity failures.
+ * Used when infrastructure (Temporal, databases, etc.) is unreachable.
+ */
+export class InfraConnectivityError extends Error {
+  readonly code = "INFRA_UNREACHABLE" as const;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "InfraConnectivityError";
+  }
+}
+
+/**
  * Extended env interface for EVM RPC validation
  */
 interface EnvWithRpc extends ParsedEnv {
@@ -161,16 +174,13 @@ interface ScheduleControlForHealthCheck {
  * Budget: 5 seconds timeout for connection establishment.
  *
  * @param scheduleControl - ScheduleControlPort to test
- * @param env - Server environment for mode check
+ * @param _env - Server environment (unused, kept for API consistency)
  * @throws RuntimeSecretError if Temporal unreachable
  */
 export async function assertTemporalConnectivity(
   scheduleControl: ScheduleControlForHealthCheck,
-  env: ParsedEnv
+  _env: ParsedEnv
 ): Promise<void> {
-  // Test mode may use mocked adapters - skip connectivity check
-  if (env.APP_ENV === "test") return;
-
   try {
     // 5 second timeout budget for Temporal connection
     const timeoutPromise = new Promise<never>((_resolve, reject) => {
@@ -187,7 +197,7 @@ export async function assertTemporalConnectivity(
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unknown Temporal error";
-    throw new RuntimeSecretError(
+    throw new InfraConnectivityError(
       `Temporal connectivity check failed: ${message}. ` +
         "Verify TEMPORAL_ADDRESS is correct and Temporal is running (pnpm dev:infra)."
     );

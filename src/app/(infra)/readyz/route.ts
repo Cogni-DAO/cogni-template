@@ -25,6 +25,7 @@ import {
   assertEvmRpcConnectivity,
   assertRuntimeSecrets,
   assertTemporalConnectivity,
+  InfraConnectivityError,
   RuntimeSecretError,
 } from "@/shared/env/invariants";
 import type { RequestContext } from "@/shared/observability";
@@ -37,7 +38,11 @@ export const dynamic = "force-dynamic";
  */
 function logReadinessFailure(
   ctx: RequestContext,
-  error: EnvValidationError | RuntimeSecretError | Error
+  error:
+    | EnvValidationError
+    | RuntimeSecretError
+    | InfraConnectivityError
+    | Error
 ): void {
   if (error instanceof EnvValidationError) {
     ctx.log.error(
@@ -55,6 +60,14 @@ function logReadinessFailure(
         message: error.message,
       },
       "readiness check failed: missing runtime secret"
+    );
+  } else if (error instanceof InfraConnectivityError) {
+    ctx.log.error(
+      {
+        reason: error.code,
+        message: error.message,
+      },
+      "readiness check failed: infrastructure unreachable"
     );
   } else {
     ctx.log.error(
@@ -114,6 +127,22 @@ export const GET = wrapRouteHandlerWithLogging(
 
       // Runtime secret validation failures (typed error from assertRuntimeSecrets)
       if (error instanceof RuntimeSecretError) {
+        logReadinessFailure(ctx, error);
+        return new NextResponse(
+          JSON.stringify({
+            status: "error",
+            reason: error.code,
+            message: error.message,
+          }),
+          {
+            status: 503, // Service Unavailable - not ready
+            headers: { "content-type": "application/json" },
+          }
+        );
+      }
+
+      // Infrastructure connectivity failures (Temporal, etc.)
+      if (error instanceof InfraConnectivityError) {
         logReadinessFailure(ctx, error);
         return new NextResponse(
           JSON.stringify({
