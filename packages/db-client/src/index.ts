@@ -18,7 +18,6 @@ export * from "@cogni/db-schema/scheduling";
 export { DrizzleExecutionRequestAdapter } from "./adapters/drizzle-execution-request.adapter";
 // Adapters
 export { DrizzleExecutionGrantAdapter } from "./adapters/drizzle-grant.adapter";
-export { DrizzleJobQueueAdapter } from "./adapters/drizzle-job-queue.adapter";
 export { DrizzleScheduleRunAdapter } from "./adapters/drizzle-run.adapter";
 export { DrizzleScheduleManagerAdapter } from "./adapters/drizzle-schedule.adapter";
 // Client factory
