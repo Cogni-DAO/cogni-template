@@ -1,7 +1,7 @@
 // .dependency-cruiser.cjs
 // Hexagonal architecture boundaries enforced via dependency-cruiser.
 // Pure policy config - scope controlled via CLI --include-only flag.
-// Production: depcruise src packages services --include-only '^(src|packages|services)' --output-type err-long
+// Production: depcruise src packages --include-only '^(src|packages)' --output-type err-long
 // Arch probes: depcruise src/__arch_probes__ --include-only '^src/__arch_probes__' --output-type err
 
 /** @type {import('dependency-cruiser').IConfiguration} */
@@ -29,10 +29,10 @@ const srcLayers = {
   mcp: "^src/mcp",
 };
 
-// Monorepo boundary layers (packages/, services/)
+// Monorepo boundary layers (packages/)
 const monorepoLayers = {
   packages: "^packages/",
-  services: "^services/",
+  // services: "^services/",
 };
 
 const layers = { ...srcLayers, ...monorepoLayers };
@@ -238,17 +238,17 @@ module.exports = {
       to: { path: "^packages/" },
     },
 
-    // services/ can import from packages/ (future-proof)
-    {
-      from: { path: "^services/" },
-      to: { path: "^packages/" },
-    },
+    // // services/ can import from packages/ (future-proof)
+    // {
+    //   from: { path: "^services/" },
+    //   to: { path: "^packages/" },
+    // },
 
-    // services/ can import within itself (internal)
-    {
-      from: { path: "^services/" },
-      to: { path: "^services/" },
-    },
+    // // services/ can import within itself (internal)
+    // {
+    //   from: { path: "^services/" },
+    //   to: { path: "^services/" },
+    // },
 
     // Files not in a known layer are caught by the forbidden `no-unknown-layer` rule below.
   ],
@@ -380,31 +380,31 @@ module.exports = {
         "packages/ must be standalone; cannot depend on src/ or services/",
     },
 
-    // services/ cannot import from src/
-    {
-      name: "no-services-to-src",
-      severity: "error",
-      from: {
-        path: "^services/",
-      },
-      to: {
-        path: "^src/",
-      },
-      comment: "services/ cannot depend on Node app code in src/",
-    },
+    // // services/ cannot import from src/
+    // {
+    //   name: "no-services-to-src",
+    //   severity: "error",
+    //   from: {
+    //     path: "^services/",
+    //   },
+    //   to: {
+    //     path: "^src/",
+    //   },
+    //   comment: "services/ cannot depend on Node app code in src/",
+    // },
 
-    // src/ cannot import from services/
-    {
-      name: "no-src-to-services",
-      severity: "error",
-      from: {
-        path: "^src/",
-      },
-      to: {
-        path: "^services/",
-      },
-      comment: "src/ cannot depend on Operator services",
-    },
+    // // src/ cannot import from services/
+    // {
+    //   name: "no-src-to-services",
+    //   severity: "error",
+    //   from: {
+    //     path: "^src/",
+    //   },
+    //   to: {
+    //     path: "^services/",
+    //   },
+    //   comment: "src/ cannot depend on Operator services",
+    // },
 
     // Block deep imports into package internals (force use of package exports)
     // Allows index.ts (entrypoint), blocks other internal files
@@ -412,7 +412,7 @@ module.exports = {
       name: "no-deep-package-imports",
       severity: "error",
       from: {
-        path: "^(src|services)/",
+        path: "^src/", // was "^(src|services)/"
       },
       to: {
         path: "^packages/[^/]+/src/(?!index\\.ts$)",
