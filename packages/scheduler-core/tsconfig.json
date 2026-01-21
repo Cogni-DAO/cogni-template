@@ -11,8 +11,13 @@
     "declaration": true,
     "declarationMap": true,
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "baseUrl": ".",
+    "paths": {
+      "@cogni/db-schema/*": ["../db-schema/src/*"]
+    }
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "__arch_probes__"]
+  "exclude": ["node_modules", "dist", "__arch_probes__"],
+  "references": [{ "path": "../db-schema" }]
 }
