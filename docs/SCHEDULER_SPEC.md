@@ -41,20 +41,20 @@
 
 ### Progression
 
-| Phase           | Worker Entry                            | Graph Execution           | Status      |
-| --------------- | --------------------------------------- | ------------------------- | ----------- |
-| **1 (Current)** | `src/scripts/run-scheduler-worker.ts`   | v0 stub (no execution)    | ✅ Merged   |
-| **P0 Blocker**  | Same                                    | HTTP call to internal API | 🔲 Next     |
-| **2 (Future)**  | `services/scheduler-worker/src/main.ts` | Same HTTP call            | 🔲 After P0 |
+| Phase           | Worker Entry                            | Graph Execution           | Status     |
+| --------------- | --------------------------------------- | ------------------------- | ---------- |
+| **1 (Legacy)**  | `src/scripts/run-scheduler-worker.ts`   | v0 stub (no execution)    | ✅ Deleted |
+| **2 (Current)** | `services/scheduler-worker/src/main.ts` | v0 stub (no execution)    | ✅ Merged  |
+| **P0 Blocker**  | Same                                    | HTTP call to internal API | 🔲 Next    |
 
-### Phase 2 Package Extraction
+### Package Extraction (Complete)
 
-| Extract From                         | Extract To              |
+| Extracted From                       | Extracted To            |
 | ------------------------------------ | ----------------------- |
 | `src/types/scheduling.ts`            | `@cogni/scheduler-core` |
 | `src/ports/scheduling/*`             | `@cogni/scheduler-core` |
 | `src/adapters/server/scheduling/*`   | `@cogni/db-client`      |
-| `src/shared/db/schema.scheduling.ts` | `@cogni/db-client`      |
+| `src/shared/db/schema.scheduling.ts` | `@cogni/db-schema`      |
 
 **`@cogni/db-client` Invariants:**
 
@@ -202,27 +202,27 @@ pnpm exec graphile-worker --schema-only --connection "$DATABASE_URL"
 
 ### Current (Implemented)
 
-| File                                                          | Purpose                                                 |
-| ------------------------------------------------------------- | ------------------------------------------------------- |
-| `src/types/scheduling.ts`                                     | `ExecutionGrant`, `ScheduleSpec`, `ScheduleRun` types   |
-| `src/shared/db/schema.scheduling.ts`                          | `execution_grants`, `schedules`, `schedule_runs` tables |
-| `src/ports/scheduling/job-queue.port.ts`                      | `JobQueuePort` interface                                |
-| `src/ports/scheduling/execution-grant.port.ts`                | `ExecutionGrantPort` + error classes                    |
-| `src/ports/scheduling/schedule-manager.port.ts`               | `ScheduleManagerPort` interface                         |
-| `src/ports/scheduling/schedule-run.port.ts`                   | `ScheduleRunRepository` interface                       |
-| `src/adapters/server/scheduling/drizzle-job-queue.adapter.ts` | `DrizzleJobQueueAdapter`                                |
-| `src/adapters/server/scheduling/drizzle-grant.adapter.ts`     | `DrizzleExecutionGrantAdapter`                          |
-| `src/adapters/server/scheduling/drizzle-schedule.adapter.ts`  | `DrizzleScheduleManagerAdapter`                         |
-| `src/adapters/server/scheduling/drizzle-run.adapter.ts`       | `DrizzleScheduleRunAdapter`                             |
-| `src/contracts/schedules.*.v1.contract.ts`                    | Schedule CRUD contracts (4 files)                       |
-| `src/app/api/v1/schedules/route.ts`                           | POST (create), GET (list)                               |
-| `src/app/api/v1/schedules/[scheduleId]/route.ts`              | PATCH (update), DELETE                                  |
-| `src/bootstrap/container.ts`                                  | Wire scheduling ports (~line 303)                       |
-| `src/scripts/run-scheduler-worker.ts`                         | Worker entry point                                      |
-| `packages/scheduler-worker/src/tasks/execute-run.ts`          | `createExecuteScheduledRunTask` factory                 |
-| `packages/scheduler-worker/src/tasks/reconcile.ts`            | `createReconcileSchedulesTask` factory                  |
-| `packages/scheduler-worker/src/schemas/payloads.ts`           | Zod payload schemas                                     |
-| `packages/scheduler-worker/src/utils/cron.ts`                 | `computeNextCronTime` utility                           |
+| File                                                           | Purpose                                                 |
+| -------------------------------------------------------------- | ------------------------------------------------------- |
+| `packages/scheduler-core/src/types.ts`                         | `ExecutionGrant`, `ScheduleSpec`, `ScheduleRun` types   |
+| `packages/db-schema/src/scheduling.ts`                         | `execution_grants`, `schedules`, `schedule_runs` tables |
+| `packages/scheduler-core/src/ports/job-queue.port.ts`          | `JobQueuePort` interface                                |
+| `packages/scheduler-core/src/ports/execution-grant.port.ts`    | `ExecutionGrantPort` + error classes                    |
+| `packages/scheduler-core/src/ports/schedule-manager.port.ts`   | `ScheduleManagerPort` interface                         |
+| `packages/scheduler-core/src/ports/schedule-run.port.ts`       | `ScheduleRunRepository` interface                       |
+| `packages/db-client/src/adapters/drizzle-job-queue.adapter.ts` | `DrizzleJobQueueAdapter`                                |
+| `packages/db-client/src/adapters/drizzle-grant.adapter.ts`     | `DrizzleExecutionGrantAdapter`                          |
+| `packages/db-client/src/adapters/drizzle-schedule.adapter.ts`  | `DrizzleScheduleManagerAdapter`                         |
+| `packages/db-client/src/adapters/drizzle-run.adapter.ts`       | `DrizzleScheduleRunAdapter`                             |
+| `src/contracts/schedules.*.v1.contract.ts`                     | Schedule CRUD contracts (4 files)                       |
+| `src/app/api/v1/schedules/route.ts`                            | POST (create), GET (list)                               |
+| `src/app/api/v1/schedules/[scheduleId]/route.ts`               | PATCH (update), DELETE                                  |
+| `src/bootstrap/container.ts`                                   | Wire scheduling ports (~line 303)                       |
+| `services/scheduler-worker/src/main.ts`                        | Worker entry point                                      |
+| `services/scheduler-worker/src/tasks/execute-run.ts`           | `createExecuteScheduledRunTask` factory                 |
+| `services/scheduler-worker/src/tasks/reconcile.ts`             | `createReconcileSchedulesTask` factory                  |
+| `packages/scheduler-core/src/payloads.ts`                      | Zod payload schemas                                     |
+| `services/scheduler-worker/src/utils/cron.ts`                  | `computeNextCronTime` utility                           |
 
 ### Planned (P0 Blocker)
 
@@ -232,7 +232,7 @@ pnpm exec graphile-worker --schema-only --connection "$DATABASE_URL"
 | `src/app/api/internal/graphs/[graphId]/runs/route.ts` | Internal execution endpoint              |
 | `src/contracts/graphs.run.internal.v1.contract.ts`    | Internal execution contract              |
 
-### Planned (Phase 2)
+### Completed (Phase 2)
 
 | File                                    | Purpose                               |
 | --------------------------------------- | ------------------------------------- |

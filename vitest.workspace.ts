@@ -20,4 +20,6 @@ export default defineWorkspace([
   "./vitest.config.mts",
   // Package-local tests
   "./packages/*/vitest.config.ts",
+  // Service-local tests
+  "./services/*/vitest.config.ts",
 ]);

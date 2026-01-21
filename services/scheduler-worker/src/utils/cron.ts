@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/scheduler-worker/utils/cron`
+ * Module: `@cogni/scheduler-worker-service/utils/cron`
  * Purpose: Cron expression parsing utilities.
  * Scope: Computes next run time from cron+timezone. Does not validate cron syntax.
  * Invariants: Always returns a future date (after now).

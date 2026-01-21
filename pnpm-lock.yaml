@@ -47,9 +47,6 @@ importers:
       '@cogni/scheduler-core':
         specifier: workspace:*
         version: link:packages/scheduler-core
-      '@cogni/scheduler-worker':
-        specifier: workspace:*
-        version: link:packages/scheduler-worker
       '@langchain/langgraph-sdk':
         specifier: ^0.0.32
         version: 0.0.32
@@ -529,6 +526,10 @@ importers:
         version: 5.9.3
 
   packages/scheduler-core:
+    dependencies:
+      zod:
+        specifier: ^3.23.8
+        version: 3.25.76
     devDependencies:
       tsup:
         specifier: ^8.5.1
@@ -537,14 +538,29 @@ importers:
         specifier: ^5
         version: 5.9.3
 
-  packages/scheduler-worker:
+  services/scheduler-worker:
     dependencies:
+      '@cogni/db-client':
+        specifier: workspace:*
+        version: link:../../packages/db-client
+      '@cogni/scheduler-core':
+        specifier: workspace:*
+        version: link:../../packages/scheduler-core
       cron-parser:
         specifier: ^4.9.0
         version: 4.9.0
       graphile-worker:
         specifier: ^0.16.6
         version: 0.16.6(typescript@5.9.3)
+      pino:
+        specifier: ^9.6.0
+        version: 9.14.0
+      postgres:
+        specifier: ^3.4.5
+        version: 3.4.7
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
     devDependencies:
       tsup:
         specifier: ^8.5.1
@@ -558,9 +574,6 @@ importers:
       vitest:
         specifier: ^3.0.0
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.7)(happy-dom@20.0.10)(jiti@2.6.1)(jsdom@16.7.0(bufferutil@4.0.9)(utf-8-validate@5.0.10))(lightningcss@1.30.2)(msw@2.12.1(@types/node@22.19.7)(typescript@5.9.3))(terser@5.44.1)(tsx@4.20.6)(yaml@2.8.1)
-      zod:
-        specifier: ^3.24.0
-        version: 3.25.76
 
 packages:
 
@@ -7852,6 +7865,10 @@ packages:
 
   pino@7.11.0:
     resolution: {integrity: sha512-dMACeu63HtRLmCG8VKdy4cShCPKaYDR4youZqoSWLxl5Gu99HUw8bw75thbPv9Nip+H+QYX8o3ZJbTdVZZ2TVg==}
+    hasBin: true
+
+  pino@9.14.0:
+    resolution: {integrity: sha512-8OEwKp5juEvb/MjpIc4hjqfgCNysrS94RIOMXYvpYCdm/jglrKEiAYmiumbmGhCvs+IcInsphYDFwqrjr7398w==}
     hasBin: true
 
   pirates@4.0.7:
@@ -18976,6 +18993,20 @@ snapshots:
       safe-stable-stringify: 2.5.0
       sonic-boom: 2.8.0
       thread-stream: 0.15.2
+
+  pino@9.14.0:
+    dependencies:
+      '@pinojs/redact': 0.4.0
+      atomic-sleep: 1.0.0
+      on-exit-leak-free: 2.1.2
+      pino-abstract-transport: 2.0.0
+      pino-std-serializers: 7.0.0
+      process-warning: 5.0.0
+      quick-format-unescaped: 4.0.4
+      real-require: 0.2.0
+      safe-stable-stringify: 2.5.0
+      sonic-boom: 4.2.0
+      thread-stream: 3.1.0
 
   pirates@4.0.7: {}
 

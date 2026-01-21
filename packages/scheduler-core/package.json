@@ -19,6 +19,9 @@
     "postbuild": "node -e \"const fs=require('fs'); if(!fs.existsSync('dist/index.js')){console.error('ERROR: dist/index.js missing'); process.exit(1)}\"",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "zod": "^3.23.8"
+  },
   "devDependencies": {
     "tsup": "^8.5.1",
     "typescript": "^5"

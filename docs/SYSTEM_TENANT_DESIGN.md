@@ -72,11 +72,23 @@ The codebase already has the primitives needed:
 **System tenant bootstrap (idempotent):**
 
 ```sql
--- Run in migration AND seed (idempotent via ON CONFLICT)
-INSERT INTO billing_accounts (id, owner_user_id, is_system_tenant, balance_credits, created_at, updated_at)
-VALUES ('cogni_system', NULL, true, 0, now(), now())
+-- 1. Seed service principal user (app-level owner, NOT the DAO governance address)
+INSERT INTO users (id, wallet_address)
+VALUES ('cogni_system_principal', NULL)
+ON CONFLICT (id) DO NOTHING;
+
+-- 2. Seed system tenant owned by service principal
+INSERT INTO billing_accounts (id, owner_user_id, is_system_tenant, balance_credits, created_at)
+VALUES ('cogni_system', 'cogni_system_principal', true, 0, now())
 ON CONFLICT (id) DO NOTHING;
 ```
+
+**Why service principal (not DAO address)?**
+
+- Keeps `owner_user_id` NOT NULL (no constraint changes)
+- Separates app principal ownership from governance authority
+- Avoids filesystem-dependent migrations (no repo-spec.yaml reads)
+- P1: Add `tenant_settings` table to store DAO address + policy defaults
 
 **Startup healthcheck:**
 

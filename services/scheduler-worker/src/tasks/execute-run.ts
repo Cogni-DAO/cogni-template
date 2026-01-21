@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/scheduler-worker/tasks/execute-run`
+ * Module: `@cogni/scheduler-worker-service/tasks/execute-run`
  * Purpose: Graphile Worker task for executing scheduled graph runs.
  * Scope: Loads schedule, validates grant, creates run record, enqueues next run. Does not contain graph execution logic.
  * Invariants:
@@ -17,10 +17,13 @@
  */
 
 import { randomUUID } from "node:crypto";
+import {
+  ExecuteScheduledRunPayloadSchema,
+  SCHEDULER_TASK_IDS,
+} from "@cogni/scheduler-core";
 import type { Task } from "graphile-worker";
 
-import { ExecuteScheduledRunPayloadSchema } from "../schemas/payloads";
-import { computeNextCronTime } from "../utils/cron";
+import { computeNextCronTime } from "../utils/cron.js";
 
 /**
  * Creates the execute_scheduled_run task with injected dependencies.
@@ -111,7 +114,7 @@ export function createExecuteScheduledRunTask(deps: {
       // Still enqueue next run so schedule keeps ticking
       const nextRunAt = computeNextCronTime(schedule.cron, schedule.timezone);
       await deps.enqueueJob({
-        taskId: "execute_scheduled_run",
+        taskId: SCHEDULER_TASK_IDS.EXECUTE_SCHEDULED_RUN,
         payload: { scheduleId, scheduledFor: nextRunAt.toISOString() },
         runAt: nextRunAt,
         jobKey: `${scheduleId}:${nextRunAt.toISOString()}`,
@@ -136,7 +139,7 @@ export function createExecuteScheduledRunTask(deps: {
     // 6. Enqueue next run (PRODUCER_ENQUEUES_NEXT)
     const nextRunAt = computeNextCronTime(schedule.cron, schedule.timezone);
     await deps.enqueueJob({
-      taskId: "execute_scheduled_run",
+      taskId: SCHEDULER_TASK_IDS.EXECUTE_SCHEDULED_RUN,
       payload: { scheduleId, scheduledFor: nextRunAt.toISOString() },
       runAt: nextRunAt,
       jobKey: `${scheduleId}:${nextRunAt.toISOString()}`,

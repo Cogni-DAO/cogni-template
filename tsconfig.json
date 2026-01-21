@@ -10,7 +10,6 @@
     { "path": "./packages/langgraph-graphs" },
     { "path": "./packages/db-client" },
     { "path": "./packages/db-schema" },
-    { "path": "./packages/scheduler-core" },
-    { "path": "./packages/scheduler-worker" }
+    { "path": "./packages/scheduler-core" }
   ]
 }

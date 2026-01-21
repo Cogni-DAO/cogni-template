@@ -185,20 +185,20 @@ billing.ts     → imports from refs, extends with billing-specific tables
 
 #### `services/scheduler-worker/`
 
-- [ ] Verify `pnpm-workspace.yaml` includes `services/*`
-- [ ] Create `package.json` as workspace package (`@cogni/scheduler-worker-service`)
-- [ ] Create `tsconfig.json`
-- [ ] Create `Dockerfile` (multi-stage build)
-- [ ] Create `AGENTS.md`
-- [ ] Move `packages/scheduler-worker/src/worker.ts` → `src/worker.ts`
-- [ ] Move `packages/scheduler-worker/src/tasks/*` → `src/tasks/*`
-- [ ] Move `packages/scheduler-worker/src/schemas/*` → `src/schemas/*`
-- [ ] Move `packages/scheduler-worker/src/utils/*` → `src/utils/*`
-- [ ] Create `src/main.ts` (entry point with signal handling)
-- [ ] Create `src/config.ts` (Zod env schema)
-- [ ] Move `packages/scheduler-worker/tests/*` → `tests/*`
-- [ ] Update all imports to use `@cogni/scheduler-core`, `@cogni/db-client`
-- [ ] Verify NO direct `@cogni/db-schema` imports
+- [x] Verify `pnpm-workspace.yaml` includes `services/*`
+- [x] Create `package.json` as workspace package (`@cogni/scheduler-worker-service`)
+- [x] Create `tsconfig.json`
+- [x] Create `Dockerfile` (multi-stage build)
+- [x] Create `AGENTS.md`
+- [x] Move `packages/scheduler-worker/src/worker.ts` → `src/worker.ts`
+- [x] Move `packages/scheduler-worker/src/tasks/*` → `src/tasks/*`
+- [x] Move `packages/scheduler-worker/src/schemas/*` → `src/schemas/*` (now in `scheduler-core`)
+- [x] Move `packages/scheduler-worker/src/utils/*` → `src/utils/*`
+- [x] Create `src/main.ts` (entry point with signal handling)
+- [x] Create `src/config.ts` (Zod env schema)
+- [x] Move `packages/scheduler-worker/tests/*` → `tests/*`
+- [x] Update all imports to use `@cogni/scheduler-core`, `@cogni/db-client`
+- [x] Verify NO direct `@cogni/db-schema` imports
 
 ### Phase 3: Update src/ Imports (No Shims)
 
@@ -235,9 +235,9 @@ Update all existing imports in `src/` to use new packages directly:
 
 > **Gate:** Run `pnpm arch:check && pnpm typecheck` BEFORE deletions to verify import rewrites are complete.
 
-- [ ] Delete `packages/scheduler-worker/` (entire directory)
-- [ ] Delete `src/scripts/run-scheduler-worker.ts`
-- [ ] Delete `src/scripts/` directory (if empty)
+- [x] Delete `packages/scheduler-worker/` (entire directory)
+- [x] Delete `src/scripts/run-scheduler-worker.ts`
+- [x] Delete `src/scripts/` directory (if empty)
 - [x] Delete `src/types/scheduling.ts`
 - [x] Delete `src/ports/scheduling/` directory
 - [x] Delete `src/adapters/server/scheduling/` directory

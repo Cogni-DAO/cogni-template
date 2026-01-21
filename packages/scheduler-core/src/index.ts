@@ -13,6 +13,15 @@
  * @public
  */
 
+// Job payloads (Zod schemas for producer/consumer validation)
+export {
+  type ExecuteScheduledRunPayload,
+  ExecuteScheduledRunPayloadSchema,
+  type ReconcileSchedulesPayload,
+  ReconcileSchedulesPayloadSchema,
+  SCHEDULER_TASK_IDS,
+  type SchedulerTaskId,
+} from "./payloads";
 // Ports
 export {
   // ScheduleManagerPort

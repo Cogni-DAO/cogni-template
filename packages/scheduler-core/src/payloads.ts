@@ -2,15 +2,16 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/scheduler-worker/schemas/payloads`
- * Purpose: Zod schemas for Graphile Worker task payloads.
- * Scope: Validates payloads at task entry. Does not contain task logic.
+ * Module: `@cogni/scheduler-core/payloads`
+ * Purpose: Zod schemas for Graphile Worker job payloads.
+ * Scope: Shared contract between job producers and consumers. Does not contain task implementations.
  * Invariants:
- * - All tasks call Schema.parse(payload) before processing
- * - No `payload as X` casts allowed in tasks
+ * - Producer validates before enqueue
+ * - Consumer validates at task entry
+ * - No `payload as X` casts allowed
  * Side-effects: none
  * Links: docs/SCHEDULER_SPEC.md
- * @internal
+ * @public
  */
 
 import { z } from "zod";
@@ -36,3 +37,14 @@ export const ReconcileSchedulesPayloadSchema = z.object({});
 export type ReconcileSchedulesPayload = z.infer<
   typeof ReconcileSchedulesPayloadSchema
 >;
+
+/**
+ * Task identifiers for Graphile Worker.
+ */
+export const SCHEDULER_TASK_IDS = {
+  EXECUTE_SCHEDULED_RUN: "execute_scheduled_run",
+  RECONCILE_SCHEDULES: "reconcile_schedules",
+} as const;
+
+export type SchedulerTaskId =
+  (typeof SCHEDULER_TASK_IDS)[keyof typeof SCHEDULER_TASK_IDS];
