@@ -18,6 +18,7 @@ import {
   DrizzleAccountService,
   DrizzleAiTelemetryAdapter,
   DrizzleExecutionGrantAdapter,
+  DrizzleExecutionRequestAdapter,
   DrizzleJobQueueAdapter,
   DrizzlePaymentAttemptRepository,
   DrizzleScheduleManagerAdapter,
@@ -46,6 +47,7 @@ import type {
   AiTelemetryPort,
   Clock,
   ExecutionGrantPort,
+  ExecutionRequestPort,
   JobQueuePort,
   LangfusePort,
   LlmService,
@@ -93,6 +95,7 @@ export interface Container {
   // Scheduling ports
   jobQueue: JobQueuePort;
   executionGrantPort: ExecutionGrantPort;
+  executionRequestPort: ExecutionRequestPort;
   scheduleRunRepository: ScheduleRunRepository;
   scheduleManager: ScheduleManagerPort;
 }
@@ -229,6 +232,10 @@ function createContainer(): Container {
     db,
     log.child({ component: "DrizzleExecutionGrantAdapter" })
   );
+  const executionRequestPort = new DrizzleExecutionRequestAdapter(
+    db,
+    log.child({ component: "DrizzleExecutionRequestAdapter" })
+  );
   const scheduleRunRepository = new DrizzleScheduleRunAdapter(
     db,
     log.child({ component: "DrizzleScheduleRunAdapter" })
@@ -270,6 +277,7 @@ function createContainer(): Container {
     langfuse,
     jobQueue,
     executionGrantPort,
+    executionRequestPort,
     scheduleRunRepository,
     scheduleManager,
   };
