@@ -127,6 +127,8 @@ jobs:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
       EVM_RPC_URL: ${{ secrets.EVM_RPC_URL }}
+      TEMPORAL_DB_USER: ${{ secrets.TEMPORAL_DB_USER }}
+      TEMPORAL_DB_PASSWORD: ${{ secrets.TEMPORAL_DB_PASSWORD }}
       SOURCECRED_GITHUB_TOKEN: ${{ secrets.SOURCECRED_GITHUB_TOKEN }}
       VM_HOST: ${{ secrets.VM_HOST }}
       GHCR_DEPLOY_TOKEN: ${{ secrets.GHCR_DEPLOY_TOKEN }}
