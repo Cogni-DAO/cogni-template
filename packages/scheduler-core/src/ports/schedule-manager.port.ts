@@ -6,8 +6,8 @@
  * Purpose: Schedule manager port for schedule CRUD operations.
  * Scope: Defines contract for schedule lifecycle. Does not contain implementations.
  * Invariants:
- * - createSchedule creates grant + schedule + enqueues first job atomically
- * - Per SCHEDULER_SPEC.md: next_run_at computed from cron + timezone
+ * - Per CRUD_IS_TEMPORAL_AUTHORITY: createSchedule creates grant + DB + scheduleControl
+ * - Per SCHEDULER_SPEC.md: next_run_at is cache-only (Temporal is authoritative)
  * - Schedule access scoped to owner (callerUserId)
  * Side-effects: none (interface definition only)
  * Links: docs/SCHEDULER_SPEC.md, types/scheduling.ts, DrizzleScheduleManagerAdapter
@@ -108,7 +108,8 @@ export interface UpdateScheduleInput {
  */
 export interface ScheduleManagerPort {
   /**
-   * Creates schedule + grant + enqueues first job via JobQueuePort.
+   * Creates schedule with grant and scheduleControl.
+   * Per CRUD_IS_TEMPORAL_AUTHORITY: grant → DB → scheduleControl.
    */
   createSchedule(
     callerUserId: string,
