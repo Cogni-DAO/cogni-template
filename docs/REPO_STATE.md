@@ -18,32 +18,18 @@
 
 ### Spec Implementation Priority
 
-| Priority | Spec                                                          | Status         | Enables                                                    |
-| -------- | ------------------------------------------------------------- | -------------- | ---------------------------------------------------------- |
-| **1**    | [Scheduler Service Refactor](./SCHEDULER_SERVICE_REFACTOR.md) | 🔄 In Progress | Package boundaries (db-schema, db-client, scheduler-core)  |
-| **2**    | [Graph Execution](./GRAPH_EXECUTION.md)                       | 🔄 P1 Pending  | Core execution envelope, billing, compiled exports         |
-| **3**    | [System Tenant Design](./SYSTEM_TENANT_DESIGN.md)             | 📋 Draft       | Governance loops, PolicyResolverPort, multi-tenancy        |
-| **4**    | [Tool Use Spec](./TOOL_USE_SPEC.md)                           | 🔄 70% Done    | Wire adapters, policy enforcement, idempotency             |
-| **5**    | [Human-in-the-Loop](./HUMAN_IN_THE_LOOP.md)                   | 📋 Draft       | Interrupt/resume, approval gates                           |
-| **6**    | [Scheduler Spec](./SCHEDULER_SPEC.md)                         | 📋 Contract    | Scheduled graph execution, ExecutionGrant                  |
-| **7**    | [AI Governance Data](./AI_GOVERNANCE_DATA.md)                 | 📋 Draft       | Signal ingest, brief generation, incident-gated governance |
-| **8**    | [LangGraph Server](./LANGGRAPH_SERVER.md)                     | 📋 Contract    | Server deployment mode (P1 for scale)                      |
-| **9**    | [Accounts Design](./ACCOUNTS_DESIGN.md) (App API Keys)        | 📋 Roadmap     | Per-user API keys, per-key spend attribution               |
+| Priority | Spec                                                   | Status        | Enables                                                    |
+| -------- | ------------------------------------------------------ | ------------- | ---------------------------------------------------------- |
+| **1**    | [Scheduler Spec](./SCHEDULER_SPEC.md)                  | 🔄 P1 Pending | Scheduled graph execution, Temporal migration              |
+| **2**    | [Graph Execution](./GRAPH_EXECUTION.md)                | 🔄 P1 Pending | Core execution envelope, billing, compiled exports         |
+| **3**    | [System Tenant Design](./SYSTEM_TENANT_DESIGN.md)      | 📋 Draft      | Governance loops, PolicyResolverPort, multi-tenancy        |
+| **4**    | [Tool Use Spec](./TOOL_USE_SPEC.md)                    | 🔄 70% Done   | Wire adapters, policy enforcement, idempotency             |
+| **5**    | [Human-in-the-Loop](./HUMAN_IN_THE_LOOP.md)            | 📋 Draft      | Interrupt/resume, approval gates                           |
+| **6**    | [AI Governance Data](./AI_GOVERNANCE_DATA.md)          | 📋 Draft      | Signal ingest, brief generation, incident-gated governance |
+| **7**    | [LangGraph Server](./LANGGRAPH_SERVER.md)              | 📋 Contract   | Server deployment mode (P1 for scale)                      |
+| **8**    | [Accounts Design](./ACCOUNTS_DESIGN.md) (App API Keys) | 📋 Roadmap    | Per-user API keys, per-key spend attribution               |
 
 **Legend:** 📋 Draft/Contract | 🔄 In Progress | ✅ Complete
-
-### Spec Implementation Priority
-
-| Priority | Spec                                                          | Status         | Enables                                                   |
-| -------- | ------------------------------------------------------------- | -------------- | --------------------------------------------------------- |
-| **1**    | [Scheduler Service Refactor](./SCHEDULER_SERVICE_REFACTOR.md) | 🔄 In Progress | Package boundaries (db-schema, db-client, scheduler-core) |
-| **2**    | [Graph Execution](./GRAPH_EXECUTION.md)                       | 🔄 P1 Pending  | Core execution envelope, billing, compiled exports        |
-| **3**    | [System Tenant Design](./SYSTEM_TENANT_DESIGN.md)             | 📋 Draft       | Governance loops, PolicyResolverPort, multi-tenancy       |
-| **4**    | [Tool Use Spec](./TOOL_USE_SPEC.md)                           | 🔄 70% Done    | Wire adapters, policy enforcement, idempotency            |
-| **5**    | [Human-in-the-Loop](./HUMAN_IN_THE_LOOP.md)                   | 📋 Draft       | Interrupt/resume, approval gates                          |
-| **6**    | [Scheduler Spec](./SCHEDULER_SPEC.md)                         | 📋 Contract    | Scheduled graph execution, ExecutionGrant                 |
-| **7**    | [LangGraph Server](./LANGGRAPH_SERVER.md)                     | 📋 Contract    | Server deployment mode (P1 for scale)                     |
-| **8**    | [Accounts Design](./ACCOUNTS_DESIGN.md) (App API Keys)        | 📋 Roadmap     | Per-user API keys, per-key spend attribution              |
 
 ### Overall Assessment
 

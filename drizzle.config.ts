@@ -34,7 +34,9 @@ function getDatabaseUrl(): string {
 }
 
 export default defineConfig({
-  schema: "./src/shared/db/schema.ts",
+  // All schema lives in @cogni/db-schema package (ESM-only, no CJS build)
+  // drizzle-kit runs via tsx which handles ESM + TS natively
+  schema: "./packages/db-schema/src/**/*.ts",
   out: "./src/adapters/server/db/migrations",
   dialect: "postgresql",
   dbCredentials: {

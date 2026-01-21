@@ -20,10 +20,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cogni/ai-core": "workspace:*",
     "@cogni/db-schema": "workspace:*",
     "@cogni/scheduler-core": "workspace:*",
     "drizzle-orm": "^0.44.7",
-    "postgres": "^3.4.5"
+    "postgres": "^3.4.5",
+    "type-fest": "^5.4.1"
   },
   "devDependencies": {
     "tsup": "^8.5.1",

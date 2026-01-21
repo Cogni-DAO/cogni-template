@@ -26,6 +26,7 @@ jobs:
       NODE_ENV: test
       LITELLM_MASTER_KEY: build-key
       AUTH_SECRET: tNf5lFM9yMhdgwS5yeQB8Y2kmigblBqobkvI2XN2brg=
+      SCHEDULER_API_TOKEN: test-scheduler-api-token-for-ci-min32chars
 
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -65,6 +66,7 @@ jobs:
       NODE_ENV: test
       LITELLM_MASTER_KEY: build-key
       AUTH_SECRET: tNf5lFM9yMhdgwS5yeQB8Y2kmigblBqobkvI2XN2brg=
+      SCHEDULER_API_TOKEN: test-scheduler-api-token-for-ci-min32chars
 
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -133,6 +135,7 @@ jobs:
       NODE_ENV: test
       LITELLM_MASTER_KEY: build-key
       AUTH_SECRET: tNf5lFM9yMhdgwS5yeQB8Y2kmigblBqobkvI2XN2brg=
+      SCHEDULER_API_TOKEN: test-scheduler-api-token-for-ci-min32chars
 
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -224,6 +227,7 @@ jobs:
       TEST_BASE_URL: https://localhost/
       AUTH_SECRET: tNf5lFM9yMhdgwS5yeQB8Y2kmigblBqobkvI2XN2brg=
       METRICS_TOKEN: test-metrics-token-for-stack-tests
+      SCHEDULER_API_TOKEN: test-scheduler-api-token-for-ci-min32chars
       # All fake keys: DO NOT expose any real keys here
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4

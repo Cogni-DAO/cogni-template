@@ -1,11 +1,15 @@
 # Scheduled Graph Execution Design
 
 > [!CRITICAL]
-> Scheduled runs execute via **internal HTTP API** using durable **ExecutionGrants** (not user sessions). Worker calls `POST /api/internal/graphs/{graphId}/runs` with shared-secret auth—never imports graph execution code. Uses Graphile Worker's `add_job()` with `job_key` for job idempotency—NOT crontab polling.
+> Scheduled runs execute via **internal HTTP API** using durable **ExecutionGrants** (not user sessions). Worker calls `POST /api/internal/graphs/{graphId}/runs` with shared-secret auth—never imports graph execution code.
 
 ---
 
 ## Core Invariants
+
+> See [TEMPORAL_PATTERNS.md](TEMPORAL_PATTERNS.md) for canonical Temporal patterns, anti-patterns, and code examples shared across scheduler and governance workflows.
+
+### Governance Layer (Stable)
 
 1. **SCHEDULES_NEVER_BYPASS_EXECUTOR**: All scheduled graph execution flows through `GraphExecutorPort.runGraph()`. Scheduling layer owns timing only—never direct LLM/provider calls.
 
@@ -13,27 +17,39 @@
 
 3. **BILLING_VIA_GRANT**: Every `ExecutionGrant` has a `billingAccountId`. Execution service derives `virtualKeyId` from billing account's default key. All existing billing/idempotency invariants (GRAPH_EXECUTION.md) apply unchanged.
 
-4. **JOB_KEY_PER_SLOT**: Each scheduled run uses `job_key = scheduleId:scheduledFor` (ISO timestamp). Prevents duplicate execution if same slot enqueued twice.
+4. **GRANT_VALIDATED_TWICE**: Worker validates grant before calling API (fail-fast). Execution service re-validates grant validity + scope (defense-in-depth). Scope format: `graph:execute:{graphId}` or `graph:execute:*`.
 
-5. **PRODUCER_ENQUEUES_NEXT**: After each execution (success or failure), worker enqueues next run via `add_job()` with computed `run_at`. No polling. No static crontab.
+5. **RUN_LEDGER_FOR_GOVERNANCE**: Every execution creates `schedule_runs` record with status progression (pending→running→success/error).
 
-6. **QUEUE_SERIALIZES_SCHEDULE**: Each schedule uses `queue_name = scheduleId`. Graphile Worker processes one job per queue at a time—no app-level overlap checks needed.
+6. **EXECUTION_VIA_SERVICE_API**: Worker triggers runs via HTTP to `POST /api/internal/graphs/{graphId}/runs`. Worker NEVER imports graph execution code.
 
-7. **SKIP_MISSED_RUNS**: P0 does not backfill missed runs. If chain breaks (worker down), only next future slot is scheduled on recovery.
+7. **INTERNAL_API_SHARED_SECRET**: Internal calls require Bearer token (shared secret). Follows `METRICS_TOKEN` pattern. Caller service name logged. P1: JWT with aud/exp.
 
-8. **RECONCILER_GUARANTEES_CHAIN**: Reconciler runs on worker startup + self-reschedules every 5 min. For stale schedules (`next_run_at < now()`), computes next future slot and enqueues.
+8. **EXECUTION_IDEMPOTENCY_PERSISTED**: `execution_requests` table persists idempotency key → `{runId, traceId}`. This is the correctness layer for slot deduplication.
 
-9. **GRANT_VALIDATED_TWICE**: Worker validates grant before calling API (fail-fast). Execution service re-validates grant validity + scope (defense-in-depth). Scope format: `graph:execute:{graphId}` or `graph:execute:*`.
+9. **RUN_OWNERSHIP_BOUNDARY**: Worker owns `schedule_runs`. Execution service owns graph runs + billing (`charge_receipts`). Correlation via `runId` and `langfuseTraceId`.
 
-10. **RUN_LEDGER_FOR_GOVERNANCE**: Every execution creates `schedule_runs` record with status progression (pending→running→success/error).
+### Temporal-Specific Invariants
 
-11. **EXECUTION_VIA_SERVICE_API**: Worker triggers runs via HTTP to `POST /api/internal/graphs/{graphId}/runs`. Worker NEVER imports graph execution code.
+10. **NAMESPACE_PER_ENV**: Temporal namespace = `cogni-{APP_ENV}` (cogni-test, cogni-production). Single `scheduler-tasks` task queue per namespace.
 
-12. **INTERNAL_API_SHARED_SECRET**: Internal calls require Bearer token (shared secret). Follows `METRICS_TOKEN` pattern. Caller service name logged. P1: JWT with aud/exp.
+11. **WORKER_NEVER_CONTROLS_SCHEDULES**: `scheduler-temporal-worker` must not depend on `ScheduleControlPort` or call Temporal schedule APIs. CRUD routes are the single authority. Enforce via dep-cruiser.
 
-13. **EXECUTION_IDEMPOTENCY_PERSISTED**: Graphile `job_key` only dedupes _queued_ jobs—completed jobs deleted. `execution_requests` table persists idempotency key → `{runId, traceId}`.
+12. **WORKFLOW_ID_INCLUDES_TIMESTAMP**: Temporal workflowId = `{scheduleId}:{TemporalScheduledStartTime}`. Each scheduled slot gets a unique workflow. `scheduleId` remains the business key for correlation. Temporal overlap=SKIP ensures only one active workflow per schedule at a time.
 
-14. **RUN_OWNERSHIP_BOUNDARY**: Worker owns `schedule_runs`. Execution service owns graph runs + billing (`charge_receipts`). Correlation via `runId` and `langfuseTraceId`.
+13. **SLOT_IDEMPOTENCY_VIA_EXECUTION_REQUESTS**: Slot deduplication handled by `execution_requests` table with key = `scheduleId:TemporalScheduledStartTime`. The internal API idempotency layer (request_hash check) is the correctness guarantee—not workflowId uniqueness.
+
+13b. **ACTIVITY_IDEMPOTENCY**: All Activities must be idempotent or rely on downstream idempotency. `executeGraphActivity` relies on `execution_requests` table. `updateScheduleRunActivity` must use monotonic status updates (pending→running→success/error, never backwards).
+
+14. **SCHEDULED_TIMESTAMP_FROM_TEMPORAL**: Activities derive `scheduledFor` from `TemporalScheduledStartTime` search attribute (authoritative source), never from workflow input or wall clock.
+
+15. **CRUD_IS_TEMPORAL_AUTHORITY**: Schedule CRUD endpoints (create/update/enable/disable/delete) are the single authority for Temporal schedule lifecycle. Worker never modifies schedules.
+
+16. **NO_WORKER_RECONCILIATION**: Worker executes workflows only. Drift repair is a separate admin command (`pnpm scheduler:reconcile`), not an always-on loop.
+
+17. **DB_TIMING_IS_CACHE_ONLY**: `schedules.next_run_at` and `last_run_at` are cache columns for UI/quick-queries. Authoritative timing lives in Temporal. Synced on CRUD only; drift is acceptable.
+
+18. **SKIP_MISSED_RUNS**: P0 does not backfill missed runs. Temporal `catchupWindow=0` enforces this.
 
 ---
 
@@ -41,11 +57,11 @@
 
 ### Progression
 
-| Phase           | Worker Entry                            | Graph Execution           | Status     |
-| --------------- | --------------------------------------- | ------------------------- | ---------- |
-| **1 (Legacy)**  | `src/scripts/run-scheduler-worker.ts`   | v0 stub (no execution)    | ✅ Deleted |
-| **2 (Current)** | `services/scheduler-worker/src/main.ts` | v0 stub (no execution)    | ✅ Merged  |
-| **P0 Blocker**  | Same                                    | HTTP call to internal API | 🔲 Next    |
+| Phase           | Worker Entry                            | Scheduler          | Status     |
+| --------------- | --------------------------------------- | ------------------ | ---------- |
+| **1 (Legacy)**  | `src/scripts/run-scheduler-worker.ts`   | Graphile Worker    | ✅ Deleted |
+| **2 (Current)** | `services/scheduler-worker/src/main.ts` | Graphile Worker    | ✅ Merged  |
+| **3 (Next)**    | `services/scheduler-temporal-worker/`   | Temporal Schedules | 🔲 Planned |
 
 ### Package Extraction (Complete)
 
@@ -56,60 +72,88 @@
 | `src/adapters/server/scheduling/*`   | `@cogni/db-client`      |
 | `src/shared/db/schema.scheduling.ts` | `@cogni/db-schema`      |
 
-**`@cogni/db-client` Invariants:**
-
-- MUST: Export `createDbClient(databaseUrl: string)` factory
-- FORBIDDEN: `@/shared/env` imports, Next.js imports, app bootstrap
-
-### Execution Flow
+### Temporal Architecture
 
 ```
-USER → POST /api/v1/schedules → Create grant + schedule + enqueue first job
-                                         │
-                                         ▼
-GRAPHILE WORKER (at run_at) → execute_scheduled_run task
-  1. Load schedule, validate grant
-  2. Create schedule_runs (pending)
-  3. POST /api/internal/graphs/{graphId}/runs
-     ├─ Bearer: $INTERNAL_API_TOKEN
-     ├─ Idempotency-Key: {scheduleId}:{scheduledFor}
-     └─ Body: { executionGrantId, input }
-  4. Update schedule_runs (success/error)
-  5. Enqueue next job
-                                         │
-                                         ▼
-EXECUTION SERVICE → Verify token → Check idempotency → Run graph → Return {runId, traceId}
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ CRUD Endpoints (Single Authority for Temporal Schedules)                    │
+│ All Temporal calls go through ScheduleControlPort (vendor-agnostic)         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  POST /api/v1/schedules                                                     │
+│    1. Create ExecutionGrant                                                 │
+│    2. Insert into schedules table                                           │
+│    3. scheduleControl.createSchedule({ scheduleId, cron, timezone, ... })   │
+│       └─► Adapter: overlap=SKIP, catchupWindow=0 (hardcoded)                │
+│    On Temporal failure: rollback DB, return 503                             │
+│                                                                             │
+│  PATCH /api/v1/schedules/:id (enabled toggle)                               │
+│    1. Update DB                                                             │
+│    2. scheduleControl.pauseSchedule() / resumeSchedule()                    │
+│    On Temporal failure: rollback DB, return 503                             │
+│                                                                             │
+│  DELETE /api/v1/schedules/:id                                               │
+│    1. scheduleControl.deleteSchedule()                                      │
+│    2. Delete from DB (only if Temporal succeeds)                            │
+│    On Temporal failure: return 503, do NOT delete DB                        │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Temporal Infrastructure                                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Temporal Cloud (or self-hosted)                                            │
+│    • Namespace: cogni-{APP_ENV}                                             │
+│    • TaskQueue: scheduler-tasks                                             │
+│    • Schedules: overlap=SKIP, catchupWindow=0                               │
+│                                                                             │
+│  services/scheduler-temporal-worker/                                        │
+│    • Connects to Temporal, registers taskQueue                              │
+│    • Hosts GovernanceScheduledRunWorkflow + Activities                      │
+│    • Does NOT create/update/delete schedules (CRUD is authority)            │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                      │
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ Execution Flow                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Temporal Schedule fires → GovernanceScheduledRunWorkflow                   │
+│    Activity: validateGrantActivity(grantId)         // fail-fast            │
+│    Activity: createScheduleRunActivity(...)         // ledger entry         │
+│    Activity: executeGraphActivity({                                         │
+│      scheduleId,                                                            │
+│      graphId,                                                               │
+│      grantId,                                                               │
+│      scheduledFor: TemporalScheduledStartTime,      // from Temporal        │
+│      idempotencyKey: `${scheduleId}:${scheduledFor}`                        │
+│    })                                                                       │
+│      → POST /api/internal/graphs/{graphId}/runs                             │
+│         ├─ Bearer: $INTERNAL_API_TOKEN                                      │
+│         ├─ Idempotency-Key: {scheduleId}:{scheduledFor}                     │
+│         └─ Body: { executionGrantId, input }                                │
+│    Activity: updateScheduleRunActivity(success/error)                       │
+│                                                                             │
+│  [If HITL required]                                                         │
+│    Workflow waits for Signal: 'plane_review_decision'                       │
+│    Plane webhook → temporalClient.workflow.signal(...)                      │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### Idempotency Layers
 
-| Layer         | Key                       | Storage                  | Prevents                |
-| ------------- | ------------------------- | ------------------------ | ----------------------- |
-| Job enqueue   | `scheduleId:scheduledFor` | Graphile (deleted after) | Duplicate jobs          |
-| Execution API | `Idempotency-Key` header  | `execution_requests`     | Duplicate runs on retry |
-| Billing       | `runId/attempt/unit`      | `charge_receipts`        | Duplicate charges       |
+| Layer             | Key                                         | Storage              | Prevents                    |
+| ----------------- | ------------------------------------------- | -------------------- | --------------------------- |
+| Temporal Schedule | scheduleId (DB UUID)                        | Temporal             | Duplicate schedule identity |
+| Workflow          | workflowId = `{scheduleId}:{scheduledFor}`  | Temporal             | Concurrent slot executions  |
+| Execution API     | `{scheduleId}:{TemporalScheduledStartTime}` | `execution_requests` | Duplicate runs on retry     |
+| Billing           | `runId/attempt/unit`                        | `charge_receipts`    | Duplicate charges           |
 
-### Graphile Worker Pattern
-
-Use `add_job()` with queue serialization—NOT crontab (which is static/deploy-time only):
-
-```sql
-SELECT graphile_worker.add_job(
-  'execute_scheduled_run',
-  json_build_object('scheduleId', schedule_id, 'scheduledFor', next_run_at),
-  queue_name := schedule_id::text,           -- serializes per schedule
-  run_at := next_run_at,
-  job_key := schedule_id || ':' || next_run_at::text,  -- slot dedupe
-  job_key_mode := 'replace'
-);
-```
-
-**Why `job_key_mode=replace`:**
-
-- `job_key` dedupes _queued_ jobs only—prevents duplicate enqueues for same slot
-- After job completes, Graphile deletes it—`job_key` no longer exists
-- `execution_requests` table is the correctness layer for execution idempotency
-- Do NOT rely on Graphile job state for execution guarantees
+> **Note:** Temporal `scheduleId` = DB `schedules.id`. Each scheduled slot gets a unique `workflowId` with timestamp suffix. `overlap=SKIP` ensures only one active workflow per schedule at a time.
 
 ---
 
@@ -131,22 +175,25 @@ SELECT graphile_worker.add_job(
 
 ### `schedules`
 
-| Column               | Type        | Constraints                   | Notes                  |
-| -------------------- | ----------- | ----------------------------- | ---------------------- |
-| `id`                 | uuid        | PK                            |                        |
-| `owner_user_id`      | text        | NOT NULL, FK users            |                        |
-| `execution_grant_id` | uuid        | NOT NULL, FK execution_grants |                        |
-| `graph_id`           | text        | NOT NULL                      | e.g., `langgraph:poet` |
-| `input`              | jsonb       | NOT NULL                      | Graph input payload    |
-| `cron`               | text        | NOT NULL                      | 5-field cron           |
-| `timezone`           | text        | NOT NULL                      | IANA timezone          |
-| `enabled`            | boolean     | NOT NULL, default true        |                        |
-| `next_run_at`        | timestamptz | NULL                          |                        |
-| `last_run_at`        | timestamptz | NULL                          |                        |
-| `created_at`         | timestamptz | NOT NULL                      |                        |
-| `updated_at`         | timestamptz | NOT NULL                      |                        |
+| Column                 | Type        | Constraints                   | Notes                                      |
+| ---------------------- | ----------- | ----------------------------- | ------------------------------------------ |
+| `id`                   | uuid        | PK                            | Also used as Temporal scheduleId           |
+| `owner_user_id`        | text        | NOT NULL, FK users            |                                            |
+| `execution_grant_id`   | uuid        | NOT NULL, FK execution_grants |                                            |
+| `graph_id`             | text        | NOT NULL                      | e.g., `langgraph:poet`                     |
+| `input`                | jsonb       | NOT NULL                      | Graph input payload                        |
+| `cron`                 | text        | NOT NULL                      | 5-field cron                               |
+| `timezone`             | text        | NOT NULL                      | IANA timezone                              |
+| `enabled`              | boolean     | NOT NULL, default true        |                                            |
+| `temporal_schedule_id` | text        | NULL                          | Set after Temporal schedule created        |
+| `next_run_at`          | timestamptz | NULL                          | **CACHE ONLY** - synced on CRUD, may drift |
+| `last_run_at`          | timestamptz | NULL                          | **CACHE ONLY** - updated on run completion |
+| `created_at`           | timestamptz | NOT NULL                      |                                            |
+| `updated_at`           | timestamptz | NOT NULL                      |                                            |
 
-**Indexes:** `idx_schedules_owner`, `idx_schedules_next_run`, `idx_schedules_grant`
+**Indexes:** `idx_schedules_owner`, `idx_schedules_grant`
+
+> **Note:** `next_run_at` and `last_run_at` are cache columns for UI display. Authoritative timing is from `temporalClient.schedule.describe(scheduleId).info.nextActionTimes`.
 
 ### `schedule_runs`
 
@@ -154,8 +201,8 @@ SELECT graphile_worker.add_job(
 | ------------------- | ----------- | --------------------------- | ------------------------------------- |
 | `id`                | uuid        | PK                          |                                       |
 | `schedule_id`       | uuid        | NOT NULL, FK schedules      |                                       |
-| `run_id`            | text        | **NULL**                    | Set after execution API responds      |
-| `scheduled_for`     | timestamptz | NOT NULL                    | Cron slot                             |
+| `run_id`            | text        | NULL                        | Set after execution API responds      |
+| `scheduled_for`     | timestamptz | NOT NULL                    | From TemporalScheduledStartTime       |
 | `started_at`        | timestamptz | NULL                        |                                       |
 | `completed_at`      | timestamptz | NULL                        |                                       |
 | `status`            | text        | NOT NULL, default 'pending' | pending/running/success/error/skipped |
@@ -164,37 +211,30 @@ SELECT graphile_worker.add_job(
 
 **Indexes:** `idx_runs_schedule`, `idx_runs_scheduled_for`, `idx_runs_run_id`
 **Unique:** `(schedule_id, scheduled_for)` — one run per slot
-**Pattern:** Idempotent get-or-create via `INSERT ON CONFLICT DO NOTHING` + `SELECT` to survive retries/concurrency.
-**Note:** `run_id` nullable because row created (pending) BEFORE calling execution API.
+**Pattern:** Idempotent get-or-create via `INSERT ON CONFLICT DO NOTHING` + `SELECT`.
 
-### `execution_requests` (P0 Blocker)
+> **Note:** `run_id` is NULL on creation (set after internal API returns). The `ScheduleRunRepository.createRun()` port needs update to accept `runId?: string | null` to match schema.
 
-| Column            | Type        | Constraints | Notes                                |
-| ----------------- | ----------- | ----------- | ------------------------------------ |
-| `idempotency_key` | text        | PK          | `scheduleId:scheduledFor`            |
-| `request_hash`    | text        | NOT NULL    | SHA256 of normalized request payload |
-| `run_id`          | text        | NOT NULL    |                                      |
-| `trace_id`        | text        | NULL        |                                      |
-| `created_at`      | timestamptz | NOT NULL    |                                      |
+### `execution_requests`
 
-**Purpose:** Persists idempotency beyond Graphile job lifecycle (completed jobs are deleted).
-**Invariant:** If `idempotency_key` exists but `request_hash` differs, reject with 422 (payload mismatch).
+| Column            | Type        | Constraints | Notes                                   |
+| ----------------- | ----------- | ----------- | --------------------------------------- |
+| `idempotency_key` | text        | PK          | `scheduleId:TemporalScheduledStartTime` |
+| `request_hash`    | text        | NOT NULL    | SHA256 of normalized request payload    |
+| `run_id`          | text        | NOT NULL    |                                         |
+| `trace_id`        | text        | NULL        |                                         |
+| `ok`              | boolean     | NOT NULL    | Execution outcome                       |
+| `error_code`      | text        | NULL        | `AiExecutionErrorCode` if `ok=false`    |
+| `created_at`      | timestamptz | NOT NULL    |                                         |
 
----
+**Purpose:** Persists idempotency as the correctness layer for slot deduplication.
+**Invariants:**
 
-## Test Infrastructure
+- If `idempotency_key` exists but `request_hash` differs, reject with 422 (payload mismatch)
+- If `idempotency_key` exists and `request_hash` matches, return cached `{ok, runId, traceId, errorCode}` without re-executing
+- Stores **both success and error outcomes** — retries return the cached outcome
 
-| Test Type                                             | Status     | Notes                          |
-| ----------------------------------------------------- | ---------- | ------------------------------ |
-| Unit tests (`packages/scheduler-worker/tests/`)       | ✅ Pass    | Mocked deps                    |
-| Contract tests (`tests/contract/schedules.*.test.ts`) | ✅ Pass    | Schema validation              |
-| Stack tests (`tests/stack/scheduling/`)               | ⏭️ Skipped | Needs `graphile_worker` schema |
-
-**Schema Bootstrap:** Run before tests:
-
-```bash
-pnpm exec graphile-worker --schema-only --connection "$DATABASE_URL"
-```
+> **TODO (P1):** Add `ok` and `error_code` columns to schema + migration. Update `storeRequest()` to persist outcome. Update `checkIdempotency()` to return cached outcome. Update route to return cached `ok`/`errorCode` correctly.
 
 ---
 
@@ -202,44 +242,52 @@ pnpm exec graphile-worker --schema-only --connection "$DATABASE_URL"
 
 ### Current (Implemented)
 
-| File                                                           | Purpose                                                 |
-| -------------------------------------------------------------- | ------------------------------------------------------- |
-| `packages/scheduler-core/src/types.ts`                         | `ExecutionGrant`, `ScheduleSpec`, `ScheduleRun` types   |
-| `packages/db-schema/src/scheduling.ts`                         | `execution_grants`, `schedules`, `schedule_runs` tables |
-| `packages/scheduler-core/src/ports/job-queue.port.ts`          | `JobQueuePort` interface                                |
-| `packages/scheduler-core/src/ports/execution-grant.port.ts`    | `ExecutionGrantPort` + error classes                    |
-| `packages/scheduler-core/src/ports/schedule-manager.port.ts`   | `ScheduleManagerPort` interface                         |
-| `packages/scheduler-core/src/ports/schedule-run.port.ts`       | `ScheduleRunRepository` interface                       |
-| `packages/db-client/src/adapters/drizzle-job-queue.adapter.ts` | `DrizzleJobQueueAdapter`                                |
-| `packages/db-client/src/adapters/drizzle-grant.adapter.ts`     | `DrizzleExecutionGrantAdapter`                          |
-| `packages/db-client/src/adapters/drizzle-schedule.adapter.ts`  | `DrizzleScheduleManagerAdapter`                         |
-| `packages/db-client/src/adapters/drizzle-run.adapter.ts`       | `DrizzleScheduleRunAdapter`                             |
-| `src/contracts/schedules.*.v1.contract.ts`                     | Schedule CRUD contracts (4 files)                       |
-| `src/app/api/v1/schedules/route.ts`                            | POST (create), GET (list)                               |
-| `src/app/api/v1/schedules/[scheduleId]/route.ts`               | PATCH (update), DELETE                                  |
-| `src/bootstrap/container.ts`                                   | Wire scheduling ports (~line 303)                       |
-| `services/scheduler-worker/src/main.ts`                        | Worker entry point                                      |
-| `services/scheduler-worker/src/tasks/execute-run.ts`           | `createExecuteScheduledRunTask` factory                 |
-| `services/scheduler-worker/src/tasks/reconcile.ts`             | `createReconcileSchedulesTask` factory                  |
-| `packages/scheduler-core/src/payloads.ts`                      | Zod payload schemas                                     |
-| `services/scheduler-worker/src/utils/cron.ts`                  | `computeNextCronTime` utility                           |
+| File                                                                   | Purpose                                                 |
+| ---------------------------------------------------------------------- | ------------------------------------------------------- |
+| `packages/scheduler-core/src/types.ts`                                 | `ExecutionGrant`, `ScheduleSpec`, `ScheduleRun` types   |
+| `packages/db-schema/src/scheduling.ts`                                 | `execution_grants`, `schedules`, `schedule_runs` tables |
+| `packages/scheduler-core/src/ports/execution-grant.port.ts`            | `ExecutionGrantPort` + error classes                    |
+| `packages/scheduler-core/src/ports/execution-request.port.ts`          | `ExecutionRequestPort` for idempotency                  |
+| `packages/scheduler-core/src/ports/schedule-manager.port.ts`           | `ScheduleManagerPort` interface                         |
+| `packages/scheduler-core/src/ports/schedule-run.port.ts`               | `ScheduleRunRepository` interface                       |
+| `packages/db-client/src/adapters/drizzle-grant.adapter.ts`             | `DrizzleExecutionGrantAdapter`                          |
+| `packages/db-client/src/adapters/drizzle-execution-request.adapter.ts` | `DrizzleExecutionRequestAdapter`                        |
+| `packages/db-client/src/adapters/drizzle-schedule.adapter.ts`          | `DrizzleScheduleManagerAdapter`                         |
+| `packages/db-client/src/adapters/drizzle-run.adapter.ts`               | `DrizzleScheduleRunAdapter`                             |
+| `src/contracts/schedules.*.v1.contract.ts`                             | Schedule CRUD contracts (4 files)                       |
+| `src/app/api/v1/schedules/route.ts`                                    | POST (create), GET (list)                               |
+| `src/app/api/v1/schedules/[scheduleId]/route.ts`                       | PATCH (update), DELETE                                  |
+| `src/bootstrap/container.ts`                                           | Wire scheduling ports                                   |
+| `packages/scheduler-core/src/payloads.ts`                              | Zod payload schemas                                     |
 
-### Planned (P0 Blocker)
+### Planned (Temporal Migration)
 
-| File                                                  | Purpose                                  |
-| ----------------------------------------------------- | ---------------------------------------- |
-| `src/shared/db/schema.execution.ts`                   | `execution_requests` table (idempotency) |
-| `src/app/api/internal/graphs/[graphId]/runs/route.ts` | Internal execution endpoint              |
-| `src/contracts/graphs.run.internal.v1.contract.ts`    | Internal execution contract              |
+| File                                                            | Purpose                                       |
+| --------------------------------------------------------------- | --------------------------------------------- |
+| `packages/scheduler-core/src/ports/schedule-control.port.ts`    | `ScheduleControlPort` interface (no vendor)   |
+| `src/adapters/server/temporal/client.ts`                        | Temporal client factory                       |
+| `src/adapters/server/temporal/schedule-control.adapter.ts`      | `TemporalScheduleControlAdapter`              |
+| `src/adapters/server/temporal/noop-schedule-control.adapter.ts` | `NoOpScheduleControlAdapter` (`APP_ENV=test`) |
+| `services/scheduler-temporal-worker/`                           | Temporal worker service                       |
+| `services/scheduler-temporal-worker/src/main.ts`                | Worker entry, connects to Temporal            |
+| `services/scheduler-temporal-worker/src/workflows/`             | GovernanceScheduledRunWorkflow                |
+| `services/scheduler-temporal-worker/src/activities/`            | validateGrant, createRun, executeGraph        |
 
-### Completed (Phase 2)
+### Implemented (P0)
 
-| File                                    | Purpose                               |
-| --------------------------------------- | ------------------------------------- |
-| `packages/scheduler-core/`              | Types + port interfaces (extracted)   |
-| `packages/db-client/`                   | Drizzle client + adapters (extracted) |
-| `services/scheduler-worker/src/main.ts` | Standalone worker entry point         |
-| `services/scheduler-worker/Dockerfile`  | Multi-stage build                     |
+| File                                                  | Purpose                     |
+| ----------------------------------------------------- | --------------------------- |
+| `src/app/api/internal/graphs/[graphId]/runs/route.ts` | Internal execution endpoint |
+| `src/contracts/graphs.run.internal.v1.contract.ts`    | Internal execution contract |
+
+### To Delete (Post-Migration)
+
+| File                                                           | Reason                                |
+| -------------------------------------------------------------- | ------------------------------------- |
+| `services/scheduler-worker/`                                   | Replaced by scheduler-temporal-worker |
+| `packages/scheduler-core/src/ports/job-queue.port.ts`          | Graphile-specific                     |
+| `packages/db-client/src/adapters/drizzle-job-queue.adapter.ts` | Graphile-specific                     |
+| `services/scheduler-worker/src/tasks/reconcile.ts`             | Temporal handles scheduling natively  |
 
 ---
 
@@ -247,77 +295,130 @@ pnpm exec graphile-worker --schema-only --connection "$DATABASE_URL"
 
 ### P0: Completed
 
-- [x] Types: `ExecutionGrant`, `ScheduleSpec`, `ScheduleRun` in `src/types/scheduling.ts`
+- [x] Types: `ExecutionGrant`, `ScheduleSpec`, `ScheduleRun` in `@cogni/scheduler-core`
 - [x] Schema: `execution_grants`, `schedules`, `schedule_runs` tables
-- [x] Ports: `JobQueuePort`, `ExecutionGrantPort`, `ScheduleManagerPort`, `ScheduleRunRepository`
+- [x] Ports: `ExecutionGrantPort`, `ScheduleManagerPort`, `ScheduleRunRepository`
 - [x] Adapters: All Drizzle adapters implemented
 - [x] Routes: `/api/v1/schedules` CRUD endpoints
-- [x] Worker package: Task factories with Zod validation
-- [x] `pnpm scheduler:dev` script
+- [x] Package extraction complete
 
-### P0: Graph Execution API (Blocker)
+### P0: Internal Execution API (Complete)
 
-**Internal Endpoint:**
+- [x] `POST /api/internal/graphs/{graphId}/runs` — service-auth endpoint
+- [x] Auth: Bearer `SCHEDULER_API_TOKEN`, constant-time compare
+- [x] Re-validate grant (validity + scope) — defense-in-depth
+- [x] Request: `{ executionGrantId, input }` → Response: `{ runId, traceId, ok, errorCode? }`
+- [x] Create `execution_requests` table with `request_hash`
+- [x] On conflict: if `request_hash` matches return cached; if differs return 422
+- [x] Add `AccountService.getBillingAccountById` for grant → virtualKeyId resolution
+- [x] Stack tests for auth, idempotency, and grant validation
 
-- [ ] `POST /api/internal/graphs/{graphId}/runs` — service-auth endpoint
-- [ ] Auth: Bearer `INTERNAL_API_TOKEN`, constant-time compare (like `METRICS_TOKEN`)
-- [ ] Rate limit: Basic per-token limit (e.g., 100 req/sec) to prevent runaway loops
-- [ ] `X-Service-Name` header: Log for audit, but treat as advisory (not trusted until JWT)
-- [ ] Re-validate grant (validity + scope) — defense-in-depth, don't trust worker alone
-- [ ] Request: `{ executionGrantId, input }` → Response: `{ runId, traceId, ok, errorCode? }`
-- [ ] Create `execution_requests` table with `request_hash`
-- [ ] On conflict: if `request_hash` matches return cached; if differs return 422
+### P1: Temporal Migration
 
-**Worker Integration:**
+**1. Port & Types (`@cogni/scheduler-core`):** ✅
 
-- [ ] Update `execute-run.ts` to call internal API via HTTP
-- [ ] Add `INTERNAL_API_URL` and `INTERNAL_API_TOKEN` env vars
+- [x] Add `ScheduleControlPort` interface (vendor-agnostic):
+  - `createSchedule(params)` → `Promise<void>` (scheduleId caller-supplied)
+  - `pauseSchedule(scheduleId)` / `resumeSchedule(scheduleId)`
+  - `deleteSchedule(scheduleId)`
+  - `describeSchedule(scheduleId)` → `ScheduleDescription | null`
+- [x] Add `ScheduleDescription` type: `{ scheduleId, nextRunAtIso, lastRunAtIso, isPaused }`
+- [x] Add error types: `ScheduleControlUnavailableError`, `ScheduleControlConflictError`, `ScheduleControlNotFoundError`
+- [x] Input as `JsonValue` (not `unknown`), dates as ISO strings
 
-**Schema Bootstrap:**
+**ScheduleControlPort Idempotency & Error Semantics:**
 
-- [ ] Add `db:setup:worker` script: `graphile-worker --schema-only`
-- [ ] Integrate into `pnpm dev:stack:test:setup`
-- [ ] Un-skip `tests/stack/scheduling/`
+| Method             | Idempotent? | On Not Found                         | On Already Exists                    |
+| ------------------ | ----------- | ------------------------------------ | ------------------------------------ |
+| `createSchedule`   | No          | N/A                                  | Throw `ScheduleControlConflictError` |
+| `pauseSchedule`    | Yes         | Throw `ScheduleControlNotFoundError` | No-op if already paused              |
+| `resumeSchedule`   | Yes         | Throw `ScheduleControlNotFoundError` | No-op if already running             |
+| `deleteSchedule`   | Yes         | No-op (success)                      | N/A                                  |
+| `describeSchedule` | Yes         | Return `null`                        | N/A                                  |
 
-**Cleanup:**
+> **Rationale for CRUD rollback safety:**
+>
+> - `createSchedule` throws on conflict → CRUD can detect partial failure and rollback DB
+> - `deleteSchedule` is idempotent → safe to retry after transient failure
+> - `pause/resume` idempotent → safe for retry; not-found means DB/Temporal drift (503, manual reconcile)
 
-- [ ] Remove `attempt_count` from `schedule_runs` (Graphile handles retries)
-- [ ] Ensure `createSchedule` atomicity (grant+schedule+enqueue)
+**2. Adapter (`src/adapters/server/temporal/`):** ✅
 
-### Phase 2: Standalone Service
+- [x] Implement `TemporalScheduleControlAdapter`
+- [x] Implement `NoOpScheduleControlAdapter` (for `APP_ENV=test`)
+- [x] Hardcode policies: `overlap: SKIP`, `catchupWindow: 0` (not exposed in port)
+- [x] Map Temporal errors → port error types (see table below)
+- [x] Connection lifecycle via `@temporalio/client`
 
-- [ ] Create `packages/scheduler-core/` (types + ports)
-- [ ] Create `packages/db-client/` (Drizzle client + adapters)
-- [ ] Create `services/scheduler-worker/` with Dockerfile
-- [ ] Add to `docker-compose.dev.yml`
-- [ ] Delete `src/scripts/run-scheduler-worker.ts`
-- [ ] Remove `scripts` layer from `.dependency-cruiser.cjs`
+**Temporal Error Mapping:**
 
-### P1: Enhanced Auth + Runs API
+| Temporal Error                   | Port Error                        |
+| -------------------------------- | --------------------------------- |
+| `ScheduleAlreadyRunning`         | `ScheduleControlConflictError`    |
+| `ScheduleNotFoundError`          | `ScheduleControlNotFoundError`    |
+| Connection/timeout errors        | `ScheduleControlUnavailableError` |
+| Schedule already paused (no-op)  | Success (idempotent)              |
+| Schedule already deleted (no-op) | Success (idempotent)              |
 
-- [ ] `GET /api/v1/schedules/:id/runs` — read-only runs endpoint
-- [ ] `POST /api/v1/graphs/{graphId}/runs` — user-facing facade
-- [ ] JWT auth with `aud`/`exp` claims for internal API
-- [ ] Add `error_code` enum to `schedule_runs`
-- [ ] `concurrencyPolicy` column (Allow, Forbid, Replace)
+**3. Docker Infrastructure:**
 
-### P2: Advanced (Do NOT Build Preemptively)
+- [ ] Add `temporal` + `temporal-ui` + `temporal-postgres` to docker-compose (temporalio/docker-compose pinned)
+- [x] Add env vars: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE=cogni-{APP_ENV}`, `TEMPORAL_TASK_QUEUE=scheduler-tasks`
+- [ ] Health checks for temporal service
 
-- [ ] Backfill logic (requires user consent for billing implications)
+**4. CRUD Integration (failure semantics defined):** ✅
+
+- [x] Update `DrizzleScheduleManagerAdapter`: replace `JobQueuePort` → `ScheduleControlPort`
+- [x] Wire `ScheduleControlPort` in container.ts (`APP_ENV=test` → NoOp, else → Temporal)
+- [x] Add `TEMPORAL_*` env vars to `src/shared/env/server.ts` (optional in test mode)
+- [x] `POST`: grant + DB insert → `createSchedule()`. **On failure: rollback grant+DB, 503**
+- [x] `PATCH enabled`: DB update → `pauseSchedule()`/`resumeSchedule()`. **On failure: rollback, 503**
+- [x] `DELETE`: `deleteSchedule()` → DB delete. **On failure: 503, do NOT delete DB**
+- [ ] Stack test: create → describe → pause → resume → delete
+
+**5. Worker Service:**
+
+- [ ] Create `services/scheduler-temporal-worker/` (standalone, no `ScheduleControlPort` dep)
+- [ ] Implement `GovernanceScheduledRunWorkflow`
+- [ ] Implement Activities: `validateGrant`, `createScheduleRun`, `executeGraph`, `updateScheduleRun`
+- [ ] `executeGraphActivity` calls internal API with Bearer + Idempotency-Key
+- [ ] Activities derive `scheduledFor` from `TemporalScheduledStartTime`
+- [ ] Add Dockerfile and docker-compose entry
+
+**6. Cleanup (after validation):** ✅
+
+- [x] Delete `services/scheduler-worker/` (Graphile)
+- [x] Delete `JobQueuePort` and `DrizzleJobQueueAdapter`
+- [x] Remove Graphile Worker dependencies
+
+### P2: HITL Integration
+
+- [ ] Add Signal handler for `plane_review_decision` in workflow
+- [ ] Implement Plane webhook endpoint to signal workflows
+- [ ] Workflow waits for signal, then resumes execution
+
+### P3: Admin Tools
+
+- [ ] `pnpm scheduler:reconcile` — one-shot drift repair command
+- [ ] Compare DB schedules vs Temporal schedules
+- [ ] Report: missing, orphaned, state mismatch
+- [ ] Optional `--fix` flag with audit logging
 
 ---
 
 ## Anti-Patterns
 
-| Anti-Pattern                           | Why Forbidden                           |
-| -------------------------------------- | --------------------------------------- |
-| Graphile crontab for user schedules    | Crontab is static/deploy-time           |
-| Poll `schedules` table                 | Use `add_job()` with `run_at`           |
-| NextAuth sessions in workers           | Sessions expire; workers are long-lived |
-| Network-only auth for internal API     | Not auditable; can't rotate credentials |
-| Execution without idempotency key      | Retries cause duplicate runs            |
-| Worker imports graph code              | Couples to Next.js; prevents scaling    |
-| Execution service writes schedule_runs | Ownership boundary violation            |
+| Anti-Pattern                            | Why Forbidden                                   |
+| --------------------------------------- | ----------------------------------------------- |
+| Network calls in Temporal Workflow code | Non-deterministic; replays will fail            |
+| Worker creates/modifies schedules       | CRUD endpoints are the single authority         |
+| Reconciliation loop in worker           | Rebuilds control plane; creates authority split |
+| Relying on workflowId for slot dedupe   | Use `execution_requests` table instead          |
+| Using wall clock for scheduledFor       | Use `TemporalScheduledStartTime` attribute      |
+| NextAuth sessions in workers            | Sessions expire; workers are long-lived         |
+| Execution without idempotency key       | Retries cause duplicate runs                    |
+| Worker imports graph code               | Couples to Next.js; prevents scaling            |
+| Treating next_run_at as authoritative   | It's cache-only; Temporal is source of truth    |
 
 ---
 
@@ -333,23 +434,27 @@ pnpm exec graphile-worker --schema-only --connection "$DATABASE_URL"
 
 1. No user sessions in worker — use `ExecutionGrant` references only
 2. No network-only auth — Bearer token required
-3. Persist idempotency — `execution_requests` survives Graphile job deletion
+3. Persist idempotency — `execution_requests` is the correctness layer
+4. CRUD owns Temporal schedule lifecycle — worker is execution-only
 
 ---
 
 ## Related Documents
 
+- [TEMPORAL_PATTERNS.md](TEMPORAL_PATTERNS.md) — Canonical Temporal patterns and anti-patterns
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Execution invariants, billing
 - [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) — Billing account lifecycle
 - [ARCHITECTURE.md](ARCHITECTURE.md) — Hexagonal pattern
+- [PACKAGES_ARCHITECTURE.md](PACKAGES_ARCHITECTURE.md) — Package boundaries and rules
 
 ## Sources
 
-- [Graphile Worker add_job](https://worker.graphile.org/docs/sql-add-job)
-- [Graphile Worker job_key](https://worker.graphile.org/docs/job-key)
-- [Stripe Idempotency](https://stripe.com/docs/api/idempotent_requests)
+- [Temporal Schedules](https://docs.temporal.io/workflows#schedule) — Native cron replacement
+- [Temporal TypeScript SDK](https://docs.temporal.io/develop/typescript) — Worker and client APIs
+- [Temporal Search Attributes](https://docs.temporal.io/visibility#search-attribute) — TemporalScheduledStartTime
+- [Stripe Idempotency](https://stripe.com/docs/api/idempotent_requests) — Idempotency key pattern
 
 ---
 
-**Last Updated**: 2026-01-19
-**Status**: P0 in progress — internal execution API is next blocker
+**Last Updated**: 2026-01-21
+**Status**: P0 internal execution API complete; P1 Temporal migration is next

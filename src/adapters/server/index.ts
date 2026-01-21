@@ -15,7 +15,7 @@
 // Scheduling adapters - re-exported from @cogni/db-client package
 export {
   DrizzleExecutionGrantAdapter,
-  DrizzleJobQueueAdapter,
+  DrizzleExecutionRequestAdapter,
   DrizzleScheduleManagerAdapter,
   DrizzleScheduleRunAdapter,
   type LoggerLike,
@@ -79,4 +79,10 @@ export { ViemTreasuryAdapter } from "./onchain/viem-treasury.adapter";
 export { DrizzlePaymentAttemptRepository } from "./payments/drizzle-payment-attempt.adapter";
 export { EvmRpcOnChainVerifierAdapter } from "./payments/evm-rpc-onchain-verifier.adapter";
 export { PonderOnChainVerifierAdapter } from "./payments/ponder-onchain-verifier.adapter";
+// Temporal adapters - schedule control
+export {
+  NoOpScheduleControlAdapter,
+  TemporalScheduleControlAdapter,
+  type TemporalScheduleControlConfig,
+} from "./temporal";
 export { SystemClock } from "./time/system.adapter";

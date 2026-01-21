@@ -9,7 +9,7 @@
  * - FORBIDDEN: `@/`, `src/`, drizzle-orm, any I/O
  * - ALLOWED: Pure TypeScript types/interfaces only
  * Side-effects: none
- * Links: docs/SCHEDULER_SERVICE_REFACTOR.md, docs/SCHEDULER_SPEC.md
+ * Links: docs/SCHEDULER_SPEC.md
  * @public
  */
 
@@ -26,14 +26,19 @@ export {
 export {
   // ScheduleManagerPort
   type CreateScheduleInput,
-  // JobQueuePort
-  type EnqueueJobParams,
+  // ScheduleControlPort
+  type CreateScheduleParams,
   // ExecutionGrantPort
   type ExecutionGrantPort,
+  // ExecutionRequestPort
+  type ExecutionOutcome,
+  type ExecutionRequest,
+  type ExecutionRequestPort,
   GrantExpiredError,
   GrantNotFoundError,
   GrantRevokedError,
   GrantScopeMismatchError,
+  type IdempotencyCheckResult,
   InvalidCronExpressionError,
   InvalidTimezoneError,
   isGrantExpiredError,
@@ -43,9 +48,16 @@ export {
   isInvalidCronExpressionError,
   isInvalidTimezoneError,
   isScheduleAccessDeniedError,
+  isScheduleControlConflictError,
+  isScheduleControlNotFoundError,
+  isScheduleControlUnavailableError,
   isScheduleNotFoundError,
-  type JobQueuePort,
   ScheduleAccessDeniedError,
+  ScheduleControlConflictError,
+  ScheduleControlNotFoundError,
+  type ScheduleControlPort,
+  ScheduleControlUnavailableError,
+  type ScheduleDescription,
   type ScheduleManagerPort,
   ScheduleNotFoundError,
   // ScheduleRunRepository

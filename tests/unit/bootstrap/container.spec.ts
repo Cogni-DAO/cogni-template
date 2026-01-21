@@ -42,6 +42,7 @@ describe("bootstrap container DI wiring", () => {
         DB_HOST: "localhost",
         LITELLM_MASTER_KEY: "test-key",
         AUTH_SECRET: "x".repeat(32),
+        SCHEDULER_API_TOKEN: "x".repeat(32),
       });
 
       // Import after env setup to get correct adapter wiring
@@ -66,6 +67,7 @@ describe("bootstrap container DI wiring", () => {
         DB_HOST: "postgres",
         LITELLM_MASTER_KEY: "prod-key",
         AUTH_SECRET: "x".repeat(32),
+        SCHEDULER_API_TOKEN: "x".repeat(32),
         EVM_RPC_URL: "https://eth-sepolia.example.com/v2/test-key",
       });
 
@@ -91,6 +93,7 @@ describe("bootstrap container DI wiring", () => {
         DB_HOST: "localhost",
         LITELLM_MASTER_KEY: "dev-key",
         AUTH_SECRET: "x".repeat(32),
+        SCHEDULER_API_TOKEN: "x".repeat(32),
         EVM_RPC_URL: "https://eth-sepolia.example.com/v2/test-key",
       });
 
@@ -116,6 +119,7 @@ describe("bootstrap container DI wiring", () => {
         DB_HOST: "localhost",
         LITELLM_MASTER_KEY: "test-key",
         AUTH_SECRET: "x".repeat(32),
+        SCHEDULER_API_TOKEN: "x".repeat(32),
       });
     });
 

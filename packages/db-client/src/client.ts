@@ -9,7 +9,7 @@
  * - Connection string injected, never from process.env
  * - FORBIDDEN: @/shared/env, process.env, Next.js imports
  * Side-effects: IO (database connections)
- * Links: docs/SCHEDULER_SERVICE_REFACTOR.md
+ * Links: docs/PACKAGES_ARCHITECTURE.md
  * @public
  */
 

@@ -4,12 +4,14 @@
 /**
  * Module: `@adapters/server/scheduling/drizzle-schedule`
  * Purpose: DrizzleScheduleManagerAdapter for schedule CRUD operations.
- * Scope: Implements ScheduleManagerPort with Drizzle ORM. Does not contain worker task logic.
+ * Scope: Implements ScheduleManagerPort with Drizzle ORM and ScheduleControlPort for orchestration. Does not contain worker task logic.
  * Invariants:
- * - createSchedule creates grant + schedule + enqueues first job atomically
- * - Schedule access scoped to owner (callerUserId)
- * - next_run_at computed from cron + timezone
- * Side-effects: IO (database operations)
+ * - Per CRUD_IS_TEMPORAL_AUTHORITY: CRUD endpoints control schedule lifecycle
+ * - createSchedule: grant → DB → scheduleControl (on fail: rollback)
+ * - updateSchedule (enabled): DB → pause/resume (on fail: rollback DB)
+ * - deleteSchedule: scheduleControl → DB (on fail: 503, don't delete DB)
+ * - Per DB_TIMING_IS_CACHE_ONLY: next_run_at/last_run_at are cache columns
+ * Side-effects: IO (database operations, schedule control RPC)
  * Links: ports/scheduling/schedule-manager.port.ts, docs/SCHEDULER_SPEC.md
  * @public
  */
@@ -20,8 +22,8 @@ import {
   type ExecutionGrantPort,
   InvalidCronExpressionError,
   InvalidTimezoneError,
-  type JobQueuePort,
   ScheduleAccessDeniedError,
+  type ScheduleControlPort,
   type ScheduleManagerPort,
   ScheduleNotFoundError,
   type ScheduleSpec,
@@ -29,6 +31,7 @@ import {
 } from "@cogni/scheduler-core";
 import cronParser from "cron-parser";
 import { and, eq, isNull, lt, or } from "drizzle-orm";
+import type { JsonValue } from "type-fest";
 import type { Database, LoggerLike } from "../client";
 
 export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
@@ -36,7 +39,7 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
 
   constructor(
     private readonly db: Database,
-    private readonly jobQueue: JobQueuePort,
+    private readonly scheduleControl: ScheduleControlPort,
     private readonly grantPort: ExecutionGrantPort,
     logger?: LoggerLike
   ) {
@@ -57,16 +60,18 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
     const nextRunAt = this.computeNextRun(input.cron, input.timezone);
 
     // Create grant OUTSIDE transaction for atomicity cleanup
-    // If schedule insert or job enqueue fails, we hard-delete the grant
+    // If schedule insert or scheduleControl fails, we hard-delete the grant
     const grant = await this.grantPort.createGrant({
       userId: callerUserId,
       billingAccountId,
       scopes: [`graph:execute:${input.graphId}`],
     });
 
+    let row: typeof schedules.$inferSelect | undefined;
+
     try {
-      const row = await this.db.transaction(async (tx) => {
-        // Insert schedule
+      // Insert schedule into DB
+      row = await this.db.transaction(async (tx) => {
         const [scheduleRow] = await tx
           .insert(schedules)
           .values({
@@ -87,13 +92,15 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
         return scheduleRow;
       });
 
-      // Enqueue first job (outside tx for Graphile Worker)
-      await this.jobQueue.enqueueJob({
-        taskId: "execute_scheduled_run",
-        payload: { scheduleId: row.id, scheduledFor: nextRunAt.toISOString() },
-        runAt: nextRunAt,
-        jobKey: `${row.id}:${nextRunAt.toISOString()}`,
-        queueName: row.id,
+      // Per CRUD_IS_TEMPORAL_AUTHORITY: Create schedule in orchestrator
+      // Order: grant → DB → scheduleControl (on fail: rollback DB and grant)
+      await this.scheduleControl.createSchedule({
+        scheduleId: row.id,
+        cron: input.cron,
+        timezone: input.timezone,
+        graphId: input.graphId,
+        executionGrantId: grant.id,
+        input: input.input as JsonValue,
       });
 
       this.logger.info(
@@ -103,7 +110,16 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
 
       return this.toSpec(row);
     } catch (error) {
-      // Atomicity cleanup: hard-delete the orphan grant (per C1)
+      // Atomicity cleanup: delete DB row if it was created
+      if (row) {
+        this.logger.warn(
+          { scheduleId: row.id },
+          "Rolling back schedule DB row after scheduleControl failure"
+        );
+        await this.db.delete(schedules).where(eq(schedules.id, row.id));
+      }
+
+      // Atomicity cleanup: hard-delete the orphan grant
       this.logger.warn(
         { grantId: grant.id },
         "Cleaning up orphan grant after schedule creation failure"
@@ -160,34 +176,18 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
     }
 
     // Recompute next_run_at if cron/timezone/enabled changed
+    // Per DB_TIMING_IS_CACHE_ONLY: This is cache-only, Temporal is authoritative
     const newCron = patch.cron ?? existing.cron;
     const newTimezone = patch.timezone ?? existing.timezone;
     const newEnabled = patch.enabled ?? existing.enabled;
 
     if (newEnabled) {
       updates.nextRunAt = this.computeNextRun(newCron, newTimezone);
-
-      // Re-enqueue if enabled or schedule changed
-      if (
-        patch.cron !== undefined ||
-        patch.timezone !== undefined ||
-        (patch.enabled === true && !existing.enabled)
-      ) {
-        await this.jobQueue.enqueueJob({
-          taskId: "execute_scheduled_run",
-          payload: {
-            scheduleId,
-            scheduledFor: updates.nextRunAt.toISOString(),
-          },
-          runAt: updates.nextRunAt,
-          jobKey: `${scheduleId}:${updates.nextRunAt.toISOString()}`,
-          queueName: scheduleId,
-        });
-      }
     } else {
       updates.nextRunAt = null;
     }
 
+    // Update DB first
     const [row] = await this.db
       .update(schedules)
       .set(updates)
@@ -196,6 +196,40 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
 
     if (!row) {
       throw new ScheduleNotFoundError(scheduleId);
+    }
+
+    // Per CRUD_IS_TEMPORAL_AUTHORITY: Handle enabled state changes
+    // Order: DB → scheduleControl (on fail: rollback DB)
+    try {
+      if (patch.enabled !== undefined && patch.enabled !== existing.enabled) {
+        if (patch.enabled) {
+          // Enabling: resume the schedule
+          await this.scheduleControl.resumeSchedule(scheduleId);
+          this.logger.info({ scheduleId }, "Resumed schedule");
+        } else {
+          // Disabling: pause the schedule
+          await this.scheduleControl.pauseSchedule(scheduleId);
+          this.logger.info({ scheduleId }, "Paused schedule");
+        }
+      }
+    } catch (error) {
+      // Rollback DB changes on scheduleControl failure
+      this.logger.warn(
+        { scheduleId, error },
+        "Rolling back schedule update after scheduleControl failure"
+      );
+      await this.db
+        .update(schedules)
+        .set({
+          input: existing.input,
+          cron: existing.cron,
+          timezone: existing.timezone,
+          enabled: existing.enabled,
+          nextRunAt: existing.nextRunAt,
+          updatedAt: existing.updatedAt,
+        })
+        .where(eq(schedules.id, scheduleId));
+      throw error;
     }
 
     this.logger.info({ scheduleId, patch }, "Updated schedule");
@@ -215,6 +249,12 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
       throw new ScheduleAccessDeniedError(scheduleId, callerUserId);
     }
 
+    // Per CRUD_IS_TEMPORAL_AUTHORITY: Delete from scheduleControl FIRST
+    // Order: scheduleControl → DB (on fail: 503, don't delete DB)
+    // Note: scheduleControl.deleteSchedule is idempotent (no-op if not found)
+    await this.scheduleControl.deleteSchedule(scheduleId);
+
+    // Only delete from DB if scheduleControl succeeded
     await this.db.transaction(async (tx) => {
       // Revoke the grant
       await this.grantPort.revokeGrant(existing.executionGrantId);

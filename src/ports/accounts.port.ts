@@ -152,6 +152,14 @@ export type ChargeReceiptParams = {
 
 export interface AccountService {
   /**
+   * Read-only lookup of billing account by ID.
+   * Returns null if not found. Does not create.
+   */
+  getBillingAccountById(
+    billingAccountId: string
+  ): Promise<BillingAccount | null>;
+
+  /**
    * Idempotently create or fetch a billing account for the given user.
    * Ensures a default virtual key exists and is returned for data-plane calls.
    */

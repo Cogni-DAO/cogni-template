@@ -3,16 +3,19 @@
 
 /**
  * Module: `@shared/db/schema`
- * Purpose: Drizzle database schema definitions for billing and shared tables.
- * Scope: Billing tables plus re-exports of NextAuth schema (see schema.auth.ts). Does not handle connections or migrations.
- * Invariants: All tables have proper types and constraints.
- * Side-effects: none (schema definitions only)
- * Links: None
+ * Purpose: Barrel re-export of all database schema from @cogni/db-schema package.
+ * Scope: Re-exports only. Does not define any tables - all schema definitions live in packages/db-schema.
+ * Invariants: This file must not define any tables - only re-export from the package.
+ * Side-effects: none
+ * Links: docs/PACKAGES_ARCHITECTURE.md
  * @public
  */
 
-// Scheduling schema - re-exported from @cogni/db-schema package
+export * from "@cogni/db-schema/ai";
+
+// Domain slices
+export * from "@cogni/db-schema/auth";
+export * from "@cogni/db-schema/billing";
+// Core FK targets (users, billingAccounts)
+export * from "@cogni/db-schema/refs";
 export * from "@cogni/db-schema/scheduling";
-export * from "./schema.ai";
-export * from "./schema.auth";
-export * from "./schema.billing";

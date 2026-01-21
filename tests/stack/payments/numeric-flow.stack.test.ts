@@ -33,7 +33,7 @@ import {
   billingAccounts,
   creditLedger,
   paymentAttempts,
-} from "@/shared/db/schema.billing";
+} from "@/shared/db/schema";
 import { CHAIN_ID } from "@/shared/web3/chain";
 
 describe("Payment Numeric Flow Validation", () => {
@@ -61,7 +61,7 @@ describe("Payment Numeric Flow Validation", () => {
   });
 
   afterEach(async () => {
-    const { users } = await import("@/shared/db/schema.auth");
+    const { users } = await import("@/shared/db/schema");
     if (testUserId) {
       await db.delete(users).where(eq(users.id, testUserId));
     }

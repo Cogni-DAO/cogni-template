@@ -10,7 +10,7 @@
  * - All cross-slice FK references point to tables defined here
  * - FORBIDDEN: Importing from scheduling, auth, billing slices (would create cycles)
  * Side-effects: none (schema definitions only)
- * Links: docs/SCHEDULER_SERVICE_REFACTOR.md, docs/PACKAGES_ARCHITECTURE.md
+ * Links: docs/PACKAGES_ARCHITECTURE.md
  * @public
  */
 

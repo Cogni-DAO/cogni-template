@@ -7,7 +7,7 @@
  * Scope: Build tooling only; does not contain runtime code.
  * Invariants: Output must be ESM with type declarations. Separate entrypoints per slice.
  * Side-effects: IO
- * Links: docs/SCHEDULER_SERVICE_REFACTOR.md
+ * Links: docs/PACKAGES_ARCHITECTURE.md
  * @internal
  */
 

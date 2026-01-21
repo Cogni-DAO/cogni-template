@@ -15,6 +15,13 @@
       "when": 1768748574976,
       "tag": "0001_watery_romulus",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1768985279158,
+      "tag": "0002_overrated_eternity",
+      "breakpoints": true
     }
   ]
 }

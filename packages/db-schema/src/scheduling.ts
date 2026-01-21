@@ -16,7 +16,6 @@
  * @public
  */
 
-import { SCHEDULE_RUN_STATUSES } from "@cogni/scheduler-core";
 import {
   boolean,
   index,
@@ -29,6 +28,24 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import { billingAccounts, users } from "./refs";
+
+/**
+ * Schedule run status values (source of truth for DB enum).
+ * - pending: Job enqueued, not yet started
+ * - running: Execution in progress
+ * - success: Completed successfully
+ * - error: Failed with error
+ * - skipped: Skipped (disabled schedule or revoked grant)
+ */
+export const SCHEDULE_RUN_STATUSES = [
+  "pending",
+  "running",
+  "success",
+  "error",
+  "skipped",
+] as const;
+
+export type ScheduleRunStatus = (typeof SCHEDULE_RUN_STATUSES)[number];
 
 /**
  * Execution grants - durable authorization for scheduled graph execution.
@@ -153,3 +170,31 @@ export const scheduleRuns = pgTable(
     runIdIdx: index("schedule_runs_run_id_idx").on(table.runId),
   })
 );
+
+/**
+ * Execution requests - idempotency layer for graph execution via internal API.
+ * Per EXECUTION_IDEMPOTENCY_PERSISTED: Persists idempotency key → {ok, runId, traceId, errorCode}.
+ * This is the correctness layer for slot deduplication.
+ *
+ * Key format: `scheduleId:TemporalScheduledStartTime`
+ * Stores BOTH success and error outcomes - retries return the cached outcome.
+ * If idempotency_key exists but request_hash differs, reject with 422 (payload mismatch).
+ */
+export const executionRequests = pgTable("execution_requests", {
+  /** Primary key: idempotency key (e.g., `scheduleId:TemporalScheduledStartTime`) */
+  idempotencyKey: text("idempotency_key").primaryKey(),
+  /** SHA256 hash of normalized request payload for mismatch detection */
+  requestHash: text("request_hash").notNull(),
+  /** GraphExecutorPort runId for correlation */
+  runId: text("run_id").notNull(),
+  /** Langfuse trace ID (optional, set when Langfuse is configured) */
+  traceId: text("trace_id"),
+  /** Execution outcome: true = success, false = error */
+  ok: boolean("ok").notNull(),
+  /** AiExecutionErrorCode if ok=false, null if ok=true */
+  errorCode: text("error_code"),
+  /** When request was first received */
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});

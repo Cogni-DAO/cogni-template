@@ -205,10 +205,7 @@
         "packages/scheduler-core/tsup.config.ts",
         "packages/db-client/tsup.config.ts",
         "packages/db-schema/tsup.config.ts",
-        "services/scheduler-worker/tsup.config.ts",
-        "services/scheduler-worker/vitest.config.ts",
-        "vitest.workspace.ts",
-        "tsup.scripts.config.ts"
+        "vitest.workspace.ts"
       ],
       "linter": {
         "rules": {

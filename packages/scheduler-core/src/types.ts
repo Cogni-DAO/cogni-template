@@ -10,27 +10,19 @@
  * - FORBIDDEN: functions, computations, validation logic, or business rules
  * - Grant scopes constrain which graphIds can be executed (GRANT_SCOPES_CONSTRAIN_GRAPHS)
  * Side-effects: none (constants and types only)
- * Links: docs/SCHEDULER_SPEC.md, docs/SCHEDULER_SERVICE_REFACTOR.md
+ * Links: docs/SCHEDULER_SPEC.md
  * @public
  */
 
-/**
- * Schedule run status values.
- * - pending: Job enqueued, not yet started
- * - running: Execution in progress
- * - success: Completed successfully
- * - error: Failed with error
- * - skipped: Skipped (disabled schedule or revoked grant)
- */
-export const SCHEDULE_RUN_STATUSES = [
-  "pending",
-  "running",
-  "success",
-  "error",
-  "skipped",
-] as const;
+// Import from db-schema (source of truth for DB enums)
+import {
+  SCHEDULE_RUN_STATUSES as _SCHEDULE_RUN_STATUSES,
+  type ScheduleRunStatus as _ScheduleRunStatus,
+} from "@cogni/db-schema/scheduling";
 
-export type ScheduleRunStatus = (typeof SCHEDULE_RUN_STATUSES)[number];
+// Re-export
+export const SCHEDULE_RUN_STATUSES = _SCHEDULE_RUN_STATUSES;
+export type ScheduleRunStatus = _ScheduleRunStatus;
 
 /**
  * Grant scope action types.

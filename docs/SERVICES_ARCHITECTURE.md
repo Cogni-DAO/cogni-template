@@ -564,4 +564,4 @@ Worker services (like `scheduler-worker`) don't need contracts—job payloads li
 - [Packages Architecture](PACKAGES_ARCHITECTURE.md) — Pure libraries, package vs service distinction
 - [Architecture](ARCHITECTURE.md) — Hexagonal layers and boundaries
 - [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) — Infrastructure and deployment
-- [Scheduler Service Refactor](SCHEDULER_SERVICE_REFACTOR.md) — First service implementation spec
+- [Scheduler Spec](SCHEDULER_SPEC.md) — Scheduler design and Temporal migration
