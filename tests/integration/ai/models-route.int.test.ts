@@ -47,6 +47,9 @@ describe("/api/v1/ai/models integration tests", () => {
     vi.mocked(serverEnv).mockReturnValue({
       LITELLM_BASE_URL: "http://localhost:4000",
       LITELLM_MASTER_KEY: "test-key",
+      // Required by container.ts for ScheduleControlPort
+      TEMPORAL_ADDRESS: "localhost:7233",
+      TEMPORAL_NAMESPACE: "test-namespace",
     } as ReturnType<typeof serverEnv>);
   });
 
