@@ -4,7 +4,7 @@
 /**
  * Module: `@shared/db/schema`
  * Purpose: Barrel re-export of all database schema from @cogni/db-schema package.
- * Scope: Re-exports only. All schema definitions live in packages/db-schema.
+ * Scope: Re-exports only. Does not define any tables - all schema definitions live in packages/db-schema.
  * Invariants: This file must not define any tables - only re-export from the package.
  * Side-effects: none
  * Links: docs/PACKAGES_ARCHITECTURE.md
