@@ -18,7 +18,6 @@ const srcLayers = {
   // adaptersWorker, adaptersCli: add when implemented
   shared: "^src/shared",
   bootstrap: "^src/bootstrap",
-  scripts: "^src/scripts",
   lib: "^src/lib",
   auth: "^src/auth\\.ts$",
   proxy: "^src/proxy\\.ts$",
@@ -188,23 +187,6 @@ module.exports = {
       from: { path: layers.bootstrap },
       to: {
         path: [
-          layers.bootstrap,
-          layers.ports,
-          layers.adapters,
-          layers.shared,
-          layers.types,
-        ],
-      },
-    },
-
-    // scripts → scripts, bootstrap, ports, adapters, shared, types (worker entry points)
-    // TODO: Temporary layer for scheduler worker entry point. Remove when worker
-    // is refactored into its own package + service (services/scheduler-worker).
-    {
-      from: { path: layers.scripts },
-      to: {
-        path: [
-          layers.scripts,
           layers.bootstrap,
           layers.ports,
           layers.adapters,
@@ -505,20 +487,6 @@ module.exports = {
       },
       comment:
         "db-client contains postgres/drizzle; only server layers may import",
-    },
-
-    // scheduler-worker service cannot import db-schema directly (transitive through db-client only)
-    {
-      name: "scheduler-worker-no-direct-schema",
-      severity: "error",
-      from: {
-        path: "^services/scheduler-worker/",
-      },
-      to: {
-        path: "^packages/db-schema/",
-      },
-      comment:
-        "Worker has no db-schema dep; gets schema transitively through db-client",
     },
 
     // =========================================================================

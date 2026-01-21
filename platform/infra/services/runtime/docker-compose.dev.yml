@@ -37,6 +37,7 @@ services:
       - PINO_LOG_LEVEL=${PINO_LOG_LEVEL:-info}
       # Optional vars - pass-through only if set in host (absent = undefined, not empty string)
       - METRICS_TOKEN
+      - SCHEDULER_API_TOKEN
       - LANGFUSE_PUBLIC_KEY
       - LANGFUSE_SECRET_KEY
       - LANGFUSE_BASE_URL
@@ -45,28 +46,6 @@ services:
       postgres:
         condition: service_healthy
       litellm:
-        condition: service_healthy
-
-  scheduler-worker:
-    image: ${SCHEDULER_WORKER_IMAGE:-scheduler-worker-local}
-    build:
-      context: ../../../..
-      dockerfile: ./services/scheduler-worker/Dockerfile
-    container_name: scheduler-worker
-    restart: unless-stopped
-    networks:
-      - cogni-edge
-      - internal
-    environment:
-      - NODE_ENV=${NODE_ENV:-production}
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}
-      - LOG_LEVEL=${PINO_LOG_LEVEL:-info}
-      - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-5}
-      - WORKER_POLL_INTERVAL=${WORKER_POLL_INTERVAL:-1000}
-      - SERVICE_NAME=scheduler-worker
-      - HEALTH_PORT=9000
-    depends_on:
-      postgres:
         condition: service_healthy
 
   litellm:

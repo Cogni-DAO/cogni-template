@@ -133,7 +133,6 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   "tsconfig.eslint.json",
   "tsconfig.json",
   "tsconfig.scripts.json",
-  "tsup.scripts.config.ts",
   "vitest.api.config.mts",
   "vitest.config.mts",
   "vitest.integration.config.mts",
