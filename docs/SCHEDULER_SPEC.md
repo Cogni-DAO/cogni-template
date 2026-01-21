@@ -315,16 +315,16 @@
 
 ### P1: Temporal Migration
 
-**1. Port & Types (`@cogni/scheduler-core`):**
+**1. Port & Types (`@cogni/scheduler-core`):** ✅
 
-- [ ] Add `ScheduleControlPort` interface (vendor-agnostic):
+- [x] Add `ScheduleControlPort` interface (vendor-agnostic):
   - `createSchedule(params)` → `Promise<void>` (scheduleId caller-supplied)
   - `pauseSchedule(scheduleId)` / `resumeSchedule(scheduleId)`
   - `deleteSchedule(scheduleId)`
   - `describeSchedule(scheduleId)` → `ScheduleDescription | null`
-- [ ] Add `ScheduleDescription` type: `{ scheduleId, nextRunAtIso, lastRunAtIso, isPaused }`
-- [ ] Add error types: `ScheduleControlUnavailableError`, `ScheduleControlConflictError`, `ScheduleControlNotFoundError`
-- [ ] Input as `JsonValue` (not `unknown`), dates as ISO strings
+- [x] Add `ScheduleDescription` type: `{ scheduleId, nextRunAtIso, lastRunAtIso, isPaused }`
+- [x] Add error types: `ScheduleControlUnavailableError`, `ScheduleControlConflictError`, `ScheduleControlNotFoundError`
+- [x] Input as `JsonValue` (not `unknown`), dates as ISO strings
 
 **ScheduleControlPort Idempotency & Error Semantics:**
 
@@ -342,13 +342,13 @@
 > - `deleteSchedule` is idempotent → safe to retry after transient failure
 > - `pause/resume` idempotent → safe for retry; not-found means DB/Temporal drift (503, manual reconcile)
 
-**2. Adapter (`src/adapters/server/temporal/`):**
+**2. Adapter (`src/adapters/server/temporal/`):** ✅
 
-- [ ] Implement `TemporalScheduleControlAdapter`
-- [ ] Implement `NoOpScheduleControlAdapter` (for `APP_ENV=test`)
-- [ ] Hardcode policies: `overlap: SKIP`, `catchupWindow: 0` (not exposed in port)
-- [ ] Map Temporal errors → port error types (see table below)
-- [ ] Connection lifecycle via `@temporalio/client`
+- [x] Implement `TemporalScheduleControlAdapter`
+- [x] Implement `NoOpScheduleControlAdapter` (for `APP_ENV=test`)
+- [x] Hardcode policies: `overlap: SKIP`, `catchupWindow: 0` (not exposed in port)
+- [x] Map Temporal errors → port error types (see table below)
+- [x] Connection lifecycle via `@temporalio/client`
 
 **Temporal Error Mapping:**
 
@@ -363,17 +363,17 @@
 **3. Docker Infrastructure:**
 
 - [ ] Add `temporal` + `temporal-ui` + `temporal-postgres` to docker-compose (temporalio/docker-compose pinned)
-- [ ] Add env vars: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE=cogni-{APP_ENV}`, `TEMPORAL_TASK_QUEUE=scheduler-tasks`
+- [x] Add env vars: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE=cogni-{APP_ENV}`, `TEMPORAL_TASK_QUEUE=scheduler-tasks`
 - [ ] Health checks for temporal service
 
-**4. CRUD Integration (failure semantics defined):**
+**4. CRUD Integration (failure semantics defined):** ✅
 
-- [ ] Update `DrizzleScheduleManagerAdapter`: replace `JobQueuePort` → `ScheduleControlPort`
-- [ ] Wire `ScheduleControlPort` in container.ts (`APP_ENV=test` → NoOp, else → Temporal)
-- [ ] Add `TEMPORAL_*` env vars to `src/shared/env/server.ts` (optional in test mode)
-- [ ] `POST`: grant + DB insert → `createSchedule()`. **On failure: rollback grant+DB, 503**
-- [ ] `PATCH enabled`: DB update → `pauseSchedule()`/`resumeSchedule()`. **On failure: rollback, 503**
-- [ ] `DELETE`: `deleteSchedule()` → DB delete. **On failure: 503, do NOT delete DB**
+- [x] Update `DrizzleScheduleManagerAdapter`: replace `JobQueuePort` → `ScheduleControlPort`
+- [x] Wire `ScheduleControlPort` in container.ts (`APP_ENV=test` → NoOp, else → Temporal)
+- [x] Add `TEMPORAL_*` env vars to `src/shared/env/server.ts` (optional in test mode)
+- [x] `POST`: grant + DB insert → `createSchedule()`. **On failure: rollback grant+DB, 503**
+- [x] `PATCH enabled`: DB update → `pauseSchedule()`/`resumeSchedule()`. **On failure: rollback, 503**
+- [x] `DELETE`: `deleteSchedule()` → DB delete. **On failure: 503, do NOT delete DB**
 - [ ] Stack test: create → describe → pause → resume → delete
 
 **5. Worker Service:**
@@ -385,11 +385,11 @@
 - [ ] Activities derive `scheduledFor` from `TemporalScheduledStartTime`
 - [ ] Add Dockerfile and docker-compose entry
 
-**6. Cleanup (after validation):**
+**6. Cleanup (after validation):** ✅
 
-- [ ] Delete `services/scheduler-worker/` (Graphile)
-- [ ] Delete `JobQueuePort` and `DrizzleJobQueueAdapter`
-- [ ] Remove Graphile Worker dependencies
+- [x] Delete `services/scheduler-worker/` (Graphile)
+- [x] Delete `JobQueuePort` and `DrizzleJobQueueAdapter`
+- [x] Remove Graphile Worker dependencies
 
 ### P2: HITL Integration
 
