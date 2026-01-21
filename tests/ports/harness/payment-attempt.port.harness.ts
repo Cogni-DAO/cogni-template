@@ -21,8 +21,7 @@ import type {
   PaymentAttemptRepository,
 } from "@/ports";
 import { isTxHashAlreadyBoundPortError } from "@/ports";
-import { users } from "@/shared/db/schema.auth";
-import { billingAccounts } from "@/shared/db/schema.billing";
+import { billingAccounts, users } from "@/shared/db/schema";
 import { CHAIN_ID } from "@/shared/web3/chain";
 
 import { dispose, makeHarness, type TestHarness } from "./factory";

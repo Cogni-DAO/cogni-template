@@ -28,7 +28,7 @@ import {
   submitPaymentTxHashFacade,
 } from "@/app/_facades/payments/attempts.server";
 import type { SessionUser } from "@/shared/auth";
-import { creditLedger, paymentAttempts } from "@/shared/db/schema.billing";
+import { creditLedger, paymentAttempts } from "@/shared/db/schema";
 import { CHAIN_ID } from "@/shared/web3/chain";
 
 describe("MVP Payment Scenarios (9 critical flows)", () => {
@@ -77,7 +77,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
   afterEach(async () => {
     // Cleanup cascades to billing/ledger/payment_attempts via FK
     // Guard against undefined IDs when beforeEach fails partway through
-    const { users } = await import("@/shared/db/schema.auth");
+    const { users } = await import("@/shared/db/schema");
     if (testUserId) {
       await db.delete(users).where(eq(users.id, testUserId));
     }

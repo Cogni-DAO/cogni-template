@@ -23,7 +23,7 @@ import { getCsrfToken } from "next-auth/react";
 import { SiweMessage } from "siwe";
 
 import { getDb } from "@/adapters/server/db/client";
-import { users } from "@/shared/db/schema.auth";
+import { users } from "@/shared/db/schema";
 import { makeLogger } from "@/shared/observability";
 
 export const authSecret =
