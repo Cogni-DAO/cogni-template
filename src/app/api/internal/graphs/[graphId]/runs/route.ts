@@ -180,13 +180,23 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
         { idempotencyKey, runId: cached.runId, ok: cached.ok },
         "Returning cached result"
       );
-      const cachedResponse: InternalGraphRunOutput = {
-        ok: cached.ok,
-        runId: cached.runId,
-        traceId: cached.traceId,
-        ...(cached.errorCode && { error: cached.errorCode }),
-      };
-      return NextResponse.json(cachedResponse, { status: 200 });
+      // Use explicit branching for discriminated union type narrowing
+      if (cached.ok) {
+        const cachedResponse: InternalGraphRunOutput = {
+          ok: true,
+          runId: cached.runId,
+          traceId: cached.traceId,
+        };
+        return NextResponse.json(cachedResponse, { status: 200 });
+      } else {
+        const cachedResponse: InternalGraphRunOutput = {
+          ok: false,
+          runId: cached.runId,
+          traceId: cached.traceId,
+          error: cached.errorCode ?? "internal",
+        };
+        return NextResponse.json(cachedResponse, { status: 200 });
+      }
     }
 
     if (idempotencyResult.status === "mismatch") {
