@@ -15,7 +15,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronUp, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Badge,
@@ -33,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components";
+import { useModels } from "@/features/ai/hooks/useModels";
 import { createSchedule } from "./_api/createSchedule";
 import { deleteSchedule } from "./_api/deleteSchedule";
 import { fetchAgents } from "./_api/fetchAgents";
@@ -68,6 +69,7 @@ export function SchedulesView() {
   const [selectedAgent, setSelectedAgent] = useState("");
   const [selectedCron, setSelectedCron] = useState("");
   const [selectedTimezone, setSelectedTimezone] = useState("UTC");
+  const [selectedModel, setSelectedModel] = useState("");
   const [mutationError, setMutationError] = useState<string | null>(null);
 
   const {
@@ -94,6 +96,19 @@ export function SchedulesView() {
     retry: 2,
   });
 
+  const {
+    data: modelsData,
+    isLoading: modelsLoading,
+    error: modelsError,
+  } = useModels();
+
+  // Set default model when models data loads
+  useEffect(() => {
+    if (modelsData?.defaultPreferredModelId && !selectedModel) {
+      setSelectedModel(modelsData.defaultPreferredModelId);
+    }
+  }, [modelsData?.defaultPreferredModelId, selectedModel]);
+
   const createMutation = useMutation({
     mutationFn: createSchedule,
     onSuccess: () => {
@@ -102,6 +117,7 @@ export function SchedulesView() {
       setSelectedAgent("");
       setSelectedCron("");
       setSelectedTimezone("UTC");
+      setSelectedModel(modelsData?.defaultPreferredModelId ?? "");
       setIsFormOpen(false);
       setMutationError(null);
     },
@@ -133,10 +149,14 @@ export function SchedulesView() {
   });
 
   const handleCreate = () => {
-    if (!prompt.trim() || !selectedAgent || !selectedCron) return;
+    if (!prompt.trim() || !selectedAgent || !selectedCron || !selectedModel)
+      return;
     createMutation.mutate({
       graphId: selectedAgent,
-      input: { messages: [{ role: "user", content: prompt.trim() }] },
+      input: {
+        messages: [{ role: "user", content: prompt.trim() }],
+        model: selectedModel,
+      },
       cron: selectedCron,
       timezone: selectedTimezone,
     });
@@ -152,12 +172,20 @@ export function SchedulesView() {
 
   const agents = agentsData?.agents ?? [];
   const schedules = schedulesData?.schedules ?? [];
+  const models = modelsData?.models ?? [];
+  const defaultModelId = modelsData?.defaultPreferredModelId ?? "";
   const hasAgents = agents.length > 0;
+  const hasModels = models.length > 0;
   const isFormValid =
-    prompt.trim() && selectedAgent && selectedCron && hasAgents;
+    prompt.trim() &&
+    selectedAgent &&
+    selectedCron &&
+    selectedModel &&
+    hasAgents &&
+    hasModels;
 
-  if (schedulesError || agentsError) {
-    const error = schedulesError ?? agentsError;
+  if (schedulesError || agentsError || modelsError) {
+    const error = schedulesError ?? agentsError ?? modelsError;
     return (
       <div className="mx-auto flex max-w-[var(--max-width-container-screen)] flex-col gap-8 p-4 md:p-8 lg:px-16">
         <div className="rounded-lg border border-destructive bg-destructive/10 p-6">
@@ -172,7 +200,7 @@ export function SchedulesView() {
     );
   }
 
-  if (schedulesLoading || agentsLoading) {
+  if (schedulesLoading || agentsLoading || modelsLoading) {
     return (
       <div className="mx-auto flex max-w-[var(--max-width-container-screen)] flex-col gap-8 p-4 md:p-8 lg:px-16">
         <div className="animate-pulse space-y-8">
@@ -248,6 +276,35 @@ export function SchedulesView() {
                     {agents.map((agent) => (
                       <SelectItem key={agent.graphId} value={agent.graphId}>
                         {agent.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            {/* Model Select */}
+            <div>
+              <label htmlFor="model" className="mb-2 block font-medium text-sm">
+                Model
+              </label>
+              {!hasModels ? (
+                <p className="text-muted-foreground text-sm">
+                  No models available. Check LiteLLM configuration.
+                </p>
+              ) : (
+                <Select
+                  value={selectedModel || defaultModelId}
+                  onValueChange={setSelectedModel}
+                >
+                  <SelectTrigger id="model">
+                    <SelectValue placeholder="Select a model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {models.map((model) => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.name ?? model.id}
+                        {model.isFree && " (Free)"}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -331,6 +388,7 @@ export function SchedulesView() {
               <TableRow>
                 <TableHead>Status</TableHead>
                 <TableHead>Agent</TableHead>
+                <TableHead>Model</TableHead>
                 <TableHead>Prompt</TableHead>
                 <TableHead>Schedule</TableHead>
                 <TableHead>Timezone</TableHead>
@@ -365,6 +423,11 @@ export function SchedulesView() {
                     </TableCell>
                     <TableCell className="font-medium">
                       {schedule.graphId.split(":").pop() ?? schedule.graphId}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {typeof schedule.input?.model === "string"
+                        ? schedule.input.model
+                        : "—"}
                     </TableCell>
                     <TableCell className="max-w-xs truncate">
                       {promptText.length > 50
