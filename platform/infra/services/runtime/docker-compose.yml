@@ -260,6 +260,7 @@ services:
   scheduler-worker:
     image: ${SCHEDULER_WORKER_IMAGE}
     restart: unless-stopped
+    stop_grace_period: 30s
     networks:
       - internal
       - cogni-edge
@@ -277,6 +278,8 @@ services:
       - LOG_LEVEL=${PINO_LOG_LEVEL:-info}
       - SERVICE_NAME=scheduler-worker
       - HEALTH_PORT=9000
+      # Image digest for /version endpoint (set by deploy pipeline)
+      - IMAGE_DIGEST=${SCHEDULER_WORKER_IMAGE}
     depends_on:
       postgres:
         condition: service_healthy

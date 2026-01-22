@@ -83,5 +83,11 @@ WORKDIR /app/services/scheduler-worker
 
 ENV NODE_ENV=production
 
+# Build metadata for /version endpoint (from build args)
+ARG GIT_SHA=unknown
+ARG BUILD_TS=unknown
+ENV GIT_SHA=${GIT_SHA}
+ENV BUILD_TS=${BUILD_TS}
+
 # NOTE: No HEALTHCHECK instruction — probes defined in K8s manifests or Compose
 CMD ["node", "dist/main.js"]
