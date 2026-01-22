@@ -23,28 +23,28 @@
 >
 > **Exemption:** Temporarily violates `NO_COUPLED_PIPELINES`—service build runs in app pipeline as bridge.
 
-- [ ] Add `build-service.sh` script (scheduler-worker only, uses `docker build` like app)
-- [ ] Extend `build-prod.yml` to build scheduler-worker after app
-- [ ] Extend `push.sh` to push service image, capture digest from push output or `docker inspect --format='{{index .RepoDigests 0}}'`
-- [ ] Pass SCHEDULER_WORKER_IMAGE as full digest ref (`ghcr.io/...@sha256:...`) through workflow outputs
-- [ ] Wire scheduler-worker into `deploy.sh` (env var substitution, same pattern as APP_IMAGE)
-- [ ] Add `/version` endpoint (returns `{ sha, service, buildTs, imageDigest }`)
+- [x] Add `build-service.sh` script (scheduler-worker only, uses `docker build` like app)
+- [x] Extend `build-prod.yml` to build scheduler-worker after app
+- [x] Extend `push.sh` to push service image, capture digest from push output or `docker inspect --format='{{index .RepoDigests 0}}'`
+- [x] Pass SCHEDULER_WORKER_IMAGE as full digest ref (`ghcr.io/...@sha256:...`) through workflow outputs
+- [x] Wire scheduler-worker into `deploy.sh` (env var substitution, same pattern as APP_IMAGE)
+- [x] Add `/version` endpoint (returns `{ sha, service, buildTs, imageDigest }`)
 - [ ] Validate `/livez` + `/readyz` in staging-preview E2E
 - [ ] Add smoke test exercising real service behavior (beyond health endpoints)
 
 #### Deploy Hygiene (P0)
 
-- [ ] Compose: `stop_grace_period: 30s` for scheduler-worker
-- [ ] Verify SIGTERM drain: ready=false before connections close
-- [ ] Log drain completion before exit
+- [x] Compose: `stop_grace_period: 30s` for scheduler-worker
+- [x] Verify SIGTERM drain: ready=false before connections close
+- [x] Log drain completion before exit
 
 #### Service Contract (all services)
 
-- [ ] Health: `/livez` (liveness), `/readyz` (readiness)
-- [ ] Version: `/version` returns `{ sha, service, buildTs, imageDigest }`
-- [ ] Logging: pino JSON to stdout
-- [ ] Env: Zod-validated config with `HEALTH_PORT`
-- [ ] Shutdown: SIGTERM → ready=false → drain → exit
+- [x] Health: `/livez` (liveness), `/readyz` (readiness)
+- [x] Version: `/version` returns `{ sha, service, buildTs, imageDigest }`
+- [x] Logging: pino JSON to stdout
+- [x] Env: Zod-validated config with `HEALTH_PORT`
+- [x] Shutdown: SIGTERM → ready=false → drain → exit
 
 #### Chores
 
