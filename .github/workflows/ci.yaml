@@ -17,6 +17,11 @@ concurrency:
 env:
   NEXT_TELEMETRY_DISABLED: 1
   NODE_VERSION: "20"
+  # Temporal env vars - required by serverEnv() Zod schema
+  # Stack-test overrides TEMPORAL_ADDRESS with Docker hostname (temporal:7233)
+  TEMPORAL_ADDRESS: localhost:7233
+  TEMPORAL_NAMESPACE: cogni-test
+  TEMPORAL_TASK_QUEUE: scheduler-tasks
 
 jobs:
   # Fast gate: install → typecheck → lint
