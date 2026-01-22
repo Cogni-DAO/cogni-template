@@ -29,11 +29,11 @@ Static test data for consistent test scenarios across unit and integration tests
 
 ## Public Surface
 
-- **Exports:** JSON data files, auth helpers (db-helpers.ts, nextauth-http-helpers.ts, siwe-helpers.ts), wallet test data (test-data.ts), wallet HTTP helpers (api-helpers.ts), DB type utilities (db-utils.ts), AI fixtures (ai/models.response.json, ai/fixtures.ts, ai/mock-localstorage.ts), env fixtures (env/base-env.ts with CORE_TEST_ENV, BASE_VALID_ENV, PRODUCTION_VALID_ENV, MOCK_SERVER_ENV)
+- **Exports:** JSON data files, auth helpers (db-helpers.ts, nextauth-http-helpers.ts, siwe-helpers.ts), wallet test data (test-data.ts), wallet HTTP helpers (api-helpers.ts), DB type utilities (db-utils.ts), AI fixtures (ai/models.response.json, ai/fixtures.ts, ai/mock-localstorage.ts), env fixtures (env/base-env.ts with CORE_TEST_ENV, BASE_VALID_ENV, PRODUCTION_VALID_ENV, MOCK_SERVER_ENV), scheduling fixtures (scheduling/db-helpers.ts, scheduling/fixtures.ts), Temporal client utilities (temporal/client.ts)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** all .json files, auth/\*.ts, wallet/\*.ts, db-utils.ts, ai/\*.ts, env/\*.ts
+- **Files considered API:** all .json files, auth/\*.ts, wallet/\*.ts, db-utils.ts, ai/\*.ts, env/\*.ts, scheduling/\*.ts, temporal/\*.ts
 
 ## Responsibilities
 

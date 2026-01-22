@@ -238,17 +238,17 @@ module.exports = {
       to: { path: "^packages/" },
     },
 
-    // // services/ can import from packages/ (future-proof)
-    // {
-    //   from: { path: "^services/" },
-    //   to: { path: "^packages/" },
-    // },
+    // services/ can import from packages/ (consumption)
+    {
+      from: { path: "^services/" },
+      to: { path: "^packages/" },
+    },
 
-    // // services/ can import within itself (internal)
-    // {
-    //   from: { path: "^services/" },
-    //   to: { path: "^services/" },
-    // },
+    // services/ can import within itself (internal)
+    {
+      from: { path: "^services/" },
+      to: { path: "^services/" },
+    },
 
     // Files not in a known layer are caught by the forbidden `no-unknown-layer` rule below.
   ],
@@ -380,31 +380,31 @@ module.exports = {
         "packages/ must be standalone; cannot depend on src/ or services/",
     },
 
-    // // services/ cannot import from src/
-    // {
-    //   name: "no-services-to-src",
-    //   severity: "error",
-    //   from: {
-    //     path: "^services/",
-    //   },
-    //   to: {
-    //     path: "^src/",
-    //   },
-    //   comment: "services/ cannot depend on Node app code in src/",
-    // },
+    // services/ cannot import from src/
+    {
+      name: "no-services-to-src",
+      severity: "error",
+      from: {
+        path: "^services/",
+      },
+      to: {
+        path: "^src/",
+      },
+      comment: "services/ cannot depend on Next.js app code in src/",
+    },
 
-    // // src/ cannot import from services/
-    // {
-    //   name: "no-src-to-services",
-    //   severity: "error",
-    //   from: {
-    //     path: "^src/",
-    //   },
-    //   to: {
-    //     path: "^services/",
-    //   },
-    //   comment: "src/ cannot depend on Operator services",
-    // },
+    // src/ cannot import from services/
+    {
+      name: "no-src-to-services",
+      severity: "error",
+      from: {
+        path: "^src/",
+      },
+      to: {
+        path: "^services/",
+      },
+      comment: "src/ cannot depend on standalone services",
+    },
 
     // Block deep imports into package internals (force use of package exports)
     // Allows index.ts (entrypoint), blocks other internal files
@@ -517,6 +517,24 @@ module.exports = {
         path: "^services/[^/]+/src/main\\.ts$",
       },
       comment: "adapters must not import the composition root",
+    },
+
+    // =========================================================================
+    // Scheduler worker boundary rules (per SCHEDULER_SPEC.md)
+    // =========================================================================
+
+    // scheduler-worker must not import schedule-control modules (WORKER_NEVER_CONTROLS_SCHEDULES)
+    {
+      name: "no-worker-schedule-control",
+      severity: "error",
+      from: {
+        path: "^services/scheduler-worker/",
+      },
+      to: {
+        path: ["schedule-control", "ScheduleControl"],
+      },
+      comment:
+        "Per WORKER_NEVER_CONTROLS_SCHEDULES: worker executes workflows only, CRUD endpoints are schedule authority",
     },
   ],
 };
