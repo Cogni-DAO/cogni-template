@@ -24,7 +24,6 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "@/adapters/server/db/client";
 import { POST } from "@/app/api/internal/graphs/[graphId]/runs/route";
-import { resetContainer } from "@/bootstrap/container";
 import { executionGrants, executionRequests, users } from "@/shared/db/schema";
 
 // Token from env (matches METRICS_TOKEN pattern in metrics-endpoint.stack.test.ts)
@@ -62,7 +61,7 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
     const db = getDb();
     // Cleanup: delete user (cascades to billing_accounts, grants via FK)
     await db.delete(users).where(eq(users.id, testActor.user.id));
-    resetContainer();
+    // Don't resetContainer() - reuse connections across tests
   });
 
   /**
