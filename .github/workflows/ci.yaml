@@ -308,13 +308,24 @@ jobs:
           cache-from: type=gha,scope=stack-test
           cache-to: type=gha,mode=max,scope=stack-test
 
+      - name: Build scheduler-worker image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: services/scheduler-worker/Dockerfile
+          tags: cogni-scheduler-worker-local
+          load: true
+          cache-from: type=gha,scope=scheduler-worker
+          cache-to: type=gha,mode=max,scope=scheduler-worker
+
       - name: Start app + DB + Temporal stack
         run: |
           docker network create cogni-edge || true
           # Images pre-built with GHA cache; no --build needed
-          # Temporal services required for schedule CRUD tests
+          # Temporal services required for schedule CRUD + execution tests
+          # scheduler-worker required for workflow execution tests
           docker compose -f platform/infra/services/runtime/docker-compose.dev.yml \
-            up -d app postgres litellm caddy temporal-postgres temporal temporal-ui
+            up -d app postgres litellm caddy temporal-postgres temporal temporal-ui scheduler-worker
 
       - name: Run migrations
         run: |
