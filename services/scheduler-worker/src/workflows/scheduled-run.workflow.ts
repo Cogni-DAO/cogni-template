@@ -14,7 +14,12 @@
  * @internal
  */
 
-import { proxyActivities, uuid4, workflowInfo } from "@temporalio/workflow";
+import {
+  ApplicationFailure,
+  proxyActivities,
+  uuid4,
+  workflowInfo,
+} from "@temporalio/workflow";
 
 import type { Activities } from "../activities/index.js";
 
@@ -72,8 +77,13 @@ export async function GovernanceScheduledRunWorkflow(
   const info = workflowInfo();
   const scheduledStartTime = info.searchAttributes
     ?.TemporalScheduledStartTime as Date[] | undefined;
-  const scheduledFor =
-    scheduledStartTime?.[0]?.toISOString() ?? new Date().toISOString();
+  if (!scheduledStartTime?.[0]) {
+    throw ApplicationFailure.nonRetryable(
+      `TemporalScheduledStartTime search attribute missing - workflow must be started by Schedule. ` +
+        `scheduleId=${scheduleId}, workflowId=${info.workflowId}, runId=${info.runId}`
+    );
+  }
+  const scheduledFor = scheduledStartTime[0].toISOString();
 
   // Generate run ID (deterministic via Temporal's uuid4)
   const runId = uuid4();
