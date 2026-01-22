@@ -11,6 +11,24 @@
 
 import { describe, expect, it, vi } from "vitest";
 
+// Mock @temporalio/activity before importing activities
+vi.mock("@temporalio/activity", () => ({
+  ApplicationFailure: {
+    nonRetryable: (message: string, type?: string, details?: unknown) => {
+      const error = new Error(message);
+      (error as { type?: string }).type = type;
+      (error as { details?: unknown }).details = details;
+      return error;
+    },
+  },
+  activityInfo: () => ({
+    workflowExecution: {
+      workflowId: "test-workflow-id",
+      runId: "test-temporal-run-id",
+    },
+  }),
+}));
+
 import { createActivities } from "../src/activities/index.js";
 import {
   createMockApiSuccessResponse,
@@ -283,6 +301,7 @@ describe("executeGraphActivity", () => {
       executionGrantId: FIXED_IDS.grantId,
       input: { messages: [], model: "openrouter/auto" },
       scheduledFor: "2025-01-15T10:00:00.000Z",
+      runId: FIXED_IDS.runId,
     });
 
     expect(mockFetch).toHaveBeenCalledWith(
@@ -297,6 +316,7 @@ describe("executeGraphActivity", () => {
         body: JSON.stringify({
           executionGrantId: FIXED_IDS.grantId,
           input: { messages: [], model: "openrouter/auto" },
+          runId: FIXED_IDS.runId,
         }),
       })
     );
@@ -334,8 +354,9 @@ describe("executeGraphActivity", () => {
         executionGrantId: FIXED_IDS.grantId,
         input: {},
         scheduledFor: "2025-01-15T10:00:00.000Z",
+        runId: FIXED_IDS.runId,
       })
-    ).rejects.toThrow("Internal API error: 401");
+    ).rejects.toThrow(/Internal API client error: 401/);
 
     vi.unstubAllGlobals();
   });
