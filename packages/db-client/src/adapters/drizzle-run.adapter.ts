@@ -16,7 +16,7 @@
 import { scheduleRuns } from "@cogni/db-schema/scheduling";
 
 import type { ScheduleRun, ScheduleRunRepository } from "@cogni/scheduler-core";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Database, LoggerLike } from "../client";
 
 export class DrizzleScheduleRunAdapter implements ScheduleRunRepository {
@@ -34,12 +34,18 @@ export class DrizzleScheduleRunAdapter implements ScheduleRunRepository {
     };
   }
 
+  /**
+   * Creates a schedule run record with idempotent semantics.
+   * Per SCHEDULER_SPEC.md pattern: INSERT ON CONFLICT DO NOTHING + SELECT.
+   * UNIQUE(schedule_id, scheduled_for) prevents duplicate runs per slot.
+   */
   async createRun(params: {
     scheduleId: string;
     runId: string;
     scheduledFor: Date;
   }): Promise<ScheduleRun> {
-    const [row] = await this.db
+    // Idempotent insert - does nothing if (schedule_id, scheduled_for) exists
+    await this.db
       .insert(scheduleRuns)
       .values({
         scheduleId: params.scheduleId,
@@ -47,21 +53,39 @@ export class DrizzleScheduleRunAdapter implements ScheduleRunRepository {
         scheduledFor: params.scheduledFor,
         status: "pending",
       })
-      .returning();
+      .onConflictDoNothing({
+        target: [scheduleRuns.scheduleId, scheduleRuns.scheduledFor],
+      });
+
+    // Always SELECT to get the row (new or existing)
+    const [row] = await this.db
+      .select()
+      .from(scheduleRuns)
+      .where(
+        and(
+          eq(scheduleRuns.scheduleId, params.scheduleId),
+          eq(scheduleRuns.scheduledFor, params.scheduledFor)
+        )
+      );
 
     if (!row) {
-      throw new Error("Failed to create run record");
+      throw new Error("Failed to create or retrieve run record");
     }
 
     this.logger.debug(
-      { runId: params.runId, scheduleId: params.scheduleId },
-      "Created run record"
+      { runId: row.runId, scheduleId: params.scheduleId },
+      "Created or retrieved run record"
     );
 
     return this.toRun(row);
   }
 
+  /**
+   * Marks a run as started. Monotonic: only transitions from 'pending'.
+   * Idempotent on retry - no-op if already running/completed.
+   */
   async markRunStarted(runId: string, langfuseTraceId?: string): Promise<void> {
+    // Monotonic guard: only update if status='pending' (prevents regression)
     await this.db
       .update(scheduleRuns)
       .set({
@@ -69,16 +93,23 @@ export class DrizzleScheduleRunAdapter implements ScheduleRunRepository {
         startedAt: new Date(),
         langfuseTraceId: langfuseTraceId ?? null,
       })
-      .where(eq(scheduleRuns.runId, runId));
+      .where(
+        and(eq(scheduleRuns.runId, runId), eq(scheduleRuns.status, "pending"))
+      );
 
     this.logger.debug({ runId }, "Marked run as started");
   }
 
+  /**
+   * Marks a run as completed. Monotonic: only transitions from 'pending' or 'running'.
+   * Idempotent on retry - no-op if already in terminal state.
+   */
   async markRunCompleted(
     runId: string,
     status: "success" | "error" | "skipped",
     errorMessage?: string
   ): Promise<void> {
+    // Monotonic guard: only update if status is pending/running (prevents regression)
     await this.db
       .update(scheduleRuns)
       .set({
@@ -86,7 +117,12 @@ export class DrizzleScheduleRunAdapter implements ScheduleRunRepository {
         completedAt: new Date(),
         errorMessage: errorMessage ?? null,
       })
-      .where(eq(scheduleRuns.runId, runId));
+      .where(
+        and(
+          eq(scheduleRuns.runId, runId),
+          inArray(scheduleRuns.status, ["pending", "running"])
+        )
+      );
 
     this.logger.info({ runId, status }, "Marked run as completed");
   }

@@ -252,6 +252,43 @@ services:
       temporal:
         condition: service_healthy
 
+  # =============================================================================
+  # Scheduler Worker (Temporal)
+  # Per SCHEDULER_SPEC.md: Executes scheduled graph runs via internal API
+  # =============================================================================
+
+  scheduler-worker:
+    image: ${SCHEDULER_WORKER_IMAGE}
+    restart: unless-stopped
+    networks:
+      - internal
+      - cogni-edge
+    environment:
+      # Temporal connection
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_NAMESPACE=cogni-${APP_ENV}
+      - TEMPORAL_TASK_QUEUE=scheduler-tasks
+      # Database for activities
+      - DATABASE_URL=${DATABASE_URL}
+      # Internal API (scheduler-worker → app)
+      - APP_BASE_URL=http://app:3000
+      - SCHEDULER_API_TOKEN=${SCHEDULER_API_TOKEN}
+      # Observability
+      - LOG_LEVEL=${PINO_LOG_LEVEL:-info}
+      - SERVICE_NAME=scheduler-worker
+      - HEALTH_PORT=9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/livez || exit 1"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 30s
+
 networks:
   # External network shared with edge stack (Caddy)
   # App must be on this network for Caddy to reverse_proxy to it
