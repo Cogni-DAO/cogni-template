@@ -18,7 +18,7 @@ discovery.relabel "docker_logs" {
   // Drop containers that don't match our allowlist
   rule {
     source_labels = ["__meta_docker_container_label_com_docker_compose_service"]
-    regex         = "(app|litellm|caddy)"
+    regex         = "(app|litellm|caddy|scheduler-worker|temporal)"
     action        = "keep"
   }
 

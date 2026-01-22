@@ -456,5 +456,11 @@
 
 ---
 
+## Known Issues (P0)
+
+- [ ] **Latest trace not displayed in UI**: `schedule_runs.langfuse_trace_id` is populated after execution, but Schedules list API doesn't return run history—UI hardcodes "No runs yet" (`view.tsx:440`)
+
+---
+
 **Last Updated**: 2026-01-22
 **Status**: P1 complete; scheduler runs in dev with stack test passing. Missing deployment infra (CI/CD, production compose).
