@@ -9,26 +9,20 @@
  * Side-effects: IO (HTTP response, structured logging, network calls to RPC and Temporal)
  * Notes: Used by Docker HEALTHCHECK, deployment validation, K8s readiness probes.
  *        HTTP status is primary truth: 200 = ready, 503 = not ready.
- *        Logs readiness failures for deployment debugging.
  * Links: `@contracts/meta.readyz.read.v1.contract`, src/shared/env/invariants.ts, src/app/(infra)/livez/route.ts
  * @public
  */
 
 import { NextResponse } from "next/server";
 
-import { getContainer } from "@/bootstrap/container";
-import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { metaReadyzOperation } from "@/contracts/meta.readyz.read.v1.contract";
 import { EnvValidationError, serverEnv } from "@/shared/env";
 import {
-  assertEvmRpcConfig,
-  assertEvmRpcConnectivity,
   assertRuntimeSecrets,
   assertTemporalConnectivity,
   InfraConnectivityError,
   RuntimeSecretError,
 } from "@/shared/env/invariants";
-import type { RequestContext } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 
@@ -91,9 +85,11 @@ export const GET = wrapRouteHandlerWithLogging(
       assertRuntimeSecrets(env);
       assertEvmRpcConfig(env);
 
-      // Test RPC connectivity (3s budget, triggers lazy ViemEvmOnchainClient init)
-      // This catches missing/invalid EVM_RPC_URL immediately after deploy
-      await assertEvmRpcConnectivity(container.evmOnchainClient, env);
+    const payload = {
+      status: "healthy" as const,
+      timestamp: new Date().toISOString(),
+      version: "0",
+    };
 
       // Test Temporal connectivity (5s budget, triggers lazy connection)
       // This catches Temporal not running before stack tests execute
@@ -162,7 +158,8 @@ export const GET = wrapRouteHandlerWithLogging(
       return new NextResponse(
         JSON.stringify({
           status: "error",
-          reason: "INTERNAL_ERROR",
+          reason: error.code,
+          message: error.message,
         }),
         {
           status: 503, // Service Unavailable - not ready
@@ -170,5 +167,16 @@ export const GET = wrapRouteHandlerWithLogging(
         }
       );
     }
+
+    return new NextResponse(
+      JSON.stringify({
+        status: "error",
+        reason: "INTERNAL_ERROR",
+      }),
+      {
+        status: 503, // Service Unavailable - not ready
+        headers: { "content-type": "application/json" },
+      }
+    );
   }
-);
+}

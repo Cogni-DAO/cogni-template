@@ -165,7 +165,29 @@
 - Unit tests MUST use FakeEvmOnchainClient (no RPC calls in unit tests)
 - Payment service NEVER grants credits unless `status === 'VERIFIED'`
 
----
+- [ ] Create `adapters/server/payments/evm-rpc-onchain-verifier.adapter.ts` implementing OnChainVerifier port
+- [ ] Inject `EvmOnchainClient` dependency (see [ONCHAIN_READERS.md](ONCHAIN_READERS.md#shared-evm-infrastructure))
+- [ ] Read canonical config:
+  - `chainId` from `getWidgetConfig().chainId` (sourced from `.cogni/repo-spec.yaml` `cogni_dao.chain_id`, validated against `CHAIN_ID` constant)
+  - `receivingAddress` from `getWidgetConfig().receivingAddress` (sourced from `.cogni/repo-spec.yaml` `payments_in.widget.receiving_address`)
+  - `tokenAddress` from `USDC_TOKEN_ADDRESS` constant (`@/shared/web3/chain`)
+- [ ] Assert caller params match canonical config (immediate failure if mismatch)
+- [ ] Use `EvmOnchainClient` for all RPC operations: getTransaction, getTransactionReceipt, getBlockNumber
+- [ ] Decode ERC20 Transfer log, compute confirmations
+- [ ] Map failure conditions to PaymentErrorCode (see section 5)
+
+**Wiring & Tests:**
+
+- [ ] Wire DI in `bootstrap/container.ts`:
+  - `APP_ENV=test` → FakeOnChainVerifierAdapter (in-memory, no RPC)
+  - `APP_ENV=production|preview|dev` → EvmRpcOnChainVerifierAdapter with ViemEvmOnchainClient
+- [ ] Wire EvmOnchainClient in DI:
+  - `APP_ENV=test` → FakeEvmOnchainClient
+  - `APP_ENV=production|preview|dev` → ViemEvmOnchainClient
+- [ ] Add smoke test: run EvmRpcOnChainVerifierAdapter against known-good tx on Sepolia/Base testnet
+- [ ] Unit tests: use FakeEvmOnchainClient to simulate all verification branches (success, pending, each failure mode)
+
+**Invariants:**
 
 ### Phase 4: Operational Hardening (Post-MVP - Deferred)
 
@@ -383,7 +405,7 @@ PENDING_UNVERIFIED -> FAILED (on tx revert OR receipt not found after 24h)
 
 2. **Query chain via EvmOnchainClient:** (see [On-Chain Infrastructure](ONCHAIN_READERS.md#shared-evm-infrastructure))
    - Fetch transaction and receipt, decode ERC20 Transfer log, compute confirmations
-   - Return `PENDING` if confirmations < MIN_CONFIRMATIONS
+   - Return `PENDING` if confirmations < MIN_CONFIRMATIONS (5)
    - Return `FAILED` with specific error code for: TX_NOT_FOUND, TX_REVERTED, TOKEN_TRANSFER_NOT_FOUND, SENDER_MISMATCH, RECIPIENT_MISMATCH, AMOUNT_MISMATCH
 
 3. **Return VERIFIED:** All validations passed
