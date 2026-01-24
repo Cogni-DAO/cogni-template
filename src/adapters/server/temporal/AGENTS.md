@@ -5,12 +5,12 @@
 ## Metadata
 
 - **Owners:** @cogni-dao
-- **Last reviewed:** 2026-01-21
+- **Last reviewed:** 2026-01-22
 - **Status:** stable
 
 ## Purpose
 
-Temporal schedule control adapters implementing `ScheduleControlPort` for schedule lifecycle management (create/pause/resume/delete).
+Temporal schedule control adapter implementing `ScheduleControlPort` for schedule lifecycle management (create/pause/resume/delete).
 
 ## Pointers
 
@@ -32,10 +32,10 @@ Temporal schedule control adapters implementing `ScheduleControlPort` for schedu
 
 ## Public Surface
 
-- **Exports:** `NoOpScheduleControlAdapter`, `TemporalScheduleControlAdapter`, `TemporalScheduleControlConfig`
+- **Exports:** `TemporalScheduleControlAdapter`, `TemporalScheduleControlConfig`
 - **Routes:** none
 - **CLI:** none
-- **Env/Config keys:** `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`
+- **Env/Config keys:** `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE` (all required)
 - **Files considered API:** `index.ts`
 
 ## Ports
@@ -46,13 +46,16 @@ Temporal schedule control adapters implementing `ScheduleControlPort` for schedu
 
 ## Responsibilities
 
-- This directory **does**: Implement schedule lifecycle control via Temporal client or in-memory (NoOp)
+- This directory **does**: Implement schedule lifecycle control via Temporal client
 - This directory **does not**: Handle workflow execution, graph logic, or worker tasks
 
 ## Usage
 
 ```bash
-# Test mode uses NoOpScheduleControlAdapter automatically via APP_ENV=test
+# Start Temporal infrastructure
+pnpm dev:infra
+
+# Run stack tests (requires Temporal)
 pnpm test:stack
 ```
 
@@ -60,7 +63,7 @@ pnpm test:stack
 
 - Per `CRUD_IS_TEMPORAL_AUTHORITY`: Only CRUD endpoints use these adapters
 - Per `WORKER_NEVER_CONTROLS_SCHEDULES`: Worker service must not depend on ScheduleControlPort
-- NoOp adapter maintains same idempotency semantics as Temporal adapter
+- Temporal is required infrastructure - app fails to start without TEMPORAL_ADDRESS configured
 
 ## Dependencies
 
@@ -75,5 +78,5 @@ pnpm test:stack
 
 ## Notes
 
-- `NoOpScheduleControlAdapter` used when `APP_ENV=test` or `TEMPORAL_ADDRESS` not configured
 - Temporal adapter hardcodes `overlap=SKIP` and `catchupWindow=0` per spec
+- Connection is lazy - only connects when first schedule operation is called

@@ -177,7 +177,10 @@ export const scheduleRuns = pgTable(
  * This is the correctness layer for slot deduplication.
  *
  * Key format: `scheduleId:TemporalScheduledStartTime`
- * Stores BOTH success and error outcomes - retries return the cached outcome.
+ * Lifecycle: pending (ok=null) → finalized (ok=true/false)
+ * - On request start: create row with ok=null (pending)
+ * - On completion: update ok + errorCode (finalized)
+ * - On retry: if ok=null, execution in progress; if ok!=null, return cached outcome
  * If idempotency_key exists but request_hash differs, reject with 422 (payload mismatch).
  */
 export const executionRequests = pgTable("execution_requests", {
@@ -189,9 +192,12 @@ export const executionRequests = pgTable("execution_requests", {
   runId: text("run_id").notNull(),
   /** Langfuse trace ID (optional, set when Langfuse is configured) */
   traceId: text("trace_id"),
-  /** Execution outcome: true = success, false = error */
-  ok: boolean("ok").notNull(),
-  /** AiExecutionErrorCode if ok=false, null if ok=true */
+  /**
+   * Execution outcome: true = success, false = error, null = pending.
+   * Pending state indicates execution in progress (not yet finalized).
+   */
+  ok: boolean("ok"),
+  /** AiExecutionErrorCode if ok=false, null if ok=true or pending */
   errorCode: text("error_code"),
   /** When request was first received */
   createdAt: timestamp("created_at", { withTimezone: true })

@@ -446,10 +446,11 @@ volumes:
     # Add healthcheck once health endpoints exist
   ```
 - [ ] Add to production `docker-compose.yml` (when ready for deployment)
-- [ ] Add to CI workflow (`.github/workflows/`):
+- [ ] Add to CI/CD pipeline (see [CI/CD Services Roadmap](CICD_SERVICES_ROADMAP.md)):
   - Build: `pnpm --filter @cogni/<name>-service build`
   - Test: `pnpm --filter @cogni/<name>-service test`
   - Docker build and push to GHCR with immutable SHA tags
+  - Wire into deploy workflow (P0 stopgap: extend existing scripts; P1+: GitOps)
 
 **Invariants:**
 
@@ -553,9 +554,9 @@ Worker services (like `scheduler-worker`) don't need contracts—job payloads li
 
 ## Existing Services
 
-| Service            | Purpose                                       | Status   |
-| ------------------ | --------------------------------------------- | -------- |
-| `scheduler-worker` | Graphile Worker for scheduled graph execution | MVP (v0) |
+| Service            | Purpose                        | Status   | CI/CD                                                                              |
+| ------------------ | ------------------------------ | -------- | ---------------------------------------------------------------------------------- |
+| `scheduler-worker` | Temporal worker for scheduling | MVP (v0) | P0 stopgap (see [roadmap](CICD_SERVICES_ROADMAP.md#p0-bridge-mvp-current-tooling)) |
 
 ---
 
@@ -564,4 +565,5 @@ Worker services (like `scheduler-worker`) don't need contracts—job payloads li
 - [Packages Architecture](PACKAGES_ARCHITECTURE.md) — Pure libraries, package vs service distinction
 - [Architecture](ARCHITECTURE.md) — Hexagonal layers and boundaries
 - [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) — Infrastructure and deployment
+- [CI/CD Services Roadmap](CICD_SERVICES_ROADMAP.md) — Service build/deploy integration (P0→P4 phases)
 - [Scheduler Spec](SCHEDULER_SPEC.md) — Scheduler design and Temporal migration

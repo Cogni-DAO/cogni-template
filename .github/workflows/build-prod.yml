@@ -18,6 +18,8 @@ jobs:
   build-image:
     runs-on: ubuntu-latest
     environment: production
+    outputs:
+      scheduler_worker_image: ${{ steps.push.outputs.scheduler_worker_image }}
     env:
       NEXT_TELEMETRY_DISABLED: 1
 
@@ -53,6 +55,12 @@ jobs:
       - name: Test image
         run: platform/ci/scripts/test-image.sh
 
+      - name: Build scheduler-worker image
+        env:
+          DOCKER_BUILDKIT: "1"
+          PLATFORM: linux/amd64
+        run: platform/ci/scripts/build-service.sh
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -61,6 +69,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push to GHCR
+        id: push
         run: platform/ci/scripts/push.sh
 
       - name: Tag and push fingerprinted migrator (if built)
@@ -95,6 +104,12 @@ jobs:
             echo "**Migrator Image:** Skipped (unchanged, fingerprint: \`${MIGRATOR_FINGERPRINT}\`)" >> $GITHUB_STEP_SUMMARY
           fi
 
+          # Report scheduler-worker with digest ref
+          SCHEDULER_WORKER_DIGEST="${{ steps.push.outputs.scheduler_worker_image }}"
+          if [[ -n "$SCHEDULER_WORKER_DIGEST" ]]; then
+            echo "**Scheduler-Worker Image:** \`${SCHEDULER_WORKER_DIGEST}\`" >> $GITHUB_STEP_SUMMARY
+          fi
+
           echo "**Commit:** \`${GITHUB_SHA}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Platform:** linux/amd64" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -107,6 +122,7 @@ jobs:
             echo "- ⏭️  Migrator container build skipped (unchanged)" >> $GITHUB_STEP_SUMMARY
           fi
 
+          echo "- ✅ Scheduler-worker container build successful" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Container startup test passed" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Health endpoint test passed" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Docker healthcheck working" >> $GITHUB_STEP_SUMMARY

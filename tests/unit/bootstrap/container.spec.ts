@@ -12,6 +12,10 @@
  * @public
  */
 
+import {
+  BASE_VALID_ENV,
+  PRODUCTION_VALID_ENV,
+} from "@tests/_fixtures/env/base-env";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const ORIGINAL_ENV = process.env;
@@ -33,17 +37,7 @@ describe("bootstrap container DI wiring", () => {
   describe("getContainer adapter selection", () => {
     it("wires FakeLlmAdapter when APP_ENV=test", async () => {
       // Set up test environment
-      Object.assign(process.env, {
-        NODE_ENV: "test",
-        APP_ENV: "test",
-        POSTGRES_USER: "postgres",
-        POSTGRES_PASSWORD: "postgres",
-        POSTGRES_DB: "test_db",
-        DB_HOST: "localhost",
-        LITELLM_MASTER_KEY: "test-key",
-        AUTH_SECRET: "x".repeat(32),
-        SCHEDULER_API_TOKEN: "x".repeat(32),
-      });
+      Object.assign(process.env, BASE_VALID_ENV);
 
       // Import after env setup to get correct adapter wiring
       const { getContainer } = await import("@/bootstrap/container");
@@ -59,16 +53,9 @@ describe("bootstrap container DI wiring", () => {
     it("wires LiteLlmAdapter when APP_ENV=production", async () => {
       // Test production adapter wiring (APP_ENV controls adapters, not NODE_ENV)
       Object.assign(process.env, {
-        NODE_ENV: "test", // Keep test mode for logging silence
-        APP_ENV: "production",
-        POSTGRES_USER: "postgres",
-        POSTGRES_PASSWORD: "postgres",
+        ...PRODUCTION_VALID_ENV,
         POSTGRES_DB: "prod_db",
-        DB_HOST: "postgres",
         LITELLM_MASTER_KEY: "prod-key",
-        AUTH_SECRET: "x".repeat(32),
-        SCHEDULER_API_TOKEN: "x".repeat(32),
-        EVM_RPC_URL: "https://eth-sepolia.example.com/v2/test-key",
       });
 
       // Import after env setup
@@ -85,16 +72,9 @@ describe("bootstrap container DI wiring", () => {
     it("wires LiteLlmAdapter in development mode with APP_ENV=production", async () => {
       // Test that APP_ENV controls adapters regardless of NODE_ENV
       Object.assign(process.env, {
-        NODE_ENV: "test", // Keep test mode for logging silence
-        APP_ENV: "production",
-        POSTGRES_USER: "postgres",
-        POSTGRES_PASSWORD: "postgres",
+        ...PRODUCTION_VALID_ENV,
         POSTGRES_DB: "dev_db",
-        DB_HOST: "localhost",
         LITELLM_MASTER_KEY: "dev-key",
-        AUTH_SECRET: "x".repeat(32),
-        SCHEDULER_API_TOKEN: "x".repeat(32),
-        EVM_RPC_URL: "https://eth-sepolia.example.com/v2/test-key",
       });
 
       const { getContainer } = await import("@/bootstrap/container");
@@ -110,17 +90,7 @@ describe("bootstrap container DI wiring", () => {
   describe("container behavior", () => {
     beforeEach(() => {
       // Set minimal valid env for these tests
-      Object.assign(process.env, {
-        NODE_ENV: "test",
-        APP_ENV: "test",
-        POSTGRES_USER: "postgres",
-        POSTGRES_PASSWORD: "postgres",
-        POSTGRES_DB: "test_db",
-        DB_HOST: "localhost",
-        LITELLM_MASTER_KEY: "test-key",
-        AUTH_SECRET: "x".repeat(32),
-        SCHEDULER_API_TOKEN: "x".repeat(32),
-      });
+      Object.assign(process.env, BASE_VALID_ENV);
     });
 
     it("returns same container instance (singleton)", async () => {

@@ -12,9 +12,9 @@
  * @public
  */
 
+import { MOCK_SERVER_ENV } from "@tests/_fixtures/env/base-env";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
 import { TreasurySnapshotResponseV1 } from "@/contracts/treasury.snapshot.v1.contract";
 import { CHAIN_ID, USDC_TOKEN_ADDRESS } from "@/shared/web3/chain";
 
@@ -24,13 +24,9 @@ vi.mock("@/app/_facades/treasury/snapshot.server", () => ({
 }));
 
 // Mock serverEnv to avoid env validation errors in tests
-// MUST set APP_ENV: "test" and isTestMode: true to use fake adapters
+// Uses shared fixture to ensure all required fields are present
 vi.mock("@/shared/env", () => ({
-  serverEnv: () => ({
-    APP_ENV: "test",
-    isTestMode: true,
-    AUTH_SECRET: "test-secret-32-chars-minimum-length",
-  }),
+  serverEnv: () => MOCK_SERVER_ENV,
 }));
 
 // Mock rate limiter to always allow requests in contract tests

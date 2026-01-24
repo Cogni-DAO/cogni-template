@@ -1,0 +1,14 @@
+# Temporal Dynamic Config
+# Source: temporalio/docker-compose v1.29.1
+# Per SCHEDULER_SPEC.md: postgres-only setup for dev
+
+# Increased ID length limit for longer schedule IDs
+limit.maxIDLength:
+  - value: 255
+    constraints: {}
+
+# Dev setup only - force refresh search attributes cache
+# DO NOT enable in production
+system.forceSearchAttributesCacheRefreshOnRead:
+  - value: true
+    constraints: {}

@@ -260,18 +260,17 @@
 | `src/bootstrap/container.ts`                                           | Wire scheduling ports                                   |
 | `packages/scheduler-core/src/payloads.ts`                              | Zod payload schemas                                     |
 
-### Planned (Temporal Migration)
+### Implemented (Temporal Migration)
 
-| File                                                            | Purpose                                       |
-| --------------------------------------------------------------- | --------------------------------------------- |
-| `packages/scheduler-core/src/ports/schedule-control.port.ts`    | `ScheduleControlPort` interface (no vendor)   |
-| `src/adapters/server/temporal/client.ts`                        | Temporal client factory                       |
-| `src/adapters/server/temporal/schedule-control.adapter.ts`      | `TemporalScheduleControlAdapter`              |
-| `src/adapters/server/temporal/noop-schedule-control.adapter.ts` | `NoOpScheduleControlAdapter` (`APP_ENV=test`) |
-| `services/scheduler-temporal-worker/`                           | Temporal worker service                       |
-| `services/scheduler-temporal-worker/src/main.ts`                | Worker entry, connects to Temporal            |
-| `services/scheduler-temporal-worker/src/workflows/`             | GovernanceScheduledRunWorkflow                |
-| `services/scheduler-temporal-worker/src/activities/`            | validateGrant, createRun, executeGraph        |
+| File                                                         | Purpose                                     |
+| ------------------------------------------------------------ | ------------------------------------------- |
+| `packages/scheduler-core/src/ports/schedule-control.port.ts` | `ScheduleControlPort` interface (no vendor) |
+| `src/adapters/server/temporal/client.ts`                     | Temporal client factory                     |
+| `src/adapters/server/temporal/schedule-control.adapter.ts`   | `TemporalScheduleControlAdapter`            |
+| `services/scheduler-worker/`                                 | Temporal worker service                     |
+| `services/scheduler-worker/src/main.ts`                      | Worker entry, connects to Temporal          |
+| `services/scheduler-worker/src/workflows/`                   | GovernanceScheduledRunWorkflow              |
+| `services/scheduler-worker/src/activities/`                  | validateGrant, createRun, executeGraph      |
 
 ### Implemented (P0)
 
@@ -280,14 +279,13 @@
 | `src/app/api/internal/graphs/[graphId]/runs/route.ts` | Internal execution endpoint |
 | `src/contracts/graphs.run.internal.v1.contract.ts`    | Internal execution contract |
 
-### To Delete (Post-Migration)
+### Deleted (Graphile Cleanup)
 
-| File                                                           | Reason                                |
-| -------------------------------------------------------------- | ------------------------------------- |
-| `services/scheduler-worker/`                                   | Replaced by scheduler-temporal-worker |
-| `packages/scheduler-core/src/ports/job-queue.port.ts`          | Graphile-specific                     |
-| `packages/db-client/src/adapters/drizzle-job-queue.adapter.ts` | Graphile-specific                     |
-| `services/scheduler-worker/src/tasks/reconcile.ts`             | Temporal handles scheduling natively  |
+| File                                                           | Reason                               |
+| -------------------------------------------------------------- | ------------------------------------ |
+| `packages/scheduler-core/src/ports/job-queue.port.ts`          | Graphile-specific, replaced          |
+| `packages/db-client/src/adapters/drizzle-job-queue.adapter.ts` | Graphile-specific, replaced          |
+| `services/scheduler-worker/src/tasks/reconcile.ts`             | Temporal handles scheduling natively |
 
 ---
 
@@ -345,7 +343,7 @@
 **2. Adapter (`src/adapters/server/temporal/`):** ✅
 
 - [x] Implement `TemporalScheduleControlAdapter`
-- [x] Implement `NoOpScheduleControlAdapter` (for `APP_ENV=test`)
+- [x] Implement `TemporalScheduleControlAdapter`
 - [x] Hardcode policies: `overlap: SKIP`, `catchupWindow: 0` (not exposed in port)
 - [x] Map Temporal errors → port error types (see table below)
 - [x] Connection lifecycle via `@temporalio/client`
@@ -360,34 +358,36 @@
 | Schedule already paused (no-op)  | Success (idempotent)              |
 | Schedule already deleted (no-op) | Success (idempotent)              |
 
-**3. Docker Infrastructure:**
+**3. Docker Infrastructure:** ✅
 
-- [ ] Add `temporal` + `temporal-ui` + `temporal-postgres` to docker-compose (temporalio/docker-compose pinned)
+- [x] Add `temporal` + `temporal-ui` + `temporal-postgres` to docker-compose (temporalio/docker-compose v1.29.1 pinned)
 - [x] Add env vars: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE=cogni-{APP_ENV}`, `TEMPORAL_TASK_QUEUE=scheduler-tasks`
-- [ ] Health checks for temporal service
+- [x] Health checks for temporal service (gRPC health via `temporal operator cluster health`)
+- [x] Add `TEMPORAL_DB_USER`, `TEMPORAL_DB_PASSWORD` to deploy.sh + GitHub workflows
+- [x] Sync dev + prod compose files
 
 **4. CRUD Integration (failure semantics defined):** ✅
 
 - [x] Update `DrizzleScheduleManagerAdapter`: replace `JobQueuePort` → `ScheduleControlPort`
-- [x] Wire `ScheduleControlPort` in container.ts (`APP_ENV=test` → NoOp, else → Temporal)
+- [x] Wire `ScheduleControlPort` in container.ts (Temporal required, no fallback)
 - [x] Add `TEMPORAL_*` env vars to `src/shared/env/server.ts` (optional in test mode)
 - [x] `POST`: grant + DB insert → `createSchedule()`. **On failure: rollback grant+DB, 503**
 - [x] `PATCH enabled`: DB update → `pauseSchedule()`/`resumeSchedule()`. **On failure: rollback, 503**
 - [x] `DELETE`: `deleteSchedule()` → DB delete. **On failure: 503, do NOT delete DB**
 - [ ] Stack test: create → describe → pause → resume → delete
 
-**5. Worker Service:**
+**5. Worker Service:** ✅
 
-- [ ] Create `services/scheduler-temporal-worker/` (standalone, no `ScheduleControlPort` dep)
-- [ ] Implement `GovernanceScheduledRunWorkflow`
-- [ ] Implement Activities: `validateGrant`, `createScheduleRun`, `executeGraph`, `updateScheduleRun`
-- [ ] `executeGraphActivity` calls internal API with Bearer + Idempotency-Key
-- [ ] Activities derive `scheduledFor` from `TemporalScheduledStartTime`
-- [ ] Add Dockerfile and docker-compose entry
+- [x] Create `services/scheduler-worker/` (standalone Temporal worker, no `ScheduleControlPort` dep)
+- [x] Implement `GovernanceScheduledRunWorkflow`
+- [x] Implement Activities: `validateGrant`, `createScheduleRun`, `executeGraph`, `updateScheduleRun`
+- [x] `executeGraphActivity` calls internal API with Bearer + Idempotency-Key
+- [x] Activities derive `scheduledFor` from `TemporalScheduledStartTime`
+- [x] Add Dockerfile and docker-compose entry
 
 **6. Cleanup (after validation):** ✅
 
-- [x] Delete `services/scheduler-worker/` (Graphile)
+- [x] Repurpose `services/scheduler-worker/` from Graphile to Temporal
 - [x] Delete `JobQueuePort` and `DrizzleJobQueueAdapter`
 - [x] Remove Graphile Worker dependencies
 
@@ -456,5 +456,11 @@
 
 ---
 
-**Last Updated**: 2026-01-21
-**Status**: P0 internal execution API complete; P1 Temporal migration is next
+## Known Issues (P0)
+
+- [ ] **Latest trace not displayed in UI**: `schedule_runs.langfuse_trace_id` is populated after execution, but Schedules list API doesn't return run history—UI hardcodes "No runs yet" (`view.tsx:440`)
+
+---
+
+**Last Updated**: 2026-01-22
+**Status**: P1 complete; scheduler runs in dev with stack test passing. Missing deployment infra (CI/CD, production compose).

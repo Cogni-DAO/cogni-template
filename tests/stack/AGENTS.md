@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-01-12
+- **Last reviewed:** 2026-01-22
 - **Status:** stable
 
 ## Purpose
@@ -44,7 +44,7 @@ Full-stack HTTP API integration tests requiring running Docker Compose infrastru
 
 ## Usage
 
-Requires running Docker Compose stack with app+postgres services.
+Requires running Docker Compose stack with app+postgres+temporal services.
 
 ```bash
 # One-time setup (creates test database and runs migrations)
@@ -74,7 +74,7 @@ pnpm test:stack:dev  # or pnpm test:stack:docker
 ## Dependencies
 
 - **Internal:** app/\_facades/, adapters/server/db, adapters/test, shared/
-- **External:** Running Next.js app, PostgreSQL database
+- **External:** Running Next.js app, PostgreSQL database, Temporal server
 
 ## Change Protocol
 
@@ -85,6 +85,7 @@ pnpm test:stack:dev  # or pnpm test:stack:docker
 ## Notes
 
 - Stack tests are slower than integration tests
-- Requires external infrastructure (Docker Compose)
+- Requires external infrastructure (Docker Compose with postgres + temporal)
 - Tests run sequentially to avoid database conflicts
 - Uses APP_ENV=test in CI to get FakeLlmAdapter responses
+- Temporal namespace (cogni-test) auto-created by docker-compose via DEFAULT_NAMESPACE env var

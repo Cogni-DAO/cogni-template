@@ -109,6 +109,9 @@ pnpm setup github --env production
      - `APP_DB_PASSWORD` (generated hex password)
      - `APP_DB_NAME` (cogni_template_preview/cogni_template_production)
      - `DATABASE_URL` (postgresql://APP_DB_USER:APP_DB_PASSWORD@postgres:5432/APP_DB_NAME)
+   - **Temporal DB secrets:** Dedicated Postgres for Temporal (self-hosted)
+     - `TEMPORAL_DB_USER` (default: temporal)
+     - `TEMPORAL_DB_PASSWORD` (generated hex password)
    - **Service secrets:** Fresh generation per environment
      - `LITELLM_MASTER_KEY` (new random sk-xxx key)
      - `AUTH_SECRET` (generated random string)

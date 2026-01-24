@@ -11,7 +11,6 @@
  * @public
  */
 
-export { NoOpScheduleControlAdapter } from "./noop-schedule-control.adapter";
 export {
   TemporalScheduleControlAdapter,
   type TemporalScheduleControlConfig,

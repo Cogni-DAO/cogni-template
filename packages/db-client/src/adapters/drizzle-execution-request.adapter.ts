@@ -7,6 +7,7 @@
  * Scope: Implements ExecutionRequestPort with Drizzle ORM. Does not contain scheduling logic.
  * Invariants:
  *   - Per EXECUTION_IDEMPOTENCY_PERSISTED: Persists idempotency key → {ok, runId, traceId, errorCode}
+ *   - Lifecycle: pending (ok=null) → finalized (ok=true/false)
  *   - Stores BOTH success and error outcomes - retries return cached outcome
  *   - idempotencyKey uniqueness enforced at DB level (primary key)
  *   - requestHash mismatch detection returns 'mismatch' status
@@ -77,7 +78,19 @@ export class DrizzleExecutionRequestAdapter implements ExecutionRequestPort {
       };
     }
 
-    // Hash matches - return cached result with outcome
+    // Hash matches - check if pending (ok=null) or finalized (ok!=null)
+    if (record.ok === null) {
+      this.logger.info(
+        { idempotencyKey, runId: record.runId },
+        "Idempotency key hit, execution still pending"
+      );
+      return {
+        status: "pending",
+        request: this.toExecutionRequest(record),
+      };
+    }
+
+    // Hash matches, finalized - return cached result with outcome
     this.logger.info(
       { idempotencyKey, runId: record.runId, ok: record.ok },
       "Idempotency key hit, returning cached result"
@@ -88,6 +101,48 @@ export class DrizzleExecutionRequestAdapter implements ExecutionRequestPort {
     };
   }
 
+  async createPendingRequest(
+    idempotencyKey: string,
+    requestHash: string,
+    runId: string,
+    traceId: string | null
+  ): Promise<void> {
+    await this.db.insert(executionRequests).values({
+      idempotencyKey,
+      requestHash,
+      runId,
+      traceId,
+      ok: null, // Pending state
+      errorCode: null,
+    });
+
+    this.logger.info(
+      { idempotencyKey, runId, traceId },
+      "Created pending execution request"
+    );
+  }
+
+  async finalizeRequest(
+    idempotencyKey: string,
+    outcome: ExecutionOutcome
+  ): Promise<void> {
+    await this.db
+      .update(executionRequests)
+      .set({
+        ok: outcome.ok,
+        errorCode: outcome.errorCode,
+      })
+      .where(eq(executionRequests.idempotencyKey, idempotencyKey));
+
+    this.logger.info(
+      { idempotencyKey, ok: outcome.ok, errorCode: outcome.errorCode },
+      "Finalized execution request"
+    );
+  }
+
+  /**
+   * @deprecated Use createPendingRequest + finalizeRequest instead.
+   */
   async storeRequest(
     idempotencyKey: string,
     requestHash: string,
@@ -106,7 +161,7 @@ export class DrizzleExecutionRequestAdapter implements ExecutionRequestPort {
 
     this.logger.info(
       { idempotencyKey, runId, ok: outcome.ok, errorCode: outcome.errorCode },
-      "Stored execution request for idempotency"
+      "Stored execution request for idempotency (deprecated path)"
     );
   }
 

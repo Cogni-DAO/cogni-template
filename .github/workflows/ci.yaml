@@ -17,6 +17,11 @@ concurrency:
 env:
   NEXT_TELEMETRY_DISABLED: 1
   NODE_VERSION: "20"
+  # Temporal env vars - required by serverEnv() Zod schema
+  # All CI jobs (including stack-test) use localhost:7233 since tests run on host, not in Docker
+  TEMPORAL_ADDRESS: localhost:7233
+  TEMPORAL_NAMESPACE: cogni-test
+  TEMPORAL_TASK_QUEUE: scheduler-tasks
 
 jobs:
   # Fast gate: install → typecheck → lint
@@ -228,6 +233,11 @@ jobs:
       AUTH_SECRET: tNf5lFM9yMhdgwS5yeQB8Y2kmigblBqobkvI2XN2brg=
       METRICS_TOKEN: test-metrics-token-for-stack-tests
       SCHEDULER_API_TOKEN: test-scheduler-api-token-for-ci-min32chars
+      # Temporal env vars for HOST-based test process (vitest runs on host, not in Docker)
+      # App container gets temporal:7233 from docker-compose.dev.yml; tests need localhost:7233
+      TEMPORAL_ADDRESS: localhost:7233
+      TEMPORAL_NAMESPACE: cogni-test
+      TEMPORAL_TASK_QUEUE: scheduler-tasks
       # All fake keys: DO NOT expose any real keys here
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -298,12 +308,24 @@ jobs:
           cache-from: type=gha,scope=stack-test
           cache-to: type=gha,mode=max,scope=stack-test
 
-      - name: Start app + DB stack
+      - name: Build scheduler-worker image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          file: services/scheduler-worker/Dockerfile
+          tags: cogni-scheduler-worker-local
+          load: true
+          cache-from: type=gha,scope=scheduler-worker
+          cache-to: type=gha,mode=max,scope=scheduler-worker
+
+      - name: Start app + DB + Temporal stack
         run: |
           docker network create cogni-edge || true
           # Images pre-built with GHA cache; no --build needed
+          # Temporal services required for schedule CRUD + execution tests
+          # scheduler-worker required for workflow execution tests
           docker compose -f platform/infra/services/runtime/docker-compose.dev.yml \
-            up -d app postgres litellm caddy
+            up -d app postgres litellm caddy temporal-postgres temporal temporal-ui scheduler-worker
 
       - name: Run migrations
         run: |

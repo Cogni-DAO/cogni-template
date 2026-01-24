@@ -6,6 +6,7 @@
  * Purpose: Vitest global setup for stack tests to reset test database tables between runs.
  * Scope: Truncates all tables in stack test database to ensure clean state. Does not handle migrations.
  * Invariants: Only operates on stack test database; preserves schema structure; cleans all data.
+ * TODO: Consider also wiping Temporal schedules (temporal-postgres) for fully clean state.
  * Side-effects: IO (database truncation)
  * Notes: Assumes app has already run migrations; used by vitest.stack.config.mts as globalSetup.
  * Links: vitest stack config, database schema

@@ -129,6 +129,11 @@ push to main → build-prod.yml (build → test → push) → deploy-production.
 - `prod-${GITHUB_SHA}-migrate` (deploy consumption, legacy)
 - `migrate-${FINGERPRINT}` (content-addressed, CI caching - partial implementation)
 
+**Service images** (see [CI/CD Services Roadmap](CICD_SERVICES_ROADMAP.md)):
+
+- `prod-${GITHUB_SHA}-${SERVICE}` (e.g., `prod-abc123-scheduler-worker`)
+- Future: Content fingerprinting like migrator
+
 **SourceCred** (manual image release, auto-deployed via deploy.sh):
 
 - Immutable image: `ghcr.io/cogni-dao/cogni-sourcecred-runner:sc0.11.2-node18-2025-12-07`
@@ -194,3 +199,4 @@ push to main → build-prod.yml (build → test → push) → deploy-production.
 
 - [Application Architecture](ARCHITECTURE.md) - Hexagonal design and code organization
 - [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) - Infrastructure and deployment details
+- [CI/CD Services Roadmap](CICD_SERVICES_ROADMAP.md) - Service build/deploy integration plan (GitOps migration)

@@ -161,7 +161,7 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       );
     }
 
-    const { executionGrantId, input } = parseResult.data;
+    const { executionGrantId, input, runId: providedRunId } = parseResult.data;
 
     // --- 5. Compute request hash for idempotency ---
     const requestHash = computeRequestHash(graphId, input);
@@ -197,6 +197,24 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
         };
         return NextResponse.json(cachedResponse, { status: 200 });
       }
+    }
+
+    if (idempotencyResult.status === "pending") {
+      // Execution in progress - return 409 Conflict to signal retry later
+      const pending = idempotencyResult.request;
+      log.info(
+        { idempotencyKey, runId: pending.runId },
+        "Execution already in progress"
+      );
+      return NextResponse.json(
+        {
+          error: "Execution in progress",
+          message:
+            "Request with this Idempotency-Key is currently being processed",
+          runId: pending.runId,
+        },
+        { status: 409 }
+      );
     }
 
     if (idempotencyResult.status === "mismatch") {
@@ -268,11 +286,25 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
     }
 
     // --- 9. Execute graph ---
-    const runId = randomUUID();
+    // Use provided runId (from scheduler-worker) or generate if not provided
+    // Per SCHEDULER_SPEC.md: Canonical runId shared with schedule_runs and charge_receipts
+    const runId = providedRunId ?? randomUUID();
+
+    // Use OTel trace ID (same one passed to executor, used by Langfuse decorator)
+    const traceId = ctx.traceId;
 
     log.info(
-      { graphId, runId, executionGrantId, idempotencyKey },
+      { graphId, runId, executionGrantId, idempotencyKey, traceId },
       "Starting scheduled graph execution"
+    );
+
+    // --- 9a. Create pending idempotency record BEFORE execution ---
+    // This ensures the record exists even if execution fails/times out
+    await container.executionRequestPort.createPendingRequest(
+      idempotencyKey,
+      requestHash,
+      runId,
+      traceId
     );
 
     // Build caller from grant + billing account
@@ -312,17 +344,11 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
 
     const final = await result.final;
 
-    // Use OTel trace ID (same one passed to executor, used by Langfuse decorator)
-    const traceId = ctx.traceId;
-
-    // --- 10. Store idempotency record with outcome ---
-    await container.executionRequestPort.storeRequest(
-      idempotencyKey,
-      requestHash,
-      runId,
-      traceId,
-      { ok: final.ok, errorCode: final.error ?? null }
-    );
+    // --- 10. Finalize idempotency record with outcome ---
+    await container.executionRequestPort.finalizeRequest(idempotencyKey, {
+      ok: final.ok,
+      errorCode: final.error ?? null,
+    });
 
     // --- 11. Return result ---
     if (final.ok) {

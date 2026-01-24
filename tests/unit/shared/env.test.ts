@@ -12,6 +12,7 @@
  * @public
  */
 
+import { BASE_VALID_ENV } from "@tests/_fixtures/env/base-env";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const ORIGINAL_ENV = { ...process.env };
@@ -30,16 +31,11 @@ describe("env schemas", () => {
     Reflect.deleteProperty(process.env, "DATABASE_URL");
 
     Object.assign(process.env, {
-      NODE_ENV: "test",
-      APP_ENV: "test",
+      ...BASE_VALID_ENV,
       POSTGRES_USER: "u",
       POSTGRES_PASSWORD: "p",
       POSTGRES_DB: "db",
       DB_HOST: "h",
-      DB_PORT: "5432",
-      AUTH_SECRET: "x".repeat(32),
-      SCHEDULER_API_TOKEN: "x".repeat(32),
-      // LITELLM_BASE_URL: auto-detects based on NODE_ENV
       LITELLM_MASTER_KEY: "adminkey",
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: "test-project-id",
     });
@@ -56,12 +52,9 @@ describe("env schemas", () => {
 
   it("uses provided DATABASE_URL when present", async () => {
     Object.assign(process.env, {
-      NODE_ENV: "test",
-      APP_ENV: "test",
+      ...BASE_VALID_ENV,
       DATABASE_URL: "sqlite://build.db",
       LITELLM_MASTER_KEY: "adminkey",
-      AUTH_SECRET: "x".repeat(32),
-      SCHEDULER_API_TOKEN: "x".repeat(32),
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: "test-project-id",
     });
 

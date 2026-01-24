@@ -42,10 +42,16 @@ services:
       - LANGFUSE_SECRET_KEY
       - LANGFUSE_BASE_URL
       - LANGFUSE_TRACING_ENVIRONMENT=${DEPLOY_ENVIRONMENT:-local}
+      # Temporal schedule orchestration (per SCHEDULER_SPEC.md)
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_NAMESPACE=cogni-${APP_ENV:-dev}
+      - TEMPORAL_TASK_QUEUE=scheduler-tasks
     depends_on:
       postgres:
         condition: service_healthy
       litellm:
+        condition: service_healthy
+      temporal:
         condition: service_healthy
 
   litellm:
@@ -237,6 +243,137 @@ services:
     depends_on:
       - loki
 
+  # =============================================================================
+  # Temporal Services (from temporalio/docker-compose v1.29.1, postgres-only)
+  # Per SCHEDULER_SPEC.md: Required for non-test schedule orchestration
+  #
+  # External DB support: To use managed Postgres (RDS, Cloud SQL, etc.):
+  #   1. Set TEMPORAL_DB_HOST to external hostname
+  #   2. Set TEMPORAL_DB_PORT if non-standard
+  #   3. Add temporal service to cogni-edge network (for external connectivity)
+  #   4. Remove temporal-postgres service and volume
+  # =============================================================================
+
+  temporal-postgres:
+    # Dedicated Postgres for Temporal (not shared with app DB)
+    # Aligned to postgres:15 for MVP consistency with app DB
+    image: postgres:15
+    container_name: temporal-postgres
+    restart: unless-stopped
+    networks:
+      - internal
+    environment:
+      POSTGRES_USER: ${TEMPORAL_DB_USER:-temporal}
+      POSTGRES_PASSWORD: ${TEMPORAL_DB_PASSWORD:-temporal}
+    volumes:
+      - temporal_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${TEMPORAL_DB_USER:-temporal}"]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 10s
+
+  temporal:
+    # Temporal server with auto-setup (handles schema migrations)
+    # Pinned version from temporalio/docker-compose v1.29.1
+    image: temporalio/auto-setup:1.29.1
+    container_name: temporal
+    restart: unless-stopped
+    networks:
+      - internal
+    ports:
+      - "127.0.0.1:7233:7233"
+    environment:
+      # Temporal DB config (auto-setup env vars)
+      - DB=postgres12
+      - DB_PORT=${TEMPORAL_DB_PORT:-5432}
+      - POSTGRES_USER=${TEMPORAL_DB_USER:-temporal}
+      - POSTGRES_PWD=${TEMPORAL_DB_PASSWORD:-temporal}
+      - POSTGRES_SEEDS=${TEMPORAL_DB_HOST:-temporal-postgres}
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+      # Temporal gRPC endpoints
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CLI_ADDRESS=temporal:7233
+      # Namespace auto-creation (must match app's TEMPORAL_NAMESPACE)
+      - DEFAULT_NAMESPACE=${TEMPORAL_NAMESPACE}
+    volumes:
+      - ./configs/temporal-dynamicconfig.yaml:/etc/temporal/config/dynamicconfig/development-sql.yaml:ro
+    depends_on:
+      temporal-postgres:
+        condition: service_healthy
+    healthcheck:
+      # Use temporal CLI to check cluster health (available in auto-setup image)
+      test: ["CMD", "temporal", "operator", "cluster", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  temporal-ui:
+    # Temporal Web UI for debugging schedules and workflows
+    # Pinned version from temporalio/docker-compose v1.29.1
+    image: temporalio/ui:2.34.0
+    container_name: temporal-ui
+    restart: unless-stopped
+    networks:
+      - internal
+    ports:
+      - "127.0.0.1:8233:8080"
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+    depends_on:
+      temporal:
+        condition: service_healthy
+
+  # =============================================================================
+  # Scheduler Worker (Temporal)
+  # Per SCHEDULER_SPEC.md: Executes scheduled graph runs via internal API
+  # =============================================================================
+
+  scheduler-worker:
+    image: ${SCHEDULER_WORKER_IMAGE:-cogni-scheduler-worker-local}
+    build:
+      context: ../../../..
+      dockerfile: services/scheduler-worker/Dockerfile
+    container_name: scheduler-worker
+    restart: unless-stopped
+    networks:
+      - internal
+      - cogni-edge
+    environment:
+      # Temporal connection
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_NAMESPACE=cogni-${APP_ENV:-dev}
+      - TEMPORAL_TASK_QUEUE=scheduler-tasks
+      # Database for activities
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-user}:${POSTGRES_PASSWORD:-password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}
+      # Internal API (scheduler-worker → app)
+      # Default: http://app:3000 for Docker-based stacks
+      # Override: http://host.docker.internal:3000 for test:stack:dev (app on host)
+      - APP_BASE_URL=${SCHEDULER_APP_BASE_URL:-http://app:3000}
+      - SCHEDULER_API_TOKEN=${SCHEDULER_API_TOKEN?SCHEDULER_API_TOKEN is required}
+      # Observability
+      - LOG_LEVEL=${PINO_LOG_LEVEL:-info}
+      - SERVICE_NAME=scheduler-worker
+      - HEALTH_PORT=9000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "require(''http'').get(''http://localhost:9000/livez'',r=>{process.exit(r.statusCode===200?0:1)})"',
+        ]
+      interval: 10s
+      timeout: 2s
+      retries: 3
+      start_period: 30s
+
 networks:
   cogni-edge:
     name: cogni-edge
@@ -258,3 +395,5 @@ volumes:
     name: loki_data
   grafana_data:
     name: grafana_data
+  temporal_postgres_data:
+    name: temporal_postgres_data

@@ -295,6 +295,11 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
   }
 
   private computeNextRun(cron: string, timezone: string): Date {
+    // Validate timezone first (fail fast with clear domain error)
+    if (!this.isValidTimezone(timezone)) {
+      throw new InvalidTimezoneError(timezone);
+    }
+
     try {
       const interval = cronParser.parseExpression(cron, {
         currentDate: new Date(),
@@ -303,12 +308,18 @@ export class DrizzleScheduleManagerAdapter implements ScheduleManagerPort {
       return interval.next().toDate();
     } catch (error) {
       if (error instanceof Error) {
-        if (error.message.includes("Invalid timezone")) {
-          throw new InvalidTimezoneError(timezone);
-        }
         throw new InvalidCronExpressionError(cron, error.message);
       }
       throw error;
+    }
+  }
+
+  private isValidTimezone(timezone: string): boolean {
+    try {
+      Intl.DateTimeFormat(undefined, { timeZone: timezone });
+      return true;
+    } catch {
+      return false;
     }
   }
 

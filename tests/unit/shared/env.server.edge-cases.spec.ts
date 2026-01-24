@@ -12,6 +12,7 @@
  * @public
  */
 
+import { BASE_VALID_ENV } from "@tests/_fixtures/env/base-env";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const ORIGINAL_ENV = process.env;
@@ -30,17 +31,7 @@ describe("server env edge cases", () => {
 
   it("returns cached instance and populates expected fields", async () => {
     // Set minimal valid env
-    Object.assign(process.env, {
-      NODE_ENV: "test",
-      APP_ENV: "test",
-      POSTGRES_USER: "postgres",
-      POSTGRES_PASSWORD: "postgres",
-      POSTGRES_DB: "test_db",
-      DB_HOST: "localhost",
-      LITELLM_MASTER_KEY: "test-key",
-      AUTH_SECRET: "x".repeat(32),
-      SCHEDULER_API_TOKEN: "x".repeat(32),
-    });
+    Object.assign(process.env, BASE_VALID_ENV);
 
     const { serverEnv } = await import("@/shared/env/server");
 
