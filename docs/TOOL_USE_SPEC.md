@@ -65,6 +65,8 @@
 
 25. **TOOL_SAME_PATH_ALL_EXECUTORS**: Same policy/redaction/audit path for dev, server, and InProc. No executor-specific bypass paths (e.g., no dev.ts that skips policy). `toLangChainTool` wrapper enforces `configurable.toolIds` allowlist for all executors.
 
+26. **CONNECTION_ID_ONLY**: Tools requiring external auth receive `connectionId` (opaque reference), never raw credentials. Connection Broker resolves tokens at invocation time. No secrets in `configurable`, `ToolPolicyContext`, or ALS context. Applies to all authenticated tools regardless of source (`@cogni/ai-tools` or MCP). See [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md).
+
 ---
 
 ## Implementation Checklist
@@ -89,41 +91,36 @@ Per invariants **TOOL_SEMANTICS_CANONICAL**, **WIRE_FORMATS_ARE_ADAPTERS**, **OP
 
 **OpenAI wire adapter (`src/adapters/server/ai/`):**
 
-- [ ] `OpenAIToolEncoder(ToolSpec)` → `tools[]` for LLM request
-- [ ] `OpenAIToolDecoder(stream)` → `ToolInvocationRecord` + tool AiEvents
-- [ ] Replace simplified `JsonSchemaObject` with proper `JSONSchema7` import
+> Note: P0 uses LangGraph's `createReactAgent` which handles tool call assembly internally. Explicit encoder/decoder is P1 for non-LangGraph paths.
+
+- [ ] `OpenAIToolEncoder(ToolSpec)` → `tools[]` for LLM request (P1: non-LangGraph paths)
+- [ ] `OpenAIToolDecoder(stream)` → `ToolInvocationRecord` + tool AiEvents (P1)
+- [ ] Replace simplified `JsonSchemaObject` with proper `JSONSchema7` import (P1)
 
 **Golden fixtures (`tests/contracts/`):**
 
-- [ ] `openai-tool-wire-format.test.ts` — tool definition serialization (exact keys, no extras)
-- [ ] `tool-call-delta-assembly.test.ts` — stream delta accumulation matches OpenAI SSE format
-- [ ] `tool-invocation-record.test.ts` — semantic record captures full lifecycle
+- [ ] `openai-tool-wire-format.test.ts` — tool definition serialization (P1)
+- [ ] `tool-call-delta-assembly.test.ts` — stream delta accumulation (P1)
+- [x] Tool replay test — `tests/stack/ai/chat-tool-replay.stack.test.ts`
 
-### P0: First Tool End-to-End
+### P0: First Tool End-to-End ✅
 
 **Port layer:**
 
-- [x] Add tool types to `llm.port.ts`: `LlmToolDefinition`, `LlmToolCall`, `LlmToolCallDelta`, `LlmToolChoice` (migrate to ai-core)
-- [ ] Extend `CompletionStreamParams` with `tools?: LlmToolDefinition[]` and `toolChoice?: LlmToolChoice`
-- [ ] Add `tool_call_delta` event to `ChatDeltaEvent` union
-- [ ] Add `toolCalls?: LlmToolCall[]` to `LlmCompletionResult`
-
-**Adapter layer:**
-
-- [ ] Update `litellm.adapter.ts` to pass tools/toolChoice to LiteLLM API
-- [ ] Parse SSE `delta.tool_calls` and emit `tool_call_delta` events
-- [ ] Accumulate tool calls and include in final result
+- [x] Add tool types to `llm.port.ts`: `LlmToolDefinition`, `LlmToolCall`, `LlmToolCallDelta`, `LlmToolChoice`
+- [x] Tools passed via `GraphRunRequest.toolIds` → `configurable.toolIds`
 
 **Package layer:**
 
 - [x] Create `get_current_time` tool in `@cogni/ai-tools/tools/get-current-time.ts`
 - [x] Create `@cogni/ai-tools` package with ToolContract, BoundTool types
 - [x] Create `toLangChainTool()` converter in `@cogni/langgraph-graphs/runtime/`
-- [ ] Implement agentic loop in `@cogni/langgraph-graphs/inproc/` (LLM→tool→LLM cycle)
+- [x] Agentic loop via `createReactAgent` in `@cogni/langgraph-graphs` (LLM→tool→LLM works)
 
-**Bootstrap layer:**
+**Provider layer:**
 
-- [ ] Create `src/bootstrap/ai/tools.bindings.ts` for tool binding with ports
+- [x] `LangGraphInProcProvider` wires tools from `TOOL_CATALOG` to graph
+- [x] `createToolRunner()` with policy enforcement at runtime
 
 **Contract layer:**
 
@@ -468,8 +465,9 @@ When `toolCall.function.arguments` is invalid JSON:
 - [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — Correlation IDs, telemetry invariants
 - [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Architecture, anti-patterns
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — GraphExecutorPort, billing, pump+fanout
+- [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md) — Authenticated tool connections
 
 ---
 
-**Last Updated**: 2026-01-14
-**Status**: Draft (Rev 3 - Added TOOL_ID_STABILITY, TOOL_CONFIG_PROPAGATION, TOOL_CATALOG_IS_CANONICAL, TOOL_SAME_PATH_ALL_EXECUTORS)
+**Last Updated**: 2026-01-24
+**Status**: Draft (Rev 4 - Added CONNECTION_ID_ONLY, fixed P0 checklist to reflect working agentic loop)
