@@ -7,33 +7,41 @@
 
 1. **CONNECTION_ID_ONLY**: Tools receive `connectionId` (opaque reference), never raw tokens. No secrets in `configurable`, `ToolPolicyContext`, or graph state.
 
-2. **BROKER_AT_INVOCATION**: Token resolution happens inside `toolRunner.exec()`, not at graph construction or request ingress. Enables lazy refresh without blocking execution.
+2. **BROKER_AT_INVOCATION**: Token resolution happens inside `toolRunner.exec()`, not at graph construction or request ingress. Broker is injected into toolRunner; tool implementations must not call broker/vault directly.
 
 3. **TENANT_SCOPED**: Connections belong to `billing_account_id`. Cross-tenant access forbidden. ExecutionGrants include `connection:use:{connectionId}` scopes.
 
-4. **ENCRYPTED_AT_REST**: Credentials stored encrypted. Key from env, not DB. Versioned key IDs for rotation.
+4. **ENCRYPTED_AT_REST**: Credentials stored encrypted with AEAD. AAD binding: `{billing_account_id, connection_id, provider}` prevents ciphertext rebind across tenants. Key from env, not DB. Versioned key IDs for rotation.
 
-5. **SINGLE_AUTH_PATH**: Same credential resolution for all tools regardless of source (`@cogni/ai-tools` or MCP). No forked logic.
+5. **GRANT_AUTHORIZES_CONNECTION**: Request-provided `connectionIds` is a declaration, not authorization. Authorization comes from ExecutionGrant scopes only. Effective allowlist = `grantAllowed ∩ requestDeclared`. Enforce membership before `broker.resolve()` (deny fast).
 
-6. **REFRESH_BEFORE_EXPIRY**: Broker refreshes OAuth tokens proactively. Tool invocation never blocks on refresh flow.
+6. **SINGLE_AUTH_PATH**: Same credential resolution for all tools regardless of source (`@cogni/ai-tools` or MCP). No forked logic.
+
+7. **REFRESH_WITH_TIMEOUT**: Background refresh preferred (jittered window before expiry). Synchronous refresh allowed with bounded timeout. On timeout/failure: typed error, metric emitted, tool invocation fails.
+
+8. **ONE_CONNECTION_PER_CALL**: Authenticated tool invocations must specify exactly one `connectionId` via tool args (uuid-validated). No implicit selection from `connectionIds[]` allowlist. No context magic.
 
 ---
 
 ## Schema: `connections`
 
-| Column                  | Type        | Notes                               |
-| ----------------------- | ----------- | ----------------------------------- |
-| `id`                    | uuid        | PK                                  |
-| `billing_account_id`    | text        | FK, tenant scope                    |
-| `provider`              | text        | `github`, `bluesky`, `google`       |
-| `credential_type`       | text        | `oauth2`, `app_password`, `api_key` |
-| `encrypted_credentials` | bytea       | Encrypted JSON blob                 |
-| `encryption_key_id`     | text        | For key rotation                    |
-| `scopes`                | text[]      | OAuth scopes granted                |
-| `expires_at`            | timestamptz | NULL if no expiry                   |
-| `created_at`            | timestamptz |                                     |
+| Column                  | Type        | Notes                                                          |
+| ----------------------- | ----------- | -------------------------------------------------------------- |
+| `id`                    | uuid        | PK                                                             |
+| `billing_account_id`    | text        | FK, tenant scope                                               |
+| `provider`              | text        | `github`, `bluesky`, `google`                                  |
+| `credential_type`       | text        | `oauth2`, `app_password`, `api_key`, `github_app_installation` |
+| `encrypted_credentials` | bytea       | AEAD encrypted JSON blob (includes nonce)                      |
+| `encryption_key_id`     | text        | For key rotation                                               |
+| `scopes`                | text[]      | OAuth scopes granted                                           |
+| `expires_at`            | timestamptz | NULL if no expiry                                              |
+| `created_at`            | timestamptz |                                                                |
+| `created_by_user_id`    | text        | Audit: who created                                             |
+| `last_used_at`          | timestamptz | Stale connection detection                                     |
+| `revoked_at`            | timestamptz | Soft delete                                                    |
+| `revoked_by_user_id`    | text        | Audit: who revoked                                             |
 
-**Forbidden:** Plaintext `access_token`/`refresh_token` columns. User-scoped connections (tenant-only).
+**Forbidden:** Plaintext `access_token`/`refresh_token` columns.
 
 ---
 
@@ -41,12 +49,17 @@
 
 ### P0: Connection Model
 
-- [ ] Create `connections` table with encrypted storage
-- [ ] Create `ConnectionBrokerPort`: `resolve(connectionId) → Credential`
-- [ ] Implement `DrizzleConnectionBrokerAdapter` with decryption
-- [ ] Extend `ToolPolicyContext` with `connectionIds?: readonly string[]`
-- [ ] Wire broker into `toolRunner.exec()` for resolution
+- [ ] Create `connections` table with AEAD encrypted storage
+- [ ] Create `ConnectionBrokerPort`: `resolveForTool({connectionId, toolId, subject}) → ToolCredential`
+- [ ] Implement `DrizzleConnectionBrokerAdapter` with decryption + AAD validation
+- [ ] Wire broker into `toolRunner.exec()` (injected, not called by tools)
+- [ ] Enforce grant intersection before resolve (deny fast)
 - [ ] First type: `app_password` (Bluesky) — no OAuth
+
+**Port contract:**
+
+- `subject: {billingAccountId, grantId, runId}` — broker verifies tenant match, logs audit
+- `ToolCredential: {provider, secret: string | {headers}, expiresAt?}` — broker validates `connection.provider` matches tool expectation
 
 #### Chores
 
@@ -70,13 +83,12 @@
 
 ## File Pointers (P0)
 
-| File                                                 | Change                         |
-| ---------------------------------------------------- | ------------------------------ |
-| `src/shared/db/schema.connections.ts`                | New table                      |
-| `src/ports/connection-broker.port.ts`                | New port interface             |
-| `src/adapters/server/connections/drizzle.adapter.ts` | Broker implementation          |
-| `@cogni/ai-core/tooling/runtime/tool-policy.ts`      | Add `connectionIds` to context |
-| `@cogni/ai-core/tooling/tool-runner.ts`              | Wire broker for resolution     |
+| File                                                 | Change                                            |
+| ---------------------------------------------------- | ------------------------------------------------- |
+| `src/shared/db/schema.connections.ts`                | New table with audit columns                      |
+| `src/ports/connection-broker.port.ts`                | `resolveForTool({connectionId, toolId, subject})` |
+| `src/adapters/server/connections/drizzle.adapter.ts` | AEAD decryption, AAD + tenant validation          |
+| `@cogni/ai-core/tooling/tool-runner.ts`              | Inject broker, enforce grant intersection         |
 
 ---
 
@@ -88,22 +100,29 @@ Resolving at request time risks token expiry mid-run. Resolving at invocation ke
 
 ### 2. Connection Scoping
 
-Connections are tenant-scoped, not tool-scoped. A GitHub connection serves any tool needing GitHub access. `connectionIds` in request declares available credentials; `toolIds` declares allowed capabilities.
+Connections are tenant-scoped, not tool-scoped. A GitHub connection serves any tool needing GitHub access. Request `connectionIds` declares intent; ExecutionGrant scopes authorize. Effective = intersection.
 
-### 3. ExecutionGrant Integration
+### 3. Authorization Flow
 
-Scheduled runs validate `connection:use:{connectionId}` scopes before tool invocation. Missing scope = tool denied.
+1. Request declares `connectionIds[]` (intent)
+2. ExecutionGrant contains `connection:use:{id}` scopes (authorization)
+3. toolRunner computes `effectiveAllowed = grant ∩ request`
+4. Tool invocation specifies one `connectionId` via args (per ONE_CONNECTION_PER_CALL)
+5. Membership check before `broker.resolveForTool()` — deny fast if not in effectiveAllowed
+6. Broker verifies `connection.billing_account_id == subject.billingAccountId` (defense-in-depth)
 
 ---
 
 ## Anti-Patterns
 
-| Pattern                        | Problem                               |
-| ------------------------------ | ------------------------------------- |
-| Tokens in `configurable`       | Serialized, logged, visible in traces |
-| Different auth per tool source | Fragments codebase, policy confusion  |
-| User-scoped connections        | Breaks tenant isolation               |
-| Resolve at construction        | Stale by execution time               |
+| Pattern                         | Problem                                   |
+| ------------------------------- | ----------------------------------------- |
+| Tokens in `configurable`        | Serialized, logged, visible in traces     |
+| Different auth per tool source  | Fragments codebase, policy confusion      |
+| Tools calling broker directly   | Bypasses grant enforcement, audit         |
+| Trust request connectionIds     | Confused-deputy; must intersect w/ grant  |
+| Implicit connectionId selection | Authority leaks; must be explicit in args |
+| Resolve at construction         | Stale by execution time                   |
 
 ---
 
