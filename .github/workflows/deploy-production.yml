@@ -88,6 +88,13 @@ jobs:
           SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
           VM_HOST: ${{ secrets.VM_HOST }}
 
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Resolve scheduler-worker digest
         run: |
           # Pull scheduler-worker image and resolve to digest ref

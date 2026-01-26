@@ -5,11 +5,11 @@
 
 ## Architecture Contract
 
-| Category             | Status         | Notes                                             |
-| -------------------- | -------------- | ------------------------------------------------- |
-| **Invariants 1-23**  | ✅ Implemented | Core billing, execution, discovery                |
-| **Invariants 24-31** | 📋 Contract    | Compiled exports + configurable; impl in progress |
-| **P1 Checklist**     | 📋 Contract    | Run persistence, compiled graph migration         |
+| Category             | Status         | Notes                                       |
+| -------------------- | -------------- | ------------------------------------------- |
+| **Invariants 1-23**  | ✅ Implemented | Core billing, execution, discovery          |
+| **Invariants 24-32** | 📋 Contract    | Compiled exports, configurable, connections |
+| **P1 Checklist**     | 📋 Contract    | Run persistence, compiled graph migration   |
 
 **Open Work:** See [P1: Compiled Graph Execution](#p1-compiled-graph-execution) checklist.
 
@@ -81,6 +81,8 @@
 30. **NO_SECRETS_IN_CONFIGURABLE_OR_CONTEXT**: `configurable` and ALS context must never contain raw secrets (API keys, tokens, credentials). Only opaque reference IDs (e.g., `virtualKeyId`, `connectionId`). Secrets resolved from secure store inside tool runner/runtime at execution time.
 
 31. **BILLING_BOUNDED_BACKPRESSURE**: Billing subscriber uses bounded queue. If backpressure occurs, driver blocks (preserving lossless guarantee) rather than unbounded memory growth. P1: durable event spill or worker-based ingestion.
+
+32. **CONNECTION_IDS_ARE_REFERENCES**: `GraphRunRequest` may carry `connectionIds?: readonly string[]` (P1). These are opaque references resolved by Connection Broker at tool invocation. Per #30, no credentials in request. Per TOOL_USE_SPEC.md #26, same auth path for all tools. See [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md).
 
 ---
 

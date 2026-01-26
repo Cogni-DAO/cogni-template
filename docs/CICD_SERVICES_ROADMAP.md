@@ -55,6 +55,7 @@
 
 > Decouple deploy from app repo. Manifest-driven promotion.
 
+- [ ] Extend digest-driven deploy to app+migrator (follow scheduler-worker pattern: CI resolves digest in `push.sh`, deploy uses `@sha256:` refs)
 - [ ] Create `cogni-deployments` repo (or `deployments/` monorepo dir)
 - [ ] Write Kustomize base for scheduler-worker (`base/scheduler-worker/`)
 - [ ] Create overlays: `overlays/staging/`, `overlays/production/`

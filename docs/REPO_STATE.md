@@ -1,6 +1,6 @@
 # Repository State Summary
 
-**Assessment Date:** 2026-01-20
+**Assessment Date:** 2026-01-24
 **Core Mission:** Crypto-metered AI infrastructure where users pay DAO wallet → get credits → consume LLM → billing tracked with dual-cost accounting. Empowering both System-tenant governance AI runs, and user-tenant useful AI services.
 
 **Related Documentation:**
@@ -23,11 +23,12 @@
 | **1**    | [Scheduler Spec](./SCHEDULER_SPEC.md)                  | 🔄 P1 Pending | Scheduled graph execution, Temporal migration              |
 | **2**    | [Graph Execution](./GRAPH_EXECUTION.md)                | 🔄 P1 Pending | Core execution envelope, billing, compiled exports         |
 | **3**    | [System Tenant Design](./SYSTEM_TENANT_DESIGN.md)      | 📋 Draft      | Governance loops, PolicyResolverPort, multi-tenancy        |
-| **4**    | [Tool Use Spec](./TOOL_USE_SPEC.md)                    | 🔄 70% Done   | Wire adapters, policy enforcement, idempotency             |
-| **5**    | [Human-in-the-Loop](./HUMAN_IN_THE_LOOP.md)            | 📋 Draft      | Interrupt/resume, approval gates                           |
-| **6**    | [AI Governance Data](./AI_GOVERNANCE_DATA.md)          | 📋 Draft      | Signal ingest, brief generation, incident-gated governance |
-| **7**    | [LangGraph Server](./LANGGRAPH_SERVER.md)              | 📋 Contract   | Server deployment mode (P1 for scale)                      |
-| **8**    | [Accounts Design](./ACCOUNTS_DESIGN.md) (App API Keys) | 📋 Roadmap    | Per-user API keys, per-key spend attribution               |
+| **4**    | [Tool Use Spec](./TOOL_USE_SPEC.md)                    | ✅ P0 Done    | Agentic loop, policy enforcement, local tools              |
+| **5**    | [Tenant Connections](./TENANT_CONNECTIONS_SPEC.md)     | 📋 Draft      | Authenticated tools, OAuth, connectionId broker            |
+| **6**    | [Human-in-the-Loop](./HUMAN_IN_THE_LOOP.md)            | 📋 Draft      | Interrupt/resume, approval gates                           |
+| **7**    | [AI Governance Data](./AI_GOVERNANCE_DATA.md)          | 📋 Draft      | Signal ingest, brief generation, incident-gated governance |
+| **8**    | [LangGraph Server](./LANGGRAPH_SERVER.md)              | 📋 Contract   | Server deployment mode (P1 for scale)                      |
+| **9**    | [Accounts Design](./ACCOUNTS_DESIGN.md) (App API Keys) | 📋 Roadmap    | Per-user API keys, per-key spend attribution               |
 
 **Legend:** 📋 Draft/Contract | 🔄 In Progress | ✅ Complete
 
@@ -40,8 +41,8 @@
 | Web3 Governance          | 30%    | `repoSpec.server.ts` enforces repo-spec. Needs hardening. External services required (git-review, git-admin) |
 | External API Readiness   | 30%    | Service-auth only, API keys on roadmap                                                                       |
 | Observability            | 70%    | User Activity dashboard complete, need Admin Grafana metrics dashboards                                      |
-| AI Infrastructure Wiring | 50%    | Code docs, logs MCP server. Missing: Langfuse, Evals, LangGraph, assistant-ui/CopilotKit tool use rendering  |
-| AI Intelligence          | 10%    | Simple system prompt, no tool usage, no workflows                                                            |
+| AI Infrastructure Wiring | 60%    | Tool execution works (local). Missing: Langfuse traces, Evals, authenticated tools (connectionId)            |
+| AI Intelligence          | 20%    | Basic agentic loop works (`createReactAgent`). No external tools, no workflows                               |
 | Company Automations      | 40%    | Thick CI/CD test infra foundation. No automated data analysis, coding, or AI actions                         |
 
 The system accepts USDC payments with real EVM RPC verification, tracks LLM costs with profit margins, and provides full activity visibility. Service-auth architecture means all LLM calls use shared master key (per-user keys on roadmap). AI infrastructure is basic (streaming chat only), automation is primarily CI/CD gates with no autonomous agents yet.
