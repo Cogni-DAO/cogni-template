@@ -7,7 +7,8 @@
  * Scope: Dev-only entrypoint. Reads env, instantiates LLM. NOT for production use.
  * Invariants:
  *   - Only used by langgraph.json for dev server
- *   - Uses LiteLLM via ChatOpenAI adapter
+ *   - Uses LiteLLM via OpenAI-compatible API
+ *   - MODEL_VIA_CONFIGURABLE: Model selected at runtime via RunnableConfig.configurable.model
  *   - TOOL_SAME_PATH_ALL_EXECUTORS: Tools bound at compile time, policy via configurable.toolIds
  *   - TOOLS_VIA_TOOLRUNNER: Tool execution through createDevToolExecFn
  * Side-effects: process.env
@@ -16,7 +17,7 @@
  */
 
 import { type CatalogBoundTool, TOOL_CATALOG } from "@cogni/ai-tools";
-import { ChatOpenAI } from "@langchain/openai";
+import { initChatModel } from "langchain/chat_models/universal";
 
 import { LANGGRAPH_CATALOG } from "../../catalog";
 import { createDevToolExecFn } from "../../runtime/dev-tool-exec";
@@ -24,25 +25,21 @@ import { toLangChainTools } from "../../runtime/langchain-tools";
 
 import { createPondererGraph, PONDERER_GRAPH_NAME } from "./graph";
 
-/**
- * Create LLM configured for LiteLLM proxy.
- * Uses OpenAI-compatible API via LiteLLM.
- *
- * P1: Move to langgraph-server package with proper config injection.
- */
-function createDevLLM(): ChatOpenAI {
-  // biome-ignore lint/style/noProcessEnv: Dev-only entrypoint, P1 will use config injection
-  const baseURL = process.env.LITELLM_BASE_URL ?? "http://localhost:4000";
-  // biome-ignore lint/style/noProcessEnv: Dev-only entrypoint, P1 will use config injection
-  const apiKey = process.env.LITELLM_MASTER_KEY ?? "dev-key";
+// biome-ignore lint/style/noProcessEnv: Dev-only entrypoint
+const baseURL = process.env.LITELLM_BASE_URL ?? "http://localhost:4000";
+// biome-ignore lint/style/noProcessEnv: Dev-only entrypoint
+const apiKey = process.env.LITELLM_MASTER_KEY ?? "dev-key";
 
-  return new ChatOpenAI({
-    // MVP: Hardcoded. P1: Pass model via LangGraph configurable at runtime.
-    model: "devstral",
-    configuration: { baseURL },
-    apiKey,
-  });
-}
+/**
+ * ConfigurableModel LLM that reads model from RunnableConfig.configurable.model at runtime.
+ * Per MODEL_VIA_CONFIGURABLE: No hardcoded model - selected dynamically per request.
+ */
+const llm = await initChatModel(undefined, {
+  configurableFields: ["model"],
+  modelProvider: "openai",
+  configuration: { baseURL },
+  apiKey,
+});
 
 /**
  * Get bound tools for ponderer graph from catalog.
@@ -82,10 +79,11 @@ const tools = toLangChainTools({
  * Pre-compiled ponderer graph for LangGraph dev server.
  * Exported as `ponderer` to match langgraph.json graph name.
  *
+ * Model selected at runtime via RunnableConfig.configurable.model.
  * Tools are bound at compile time. Runtime authorization via
  * RunnableConfig.configurable.toolIds (passed from LangGraphDevProvider).
  */
 export const ponderer = createPondererGraph({
-  llm: createDevLLM(),
+  llm,
   tools,
 });

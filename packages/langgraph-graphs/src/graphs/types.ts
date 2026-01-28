@@ -13,7 +13,7 @@
  * @public
  */
 
-import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
+import type { LanguageModelLike } from "@langchain/core/language_models/base";
 import type { BaseMessage } from "@langchain/core/messages";
 import type {
   RunnableConfig,
@@ -66,8 +66,8 @@ export type MessageGraphOutput = { readonly messages: BaseMessage[] };
  * Extend per-graph when additional dependencies are needed.
  */
 export interface CreateReactAgentGraphOptions {
-  /** LLM instance (should be CompletionUnitLLM for billing) */
-  readonly llm: BaseChatModel;
+  /** LLM instance - LanguageModelLike to match createReactAgent expectation */
+  readonly llm: LanguageModelLike;
   /** Tools wrapped via toLangChainTools() */
   readonly tools: ReadonlyArray<StructuredToolInterface>;
 }
