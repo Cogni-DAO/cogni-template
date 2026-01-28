@@ -14,6 +14,7 @@
  * @public
  */
 
+import { MessagesAnnotation } from "@langchain/langgraph";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
 import {
@@ -70,6 +71,7 @@ export function createPoetGraph(opts: CreateReactAgentGraphOptions): PoetGraph {
     llm,
     tools: [...tools], // Spread readonly array to mutable for LangGraph
     messageModifier: POET_SYSTEM_PROMPT,
+    stateSchema: MessagesAnnotation,
   });
 
   // Centralized cast with runtime assertion

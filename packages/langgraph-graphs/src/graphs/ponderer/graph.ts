@@ -14,6 +14,7 @@
  * @public
  */
 
+import { MessagesAnnotation } from "@langchain/langgraph";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
 import {
@@ -57,6 +58,7 @@ export function createPondererGraph(
     llm,
     tools: [...tools], // Spread readonly array to mutable for LangGraph
     messageModifier: PONDERER_SYSTEM_PROMPT,
+    stateSchema: MessagesAnnotation,
   });
 
   // Centralized cast with runtime assertion

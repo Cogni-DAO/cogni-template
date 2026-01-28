@@ -44,7 +44,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@langchain/langgraph-cli": "^0.0.35",
+    "@langchain/langgraph-cli": "^1.1.11",
     "tsup": "^8.5.1",
     "typescript": "^5"
   }
