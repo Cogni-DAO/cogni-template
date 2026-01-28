@@ -84,6 +84,10 @@
 
 32. **CONNECTION_IDS_ARE_REFERENCES**: `GraphRunRequest` may carry `connectionIds?: readonly string[]` (P1). These are opaque references resolved by Connection Broker at tool invocation. Per #30, no credentials in request. Per TOOL_USE_SPEC.md #26, same auth path for all tools. See [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md).
 
+33. **UNIFIED_INVOKE_SIGNATURE**: Both adapters (InProc, LangGraph Server) call `graph.invoke(input, { configurable: GraphRunConfig })` with identical input/config shapes. Wiring (LLM, tools) is centralized in shared entrypoint helpers, not per-graph bespoke code.
+
+34. **NO_PER_GRAPH_ENTRYPOINT_WIRING**: Entrypoint logic (LLM creation, tool binding, ALS setup) is implemented once in shared helpers (`createServerEntrypoint`, `createInProcEntrypoint`) and reused by all graphs. Graphs export pure factories only. This prevents drift into two graph ecosystems.
+
 ---
 
 ## Graph Catalog & Provider Architecture
@@ -373,7 +377,22 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 
 ### P1: Compiled Graph Execution
 
-Migrate all graphs to compiled exports + `RunnableConfig.configurable`. Enables unified graph artifacts across InProc and Server.
+Migrate graphs to pure factories + two entrypoints (server, inproc). Both invoke with `{ configurable: GraphRunConfig }`. Entrypoint logic is centralized in shared helpers per NO_PER_GRAPH_ENTRYPOINT_WIRING.
+
+**Architecture:**
+
+```
+graph.ts (pure factory)       → createXGraph({ llm, tools })
+    ↓                                ↓
+server.ts (langgraph dev)     inproc.ts (Next.js)
+    ↓                                ↓
+top-level await initChatModel  createInProcEntrypoint() [sync]
+    ↓                                ↓
+createServerEntrypoint() [sync]  no-arg CompletionUnitLLM
+(receives pre-built LLM)        (reads ALS + configurable.model)
+    ↓                                ↓
+    └──────── graph.invoke(input, { configurable }) ────────┘
+```
 
 **Type Placement:**
 
@@ -388,14 +407,38 @@ Migrate all graphs to compiled exports + `RunnableConfig.configurable`. Enables 
 - [x] Define `GraphRunConfig` schema in `@cogni/ai-core` (Zod): `model`, `runId`, `attempt`, `billingAccountId`, `virtualKeyId`, `traceId?`, `toolIds?`
 - [x] Create `InProcRuntime` with `AsyncLocalStorage` in `packages/langgraph-graphs/src/runtime/`
 - [x] Add `TOOL_CATALOG: Record<string, BoundTool>` to `@cogni/ai-tools/catalog.ts`
-- [ ] Fix `toLangChainTool` to accept `config` param, check `configurable.toolIds` allowlist, return `policy_denied` via `ToolExecResult`
-- [ ] Refactor `ponderer` graph to compiled no-arg export with one tool (proof of concept)
-- [ ] Prove end-to-end in `langgraph dev`: compiled export + configurable model + tool by ID
-- [ ] Refactor `LangGraphInProcProvider` to use ALS context + invoke with `{ configurable }`
-- [ ] Verify billing still works via `completionFn` → LiteLLM headers
-- [ ] Update `langgraph.json` to point to compiled exports
-- [ ] Stack test: same graph works in both InProc and langgraph dev
-- [ ] Delete legacy factory exports and dev.ts workaround
+- [x] Runtime model selection via `initChatModel` + `configurableFields` (server.ts/dev.ts)
+- [x] Schema extraction fix (`stateSchema: MessagesAnnotation` in graph factories)
+
+**Tool Wrapper Architecture (single impl, two wrappers):**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ makeLangChainTools({ contracts, execResolver })  ← single impl      │
+│   execResolver: (config?) => ToolExecFn                             │
+│   allowlist check via config.configurable.toolIds                   │
+└─────────────────────────────────────────────────────────────────────┘
+              ↑                                    ↑
+┌──────────────────────────────────┐ ┌────────────────────────────────┐
+│ toLangChainToolsServer           │ │ toLangChainToolsInProc         │
+│ ({ contracts, toolExecFn })      │ │ ({ contracts })                │
+│ execResolver = () => toolExecFn  │ │ execResolver = () =>           │
+│ (captured at bind time)          │ │   getInProcRuntime().toolExecFn│
+└──────────────────────────────────┘ └────────────────────────────────┘
+```
+
+- [ ] `CompletionUnitLLM`: no-arg constructor; read `completionFn`/`tokenSink` from ALS in `_generate()`, `model` from `config.configurable.model`; throw if ALS or model missing
+- [ ] `makeLangChainTools`: single core impl with `execResolver: (config) => ToolExecFn`; allowlist check via `configurable.toolIds`
+- [ ] `toLangChainToolsServer({ contracts, toolExecFn })`: wrapper; execResolver returns captured `toolExecFn`
+- [ ] `toLangChainToolsInProc({ contracts })`: wrapper; execResolver reads `toolExecFn` from ALS
+- [ ] Create `createServerEntrypoint()` helper (sync; receives pre-built LLM)
+- [ ] Create `createInProcEntrypoint()` helper (sync; creates no-arg CompletionUnitLLM)
+- [ ] `server.ts`: top-level await for `initChatModel`; call `createServerEntrypoint()`; export graph (not Promise)
+- [ ] `inproc.ts`: call `createInProcEntrypoint()`; export graph
+- [ ] Refactor `LangGraphInProcProvider` to use inproc entrypoints with ALS context
+- [ ] Verify billing: inproc path emits `usage_report` with `litellmCallId`/`costUsd`
+- [ ] Stack test: both entrypoints invoke with identical `{ configurable }` shape
+- [ ] Delete dev.ts; update `langgraph.json` to server.ts exports
 
 ### P2: Claude Agent SDK Adapter
 
@@ -875,5 +918,5 @@ await myGraph.invoke(messages, {
 
 ---
 
-**Last Updated**: 2026-01-14
-**Status**: Draft (Rev 16 - TOOLS_BY_ID is allowlist not registry; TOOL_CATALOG in ai-tools; remove ToolRegistry refs)
+**Last Updated**: 2026-01-29
+**Status**: Draft (Rev 17 - UNIFIED_INVOKE_SIGNATURE, NO_PER_GRAPH_ENTRYPOINT_WIRING; two-entrypoint architecture)
