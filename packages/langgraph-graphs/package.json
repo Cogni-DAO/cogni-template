@@ -37,13 +37,14 @@
   "dependencies": {
     "@cogni/ai-core": "workspace:*",
     "@cogni/ai-tools": "workspace:*",
-    "@langchain/core": "^1.1.8",
+    "@langchain/core": "^1.1.17",
     "@langchain/langgraph": "^1.0.7",
     "@langchain/openai": "^1.2.2",
+    "langchain": "^1.2.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@langchain/langgraph-cli": "^0.0.35",
+    "@langchain/langgraph-cli": "^1.1.11",
     "tsup": "^8.5.1",
     "typescript": "^5"
   }

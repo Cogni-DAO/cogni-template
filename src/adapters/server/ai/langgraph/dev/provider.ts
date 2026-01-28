@@ -160,7 +160,7 @@ export class LangGraphDevProvider implements GraphProvider {
     threadId: string,
     threadMetadata: { billingAccountId: string; stateKey: string }
   ): GraphRunResult {
-    const { runId, ingressRequestId, messages, caller, toolIds } = req;
+    const { runId, ingressRequestId, messages, caller, toolIds, model } = req;
     const attempt = 0; // P0_ATTEMPT_FREEZE
 
     // P0 Contract: undefined => catalog default, [] => deny-all, [...] => exact
@@ -208,7 +208,8 @@ export class LangGraphDevProvider implements GraphProvider {
       state,
       runId,
       ingressRequestId,
-      resolvedToolIds
+      resolvedToolIds,
+      model
     );
 
     return { stream, final };
@@ -236,7 +237,8 @@ export class LangGraphDevProvider implements GraphProvider {
     },
     runId: string,
     requestId: string,
-    resolvedToolIds: readonly string[]
+    resolvedToolIds: readonly string[],
+    model: string
   ): AsyncIterable<AiEvent> {
     try {
       // Ensure thread exists (idempotent create)
@@ -259,12 +261,13 @@ export class LangGraphDevProvider implements GraphProvider {
       }
 
       // Start streaming run
-      // Per TOOL_CONFIG_PROPAGATION: toolIds passed via configurable for wrapper check
+      // Per MODEL_VIA_CONFIGURABLE + TOOL_CONFIG_PROPAGATION: pass model and toolIds
       const sdkStream = this.client.runs.stream(threadId, graphName, {
         input: { messages: [lastUserMessage] },
         streamMode: ["messages-tuple"],
         config: {
           configurable: {
+            model,
             toolIds: [...resolvedToolIds],
           },
         },

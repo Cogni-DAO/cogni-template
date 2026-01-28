@@ -9,51 +9,8 @@
 
 model_list:
   # ===== FREE MODELS =====
-  # All validated for tool support via OpenRouter API (2026-01-13)
+  # Validated for streaming + tool support (2026-01-28)
   # Rate limits: 50 req/day (free plan) or 1000 req/day (>=$10 credits)
-
-  # Google
-  - model_name: gemini-2-flash
-    litellm_params:
-      model: openrouter/google/gemini-2.0-flash-exp:free
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "Gemini 2.0 Flash"
-      is_free: true
-      provider_key: "google"
-      metadata:
-        cogni:
-          default_free: true
-
-  # Mistral
-  - model_name: devstral
-    litellm_params:
-      model: openrouter/mistralai/devstral-2512:free
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "Devstral"
-      is_free: true
-      provider_key: "mistral"
-
-  # Qwen
-  - model_name: qwen3-coder
-    litellm_params:
-      model: openrouter/qwen/qwen3-coder:free
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "Qwen3 Coder"
-      is_free: true
-      provider_key: "qwen"
-
-  # Llama (Meta)
-  - model_name: llama-3.3-70b
-    litellm_params:
-      model: openrouter/meta-llama/llama-3.3-70b-instruct:free
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "Llama 3.3 70B"
-      is_free: true
-      provider_key: "llama"
 
   # NVIDIA
   - model_name: nemotron-nano-30b
@@ -64,6 +21,49 @@ model_list:
       display_name: "Nemotron Nano 30B"
       is_free: true
       provider_key: "nvidia"
+      metadata:
+        cogni:
+          default_free: true
+
+  # TNG
+  - model_name: tng-chimera
+    litellm_params:
+      model: openrouter/tngtech/tng-r1t-chimera:free
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "TNG Chimera"
+      is_free: true
+      provider_key: "tng"
+
+  # Arcee
+  - model_name: trinity-mini
+    litellm_params:
+      model: openrouter/arcee-ai/trinity-mini:free
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Trinity Mini"
+      is_free: true
+      provider_key: "arcee"
+
+  # Zhipu (GLM)
+  - model_name: glm-4.5-air
+    litellm_params:
+      model: openrouter/z-ai/glm-4.5-air:free
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "GLM 4.5 Air"
+      is_free: true
+      provider_key: "zhipu"
+
+  # Upstage
+  - model_name: solar-pro-3
+    litellm_params:
+      model: openrouter/upstage/solar-pro-3:free
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Solar Pro 3"
+      is_free: true
+      provider_key: "upstage"
 
   # ===== PAID MODELS =====
   # OpenAI

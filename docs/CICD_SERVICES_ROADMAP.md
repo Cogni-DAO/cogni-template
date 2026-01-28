@@ -37,6 +37,9 @@
 - [x] Compose: `stop_grace_period: 30s` for scheduler-worker
 - [x] Verify SIGTERM drain: ready=false before connections close
 - [x] Log drain completion before exit
+- [ ] **VM disk sizing**: Preview VM at 20GB insufficient for stack (litellm 4GB, sourcecred 2.6GB, postgres, temporal, app). Options: (a) upgrade Cherry Servers plan, (b) add block storage, (c) more aggressive image cleanup before pull
+- [ ] **Deploy cleanup**: Add `docker image prune -f` to deploy.sh to remove dangling images from all services (not just cogni-template\*)
+- [ ] **Deploy resilience**: Failed deployments must not take down the running site (currently preview.cognidao.org becomes unreachable on disk-full failures)
 
 #### Service Contract (all services)
 

@@ -109,7 +109,6 @@ This document covers two execution backends for LangGraph graphs:
 | No `costUsd`              | Cannot bill accurately                      | P1: LiteLLM header capture             |
 | In-memory only            | No persistence across restarts              | P1: Postgres checkpointer              |
 | Manual catalog sync       | Must update both catalog and langgraph.json | P1: Build-time generation              |
-| Hardcoded model in dev.ts | Client's requested model ignored            | P1: LangGraph configurable pattern     |
 | Late tool_call visibility | Tool may execute before chunk arrives       | Buffered; 64KB args / 100 pending caps |
 
 ### MVP Catalog Alignment
