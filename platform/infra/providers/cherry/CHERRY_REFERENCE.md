@@ -33,7 +33,7 @@ curl -s -H "Authorization: Bearer ${CHERRY_AUTH_TOKEN}" "https://api.cherryserve
 
 | Slug                   | Specs                   | EUR/hr |
 | ---------------------- | ----------------------- | ------ |
-| `B1-1-1gb-20s-shared`  | 1 vCore, 1GB, 20GB SSD  | €0.018 |
-| `B1-2-2gb-40s-shared`  | 2 vCore, 2GB, 40GB SSD  | -      |
+| `B1-1-1gb-20s-shared`  | 1 vCore, 1GB, 20GB SSD  | €0.02  |
+| `B1-2-2gb-40s-shared`  | 2 vCore, 2GB, 40GB SSD  | €0.03  |
 | `B1-4-4gb-80s-shared`  | 4 vCore, 4GB, 80GB SSD  | -      |
 | `B1-6-6gb-100s-shared` | 6 vCore, 6GB, 100GB SSD | -      |

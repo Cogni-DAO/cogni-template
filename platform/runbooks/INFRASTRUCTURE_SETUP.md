@@ -98,7 +98,7 @@ cat > terraform.preview.tfvars << EOF
 environment     = "preview"
 vm_name_prefix  = "cogni-template"
 project_id      = "${CHERRY_PROJECT_ID}"
-plan            = "B1-1-1gb-20s-shared"
+plan            = "B1-2-2gb-40s-shared"
 region          = "LT-Siauliai"
 public_key_path = "keys/cogni_template_preview_deploy.pub"
 EOF
@@ -127,7 +127,7 @@ cat > terraform.production.tfvars << EOF
 environment     = "production"
 vm_name_prefix  = "cogni-template"
 project_id      = "${CHERRY_PROJECT_ID}"
-plan            = "B1-1-1gb-20s-shared"
+plan            = "B1-2-2gb-40s-shared"
 region          = "LT-Siauliai"
 public_key_path = "keys/cogni_template_production_deploy.pub"
 EOF
