@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-15
+- **Last reviewed:** 2026-01-29
 - **Status:** draft
 
 ## Purpose
@@ -52,11 +52,11 @@ LangGraph graph definitions and runtime utilities for agentic AI execution. Cont
     - `ToolExecFn`, `ToolExecResult` — Tool execution types
   - `@cogni/langgraph-graphs/runtime` — LangChain utilities:
     - `toLangChainTools()` — Convert tool contracts to LangChain DynamicStructuredTool (checks configurable.toolIds)
-    - `CompletionUnitLLM` — BaseChatModel wrapper for billing integration
+    - `CompletionUnitLLM` — Runnable-based LLM wrapper for billing integration (reads model from configurable)
     - `toBaseMessage()`, `fromBaseMessage()` — Message converters
     - `AsyncQueue` — Simple async queue for streaming
     - `runWithInProcContext()`, `getInProcRuntime()`, `hasInProcRuntime()` — AsyncLocalStorage for per-run context
-    - `InProcRuntime` — Runtime context type (completionFn, tokenSink, toolExecFn)
+    - `InProcRuntime` — Runtime context type (completionFn, tokenSink, toolExecFn; NO model per #35)
   - `@cogni/langgraph-graphs/graphs` — Graph factories and shared types:
     - `createPoetGraph()`, `createPondererGraph()` — React agent factories
     - `POET_GRAPH_NAME`, `PONDERER_GRAPH_NAME` — Graph name constants

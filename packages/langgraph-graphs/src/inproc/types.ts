@@ -71,16 +71,20 @@ export type { ToolExecFn, ToolExecResult } from "@cogni/ai-core";
 export interface InProcGraphRequest {
   readonly runId: string;
   readonly messages: readonly Message[];
-  readonly model: string;
   readonly abortSignal?: AbortSignal;
   readonly traceId?: string;
   readonly ingressRequestId?: string;
   /**
    * RunnableConfig.configurable passed to graph.invoke().
-   * Must include toolIds from GraphRunConfig for TOOLS_DENY_BY_DEFAULT.
+   * Per UNIFIED_INVOKE_SIGNATURE: same shape for server and inproc.
+   * - model: required for CompletionUnitLLM (reads via configurable.model)
+   * - toolIds: required for TOOLS_DENY_BY_DEFAULT
    * Provider is responsible for populating this from GraphRunConfig.
    */
-  readonly configurable?: { toolIds?: readonly string[] };
+  readonly configurable: {
+    readonly model: string;
+    readonly toolIds?: readonly string[];
+  };
 }
 
 /**

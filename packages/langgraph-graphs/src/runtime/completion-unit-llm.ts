@@ -3,15 +3,17 @@
 
 /**
  * Module: `@cogni/langgraph-graphs/runtime/completion-unit-llm`
- * Purpose: LangChain BaseChatModel wrapper that routes LLM calls through injected CompletionFn.
+ * Purpose: Runnable-based LLM wrapper that routes calls through ALS-provided CompletionFn.
  * Scope: Enables billing/streaming integration via executeCompletionUnit pattern. Does not call LLM providers directly.
  * Invariants:
- *   - NO_DIRECT_MODEL_CALLS: All LLM calls go through injected CompletionFn
+ *   - NO_MODEL_IN_ALS (#35): Model read from config.configurable.model, never ALS
+ *   - MODEL_READ_FROM_CONFIGURABLE_AT_RUNNABLE_BOUNDARY (#37): Model resolved in invoke()
+ *   - NO_DIRECT_MODEL_CALLS: All LLM calls go through ALS-provided CompletionFn
  *   - NO_AWAIT_IN_TOKEN_PATH: tokenSink.push() is synchronous
- *   - Token streaming via tokenSink injection in _generate()
  *   - THROWS_AI_EXECUTION_ERROR: On completion failure, throws AiExecutionError with structured code
- * Side-effects: none (effects via injected deps)
- * Links: LANGGRAPH_AI.md, ERROR_HANDLING_ARCHITECTURE.md
+ *   - THROWS_FAST_IF_MISSING: Throws immediately if ALS context or model missing
+ * Side-effects: none (effects via ALS-injected deps)
+ * Links: LANGGRAPH_AI.md, ERROR_HANDLING_ARCHITECTURE.md, GRAPH_EXECUTION.md
  * @public
  */
 
@@ -20,23 +22,20 @@ import {
   AiExecutionError,
   isAiExecutionErrorCode,
 } from "@cogni/ai-core";
-import type { CallbackManagerForLLMRun } from "@langchain/core/callbacks/manager";
-import {
-  BaseChatModel,
-  type BaseChatModelCallOptions,
-} from "@langchain/core/language_models/chat_models";
 import type { BaseMessage } from "@langchain/core/messages";
 import { AIMessage } from "@langchain/core/messages";
-import type { ChatGenerationChunk, ChatResult } from "@langchain/core/outputs";
+import type { RunnableConfig } from "@langchain/core/runnables";
+import { Runnable } from "@langchain/core/runnables";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
 
+import { getInProcRuntime } from "./inproc-runtime";
 import { fromBaseMessage, type Message } from "./message-converters";
 
 /** OpenAI tool format - matches LlmToolDefinition in ports */
 type OpenAIToolDef = ReturnType<typeof convertToOpenAITool>;
 
 /**
- * Completion function signature injected from adapter.
+ * Completion function signature obtained from ALS.
  * Per GRAPH_LLM_VIA_COMPLETION: graph calls this, not LLM SDK directly.
  *
  * Generic TTool allows src/ to use LlmToolDefinition while package defaults to unknown.
@@ -91,69 +90,110 @@ export interface TokenSink {
 }
 
 /**
- * LangChain BaseChatModel that routes through injected CompletionFn.
+ * Extended RunnableConfig with our configurable fields.
+ * Model comes from configurable per #35/#37.
+ */
+interface CompletionUnitConfig extends RunnableConfig {
+  configurable?: {
+    model?: string;
+    toolIds?: readonly string[];
+    [key: string]: unknown;
+  };
+}
+
+/**
+ * Internal config for CompletionUnitLLM.
+ * Only used by bindTools() to pass tools to new instance.
+ * @internal
+ */
+interface CompletionUnitLLMConfig {
+  readonly boundTools?: OpenAIToolDef[];
+}
+
+/**
+ * Runnable-based LLM that routes through ALS-provided CompletionFn.
  *
  * This wrapper enables:
  * - Billing integration via adapter's executeCompletionUnit
- * - Token streaming to queue via tokenSink
- * - Usage tracking across multi-step graphs
+ * - Token streaming to queue via tokenSink from ALS
+ * - Model selection via configurable (not ALS)
  *
- * Note: _streamResponseChunks() is NOT used when using createReactAgent
- * (which uses invoke() internally). Token streaming is achieved via
- * tokenSink injection in _generate().
+ * Per #35 NO_MODEL_IN_ALS: model comes from config.configurable.model
+ * Per #37 MODEL_READ_FROM_CONFIGURABLE_AT_RUNNABLE_BOUNDARY: resolved in invoke()
+ *
+ * Usage tracking is handled by the runner (per-run aggregation), not this class.
  */
-export class CompletionUnitLLM extends BaseChatModel {
-  private completionFn: CompletionFn;
-  private modelId: string;
-  private tokenSink?: TokenSink;
+export class CompletionUnitLLM extends Runnable<BaseMessage[], AIMessage> {
   /** Bound tools in OpenAI format, set via bindTools() */
-  private boundTools?: OpenAIToolDef[];
-  /** Accumulated usage across all LLM calls. Undefined until first call reports usage. */
-  private collectedUsage:
-    | { promptTokens: number; completionTokens: number }
-    | undefined = undefined;
+  private readonly _boundTools?: OpenAIToolDef[];
+
+  lc_namespace = ["cogni", "langgraph"];
 
   static lc_name(): string {
     return "CompletionUnitLLM";
   }
 
-  constructor(
-    completionFn: CompletionFn,
-    modelId: string,
-    tokenSink?: TokenSink,
-    boundTools?: OpenAIToolDef[]
-  ) {
-    super({});
-    this.completionFn = completionFn;
-    this.modelId = modelId;
-    this.tokenSink = tokenSink;
-    this.boundTools = boundTools;
-  }
-
-  _llmType(): string {
-    return "completion-unit-llm";
+  /**
+   * Returns model type identifier.
+   * Required by LangGraph's _isBaseChatModel() check which looks for this method.
+   * LangGraph uses duck-typing: "invoke" in model && "_modelType" in model
+   */
+  _modelType(): string {
+    return "base_chat_model";
   }
 
   /**
-   * Generate a response from the LLM.
-   * Routes through injected CompletionFn for billing/streaming.
-   * Per CANCEL_PROPAGATION: passes abort signal to completionFn.
+   * Create a CompletionUnitLLM instance.
+   *
+   * No completionFn/tokenSink/model params — these are read at invoke time:
+   * - model: from config.configurable.model (per #35/#37)
+   * - completionFn, tokenSink: from ALS via getInProcRuntime()
+   *
+   * @param config - Internal config (only used by bindTools)
    */
-  async _generate(
+  constructor(config?: CompletionUnitLLMConfig) {
+    super({});
+    this._boundTools = config?.boundTools;
+  }
+
+  /**
+   * Invoke the LLM with messages.
+   *
+   * Reads model from config.configurable (per #35/#37) and
+   * completionFn/tokenSink from ALS. Fails fast if either is missing.
+   *
+   * @param messages - Input messages
+   * @param config - RunnableConfig with configurable.model
+   * @returns AIMessage with response
+   */
+  async invoke(
     messages: BaseMessage[],
-    options?: BaseChatModelCallOptions
-  ): Promise<ChatResult> {
+    config?: CompletionUnitConfig
+  ): Promise<AIMessage> {
+    // Read model from configurable (per #35/#37)
+    const model = config?.configurable?.model;
+    if (!model) {
+      throw new Error(
+        "[CompletionUnitLLM] config.configurable.model is required. " +
+          "Ensure graph is invoked with { configurable: { model: '...' } }."
+      );
+    }
+
+    // Read runtime from ALS (throws if missing per THROWS_FAST_IF_MISSING)
+    const runtime = getInProcRuntime();
+    const { completionFn, tokenSink } = runtime;
+
     // Convert LangChain messages to app format
     const appMessages = messages.map(fromBaseMessage);
 
     // Call completion function with abort signal per CANCEL_PROPAGATION
     // Per TOOLS_VIA_BINDTOOLS: pass bound tools to completionFn
-    const { stream, final } = this.completionFn({
+    const { stream, final } = completionFn({
       messages: appMessages,
-      model: this.modelId,
-      abortSignal: options?.signal,
-      ...(this.boundTools &&
-        this.boundTools.length > 0 && { tools: this.boundTools }),
+      model,
+      abortSignal: config?.signal,
+      ...(this._boundTools &&
+        this._boundTools.length > 0 && { tools: this._boundTools }),
     });
 
     // CRITICAL: Register guard immediately to prevent unhandled rejection.
@@ -165,10 +205,8 @@ export class CompletionUnitLLM extends BaseChatModel {
     // Drain stream, pushing tokens to sink (SYNC!)
     try {
       for await (const event of stream) {
-        if (this.tokenSink) {
-          // Push is synchronous per NO_AWAIT_IN_TOKEN_PATH
-          this.tokenSink.push(event);
-        }
+        // Push is synchronous per NO_AWAIT_IN_TOKEN_PATH
+        tokenSink.push(event);
       }
     } finally {
       // Ensure finalGuard is awaited even on error path
@@ -187,19 +225,10 @@ export class CompletionUnitLLM extends BaseChatModel {
       throw new AiExecutionError(code, `Completion failed: ${code}`);
     }
 
-    // Accumulate usage (initialize on first call with usage)
-    if (result.usage) {
-      if (this.collectedUsage === undefined) {
-        this.collectedUsage = { promptTokens: 0, completionTokens: 0 };
-      }
-      this.collectedUsage.promptTokens += result.usage.promptTokens;
-      this.collectedUsage.completionTokens += result.usage.completionTokens;
-    }
-
     // Build AIMessage from result
     // Invariant: tool calls must have function.name (provider contract)
     // Default empty arguments to "{}" to handle tools with no parameters
-    const aiMessage = new AIMessage({
+    return new AIMessage({
       content: result.content ?? "",
       tool_calls: result.toolCalls?.map((tc, i) => {
         if (!tc.function?.name) {
@@ -218,74 +247,21 @@ export class CompletionUnitLLM extends BaseChatModel {
         };
       }),
     });
-
-    return {
-      generations: [
-        {
-          text: result.content ?? "",
-          message: aiMessage,
-          generationInfo: {
-            finishReason: result.finishReason,
-          },
-        },
-      ],
-      llmOutput: {
-        tokenUsage: result.usage,
-      },
-    };
-  }
-
-  /**
-   * Get accumulated usage across all LLM calls.
-   * Returns undefined if no calls reported usage.
-   */
-  getCollectedUsage():
-    | { promptTokens: number; completionTokens: number }
-    | undefined {
-    return this.collectedUsage ? { ...this.collectedUsage } : undefined;
-  }
-
-  /**
-   * Reset collected usage (for testing).
-   */
-  resetUsage(): void {
-    this.collectedUsage = undefined;
-  }
-
-  /**
-   * Required by BaseChatModel. Not used for streaming in our pattern.
-   * We stream via tokenSink in _generate() instead.
-   */
-  // biome-ignore lint/correctness/useYield: Framework override - throws intentionally without yielding
-  async *_streamResponseChunks(
-    _messages: BaseMessage[],
-    _options: this["ParsedCallOptions"],
-    _runManager?: CallbackManagerForLLMRun
-  ): AsyncGenerator<ChatGenerationChunk> {
-    throw new Error(
-      "Streaming via _streamResponseChunks not supported. Use tokenSink pattern."
-    );
   }
 
   /**
    * Bind tools to this model instance.
    * Converts LangChain tools to OpenAI format and returns a new instance.
-   * Per TOOLS_VIA_BINDTOOLS: bound tools are passed to completionFn in _generate().
+   *
+   * Per #35/#37: model is NOT captured here — always read from configurable in invoke().
    */
-  bindTools(
-    tools: unknown[],
-    _kwargs?: Partial<BaseChatModelCallOptions>
-  ): this {
+  bindTools(tools: unknown[]): CompletionUnitLLM {
     // Convert LangChain tools to OpenAI function-calling format
     const openAITools = tools.map((tool) =>
       convertToOpenAITool(tool as Parameters<typeof convertToOpenAITool>[0])
     );
     // Return new instance with tools bound (immutable pattern per LangChain convention)
-    return new CompletionUnitLLM(
-      this.completionFn,
-      this.modelId,
-      this.tokenSink,
-      openAITools
-    ) as this;
+    // Model is NOT captured — always read from configurable at invoke time
+    return new CompletionUnitLLM({ boundTools: openAITools });
   }
 }
