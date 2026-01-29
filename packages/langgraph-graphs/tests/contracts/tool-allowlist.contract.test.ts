@@ -17,7 +17,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { makeLangChainTool } from "../../src/runtime/langchain-tools";
+import { makeLangChainTool } from "../../src/runtime/core/langchain-tools";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Test Helpers

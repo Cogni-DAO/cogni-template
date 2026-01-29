@@ -4,22 +4,24 @@
 /**
  * Module: `@cogni/langgraph-graphs/tests/contracts/model-via-configurable.contract`
  * Purpose: Lock invariants #35-37: model flows via configurable, not ALS.
- * Scope: Tests CompletionUnitLLM boundary directly. Does NOT test full graph execution.
+ * Scope: Tests CogniCompletionAdapter boundary directly. Does NOT test full graph execution.
  * Invariants:
  *   - NO_MODEL_IN_ALS (#35): Model comes from configurable.model, never ALS
  *   - MODEL_READ_FROM_CONFIGURABLE_AT_RUNNABLE_BOUNDARY (#37): Model resolved in invoke()
  *   - THROWS_FAST_IF_MISSING: Throws if model missing from configurable
  * Side-effects: none (all mocked)
- * Links: GRAPH_EXECUTION.md, completion-unit-llm.ts
+ * Links: GRAPH_EXECUTION.md, completion-adapter.ts
  * @internal
  */
 
 import type { AiEvent } from "@cogni/ai-core";
 import { HumanMessage } from "@langchain/core/messages";
 import { describe, expect, it, vi } from "vitest";
-import type { CompletionFn } from "../../src/runtime/completion-unit-llm";
-import { CompletionUnitLLM } from "../../src/runtime/completion-unit-llm";
-import { runWithInProcContext } from "../../src/runtime/inproc-runtime";
+import {
+  CogniCompletionAdapter,
+  type CompletionFn,
+  runWithCogniExecContext,
+} from "../../src/runtime/cogni";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Test Helpers
@@ -72,18 +74,18 @@ function createTestRuntime(completionFn: CompletionFn) {
 // Contract Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("CompletionUnitLLM (model-via-configurable contract)", () => {
+describe("CogniCompletionAdapter (model-via-configurable contract)", () => {
   describe("T1: model from configurable", () => {
     it("reads model from config.configurable.model, not ALS", async () => {
       const { fn: completionFn, calls } = createSpyCompletionFn();
       const runtime = createTestRuntime(completionFn);
-      const llm = new CompletionUnitLLM();
+      const llm = new CogniCompletionAdapter();
 
       const messages = [new HumanMessage("Hello")];
       const testModel = "test-model-from-configurable";
 
       // Invoke within ALS context, model in configurable (not ALS)
-      await runWithInProcContext(runtime, () =>
+      await runWithCogniExecContext(runtime, () =>
         llm.invoke(messages, {
           configurable: { model: testModel },
         })
@@ -99,15 +101,15 @@ describe("CompletionUnitLLM (model-via-configurable contract)", () => {
     it("passes different models correctly per invocation", async () => {
       const { fn: completionFn, calls } = createSpyCompletionFn();
       const runtime = createTestRuntime(completionFn);
-      const llm = new CompletionUnitLLM();
+      const llm = new CogniCompletionAdapter();
 
       const messages = [new HumanMessage("Hello")];
 
       // Invoke twice with different models
-      await runWithInProcContext(runtime, () =>
+      await runWithCogniExecContext(runtime, () =>
         llm.invoke(messages, { configurable: { model: "model-A" } })
       );
-      await runWithInProcContext(runtime, () =>
+      await runWithCogniExecContext(runtime, () =>
         llm.invoke(messages, { configurable: { model: "model-B" } })
       );
 
@@ -121,13 +123,13 @@ describe("CompletionUnitLLM (model-via-configurable contract)", () => {
     it("throws when configurable.model is missing", async () => {
       const { fn: completionFn, calls } = createSpyCompletionFn();
       const runtime = createTestRuntime(completionFn);
-      const llm = new CompletionUnitLLM();
+      const llm = new CogniCompletionAdapter();
 
       const messages = [new HumanMessage("Hello")];
 
       // Invoke without model in configurable
       await expect(
-        runWithInProcContext(runtime, () =>
+        runWithCogniExecContext(runtime, () =>
           llm.invoke(messages, { configurable: {} })
         )
       ).rejects.toThrow("configurable.model is required");
@@ -139,12 +141,12 @@ describe("CompletionUnitLLM (model-via-configurable contract)", () => {
     it("throws when configurable is undefined", async () => {
       const { fn: completionFn, calls } = createSpyCompletionFn();
       const runtime = createTestRuntime(completionFn);
-      const llm = new CompletionUnitLLM();
+      const llm = new CogniCompletionAdapter();
 
       const messages = [new HumanMessage("Hello")];
 
       await expect(
-        runWithInProcContext(runtime, () => llm.invoke(messages, {}))
+        runWithCogniExecContext(runtime, () => llm.invoke(messages, {}))
       ).rejects.toThrow("configurable.model is required");
 
       expect(calls).toHaveLength(0);
@@ -153,12 +155,12 @@ describe("CompletionUnitLLM (model-via-configurable contract)", () => {
     it("throws when config is undefined", async () => {
       const { fn: completionFn, calls } = createSpyCompletionFn();
       const runtime = createTestRuntime(completionFn);
-      const llm = new CompletionUnitLLM();
+      const llm = new CogniCompletionAdapter();
 
       const messages = [new HumanMessage("Hello")];
 
       await expect(
-        runWithInProcContext(runtime, () => llm.invoke(messages))
+        runWithCogniExecContext(runtime, () => llm.invoke(messages))
       ).rejects.toThrow("configurable.model is required");
 
       expect(calls).toHaveLength(0);
@@ -167,12 +169,12 @@ describe("CompletionUnitLLM (model-via-configurable contract)", () => {
 
   describe("T3: ALS context required", () => {
     it("throws when invoked outside ALS context", async () => {
-      const llm = new CompletionUnitLLM();
+      const llm = new CogniCompletionAdapter();
       const messages = [new HumanMessage("Hello")];
 
       await expect(
         llm.invoke(messages, { configurable: { model: "test-model" } })
-      ).rejects.toThrow("outside of runWithInProcContext");
+      ).rejects.toThrow("outside of runWithCogniExecContext");
     });
   });
 });
