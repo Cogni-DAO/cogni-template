@@ -8,7 +8,9 @@
 | Category             | Status         | Notes                                       |
 | -------------------- | -------------- | ------------------------------------------- |
 | **Invariants 1-23**  | ✅ Implemented | Core billing, execution, discovery          |
-| **Invariants 24-32** | 📋 Contract    | Compiled exports, configurable, connections |
+| **Invariants 24-34** | 📋 Contract    | Compiled exports, configurable, connections |
+| **Invariants 35-37** | ✅ Implemented | Model via configurable, ALS constraints     |
+| **Invariants 38-40** | 📋 Contract    | Node-keyed config, shared resolvers         |
 | **P1 Checklist**     | 📋 Contract    | Run persistence, compiled graph migration   |
 
 **Open Work:** See [P1: Compiled Graph Execution](#p1-compiled-graph-execution) checklist.
@@ -72,7 +74,7 @@
 
 26. **TOOLS_BY_ID**: `configurable.toolIds: string[]` is a **capability allowlist**, not a registry lookup. Tool schemas are bound at graph compile time; `toolIds` gates which tools may execute at runtime. `toLangChainTool` wrapper checks this allowlist and returns `policy_denied` (via existing `ToolExecResult`) if tool not in list. OAuth/MCP auth is resolved from ALS runtime context, never from configurable.
 
-27. **EXECUTOR_OWNS_TRANSPORT**: Executor decides LLM routing (CompletionUnitLLM vs ChatOpenAI). Graph code is transport-agnostic.
+27. **EXECUTOR_OWNS_TRANSPORT**: Executor decides LLM routing (CogniCompletionAdapter vs ChatOpenAI). Graph code is transport-agnostic.
 
 28. **RUNTIME_CONTEXT_VIA_ALS**: InProc runtime context (`completionFn`, `tokenSink`) accessed via `AsyncLocalStorage` per run, not global singleton.
 
@@ -83,6 +85,22 @@
 31. **BILLING_BOUNDED_BACKPRESSURE**: Billing subscriber uses bounded queue. If backpressure occurs, driver blocks (preserving lossless guarantee) rather than unbounded memory growth. P1: durable event spill or worker-based ingestion.
 
 32. **CONNECTION_IDS_ARE_REFERENCES**: `GraphRunRequest` may carry `connectionIds?: readonly string[]` (P1). These are opaque references resolved by Connection Broker at tool invocation. Per #30, no credentials in request. Per TOOL_USE_SPEC.md #26, same auth path for all tools. See [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md).
+
+33. **UNIFIED_INVOKE_SIGNATURE**: Both adapters (InProc, LangGraph Server) call `graph.invoke(input, { configurable: GraphRunConfig })` with identical input/config shapes. Wiring (LLM, tools) is centralized in shared entrypoint helpers, not per-graph bespoke code.
+
+34. **NO_PER_GRAPH_ENTRYPOINT_WIRING**: Entrypoint logic (LLM creation, tool binding, ALS setup) is implemented once in shared helpers (`createServerEntrypoint`, `createInProcEntrypoint`) and reused by all graphs. Graphs export pure factories only. This prevents drift into two graph ecosystems.
+
+35. **NO_MODEL_IN_ALS**: Model MUST NOT be stored in ALS. Model comes from `configurable.model` only. ALS holds non-serializable deps (functions, sinks), not run parameters.
+
+36. **ALS_ONLY_FOR_NON_SERIALIZABLE_DEPS**: Run-scoped ALS contains ONLY: `completionFn`, `tokenSink`, `toolExecFn`. Never: `model`, `toolIds`, or other serializable config values.
+
+37. **MODEL_READ_FROM_CONFIGURABLE_AT_RUNNABLE_BOUNDARY**: Model resolution happens in `Runnable.invoke()`, reading directly from `config.configurable.model`. Never resolve model inside internal methods (`_generate()`). This enables InProc to use a `Runnable`-based model (not `BaseChatModel`) that reads configurable at the correct boundary.
+
+38. **NODE_KEYED_CONFIG_VIA_FLAT_MAP**: Node-specific overrides use flat keys `<nodeKey>__model` and `<nodeKey>__toolIds` in configurable. Resolution: `configurable[nodeKey__field] ?? configurable[field]`. This keeps configurable JSON-serializable and avoids nested structures that complicate adapter translation.
+
+39. **SHARED_RESOLVERS_FOR_NODE_CONFIG**: Model and toolIds resolution uses shared functions `resolveModel(configurable, nodeKey?)` and `resolveToolIds(configurable, nodeKey?)`. Both `CogniCompletionAdapter` and tool wrappers use these resolvers—no duplicate resolution logic.
+
+40. **NODE_KEY_PROPAGATION**: Nodes that need specific config must receive `nodeKey` at construction and pass it through to LLM/tool invocations. Graph factories are responsible for wiring nodeKey; runtime just resolves.
 
 ---
 
@@ -119,9 +137,13 @@ packages/
         │   ├── ponderer/graph.ts             # export const pondererGraph = ...compile()
         │   └── research/graph.ts             # Graph #3 (compiled)
         └── runtime/                          # Runtime utilities ✓
-            ├── completion-unit-llm.ts        # CompletionUnitLLM wraps completionFn
-            ├── inproc-runtime.ts             # AsyncLocalStorage context
-            └── langchain-tools.ts            # toLangChainTool() with config param + allowlist check
+            ├── core/                         # Generic (no ALS)
+            │   ├── langchain-tools.ts        # makeLangChainTools, toLangChainToolsCaptured
+            │   └── ...
+            └── cogni/                        # Cogni executor (uses ALS)
+                ├── exec-context.ts           # CogniExecContext, runWithCogniExecContext
+                ├── completion-adapter.ts     # CogniCompletionAdapter wraps completionFn
+                └── tools.ts                  # toLangChainToolsFromContext
 
 src/
 ├── ports/
@@ -373,29 +395,104 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 
 ### P1: Compiled Graph Execution
 
-Migrate all graphs to compiled exports + `RunnableConfig.configurable`. Enables unified graph artifacts across InProc and Server.
+Migrate graphs to pure factories + two entrypoints (server, cogni-exec). Both invoke with `{ configurable: GraphRunConfig }`. Entrypoint logic is centralized in shared helpers per NO_PER_GRAPH_ENTRYPOINT_WIRING.
+
+**Per-Graph File Structure:**
+
+```
+graphs/<name>/
+├── graph.ts        # Pure factory: createXGraph({ llm, tools })
+├── prompts.ts      # System prompt constant(s)
+├── server.ts       # ~1 line: await createServerEntrypoint("name")
+└── cogni-exec.ts   # ~1 line: createCogniEntrypoint("name")
+```
+
+**Entrypoint Invariants:**
+
+- **PURE_GRAPH_FACTORY**: `graph.ts` has no env/ALS/entrypoint wiring
+- **ENTRYPOINT_IS_THIN**: `server.ts` and `cogni-exec.ts` are ~1-liners calling shared helpers
+- **LANGGRAPH_JSON_POINTS_TO_SERVER_ONLY**: `langgraph.json` references `server.ts`, never `cogni-exec.ts`
+- **NO_CROSSING_THE_STREAMS**: `core/` never imports `runtime/cogni/`; `cogni-exec.ts` never uses `initChatModel`/env
+
+**Architecture:**
+
+```
+graph.ts (pure factory)       → createXGraph({ llm, tools })
+    ↓                                ↓
+server.ts (langgraph dev)     cogni-exec.ts (Cogni executor)
+    ↓                                ↓
+await createServerEntrypoint()  createCogniEntrypoint() [sync]
+    ↓                                ↓
+initChatModel + captured exec   CogniCompletionAdapter + ALS context
+    ↓                                ↓
+    └──────── graph.invoke(input, { configurable: { model, toolIds } }) ────────┘
+```
 
 **Type Placement:**
 
-| Type             | Package                                  | Rationale                                                   |
-| ---------------- | ---------------------------------------- | ----------------------------------------------------------- |
-| `GraphRunConfig` | `@cogni/ai-core`                         | JSON-serializable; shared across all adapters               |
-| `InProcRuntime`  | `packages/langgraph-graphs/src/runtime/` | LangGraph-specific; holds `completionFn`, `tokenSink`       |
-| `TOOL_CATALOG`   | `@cogni/ai-tools/catalog.ts`             | Canonical tool registry; `langgraph-graphs` wraps from here |
+| Type               | Package                                        | Rationale                                                                              |
+| ------------------ | ---------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `GraphRunConfig`   | `@cogni/ai-core`                               | JSON-serializable; shared across all adapters                                          |
+| `CogniExecContext` | `packages/langgraph-graphs/src/runtime/cogni/` | LangGraph-specific; holds `completionFn`, `tokenSink`, `toolExecFn` (NO model per #35) |
+| `TOOL_CATALOG`     | `@cogni/ai-tools/catalog.ts`                   | Canonical tool registry; `langgraph-graphs` wraps from here                            |
 
 **Implementation Checklist:**
 
 - [x] Define `GraphRunConfig` schema in `@cogni/ai-core` (Zod): `model`, `runId`, `attempt`, `billingAccountId`, `virtualKeyId`, `traceId?`, `toolIds?`
-- [x] Create `InProcRuntime` with `AsyncLocalStorage` in `packages/langgraph-graphs/src/runtime/`
+- [x] Create `CogniExecContext` with `AsyncLocalStorage` in `packages/langgraph-graphs/src/runtime/cogni/`
 - [x] Add `TOOL_CATALOG: Record<string, BoundTool>` to `@cogni/ai-tools/catalog.ts`
-- [ ] Fix `toLangChainTool` to accept `config` param, check `configurable.toolIds` allowlist, return `policy_denied` via `ToolExecResult`
-- [ ] Refactor `ponderer` graph to compiled no-arg export with one tool (proof of concept)
-- [ ] Prove end-to-end in `langgraph dev`: compiled export + configurable model + tool by ID
-- [ ] Refactor `LangGraphInProcProvider` to use ALS context + invoke with `{ configurable }`
-- [ ] Verify billing still works via `completionFn` → LiteLLM headers
-- [ ] Update `langgraph.json` to point to compiled exports
-- [ ] Stack test: same graph works in both InProc and langgraph dev
-- [ ] Delete legacy factory exports and dev.ts workaround
+- [x] Runtime model selection via `initChatModel` + `configurableFields` (server.ts/dev.ts)
+- [x] Schema extraction fix (`stateSchema: MessagesAnnotation` in graph factories)
+
+**Tool Wrapper Architecture (single impl, two wrappers):**
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ makeLangChainTools({ contracts, execResolver })  ← single impl      │
+│   execResolver: (config?) => ToolExecFn                             │
+│   allowlist check via config.configurable.toolIds                   │
+└─────────────────────────────────────────────────────────────────────┘
+              ↑                                    ↑
+┌──────────────────────────────────┐ ┌────────────────────────────────┐
+│ toLangChainToolsCaptured         │ │ toLangChainToolsFromContext    │
+│ ({ contracts, toolExecFn })      │ │ ({ contracts })                │
+│ execResolver = () => toolExecFn  │ │ execResolver = () =>           │
+│ (captured at bind time)          │ │   getCogniExecContext().toolExecFn│
+└──────────────────────────────────┘ └────────────────────────────────┘
+```
+
+- [x] `CogniCompletionAdapter`: Replace `BaseChatModel` with `Runnable`-based implementation; read `model` from `configurable` in `invoke()` (per #37); read `completionFn`/`tokenSink` from ALS; throw if ALS missing or model missing from configurable
+- [x] `makeLangChainTools`: single core impl with `execResolver: (config) => ToolExecFn`; allowlist check via `configurable.toolIds`
+- [x] `toLangChainToolsCaptured({ contracts, toolExecFn })`: wrapper; execResolver returns captured `toolExecFn`
+- [x] `toLangChainToolsFromContext({ contracts })`: wrapper; execResolver reads `toolExecFn` from ALS
+- [x] Create `createServerEntrypoint(graphName)` helper in `runtime/core/`
+- [x] Create `createCogniEntrypoint(graphName)` helper in `runtime/cogni/`
+- [x] Per-graph `server.ts`: `export const x = await createServerEntrypoint("name")`
+- [x] Per-graph `cogni-exec.ts`: `export const x = createCogniEntrypoint("name")`
+- [x] Delete `dev.ts` files; update `langgraph.json` to `server.ts` exports
+- [ ] Refactor Cogni provider to import from `cogni-exec.ts` entrypoints
+- [ ] Verify billing: cogni-exec path emits `usage_report` with `litellmCallId`/`costUsd`
+- [ ] Stack test: both entrypoints produce identical graph output for same input
+
+### P1: Node-Keyed Model & Tool Configuration
+
+Per-node model/tool overrides via flat configurable keys: `<nodeKey>__model`, `<nodeKey>__toolIds`. Resolution: override ?? default.
+
+**File Pointers:**
+
+| File                                                                | Change                                                     |
+| ------------------------------------------------------------------- | ---------------------------------------------------------- |
+| `packages/langgraph-graphs/src/runtime/config-resolvers.ts`         | New: `resolveModel()`, `resolveToolIds()` shared resolvers |
+| `packages/langgraph-graphs/src/runtime/cogni/completion-adapter.ts` | Accept optional `nodeKey`; use resolver in `invoke()`      |
+| `packages/langgraph-graphs/src/runtime/langchain-tools.ts`          | Use `resolveToolIds()` for allowlist check                 |
+
+**Checklist:**
+
+- [ ] Create `config-resolvers.ts` with shared resolvers
+- [ ] Update `CogniCompletionAdapter` to accept `nodeKey` and use `resolveModel()`
+- [ ] Update tool wrappers to use `resolveToolIds()`
+- [ ] Unit tests: resolver edge cases (missing config, override precedence)
+- [ ] Integration test: two-node graph with `planner__model` override
 
 ### P2: Claude Agent SDK Adapter
 
@@ -715,7 +812,7 @@ The `executeCompletionUnit()` method must provide a **unified execution boundary
 
 This restores the invariant: `stream + final = unified execution boundary with normalized errors`.
 
-The `CompletionUnitLLM` in the package layer then doesn't need any special error handling — it just consumes a well-behaved stream/final from the adapter boundary.
+The `CogniCompletionAdapter` in the package layer then doesn't need any special error handling — it just consumes a well-behaved stream/final from the adapter boundary.
 
 **Working Billing Flow (Non-LangGraph InProc Path):**
 
@@ -875,5 +972,5 @@ await myGraph.invoke(messages, {
 
 ---
 
-**Last Updated**: 2026-01-14
-**Status**: Draft (Rev 16 - TOOLS_BY_ID is allowlist not registry; TOOL_CATALOG in ai-tools; remove ToolRegistry refs)
+**Last Updated**: 2026-01-29
+**Status**: Draft (Rev 18 - NODE_KEYED_CONFIG_VIA_FLAT_MAP; per-node model/toolIds overrides)

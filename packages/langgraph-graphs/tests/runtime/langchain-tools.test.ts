@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/langgraph-graphs/tests/runtime/langchain-tools`
  * Purpose: Tool wrapper correlation test - verifies toolCallId stability across events.
- * Scope: Tests that toLangChainTools produces tools that emit correlated events. Does NOT test actual tool execution or LLM integration.
+ * Scope: Tests that toLangChainToolsCaptured produces tools that emit correlated events. Does NOT test actual tool execution or LLM integration.
  * Invariants:
  *   - TOOLCALL_ID_STABLE: Same toolCallId across tool_call_start → tool_call_result
  *   - tool_call_start precedes tool_call_result for given toolCallId (OPT1)
@@ -19,8 +19,8 @@ import { z } from "zod";
 
 import {
   type ToolExecFn,
-  toLangChainTools,
-} from "../../src/runtime/langchain-tools";
+  toLangChainToolsCaptured,
+} from "../../src/runtime/core/langchain-tools";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Test Helpers
@@ -97,16 +97,16 @@ function createMockToolExecFn(
 // Tool Correlation Tests
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe("toLangChainTools", () => {
+describe("toLangChainToolsCaptured", () => {
   it("emits tool_call_start then tool_call_result with same toolCallId (OPT1)", async () => {
     const collector = createEventCollector();
     const contract = createTestContract();
     const mockExec = createMockToolExecFn(collector);
 
-    // Wrap tool with toLangChainTools
-    const tools = toLangChainTools({
+    // Wrap tool with toLangChainToolsCaptured
+    const tools = toLangChainToolsCaptured({
       contracts: [contract],
-      exec: mockExec,
+      toolExecFn: mockExec,
     });
 
     expect(tools).toHaveLength(1);

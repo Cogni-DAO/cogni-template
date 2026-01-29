@@ -15,7 +15,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { AsyncQueue } from "../../src/runtime/async-queue";
+import { AsyncQueue } from "../../src/runtime/core/async-queue";
 
 describe("AsyncQueue", () => {
   it("should yield pushed items in order", async () => {

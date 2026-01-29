@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/langgraph-graphs/runtime/async-queue`
+ * Module: `@cogni/langgraph-graphs/runtime/core/async-queue`
  * Purpose: Simple async queue for streaming events from sync producers.
  * Scope: Enables invoke() + queue pattern per LANGGRAPH_AI.md (NOT streamEvents).
  * Invariants:
