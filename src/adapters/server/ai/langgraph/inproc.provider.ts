@@ -193,15 +193,14 @@ export class LangGraphInProcProvider implements GraphProvider {
 
     // Build request for package runner
     // Use conditional spreads for exactOptionalPropertyTypes
+    // Per UNIFIED_INVOKE_SIGNATURE: configurable has model + toolIds
     const runnerRequest: InProcGraphRequest = {
       runId,
       messages: messages as InProcGraphRequest["messages"],
-      model,
       ...(abortSignal !== undefined && { abortSignal }),
       ...(caller.traceId !== undefined && { traceId: caller.traceId }),
       ...(ingressRequestId !== undefined && { ingressRequestId }),
-      // Pass same toolIds to configurable (wrapper early-deny matches ToolRunner policy)
-      configurable: { toolIds },
+      configurable: { model, toolIds },
     };
 
     // Delegate to package runner — all LangChain logic is there

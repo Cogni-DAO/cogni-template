@@ -4,9 +4,10 @@
 /**
  * Module: `@cogni/langgraph-graphs/inproc/runner`
  * Purpose: InProc graph execution runner for Next.js server runtime.
- * Scope: Creates queue, wires dependencies, executes graph, emits events. Does NOT import from src/.
+ * Scope: Creates queue, wires dependencies, executes graph via ALS context, emits events. Does NOT import from src/.
  * Invariants:
  *   - SINGLE_QUEUE_PER_RUN: Runner creates queue, passes emit to createToolExecFn
+ *   - RUNTIME_CONTEXT_VIA_ALS: Sets up ALS context before graph invocation
  *   - ASSISTANT_FINAL_REQUIRED: Emits exactly one assistant_final event on success; none on error
  *   - NO_AWAIT_IN_TOKEN_PATH: tokenSink.push() is synchronous
  *   - RESULT_REFLECTS_OUTCOME: final.ok matches stream success/failure
@@ -20,11 +21,15 @@ import { type AiEvent, normalizeErrorToExecutionCode } from "@cogni/ai-core";
 import type { BaseMessage } from "@langchain/core/messages";
 
 import { AsyncQueue } from "../runtime/async-queue";
-import { CompletionUnitLLM } from "../runtime/completion-unit-llm";
-import { toLangChainTools } from "../runtime/langchain-tools";
+import {
+  type CompletionFn,
+  CompletionUnitLLM,
+} from "../runtime/completion-unit-llm";
+import { runWithInProcContext } from "../runtime/inproc-runtime";
+import { toLangChainToolsServer } from "../runtime/langchain-tools";
 import { toBaseMessage } from "../runtime/message-converters";
 
-import type { CompletionFn, GraphResult, InProcRunnerOptions } from "./types";
+import type { GraphResult, InProcRunnerOptions } from "./types";
 
 /**
  * Extract text content from final assistant message.
@@ -63,6 +68,7 @@ function extractAssistantContent(messages: BaseMessage[]): string {
  * All LangChain logic is contained here — callers don't need LangChain imports.
  *
  * Per SINGLE_QUEUE_PER_RUN: Runner creates queue internally.
+ * Per RUNTIME_CONTEXT_VIA_ALS: Sets up ALS before graph invocation.
  * Per ASSISTANT_FINAL_REQUIRED: Emits exactly one assistant_final event.
  *
  * @param opts - Runner options including graph factory
@@ -91,29 +97,41 @@ export function createInProcGraphRunner<TTool = unknown>(
 
   const tokenSink = { push: emit };
   const toolExecFn = createToolExecFn(emit);
-  // Cast: CompletionUnitLLM converts tools to OpenAI format internally; tool type erased at boundary
-  const llm = new CompletionUnitLLM(
-    completionFn as CompletionFn<unknown>,
-    request.model,
-    tokenSink
-  );
-  const tools = toLangChainTools({
+
+  // Create no-arg CompletionUnitLLM (reads from ALS + configurable at invoke time)
+  const llm = new CompletionUnitLLM();
+
+  // Use toLangChainToolsServer since runner provides toolExecFn directly (not from ALS)
+  const tools = toLangChainToolsServer({
     contracts: toolContracts,
-    exec: toolExecFn,
+    toolExecFn,
   });
+
   // Use factory from catalog instead of hardcoded graph
   const graph = createGraph({ llm, tools });
 
   const final = (async (): Promise<GraphResult> => {
     try {
       const messages = request.messages.map(toBaseMessage);
-      // toolIds comes from GraphRunConfig via request.configurable, NOT derived from contracts
-      const result = await graph.invoke(
-        { messages },
+
+      // Set up ALS context and invoke graph
+      // Per RUNTIME_CONTEXT_VIA_ALS: CompletionUnitLLM reads model/completionFn/tokenSink from ALS
+      // Note: model is in ALS because LangChain strips configurable before _generate()
+      const result = await runWithInProcContext(
         {
-          signal: request.abortSignal,
-          configurable: request.configurable,
-        }
+          model: request.configurable.model,
+          completionFn: completionFn as CompletionFn<unknown>,
+          tokenSink,
+          toolExecFn,
+        },
+        () =>
+          graph.invoke(
+            { messages },
+            {
+              signal: request.abortSignal,
+              configurable: request.configurable,
+            }
+          )
       );
 
       const assistantContent = extractAssistantContent(result.messages);

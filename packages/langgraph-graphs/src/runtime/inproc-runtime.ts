@@ -23,9 +23,12 @@ import type { CompletionFn } from "./completion-unit-llm";
 /**
  * InProc runtime context.
  * Holds per-run dependencies that cannot travel through RunnableConfig.configurable
- * (functions, object instances).
+ * (functions, object instances) plus model which LangChain strips before _generate().
  */
 export interface InProcRuntime {
+  /** Model identifier for this run (LangChain strips configurable before _generate) */
+  readonly model: string;
+
   /** Completion function routed through executeCompletionUnit for billing */
   readonly completionFn: CompletionFn;
 

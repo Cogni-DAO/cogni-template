@@ -260,9 +260,12 @@ describe("Runner ToolExecFn seam (integration)", () => {
         request: {
           runId: TEST_RUN_ID,
           messages: [{ role: "user", content: "Echo hello world" }],
-          model: TEST_MODEL,
-          // Must pass toolIds for wrapper deny-by-default check
-          configurable: { toolIds: [TEST_TOOL_NAME] },
+          // Per UNIFIED_INVOKE_SIGNATURE: model + toolIds in configurable
+          configurable: {
+            model: TEST_MODEL,
+            // Must pass toolIds for wrapper deny-by-default check
+            toolIds: [TEST_TOOL_NAME],
+          },
         },
       });
 
@@ -355,9 +358,12 @@ describe("Runner ToolExecFn seam (integration)", () => {
         request: {
           runId: TEST_RUN_ID,
           messages: [{ role: "user", content: "Use denied tool" }],
-          model: TEST_MODEL,
-          // Only TEST_TOOL_NAME in toolIds - DENIED_TOOL_NAME will be rejected by wrapper
-          configurable: { toolIds: [TEST_TOOL_NAME] },
+          // Per UNIFIED_INVOKE_SIGNATURE: model + toolIds in configurable
+          configurable: {
+            model: TEST_MODEL,
+            // Only TEST_TOOL_NAME in toolIds - DENIED_TOOL_NAME will be rejected by wrapper
+            toolIds: [TEST_TOOL_NAME],
+          },
         },
       });
 
