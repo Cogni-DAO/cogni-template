@@ -24,7 +24,7 @@ const baseURL = process.env.LITELLM_BASE_URL ?? "http://localhost:4000";
 const apiKey = process.env.LITELLM_MASTER_KEY ?? "dev-key";
 
 const llm = await initChatModel(undefined, {
-  configurableFields: ["model"],
+  configurableFields: ["model", "user"],
   modelProvider: "openai",
   configuration: { baseURL },
   apiKey,

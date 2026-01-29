@@ -262,6 +262,7 @@ export class LangGraphDevProvider implements GraphProvider {
 
       // Start streaming run
       // Per MODEL_VIA_CONFIGURABLE + TOOL_CONFIG_PROPAGATION: pass model and toolIds
+      // Per EXTERNAL_BILLING_VIA_RECONCILIATION: pass user=${runId}/${attempt} for spend_logs attribution
       const sdkStream = this.client.runs.stream(threadId, graphName, {
         input: { messages: [lastUserMessage] },
         streamMode: ["messages-tuple"],
@@ -269,6 +270,7 @@ export class LangGraphDevProvider implements GraphProvider {
           configurable: {
             model,
             toolIds: [...resolvedToolIds],
+            user: `${ctx.runId}/${ctx.attempt}`,
           },
         },
       });

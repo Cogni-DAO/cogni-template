@@ -11,6 +11,7 @@
 | **Invariants 24-34** | 📋 Contract    | Compiled exports, configurable, connections |
 | **Invariants 35-37** | ✅ Implemented | Model via configurable, ALS constraints     |
 | **Invariants 38-40** | 📋 Contract    | Node-keyed config, shared resolvers         |
+| **Invariants 41-47** | ✅ Validated   | External executor billing via end_user      |
 | **P1 Checklist**     | 📋 Contract    | Run persistence, compiled graph migration   |
 
 **Open Work:** See [P1: Compiled Graph Execution](#p1-compiled-graph-execution) checklist.
@@ -101,6 +102,24 @@
 39. **SHARED_RESOLVERS_FOR_NODE_CONFIG**: Model and toolIds resolution uses shared functions `resolveModel(configurable, nodeKey?)` and `resolveToolIds(configurable, nodeKey?)`. Both `CogniCompletionAdapter` and tool wrappers use these resolvers—no duplicate resolution logic.
 
 40. **NODE_KEY_PROPAGATION**: Nodes that need specific config must receive `nodeKey` at construction and pass it through to LLM/tool invocations. Graph factories are responsible for wiring nodeKey; runtime just resolves.
+
+### External Executor Billing (41-47)
+
+See [EXTERNAL_EXECUTOR_BILLING.md](EXTERNAL_EXECUTOR_BILLING.md) for full design.
+
+41. **END_USER_CORRELATION**: External executors set `configurable.user = ${runId}/${attempt}` server-side. LiteLLM stores as `end_user`. Reconciler queries by `end_user`.
+
+42. **USAGE_UNIT_IS_PROVIDER_CALL_ID**: `usageUnitId = spend_logs.request_id`. Multiple charge_receipts per run expected for multi-step graphs.
+
+43. **SERVER_SETS_USER_NEVER_CLIENT**: Provider overwrites any client-supplied `configurable.user`. Prevents billing spoofing.
+
+44. **RECONCILE_AFTER_STREAM_COMPLETES**: Reconciliation triggers after stream ends. No grace window for MVP.
+
+45. **STREAM_EVENTS_ARE_UX_ONLY**: External executor `usage_report` events are telemetry hints only. Authoritative billing via reconciliation.
+
+46. **RECONCILER_VIA_COMMIT_USAGE_FACT**: Reconcilers MUST call `commitUsageFact()`. ONE_LEDGER_WRITER applies.
+
+47. **CONFIGURABLE_USER_IN_SERVER_ENTRYPOINT**: `initChatModel` must include `"user"` in `configurableFields` for external executors.
 
 ---
 
@@ -496,14 +515,27 @@ Per-node model/tool overrides via flat configurable keys: `<nodeKey>__model`, `<
 
 ### P2: Claude Agent SDK Adapter
 
-- [ ] Create `ClaudeGraphExecutorAdapter` implementing `GraphExecutorPort`
-- [ ] Translate Claude SDK events → AiEvents
-- [ ] Emit `usage_report` with `message.id`-based `usageUnitId`
+> See [CLAUDE_SDK_ADAPTER_SPEC.md](CLAUDE_SDK_ADAPTER_SPEC.md) for full specification.
+
+- [ ] Create `ClaudeAgentExecutor` implementing `GraphExecutorPort`
+- [ ] Map SDK `SDKMessage` stream → `AiEvent` stream
+- [ ] Bridge tools via in-process MCP server (`createSdkMcpServer`)
+- [ ] Emit `usage_report` with `session_id`-based `usageUnitId`
 - [ ] Add `anthropic_sdk` to `SOURCE_SYSTEMS` enum
 
-### Future: External Engine Adapters
+### P2: n8n Workflow Adapter
 
-n8n/Flowise adapters — build only if demand materializes and engines route LLM through our gateway.
+> See [N8N_ADAPTER_SPEC.md](N8N_ADAPTER_SPEC.md) for full specification.
+
+- [ ] Create `N8nWorkflowExecutor` implementing `GraphExecutorPort`
+- [ ] Invoke n8n workflows via webhook POST
+- [ ] Support sync response mode (wait for completion)
+- [ ] Reconcile billing via LiteLLM spend logs (LLM routed through gateway)
+- [ ] Emit `usage_report` with `execution_id`-based `usageUnitId`
+
+### Future: Additional External Adapters
+
+Flowise/custom engine adapters — build only if demand materializes and engines route LLM through our gateway.
 
 ---
 
@@ -969,6 +1001,8 @@ await myGraph.invoke(messages, {
 - [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md) — Credit unit standard, pricing policy, markup
 - [ACTIVITY_METRICS.md](ACTIVITY_METRICS.md) — Activity dashboard join
 - [USAGE_HISTORY.md](USAGE_HISTORY.md) — Message artifact persistence (parallel stream consumer)
+- [CLAUDE_SDK_ADAPTER_SPEC.md](CLAUDE_SDK_ADAPTER_SPEC.md) — Claude Agent SDK adapter design (P2)
+- [N8N_ADAPTER_SPEC.md](N8N_ADAPTER_SPEC.md) — n8n workflow execution adapter design (P2)
 
 ---
 
