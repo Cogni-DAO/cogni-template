@@ -50,13 +50,10 @@ LangGraph graph definitions and runtime utilities for agentic AI execution. Cont
     - `CompletionFn`, `CompletionResult` — Injected completion function types
     - `CreateGraphFn`, `CreateGraphOptions` — Graph factory types
     - `ToolExecFn`, `ToolExecResult` — Tool execution types
-  - `@cogni/langgraph-graphs/runtime` — LangChain utilities:
-    - `toLangChainTools()` — Convert tool contracts to LangChain DynamicStructuredTool (checks configurable.toolIds)
-    - `CompletionUnitLLM` — Runnable-based LLM wrapper for billing integration (reads model from configurable)
-    - `toBaseMessage()`, `fromBaseMessage()` — Message converters
-    - `AsyncQueue` — Simple async queue for streaming
-    - `runWithInProcContext()`, `getInProcRuntime()`, `hasInProcRuntime()` — AsyncLocalStorage for per-run context
-    - `InProcRuntime` — Runtime context type (completionFn, tokenSink, toolExecFn; NO model per #35)
+  - `@cogni/langgraph-graphs/runtime` — LangChain utilities (split: `core/` generic, `cogni/` ALS-based):
+    - **Core (no ALS):** `makeLangChainTool()`, `toLangChainToolsCaptured()`, `toBaseMessage()`, `fromBaseMessage()`, `AsyncQueue`, `createServerEntrypoint()`
+    - **Cogni (uses ALS):** `CogniCompletionAdapter`, `runWithCogniExecContext()`, `getCogniExecContext()`, `hasCogniExecContext()`, `toLangChainToolsFromContext()`, `createCogniEntrypoint()`
+    - `CogniExecContext` — Runtime context type (completionFn, tokenSink, toolExecFn; NO model per #35)
   - `@cogni/langgraph-graphs/graphs` — Graph factories and shared types:
     - `createPoetGraph()`, `createPondererGraph()` — React agent factories
     - `POET_GRAPH_NAME`, `PONDERER_GRAPH_NAME` — Graph name constants

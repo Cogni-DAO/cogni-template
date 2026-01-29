@@ -52,7 +52,7 @@ export function isAiExecutionErrorCode(x: unknown): x is AiExecutionErrorCode {
 
 /**
  * Error class that carries a structured AiExecutionErrorCode.
- * Used by CompletionUnitLLM and other layers to propagate error codes
+ * Used by CogniCompletionAdapter and other layers to propagate error codes
  * without losing type information through the call chain.
  */
 export class AiExecutionError extends Error {

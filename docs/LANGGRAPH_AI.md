@@ -12,7 +12,7 @@
 | **Package structure**   | ✅ Implemented | ai-core, ai-tools, langgraph-graphs                                  |
 | **Compiled exports**    | 📋 Contract    | Graphs export `compile()` with no args                               |
 | **TOOL_CATALOG**        | 📋 Contract    | Canonical registry in `ai-tools`; wrapper checks `toolIds` allowlist |
-| **ALS runtime context** | 📋 Contract    | `getInProcRuntime()` per-run isolation                               |
+| **ALS runtime context** | 📋 Contract    | `getCogniExecContext()` per-run isolation                            |
 
 > See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) for authoritative invariants and implementation status.
 
@@ -68,11 +68,16 @@ packages/
         │       ├── inproc.ts         # Next.js entrypoint
         │       └── prompts.ts        # System prompts
         └── runtime/                  # Runtime utilities
-            ├── completion-unit-llm.ts # CompletionUnitLLM (Runnable-based; model from configurable, deps from ALS)
-            ├── inproc-runtime.ts     # AsyncLocalStorage context
-            ├── server-entrypoint.ts  # createServerEntrypoint() helper (sync)
-            ├── inproc-entrypoint.ts  # createInProcEntrypoint() helper (sync)
-            └── langchain-tools.ts    # makeLangChainTools (core) + toLangChainToolsServer/InProc
+            ├── core/                 # Generic (no ALS)
+            │   ├── async-queue.ts
+            │   ├── message-converters.ts
+            │   ├── langchain-tools.ts   # makeLangChainTools, toLangChainToolsCaptured
+            │   └── server-entrypoint.ts
+            └── cogni/                # Cogni executor (uses ALS)
+                ├── exec-context.ts      # CogniExecContext, runWithCogniExecContext
+                ├── completion-adapter.ts # CogniCompletionAdapter (Runnable-based)
+                ├── tools.ts             # toLangChainToolsFromContext
+                └── entrypoint.ts        # createCogniEntrypoint
 ```
 
 **Supported import surface:**
@@ -83,7 +88,7 @@ import { poetGraph, pondererGraph } from "@cogni/langgraph-graphs/graphs";
 
 // Runtime utilities
 import {
-  CompletionUnitLLM,
+  CogniCompletionAdapter,
   toBaseMessage,
 } from "@cogni/langgraph-graphs/runtime";
 ```
@@ -169,15 +174,15 @@ InProc executes LangGraph within the Next.js server runtime with billing through
                               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │ Compiled Graph (packages/langgraph-graphs/src/graphs/*)             │
-│ - Accesses runtime via getInProcRuntime()                           │
-│ - LLM calls route through CompletionUnitLLM                         │
+│ - Accesses runtime via getCogniExecContext()                        │
+│ - LLM calls route through CogniCompletionAdapter                    │
 │ - Tools resolved by toolIds via ToolRegistry                        │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### CompletionUnitLLM
+### CogniCompletionAdapter
 
-`CompletionUnitLLM` (`runtime/completion-unit-llm.ts`) is a `Runnable`-based wrapper that routes LLM calls through the ALS-provided `CompletionFn` for billing/streaming integration.
+`CogniCompletionAdapter` (`runtime/cogni/completion-adapter.ts`) is a `Runnable`-based wrapper that routes LLM calls through the ALS-provided `CompletionFn` for billing/streaming integration.
 
 **Key design:**
 
@@ -193,8 +198,8 @@ The provider sets up ALS context before graph invocation. Per #35 NO_MODEL_IN_AL
 
 **Files:**
 
-- `runtime/inproc-runtime.ts` — `InProcRuntime` interface, `runWithInProcContext()`, `getInProcRuntime()`
-- `runtime/completion-unit-llm.ts` — `CompletionUnitLLM` implementation
+- `runtime/cogni/exec-context.ts` — `CogniExecContext` interface, `runWithCogniExecContext()`, `getCogniExecContext()`
+- `runtime/cogni/completion-adapter.ts` — `CogniCompletionAdapter` implementation
 
 ---
 
@@ -270,11 +275,11 @@ export const myAgent = createServerEntrypoint(
 
 ```typescript
 // packages/langgraph-graphs/src/graphs/my-agent/inproc.ts
-import { createInProcEntrypoint } from "../../runtime/inproc-entrypoint";
+import { createCogniEntrypoint } from "../../runtime/cogni/entrypoint";
 import { createMyAgentGraph, MY_AGENT_GRAPH_NAME } from "./graph";
 
-// createInProcEntrypoint is SYNC — creates no-arg CompletionUnitLLM (reads ALS at invoke time)
-export const myAgentGraph = createInProcEntrypoint(
+// createCogniEntrypoint is SYNC — creates no-arg CogniCompletionAdapter (reads ALS at invoke time)
+export const myAgentGraph = createCogniEntrypoint(
   MY_AGENT_GRAPH_NAME,
   createMyAgentGraph
 );
@@ -315,7 +320,7 @@ export { myAgentGraph } from "./my-agent/inproc";
 Both paths use the same factory (`graph.ts`) and invoke signature (`{ configurable }`). Entrypoints differ by LLM wiring:
 
 - `server.ts` — For `langgraph dev`: top-level await builds LLM via `initChatModel`; helper is sync
-- `inproc.ts` — For Next.js: no-arg `CompletionUnitLLM` (reads `model` from `configurable`, deps from ALS at invoke time)
+- `inproc.ts` — For Next.js: no-arg `CogniCompletionAdapter` (reads `model` from `configurable`, deps from ALS at invoke time)
 
 Entrypoint logic is centralized in shared helpers. See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) invariants #33-34.
 
@@ -388,14 +393,14 @@ Server path deferred until InProc proves correctness. See [LANGGRAPH_SERVER.md](
 
 1. **No `@langchain` imports in `src/`** — All LangChain code in `packages/langgraph-graphs/`
 2. **No hardcoded models in graphs** — Model comes from ALS (provider sets from `configurable.model`)
-3. **No direct `ChatOpenAI` in InProc** — Use `CompletionUnitLLM` wrapper for billing
+3. **No direct `ChatOpenAI` in InProc** — Use `CogniCompletionAdapter` wrapper for billing
 4. **No tool instances in configurable** — Pass `toolIds`, resolve via registry
 5. **No constructor args on graph exports** — Graphs compile with no args; runtime config via `configurable`
 6. **No env reads in package exports** — Use `AsyncLocalStorage` context
 7. **No `await` in token sink** — `tokenSink.push()` must be synchronous
 8. **No `streamEvents()` for InProc** — Use `invoke()` + AsyncQueue
 9. **No forked tool wrapper logic** — Single `makeLangChainTools` impl; thin wrappers resolve `toolExecFn` differently
-10. **No constructor args on `CompletionUnitLLM`** — No-arg constructor; reads model from `configurable` and deps from ALS at invoke time
+10. **No constructor args on `CogniCompletionAdapter`** — No-arg constructor; reads model from `configurable` and deps from ALS at invoke time
 
 ---
 
