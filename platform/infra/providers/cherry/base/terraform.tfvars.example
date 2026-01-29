@@ -10,7 +10,7 @@ domain = "canary.cognidao.org"
 # Optional overrides (defaults are shown)
 # region = "LT-Siauliai"
 # image = "ubuntu_22_04"  
-# plan = "B1-1-1gb-20s-shared"
+# plan = "B1-2-2gb-40s-shared"
 # hostname = "cogni-canary"
 # public_key_path = "~/.ssh/id_rsa.pub"
 
