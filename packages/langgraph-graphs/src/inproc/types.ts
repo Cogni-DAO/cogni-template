@@ -27,8 +27,8 @@ import type {
   CompletionFn,
   CompletionResult,
   ToolCall,
-} from "../runtime/completion-unit-llm";
-import type { Message } from "../runtime/message-converters";
+} from "../runtime/cogni/completion-adapter";
+import type { Message } from "../runtime/core/message-converters";
 
 // Re-export for convenience
 export type { CompletionFn, CompletionResult, Message, ToolCall };
@@ -77,7 +77,7 @@ export interface InProcGraphRequest {
   /**
    * RunnableConfig.configurable passed to graph.invoke().
    * Per UNIFIED_INVOKE_SIGNATURE: same shape for server and inproc.
-   * - model: required for CompletionUnitLLM (reads via configurable.model)
+   * - model: required for CogniCompletionAdapter (reads via configurable.model)
    * - toolIds: required for TOOLS_DENY_BY_DEFAULT
    * Provider is responsible for populating this from GraphRunConfig.
    */

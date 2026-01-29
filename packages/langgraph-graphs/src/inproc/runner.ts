@@ -21,15 +21,16 @@
 
 import { type AiEvent, normalizeErrorToExecutionCode } from "@cogni/ai-core";
 import type { BaseMessage } from "@langchain/core/messages";
-
-import { AsyncQueue } from "../runtime/async-queue";
 import {
+  CogniCompletionAdapter,
   type CompletionFn,
-  CompletionUnitLLM,
-} from "../runtime/completion-unit-llm";
-import { runWithInProcContext } from "../runtime/inproc-runtime";
-import { toLangChainToolsServer } from "../runtime/langchain-tools";
-import { toBaseMessage } from "../runtime/message-converters";
+  runWithCogniExecContext,
+} from "../runtime/cogni";
+import {
+  AsyncQueue,
+  toBaseMessage,
+  toLangChainToolsCaptured,
+} from "../runtime/core";
 
 import type { GraphResult, InProcRunnerOptions } from "./types";
 
@@ -115,11 +116,11 @@ export function createInProcGraphRunner<TTool = unknown>(
   const tokenSink = { push: emit };
   const toolExecFn = createToolExecFn(emit);
 
-  // Create no-arg CompletionUnitLLM (reads from ALS + configurable at invoke time)
-  const llm = new CompletionUnitLLM();
+  // Create no-arg CogniCompletionAdapter (reads from ALS + configurable at invoke time)
+  const llm = new CogniCompletionAdapter();
 
-  // Use toLangChainToolsServer since runner provides toolExecFn directly (not from ALS)
-  const tools = toLangChainToolsServer({
+  // Use toLangChainToolsCaptured since runner provides toolExecFn directly (not from ALS)
+  const tools = toLangChainToolsCaptured({
     contracts: toolContracts,
     toolExecFn,
   });
@@ -134,7 +135,7 @@ export function createInProcGraphRunner<TTool = unknown>(
       // Set up ALS context and invoke graph
       // Per #35 NO_MODEL_IN_ALS: model comes from configurable, not ALS
       // Per #36 ALS_ONLY_FOR_NON_SERIALIZABLE_DEPS: ALS holds only completionFn, tokenSink, toolExecFn
-      const result = await runWithInProcContext(
+      const result = await runWithCogniExecContext(
         {
           completionFn: completionFn as CompletionFn<unknown>,
           tokenSink,

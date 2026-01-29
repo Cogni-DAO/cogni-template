@@ -20,8 +20,8 @@ import { type CatalogBoundTool, TOOL_CATALOG } from "@cogni/ai-tools";
 import { initChatModel } from "langchain/chat_models/universal";
 
 import { LANGGRAPH_CATALOG } from "../../catalog";
-import { createDevToolExecFn } from "../../runtime/dev-tool-exec";
-import { toLangChainTools } from "../../runtime/langchain-tools";
+import { createDevToolExecFn } from "../../runtime/core/dev-tool-exec";
+import { toLangChainToolsCaptured } from "../../runtime/core/langchain-tools";
 
 import { createPondererGraph, PONDERER_GRAPH_NAME } from "./graph";
 
@@ -70,9 +70,9 @@ const devToolExecFn = createDevToolExecFn(boundTools);
  * Per TOOL_CONFIG_PROPAGATION: Wrapper checks configurable.toolIds at runtime.
  */
 const toolContracts = Object.values(boundTools).map((bt) => bt.contract);
-const tools = toLangChainTools({
+const tools = toLangChainToolsCaptured({
   contracts: toolContracts,
-  exec: devToolExecFn,
+  toolExecFn: devToolExecFn,
 });
 
 /**

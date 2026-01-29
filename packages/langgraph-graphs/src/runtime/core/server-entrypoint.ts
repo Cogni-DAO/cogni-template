@@ -2,13 +2,13 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/langgraph-graphs/runtime/server-entrypoint`
+ * Module: `@cogni/langgraph-graphs/runtime/core/server-entrypoint`
  * Purpose: Shared helper for creating langgraph dev server entrypoints.
  * Scope: Wires LLM + tools to graph factory. Does NOT read env (caller does top-level await).
  * Invariants:
  *   - SYNC_ENTRYPOINT: This function is sync; async LLM init happens in caller via top-level await
  *   - NO_PER_GRAPH_ENTRYPOINT_WIRING: All server entrypoints use this shared helper
- *   - TOOLS_VIA_TOOLRUNNER: Tools use toLangChainToolsServer which captures toolExecFn
+ *   - TOOLS_VIA_TOOLRUNNER: Tools use toLangChainToolsCaptured which captures toolExecFn
  * Side-effects: none
  * Links: LANGGRAPH_AI.md, GRAPH_EXECUTION.md
  * @public
@@ -18,15 +18,15 @@ import { type CatalogBoundTool, TOOL_CATALOG } from "@cogni/ai-tools";
 import type { BaseChatModel } from "@langchain/core/language_models/chat_models";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 
-import { LANGGRAPH_CATALOG } from "../catalog";
+import { LANGGRAPH_CATALOG } from "../../catalog";
 import type {
   CreateReactAgentGraphOptions,
   InvokableGraph,
   MessageGraphInput,
   MessageGraphOutput,
-} from "../graphs/types";
+} from "../../graphs/types";
 import { createDevToolExecFn } from "./dev-tool-exec";
-import { toLangChainToolsServer } from "./langchain-tools";
+import { toLangChainToolsCaptured } from "./langchain-tools";
 
 /**
  * Options for createServerEntrypoint.
@@ -98,9 +98,9 @@ export function createServerEntrypoint<
   // Create tool exec function for dev server
   const devToolExecFn = createDevToolExecFn(boundTools);
 
-  // Convert to LangChain tools (server wrapper captures toolExecFn)
+  // Convert to LangChain tools (captured wrapper captures toolExecFn)
   const toolContracts = Object.values(boundTools).map((bt) => bt.contract);
-  const tools: StructuredToolInterface[] = toLangChainToolsServer({
+  const tools: StructuredToolInterface[] = toLangChainToolsCaptured({
     contracts: toolContracts,
     toolExecFn: devToolExecFn,
   });

@@ -2,14 +2,14 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/langgraph-graphs/runtime/langchain-tools`
+ * Module: `@cogni/langgraph-graphs/runtime/core/langchain-tools`
  * Purpose: Convert @cogni/ai-tools contracts to LangChain StructuredTool format.
  * Scope: Tool wrappers that delegate to exec function resolved at invocation time. Does NOT execute tools directly.
  * Invariants:
  *   - TOOLS_VIA_TOOLRUNNER: All tool calls delegate to toolRunner.exec()
  *   - TOOLS_DENY_BY_DEFAULT: If toolIds missing or tool not in list, return policy_denied
  *   - TOOL_CONFIG_PROPAGATION: LangChain tool func receives config param for authorization
- *   - SINGLE_IMPLEMENTATION: makeLangChainTools is the single core; two thin wrappers for server/inproc
+ *   - SINGLE_IMPLEMENTATION: makeLangChainTools is the single core impl
  *   - Uses contract.inputSchema directly (no separate schema param)
  * Side-effects: none
  * Links: TOOL_USE_SPEC.md, LANGGRAPH_AI.md
@@ -25,15 +25,13 @@ import {
 } from "@langchain/core/tools";
 import type { z } from "zod";
 
-import { getInProcRuntime } from "./inproc-runtime";
-
 // Re-export canonical types for consumers (per TOOL_EXEC_TYPES_IN_AI_CORE)
 export type { ToolExecFn, ToolExecResult } from "@cogni/ai-core";
 
 /**
  * Resolver that provides ToolExecFn at tool invocation time.
- * - Server: returns captured toolExecFn
- * - InProc: reads from ALS
+ * - Captured: returns toolExecFn captured at bind time
+ * - FromContext: reads from ALS at invocation time
  */
 export type ExecResolver = (config?: RunnableConfig) => ToolExecFn;
 
@@ -171,13 +169,13 @@ export function makeLangChainTools(
 }
 
 // ============================================================================
-// Thin Wrappers (server and inproc)
+// Thin Wrapper (captured exec at bind time)
 // ============================================================================
 
 /**
- * Options for toLangChainToolsServer.
+ * Options for toLangChainToolsCaptured.
  */
-export interface ToLangChainToolsServerOptions {
+export interface ToLangChainToolsCapturedOptions {
   /** Array of tool contracts */
   readonly contracts: ReadonlyArray<
     ToolContract<string, unknown, unknown, unknown>
@@ -187,100 +185,18 @@ export interface ToLangChainToolsServerOptions {
 }
 
 /**
- * Server wrapper: Convert tool contracts to LangChain tools.
- * Captures toolExecFn at bind time — used by langgraph dev server.
+ * Captured wrapper: Convert tool contracts to LangChain tools.
+ * Captures toolExecFn at bind time — used when exec is known upfront.
  *
  * @param opts - Options with contracts and toolExecFn
  * @returns Array of LangChain StructuredToolInterface
  */
-export function toLangChainToolsServer(
-  opts: ToLangChainToolsServerOptions
+export function toLangChainToolsCaptured(
+  opts: ToLangChainToolsCapturedOptions
 ): StructuredToolInterface[] {
   const { contracts, toolExecFn } = opts;
   return makeLangChainTools({
     contracts,
     execResolver: () => toolExecFn, // captured at bind time
-  });
-}
-
-/**
- * Options for toLangChainToolsInProc.
- */
-export interface ToLangChainToolsInProcOptions {
-  /** Array of tool contracts */
-  readonly contracts: ReadonlyArray<
-    ToolContract<string, unknown, unknown, unknown>
-  >;
-}
-
-/**
- * InProc wrapper: Convert tool contracts to LangChain tools.
- * Reads toolExecFn from ALS at invocation time — used by Next.js inproc path.
- *
- * @param opts - Options with contracts
- * @returns Array of LangChain StructuredToolInterface
- */
-export function toLangChainToolsInProc(
-  opts: ToLangChainToolsInProcOptions
-): StructuredToolInterface[] {
-  const { contracts } = opts;
-  return makeLangChainTools({
-    contracts,
-    execResolver: () => getInProcRuntime().toolExecFn, // read from ALS at invocation
-  });
-}
-
-// ============================================================================
-// Deprecated APIs (for backwards compatibility during migration)
-// ============================================================================
-
-/**
- * Options for toLangChainTool().
- * @deprecated Use makeLangChainTool with execResolver instead
- */
-export interface ToLangChainToolOptions {
-  /** Tool contract from @cogni/ai-tools (includes inputSchema) */
-  readonly contract: ToolContract<string, unknown, unknown, unknown>;
-  /** Exec function that runs through toolRunner */
-  readonly exec: ToolExecFn;
-}
-
-/**
- * Convert a tool contract to a LangChain StructuredToolInterface.
- * @deprecated Use toLangChainToolsServer or toLangChainToolsInProc instead
- */
-export function toLangChainTool(
-  opts: ToLangChainToolOptions
-): StructuredToolInterface {
-  const { contract, exec } = opts;
-  return makeLangChainTool({
-    contract,
-    execResolver: () => exec,
-  });
-}
-
-/**
- * Options for toLangChainTools().
- * @deprecated Use toLangChainToolsServer or toLangChainToolsInProc instead
- */
-export interface ToLangChainToolsOptions {
-  /** Array of tool contracts */
-  readonly contracts: ReadonlyArray<
-    ToolContract<string, unknown, unknown, unknown>
-  >;
-  /** Exec function for all tools */
-  readonly exec: ToolExecFn;
-}
-
-/**
- * Convert multiple tool contracts to LangChain StructuredToolInterface[].
- * @deprecated Use toLangChainToolsServer or toLangChainToolsInProc instead
- */
-export function toLangChainTools(
-  opts: ToLangChainToolsOptions
-): StructuredToolInterface[] {
-  return toLangChainToolsServer({
-    contracts: opts.contracts,
-    toolExecFn: opts.exec,
   });
 }

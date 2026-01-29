@@ -2,14 +2,14 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/langgraph-graphs/runtime/inproc-entrypoint`
- * Purpose: Shared helper for creating Next.js inproc entrypoints.
- * Scope: Wires no-arg CompletionUnitLLM + ALS-bound tools to graph factory. Does NOT read env or call providers directly.
+ * Module: `@cogni/langgraph-graphs/runtime/cogni/entrypoint`
+ * Purpose: Shared helper for creating Cogni executor entrypoints.
+ * Scope: Wires no-arg CogniCompletionAdapter + ALS-bound tools to graph factory. Does NOT read env or call providers directly.
  * Invariants:
  *   - SYNC_ENTRYPOINT: This function is sync
- *   - NO_PER_GRAPH_ENTRYPOINT_WIRING: All inproc entrypoints use this shared helper
- *   - NO_CONSTRUCTOR_ARGS: Uses no-arg CompletionUnitLLM (reads from ALS at invoke)
- *   - TOOLS_VIA_ALS: Tools use toLangChainToolsInProc which reads toolExecFn from ALS
+ *   - NO_PER_GRAPH_ENTRYPOINT_WIRING: All Cogni entrypoints use this shared helper
+ *   - NO_CONSTRUCTOR_ARGS: Uses no-arg CogniCompletionAdapter (reads from ALS at invoke)
+ *   - TOOLS_VIA_ALS: Tools use toLangChainToolsFromContext which reads toolExecFn from ALS
  * Side-effects: none
  * Links: LANGGRAPH_AI.md, GRAPH_EXECUTION.md
  * @public
@@ -18,25 +18,25 @@
 import { type CatalogBoundTool, TOOL_CATALOG } from "@cogni/ai-tools";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 
-import { LANGGRAPH_CATALOG } from "../catalog";
+import { LANGGRAPH_CATALOG } from "../../catalog";
 import type {
   CreateReactAgentGraphOptions,
   InvokableGraph,
   MessageGraphInput,
   MessageGraphOutput,
-} from "../graphs/types";
-import { CompletionUnitLLM } from "./completion-unit-llm";
-import { toLangChainToolsInProc } from "./langchain-tools";
+} from "../../graphs/types";
+import { CogniCompletionAdapter } from "./completion-adapter";
+import { toLangChainToolsFromContext } from "./tools";
 
 /**
- * Create an inproc entrypoint for Next.js.
+ * Create a Cogni executor entrypoint.
  *
  * Per SYNC_ENTRYPOINT: This function is sync.
  *
- * Per NO_CONSTRUCTOR_ARGS: Creates no-arg CompletionUnitLLM that reads
+ * Per NO_CONSTRUCTOR_ARGS: Creates no-arg CogniCompletionAdapter that reads
  * completionFn/tokenSink from ALS and model from configurable at invoke time.
  *
- * Per TOOLS_VIA_ALS: Tools use toLangChainToolsInProc which reads
+ * Per TOOLS_VIA_ALS: Tools use toLangChainToolsFromContext which reads
  * toolExecFn from ALS at invocation time.
  *
  * Per NO_PER_GRAPH_ENTRYPOINT_WIRING: All inproc.ts files use this helper
@@ -49,13 +49,13 @@ import { toLangChainToolsInProc } from "./langchain-tools";
  * @example
  * ```typescript
  * // packages/langgraph-graphs/src/graphs/poet/inproc.ts
- * import { createInProcEntrypoint } from "../../runtime/inproc-entrypoint";
+ * import { createCogniEntrypoint } from "../../runtime/cogni/entrypoint";
  * import { createPoetGraph, POET_GRAPH_NAME } from "./graph";
  *
- * export const poetGraph = createInProcEntrypoint(POET_GRAPH_NAME, createPoetGraph);
+ * export const poetGraph = createCogniEntrypoint(POET_GRAPH_NAME, createPoetGraph);
  * ```
  */
-export function createInProcEntrypoint<
+export function createCogniEntrypoint<
   TIn extends MessageGraphInput = MessageGraphInput,
   TOut extends MessageGraphOutput = MessageGraphOutput,
 >(
@@ -66,7 +66,7 @@ export function createInProcEntrypoint<
   const catalogEntry = LANGGRAPH_CATALOG[graphName];
   if (!catalogEntry) {
     throw new Error(
-      `[createInProcEntrypoint] Catalog entry not found for graph: ${graphName}`
+      `[createCogniEntrypoint] Catalog entry not found for graph: ${graphName}`
     );
   }
 
@@ -80,12 +80,12 @@ export function createInProcEntrypoint<
         )
     );
 
-  // Create no-arg CompletionUnitLLM (reads from ALS + configurable at invoke)
-  const llm = new CompletionUnitLLM();
+  // Create no-arg CogniCompletionAdapter (reads from ALS + configurable at invoke)
+  const llm = new CogniCompletionAdapter();
 
-  // Convert to LangChain tools (inproc wrapper reads toolExecFn from ALS)
+  // Convert to LangChain tools (context wrapper reads toolExecFn from ALS)
   const toolContracts = Object.values(boundTools).map((bt) => bt.contract);
-  const tools: StructuredToolInterface[] = toLangChainToolsInProc({
+  const tools: StructuredToolInterface[] = toLangChainToolsFromContext({
     contracts: toolContracts,
   });
 

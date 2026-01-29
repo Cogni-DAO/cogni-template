@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/langgraph-graphs/runtime/completion-unit-llm`
- * Purpose: Runnable-based LLM wrapper that routes calls through ALS-provided CompletionFn.
+ * Module: `@cogni/langgraph-graphs/runtime/cogni/completion-adapter`
+ * Purpose: Runnable-based adapter that routes LLM calls through Cogni's ALS-provided CompletionFn.
  * Scope: Enables billing/streaming integration via executeCompletionUnit pattern. Does not call LLM providers directly.
  * Invariants:
  *   - NO_MODEL_IN_ALS (#35): Model read from config.configurable.model, never ALS
@@ -27,9 +27,8 @@ import { AIMessage } from "@langchain/core/messages";
 import type { RunnableConfig } from "@langchain/core/runnables";
 import { Runnable } from "@langchain/core/runnables";
 import { convertToOpenAITool } from "@langchain/core/utils/function_calling";
-
-import { getInProcRuntime } from "./inproc-runtime";
-import { fromBaseMessage, type Message } from "./message-converters";
+import { fromBaseMessage, type Message } from "../core/message-converters";
+import { getCogniExecContext } from "./exec-context";
 
 /** OpenAI tool format - matches LlmToolDefinition in ports */
 type OpenAIToolDef = ReturnType<typeof convertToOpenAITool>;
@@ -93,7 +92,7 @@ export interface TokenSink {
  * Extended RunnableConfig with our configurable fields.
  * Model comes from configurable per #35/#37.
  */
-interface CompletionUnitConfig extends RunnableConfig {
+interface CogniCompletionConfig extends RunnableConfig {
   configurable?: {
     model?: string;
     toolIds?: readonly string[];
@@ -102,19 +101,19 @@ interface CompletionUnitConfig extends RunnableConfig {
 }
 
 /**
- * Internal config for CompletionUnitLLM.
+ * Internal config for CogniCompletionAdapter.
  * Only used by bindTools() to pass tools to new instance.
  * @internal
  */
-interface CompletionUnitLLMConfig {
+interface CogniCompletionAdapterConfig {
   readonly boundTools?: OpenAIToolDef[];
 }
 
 /**
- * Runnable-based LLM that routes through ALS-provided CompletionFn.
+ * Cogni completion adapter that routes LLM calls through ALS-provided CompletionFn.
  *
- * This wrapper enables:
- * - Billing integration via adapter's executeCompletionUnit
+ * This adapter enables:
+ * - Billing integration via Cogni's executeCompletionUnit
  * - Token streaming to queue via tokenSink from ALS
  * - Model selection via configurable (not ALS)
  *
@@ -123,14 +122,14 @@ interface CompletionUnitLLMConfig {
  *
  * Usage tracking is handled by the runner (per-run aggregation), not this class.
  */
-export class CompletionUnitLLM extends Runnable<BaseMessage[], AIMessage> {
+export class CogniCompletionAdapter extends Runnable<BaseMessage[], AIMessage> {
   /** Bound tools in OpenAI format, set via bindTools() */
   private readonly _boundTools?: OpenAIToolDef[];
 
   lc_namespace = ["cogni", "langgraph"];
 
   static lc_name(): string {
-    return "CompletionUnitLLM";
+    return "CogniCompletionAdapter";
   }
 
   /**
@@ -143,15 +142,15 @@ export class CompletionUnitLLM extends Runnable<BaseMessage[], AIMessage> {
   }
 
   /**
-   * Create a CompletionUnitLLM instance.
+   * Create a CogniCompletionAdapter instance.
    *
    * No completionFn/tokenSink/model params — these are read at invoke time:
    * - model: from config.configurable.model (per #35/#37)
-   * - completionFn, tokenSink: from ALS via getInProcRuntime()
+   * - completionFn, tokenSink: from ALS via getCogniExecContext()
    *
    * @param config - Internal config (only used by bindTools)
    */
-  constructor(config?: CompletionUnitLLMConfig) {
+  constructor(config?: CogniCompletionAdapterConfig) {
     super({});
     this._boundTools = config?.boundTools;
   }
@@ -168,20 +167,20 @@ export class CompletionUnitLLM extends Runnable<BaseMessage[], AIMessage> {
    */
   async invoke(
     messages: BaseMessage[],
-    config?: CompletionUnitConfig
+    config?: CogniCompletionConfig
   ): Promise<AIMessage> {
     // Read model from configurable (per #35/#37)
     const model = config?.configurable?.model;
     if (!model) {
       throw new Error(
-        "[CompletionUnitLLM] config.configurable.model is required. " +
+        "[CogniCompletionAdapter] config.configurable.model is required. " +
           "Ensure graph is invoked with { configurable: { model: '...' } }."
       );
     }
 
-    // Read runtime from ALS (throws if missing per THROWS_FAST_IF_MISSING)
-    const runtime = getInProcRuntime();
-    const { completionFn, tokenSink } = runtime;
+    // Read context from ALS (throws if missing per THROWS_FAST_IF_MISSING)
+    const context = getCogniExecContext();
+    const { completionFn, tokenSink } = context;
 
     // Convert LangChain messages to app format
     const appMessages = messages.map(fromBaseMessage);
@@ -233,7 +232,7 @@ export class CompletionUnitLLM extends Runnable<BaseMessage[], AIMessage> {
       tool_calls: result.toolCalls?.map((tc, i) => {
         if (!tc.function?.name) {
           throw new Error(
-            `[CompletionUnitLLM] missing toolCall function.name at index ${i}`
+            `[CogniCompletionAdapter] missing toolCall function.name at index ${i}`
           );
         }
         return {
@@ -250,18 +249,18 @@ export class CompletionUnitLLM extends Runnable<BaseMessage[], AIMessage> {
   }
 
   /**
-   * Bind tools to this model instance.
+   * Bind tools to this adapter instance.
    * Converts LangChain tools to OpenAI format and returns a new instance.
    *
    * Per #35/#37: model is NOT captured here — always read from configurable in invoke().
    */
-  bindTools(tools: unknown[]): CompletionUnitLLM {
+  bindTools(tools: unknown[]): CogniCompletionAdapter {
     // Convert LangChain tools to OpenAI function-calling format
     const openAITools = tools.map((tool) =>
       convertToOpenAITool(tool as Parameters<typeof convertToOpenAITool>[0])
     );
     // Return new instance with tools bound (immutable pattern per LangChain convention)
     // Model is NOT captured — always read from configurable at invoke time
-    return new CompletionUnitLLM({ boundTools: openAITools });
+    return new CogniCompletionAdapter({ boundTools: openAITools });
   }
 }

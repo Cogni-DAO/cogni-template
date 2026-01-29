@@ -4,64 +4,60 @@
 /**
  * Module: `@cogni/langgraph-graphs/runtime`
  * Purpose: LangChain runtime utilities for graph execution.
- * Scope: Message converters, tool wrappers, LLM wrapper, async queue, entrypoint helpers. Does NOT contain graph definitions.
+ * Scope: Re-exports from core/ (generic) and cogni/ (Cogni executor-specific). Does NOT contain implementation logic.
  * Invariants:
- *   - All LangChain imports contained here
- *   - Utilities are pure functions (no side effects)
- *   - CompletionUnitLLM reads from ALS + configurable (no constructor args)
- *   - Tool wrappers: single impl (makeLangChainTools) + two thin wrappers
+ *   - CORE_NO_ALS: core/ modules have no ALS dependencies
+ *   - COGNI_USES_ALS: cogni/ modules use CogniExecContext (AsyncLocalStorage)
  * Side-effects: none
  * Links: LANGGRAPH_AI.md, TOOL_USE_SPEC.md
  * @public
  */
 
-// Async queue for streaming
-export { AsyncQueue } from "./async-queue";
+// ============================================================================
+// Core (generic, no ALS)
+// ============================================================================
 
-// CompletionUnitLLM wrapper (no-arg; reads from ALS + configurable)
 export {
-  type CompletionFn,
-  type CompletionResult,
-  CompletionUnitLLM,
-} from "./completion-unit-llm";
-export { createInProcEntrypoint } from "./inproc-entrypoint";
-// InProc runtime context (ALS-based)
-export {
-  getInProcRuntime,
-  hasInProcRuntime,
-  type InProcRuntime,
-  runWithInProcContext,
-} from "./inproc-runtime";
-// Tool wrappers: core impl + thin wrappers
-export {
-  // Core implementation
-  type ExecResolver,
-  type MakeLangChainToolOptions,
-  type MakeLangChainToolsOptions,
-  makeLangChainTool,
-  makeLangChainTools,
-  // Deprecated (for backwards compatibility)
-  type ToLangChainToolOptions,
-  // Thin wrappers
-  type ToLangChainToolsInProcOptions,
-  type ToLangChainToolsOptions,
-  type ToLangChainToolsServerOptions,
-  type ToolExecFn,
-  type ToolExecResult,
-  toLangChainTool,
-  toLangChainTools,
-  toLangChainToolsInProc,
-  toLangChainToolsServer,
-} from "./langchain-tools";
-// Message types and converters
-export {
-  fromBaseMessage,
-  type Message,
-  type MessageToolCall,
-  toBaseMessage,
-} from "./message-converters";
-// Entrypoint helpers (per NO_PER_GRAPH_ENTRYPOINT_WIRING)
-export {
+  // Async queue
+  AsyncQueue,
+  // Server entrypoint helper
   type CreateServerEntrypointOptions,
   createServerEntrypoint,
-} from "./server-entrypoint";
+  // Tool wrappers
+  type ExecResolver,
+  // Message types
+  fromBaseMessage,
+  type MakeLangChainToolOptions,
+  type MakeLangChainToolsOptions,
+  type Message,
+  type MessageToolCall,
+  makeLangChainTool,
+  makeLangChainTools,
+  type ToLangChainToolsCapturedOptions,
+  type ToolExecFn,
+  type ToolExecResult,
+  toBaseMessage,
+  toLangChainToolsCaptured,
+} from "./core";
+
+// ============================================================================
+// Cogni executor-specific (uses ALS)
+// ============================================================================
+
+export {
+  // Completion adapter
+  CogniCompletionAdapter,
+  // Execution context
+  type CogniExecContext,
+  type CompletionFn,
+  type CompletionResult,
+  // Entrypoint helper
+  createCogniEntrypoint,
+  getCogniExecContext,
+  hasCogniExecContext,
+  runWithCogniExecContext,
+  type TokenSink,
+  type ToLangChainToolsFromContextOptions,
+  type ToolCall,
+  toLangChainToolsFromContext,
+} from "./cogni";

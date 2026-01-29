@@ -50,7 +50,7 @@ export type PoetGraph = InvokableGraph<MessageGraphInput, MessageGraphOutput>;
  *
  * @example
  * ```typescript
- * const llm = new CompletionUnitLLM(completionFn, "gpt-4");
+ * const llm = new CogniCompletionAdapter();
  * const tools = toLangChainTools({ contracts, exec: toolRunner.exec });
  * const graph = createPoetGraph({ llm, tools });
  *
