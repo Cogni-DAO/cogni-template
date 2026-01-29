@@ -135,8 +135,10 @@ Any new executor must answer:
 
 ## Related Docs
 
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — ONE_LEDGER_WRITER, UsageFact
-- [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) — LangGraph dev adapter
+- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — ONE_LEDGER_WRITER, UsageFact, invariants 41-47
+- [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) — LangGraph Server adapter (uses this pattern)
+- [CLAUDE_SDK_ADAPTER_SPEC.md](CLAUDE_SDK_ADAPTER_SPEC.md) — In-process adapter (does NOT use reconciliation)
+- [N8N_ADAPTER_SPEC.md](N8N_ADAPTER_SPEC.md) — External adapter (uses this pattern)
 - [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md) — Charge receipt schema
 
 ---
