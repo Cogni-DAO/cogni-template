@@ -60,12 +60,12 @@ packages/
         │   ├── poet/
         │   │   ├── graph.ts          # Pure factory: createPoetGraph({ llm, tools })
         │   │   ├── server.ts         # langgraph dev entrypoint (initChatModel)
-        │   │   ├── inproc.ts         # Next.js entrypoint (CompletionUnitModel reads configurable)
+        │   │   ├── cogni-exec.ts     # Cogni executor entrypoint (ALS-based)
         │   │   └── prompts.ts        # System prompts
         │   └── <agent>/
         │       ├── graph.ts          # Pure factory
         │       ├── server.ts         # langgraph dev entrypoint
-        │       ├── inproc.ts         # Next.js entrypoint
+        │       ├── cogni-exec.ts     # Cogni executor entrypoint
         │       └── prompts.ts        # System prompts
         └── runtime/                  # Runtime utilities
             ├── core/                 # Generic (no ALS)
@@ -219,10 +219,10 @@ Server path is deferred until InProc proves correctness. See [LANGGRAPH_SERVER.m
 
 ```
 packages/langgraph-graphs/src/graphs/my-agent/
-├── graph.ts      # Pure factory: createMyAgentGraph({ llm, tools })
-├── server.ts     # langgraph dev entrypoint (uses shared helper)
-├── inproc.ts     # Next.js entrypoint (uses shared helper)
-└── prompts.ts    # System prompt constant(s)
+├── graph.ts        # Pure factory: createMyAgentGraph({ llm, tools })
+├── server.ts       # langgraph dev entrypoint (uses shared helper)
+├── cogni-exec.ts   # Cogni executor entrypoint (uses shared helper)
+└── prompts.ts      # System prompt constant(s)
 ```
 
 ### 1. Create Pure Graph Factory
@@ -274,7 +274,7 @@ export const myAgent = createServerEntrypoint(
 ```
 
 ```typescript
-// packages/langgraph-graphs/src/graphs/my-agent/inproc.ts
+// packages/langgraph-graphs/src/graphs/my-agent/cogni-exec.ts
 import { createCogniEntrypoint } from "../../runtime/cogni/entrypoint";
 import { createMyAgentGraph, MY_AGENT_GRAPH_NAME } from "./graph";
 
@@ -285,11 +285,11 @@ export const myAgentGraph = createCogniEntrypoint(
 );
 ```
 
-### 3. Export Inproc Entrypoint from Barrel
+### 3. Export Cogni Entrypoint from Barrel
 
 ```typescript
 // packages/langgraph-graphs/src/graphs/index.ts
-export { myAgentGraph } from "./my-agent/inproc";
+export { myAgentGraph } from "./my-agent/cogni-exec";
 ```
 
 ### 3. Add Catalog Entry
@@ -320,7 +320,7 @@ export { myAgentGraph } from "./my-agent/inproc";
 Both paths use the same factory (`graph.ts`) and invoke signature (`{ configurable }`). Entrypoints differ by LLM wiring:
 
 - `server.ts` — For `langgraph dev`: top-level await builds LLM via `initChatModel`; helper is sync
-- `inproc.ts` — For Next.js: no-arg `CogniCompletionAdapter` (reads `model` from `configurable`, deps from ALS at invoke time)
+- `cogni-exec.ts` — For Cogni executor (Next.js): no-arg `CogniCompletionAdapter` (reads `model` from `configurable`, deps from ALS at invoke time)
 
 Entrypoint logic is centralized in shared helpers. See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) invariants #33-34.
 
