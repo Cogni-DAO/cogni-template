@@ -395,19 +395,35 @@ Refactor to GraphProvider + AggregatingGraphExecutor pattern. Enable multi-graph
 
 ### P1: Compiled Graph Execution
 
-Migrate graphs to pure factories + two entrypoints (server, inproc). Both invoke with `{ configurable: GraphRunConfig }`. Entrypoint logic is centralized in shared helpers per NO_PER_GRAPH_ENTRYPOINT_WIRING.
+Migrate graphs to pure factories + two entrypoints (server, cogni-exec). Both invoke with `{ configurable: GraphRunConfig }`. Entrypoint logic is centralized in shared helpers per NO_PER_GRAPH_ENTRYPOINT_WIRING.
+
+**Per-Graph File Structure:**
+
+```
+graphs/<name>/
+├── graph.ts        # Pure factory: createXGraph({ llm, tools })
+├── prompts.ts      # System prompt constant(s)
+├── server.ts       # ~1 line: await createServerEntrypoint("name")
+└── cogni-exec.ts   # ~1 line: createCogniEntrypoint("name")
+```
+
+**Entrypoint Invariants:**
+
+- **PURE_GRAPH_FACTORY**: `graph.ts` has no env/ALS/entrypoint wiring
+- **ENTRYPOINT_IS_THIN**: `server.ts` and `cogni-exec.ts` are ~1-liners calling shared helpers
+- **LANGGRAPH_JSON_POINTS_TO_SERVER_ONLY**: `langgraph.json` references `server.ts`, never `cogni-exec.ts`
+- **NO_CROSSING_THE_STREAMS**: `core/` never imports `runtime/cogni/`; `cogni-exec.ts` never uses `initChatModel`/env
 
 **Architecture:**
 
 ```
 graph.ts (pure factory)       → createXGraph({ llm, tools })
     ↓                                ↓
-server.ts (langgraph dev)     inproc.ts (Next.js)
+server.ts (langgraph dev)     cogni-exec.ts (Cogni executor)
     ↓                                ↓
-top-level await initChatModel  createInProcEntrypoint() [sync]
+await createServerEntrypoint()  createCogniEntrypoint() [sync]
     ↓                                ↓
-createServerEntrypoint() [sync]  CogniCompletionAdapter (Runnable)
-(receives pre-built LLM)        (model from configurable, deps from ALS)
+initChatModel + captured exec   CogniCompletionAdapter + ALS context
     ↓                                ↓
     └──────── graph.invoke(input, { configurable: { model, toolIds } }) ────────┘
 ```
@@ -449,14 +465,14 @@ createServerEntrypoint() [sync]  CogniCompletionAdapter (Runnable)
 - [x] `makeLangChainTools`: single core impl with `execResolver: (config) => ToolExecFn`; allowlist check via `configurable.toolIds`
 - [x] `toLangChainToolsCaptured({ contracts, toolExecFn })`: wrapper; execResolver returns captured `toolExecFn`
 - [x] `toLangChainToolsFromContext({ contracts })`: wrapper; execResolver reads `toolExecFn` from ALS
-- [x] Create `createServerEntrypoint()` helper (sync; receives pre-built LLM)
-- [x] Create `createCogniEntrypoint()` helper (sync; creates no-arg CogniCompletionAdapter)
-- [ ] `server.ts`: top-level await for `initChatModel`; call `createServerEntrypoint()`; export graph (not Promise)
-- [ ] `inproc.ts`: call `createInProcEntrypoint()`; export graph
-- [ ] Refactor `LangGraphInProcProvider` to use inproc entrypoints with ALS context
-- [ ] Verify billing: inproc path emits `usage_report` with `litellmCallId`/`costUsd`
-- [ ] Stack test: both entrypoints invoke with identical `{ configurable }` shape
-- [ ] Delete dev.ts; update `langgraph.json` to server.ts exports
+- [x] Create `createServerEntrypoint(graphName)` helper in `runtime/core/`
+- [x] Create `createCogniEntrypoint(graphName)` helper in `runtime/cogni/`
+- [x] Per-graph `server.ts`: `export const x = await createServerEntrypoint("name")`
+- [x] Per-graph `cogni-exec.ts`: `export const x = createCogniEntrypoint("name")`
+- [x] Delete `dev.ts` files; update `langgraph.json` to `server.ts` exports
+- [ ] Refactor Cogni provider to import from `cogni-exec.ts` entrypoints
+- [ ] Verify billing: cogni-exec path emits `usage_report` with `litellmCallId`/`costUsd`
+- [ ] Stack test: both entrypoints produce identical graph output for same input
 
 ### P1: Node-Keyed Model & Tool Configuration
 
