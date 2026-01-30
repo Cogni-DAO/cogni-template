@@ -7,11 +7,7 @@
     "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "composite": true,
-    "declaration": true,
-    "declarationMap": true,
-    "outDir": "dist",
-    "rootDir": "src"
+    "noEmit": true
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "__arch_probes__"]

@@ -4,34 +4,21 @@
 /**
  * Module: `@cogni/langgraph-graphs/graphs/ponderer/server`
  * Purpose: LangGraph dev server entrypoint for ponderer graph.
- * Scope: Top-level await for LLM init, delegates to shared helper. NOT for production.
+ * Scope: Thin entrypoint. Does NOT import catalog (type transparency for LangGraph CLI).
  * Invariants:
- *   - ENTRYPOINT_IS_THIN: Only LLM init + helper call
  *   - LANGGRAPH_JSON_POINTS_TO_SERVER_ONLY: Referenced by langgraph.json
- * Side-effects: process.env
+ *   - HELPERS_DO_NOT_IMPORT_CATALOG: Uses makeServerGraph with explicit toolIds
+ * Side-effects: process.env (via makeServerGraph)
  * Links: GRAPH_EXECUTION.md
  * @internal
  */
 
-import { initChatModel } from "langchain/chat_models/universal";
-
-import { createServerEntrypoint } from "../../runtime/core/server-entrypoint";
+import { makeServerGraph } from "../../runtime/core/make-server-graph";
 import { createPondererGraph, PONDERER_GRAPH_NAME } from "./graph";
+import { PONDERER_TOOL_IDS } from "./tools";
 
-// biome-ignore lint/style/noProcessEnv: Dev-only entrypoint
-const baseURL = process.env.LITELLM_BASE_URL ?? "http://localhost:4000";
-// biome-ignore lint/style/noProcessEnv: Dev-only entrypoint
-const apiKey = process.env.LITELLM_MASTER_KEY ?? "dev-key";
-
-const llm = await initChatModel(undefined, {
-  configurableFields: ["model"],
-  modelProvider: "openai",
-  configuration: { baseURL },
-  apiKey,
+export const ponderer = await makeServerGraph({
+  name: PONDERER_GRAPH_NAME,
+  createGraph: createPondererGraph,
+  toolIds: PONDERER_TOOL_IDS,
 });
-
-export const ponderer = createServerEntrypoint(
-  PONDERER_GRAPH_NAME,
-  createPondererGraph,
-  { llm }
-);

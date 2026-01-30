@@ -28,7 +28,8 @@ export {
   type ToolExecResult,
   toLangChainToolsCaptured,
 } from "./langchain-tools";
-
+// Server graph helper (for langgraph dev)
+export { makeServerGraph } from "./make-server-graph";
 // Message types and converters
 export {
   fromBaseMessage,
@@ -36,9 +37,3 @@ export {
   type MessageToolCall,
   toBaseMessage,
 } from "./message-converters";
-
-// Server entrypoint helper (for langgraph dev)
-export {
-  type CreateServerEntrypointOptions,
-  createServerEntrypoint,
-} from "./server-entrypoint";

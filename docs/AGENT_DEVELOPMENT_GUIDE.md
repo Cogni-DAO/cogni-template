@@ -10,30 +10,33 @@
 packages/langgraph-graphs/src/graphs/<name>/
 ├── graph.ts        # Pure factory: createXGraph({ llm, tools })
 ├── prompts.ts      # System prompt constant(s)
-├── server.ts       # LangGraph dev entrypoint (~1 line)
-└── cogni-exec.ts   # Cogni executor entrypoint (~1 line)
+├── tools.ts        # Tool IDs constant (*_TOOL_IDS)
+├── server.ts       # LangGraph dev entrypoint
+└── cogni-exec.ts   # Cogni executor entrypoint
 ```
 
 **Steps:**
 
-1. Create `graph.ts` — pure factory with `stateSchema: MessagesAnnotation`
+1. Create `graph.ts` — pure factory with `stateSchema: MessagesAnnotation`, NO explicit return type
 2. Create `prompts.ts` — system prompt constant
-3. Add entry to `catalog.ts` — `toolIds`, `graphFactory`
-4. Create `server.ts` — `export const x = await createServerEntrypoint("name")`
-5. Create `cogni-exec.ts` — `export const x = createCogniEntrypoint("name")`
-6. Add to `langgraph.json` — `"name": "./src/graphs/<name>/server.ts:x"`
-7. Export from `graphs/index.ts`
+3. Create `tools.ts` — export `*_TOOL_IDS` array referencing tool names from `@cogni/ai-tools`
+4. Create `server.ts` — `export const x = await makeServerGraph({ name, createGraph, toolIds })`
+5. Create `cogni-exec.ts` — `export const xGraph = makeCogniGraph({ name, createGraph, toolIds })`
+6. Add entry to `catalog.ts` — `toolIds`, `graphFactory`
+7. Add to `langgraph.json` — `"name": "./src/graphs/<name>/server.ts:x"`
+8. Export from `graphs/index.ts`
 
 **Template:** Copy from `ponderer/`
 
-**Verify:** `pnpm packages:build && pnpm check`
+**Verify:** `pnpm packages:build && pnpm langgraph:dev`
 
 ## Entrypoint Invariants
 
 | Invariant                            | Rule                                                                   |
 | ------------------------------------ | ---------------------------------------------------------------------- |
 | PURE_GRAPH_FACTORY                   | `graph.ts` has no env/ALS/entrypoint wiring                            |
-| ENTRYPOINT_IS_THIN                   | `server.ts` and `cogni-exec.ts` are ~1-liners                          |
+| TYPE_TRANSPARENT_RETURN              | `graph.ts` has NO explicit return type (preserves CompiledStateGraph)  |
+| ENTRYPOINT_IS_THIN                   | `server.ts` and `cogni-exec.ts` call `make*Graph` helpers              |
 | LANGGRAPH_JSON_POINTS_TO_SERVER_ONLY | Never reference `cogni-exec.ts` in langgraph.json                      |
 | NO_CROSSING_THE_STREAMS              | `server.ts` uses `initChatModel`; `cogni-exec.ts` uses ALS — never mix |
 
@@ -45,8 +48,7 @@ From `packages/langgraph-graphs/src/graphs/types.ts`:
 | ------------------------------ | -------------------------------------------------- |
 | `InvokableGraph<I, O>`         | Type firewall: `Pick<RunnableInterface, "invoke">` |
 | `CreateReactAgentGraphOptions` | Base options: `{ llm, tools }`                     |
-| `MessageGraphInput/Output`     | Standard message-based I/O                         |
-| `asInvokableGraph()`           | Centralized cast with runtime assertion            |
+| `MessageGraphInput/Output`     | Mutable message arrays (LangGraph-aligned)         |
 
 ## Tier 2: Composed Graphs
 
