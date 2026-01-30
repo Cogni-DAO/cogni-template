@@ -139,6 +139,7 @@ Any new executor must answer:
 - [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) — LangGraph Server adapter (uses this pattern)
 - [CLAUDE_SDK_ADAPTER_SPEC.md](CLAUDE_SDK_ADAPTER_SPEC.md) — In-process adapter (does NOT use reconciliation)
 - [N8N_ADAPTER_SPEC.md](N8N_ADAPTER_SPEC.md) — External adapter (uses this pattern)
+- [CLAWDBOT_ADAPTER_SPEC.md](CLAWDBOT_ADAPTER_SPEC.md) — External runtime adapter (uses this pattern)
 - [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md) — Charge receipt schema
 
 ---

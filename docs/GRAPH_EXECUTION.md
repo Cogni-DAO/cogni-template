@@ -533,6 +533,17 @@ Per-node model/tool overrides via flat configurable keys: `<nodeKey>__model`, `<
 - [ ] Reconcile billing via LiteLLM spend logs (LLM routed through gateway)
 - [ ] Emit `usage_report` with `execution_id`-based `usageUnitId`
 
+### P2: Clawdbot (Moltbot) Adapter
+
+> See [CLAWDBOT_ADAPTER_SPEC.md](CLAWDBOT_ADAPTER_SPEC.md) for full specification.
+
+- [ ] Create `ClawdbotExecutorAdapter` implementing `GraphExecutorPort`
+- [ ] Invoke Moltbot Gateway via `/v1/chat/completions` with SSE streaming
+- [ ] Route all LLM calls through LiteLLM (DAO billing via virtual key)
+- [ ] Containment: sandboxing enabled, elevated disabled, egress allowlist
+- [ ] Privileged integrations via Cogni bridge tool (toolRunner.exec)
+- [ ] Reconcile billing via LiteLLM spend logs (end_user correlation)
+
 ### Future: Additional External Adapters
 
 Flowise/custom engine adapters — build only if demand materializes and engines route LLM through our gateway.
@@ -1003,6 +1014,7 @@ await myGraph.invoke(messages, {
 - [USAGE_HISTORY.md](USAGE_HISTORY.md) — Message artifact persistence (parallel stream consumer)
 - [CLAUDE_SDK_ADAPTER_SPEC.md](CLAUDE_SDK_ADAPTER_SPEC.md) — Claude Agent SDK adapter design (P2)
 - [N8N_ADAPTER_SPEC.md](N8N_ADAPTER_SPEC.md) — n8n workflow execution adapter design (P2)
+- [CLAWDBOT_ADAPTER_SPEC.md](CLAWDBOT_ADAPTER_SPEC.md) — Clawdbot (Moltbot) external runtime adapter (P2)
 
 ---
 
