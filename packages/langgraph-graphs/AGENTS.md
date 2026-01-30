@@ -112,3 +112,4 @@ pnpm --filter @cogni/langgraph-graphs test
 - Per PACKAGES_NO_SRC_IMPORTS: This package cannot import from `src/**`
 - `LangGraphInProcProvider` in `src/adapters/server/ai/langgraph/` wires this package
 - Package isolation enables LangGraph Server to import graphs without Next.js deps
+- **Dual tsconfig:** LangGraph CLI generates runtime `.ts` files (`__langgraph__*.ts`) that break `composite` mode. This package uses `tsconfig.json` (noEmit, for CLI) + `tsconfig.build.json` (composite, for `tsc -b`). Root tsconfig.json references the build config explicitly. This is not proper form, but a valid workaround.
