@@ -8,7 +8,7 @@
  * Invariants:
  *   - SINGLE_INVOKABLE_INTERFACE: All graphs implement InvokableGraph<I,O>
  *   - LANGCHAIN_ALIGNED: Uses RunnableConfig/RunnableInterface from @langchain/core
- * Side-effects: none (types + one runtime assertion)
+ * Side-effects: none
  * Links: LANGGRAPH_AI.md, AGENT_DEVELOPMENT_GUIDE.md
  * @public
  */
@@ -37,23 +37,6 @@ export type GraphInvokeOptions = Partial<RunnableConfig>;
  * @typeParam O - Output type (e.g., { messages: BaseMessage[] })
  */
 export type InvokableGraph<I, O> = Pick<RunnableInterface<I, O>, "invoke">;
-
-/**
- * Centralized cast with runtime assertion.
- * Validates that the object implements invoke() before casting.
- *
- * @throws Error if graph does not implement invoke()
- */
-export function asInvokableGraph<I, O>(g: unknown): InvokableGraph<I, O> {
-  if (!g || typeof (g as Record<string, unknown>).invoke !== "function") {
-    const actualType = g === null ? "null" : typeof g;
-    const keys = g && typeof g === "object" ? Object.keys(g).join(", ") : "n/a";
-    throw new Error(
-      `Graph does not implement invoke(). Got ${actualType} with keys: [${keys}]`
-    );
-  }
-  return g as InvokableGraph<I, O>;
-}
 
 /**
  * Standard input/output types for message-based graphs.

@@ -19,11 +19,10 @@ export { createPoetGraph, POET_GRAPH_NAME } from "./poet/graph";
 // Ponderer graph (philosophical thinker)
 export { createPondererGraph, PONDERER_GRAPH_NAME } from "./ponderer/graph";
 // Shared graph types
-export {
-  asInvokableGraph,
-  type CreateReactAgentGraphOptions,
-  type GraphInvokeOptions,
-  type InvokableGraph,
-  type MessageGraphInput,
-  type MessageGraphOutput,
+export type {
+  CreateReactAgentGraphOptions,
+  GraphInvokeOptions,
+  InvokableGraph,
+  MessageGraphInput,
+  MessageGraphOutput,
 } from "./types";

@@ -57,10 +57,8 @@ LangGraph graph definitions and runtime utilities for agentic AI execution. Cont
   - `@cogni/langgraph-graphs/graphs` — Graph factories and shared types:
     - `createPoetGraph()`, `createPondererGraph()` — React agent factories (TYPE_TRANSPARENT_RETURN)
     - `POET_GRAPH_NAME`, `PONDERER_GRAPH_NAME` — Graph name constants
-    - `InvokableGraph<I,O>` — Type firewall (Pick<RunnableInterface, "invoke">)
-    - `MessageGraphInput`, `MessageGraphOutput` — Mutable message types (LangGraph-aligned)
-    - `GraphInvokeOptions` — Alias to Partial<RunnableConfig>
-    - `CreateReactAgentGraphOptions` — Base factory options
+    - `InvokableGraph<I,O>`, `MessageGraphInput`, `MessageGraphOutput` — Type firewall
+    - `GraphInvokeOptions`, `CreateReactAgentGraphOptions` — Factory types
   - **Per-graph tools:** `src/graphs/*/tools.ts` exports `*_TOOL_IDS` constants
 - **CLI:** none
 - **Env/Config keys:** none (all deps injected)
