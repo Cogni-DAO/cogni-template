@@ -8,7 +8,7 @@
  * Invariants:
  *   - Pure factory function — no side effects, no env reads
  *   - LLM and tools are injected, not instantiated
- *   - Uses shared InvokableGraph type (no per-graph interface duplication)
+ *   - TYPE_TRANSPARENT_RETURN: No explicit return type annotation to preserve CompiledStateGraph for CLI schema extraction
  * Side-effects: none
  * Links: LANGGRAPH_AI.md, AGENT_DEVELOPMENT_GUIDE.md
  * @public
@@ -17,13 +17,7 @@
 import { MessagesAnnotation } from "@langchain/langgraph";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
-import {
-  asInvokableGraph,
-  type CreateReactAgentGraphOptions,
-  type InvokableGraph,
-  type MessageGraphInput,
-  type MessageGraphOutput,
-} from "../types";
+import type { CreateReactAgentGraphOptions } from "../types";
 import { PONDERER_SYSTEM_PROMPT } from "./prompts";
 
 /**
@@ -32,35 +26,24 @@ import { PONDERER_SYSTEM_PROMPT } from "./prompts";
 export const PONDERER_GRAPH_NAME = "ponderer" as const;
 
 /**
- * Ponderer graph type alias.
- * Uses shared InvokableGraph interface — no per-graph interface duplication.
- */
-export type PondererGraph = InvokableGraph<
-  MessageGraphInput,
-  MessageGraphOutput
->;
-
-/**
  * Create a philosophical ponderer agent graph.
  *
  * Same structure as poet graph but with philosophical system prompt.
  * Uses createReactAgent with tool-calling loop.
  *
+ * NOTE: Return type is intentionally NOT annotated to preserve the concrete
+ * CompiledStateGraph type for LangGraph CLI schema extraction.
+ *
  * @param opts - Options with LLM and tools
  * @returns Compiled LangGraph ready for invoke()
  */
-export function createPondererGraph(
-  opts: CreateReactAgentGraphOptions
-): PondererGraph {
+export function createPondererGraph(opts: CreateReactAgentGraphOptions) {
   const { llm, tools } = opts;
 
-  const agent = createReactAgent({
+  return createReactAgent({
     llm,
     tools: [...tools], // Spread readonly array to mutable for LangGraph
     messageModifier: PONDERER_SYSTEM_PROMPT,
     stateSchema: MessagesAnnotation,
   });
-
-  // Centralized cast with runtime assertion
-  return asInvokableGraph<MessageGraphInput, MessageGraphOutput>(agent);
 }

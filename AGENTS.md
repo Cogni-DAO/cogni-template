@@ -57,8 +57,12 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 ### AI & Evals
 
 - [AI Setup Spec](docs/AI_SETUP_SPEC.md)
+- [Graph Execution](docs/GRAPH_EXECUTION.md)
 - [LangGraph Server](docs/LANGGRAPH_SERVER.md)
 - [LangGraph Patterns](docs/LANGGRAPH_AI.md)
+- [Claude SDK Adapter](docs/CLAUDE_SDK_ADAPTER_SPEC.md)
+- [n8n Adapter](docs/N8N_ADAPTER_SPEC.md)
+- [Clawdbot Adapter](docs/CLAWDBOT_ADAPTER_SPEC.md)
 - [AI Evals](docs/AI_EVALS.md)
 
 ### Development

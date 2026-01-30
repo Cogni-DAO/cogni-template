@@ -8,7 +8,7 @@
  * Invariants:
  *   - Pure factory function — no side effects, no env reads
  *   - LLM and tools are injected, not instantiated
- *   - Uses shared InvokableGraph type (no per-graph interface duplication)
+ *   - TYPE_TRANSPARENT_RETURN: No explicit return type annotation to preserve CompiledStateGraph for CLI schema extraction
  * Side-effects: none
  * Links: LANGGRAPH_AI.md, AGENT_DEVELOPMENT_GUIDE.md
  * @public
@@ -17,25 +17,13 @@
 import { MessagesAnnotation } from "@langchain/langgraph";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 
-import {
-  asInvokableGraph,
-  type CreateReactAgentGraphOptions,
-  type InvokableGraph,
-  type MessageGraphInput,
-  type MessageGraphOutput,
-} from "../types";
+import type { CreateReactAgentGraphOptions } from "../types";
 import { POET_SYSTEM_PROMPT } from "./prompts";
 
 /**
  * Graph name constant for routing.
  */
 export const POET_GRAPH_NAME = "poet" as const;
-
-/**
- * Poet graph type alias.
- * Uses shared InvokableGraph interface — no per-graph interface duplication.
- */
-export type PoetGraph = InvokableGraph<MessageGraphInput, MessageGraphOutput>;
 
 /**
  * Create a poetic AI assistant graph.
@@ -45,12 +33,15 @@ export type PoetGraph = InvokableGraph<MessageGraphInput, MessageGraphOutput>;
  * - LLM handles tool calling decisions
  * - Agent loops until no more tool calls needed
  *
+ * NOTE: Return type is intentionally NOT annotated to preserve the concrete
+ * CompiledStateGraph type for LangGraph CLI schema extraction.
+ *
  * @param opts - Options with LLM and tools
  * @returns Compiled LangGraph ready for invoke()
  *
  * @example
  * ```typescript
- * const llm = new CompletionUnitLLM(completionFn, "gpt-4");
+ * const llm = new CogniCompletionAdapter();
  * const tools = toLangChainTools({ contracts, exec: toolRunner.exec });
  * const graph = createPoetGraph({ llm, tools });
  *
@@ -59,7 +50,7 @@ export type PoetGraph = InvokableGraph<MessageGraphInput, MessageGraphOutput>;
  * });
  * ```
  */
-export function createPoetGraph(opts: CreateReactAgentGraphOptions): PoetGraph {
+export function createPoetGraph(opts: CreateReactAgentGraphOptions) {
   const { llm, tools } = opts;
 
   // Use LangGraph's prebuilt React agent
@@ -67,13 +58,10 @@ export function createPoetGraph(opts: CreateReactAgentGraphOptions): PoetGraph {
   // 1. LLM generates response (possibly with tool calls)
   // 2. If tool calls, execute them and loop back
   // 3. If no tool calls, return final response
-  const agent = createReactAgent({
+  return createReactAgent({
     llm,
     tools: [...tools], // Spread readonly array to mutable for LangGraph
     messageModifier: POET_SYSTEM_PROMPT,
     stateSchema: MessagesAnnotation,
   });
-
-  // Centralized cast with runtime assertion
-  return asInvokableGraph<MessageGraphInput, MessageGraphOutput>(agent);
 }

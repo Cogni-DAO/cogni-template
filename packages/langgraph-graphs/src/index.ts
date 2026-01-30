@@ -44,4 +44,4 @@ export type {
 } from "./inproc/types";
 
 // Re-export runtime types (interfaces only, not implementations)
-export type { ToLangChainToolOptions } from "./runtime/index";
+export type { MakeLangChainToolOptions } from "./runtime/index";

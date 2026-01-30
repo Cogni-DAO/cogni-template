@@ -124,13 +124,13 @@ AI/LLM errors follow a specialized pattern with **single-point normalization** t
 **Error Types (all in `@cogni/ai-core`):**
 
 - `LlmError` — Thrown by adapters; captures `kind` (timeout, rate_limited, provider_4xx, etc.) and optional HTTP `status`
-- `AiExecutionError` — Carries structured `code` field through call chains (thrown by CompletionUnitLLM)
+- `AiExecutionError` — Carries structured `code` field through call chains (thrown by CogniCompletionAdapter)
 - `AiExecutionErrorCode` — Stable contract: `invalid_request`, `not_found`, `timeout`, `aborted`, `rate_limit`, `internal`, `insufficient_credits`
 
 **Error Flow:**
 
 1. Adapter throws `LlmError` with kind + status at HTTP/SSE boundary
-2. `CompletionUnitLLM` catches, throws `AiExecutionError` with structured code
+2. `CogniCompletionAdapter` catches, throws `AiExecutionError` with structured code
 3. Graph runner catches, calls `normalizeErrorToExecutionCode()` for any error type
 4. `completion.ts` catches connection-time errors, normalizes via same function
 5. Returns `{ ok: false, error: AiExecutionErrorCode }` to all consumers

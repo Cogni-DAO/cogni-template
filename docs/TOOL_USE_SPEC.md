@@ -67,6 +67,16 @@
 
 26. **CONNECTION_ID_ONLY**: Tools requiring external auth receive `connectionId` (opaque reference), never raw credentials. Connection Broker resolves tokens at invocation time. No secrets in `configurable`, `ToolPolicyContext`, or ALS context. Applies to all authenticated tools regardless of source (`@cogni/ai-tools` or MCP). See [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md).
 
+27. **TOOL_SOURCE_RETURNS_BOUND_TOOL**: `ToolSourcePort.getBoundTool(toolId)` returns a `BoundToolRuntime` object that owns validation, execution, and redaction logic. `toolRunner` orchestrates the pipeline (policy → validate → exec → validate output → redact → emit events) but never imports Zod or performs schema operations directly. This keeps `@cogni/ai-core` semantic-only while `@cogni/ai-tools` owns schema logic.
+
+28. **NO_SECRETS_IN_CONTEXT**: `ToolInvocationContext`, `RunnableConfig.configurable`, and ALS context must NEVER contain secrets (access tokens, API keys, refresh tokens, Authorization headers, provider secret blobs). Only opaque reference IDs (`connectionId`, `virtualKeyId`) are permitted. Secrets resolved via capability interfaces at invocation time. Enforced by negative test cases + static checks.
+
+29. **AUTH_VIA_CAPABILITY_INTERFACE**: Tools requiring external auth receive credentials through injected capability interfaces (e.g., `AuthCapability.getAccessToken(connectionId)`, `ConnectionClientFactory.for(connectionId)`), NOT via context fields. This prevents secret leakage into logs/traces/exceptions. Capabilities are injected at composition root; tools declare capability dependencies in contract.
+
+30. **GRANT_INTERSECTION_REQUIRED**: `toolRunner.exec()` computes `effectiveAllowedConnectionIds = executionGrant.allowedConnectionIds ∩ request.allowedConnectionIds`. Tool invocation's `connectionId` must be in this intersection BEFORE broker resolution or external calls. Missing/empty intersection = `policy_denied`. Prevents confused-deputy and UI-driven escalation attacks.
+
+31. **ARCH_SINGLE_EXECUTION_PATH**: All tool implementations execute ONLY through `toolRunner.exec()`. No direct `tool.func()` calls in LangChain wrappers, no direct MCP `callTool()` invocations, no executor-specific bypass paths. Enforced by architectural grep tests that fail on bypass patterns.
+
 ---
 
 ## Implementation Checklist
@@ -164,6 +174,54 @@ Per invariants **EFFECT_TYPED**, **POLICY_IS_DATA**, **DENY_BY_DEFAULT**, **TOOL
 - [x] Add test: require_approval treated as deny in P0 (tool-runner.test.ts)
 - [x] Add test: catalog filtering uses policy.decide() (tool-catalog.test.ts)
 
+### P0: Tool Source Port + Connection Authorization
+
+Per invariants **TOOL_SOURCE_RETURNS_BOUND_TOOL**, **NO_SECRETS_IN_CONTEXT**, **AUTH_VIA_CAPABILITY_INTERFACE**, **GRANT_INTERSECTION_REQUIRED**, **ARCH_SINGLE_EXECUTION_PATH**:
+
+**ToolSourcePort abstraction (`@cogni/ai-core/tooling/`):**
+
+- [ ] Create `ToolSourcePort` interface with `getBoundTool(toolId)` and `listToolSpecs()`
+- [ ] Create `BoundToolRuntime` interface: `{ id, spec, effect, validateInput(), exec(), validateOutput(), redact() }`
+- [ ] Create `ToolInvocationContext` type with references-only fields: `{ runId, toolCallId, connectionId? }`
+- [ ] Refactor `createToolRunner()` to accept `ToolSourcePort` instead of raw `boundTools`
+- [ ] toolRunner calls `boundTool.validateInput()` (Zod stays in ai-tools, not ai-core)
+- [ ] toolRunner calls `boundTool.exec(validatedArgs, ctx, capabilities)`
+- [ ] toolRunner calls `boundTool.validateOutput()` then `boundTool.redact()`
+
+**StaticToolSource (`@cogni/ai-core/tooling/sources/`):**
+
+- [ ] Create `StaticToolSource` implementing `ToolSourcePort`
+- [ ] Wraps `TOOL_CATALOG` from `@cogni/ai-tools`
+- [ ] Export from ai-core barrel
+
+**Connection authorization (`@cogni/ai-core/tooling/`):**
+
+- [ ] Add `allowedConnectionIds?: string[]` to `GraphRunConfig`
+- [ ] Add `executionGrant?: { allowedConnectionIds: string[] }` to toolRunner config
+- [ ] Implement `computeEffectiveConnections(grant, request)` → intersection
+- [ ] Validate `connectionId ∈ effectiveAllowed` BEFORE broker resolve
+- [ ] Return `policy_denied` if connectionId not in intersection or intersection empty
+
+**Capability-based auth (`@cogni/ai-tools/capabilities/`):**
+
+- [ ] Create `AuthCapability` interface: `getAccessToken(connectionId): Promise<string>`
+- [ ] Create `ConnectionClientFactory` interface: `for(connectionId): AuthenticatedClient`
+- [ ] Tools declare capability dependencies in contract: `capabilities: ['auth']`
+- [ ] Composition root binds capabilities to broker-backed implementations
+- [ ] toolRunner injects resolved capabilities into `boundTool.exec()`
+
+**Architectural tests (`tests/arch/`):**
+
+- [ ] `tool-single-execution-path.test.ts` — grep for direct `tool.func()` calls outside toolRunner
+- [ ] `no-secrets-in-context.test.ts` — static check for secret-shaped fields in context types
+- [ ] `connection-grant-intersection.test.ts` — unit test for intersection enforcement
+
+**Wiring:**
+
+- [ ] Update `LangGraphInProcProvider` to use `ToolSourcePort`
+- [ ] Update `src/bootstrap/ai/tool-bindings.ts` with `StaticToolSource`
+- [ ] Update LangChain wrappers to use new toolRunner signature
+
 ### P1: Tool Ecosystem + ToolCatalog
 
 - [ ] `GraphLlmCaller` type enforcement (graphRunId requires graph_name + graph_version)
@@ -225,6 +283,19 @@ Per invariant **MCP_UNTRUSTED_BY_DEFAULT**:
 | `src/shared/ai/tool-policy.ts`                        | New: `ToolPolicy` interface for deny-by-default enforcement                          |
 | `src/shared/ai/tool-catalog.ts`                       | New: `ToolCatalog` interface for explicit tool visibility                            |
 | `tests/unit/ai/tool-policy.test.ts`                   | New: deny-by-default + policy filter tests                                           |
+
+**P0: Tool Source Port + Connection Auth (new files):**
+
+| File                                                  | Change                                                                   |
+| ----------------------------------------------------- | ------------------------------------------------------------------------ |
+| `@cogni/ai-core/tooling/ports/tool-source.port.ts`    | New: `ToolSourcePort` interface with `getBoundTool()`, `listToolSpecs()` |
+| `@cogni/ai-core/tooling/types.ts`                     | Add: `BoundToolRuntime`, `ToolInvocationContext`, `ToolCapabilities`     |
+| `@cogni/ai-core/tooling/sources/static.source.ts`     | New: `StaticToolSource` wrapping TOOL_CATALOG                            |
+| `@cogni/ai-tools/capabilities/auth.ts`                | New: `AuthCapability` interface for broker-backed auth                   |
+| `@cogni/ai-tools/capabilities/index.ts`               | New: capability barrel exports                                           |
+| `tests/arch/tool-single-execution-path.test.ts`       | New: grep for direct tool.func() calls outside toolRunner                |
+| `tests/arch/no-secrets-in-context.test.ts`            | New: static check for secret-shaped fields in context types              |
+| `tests/unit/ai/connection-grant-intersection.test.ts` | New: grant intersection logic + deny-fast behavior                       |
 
 ---
 
@@ -341,6 +412,111 @@ interface ToolCatalog {
 **Double enforcement:** Catalog filters visibility; toolRunner enforces at runtime (defense in depth).
 
 **No tool registry service in P0.** Graphs import their tools directly. Tool bindings live in composition roots (`src/bootstrap/ai/tool-bindings.ts`), not adapter-scoped files.
+
+### 2b. ToolSourcePort + BoundToolRuntime Architecture
+
+Per invariants **TOOL_SOURCE_RETURNS_BOUND_TOOL**, **NO_SECRETS_IN_CONTEXT**, **AUTH_VIA_CAPABILITY_INTERFACE**:
+
+```typescript
+// @cogni/ai-core/tooling/ports/tool-source.port.ts
+interface ToolSourcePort {
+  /** Get executable tool by ID; returns undefined if not found */
+  getBoundTool(toolId: string): BoundToolRuntime | undefined;
+  /** List all tool specs for LLM exposure (derived from BoundToolRuntime.spec) */
+  listToolSpecs(): readonly ToolSpec[];
+}
+
+// @cogni/ai-core/tooling/types.ts
+interface BoundToolRuntime {
+  /** Namespaced tool ID (e.g., core__get_current_time) */
+  readonly id: string;
+  /** Tool spec for LLM exposure (compiled from Zod, no runtime) */
+  readonly spec: ToolSpec;
+  /** Side-effect level for policy decisions */
+  readonly effect: ToolEffect;
+  /** Whether tool requires authenticated connection */
+  readonly requiresConnection: boolean;
+  /** Capability dependencies (e.g., ['auth', 'clock']) */
+  readonly capabilities: readonly string[];
+
+  /** Validate input args; throws ZodError on failure. Zod stays in ai-tools. */
+  validateInput(rawArgs: unknown): unknown;
+  /** Execute tool with validated args + context + capabilities */
+  exec(
+    validatedArgs: unknown,
+    ctx: ToolInvocationContext,
+    capabilities: ToolCapabilities
+  ): Promise<unknown>;
+  /** Validate output; throws on failure */
+  validateOutput(rawOutput: unknown): unknown;
+  /** Redact output for UI/telemetry; allowlist-based */
+  redact(validatedOutput: unknown): unknown;
+}
+
+/** Context for tool invocation — references only, NO secrets */
+interface ToolInvocationContext {
+  readonly runId: string;
+  readonly toolCallId: string;
+  readonly connectionId?: string; // Out-of-band, not in tool args
+  // FORBIDDEN: accessToken, apiKey, refreshToken, headers, secrets
+}
+
+/** Capabilities injected by toolRunner; backed by broker */
+interface ToolCapabilities {
+  readonly auth?: AuthCapability;
+  readonly clock?: ClockCapability;
+  // Extensible for future capabilities
+}
+
+interface AuthCapability {
+  getAccessToken(connectionId: string): Promise<string>;
+  getAuthHeaders(connectionId: string): Promise<Record<string, string>>;
+}
+```
+
+**toolRunner pipeline with ToolSourcePort:**
+
+```
+toolRunner.exec(toolId, rawArgs, ctx)
+    │
+    ├─ 1. source.getBoundTool(toolId) → boundTool | undefined
+    │      └─ undefined → { ok: false, errorCode: 'unavailable' }
+    │
+    ├─ 2. policy.decide(ctx, toolId, boundTool.effect)
+    │      └─ deny/require_approval → { ok: false, errorCode: 'policy_denied' }
+    │
+    ├─ 3. If boundTool.requiresConnection:
+    │      ├─ Validate ctx.connectionId exists
+    │      ├─ Check connectionId ∈ effectiveAllowed (grant ∩ request)
+    │      └─ Fail fast if not authorized
+    │
+    ├─ 4. boundTool.validateInput(rawArgs) → validatedArgs
+    │      └─ ZodError → { ok: false, errorCode: 'validation' }
+    │
+    ├─ 5. Resolve capabilities (auth via broker if needed)
+    │      └─ capabilities = { auth: brokerBackedAuth, clock, ... }
+    │
+    ├─ 6. emit('tool_call_start', { toolCallId, args: validatedArgs })
+    │
+    ├─ 7. boundTool.exec(validatedArgs, ctx, capabilities) → rawOutput
+    │      └─ Error → { ok: false, errorCode: 'execution' }
+    │
+    ├─ 8. boundTool.validateOutput(rawOutput) → validatedOutput
+    │
+    ├─ 9. boundTool.redact(validatedOutput) → safeOutput
+    │      └─ Error → { ok: false, errorCode: 'redaction_failed' }
+    │
+    ├─ 10. emit('tool_call_result', { toolCallId, result: safeOutput })
+    │
+    └─ 11. { ok: true, value: safeOutput }
+```
+
+**Key design points:**
+
+- `@cogni/ai-core` stays semantic-only (no Zod imports)
+- `BoundToolRuntime` owns validation/redaction logic; implemented in `@cogni/ai-tools`
+- Secrets never touch context; resolved via `AuthCapability` at step 5
+- Grant intersection checked at step 3, BEFORE any broker call
 
 ### 3. assistant-stream Tool API
 
@@ -469,5 +645,5 @@ When `toolCall.function.arguments` is invalid JSON:
 
 ---
 
-**Last Updated**: 2026-01-24
-**Status**: Draft (Rev 4 - Added CONNECTION_ID_ONLY, fixed P0 checklist to reflect working agentic loop)
+**Last Updated**: 2026-01-29
+**Status**: Draft (Rev 5 - Added ToolSourcePort architecture, BoundToolRuntime interface, capability-based auth, grant intersection enforcement, arch tests)

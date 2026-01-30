@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/langgraph-graphs/runtime/dev-tool-exec`
+ * Module: `@cogni/langgraph-graphs/runtime/core/dev-tool-exec`
  * Purpose: Tool execution for langgraph dev server.
  * Scope: Creates tool runner for dev.ts graph exports. Does NOT stream events externally.
  * Invariants:

@@ -120,7 +120,8 @@ function createTestRunnerOptions(overrides?: {
   const request: InProcGraphRequest = {
     runId: "test-run-id",
     messages: [{ role: "user", content: "Hello" }],
-    model: "test-model",
+    // Per UNIFIED_INVOKE_SIGNATURE: model + toolIds in configurable
+    configurable: { model: "test-model" },
   };
 
   return {

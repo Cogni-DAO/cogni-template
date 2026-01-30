@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/langgraph-graphs/runtime/message-converters`
+ * Module: `@cogni/langgraph-graphs/runtime/core/message-converters`
  * Purpose: Convert between app Message format and LangChain BaseMessage format.
  * Scope: Pure converters, handles all message roles. Does not modify message content.
  * Invariants:

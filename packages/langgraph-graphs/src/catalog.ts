@@ -14,13 +14,13 @@
  * @public
  */
 
-import { GET_CURRENT_TIME_NAME } from "@cogni/ai-tools";
-
 import { createPoetGraph, POET_GRAPH_NAME } from "./graphs/poet/graph";
+import { POET_TOOL_IDS } from "./graphs/poet/tools";
 import {
   createPondererGraph,
   PONDERER_GRAPH_NAME,
 } from "./graphs/ponderer/graph";
+import { PONDERER_TOOL_IDS } from "./graphs/ponderer/tools";
 import type { CreateGraphFn } from "./inproc/types";
 
 /**
@@ -55,7 +55,7 @@ export const LANGGRAPH_CATALOG: Readonly<Record<string, CatalogEntry>> = {
   [POET_GRAPH_NAME]: {
     displayName: "Poet",
     description: "Poetic AI assistant with structured verse responses",
-    toolIds: [GET_CURRENT_TIME_NAME],
+    toolIds: POET_TOOL_IDS,
     graphFactory: createPoetGraph,
   },
 
@@ -66,7 +66,7 @@ export const LANGGRAPH_CATALOG: Readonly<Record<string, CatalogEntry>> = {
   [PONDERER_GRAPH_NAME]: {
     displayName: "Ponderer",
     description: "Philosophical thinker with concise, profound responses",
-    toolIds: [GET_CURRENT_TIME_NAME],
+    toolIds: PONDERER_TOOL_IDS,
     graphFactory: createPondererGraph,
   },
 } as const;

@@ -7,7 +7,7 @@
     { "path": "./packages/ai-tools" },
     { "path": "./packages/aragon-osx" },
     { "path": "./packages/cogni-contracts" },
-    { "path": "./packages/langgraph-graphs" },
+    { "path": "./packages/langgraph-graphs/tsconfig.build.json" },
     { "path": "./packages/db-client" },
     { "path": "./packages/db-schema" },
     { "path": "./packages/scheduler-core" }

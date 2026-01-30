@@ -1,7 +1,7 @@
 {
   "node_version": "20",
   "graphs": {
-    "poet": "./src/graphs/poet/dev.ts:poet",
-    "ponderer": "./src/graphs/ponderer/dev.ts:ponderer"
+    "poet": "./src/graphs/poet/server.ts:poet",
+    "ponderer": "./src/graphs/ponderer/server.ts:ponderer"
   }
 }

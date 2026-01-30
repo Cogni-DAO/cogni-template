@@ -12,7 +12,7 @@
  */
 
 import { existsSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 
 interface TsConfigReference {
   path: string;
@@ -50,7 +50,9 @@ function main(): void {
   let failed = false;
 
   for (const ref of refs) {
-    const pkgDir = resolve(rootDir, ref.path);
+    // Handle both directory refs (./packages/foo) and file refs (./packages/foo/tsconfig.build.json)
+    const refPath = resolve(rootDir, ref.path);
+    const pkgDir = ref.path.endsWith(".json") ? dirname(refPath) : refPath;
     const pkgJsonPath = resolve(pkgDir, "package.json");
 
     if (!existsSync(pkgJsonPath)) {
