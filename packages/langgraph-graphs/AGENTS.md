@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-29
+- **Last reviewed:** 2026-01-30
 - **Status:** draft
 
 ## Purpose
@@ -51,21 +51,22 @@ LangGraph graph definitions and runtime utilities for agentic AI execution. Cont
     - `CreateGraphFn`, `CreateGraphOptions` — Graph factory types
     - `ToolExecFn`, `ToolExecResult` — Tool execution types
   - `@cogni/langgraph-graphs/runtime` — LangChain utilities (split: `core/` generic, `cogni/` ALS-based):
-    - **Core (no ALS):** `makeLangChainTool()`, `toLangChainToolsCaptured()`, `toBaseMessage()`, `fromBaseMessage()`, `AsyncQueue`, `createServerEntrypoint()`
-    - **Cogni (uses ALS):** `CogniCompletionAdapter`, `runWithCogniExecContext()`, `getCogniExecContext()`, `hasCogniExecContext()`, `toLangChainToolsFromContext()`, `createCogniEntrypoint()`
+    - **Core (no ALS):** `makeLangChainTool()`, `toLangChainToolsCaptured()`, `toBaseMessage()`, `fromBaseMessage()`, `AsyncQueue`, `makeServerGraph()`
+    - **Cogni (uses ALS):** `CogniCompletionAdapter`, `runWithCogniExecContext()`, `getCogniExecContext()`, `hasCogniExecContext()`, `toLangChainToolsFromContext()`, `makeCogniGraph()`
     - `CogniExecContext` — Runtime context type (completionFn, tokenSink, toolExecFn; NO model per #35)
   - `@cogni/langgraph-graphs/graphs` — Graph factories and shared types:
-    - `createPoetGraph()`, `createPondererGraph()` — React agent factories
+    - `createPoetGraph()`, `createPondererGraph()` — React agent factories (TYPE_TRANSPARENT_RETURN)
     - `POET_GRAPH_NAME`, `PONDERER_GRAPH_NAME` — Graph name constants
     - `InvokableGraph<I,O>` — Type firewall (Pick<RunnableInterface, "invoke">)
+    - `MessageGraphInput`, `MessageGraphOutput` — Mutable message types (LangGraph-aligned)
     - `GraphInvokeOptions` — Alias to Partial<RunnableConfig>
     - `CreateReactAgentGraphOptions` — Base factory options
-    - `asInvokableGraph()` — Centralized cast with runtime assertion
+  - **Per-graph tools:** `src/graphs/*/tools.ts` exports `*_TOOL_IDS` constants
 - **CLI:** none
 - **Env/Config keys:** none (all deps injected)
 - **Files considered API:** `index.ts`, `inproc/index.ts`, `runtime/index.ts`, `graphs/index.ts`, `langgraph.json`
-- **Server entrypoints:** `src/graphs/*/server.ts` — LangGraph dev server (langgraph.json)
-- **Cogni entrypoints:** `src/graphs/*/cogni-exec.ts` — Cogni executor (Next.js runtime)
+- **Server entrypoints:** `src/graphs/*/server.ts` — LangGraph dev server (uses `makeServerGraph`)
+- **Cogni entrypoints:** `src/graphs/*/cogni-exec.ts` — Cogni executor (uses `makeCogniGraph`)
 
 ## Ports
 
@@ -90,7 +91,8 @@ pnpm --filter @cogni/langgraph-graphs test
 - All `@langchain/*` imports must stay in this package (NO_LANGCHAIN_IN_SRC)
 - Graph factories are pure functions — no env reads, no side effects
 - PURE_GRAPH_FACTORY: `graph.ts` has no env/ALS/entrypoint wiring
-- ENTRYPOINT_IS_THIN: `server.ts` and `cogni-exec.ts` are ~1-liners calling shared helpers
+- TYPE_TRANSPARENT_RETURN: Graph factories have NO explicit return type annotation to preserve `CompiledStateGraph` for CLI schema extraction
+- ENTRYPOINT_IS_THIN: `server.ts` and `cogni-exec.ts` are ~1-liners calling `makeServerGraph`/`makeCogniGraph`
 - NO_CROSSING_THE_STREAMS: `server.ts` uses `initChatModel`; `cogni-exec.ts` uses ALS — never mix
 - TOOLS_DENY_BY_DEFAULT: toLangChainTool checks configurable.toolIds; returns policy_denied if not in list
 - TOOL_CATALOG_IS_CANONICAL: `LANGGRAPH_CATALOG` entries use `toolIds: string[]` references; providers resolve from `TOOL_CATALOG`

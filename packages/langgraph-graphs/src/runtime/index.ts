@@ -27,7 +27,6 @@ export {
   type MakeLangChainToolOptions,
   type MakeLangChainToolsOptions,
   // Server graph helper
-  type MakeServerGraphOptions,
   type Message,
   type MessageToolCall,
   makeLangChainTool,
@@ -54,7 +53,6 @@ export {
   getCogniExecContext,
   hasCogniExecContext,
   // Cogni graph helper
-  type MakeCogniGraphOptions,
   makeCogniGraph,
   runWithCogniExecContext,
   type TokenSink,

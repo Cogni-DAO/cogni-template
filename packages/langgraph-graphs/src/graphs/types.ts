@@ -57,9 +57,11 @@ export function asInvokableGraph<I, O>(g: unknown): InvokableGraph<I, O> {
 
 /**
  * Standard input/output types for message-based graphs.
+ * NOTE: Mutable arrays to align with LangGraph's UpdateType expectations.
+ * Immutability should be enforced at runtime after validation, not in boundary types.
  */
-export type MessageGraphInput = { readonly messages: readonly BaseMessage[] };
-export type MessageGraphOutput = { readonly messages: BaseMessage[] };
+export type MessageGraphInput = { messages: BaseMessage[] };
+export type MessageGraphOutput = { messages: BaseMessage[] };
 
 /**
  * Base options for React agent graph factories.

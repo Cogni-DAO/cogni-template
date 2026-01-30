@@ -29,7 +29,7 @@ export {
   runWithCogniExecContext,
 } from "./exec-context";
 // Cogni graph helper
-export { type MakeCogniGraphOptions, makeCogniGraph } from "./make-cogni-graph";
+export { makeCogniGraph } from "./make-cogni-graph";
 
 // Tool wrapper that resolves from ALS context
 export {

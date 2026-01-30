@@ -15,17 +15,9 @@
  */
 
 // Poet graph (poetic AI assistant)
-export {
-  createPoetGraph,
-  POET_GRAPH_NAME,
-  type PoetGraph,
-} from "./poet/graph";
+export { createPoetGraph, POET_GRAPH_NAME } from "./poet/graph";
 // Ponderer graph (philosophical thinker)
-export {
-  createPondererGraph,
-  PONDERER_GRAPH_NAME,
-  type PondererGraph,
-} from "./ponderer/graph";
+export { createPondererGraph, PONDERER_GRAPH_NAME } from "./ponderer/graph";
 // Shared graph types
 export {
   asInvokableGraph,

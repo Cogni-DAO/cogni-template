@@ -10,6 +10,7 @@
  *   - HELPERS_DO_NOT_ENFORCE_POLICY: Policy is ToolRunner's job
  *   - NO_HIDDEN_DEFAULT_MODEL: Model comes from configurable only (fail-fast at invoke if missing)
  *   - FAIL_FAST_ON_MISSING_TOOLS: Throw if toolIds reference tools not in TOOL_CATALOG
+ *   - TYPE_TRANSPARENT_RETURN: Returns ReturnType<TCreateGraph> to preserve concrete types for CLI schema extraction
  * Side-effects: process.env (reads LITELLM_BASE_URL, LITELLM_MASTER_KEY)
  * Links: GRAPH_EXECUTION.md, LANGGRAPH_AI.md
  * @public
@@ -19,31 +20,9 @@ import { type CatalogBoundTool, TOOL_CATALOG } from "@cogni/ai-tools";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import { initChatModel } from "langchain/chat_models/universal";
 
-import type {
-  CreateReactAgentGraphOptions,
-  InvokableGraph,
-  MessageGraphInput,
-  MessageGraphOutput,
-} from "../../graphs/types";
+import type { CreateReactAgentGraphOptions } from "../../graphs/types";
 import { createDevToolExecFn } from "./dev-tool-exec";
 import { toLangChainToolsCaptured } from "./langchain-tools";
-
-/**
- * Options for makeServerGraph.
- */
-export interface MakeServerGraphOptions<
-  TIn extends MessageGraphInput = MessageGraphInput,
-  TOut extends MessageGraphOutput = MessageGraphOutput,
-> {
-  /** Graph name (for error messages) */
-  readonly name: string;
-  /** Pure graph factory function */
-  readonly createGraph: (
-    opts: CreateReactAgentGraphOptions
-  ) => InvokableGraph<TIn, TOut>;
-  /** Tool IDs this graph uses (from per-graph tools.ts) */
-  readonly toolIds: readonly string[];
-}
 
 /**
  * Create a compiled graph for langgraph dev server.
@@ -51,11 +30,15 @@ export interface MakeServerGraphOptions<
  * This is an async function because it initializes the LLM via initChatModel.
  * Call with top-level await in server.ts.
  *
+ * Per TYPE_TRANSPARENT_RETURN: Generic over TCreateGraph and returns
+ * ReturnType<TCreateGraph> to preserve concrete graph types for the
+ * LangGraph CLI schema extractor.
+ *
  * Per HELPERS_DO_NOT_IMPORT_CATALOG: Takes explicit toolIds, no catalog lookup.
  * Per HELPERS_DO_NOT_ENFORCE_POLICY: Tool wiring only; policy is ToolRunner's job.
  *
  * @param opts - Options with name, createGraph factory, and toolIds
- * @returns Compiled graph ready for invoke
+ * @returns Compiled graph ready for invoke (concrete type preserved)
  *
  * @example
  * ```typescript
@@ -68,9 +51,15 @@ export interface MakeServerGraphOptions<
  * ```
  */
 export async function makeServerGraph<
-  TIn extends MessageGraphInput = MessageGraphInput,
-  TOut extends MessageGraphOutput = MessageGraphOutput,
->(opts: MakeServerGraphOptions<TIn, TOut>): Promise<InvokableGraph<TIn, TOut>> {
+  TCreateGraph extends (opts: CreateReactAgentGraphOptions) => unknown,
+>(opts: {
+  /** Graph name (for error messages) */
+  readonly name: string;
+  /** Pure graph factory function */
+  readonly createGraph: TCreateGraph;
+  /** Tool IDs this graph uses (from per-graph tools.ts) */
+  readonly toolIds: readonly string[];
+}): Promise<ReturnType<TCreateGraph>> {
   const { name, createGraph, toolIds } = opts;
 
   // Read env for LiteLLM connection
@@ -117,6 +106,6 @@ export async function makeServerGraph<
     toolExecFn: devToolExecFn,
   });
 
-  // Create graph using factory
-  return createGraph({ llm, tools });
+  // Create graph using factory - cast preserves concrete return type
+  return createGraph({ llm, tools }) as ReturnType<TCreateGraph>;
 }

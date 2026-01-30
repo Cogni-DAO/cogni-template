@@ -13,6 +13,7 @@
  *   - NO_HIDDEN_DEFAULT_MODEL: CogniCompletionAdapter fails fast if configurable.model missing
  *   - FAIL_FAST_ON_MISSING_TOOLS: Throw if toolIds reference tools not in TOOL_CATALOG
  *   - TOOLS_VIA_ALS: Tools read toolExecFn from ALS at invocation time
+ *   - TYPE_TRANSPARENT_RETURN: Returns ReturnType<TCreateGraph> to preserve concrete types
  * Side-effects: none
  * Links: GRAPH_EXECUTION.md, LANGGRAPH_AI.md
  * @public
@@ -21,31 +22,9 @@
 import { type CatalogBoundTool, TOOL_CATALOG } from "@cogni/ai-tools";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 
-import type {
-  CreateReactAgentGraphOptions,
-  InvokableGraph,
-  MessageGraphInput,
-  MessageGraphOutput,
-} from "../../graphs/types";
+import type { CreateReactAgentGraphOptions } from "../../graphs/types";
 import { CogniCompletionAdapter } from "./completion-adapter";
 import { toLangChainToolsFromContext } from "./tools";
-
-/**
- * Options for makeCogniGraph.
- */
-export interface MakeCogniGraphOptions<
-  TIn extends MessageGraphInput = MessageGraphInput,
-  TOut extends MessageGraphOutput = MessageGraphOutput,
-> {
-  /** Graph name (for error messages) */
-  readonly name: string;
-  /** Pure graph factory function */
-  readonly createGraph: (
-    opts: CreateReactAgentGraphOptions
-  ) => InvokableGraph<TIn, TOut>;
-  /** Tool IDs this graph uses (from per-graph tools.ts) */
-  readonly toolIds: readonly string[];
-}
 
 /**
  * Create a compiled graph for Cogni executor (Next.js runtime).
@@ -57,6 +36,9 @@ export interface MakeCogniGraphOptions<
  *
  * Per TOOLS_VIA_ALS: Tools use toLangChainToolsFromContext which reads
  * toolExecFn from ALS at invocation time.
+ *
+ * Per TYPE_TRANSPARENT_RETURN: Generic over TCreateGraph and returns
+ * ReturnType<TCreateGraph> to preserve concrete graph types.
  *
  * Per HELPERS_DO_NOT_IMPORT_CATALOG: Takes explicit toolIds, no catalog lookup.
  * Per HELPERS_DO_NOT_ENFORCE_POLICY: Tool wiring only; policy is ToolRunner's job.
@@ -75,9 +57,15 @@ export interface MakeCogniGraphOptions<
  * ```
  */
 export function makeCogniGraph<
-  TIn extends MessageGraphInput = MessageGraphInput,
-  TOut extends MessageGraphOutput = MessageGraphOutput,
->(opts: MakeCogniGraphOptions<TIn, TOut>): InvokableGraph<TIn, TOut> {
+  TCreateGraph extends (opts: CreateReactAgentGraphOptions) => unknown,
+>(opts: {
+  /** Graph name (for error messages) */
+  readonly name: string;
+  /** Pure graph factory function */
+  readonly createGraph: TCreateGraph;
+  /** Tool IDs this graph uses (from per-graph tools.ts) */
+  readonly toolIds: readonly string[];
+}): ReturnType<TCreateGraph> {
   const { name, createGraph, toolIds } = opts;
 
   // Resolve bound tools from TOOL_CATALOG
@@ -108,6 +96,6 @@ export function makeCogniGraph<
     contracts: toolContracts,
   });
 
-  // Create graph using factory
-  return createGraph({ llm, tools });
+  // Create graph using factory - cast preserves concrete return type
+  return createGraph({ llm, tools }) as ReturnType<TCreateGraph>;
 }
