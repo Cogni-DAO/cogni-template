@@ -20,19 +20,19 @@
 export {
   // Async queue
   AsyncQueue,
-  // Server entrypoint helper
-  type CreateServerEntrypointOptions,
-  createServerEntrypoint,
   // Tool wrappers
   type ExecResolver,
   // Message types
   fromBaseMessage,
   type MakeLangChainToolOptions,
   type MakeLangChainToolsOptions,
+  // Server graph helper
+  type MakeServerGraphOptions,
   type Message,
   type MessageToolCall,
   makeLangChainTool,
   makeLangChainTools,
+  makeServerGraph,
   type ToLangChainToolsCapturedOptions,
   type ToolExecFn,
   type ToolExecResult,
@@ -51,10 +51,11 @@ export {
   type CogniExecContext,
   type CompletionFn,
   type CompletionResult,
-  // Entrypoint helper
-  createCogniEntrypoint,
   getCogniExecContext,
   hasCogniExecContext,
+  // Cogni graph helper
+  type MakeCogniGraphOptions,
+  makeCogniGraph,
   runWithCogniExecContext,
   type TokenSink,
   type ToLangChainToolsFromContextOptions,

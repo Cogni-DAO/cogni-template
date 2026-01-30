@@ -21,10 +21,6 @@ export {
   type TokenSink,
   type ToolCall,
 } from "./completion-adapter";
-
-// Cogni entrypoint helper
-export { createCogniEntrypoint } from "./entrypoint";
-
 // Cogni execution context (ALS-based)
 export {
   type CogniExecContext,
@@ -32,6 +28,8 @@ export {
   hasCogniExecContext,
   runWithCogniExecContext,
 } from "./exec-context";
+// Cogni graph helper
+export { type MakeCogniGraphOptions, makeCogniGraph } from "./make-cogni-graph";
 
 // Tool wrapper that resolves from ALS context
 export {

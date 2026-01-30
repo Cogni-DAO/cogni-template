@@ -4,19 +4,21 @@
 /**
  * Module: `@cogni/langgraph-graphs/graphs/ponderer/cogni-exec`
  * Purpose: Cogni executor entrypoint for ponderer graph.
- * Scope: Delegates to shared helper. Does NOT read env or initialize LLM directly.
+ * Scope: Thin entrypoint. Does NOT import catalog or read env.
  * Invariants:
- *   - ENTRYPOINT_IS_THIN: Only helper call
+ *   - HELPERS_DO_NOT_IMPORT_CATALOG: Uses makeCogniGraph with explicit toolIds
  *   - NO_CROSSING_THE_STREAMS: Never imports initChatModel or reads env
  * Side-effects: none
  * Links: GRAPH_EXECUTION.md
  * @public
  */
 
-import { createCogniEntrypoint } from "../../runtime/cogni/entrypoint";
+import { makeCogniGraph } from "../../runtime/cogni/make-cogni-graph";
 import { createPondererGraph, PONDERER_GRAPH_NAME } from "./graph";
+import { PONDERER_TOOL_IDS } from "./tools";
 
-export const pondererGraph = createCogniEntrypoint(
-  PONDERER_GRAPH_NAME,
-  createPondererGraph
-);
+export const pondererGraph = makeCogniGraph({
+  name: PONDERER_GRAPH_NAME,
+  createGraph: createPondererGraph,
+  toolIds: PONDERER_TOOL_IDS,
+});
