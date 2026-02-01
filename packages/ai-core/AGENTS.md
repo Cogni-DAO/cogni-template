@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-15
+- **Last reviewed:** 2026-02-01
 - **Status:** draft
 
 ## Purpose
@@ -52,7 +52,9 @@
   - `ToolRedactionConfig` - Redaction config for tool output
   - `createToolRunner` - Canonical tool execution pipeline (policy enforcement, validation, redaction)
   - `ToolPolicy`, `createToolAllowlistPolicy`, `DENY_ALL_POLICY` - Tool policy interface and helpers
-  - `BoundToolRuntime`, `ToolContractRuntime` - Minimal runtime interfaces (no Zod dependency)
+  - `BoundToolRuntime` - Minimal runtime interface (no Zod dependency)
+  - `ToolSourcePort` - Port interface for tool sources (static, MCP)
+  - `StaticToolSource`, `createStaticToolSource`, `createStaticToolSourceFromRecord` - Static tool source implementation
   - `AiSpanPort` - Observability interface for tool span instrumentation
   - `AiExecutionErrorCode`, `AI_EXECUTION_ERROR_CODES` - Canonical error codes and runtime array
   - `AiExecutionError`, `isAiExecutionError` - Structured error class and type guard
@@ -63,7 +65,7 @@
   - `ToolExecFn`, `ToolExecResult` - Tool execution function signature and result types
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** `index.ts`, `events/*.ts`, `usage/*.ts`, `context/*.ts`, `billing/*.ts`, `tooling/*.ts`, `execution/*.ts`, `graph/*.ts`
+- **Files considered API:** `index.ts`, `events/*.ts`, `usage/*.ts`, `context/*.ts`, `billing/*.ts`, `tooling/*.ts`, `tooling/ports/*.ts`, `tooling/sources/*.ts`, `execution/*.ts`, `graph/*.ts`
 
 ## Ports
 

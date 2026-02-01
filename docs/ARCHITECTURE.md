@@ -531,6 +531,8 @@ Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [GRAPH_EXECUTION.md](G
 - [LangGraph AI Guide](LANGGRAPH_AI.md) - Graph patterns and anti-patterns
 - [Clawdbot Adapter](CLAWDBOT_ADAPTER_SPEC.md) - Clawdbot (Moltbot) external runtime, DAO billing, sandbox containment
 - [Tool Use Spec](TOOL_USE_SPEC.md) - Tool execution invariants, first tool checklist
+- [Authorization (RBAC/ReBAC)](RBAC_SPEC.md) - Actor/subject model, OpenFGA, dual-check for agent delegation
+- [Tenant Connections](TENANT_CONNECTIONS_SPEC.md) - Connection broker, credential faucet, grant intersection
 - [Packages Architecture](PACKAGES_ARCHITECTURE.md) - Internal packages, isolation boundaries, and CI/CD setup
 - [Environment & Stack Deployment Modes](ENVIRONMENTS.md) - All 6 deployment modes, environment variables, and when to use each
 - [Observability](OBSERVABILITY.md) - Structured logging, Prometheus metrics, and Grafana Cloud integration

@@ -23,12 +23,13 @@ import type {
   ToolCallStartEvent,
 } from "../events/ai-events";
 import type { AiSpanPort } from "./ai-span";
+import type { ToolSourcePort } from "./ports/tool-source.port";
 import {
   DENY_ALL_POLICY,
   type ToolPolicy,
   type ToolPolicyContext,
 } from "./runtime/tool-policy";
-import type { BoundToolRuntime, EmitAiEvent, ToolResult } from "./types";
+import type { EmitAiEvent, ToolResult } from "./types";
 
 /** Charset for provider-compatible tool call IDs */
 const TOOL_ID_CHARS =
@@ -95,21 +96,24 @@ export interface ToolRunnerConfig {
 }
 
 /**
- * Create a tool runner instance with the given bound tools.
+ * Create a tool runner instance with the given tool source.
  * The runner executes tools and emits AiEvents via the provided callback.
  *
+ * Per TOOL_SOURCE_RETURNS_BOUND_TOOL: All tool lookups go through ToolSourcePort.
  * Per DENY_BY_DEFAULT: if no policy is provided, defaults to DENY_ALL_POLICY
  * which rejects all tool invocations. Callers must explicitly provide a policy
  * with allowedTools to enable tool execution.
  *
- * @param boundTools - Map of tool name to bound tool (contract + implementation)
+ * @param source - Tool source providing getBoundTool() lookup
  * @param emit - Callback to emit AiEvents
  * @param config - Optional configuration (policy, ctx)
  * @returns Tool runner with exec method
  */
-export function createToolRunner<
-  TTools extends Record<string, BoundToolRuntime>,
->(boundTools: TTools, emit: EmitAiEvent, config?: ToolRunnerConfig) {
+export function createToolRunner(
+  source: ToolSourcePort,
+  emit: EmitAiEvent,
+  config?: ToolRunnerConfig
+) {
   // Default to DENY_ALL_POLICY per DENY_BY_DEFAULT invariant
   const policy = config?.policy ?? DENY_ALL_POLICY;
   // Default ctx for P0; P1+ will require explicit ctx for tenant/role-based policy
@@ -130,8 +134,8 @@ export function createToolRunner<
    * @param options - Execution options (e.g., model-provided toolCallId)
    * @returns ToolResult with redacted value on success, error info on failure
    */
-  async function exec<TName extends keyof TTools & string>(
-    toolName: TName,
+  async function exec(
+    toolName: string,
     rawArgs: unknown,
     options?: ToolExecOptions
   ): Promise<ToolResult<Record<string, unknown>>> {
@@ -178,8 +182,8 @@ export function createToolRunner<
       });
     };
 
-    // Look up bound tool
-    const boundTool = boundTools[toolName];
+    // Look up bound tool via ToolSourcePort (per TOOL_SOURCE_RETURNS_BOUND_TOOL)
+    const boundTool = source.getBoundTool(toolName);
     if (!boundTool) {
       const errorEvent: ToolCallResultEvent = {
         type: "tool_call_result",
@@ -196,10 +200,8 @@ export function createToolRunner<
       };
     }
 
-    const { contract, implementation } = boundTool;
-
-    // 1. Policy check (DENY_BY_DEFAULT)
-    const decision = policy.decide(ctx, toolName, contract.effect);
+    // 1. Policy check (DENY_BY_DEFAULT) — before any method calls
+    const decision = policy.decide(ctx, toolName, boundTool.effect);
     if (decision === "deny" || decision === "require_approval") {
       // P0: require_approval treated as deny (human-in-the-loop is P1)
       const errorEvent: ToolCallResultEvent = {
@@ -212,7 +214,7 @@ export function createToolRunner<
       // Per LANGFUSE_TOOL_VISIBILITY: record policy decision
       endSpan({ decision: "deny", reason: "policy_denied" }, "WARNING", {
         policyDecision: "deny",
-        effect: contract.effect,
+        effect: boundTool.effect,
       });
       return {
         ok: false,
@@ -221,10 +223,11 @@ export function createToolRunner<
       };
     }
 
-    // 2. Validate args via inputSchema
+    // 2. Validate args via boundTool.validateInput()
+    // Per TOOL_SOURCE_RETURNS_BOUND_TOOL: BoundToolRuntime owns validation logic
     let validatedInput: unknown;
     try {
-      validatedInput = contract.inputSchema.parse(rawArgs);
+      validatedInput = boundTool.validateInput(rawArgs);
     } catch (err) {
       const safeMessage =
         err instanceof Error ? err.message : "Invalid tool arguments";
@@ -252,10 +255,26 @@ export function createToolRunner<
     };
     emit(startEvent);
 
-    // 4. Execute tool
+    // 4. Build invocation context and capabilities
+    // Per AUTH_VIA_CAPABILITY_INTERFACE: tools receive auth via capabilities, not context
+    const invocationCtx = {
+      runId: ctx.runId,
+      toolCallId,
+      // connectionId will be added in P1 when connection auth is implemented
+    };
+    // Per FIX_LAYERING_CAPABILITY_TYPES: capabilities is opaque to ai-core
+    // Composition root (src/bootstrap/ai/tool-bindings.ts) provides concrete capabilities
+    const capabilities = {};
+
+    // 5. Execute tool via boundTool.exec()
+    // Per TOOL_SOURCE_RETURNS_BOUND_TOOL: BoundToolRuntime owns execution logic
     let rawOutput: unknown;
     try {
-      rawOutput = await implementation.execute(validatedInput);
+      rawOutput = await boundTool.exec(
+        validatedInput,
+        invocationCtx,
+        capabilities
+      );
     } catch (err) {
       const safeMessage =
         err instanceof Error ? err.message : "Tool execution failed";
@@ -267,7 +286,7 @@ export function createToolRunner<
       };
       emit(errorEvent);
       endSpan({ errorCode: "execution", message: safeMessage }, "ERROR", {
-        effect: contract.effect,
+        effect: boundTool.effect,
       });
       return {
         ok: false,
@@ -276,10 +295,11 @@ export function createToolRunner<
       };
     }
 
-    // 5. Validate result via outputSchema
+    // 6. Validate result via boundTool.validateOutput()
+    // Per TOOL_SOURCE_RETURNS_BOUND_TOOL: BoundToolRuntime owns output validation
     let validatedOutput: unknown;
     try {
-      validatedOutput = contract.outputSchema.parse(rawOutput);
+      validatedOutput = boundTool.validateOutput(rawOutput);
     } catch (err) {
       const safeMessage =
         err instanceof Error ? err.message : "Invalid tool output";
@@ -298,10 +318,11 @@ export function createToolRunner<
       };
     }
 
-    // 6. Redact output (contract.redact handles allowlist internally)
+    // 7. Redact output via boundTool.redact()
+    // Per REDACTION_REQUIRED: no raw output may leak to UI/logs
     let redactedOutput: unknown;
     try {
-      redactedOutput = contract.redact(validatedOutput);
+      redactedOutput = boundTool.redact(validatedOutput);
     } catch (err) {
       const safeMessage =
         err instanceof Error ? err.message : "Redaction failed";
@@ -320,8 +341,8 @@ export function createToolRunner<
       };
     }
 
-    // 7. Emit tool_call_result with redacted output
-    // Cast: contract.redact is responsible for returning correct shape
+    // 8. Emit tool_call_result with redacted output
+    // Cast: boundTool.redact is responsible for returning correct shape
     const safeResult = redactedOutput as Record<string, unknown>;
     const resultEvent: ToolCallResultEvent = {
       type: "tool_call_result",
@@ -330,7 +351,7 @@ export function createToolRunner<
     };
     emit(resultEvent);
 
-    // 8. End span with success
+    // 9. End span with success
     // Per SPAN_METADATA_ONLY: metadata only by default; hook provides scrubbed payload
     let hookOutput: unknown;
     let hookOutputFailed = false;
@@ -343,12 +364,12 @@ export function createToolRunner<
       }
     }
     endSpan(hookOutput, "DEFAULT", {
-      effect: contract.effect,
+      effect: boundTool.effect,
       policyDecision: "allow",
       hookOutputFailed,
     });
 
-    // 9. Return result
+    // 10. Return result
     return {
       ok: true,
       value: safeResult,

@@ -52,6 +52,9 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [Node Formation Spec](docs/NODE_FORMATION_SPEC.md)
 - [Chain Deployment Tech Debt](docs/CHAIN_DEPLOYMENT_TECH_DEBT.md)
 - [Architecture](docs/ARCHITECTURE.md)
+- [Authorization (RBAC/ReBAC)](docs/RBAC_SPEC.md)
+- [Tenant Connections](docs/TENANT_CONNECTIONS_SPEC.md)
+- [Tool Use Spec](docs/TOOL_USE_SPEC.md)
 - [Services Migration Guide](docs/SERVICES_MIGRATION.md)
 
 ### AI & Evals

@@ -16,11 +16,13 @@
 
 import {
   type AiEvent,
+  type BoundToolRuntime,
+  createStaticToolSourceFromRecord,
   createToolAllowlistPolicy,
   createToolRunner,
   type ToolExecFn,
 } from "@cogni/ai-core";
-import type { CatalogBoundTool } from "@cogni/ai-tools";
+import { type CatalogBoundTool, toBoundToolRuntime } from "@cogni/ai-tools";
 
 /**
  * No-op event emitter for dev server.
@@ -44,6 +46,12 @@ const devEmit = (_event: AiEvent): void => {
 export function createDevToolExecFn(
   boundTools: Readonly<Record<string, CatalogBoundTool>>
 ): ToolExecFn {
+  // Convert CatalogBoundTool to BoundToolRuntime
+  const runtimeTools: Record<string, BoundToolRuntime> = {};
+  for (const [id, tool] of Object.entries(boundTools)) {
+    runtimeTools[id] = toBoundToolRuntime(tool);
+  }
+
   // Create tool runner with DENY_ALL_POLICY by default
   // The toLangChainTool wrapper will check configurable.toolIds BEFORE calling exec
   // So by the time exec() is called, the tool is already in the allowlist
@@ -57,10 +65,11 @@ export function createDevToolExecFn(
   // For full double-enforcement (defense in depth), we'd need toolIds at
   // createDevToolExecFn time, but dev server doesn't have that context.
   // The wrapper check is sufficient for dev server use.
-  const allToolIds = Object.keys(boundTools);
+  const allToolIds = Object.keys(runtimeTools);
   const policy = createToolAllowlistPolicy(allToolIds);
+  const source = createStaticToolSourceFromRecord(runtimeTools);
 
-  const toolRunner = createToolRunner(boundTools, devEmit, {
+  const toolRunner = createToolRunner(source, devEmit, {
     policy,
     ctx: { runId: "dev_server" },
   });

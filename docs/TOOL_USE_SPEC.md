@@ -77,6 +77,10 @@
 
 31. **ARCH_SINGLE_EXECUTION_PATH**: All tool implementations execute ONLY through `toolRunner.exec()`. No direct `tool.func()` calls in LangChain wrappers, no direct MCP `callTool()` invocations, no executor-specific bypass paths. Enforced by architectural grep tests that fail on bypass patterns.
 
+32. **AUTHZ_CHECK_BEFORE_TOOL_EXEC**: `toolRunner.exec()` must call `AuthorizationPort.check(actor, subject?, 'tool.execute', tool:{toolId}, ctx)` BEFORE tool execution. When subject is present (agent acting on behalf of user), both permission AND delegation are verified. No bypass paths. See [RBAC_SPEC.md](RBAC_SPEC.md).
+
+33. **CONTEXT_HAS_IDENTITY**: Every `ToolInvocationContext` must include `{ actorId, tenantId }` and optionally `{ subjectId, graphId }`. No anonymous tool execution. `subjectId` is set ONLY by server (not from request params) per OBO_SUBJECT_MUST_BE_BOUND. These fields are references only — no secrets.
+
 ---
 
 ## Implementation Checklist
@@ -180,19 +184,20 @@ Per invariants **TOOL_SOURCE_RETURNS_BOUND_TOOL**, **NO_SECRETS_IN_CONTEXT**, **
 
 **ToolSourcePort abstraction (`@cogni/ai-core/tooling/`):**
 
-- [ ] Create `ToolSourcePort` interface with `getBoundTool(toolId)` and `listToolSpecs()`
-- [ ] Create `BoundToolRuntime` interface: `{ id, spec, effect, validateInput(), exec(), validateOutput(), redact() }`
-- [ ] Create `ToolInvocationContext` type with references-only fields: `{ runId, toolCallId, connectionId? }`
-- [ ] Refactor `createToolRunner()` to accept `ToolSourcePort` instead of raw `boundTools`
-- [ ] toolRunner calls `boundTool.validateInput()` (Zod stays in ai-tools, not ai-core)
-- [ ] toolRunner calls `boundTool.exec(validatedArgs, ctx, capabilities)`
-- [ ] toolRunner calls `boundTool.validateOutput()` then `boundTool.redact()`
+- [x] Create `ToolSourcePort` interface with `getBoundTool(toolId)` and `listToolSpecs()`
+- [x] Create `BoundToolRuntime` interface: `{ id, spec, effect, validateInput(), exec(), validateOutput(), redact() }`
+- [x] Create `ToolInvocationContext` type with base fields: `{ runId, toolCallId, connectionId? }`
+- [ ] Add identity fields to `ToolInvocationContext` — see P0: RBAC Wiring below
+- [x] Refactor `createToolRunner()` to accept `ToolSourcePort` instead of raw `boundTools`
+- [x] toolRunner calls `boundTool.validateInput()` (Zod stays in ai-tools, not ai-core)
+- [x] toolRunner calls `boundTool.exec(validatedArgs, ctx, capabilities)`
+- [x] toolRunner calls `boundTool.validateOutput()` then `boundTool.redact()`
 
 **StaticToolSource (`@cogni/ai-core/tooling/sources/`):**
 
-- [ ] Create `StaticToolSource` implementing `ToolSourcePort`
+- [x] Create `StaticToolSource` implementing `ToolSourcePort`
 - [ ] Wraps `TOOL_CATALOG` from `@cogni/ai-tools`
-- [ ] Export from ai-core barrel
+- [x] Export from ai-core barrel
 
 **Connection authorization (`@cogni/ai-core/tooling/`):**
 
@@ -204,7 +209,7 @@ Per invariants **TOOL_SOURCE_RETURNS_BOUND_TOOL**, **NO_SECRETS_IN_CONTEXT**, **
 
 **Capability-based auth (`@cogni/ai-tools/capabilities/`):**
 
-- [ ] Create `AuthCapability` interface: `getAccessToken(connectionId): Promise<string>`
+- [x] Create `AuthCapability` interface: `getAccessToken(connectionId): Promise<string>`
 - [ ] Create `ConnectionClientFactory` interface: `for(connectionId): AuthenticatedClient`
 - [ ] Tools declare capability dependencies in contract: `capabilities: ['auth']`
 - [ ] Composition root binds capabilities to broker-backed implementations
@@ -221,6 +226,17 @@ Per invariants **TOOL_SOURCE_RETURNS_BOUND_TOOL**, **NO_SECRETS_IN_CONTEXT**, **
 - [ ] Update `LangGraphInProcProvider` to use `ToolSourcePort`
 - [ ] Update `src/bootstrap/ai/tool-bindings.ts` with `StaticToolSource`
 - [ ] Update LangChain wrappers to use new toolRunner signature
+
+**RBAC wiring (per AUTHZ_CHECK_BEFORE_TOOL_EXEC, CONTEXT_HAS_IDENTITY):**
+
+- [ ] Add `actorId: string` to `ToolInvocationContext`
+- [ ] Add `subjectId?: string` to `ToolInvocationContext` (OBO only, server-bound)
+- [ ] Add `tenantId: string` to `ToolInvocationContext`
+- [ ] Inject `AuthorizationPort` into `createToolRunner()` config
+- [ ] Call `authz.check(actor, subject?, 'tool.execute', tool:{id}, ctx)` before step 4 in pipeline
+- [ ] Add `authz_denied` to `ToolErrorCode` union
+- [ ] Arch test: `authz-at-tool-exec.test.ts` — grep for tool.exec without authz check
+- [ ] See [RBAC_SPEC.md](RBAC_SPEC.md) for full AuthorizationPort interface
 
 ### P1: Tool Ecosystem + ToolCatalog
 
@@ -457,6 +473,12 @@ interface BoundToolRuntime {
 interface ToolInvocationContext {
   readonly runId: string;
   readonly toolCallId: string;
+  // Identity fields (per CONTEXT_HAS_IDENTITY, RBAC_SPEC.md)
+  readonly actorId: string; // "user:{wallet}" | "agent:{id}" | "service:{name}"
+  readonly subjectId?: string; // "user:{wallet}" — OBO only, server-bound
+  readonly tenantId: string; // Tenant/billing account scope
+  readonly graphId?: string; // Graph context for authz
+  // Connection reference (per CONNECTION_IN_CONTEXT_NOT_ARGS)
   readonly connectionId?: string; // Out-of-band, not in tool args
   // FORBIDDEN: accessToken, apiKey, refreshToken, headers, secrets
 }
@@ -482,33 +504,36 @@ toolRunner.exec(toolId, rawArgs, ctx)
     ├─ 1. source.getBoundTool(toolId) → boundTool | undefined
     │      └─ undefined → { ok: false, errorCode: 'unavailable' }
     │
-    ├─ 2. policy.decide(ctx, toolId, boundTool.effect)
+    ├─ 2. policy.decide(ctx, toolId, boundTool.effect)           ← ToolPolicy (cheap)
     │      └─ deny/require_approval → { ok: false, errorCode: 'policy_denied' }
     │
-    ├─ 3. If boundTool.requiresConnection:
+    ├─ 3. authz.check(actor, subject?, 'tool.execute', tool:{id}) ← OpenFGA (P0: RBAC)
+    │      └─ deny → { ok: false, errorCode: 'authz_denied' }
+    │
+    ├─ 4. If boundTool.requiresConnection:
     │      ├─ Validate ctx.connectionId exists
     │      ├─ Check connectionId ∈ effectiveAllowed (grant ∩ request)
-    │      └─ Fail fast if not authorized
+    │      └─ Fail fast → { ok: false, errorCode: 'policy_denied' }
     │
-    ├─ 4. boundTool.validateInput(rawArgs) → validatedArgs
+    ├─ 5. boundTool.validateInput(rawArgs) → validatedArgs
     │      └─ ZodError → { ok: false, errorCode: 'validation' }
     │
-    ├─ 5. Resolve capabilities (auth via broker if needed)
-    │      └─ capabilities = { auth: brokerBackedAuth, clock, ... }
+    ├─ 6. Resolve capabilities (auth via broker if needed)
+    │      └─ authz.check for connection.use happens inside broker
     │
-    ├─ 6. emit('tool_call_start', { toolCallId, args: validatedArgs })
+    ├─ 7. emit('tool_call_start', { toolCallId, args: validatedArgs })
     │
-    ├─ 7. boundTool.exec(validatedArgs, ctx, capabilities) → rawOutput
+    ├─ 8. boundTool.exec(validatedArgs, ctx, capabilities) → rawOutput
     │      └─ Error → { ok: false, errorCode: 'execution' }
     │
-    ├─ 8. boundTool.validateOutput(rawOutput) → validatedOutput
+    ├─ 9. boundTool.validateOutput(rawOutput) → validatedOutput
     │
-    ├─ 9. boundTool.redact(validatedOutput) → safeOutput
-    │      └─ Error → { ok: false, errorCode: 'redaction_failed' }
+    ├─ 10. boundTool.redact(validatedOutput) → safeOutput
+    │       └─ Error → { ok: false, errorCode: 'redaction_failed' }
     │
-    ├─ 10. emit('tool_call_result', { toolCallId, result: safeOutput })
+    ├─ 11. emit('tool_call_result', { toolCallId, result: safeOutput })
     │
-    └─ 11. { ok: true, value: safeOutput }
+    └─ 12. { ok: true, value: safeOutput }
 ```
 
 **Key design points:**

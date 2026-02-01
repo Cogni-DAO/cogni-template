@@ -22,7 +22,8 @@ import {
 } from "@cogni/ai-core";
 import {
   createEventCollector,
-  createTestBoundTool,
+  createTestBoundToolRuntime,
+  createTestToolSource,
   TEST_TOOL_NAME,
 } from "@tests/_fakes/ai/tool-builders";
 import { describe, expect, it, vi } from "vitest";
@@ -38,11 +39,9 @@ describe("createToolRunner", () => {
       const collector = createEventCollector();
 
       // Create runner WITHOUT policy (defaults to DENY_ALL_POLICY)
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit
-        // No config = no policy = DENY_ALL_POLICY
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit);
+      // No config = no policy = DENY_ALL_POLICY
 
       const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
 
@@ -63,11 +62,10 @@ describe("createToolRunner", () => {
       const { boundTool, executeSpy } = createSpyableBoundTool();
       const collector = createEventCollector();
 
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: DENY_ALL_POLICY }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: DENY_ALL_POLICY,
+      });
 
       const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
 
@@ -83,11 +81,8 @@ describe("createToolRunner", () => {
       const collector = createEventCollector();
 
       const policy = createToolAllowlistPolicy([TEST_TOOL_NAME]);
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, { policy });
 
       const result = await runner.exec(TEST_TOOL_NAME, { value: "hello" });
 
@@ -113,11 +108,8 @@ describe("createToolRunner", () => {
 
       // Policy allows "other_tool" but NOT TEST_TOOL_NAME
       const policy = createToolAllowlistPolicy(["other_tool"]);
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, { policy });
 
       const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
 
@@ -141,8 +133,9 @@ describe("createToolRunner", () => {
     it("returns unavailable error for unknown tool", async () => {
       const collector = createEventCollector();
 
-      // Create runner with empty boundTools
-      const runner = createToolRunner({}, collector.emit);
+      // Create runner with empty source
+      const source = createTestToolSource({});
+      const runner = createToolRunner(source, collector.emit);
 
       const result = await runner.exec("nonexistent_tool", { value: "test" });
 
@@ -150,6 +143,25 @@ describe("createToolRunner", () => {
       expect(result.errorCode).toBe("unavailable");
 
       // Error event emitted
+      const resultEvents = collector.getByType("tool_call_result");
+      expect(resultEvents).toHaveLength(1);
+      expect(resultEvents[0].isError).toBe(true);
+    });
+
+    it("does NOT emit tool_call_start when source.getBoundTool returns undefined", async () => {
+      // Regression test: Ensures unknown toolId fails fast without emitting start event
+      // Per TOOL_SOURCE_RETURNS_BOUND_TOOL: source.getBoundTool returns undefined for unknown tools
+      const collector = createEventCollector();
+      const source = createTestToolSource({});
+      const runner = createToolRunner(source, collector.emit);
+
+      await runner.exec("unknown_tool_id", { value: "test" });
+
+      // tool_call_start should NOT be emitted for unknown tools
+      const startEvents = collector.getByType("tool_call_start");
+      expect(startEvents).toHaveLength(0);
+
+      // Only tool_call_result (error) should be emitted
       const resultEvents = collector.getByType("tool_call_result");
       expect(resultEvents).toHaveLength(1);
       expect(resultEvents[0].isError).toBe(true);
@@ -162,7 +174,7 @@ describe("createToolRunner", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Create a bound tool with spyable implementation.
+ * Create a bound tool runtime with spyable exec method.
  */
 function createSpyableBoundTool() {
   const executeSpy = vi
@@ -172,10 +184,8 @@ function createSpyableBoundTool() {
       secret: "hidden",
     }));
 
-  const boundTool = createTestBoundTool();
-  // Replace implementation with spy
-  (boundTool.implementation as { execute: typeof executeSpy }).execute =
-    executeSpy;
+  const boundTool = createTestBoundToolRuntime();
+  boundTool.exec = async (args) => executeSpy(args);
 
   return { boundTool, executeSpy };
 }

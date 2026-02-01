@@ -11,6 +11,17 @@
  * @public
  */
 
+export type {
+  AuthCapability,
+  ClockCapability,
+  ToolCapabilities,
+} from "./capabilities";
+// Capabilities
+export {
+  createFixedClock,
+  stubAuthCapability,
+  systemClock,
+} from "./capabilities";
 // Tool catalog
 export {
   type CatalogBoundTool,
@@ -21,6 +32,8 @@ export {
   TOOL_CATALOG,
   type ToolCatalog,
 } from "./catalog";
+// Runtime adapter
+export { toBoundToolRuntime } from "./runtime-adapter";
 // Schema compilation
 export {
   type ToToolSpecResult,

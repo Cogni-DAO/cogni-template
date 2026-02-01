@@ -52,6 +52,8 @@ export {
 export type { GraphId } from "./graph/graph-id";
 // Span types (observability)
 export type { AiSpanHandle, AiSpanPort } from "./tooling/ai-span";
+// Tool source port
+export type { ToolSourcePort } from "./tooling/ports/tool-source.port";
 // Tool policy (runtime)
 export {
   createToolAllowlistPolicy,
@@ -60,6 +62,12 @@ export {
   type ToolPolicyContext,
   type ToolPolicyDecision,
 } from "./tooling/runtime/tool-policy";
+// Tool sources
+export {
+  createStaticToolSource,
+  createStaticToolSourceFromRecord,
+  StaticToolSource,
+} from "./tooling/sources/static.source";
 // Tool runner
 export {
   createToolRunner,
@@ -68,17 +76,18 @@ export {
   type ToolRunnerConfig,
 } from "./tooling/tool-runner";
 // Tooling types
+// NOTE: Per FIX_LAYERING_CAPABILITY_TYPES, AuthCapability/ClockCapability are in @cogni/ai-tools
 export type {
   BoundToolRuntime,
   EmitAiEvent,
   ParseableSchema,
   RedactionMode,
-  ToolContractRuntime,
+  ToolCapabilities,
   ToolEffect,
   ToolErrorCode,
   ToolExecFn,
   ToolExecResult,
-  ToolImplementationRuntime,
+  ToolInvocationContext,
   ToolInvocationRecord,
   ToolRedactionConfig,
   ToolResult,

@@ -443,6 +443,21 @@ module.exports = {
         "ai-core defines runtime interfaces; ai-tools implements them. No reverse dependency.",
     },
 
+    // Graph code cannot import ai-core directly (per ARCH_SINGLE_EXECUTION_PATH)
+    // Graphs receive ToolExecFn via DI; they must not access BoundToolRuntime
+    {
+      name: "no-graphs-to-ai-core",
+      severity: "error",
+      from: {
+        path: "^packages/langgraph-graphs/src/graphs/",
+      },
+      to: {
+        path: "^packages/ai-core/",
+      },
+      comment:
+        "Graph code uses ToolExecFn via runtime layer. Direct ai-core imports would bypass toolRunner.",
+    },
+
     // =========================================================================
     // Scheduler package boundary rules (per PACKAGES_ARCHITECTURE.md)
     // =========================================================================

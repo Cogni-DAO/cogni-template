@@ -4,14 +4,15 @@
 /**
  * Module: `@tests/unit/security/no-secret-fields.types`
  * Purpose: Type-level guard tests ensuring secrets never appear in port interfaces.
- * Scope: Compile-time verification that BillingAccount and LlmCaller do not contain secret fields.
- * Invariants: Security invariant - secrets must not cross port boundaries.
+ * Scope: Compile-time verification that BillingAccount, LlmCaller, and ToolInvocationContext do not contain secret fields. Does NOT test runtime behavior.
+ * Invariants: Security invariant - secrets must not cross port boundaries; NO_SECRETS_IN_CONTEXT.
  * Side-effects: none (type-only tests)
  * Notes: Uses @ts-expect-error to fail compilation if secret fields are re-added.
- * Links: src/ports/accounts.port.ts, src/ports/llm.port.ts, docs/SECURITY_AUTH_SPEC.md
+ * Links: src/ports/accounts.port.ts, src/ports/llm.port.ts, @cogni/ai-core/tooling/types.ts, docs/SECURITY_AUTH_SPEC.md, docs/TOOL_USE_SPEC.md
  * @public
  */
 
+import type { ToolInvocationContext } from "@cogni/ai-core";
 import { describe, expect, it } from "vitest";
 import type { BillingAccount, LlmCaller } from "@/ports";
 
@@ -52,5 +53,45 @@ describe("Security: No secret fields in port interfaces", () => {
 
     // Runtime assertion (type guard already enforces at compile time)
     expect(caller.billingAccountId).toBeDefined();
+  });
+
+  /**
+   * Security invariant: ToolInvocationContext must NOT contain secrets.
+   * Per NO_SECRETS_IN_CONTEXT (TOOL_USE_SPEC.md #28): Context carries references
+   * only (runId, toolCallId, connectionId?). Secrets flow via capabilities.
+   * If this test fails to compile, someone added a secret field to ToolInvocationContext.
+   */
+  it("ToolInvocationContext does not expose accessToken", () => {
+    const ctx: ToolInvocationContext = {
+      runId: "run-123",
+      toolCallId: "call-456",
+      connectionId: "conn-789",
+      // @ts-expect-error - accessToken must NOT exist on ToolInvocationContext (NO_SECRETS_IN_CONTEXT)
+      accessToken: "should-not-compile",
+    };
+
+    expect(ctx.runId).toBeDefined();
+  });
+
+  it("ToolInvocationContext does not expose apiKey", () => {
+    const ctx: ToolInvocationContext = {
+      runId: "run-123",
+      toolCallId: "call-456",
+      // @ts-expect-error - apiKey must NOT exist on ToolInvocationContext (NO_SECRETS_IN_CONTEXT)
+      apiKey: "should-not-compile",
+    };
+
+    expect(ctx.runId).toBeDefined();
+  });
+
+  it("ToolInvocationContext does not expose refreshToken", () => {
+    const ctx: ToolInvocationContext = {
+      runId: "run-123",
+      toolCallId: "call-456",
+      // @ts-expect-error - refreshToken must NOT exist on ToolInvocationContext (NO_SECRETS_IN_CONTEXT)
+      refreshToken: "should-not-compile",
+    };
+
+    expect(ctx.runId).toBeDefined();
   });
 });

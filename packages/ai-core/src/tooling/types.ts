@@ -119,6 +119,49 @@ export interface ToolInvocationRecord {
 }
 
 // -----------------------------------------------------------------------------
+// Tool Invocation Context (references only, NO secrets)
+// Per NO_SECRETS_IN_CONTEXT invariant
+// -----------------------------------------------------------------------------
+
+/**
+ * Context for tool invocation — references only, NO secrets.
+ *
+ * Per NO_SECRETS_IN_CONTEXT (TOOL_USE_SPEC.md #28):
+ * This type must NEVER contain secrets (access tokens, API keys, refresh tokens,
+ * Authorization headers, provider secret blobs). Only opaque reference IDs are permitted.
+ *
+ * FORBIDDEN fields: accessToken, apiKey, refreshToken, headers, secret, credential
+ */
+export interface ToolInvocationContext {
+  /** Graph run ID for correlation */
+  readonly runId: string;
+  /** Stable tool call ID (model-provided or generated) */
+  readonly toolCallId: string;
+  /**
+   * Connection ID for authenticated tools (out-of-band, not in tool args).
+   * Per CONNECTION_IN_CONTEXT_NOT_ARGS: connectionId in context, not tool schemas.
+   */
+  readonly connectionId?: string;
+}
+
+// -----------------------------------------------------------------------------
+// Tool Capabilities Type
+// Per FIX_LAYERING_CAPABILITY_TYPES: interfaces live in ai-tools, ai-core uses opaque
+// -----------------------------------------------------------------------------
+
+/**
+ * Capabilities type alias for ai-core.
+ *
+ * Per FIX_LAYERING_CAPABILITY_TYPES (Architecture eval):
+ * - Concrete capability interfaces (AuthCapability, ClockCapability) live in @cogni/ai-tools
+ * - ai-core treats capabilities as opaque Record to avoid pulling tool-domain interfaces
+ * - Composition root binds concrete capability implementations
+ *
+ * @see @cogni/ai-tools/capabilities for concrete interfaces
+ */
+export type ToolCapabilities = Record<string, unknown>;
+
+// -----------------------------------------------------------------------------
 // Tool Contract Runtime Types (minimal interface for tool-runner)
 // -----------------------------------------------------------------------------
 
@@ -131,32 +174,77 @@ export interface ParseableSchema {
 }
 
 /**
- * Minimal tool contract interface for tool-runner.
- * ai-tools implements this with full Zod schemas; ai-core only sees this interface.
- * Policy/allowlist belongs in ToolPolicy, not here.
- */
-export interface ToolContractRuntime {
-  readonly name: string;
-  readonly effect: ToolEffect;
-  readonly inputSchema: ParseableSchema;
-  readonly outputSchema: ParseableSchema;
-  readonly redact: (output: unknown) => unknown;
-}
-
-/**
- * Minimal tool implementation interface for tool-runner.
- */
-export interface ToolImplementationRuntime {
-  readonly execute: (input: unknown) => Promise<unknown>;
-}
-
-/**
- * Bound tool: contract + implementation.
- * This is the runtime interface consumed by tool-runner.
+ * Bound tool runtime interface.
+ *
+ * Per TOOL_SOURCE_RETURNS_BOUND_TOOL (TOOL_USE_SPEC.md #27):
+ * This interface owns validation, execution, and redaction logic.
+ * toolRunner orchestrates the pipeline but never imports Zod.
+ *
+ * Implementations live in @cogni/ai-tools (which has Zod).
+ * ai-core only sees this semantic interface.
  */
 export interface BoundToolRuntime {
-  readonly contract: ToolContractRuntime;
-  readonly implementation: ToolImplementationRuntime;
+  /** Namespaced tool ID (e.g., "core__get_current_time") */
+  readonly id: string;
+
+  /** Tool spec for LLM exposure (compiled from Zod, no runtime) */
+  readonly spec: ToolSpec;
+
+  /** Side-effect level for policy decisions */
+  readonly effect: ToolEffect;
+
+  /** Whether tool requires authenticated connection */
+  readonly requiresConnection: boolean;
+
+  /** Capability dependencies (e.g., ['auth', 'clock']) */
+  readonly capabilities: readonly string[];
+
+  // --- Method-based interface ---
+
+  /**
+   * Validate input args.
+   * Throws validation error on failure (Zod stays in ai-tools).
+   *
+   * @param rawArgs - Raw arguments from LLM
+   * @returns Validated and typed arguments
+   * @throws ZodError or similar on validation failure
+   */
+  validateInput(rawArgs: unknown): unknown;
+
+  /**
+   * Execute tool with validated args, context, and capabilities.
+   *
+   * Per AUTH_VIA_CAPABILITY_INTERFACE: auth is provided via capabilities,
+   * not via raw secrets in context.
+   *
+   * @param validatedArgs - Arguments validated by validateInput()
+   * @param ctx - Invocation context (references only)
+   * @param capabilities - Injected capabilities (auth, clock, etc.)
+   * @returns Raw tool output (before validation/redaction)
+   */
+  exec(
+    validatedArgs: unknown,
+    ctx: ToolInvocationContext,
+    capabilities: ToolCapabilities
+  ): Promise<unknown>;
+
+  /**
+   * Validate output from tool execution.
+   *
+   * @param rawOutput - Output from exec()
+   * @returns Validated output
+   * @throws On validation failure
+   */
+  validateOutput(rawOutput: unknown): unknown;
+
+  /**
+   * Redact output for UI/telemetry.
+   * Per REDACTION_REQUIRED: allowlist-based, missing fields stripped.
+   *
+   * @param validatedOutput - Output validated by validateOutput()
+   * @returns Redacted output safe for UI/logs
+   */
+  redact(validatedOutput: unknown): unknown;
 }
 
 /**

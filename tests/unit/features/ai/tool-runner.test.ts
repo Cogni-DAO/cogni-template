@@ -19,7 +19,8 @@
 import { createToolAllowlistPolicy, createToolRunner } from "@cogni/ai-core";
 import {
   createEventCollector,
-  createTestBoundTool,
+  createTestBoundToolRuntime,
+  createTestToolSource,
   TEST_TOOL_CALL_ID,
   TEST_TOOL_NAME,
 } from "@tests/_fakes";
@@ -40,13 +41,13 @@ describe("features/ai/tool-runner", () => {
   describe("exec()", () => {
     it("returns ok:true with redacted value on success", async () => {
       // Arrange
-      const boundTool = createTestBoundTool(); // Uses default: "Processed: ${input.value}"
+      const boundTool = createTestBoundToolRuntime(); // Uses default: "Processed: ${input.value}"
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       const result = await runner.exec(TEST_TOOL_NAME, { value: "test_input" });
@@ -63,7 +64,8 @@ describe("features/ai/tool-runner", () => {
     it("returns ok:false with errorCode 'unavailable' for unknown tool", async () => {
       // Arrange
       const collector = createEventCollector();
-      const runner = createToolRunner({}, collector.emit, {
+      const source = createTestToolSource({});
+      const runner = createToolRunner(source, collector.emit, {
         policy: TEST_POLICY,
         ctx: TEST_CTX,
       });
@@ -81,13 +83,15 @@ describe("features/ai/tool-runner", () => {
 
     it("returns ok:false with errorCode 'validation' on input validation failure", async () => {
       // Arrange
-      const boundTool = createTestBoundTool({ validateInputThrows: true });
+      const boundTool = createTestBoundToolRuntime({
+        validateInputThrows: true,
+      });
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       const result = await runner.exec(TEST_TOOL_NAME, { invalid: "args" });
@@ -101,13 +105,13 @@ describe("features/ai/tool-runner", () => {
 
     it("returns ok:false with errorCode 'execution' on execution error", async () => {
       // Arrange
-      const boundTool = createTestBoundTool({ executionThrows: true });
+      const boundTool = createTestBoundToolRuntime({ executionThrows: true });
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
@@ -124,14 +128,14 @@ describe("features/ai/tool-runner", () => {
 
     it("returns ok:false with errorCode 'policy_denied' when tool not in policy allowlist", async () => {
       // Arrange - policy allows only TEST_TOOL_NAME, but tool is different
-      const boundTool = createTestBoundTool();
+      const boundTool = createTestBoundToolRuntime();
       const collector = createEventCollector();
       const restrictivePolicy = createToolAllowlistPolicy(["other_tool_only"]);
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: restrictivePolicy, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: restrictivePolicy,
+        ctx: TEST_CTX,
+      });
 
       // Act
       const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
@@ -146,13 +150,11 @@ describe("features/ai/tool-runner", () => {
 
     it("returns ok:false with errorCode 'policy_denied' when using default DENY_ALL_POLICY", async () => {
       // Arrange - no policy provided, defaults to DENY_ALL_POLICY
-      const boundTool = createTestBoundTool();
+      const boundTool = createTestBoundToolRuntime();
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit
-        // No config - uses DENY_ALL_POLICY
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit);
+      // No config - uses DENY_ALL_POLICY
 
       // Act
       const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
@@ -166,16 +168,16 @@ describe("features/ai/tool-runner", () => {
 
     it("returns ok:false with errorCode 'policy_denied' when effect requires approval (P0 behavior)", async () => {
       // Arrange - tool is in allowlist but effect requires approval
-      const boundTool = createTestBoundTool({ effect: "state_change" });
+      const boundTool = createTestBoundToolRuntime({ effect: "state_change" });
       const collector = createEventCollector();
       const approvalPolicy = createToolAllowlistPolicy([TEST_TOOL_NAME], {
         requireApprovalForEffects: ["state_change"],
       });
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: approvalPolicy, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: approvalPolicy,
+        ctx: TEST_CTX,
+      });
 
       // Act
       const result = await runner.exec(TEST_TOOL_NAME, { value: "test" });
@@ -192,13 +194,13 @@ describe("features/ai/tool-runner", () => {
   describe("event emission", () => {
     it("emits tool_call_start before execution", async () => {
       // Arrange
-      const boundTool = createTestBoundTool();
+      const boundTool = createTestBoundToolRuntime();
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       await runner.exec(
@@ -220,13 +222,13 @@ describe("features/ai/tool-runner", () => {
 
     it("emits tool_call_result after execution", async () => {
       // Arrange
-      const boundTool = createTestBoundTool(); // Uses default: "Processed: ${input.value}"
+      const boundTool = createTestBoundToolRuntime(); // Uses default: "Processed: ${input.value}"
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       await runner.exec(
@@ -248,13 +250,13 @@ describe("features/ai/tool-runner", () => {
 
     it("emits events in correct order: start then result", async () => {
       // Arrange
-      const boundTool = createTestBoundTool();
+      const boundTool = createTestBoundToolRuntime();
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       await runner.exec(
@@ -271,13 +273,13 @@ describe("features/ai/tool-runner", () => {
 
     it("maintains stable toolCallId across start and result events", async () => {
       // Arrange
-      const boundTool = createTestBoundTool();
+      const boundTool = createTestBoundToolRuntime();
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
       const customToolCallId = "call_stable_id_789";
 
       // Act
@@ -298,13 +300,13 @@ describe("features/ai/tool-runner", () => {
 
     it("emits error result with isError:true on execution failure", async () => {
       // Arrange
-      const boundTool = createTestBoundTool({ executionThrows: true });
+      const boundTool = createTestBoundToolRuntime({ executionThrows: true });
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act
       await runner.exec(
@@ -322,13 +324,13 @@ describe("features/ai/tool-runner", () => {
 
     it("generates UUID toolCallId when not provided by model", async () => {
       // Arrange
-      const boundTool = createTestBoundTool();
+      const boundTool = createTestBoundToolRuntime();
       const collector = createEventCollector();
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: TEST_POLICY, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: TEST_POLICY,
+        ctx: TEST_CTX,
+      });
 
       // Act - no modelToolCallId provided
       await runner.exec(TEST_TOOL_NAME, { value: "test" });
@@ -346,14 +348,14 @@ describe("features/ai/tool-runner", () => {
 
     it("emits tool_call_result with isError:true when policy denies tool", async () => {
       // Arrange
-      const boundTool = createTestBoundTool();
+      const boundTool = createTestBoundToolRuntime();
       const collector = createEventCollector();
       const restrictivePolicy = createToolAllowlistPolicy(["other_tool"]);
-      const runner = createToolRunner(
-        { [TEST_TOOL_NAME]: boundTool },
-        collector.emit,
-        { policy: restrictivePolicy, ctx: TEST_CTX }
-      );
+      const source = createTestToolSource({ [TEST_TOOL_NAME]: boundTool });
+      const runner = createToolRunner(source, collector.emit, {
+        policy: restrictivePolicy,
+        ctx: TEST_CTX,
+      });
 
       // Act
       await runner.exec(
