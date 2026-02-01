@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-12-01
+- **Last reviewed:** 2026-02-01
 - **Status:** draft
 
 ## Purpose
@@ -43,10 +43,11 @@ Deterministic test doubles for unit tests with no I/O dependencies.
   - MockAccountService (account/credits test doubles)
   - Payment builders (createPaymentAttempt, createIntentAttempt, createPendingAttempt, createCreditedAttempt, createRejectedAttempt, createFailedAttempt, createExpiredIntent, createTimedOutPending)
   - makeTestCtx (RequestContext factory for facade/service tests)
+  - Tool test helpers (createTestBoundToolRuntime, createTestToolSource, createEventCollector)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** index.ts, payments/fakes.ts, ai/fakes.ts, test-context.ts
+- **Files considered API:** index.ts, payments/fakes.ts, ai/fakes.ts, ai/tool-builders.ts, test-context.ts
 
 ## Responsibilities
 
