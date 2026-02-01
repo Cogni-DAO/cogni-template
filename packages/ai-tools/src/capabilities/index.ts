@@ -14,6 +14,16 @@
  * @public
  */
 
+// Metrics capability (per GOVERNED_METRICS invariant)
+export type {
+  MetricDataPoint,
+  MetricQueryResult,
+  MetricSummary,
+  MetricsCapability,
+  MetricTemplate,
+  MetricWindow,
+  TemplateQueryParams,
+} from "./metrics";
 // Export capability interfaces (defined here, NOT in ai-core)
 export type {
   AuthCapability,

@@ -6,7 +6,7 @@
  * Purpose: Canonical registry of all tool definitions. Single source of truth.
  * Scope: Exports TOOL_CATALOG and createToolCatalog helper. Does NOT import @langchain.
  * Invariants:
- *   - TOOL_CATALOG_IS_CANONICAL: This is the only tool registry
+ *   - TOOL_CATALOG_IS_CANONICAL: Single source of truth for core__ tools
  *   - TOOL_ID_STABILITY: Duplicate IDs throw at construction time
  *   - TOOL_ID_NAMESPACED: IDs use core__<name> format
  * Side-effects: none
@@ -15,6 +15,7 @@
  */
 
 import { getCurrentTimeBoundTool } from "./tools/get-current-time";
+import { metricsQueryBoundTool } from "./tools/metrics-query";
 import type { BoundTool } from "./types";
 
 /**
@@ -88,9 +89,7 @@ export function createToolCatalog(
 export const TOOL_CATALOG: ToolCatalog = createToolCatalog([
   // Core tools (core__ prefix)
   getCurrentTimeBoundTool as CatalogBoundTool,
-
-  // Add new tools here:
-  // webSearchBoundTool as CatalogBoundTool,
+  metricsQueryBoundTool as CatalogBoundTool,
 ]);
 
 /**
