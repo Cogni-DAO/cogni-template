@@ -73,6 +73,8 @@ export { type Database, getDb } from "./db/client";
 export {
   type MimirAdapterConfig,
   MimirMetricsAdapter,
+  TemplateQueryError,
+  type TemplateQueryErrorCode,
 } from "./metrics/mimir.adapter";
 export { ViemEvmOnchainClient } from "./onchain/viem-evm-onchain-client.adapter";
 export { ViemTreasuryAdapter } from "./onchain/viem-treasury.adapter";

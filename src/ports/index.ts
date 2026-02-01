@@ -109,12 +109,18 @@ export {
 export type {
   InstantQueryParams,
   MetricsQueryPort,
+  MetricTemplate,
+  MetricWindow,
   PrometheusDataPoint,
   PrometheusInstantResult,
   PrometheusInstantValue,
   PrometheusRangeResult,
   PrometheusTimeSeries,
   RangeQueryParams,
+  TemplateDataPoint,
+  TemplateQueryParams,
+  TemplateQueryResult,
+  TemplateSummary,
 } from "./metrics-query.port";
 export type {
   OnChainVerifier,
