@@ -13,7 +13,8 @@
  * @internal
  */
 
-import type { AiEvent } from "@cogni/ai-core";
+import type { AiEvent, ToolSourcePort } from "@cogni/ai-core";
+import { TOOL_CATALOG, toBoundToolRuntime } from "@cogni/ai-tools";
 import { describe, expect, it, vi } from "vitest";
 
 import type { CompletionUnitAdapter } from "@/adapters/server/ai/langgraph/inproc.provider";
@@ -74,6 +75,29 @@ function createMockAdapter(options?: {
 }
 
 /**
+ * Create a mock ToolSourcePort that wraps TOOL_CATALOG with stub implementations.
+ *
+ * NOTE: This uses TOOL_CATALOG stubs intentionally for unit test isolation.
+ * The stack test (tests/stack/ai/metrics-tool.stack.test.ts) validates real
+ * capability bindings via container.toolSource with injected MetricsCapability.
+ */
+function createMockToolSource(): ToolSourcePort {
+  // Build runtime map from catalog
+  const runtimeMap = new Map(
+    Object.entries(TOOL_CATALOG).map(([id, tool]) => [
+      id,
+      toBoundToolRuntime(tool),
+    ])
+  );
+
+  return {
+    getBoundTool: (toolId: string) => runtimeMap.get(toolId),
+    listToolSpecs: () => Array.from(runtimeMap.values()).map((t) => t.spec),
+    hasToolId: (toolId: string) => runtimeMap.has(toolId),
+  };
+}
+
+/**
  * Create a minimal GraphRunRequest for testing.
  */
 function createTestRequest(
@@ -107,7 +131,8 @@ describe("LangGraphInProcProvider", () => {
         { type: "text_delta", delta: "World" },
       ];
       const mockAdapter = createMockAdapter({ events: adapterEvents });
-      const provider = new LangGraphInProcProvider(mockAdapter);
+      const mockToolSource = createMockToolSource();
+      const provider = new LangGraphInProcProvider(mockAdapter, mockToolSource);
 
       const request = createTestRequest({ graphId: "langgraph:poet" });
       const { stream, final } = provider.runGraph(request);
@@ -142,7 +167,8 @@ describe("LangGraphInProcProvider", () => {
   describe("invalid graphId", () => {
     it("emits not_found error then done for unknown graph (REQ1)", async () => {
       const mockAdapter = createMockAdapter();
-      const provider = new LangGraphInProcProvider(mockAdapter);
+      const mockToolSource = createMockToolSource();
+      const provider = new LangGraphInProcProvider(mockAdapter, mockToolSource);
 
       // Request with graph not in catalog
       const request = createTestRequest({
@@ -174,7 +200,8 @@ describe("LangGraphInProcProvider", () => {
 
     it("emits invalid_request error for malformed graphId", async () => {
       const mockAdapter = createMockAdapter();
-      const provider = new LangGraphInProcProvider(mockAdapter);
+      const mockToolSource = createMockToolSource();
+      const provider = new LangGraphInProcProvider(mockAdapter, mockToolSource);
 
       // Request with wrong provider prefix
       const request = createTestRequest({

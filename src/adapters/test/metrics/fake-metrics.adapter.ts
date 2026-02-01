@@ -18,6 +18,8 @@ import type {
   PrometheusInstantResult,
   PrometheusRangeResult,
   RangeQueryParams,
+  TemplateQueryParams,
+  TemplateQueryResult,
 } from "@/ports";
 
 /**
@@ -46,6 +48,37 @@ export class FakeMetricsAdapter implements MetricsQueryPort {
     return {
       resultType: "vector",
       result: [],
+    };
+  }
+
+  /**
+   * Returns fake template query result.
+   * Per GOVERNED_METRICS: Implements optional queryTemplate for AI tool testing.
+   */
+  async queryTemplate(
+    _params: TemplateQueryParams
+  ): Promise<TemplateQueryResult> {
+    const now = new Date();
+    return {
+      queryRef: `fake_mqt_${Date.now().toString(36)}`,
+      executedAt: now.toISOString(),
+      cached: false,
+      summary: {
+        current: 100,
+        previous: 95,
+        changePercent: 5.26,
+      },
+      series: [
+        {
+          timestamp: new Date(now.getTime() - 5 * 60 * 1000).toISOString(),
+          value: 95,
+        },
+        {
+          timestamp: now.toISOString(),
+          value: 100,
+        },
+      ],
+      truncated: false,
     };
   }
 }
