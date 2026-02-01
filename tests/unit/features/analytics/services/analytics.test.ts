@@ -113,17 +113,18 @@ describe("features/analytics/services/analytics", () => {
   describe("K-anonymity pointwise suppression", () => {
     it("should return null for buckets with denom < K (not 0, not omitted)", async () => {
       // Mock denominator result: [100, 30, 80, 10] (2nd and 4th bucket below k=50)
+      // Per Prometheus HTTP API: values are [timestamp, value_string] tuples
       queryRangeSpy.mockResolvedValueOnce({
         resultType: "matrix",
         result: [
           {
             metric: {},
             values: [
-              { timestamp: 1000, value: "100" },
-              { timestamp: 2000, value: "30" }, // Below K
-              { timestamp: 3000, value: "80" },
-              { timestamp: 4000, value: "10" }, // Below K
-            ],
+              [1000, "100"],
+              [2000, "30"], // Below K
+              [3000, "80"],
+              [4000, "10"], // Below K
+            ] as [number, string][],
           },
         ],
       });
@@ -135,11 +136,11 @@ describe("features/analytics/services/analytics", () => {
           {
             metric: {},
             values: [
-              { timestamp: 1000, value: 50 },
-              { timestamp: 2000, value: 20 },
-              { timestamp: 3000, value: 60 },
-              { timestamp: 4000, value: 5 },
-            ],
+              [1000, "50"],
+              [2000, "20"],
+              [3000, "60"],
+              [4000, "5"],
+            ] as [number, string][],
           },
         ],
       });

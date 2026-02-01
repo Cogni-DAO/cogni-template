@@ -14,19 +14,16 @@
 
 /**
  * Single data point in a Prometheus time series.
- * Timestamp is Unix seconds (Prometheus format), value is numeric or null.
+ * Per Prometheus HTTP API: [unix_timestamp_seconds, sample_value_string] tuple.
  */
-export interface PrometheusDataPoint {
-  timestamp: number; // Unix timestamp in seconds
-  value: number | null; // Metric value or null (no data)
-}
+export type PrometheusDataPoint = [number, string];
 
 /**
  * Time series result with metric labels and data points.
  */
 export interface PrometheusTimeSeries {
   metric: Record<string, string>; // Label key-value pairs
-  values: PrometheusDataPoint[]; // Array of [timestamp, value] points
+  values: PrometheusDataPoint[]; // Array of [timestamp, value_string] tuples
 }
 
 /**

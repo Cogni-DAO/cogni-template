@@ -283,9 +283,9 @@ describe("MimirMetricsAdapter", () => {
           {
             metric: { job: "test" },
             values: [
-              { timestamp: 1000, value: 1 },
-              { timestamp: 2000, value: 2 },
-            ],
+              [1000, "1"],
+              [2000, "2"],
+            ] as [number, string][],
           },
         ],
       };
@@ -411,11 +411,11 @@ describe("MimirMetricsAdapter", () => {
     });
 
     it("should generate deterministic queryRef and enforce maxPoints", async () => {
-      // Mock successful range query with many points
-      const manyPoints = Array.from({ length: 150 }, (_, i) => ({
-        timestamp: 1000 + i * 60,
-        value: i,
-      }));
+      // Mock successful range query with many points (Prometheus tuple format)
+      const manyPoints: [number, string][] = Array.from(
+        { length: 150 },
+        (_, i) => [1000 + i * 60, String(i)]
+      );
 
       mockFetch.mockResolvedValue({
         ok: true,

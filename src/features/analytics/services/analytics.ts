@@ -128,8 +128,8 @@ export async function getAnalyticsSummary(
   if (denominatorResult.result.length > 0) {
     const series = denominatorResult.result[0];
     if (series) {
-      for (const point of series.values) {
-        requestCounts.push(Number.parseFloat(point.value?.toString() ?? "0"));
+      for (const [, valueStr] of series.values) {
+        requestCounts.push(Number.parseFloat(valueStr ?? "0"));
       }
     }
   }
@@ -251,18 +251,19 @@ function extractScalar(result: {
 
 /**
  * Extract timeseries from range query result.
+ * Per Prometheus HTTP API: values are [unix_timestamp, sample_value_string] tuples.
  */
 function extractTimeseries(result: {
   resultType: string;
-  result: Array<{ values: Array<{ timestamp: number; value: number | null }> }>;
+  result: Array<{ values: Array<[number, string]> }>;
 }): AnalyticsDataPoint[] {
   if (result.result.length === 0) return [];
   const series = result.result[0];
   if (!series) return [];
 
-  return series.values.map((point) => ({
-    timestamp: new Date(point.timestamp * 1000),
-    value: point.value,
+  return series.values.map(([timestamp, valueStr]) => ({
+    timestamp: new Date(timestamp * 1000),
+    value: Number.parseFloat(valueStr),
   }));
 }
 

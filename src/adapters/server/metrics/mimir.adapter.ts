@@ -238,11 +238,11 @@ export class MimirMetricsAdapter implements MetricsQueryPort {
     }
 
     return series.values
-      .filter((dp) => dp.value !== null)
-      .map((dp) => ({
-        timestamp: new Date(dp.timestamp * 1000).toISOString(),
-        value: dp.value as number,
-      }));
+      .map(([timestamp, valueStr]) => ({
+        timestamp: new Date(timestamp * 1000).toISOString(),
+        value: parseFloat(valueStr),
+      }))
+      .filter((dp) => !Number.isNaN(dp.value));
   }
 
   /**
