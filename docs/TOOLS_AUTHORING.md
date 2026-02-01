@@ -45,6 +45,8 @@ src/bootstrap/
 
 ## Checklist: Add a Tool
 
+> ⚠️ **Footgun:** Until enabled-tool gating is implemented, adding ANY tool to the catalog requires a binding in `tool-bindings.ts` or bootstrap fails. Track boilerplate-reduction work in issues, not this doc.
+
 ### 1. Contract (`packages/ai-tools/src/tools/{name}.ts`)
 
 ```typescript
@@ -158,66 +160,9 @@ it("executes via adapter", async () => {
 
 ## NOT YET SUPPORTED
 
-### Authenticated Tools (connectionId)
-
-**Status:** Spec complete, implementation TODO.
-
-Tools requiring external auth (GitHub, Bluesky, OAuth) need the connection broker pipeline:
-
-- `connections` table with AEAD encryption
-- `ConnectionBrokerPort.resolveForTool()`
-- Grant intersection enforcement in `toolRunner.exec()`
-- `AuthCapability` backed by broker
-
-**Ref:** [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md) — Full P0 checklist
-
-**Invariants (not yet enforced):**
-
-- CONNECTION_ID_ONLY (#26)
-- NO_SECRETS_IN_CONTEXT (#28)
-- AUTH_VIA_CAPABILITY_INTERFACE (#29)
-- GRANT_INTERSECTION_BEFORE_RESOLVE (#30)
-
-### MCP Integration
-
-**Status:** Design complete, implementation P1.
-
-MCP tools should be another `ToolSourcePort` implementation, not a provider bypass.
-
-```
-P0: StaticToolSource works (current)
-P1: McpToolSourceAdapter implements ToolSourcePort
-P2: CompositeToolSourcePort merges Static + MCP
-```
-
-**Invariants (not yet enforced):**
-
-- MCP_UNTRUSTED_BY_DEFAULT (#21)
-- Same policy/redaction/audit path as core tools
-
-**Ref:** [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) #21, #25
-
-### Human-in-the-Loop Approval
-
-**Status:** P1.
-
-Tools with `effect: "state_change"` or `"external_side_effect"` may require approval gates.
-
-- `ToolPolicy.requireApprovalForEffects` exists but treated as `deny` in P0
-- LangGraph interrupts for approval flow not implemented
-
-**Ref:** [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) Implementation Checklist P1
-
-### P0: Reduce Tool Boilerplate
-
-Current 8-step checklist is temporary. Target: 2-3 files per tool.
-
-- [ ] Enabled-tool gating: fail-fast only for enabled tool IDs, not entire catalog
-- [ ] ToolModule manifest: `{ id, contract, bind(deps), requiredDeps }` per tool file
-- [ ] Delete stubs: binding-time failure replaces stub pattern
-- [ ] Generate catalog: codegen from module index, not manual registration
-- [ ] Domain ports over per-tool capabilities: reuse `MetricsQueryPort` not `MetricsCapability`
-- [ ] Fast path for pure tools: skip steps 2, 3, 5, 6, 7 (no I/O = no capability wiring)
+- **Authenticated tools (connectionId):** see [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md)
+- **MCP integration:** see [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) (ToolSourcePort, P2)
+- **Approval gates:** see [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) (effects + policy, P1)
 
 ---
 

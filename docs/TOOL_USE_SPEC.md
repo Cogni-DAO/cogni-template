@@ -67,7 +67,7 @@
 
 26. **CONNECTION_ID_ONLY**: Tools requiring external auth receive `connectionId` (opaque reference), never raw credentials. Connection Broker resolves tokens at invocation time. No secrets in `configurable`, `ToolPolicyContext`, or ALS context. Applies to all authenticated tools regardless of source (`@cogni/ai-tools` or MCP). See [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md).
 
-27. **TOOL_SOURCE_RETURNS_BOUND_TOOL**: `ToolSourcePort.getBoundTool(toolId)` returns a `BoundToolRuntime` object that owns validation, execution, and redaction logic. `toolRunner` orchestrates the pipeline (policy → validate → exec → validate output → redact → emit events) but never imports Zod or performs schema operations directly. This keeps `@cogni/ai-core` semantic-only while `@cogni/ai-tools` owns schema logic. **NOTE:** Fail-fast binding MUST apply only to enabled tool IDs for the current env/tenant. Do not require bindings for disabled/optional tools.
+27. **TOOL_SOURCE_RETURNS_BOUND_TOOL**: `ToolSourcePort.getBoundTool(toolId)` returns a `BoundToolRuntime` object that owns validation, execution, and redaction logic. `toolRunner` orchestrates the pipeline (policy → validate → exec → validate output → redact → emit events) but never imports Zod or performs schema operations directly. This keeps `@cogni/ai-core` semantic-only while `@cogni/ai-tools` owns schema logic.
 
 28. **NO_SECRETS_IN_CONTEXT**: `ToolInvocationContext`, `RunnableConfig.configurable`, and ALS context must NEVER contain secrets (access tokens, API keys, refresh tokens, Authorization headers, provider secret blobs). Only opaque reference IDs (`connectionId`, `virtualKeyId`) are permitted. Secrets resolved via capability interfaces at invocation time. Enforced by negative test cases + static checks.
 
@@ -198,7 +198,6 @@ Per invariants **TOOL_SOURCE_RETURNS_BOUND_TOOL**, **NO_SECRETS_IN_CONTEXT**, **
 - [x] Create `StaticToolSource` implementing `ToolSourcePort`
 - [ ] Wraps `TOOL_CATALOG` from `@cogni/ai-tools`
 - [x] Export from ai-core barrel
-- [ ] Enabled-tool gating: fail-fast only for enabled tool IDs, not entire catalog
 
 **Connection authorization (`@cogni/ai-core/tooling/`):**
 
@@ -238,6 +237,26 @@ Per invariants **TOOL_SOURCE_RETURNS_BOUND_TOOL**, **NO_SECRETS_IN_CONTEXT**, **
 - [ ] Add `authz_denied` to `ToolErrorCode` union
 - [ ] Arch test: `authz-at-tool-exec.test.ts` — grep for tool.exec without authz check
 - [ ] See [RBAC_SPEC.md](RBAC_SPEC.md) for full AuthorizationPort interface
+
+### P0.x: Tool Authoring Foundation (Next)
+
+**P0.1 Enabled-tool gating:**
+
+- [ ] ToolSource binding validates only enabled tool IDs for env/tenant; disabled tools require no bindings
+- [ ] `listToolSpecs()` returns only enabled tools
+- [ ] Acceptance: adding a disabled tool does not break bootstrap
+
+**P0.2 ToolModule manifest + registry:**
+
+- [ ] Define `ToolModule` interface in `@cogni/ai-tools/modules/types.ts`: `{ id, contract, bind(deps), requiredDeps }`
+- [ ] Bootstrap auto-binds modules from registry (no manual catalog/bindings edits)
+- [ ] Acceptance: adding a pure tool = 1 file; I/O tool = tool module + adapter + env factory
+
+**P0.3 Connection broker + grant intersection:**
+
+- [ ] `toolRunner.exec()` enforces allowlist/policy + grant intersection BEFORE resolving credentials
+- [ ] Credentials resolved via `ConnectionBrokerPort` using `ctx.connectionId` (no secrets in inputs)
+- [ ] Acceptance: auth-required tools cannot execute without connectionId + grants; no secrets in context
 
 ### P1: Tool Ecosystem + ToolCatalog
 
