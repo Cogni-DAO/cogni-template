@@ -3,12 +3,12 @@
 
 /**
  * Module: `@adapters/server/metrics/mimir.adapter`
- * Purpose: Grafana Cloud Mimir adapter for Prometheus metrics queries.
+ * Purpose: Prometheus HTTP API client for metrics queries (compatible with Grafana Cloud Mimir).
  * Scope: Implements MetricsQueryPort; HTTP client for Prometheus query API; handles auth, timeout, error mapping. Does not implement query building, k-anonymity logic, or caching.
  * Invariants: Uses basic auth; respects timeout via AbortSignal; converts HTTP errors to exceptions.
- * Side-effects: IO (HTTP requests to Mimir)
+ * Side-effects: IO (HTTP requests to Prometheus/Mimir)
  * Notes: Queries use Prometheus HTTP API v1 format (query, query_range).
- * Links: Used by analytics service via container; requires MIMIR_URL, MIMIR_USER, MIMIR_TOKEN.
+ * Links: Used by analytics service via container; uses PROMETHEUS_QUERY_URL + PROMETHEUS_READ_USERNAME/PASSWORD.
  * @internal
  */
 
@@ -119,7 +119,7 @@ export class MimirMetricsAdapter implements MetricsQueryPort {
    * Maps Date objects to Unix timestamps for Prometheus API.
    */
   async queryRange(params: RangeQueryParams): Promise<PrometheusRangeResult> {
-    const url = new URL("/api/v1/query_range", this.config.url);
+    const url = new URL(`${this.config.url}/api/v1/query_range`);
     url.searchParams.set("query", params.query);
     url.searchParams.set(
       "start",
@@ -142,7 +142,7 @@ export class MimirMetricsAdapter implements MetricsQueryPort {
   async queryInstant(
     params: InstantQueryParams
   ): Promise<PrometheusInstantResult> {
-    const url = new URL("/api/v1/query", this.config.url);
+    const url = new URL(`${this.config.url}/api/v1/query`);
     url.searchParams.set("query", params.query);
     if (params.time) {
       url.searchParams.set(
