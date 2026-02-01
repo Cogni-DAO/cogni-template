@@ -96,11 +96,14 @@ export const serverSchema = z.object({
   // Required: Internal execution API will not function without this token.
   SCHEDULER_API_TOKEN: z.string().min(32),
 
-  // Public Analytics (Stage 9.5) - Mimir queries for public /analytics page
-  // Optional: only required when analytics feature is enabled
-  MIMIR_URL: z.string().url().optional(),
-  MIMIR_USER: z.string().min(1).optional(),
-  MIMIR_TOKEN: z.string().min(1).optional(),
+  // Prometheus Query (Grafana Cloud) - READ path for app metrics queries
+  // Query URL derived from PROMETHEUS_REMOTE_WRITE_URL (must end with /api/prom/push)
+  // Or set PROMETHEUS_QUERY_URL explicitly for non-standard endpoints
+  // Security: Use read-only token, separate from Alloy's write token
+  PROMETHEUS_REMOTE_WRITE_URL: z.string().url().optional(),
+  PROMETHEUS_QUERY_URL: z.string().url().optional(),
+  PROMETHEUS_READ_USERNAME: z.string().min(1).optional(),
+  PROMETHEUS_READ_PASSWORD: z.string().min(1).optional(),
   ANALYTICS_K_THRESHOLD: z.coerce.number().int().positive().default(50),
   ANALYTICS_QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
 

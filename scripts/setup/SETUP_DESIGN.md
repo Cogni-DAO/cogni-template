@@ -132,11 +132,17 @@ pnpm setup github --env production
        - `GRAFANA_CLOUD_LOKI_USER` (numeric user ID from Grafana Cloud)
        - `GRAFANA_CLOUD_LOKI_API_KEY` (API key with logs:write permission)
        - Get from: https://grafana.com/products/cloud/ → Connections → Data Sources → Loki
-     - **Prometheus Metrics (optional):** For metrics shipping to Grafana Cloud Mimir
+     - **Prometheus Metrics (optional):** For metrics with Grafana Cloud
        - `METRICS_TOKEN` (≥32 chars, bearer auth for /api/metrics scraping)
-       - `PROMETHEUS_REMOTE_WRITE_URL` (Mimir push endpoint)
-       - `PROMETHEUS_USERNAME` (Grafana Cloud username)
-       - `PROMETHEUS_PASSWORD` (Grafana Cloud API key)
+       - **Write path (Alloy remote_write):**
+         - `PROMETHEUS_REMOTE_WRITE_URL` (Mimir push endpoint, must end with /api/prom/push)
+         - `PROMETHEUS_USERNAME` (Grafana Cloud username)
+         - `PROMETHEUS_PASSWORD` (API key with metrics:write only)
+       - **Read path (app queries):**
+         - `PROMETHEUS_QUERY_URL` (optional, derived from write URL if not set)
+         - `PROMETHEUS_READ_USERNAME` (Grafana Cloud username, can be same as write)
+         - `PROMETHEUS_READ_PASSWORD` (Grafana Access Policy token with metrics:read scope)
+           Create at: https://grafana.com/orgs/<org>/access-policies → Add policy → metrics:read → Add token
 
 For current manual process, see [DEPLOY.md](../../platform/runbooks/DEPLOY.md).
 

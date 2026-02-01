@@ -187,8 +187,8 @@ export const metricsQueryStubImplementation: ToolImplementation<
 > = {
   execute: async (): Promise<MetricsQueryOutput> => {
     throw new Error(
-      "MetricsCapability not configured. Configure PROMETHEUS_URL and METRICS_API_KEY " +
-        "environment variables to enable metrics queries."
+      "MetricsCapability not configured. Set PROMETHEUS_QUERY_URL (or PROMETHEUS_REMOTE_WRITE_URL " +
+        "ending in /api/prom/push) + PROMETHEUS_READ_USERNAME + PROMETHEUS_READ_PASSWORD."
     );
   },
 };

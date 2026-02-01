@@ -45,7 +45,10 @@ import {
 } from "@/adapters/test";
 import { createToolBindings } from "@/bootstrap/ai/tool-bindings";
 import { createBoundToolSource } from "@/bootstrap/ai/tool-source.factory";
-import { createMetricsCapability } from "@/bootstrap/capabilities/metrics";
+import {
+  createMetricsCapability,
+  derivePrometheusQueryUrl,
+} from "@/bootstrap/capabilities/metrics";
 import type { RateLimitBypassConfig } from "@/bootstrap/http/wrapPublicRoute";
 import type {
   AccountService,
@@ -180,22 +183,39 @@ function createContainer(): Container {
     ? getTestOnChainVerifier()
     : new EvmRpcOnChainVerifierAdapter(evmOnchainClient);
 
-  // MetricsQuery: test uses fake adapter, production uses Mimir
+  // MetricsQuery: test uses fake adapter, production uses Prometheus HTTP API
+  // Not configured: stub that throws on use (deferred error, doesn't block startup)
   const metricsQuery: MetricsQueryPort = env.isTestMode
     ? new FakeMetricsAdapter()
     : (() => {
-        // Mimir config is optional - only required when analytics feature is enabled
-        if (!env.MIMIR_URL || !env.MIMIR_USER || !env.MIMIR_TOKEN) {
-          // Return fake adapter if Mimir not configured (graceful degradation)
-          log.warn(
-            "MIMIR_URL/USER/TOKEN not configured; analytics queries will return empty results"
+        const queryUrl = derivePrometheusQueryUrl(env);
+        if (
+          !queryUrl ||
+          !env.PROMETHEUS_READ_USERNAME ||
+          !env.PROMETHEUS_READ_PASSWORD
+        ) {
+          // Return stub that throws on use - allows app to start without metrics config
+          const notConfiguredError = new Error(
+            "MetricsQueryPort not configured. Set PROMETHEUS_QUERY_URL (or PROMETHEUS_REMOTE_WRITE_URL " +
+              "ending in /api/prom/push) + PROMETHEUS_READ_USERNAME + PROMETHEUS_READ_PASSWORD."
           );
-          return new FakeMetricsAdapter();
+          return {
+            queryRange: async () => {
+              throw notConfiguredError;
+            },
+            queryInstant: async () => {
+              throw notConfiguredError;
+            },
+            queryTemplate: async () => {
+              throw notConfiguredError;
+            },
+          } satisfies MetricsQueryPort;
         }
+
         const mimirConfig: MimirAdapterConfig = {
-          url: env.MIMIR_URL,
-          username: env.MIMIR_USER,
-          password: env.MIMIR_TOKEN,
+          url: queryUrl,
+          username: env.PROMETHEUS_READ_USERNAME,
+          password: env.PROMETHEUS_READ_PASSWORD,
           timeoutMs: env.ANALYTICS_QUERY_TIMEOUT_MS,
         };
         return new MimirMetricsAdapter(mimirConfig);

@@ -32,7 +32,7 @@ Infrastructure implementations of ports including server/, worker/, cli/, and te
 - **Exports:** Port implementations for bootstrap injection, database client (db, Database), MimirMetricsAdapter, ViemEvmOnchainClient, EvmRpcOnChainVerifierAdapter, EvmOnchainClient (type)
 - **Routes (if any):** none
 - **CLI (if any):** cli/ adapter implementations
-- **Env/Config keys:** DATABASE_URL, LITELLM_BASE_URL, LITELLM_MASTER_KEY, MIMIR_URL, MIMIR_USER, MIMIR_TOKEN, ANALYTICS_QUERY_TIMEOUT_MS, EVM_RPC_URL
+- **Env/Config keys:** DATABASE_URL, LITELLM_BASE_URL, LITELLM_MASTER_KEY, PROMETHEUS_QUERY_URL, PROMETHEUS_READ_USERNAME, PROMETHEUS_READ_PASSWORD, ANALYTICS_QUERY_TIMEOUT_MS, EVM_RPC_URL
 - **Files considered API:** Port implementation exports, database client, onchain client interfaces
 
 ## Ports (optional)

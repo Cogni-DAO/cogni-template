@@ -6,10 +6,11 @@
  * Purpose: Factory for MetricsCapability - bridges ai-tools capability interface to MimirMetricsAdapter.
  * Scope: Creates MetricsCapability from server environment. Does not implement transport.
  * Invariants:
- *   - NO_SECRETS_IN_CONTEXT: Mimir credentials resolved from env, never passed to tools
+ *   - NO_SECRETS_IN_CONTEXT: Prometheus credentials resolved from env, never passed to tools
  *   - GOVERNED_METRICS: Only template-based queries via MimirMetricsAdapter.queryTemplate
  * Side-effects: none (factory only)
  * Links: Called by bootstrap container; consumed by ai-tools metrics-query tool.
+ *        Uses PROMETHEUS_REMOTE_WRITE_URL or PROMETHEUS_QUERY_URL + USERNAME/PASSWORD.
  * @internal
  */
 
@@ -21,49 +22,66 @@ import type { ServerEnv } from "@/shared/env";
 
 /**
  * Stub MetricsCapability that throws when not configured.
- * Used when MIMIR_URL is not set.
+ * Used when Prometheus query URL cannot be derived.
  */
 export const stubMetricsCapability: MetricsCapability = {
   queryTemplate: async () => {
     throw new Error(
-      "MetricsCapability not configured. " +
-        "Set MIMIR_URL, MIMIR_USER, and MIMIR_TOKEN environment variables."
+      "MetricsCapability not configured. Set PROMETHEUS_QUERY_URL (or PROMETHEUS_REMOTE_WRITE_URL " +
+        "ending in /api/prom/push) + PROMETHEUS_READ_USERNAME + PROMETHEUS_READ_PASSWORD."
     );
   },
 };
 
 /**
+ * Derive Prometheus query URL from config.
+ * - If PROMETHEUS_QUERY_URL set, use it directly
+ * - If PROMETHEUS_REMOTE_WRITE_URL ends with /api/prom/push, derive by stripping /push
+ * - Otherwise return undefined (invalid config)
+ */
+export function derivePrometheusQueryUrl(env: ServerEnv): string | undefined {
+  if (env.PROMETHEUS_QUERY_URL) return env.PROMETHEUS_QUERY_URL;
+
+  const writeUrl = env.PROMETHEUS_REMOTE_WRITE_URL;
+  if (writeUrl?.endsWith("/api/prom/push")) {
+    return writeUrl.slice(0, -"/push".length); // → .../api/prom
+  }
+  return undefined;
+}
+
+/**
  * Create MetricsCapability from server environment.
- * Uses existing Mimir configuration (MIMIR_URL, MIMIR_USER, MIMIR_TOKEN).
+ * Uses Prometheus configuration (PROMETHEUS_REMOTE_WRITE_URL or PROMETHEUS_QUERY_URL).
  *
- * Per test mode pattern: returns FakeMetricsAdapter-backed capability in test mode,
- * matching how metricsQuery port is handled in container.ts.
+ * - APP_ENV=test: FakeMetricsAdapter
+ * - Configured: MimirMetricsAdapter (real Prometheus HTTP API)
+ * - Not configured: stub that throws on use
  *
- * @param env - Server environment with Mimir configuration
+ * @param env - Server environment with Prometheus configuration
  * @returns MetricsCapability backed by appropriate adapter
  */
 export function createMetricsCapability(env: ServerEnv): MetricsCapability {
-  // Test mode: use FakeMetricsAdapter (matches metricsQuery port pattern)
+  // Test mode only: use FakeMetricsAdapter
   if (env.isTestMode) {
-    const fakeAdapter = new FakeMetricsAdapter();
-    return {
-      queryTemplate: (params) => fakeAdapter.queryTemplate(params),
-    };
+    const fake = new FakeMetricsAdapter();
+    return { queryTemplate: (p) => fake.queryTemplate(p) };
   }
 
-  // Production/dev: require Mimir configuration
-  if (!env.MIMIR_URL || !env.MIMIR_USER || !env.MIMIR_TOKEN) {
+  const queryUrl = derivePrometheusQueryUrl(env);
+  const username = env.PROMETHEUS_READ_USERNAME;
+  const password = env.PROMETHEUS_READ_PASSWORD;
+
+  // Not configured: stub that throws on use
+  if (!queryUrl || !username || !password) {
     return stubMetricsCapability;
   }
 
+  // Configured: use real Prometheus HTTP API adapter (read-only credentials)
   const adapter = new MimirMetricsAdapter({
-    url: env.MIMIR_URL,
-    username: env.MIMIR_USER,
-    password: env.MIMIR_TOKEN,
+    url: queryUrl,
+    username,
+    password,
     timeoutMs: env.ANALYTICS_QUERY_TIMEOUT_MS,
   });
-
-  return {
-    queryTemplate: (params) => adapter.queryTemplate(params),
-  };
+  return { queryTemplate: (p) => adapter.queryTemplate(p) };
 }

@@ -32,7 +32,7 @@ Capability factories bridging ai-tools interfaces to adapters. Creates environme
 - **Exports:** `createMetricsCapability()`, `stubMetricsCapability`
 - **Routes (if any):** none
 - **CLI (if any):** none
-- **Env/Config keys:** Uses MIMIR_URL, MIMIR_USER, MIMIR_TOKEN via ServerEnv
+- **Env/Config keys:** Uses PROMETHEUS_REMOTE_WRITE_URL, PROMETHEUS_QUERY_URL, PROMETHEUS_READ_USERNAME, PROMETHEUS_READ_PASSWORD via ServerEnv
 - **Files considered API:** `metrics.ts`
 
 ## Ports (optional)

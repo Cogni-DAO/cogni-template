@@ -91,12 +91,13 @@ Optional:
 - LITELLM_MVP_API_KEY (MVP wallet link single key - TODO: remove when proper wallet→key registry exists)
 - OPENROUTER_API_KEY (for LiteLLM providers)
 - AUTH_SECRET (≥32 chars) - TODO: when session management added
-- METRICS*TOKEN (≥32 chars) - Bearer auth for /api/metrics endpoint (PROMETHEUS*\* are Alloy-only; not in app)
-- MIMIR_URL (url) - Grafana Cloud Mimir endpoint for analytics queries
-- MIMIR_USER - Basic auth username for Mimir
-- MIMIR_TOKEN - Basic auth password/token for Mimir
+- METRICS_TOKEN (≥32 chars) - Bearer auth for /api/metrics endpoint
+- PROMETHEUS_REMOTE_WRITE_URL (url) - Grafana Cloud write endpoint (must end with /api/prom/push)
+- PROMETHEUS_QUERY_URL (url) - Explicit query endpoint (alternative to deriving from write URL)
+- PROMETHEUS_READ_USERNAME - Basic auth username for Prometheus queries (read path)
+- PROMETHEUS_READ_PASSWORD - Basic auth password for Prometheus queries (read-only token)
 - ANALYTICS_K_THRESHOLD (int, default 50) - K-anonymity threshold for public analytics
-- ANALYTICS_QUERY_TIMEOUT_MS (int, default 5000) - Mimir query timeout
+- ANALYTICS_QUERY_TIMEOUT_MS (int, default 5000) - Prometheus query timeout
 
 **Public client (client.ts)**
 

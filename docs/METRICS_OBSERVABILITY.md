@@ -59,7 +59,7 @@ Hexagonal architecture implementation:
 - [x] Service — `src/features/analytics/services/analytics.ts` (k-anonymity logic)
 - [x] Facade — `src/app/_facades/analytics/summary.server.ts` (type mapping)
 - [x] Route — `src/app/api/v1/analytics/summary/route.ts` (HTTP endpoint with caching)
-- [x] Environment — `src/shared/env/server.ts` (MIMIR*URL, MIMIR_USER, MIMIR_TOKEN, ANALYTICS*\*)
+- [x] Environment — `src/shared/env/server.ts` (PROMETHEUS*REMOTE_WRITE_URL, PROMETHEUS_QUERY_URL, PROMETHEUS_USERNAME, PROMETHEUS_PASSWORD, ANALYTICS*\*)
 - [x] Tests — Unit, adapter, and contract tests (k-anonymity, timeout, PII denylist)
 
 Endpoint: `GET /api/v1/analytics/summary?window={7d|30d|90d}`
@@ -294,13 +294,18 @@ Reused:
 
 ## Environment Variables
 
-| Variable                     | Purpose                             |
-| ---------------------------- | ----------------------------------- |
-| `MIMIR_URL`                  | Grafana Cloud Mimir endpoint        |
-| `MIMIR_USER`                 | Mimir basic auth username           |
-| `MIMIR_TOKEN`                | Mimir basic auth token              |
-| `ANALYTICS_K_THRESHOLD`      | K-anonymity threshold (default: 50) |
-| `ANALYTICS_QUERY_TIMEOUT_MS` | Query timeout (default: 5000)       |
+| Variable                      | Purpose                                                     |
+| ----------------------------- | ----------------------------------------------------------- |
+| `PROMETHEUS_REMOTE_WRITE_URL` | Grafana Cloud write endpoint (must end with /api/prom/push) |
+| `PROMETHEUS_USERNAME`         | Write path: basic auth username (Alloy)                     |
+| `PROMETHEUS_PASSWORD`         | Write path: basic auth password (write-only token)          |
+| `PROMETHEUS_QUERY_URL`        | Read path: explicit query endpoint (or derived from write)  |
+| `PROMETHEUS_READ_USERNAME`    | Read path: basic auth username (app queries)                |
+| `PROMETHEUS_READ_PASSWORD`    | Read path: basic auth password (read-only token)            |
+| `ANALYTICS_K_THRESHOLD`       | K-anonymity threshold (default: 50)                         |
+| `ANALYTICS_QUERY_TIMEOUT_MS`  | Query timeout (default: 5000)                               |
+
+**Security**: Use separate tokens for write (Alloy) and read (app) paths to enforce least privilege.
 
 ---
 
