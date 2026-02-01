@@ -12,6 +12,8 @@
  * @public
  */
 
+import type { BoundToolRuntime, ToolInvocationContext } from "@cogni/ai-core";
+import type { ToolCapabilities } from "@cogni/ai-tools";
 import { z } from "zod";
 
 import type { Message, MessageToolCall } from "@/core";
@@ -128,7 +130,7 @@ export function createTestToolImplementation(
 }
 
 /**
- * Create a complete bound tool for testing.
+ * Create a complete bound tool for testing (ai-tools BoundTool format).
  */
 export function createTestBoundTool(
   options: {
@@ -153,6 +155,80 @@ export function createTestBoundTool(
       result: options.result,
       throws: options.executionThrows,
     }),
+  };
+}
+
+/**
+ * Create a BoundToolRuntime for testing (ai-core BoundToolRuntime format).
+ * This is the format expected by createToolRunner.
+ */
+export function createTestBoundToolRuntime(
+  options: {
+    name?: string;
+    result?: string;
+    validateInputThrows?: boolean;
+    validateOutputThrows?: boolean;
+    executionThrows?: boolean;
+    allowlist?: readonly string[];
+    effect?: "read_only" | "state_change" | "external_side_effect";
+  } = {}
+): BoundToolRuntime {
+  const boundTool = createTestBoundTool(options);
+  const contract = boundTool.contract;
+  const implementation = boundTool.implementation;
+  const name = options.name ?? TEST_TOOL_NAME;
+  const effect = options.effect ?? "read_only";
+
+  return {
+    id: name,
+    spec: {
+      name,
+      description: contract.description,
+      inputSchema: { type: "object" },
+      effect,
+      redaction: {
+        mode: "top_level_only",
+        allowlist: (options.allowlist ?? ["result"]) as readonly string[],
+      },
+    },
+    effect,
+    requiresConnection: false,
+    capabilities: [],
+
+    // Legacy fields for backward compatibility
+    contract: {
+      name: contract.name,
+      effect: contract.effect,
+      inputSchema: {
+        parse: (input: unknown) => contract.inputSchema.parse(input),
+      },
+      outputSchema: {
+        parse: (output: unknown) => contract.outputSchema.parse(output),
+      },
+      redact: (output: unknown) => contract.redact(output as TestToolOutput),
+    },
+    implementation: {
+      execute: (input: unknown) =>
+        implementation.execute(input as TestToolInput),
+    },
+
+    // Method-based interface
+    validateInput(rawArgs: unknown): unknown {
+      return contract.inputSchema.parse(rawArgs);
+    },
+    async exec(
+      validatedArgs: unknown,
+      _ctx: ToolInvocationContext,
+      _capabilities: ToolCapabilities
+    ): Promise<unknown> {
+      return implementation.execute(validatedArgs as TestToolInput);
+    },
+    validateOutput(rawOutput: unknown): unknown {
+      return contract.outputSchema.parse(rawOutput);
+    },
+    redact(validatedOutput: unknown): unknown {
+      return contract.redact(validatedOutput as TestToolOutput);
+    },
   };
 }
 

@@ -22,7 +22,7 @@ import {
 } from "@cogni/ai-core";
 import {
   createEventCollector,
-  createTestBoundTool,
+  createTestBoundToolRuntime,
   TEST_TOOL_NAME,
 } from "@tests/_fakes/ai/tool-builders";
 import { describe, expect, it, vi } from "vitest";
@@ -162,7 +162,7 @@ describe("createToolRunner", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Create a bound tool with spyable implementation.
+ * Create a bound tool runtime with spyable implementation.
  */
 function createSpyableBoundTool() {
   const executeSpy = vi
@@ -172,10 +172,12 @@ function createSpyableBoundTool() {
       secret: "hidden",
     }));
 
-  const boundTool = createTestBoundTool();
-  // Replace implementation with spy
+  const boundTool = createTestBoundToolRuntime();
+  // Replace implementation with spy (legacy interface)
   (boundTool.implementation as { execute: typeof executeSpy }).execute =
     executeSpy;
+  // Also replace exec method for new interface
+  boundTool.exec = async (args) => executeSpy(args);
 
   return { boundTool, executeSpy };
 }
