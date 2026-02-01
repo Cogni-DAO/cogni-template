@@ -13,13 +13,16 @@
  * @public
  */
 
-import { GET_CURRENT_TIME_NAME } from "@cogni/ai-tools";
+import { GET_CURRENT_TIME_NAME, METRICS_QUERY_NAME } from "@cogni/ai-tools";
 
 /**
  * Tool IDs for ponderer graph.
  * Single source of truth - imported by server.ts, cogni-exec.ts, and catalog.ts.
  */
-export const PONDERER_TOOL_IDS = [GET_CURRENT_TIME_NAME] as const;
+export const PONDERER_TOOL_IDS = [
+  GET_CURRENT_TIME_NAME,
+  METRICS_QUERY_NAME,
+] as const;
 
 /**
  * Type for ponderer tool IDs.
