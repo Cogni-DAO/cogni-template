@@ -196,10 +196,8 @@ export function createToolRunner<
       };
     }
 
-    const { contract, implementation } = boundTool;
-
-    // 1. Policy check (DENY_BY_DEFAULT)
-    const decision = policy.decide(ctx, toolName, contract.effect);
+    // 1. Policy check (DENY_BY_DEFAULT) — before any method calls
+    const decision = policy.decide(ctx, toolName, boundTool.effect);
     if (decision === "deny" || decision === "require_approval") {
       // P0: require_approval treated as deny (human-in-the-loop is P1)
       const errorEvent: ToolCallResultEvent = {
@@ -212,7 +210,7 @@ export function createToolRunner<
       // Per LANGFUSE_TOOL_VISIBILITY: record policy decision
       endSpan({ decision: "deny", reason: "policy_denied" }, "WARNING", {
         policyDecision: "deny",
-        effect: contract.effect,
+        effect: boundTool.effect,
       });
       return {
         ok: false,
@@ -221,10 +219,11 @@ export function createToolRunner<
       };
     }
 
-    // 2. Validate args via inputSchema
+    // 2. Validate args via boundTool.validateInput()
+    // Per TOOL_SOURCE_RETURNS_BOUND_TOOL: BoundToolRuntime owns validation logic
     let validatedInput: unknown;
     try {
-      validatedInput = contract.inputSchema.parse(rawArgs);
+      validatedInput = boundTool.validateInput(rawArgs);
     } catch (err) {
       const safeMessage =
         err instanceof Error ? err.message : "Invalid tool arguments";
@@ -252,10 +251,26 @@ export function createToolRunner<
     };
     emit(startEvent);
 
-    // 4. Execute tool
+    // 4. Build invocation context and capabilities
+    // Per AUTH_VIA_CAPABILITY_INTERFACE: tools receive auth via capabilities, not context
+    const invocationCtx = {
+      runId: ctx.runId,
+      toolCallId,
+      // connectionId will be added in P1 when connection auth is implemented
+    };
+    // Per FIX_LAYERING_CAPABILITY_TYPES: capabilities is opaque to ai-core
+    // Composition root (src/bootstrap/ai/tool-bindings.ts) provides concrete capabilities
+    const capabilities = {};
+
+    // 5. Execute tool via boundTool.exec()
+    // Per TOOL_SOURCE_RETURNS_BOUND_TOOL: BoundToolRuntime owns execution logic
     let rawOutput: unknown;
     try {
-      rawOutput = await implementation.execute(validatedInput);
+      rawOutput = await boundTool.exec(
+        validatedInput,
+        invocationCtx,
+        capabilities
+      );
     } catch (err) {
       const safeMessage =
         err instanceof Error ? err.message : "Tool execution failed";
@@ -267,7 +282,7 @@ export function createToolRunner<
       };
       emit(errorEvent);
       endSpan({ errorCode: "execution", message: safeMessage }, "ERROR", {
-        effect: contract.effect,
+        effect: boundTool.effect,
       });
       return {
         ok: false,
@@ -276,10 +291,11 @@ export function createToolRunner<
       };
     }
 
-    // 5. Validate result via outputSchema
+    // 6. Validate result via boundTool.validateOutput()
+    // Per TOOL_SOURCE_RETURNS_BOUND_TOOL: BoundToolRuntime owns output validation
     let validatedOutput: unknown;
     try {
-      validatedOutput = contract.outputSchema.parse(rawOutput);
+      validatedOutput = boundTool.validateOutput(rawOutput);
     } catch (err) {
       const safeMessage =
         err instanceof Error ? err.message : "Invalid tool output";
@@ -298,10 +314,11 @@ export function createToolRunner<
       };
     }
 
-    // 6. Redact output (contract.redact handles allowlist internally)
+    // 7. Redact output via boundTool.redact()
+    // Per REDACTION_REQUIRED: no raw output may leak to UI/logs
     let redactedOutput: unknown;
     try {
-      redactedOutput = contract.redact(validatedOutput);
+      redactedOutput = boundTool.redact(validatedOutput);
     } catch (err) {
       const safeMessage =
         err instanceof Error ? err.message : "Redaction failed";
@@ -320,8 +337,8 @@ export function createToolRunner<
       };
     }
 
-    // 7. Emit tool_call_result with redacted output
-    // Cast: contract.redact is responsible for returning correct shape
+    // 8. Emit tool_call_result with redacted output
+    // Cast: boundTool.redact is responsible for returning correct shape
     const safeResult = redactedOutput as Record<string, unknown>;
     const resultEvent: ToolCallResultEvent = {
       type: "tool_call_result",
@@ -330,7 +347,7 @@ export function createToolRunner<
     };
     emit(resultEvent);
 
-    // 8. End span with success
+    // 9. End span with success
     // Per SPAN_METADATA_ONLY: metadata only by default; hook provides scrubbed payload
     let hookOutput: unknown;
     let hookOutputFailed = false;
@@ -343,12 +360,12 @@ export function createToolRunner<
       }
     }
     endSpan(hookOutput, "DEFAULT", {
-      effect: contract.effect,
+      effect: boundTool.effect,
       policyDecision: "allow",
       hookOutputFailed,
     });
 
-    // 9. Return result
+    // 10. Return result
     return {
       ok: true,
       value: safeResult,

@@ -17,9 +17,13 @@
  * @internal
  */
 
-import type { AiEvent } from "@cogni/ai-core";
+import type { AiEvent, BoundToolRuntime } from "@cogni/ai-core";
 import { createToolAllowlistPolicy, createToolRunner } from "@cogni/ai-core";
-import { type CatalogBoundTool, TOOL_CATALOG } from "@cogni/ai-tools";
+import {
+  type CatalogBoundTool,
+  TOOL_CATALOG,
+  toBoundToolRuntime,
+} from "@cogni/ai-tools";
 import {
   type CompletionFn,
   type CreateGraphFn,
@@ -157,11 +161,14 @@ export class LangGraphInProcProvider implements GraphProvider {
     }
 
     // Resolve boundTools from TOOL_CATALOG (per TOOL_CATALOG_IS_CANONICAL)
-    const boundTools: Record<string, CatalogBoundTool> = {};
+    // Convert to BoundToolRuntime for toolRunner (per TOOL_SOURCE_RETURNS_BOUND_TOOL)
+    const runtimeTools: Record<string, BoundToolRuntime> = {};
+    const catalogTools: CatalogBoundTool[] = [];
     for (const toolId of catalogToolIds) {
       const tool = TOOL_CATALOG[toolId];
       if (tool) {
-        boundTools[toolId] = tool;
+        runtimeTools[toolId] = toBoundToolRuntime(tool);
+        catalogTools.push(tool);
       } else {
         this.log.error(
           { runId, graphName, toolId },
@@ -174,7 +181,7 @@ export class LangGraphInProcProvider implements GraphProvider {
     // Uses same toolIds for ToolRunner policy as configurable
     const createToolExecFn = (emit: (e: AiEvent) => void): ToolExecFn => {
       const policy = createToolAllowlistPolicy(toolIds);
-      const toolRunner = createToolRunner(boundTools, emit, {
+      const toolRunner = createToolRunner(runtimeTools, emit, {
         policy,
         ctx: { runId },
       });
@@ -188,8 +195,8 @@ export class LangGraphInProcProvider implements GraphProvider {
       };
     };
 
-    // Extract tool contracts from resolved boundTools
-    const toolContracts = Object.values(boundTools).map((bt) => bt.contract);
+    // Extract tool contracts from resolved catalog tools
+    const toolContracts = catalogTools.map((bt) => bt.contract);
 
     // Build request for package runner
     // Use conditional spreads for exactOptionalPropertyTypes
