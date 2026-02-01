@@ -21,7 +21,7 @@ import type {
 } from "@cogni/ai-core";
 
 import { toToolSpec } from "./schema";
-import type { BoundTool } from "./types";
+import type { BoundTool, ToolContract, ToolImplementation } from "./types";
 
 /**
  * Options for creating a BoundToolRuntime adapter.
@@ -142,4 +142,27 @@ export function createBoundToolRuntimeMap(
     map.set(runtime.id, runtime);
   }
   return map;
+}
+
+/**
+ * Create BoundToolRuntime from a contract and implementation separately.
+ *
+ * This enables dependency injection at bootstrap time:
+ * - Contract defines the tool schema (from catalog)
+ * - Implementation is injected with real capabilities (from bootstrap)
+ *
+ * Per AUTH_VIA_CAPABILITY_INTERFACE: tools receive capabilities via
+ * implementation factory, not via exec() capabilities parameter.
+ *
+ * @param contract - Tool contract from catalog
+ * @param implementation - Real implementation with injected dependencies
+ * @param options - Optional configuration
+ * @returns BoundToolRuntime compatible with ai-core toolRunner
+ */
+export function contractToRuntime(
+  contract: ToolContract<string, unknown, unknown, Record<string, unknown>>,
+  implementation: ToolImplementation<unknown, unknown>,
+  options?: ToBoundToolRuntimeOptions
+): BoundToolRuntime {
+  return toBoundToolRuntime({ contract, implementation }, options);
 }

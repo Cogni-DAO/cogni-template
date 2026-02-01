@@ -14,6 +14,13 @@
 export type {
   AuthCapability,
   ClockCapability,
+  MetricDataPoint,
+  MetricQueryResult,
+  MetricSummary,
+  MetricsCapability,
+  MetricTemplate,
+  MetricWindow,
+  TemplateQueryParams,
   ToolCapabilities,
 } from "./capabilities";
 // Capabilities
@@ -33,7 +40,7 @@ export {
   type ToolCatalog,
 } from "./catalog";
 // Runtime adapter
-export { toBoundToolRuntime } from "./runtime-adapter";
+export { contractToRuntime, toBoundToolRuntime } from "./runtime-adapter";
 // Schema compilation
 export {
   type ToToolSpecResult,
@@ -53,6 +60,23 @@ export {
   getCurrentTimeContract,
   getCurrentTimeImplementation,
 } from "./tools/get-current-time";
+export {
+  createMetricsQueryImplementation,
+  METRICS_QUERY_NAME,
+  type MetricsDataPoint,
+  MetricsDataPointSchema,
+  type MetricsQueryDeps,
+  type MetricsQueryInput,
+  MetricsQueryInputSchema,
+  type MetricsQueryOutput,
+  MetricsQueryOutputSchema,
+  type MetricsQueryRedacted,
+  type MetricsSummary,
+  MetricsSummarySchema,
+  metricsQueryBoundTool,
+  metricsQueryContract,
+  metricsQueryStubImplementation,
+} from "./tools/metrics-query";
 // Tool types
 export type {
   BoundTool,
