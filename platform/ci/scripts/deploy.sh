@@ -568,36 +568,23 @@ else
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 5: Disk cleanup BEFORE pull (prevents extraction failures)
+# Step 5: Require 10GB free before pull (fail-fast disk gate)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DISK_USAGE=$(df / | tail -1 | awk '{print $5}' | sed 's/%//')
-if [[ "$DISK_USAGE" -ge 70 ]]; then
-  log_warn "Disk usage at ${DISK_USAGE}% (>= 70%) - cleaning old images..."
-  log_info "Disk before cleanup:"
-  df -h / /var/lib/docker /var/lib/containerd 2>/dev/null || df -h /
+AVAIL_GB=$(df -BG / | tail -1 | awk '{print $4}' | tr -d G)
+log_info "Free space before pull: ${AVAIL_GB}GB"
 
-  # Protected IDs: running containers + keep-last (full sha256 format)
-  PROTECT_IDS=$(
-    {
-      docker ps -q | xargs -r docker inspect --format '{{.Image}}' 2>/dev/null
-      docker images --no-trunc --format '{{.ID}}' --filter 'reference=cogni-runtime:keep-last' 2>/dev/null
-    } | sort -u
-  )
+if [ "$AVAIL_GB" -lt 10 ]; then
+  log_warn "Low disk (${AVAIL_GB}GB free). Running aggressive cleanup..."
+  docker system prune -af || true
+  journalctl --vacuum-time=3d || true
 
-  # Remove unprotected ghcr.io/cogni-dao/cogni-template* images
-  comm -23 \
-    <(docker images --no-trunc --filter 'reference=ghcr.io/cogni-dao/cogni-template*' --format '{{.ID}}' | sort -u) \
-    <(echo "$PROTECT_IDS") \
-  | xargs -r docker rmi -f 2>/dev/null || true
+  AVAIL_GB=$(df -BG / | tail -1 | awk '{print $4}' | tr -d G)
+  log_info "Free space after cleanup: ${AVAIL_GB}GB"
 
-  docker container prune -f >/dev/null 2>&1 || true
-  docker builder prune -af >/dev/null 2>&1 || true
-
-  log_info "Disk after cleanup:"
-  df -h / /var/lib/docker /var/lib/containerd 2>/dev/null || df -h /
-  log_info "Cleanup complete"
-else
-  log_info "Disk usage at ${DISK_USAGE}% - no cleanup needed"
+  if [ "$AVAIL_GB" -lt 10 ]; then
+    log_error "Insufficient disk after cleanup (${AVAIL_GB}GB free). Increase disk or move /var/lib/containerd to dedicated volume."
+    exit 1
+  fi
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

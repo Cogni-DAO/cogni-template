@@ -32,6 +32,7 @@ Build once. Push to GHCR. Deploy via GitHub Actions + Docker Compose to Cherry V
 - **Deploys**: App + Postgres + LiteLLM + Alloy containers via `docker-compose.yml`
 - **Deployment**: SSH from GitHub Actions, pull-while-running, no `compose down`
 - **Network**: Shares `cogni-edge` external network with edge stack
+- **Disk gate**: Requires ≥10GB free before pull; if low, runs `docker system prune -af` then fails if still insufficient (image extraction can spike ~2× pull size)
 
 ## File Structure
 
