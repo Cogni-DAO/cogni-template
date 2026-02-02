@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-30
+- **Last reviewed:** 2026-02-02
 - **Status:** draft
 
 ## Purpose
@@ -56,7 +56,8 @@ LangGraph graph definitions and runtime utilities for agentic AI execution. Cont
     - `CogniExecContext` — Runtime context type (completionFn, tokenSink, toolExecFn; NO model per #35)
   - `@cogni/langgraph-graphs/graphs` — Graph factories and shared types:
     - `createPoetGraph()`, `createPondererGraph()` — React agent factories (TYPE_TRANSPARENT_RETURN)
-    - `POET_GRAPH_NAME`, `PONDERER_GRAPH_NAME` — Graph name constants
+    - `createResearchGraph()` — 3-node MVP research graph (plan_queries → web_search_fanout → rank_and_report)
+    - `POET_GRAPH_NAME`, `PONDERER_GRAPH_NAME`, `RESEARCH_GRAPH_NAME` — Graph name constants
     - `InvokableGraph<I,O>`, `MessageGraphInput`, `MessageGraphOutput` — Type firewall
     - `GraphInvokeOptions`, `CreateReactAgentGraphOptions` — Factory types
   - **Per-graph tools:** `src/graphs/*/tools.ts` exports `*_TOOL_IDS` constants

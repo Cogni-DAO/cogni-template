@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-01-14
+- **Last reviewed:** 2026-02-02
 - **Status:** stable
 
 ## Purpose
@@ -36,11 +36,11 @@ AI service adapters including LiteLLM completion/streaming, usage telemetry, age
 
 ## Public Surface
 
-- **Exports:** LiteLlmAdapter (LlmService), LiteLlmActivityUsageAdapter (ActivityUsagePort), LiteLlmUsageServiceAdapter (UsageService), InProcCompletionUnitAdapter (completion unit execution), AgentCatalogProvider (discovery interface), AggregatingAgentCatalog (implements AgentCatalogPort), LangGraphInProcAgentCatalogProvider (discovery provider), AggregatingGraphExecutor (execution routing), GraphProvider (execution interface), LangGraphInProcProvider (implements GraphProvider), ObservabilityGraphExecutorDecorator (wraps GraphExecutorPort with Langfuse traces)
+- **Exports:** LiteLlmAdapter (LlmService), LiteLlmActivityUsageAdapter (ActivityUsagePort), LiteLlmUsageServiceAdapter (UsageService), InProcCompletionUnitAdapter (completion unit execution), AgentCatalogProvider (discovery interface), AggregatingAgentCatalog (implements AgentCatalogPort), LangGraphInProcAgentCatalogProvider (discovery provider), AggregatingGraphExecutor (execution routing), GraphProvider (execution interface), LangGraphInProcProvider (implements GraphProvider), ObservabilityGraphExecutorDecorator (wraps GraphExecutorPort with Langfuse traces), TavilyWebSearchAdapter (WebSearchCapability with hard caps)
 - **Routes (if any):** none
 - **CLI (if any):** none
-- **Env/Config keys:** LITELLM_BASE_URL, LITELLM_MASTER_KEY (model param required - no env fallback)
-- **Files considered API:** litellm.adapter.ts, litellm.activity-usage.adapter.ts, litellm.usage-service.adapter.ts, inproc-completion-unit.adapter.ts, agent-catalog.provider.ts, aggregating-agent-catalog.ts, aggregating-executor.ts, graph-provider.ts, langgraph/inproc-agent-catalog.provider.ts, langgraph/inproc.provider.ts, observability-executor.decorator.ts
+- **Env/Config keys:** LITELLM_BASE_URL, LITELLM_MASTER_KEY (model param required - no env fallback), TAVILY_API_KEY (for web search)
+- **Files considered API:** litellm.adapter.ts, litellm.activity-usage.adapter.ts, litellm.usage-service.adapter.ts, inproc-completion-unit.adapter.ts, agent-catalog.provider.ts, aggregating-agent-catalog.ts, aggregating-executor.ts, graph-provider.ts, langgraph/inproc-agent-catalog.provider.ts, langgraph/inproc.provider.ts, observability-executor.decorator.ts, tavily-web-search.adapter.ts
 - **Streaming:** completionStream() supports SSE streaming via eventsource-parser with robustness against malformed chunks
 
 ## Ports (optional)
@@ -78,6 +78,7 @@ pnpm test tests/integration/ai/
 - AgentCatalogProvider pattern: listAgents() returns AgentDescriptor[]; AggregatingAgentCatalog fans out to providers
 - GraphProvider pattern: providerId prefixes graphId (e.g., "langgraph:poet"); AggregatingGraphExecutor routes to registered providers
 - langgraph/ subdirectory: LangGraphInProcAgentCatalogProvider (discovery) and LangGraphInProcProvider (execution) wire @cogni/langgraph-graphs catalog
+- TavilyWebSearchAdapter: HARD_CAPS_ENFORCED_AT_TOOL_BOUNDARY — maxResults capped at 5, title≤120, snippet≤160 chars regardless of caller requests
 
 ## Dependencies
 

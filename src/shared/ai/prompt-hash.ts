@@ -123,4 +123,4 @@ export const DEFAULT_TEMPERATURE = 0.7;
  * Default max tokens for LLM calls.
  * Used when computing hash before LLM call.
  */
-export const DEFAULT_MAX_TOKENS = 2048;
+export const DEFAULT_MAX_TOKENS = 4096;

@@ -18,13 +18,13 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Maximum concurrent research tasks the supervisor can delegate */
-export const MAX_CONCURRENT_RESEARCH_UNITS = 3;
+export const MAX_CONCURRENT_RESEARCH_UNITS = 2;
 
 /** Maximum supervisor iterations before forcing completion */
-export const MAX_SUPERVISOR_ITERATIONS = 10;
+export const MAX_SUPERVISOR_ITERATIONS = 3;
 
 /** Maximum tool calls per researcher before forcing compression */
-export const MAX_RESEARCHER_TOOL_CALLS = 15;
+export const MAX_RESEARCHER_TOOL_CALLS = 3;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Report Format

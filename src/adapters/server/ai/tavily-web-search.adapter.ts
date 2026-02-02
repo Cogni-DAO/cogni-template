@@ -8,6 +8,7 @@
  * Invariants:
  *   - AUTH_VIA_ADAPTER: API key resolved from config, never from context
  *   - STRUCTURED_RESULTS: Returns typed WebSearchResult
+ *   - HARD_CAPS_ENFORCED_AT_TOOL_BOUNDARY: maxResults=5 max, title≤120, content≤160
  * Side-effects: IO (HTTP requests to api.tavily.com)
  * Links: TOOL_USE_SPEC.md
  * @internal
@@ -65,10 +66,19 @@ export class TavilyWebSearchAdapter implements WebSearchCapability {
 
   /**
    * Execute a web search via Tavily API.
+   *
+   * Per HARD_CAPS_ENFORCED_AT_TOOL_BOUNDARY:
+   * - maxResults capped at 5 (model request is a hint, not authority)
+   * - include_raw_content always false
+   * - title truncated to 120 chars
+   * - content truncated to 160 chars
    */
   async search(params: WebSearchParams): Promise<WebSearchResult> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
+
+    // Hard cap: max 5 results regardless of what caller requests
+    const maxResults = Math.min(params.maxResults ?? 5, 5);
 
     try {
       const response = await fetch("https://api.tavily.com/search", {
@@ -79,9 +89,10 @@ export class TavilyWebSearchAdapter implements WebSearchCapability {
         body: JSON.stringify({
           api_key: this.apiKey,
           query: params.query,
-          max_results: params.maxResults ?? 5,
+          max_results: maxResults,
           topic: params.topic ?? "general",
-          include_raw_content: params.includeRawContent ?? false,
+          // Hard cap: never request raw content (token savings)
+          include_raw_content: false,
         }),
         signal: controller.signal,
       });
@@ -105,13 +116,13 @@ export class TavilyWebSearchAdapter implements WebSearchCapability {
       return {
         query: data.query,
         results: data.results.map((r) => ({
-          title: r.title,
           url: r.url,
-          content: r.content,
+          // Hard cap: title max 120 chars
+          title: r.title.slice(0, 120),
+          // Hard cap: content max 160 chars for token efficiency
+          content: r.content?.slice(0, 160) ?? "",
           // Conditionally include optional fields to satisfy exactOptionalPropertyTypes
-          // Note: Tavily API may return null for optional fields, so we check both
           ...(r.score != null && { score: r.score }),
-          ...(r.raw_content != null && { rawContent: r.raw_content }),
         })),
       };
     } catch (error) {
