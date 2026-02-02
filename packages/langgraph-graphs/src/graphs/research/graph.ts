@@ -404,14 +404,12 @@ function createSupervisorSubgraph(opts: CreateSupervisorSubgraphOptions) {
     };
   }
 
-  // Routing: continue or end
+  // Routing: decide whether to process tools
   function routeSupervisor(state: SupervisorState): string {
     const lastMessage =
       state.supervisorMessages[state.supervisorMessages.length - 1];
-    const exceededIterations =
-      (state.researchIterations ?? 0) >= MAX_SUPERVISOR_ITERATIONS;
 
-    // Check for research_complete or no tool calls
+    // No tool calls or not an AIMessage → end
     if (
       !(lastMessage instanceof AIMessage) ||
       !lastMessage.tool_calls?.length
@@ -419,15 +417,24 @@ function createSupervisorSubgraph(opts: CreateSupervisorSubgraphOptions) {
       return "__end__";
     }
 
-    const isComplete = lastMessage.tool_calls.some(
-      (tc) => tc.name === "research_complete"
-    );
+    // Always process tool calls via supervisor_tools
+    // (including research_complete, which extracts notes)
+    return "supervisor_tools";
+  }
 
-    if (isComplete || exceededIterations) {
+  // Routing after tools: continue loop or end
+  function routeAfterTools(state: SupervisorState): string {
+    // If notes were populated (research_complete was processed), end
+    if (state.notes && state.notes.length > 0) {
       return "__end__";
     }
 
-    return "supervisor_tools";
+    // Check iteration limit
+    if ((state.researchIterations ?? 0) >= MAX_SUPERVISOR_ITERATIONS) {
+      return "__end__";
+    }
+
+    return "supervisor";
   }
 
   // Build the supervisor subgraph
@@ -436,7 +443,7 @@ function createSupervisorSubgraph(opts: CreateSupervisorSubgraphOptions) {
     .addNode("supervisor_tools", supervisorTools)
     .addEdge("__start__", "supervisor")
     .addConditionalEdges("supervisor", routeSupervisor)
-    .addEdge("supervisor_tools", "supervisor");
+    .addConditionalEdges("supervisor_tools", routeAfterTools);
 
   return builder.compile();
 }
