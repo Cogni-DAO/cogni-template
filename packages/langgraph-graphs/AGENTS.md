@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-01-15
+- **Last reviewed:** 2026-01-30
 - **Status:** draft
 
 ## Purpose
@@ -50,24 +50,21 @@ LangGraph graph definitions and runtime utilities for agentic AI execution. Cont
     - `CompletionFn`, `CompletionResult` — Injected completion function types
     - `CreateGraphFn`, `CreateGraphOptions` — Graph factory types
     - `ToolExecFn`, `ToolExecResult` — Tool execution types
-  - `@cogni/langgraph-graphs/runtime` — LangChain utilities:
-    - `toLangChainTools()` — Convert tool contracts to LangChain DynamicStructuredTool (checks configurable.toolIds)
-    - `CompletionUnitLLM` — BaseChatModel wrapper for billing integration
-    - `toBaseMessage()`, `fromBaseMessage()` — Message converters
-    - `AsyncQueue` — Simple async queue for streaming
-    - `runWithInProcContext()`, `getInProcRuntime()`, `hasInProcRuntime()` — AsyncLocalStorage for per-run context
-    - `InProcRuntime` — Runtime context type (completionFn, tokenSink, toolExecFn)
+  - `@cogni/langgraph-graphs/runtime` — LangChain utilities (split: `core/` generic, `cogni/` ALS-based):
+    - **Core (no ALS):** `makeLangChainTool()`, `toLangChainToolsCaptured()`, `toBaseMessage()`, `fromBaseMessage()`, `AsyncQueue`, `makeServerGraph()`
+    - **Cogni (uses ALS):** `CogniCompletionAdapter`, `runWithCogniExecContext()`, `getCogniExecContext()`, `hasCogniExecContext()`, `toLangChainToolsFromContext()`, `makeCogniGraph()`
+    - `CogniExecContext` — Runtime context type (completionFn, tokenSink, toolExecFn; NO model per #35)
   - `@cogni/langgraph-graphs/graphs` — Graph factories and shared types:
-    - `createPoetGraph()`, `createPondererGraph()` — React agent factories
+    - `createPoetGraph()`, `createPondererGraph()` — React agent factories (TYPE_TRANSPARENT_RETURN)
     - `POET_GRAPH_NAME`, `PONDERER_GRAPH_NAME` — Graph name constants
-    - `InvokableGraph<I,O>` — Type firewall (Pick<RunnableInterface, "invoke">)
-    - `GraphInvokeOptions` — Alias to Partial<RunnableConfig>
-    - `CreateReactAgentGraphOptions` — Base factory options
-    - `asInvokableGraph()` — Centralized cast with runtime assertion
+    - `InvokableGraph<I,O>`, `MessageGraphInput`, `MessageGraphOutput` — Type firewall
+    - `GraphInvokeOptions`, `CreateReactAgentGraphOptions` — Factory types
+  - **Per-graph tools:** `src/graphs/*/tools.ts` exports `*_TOOL_IDS` constants
 - **CLI:** none
 - **Env/Config keys:** none (all deps injected)
 - **Files considered API:** `index.ts`, `inproc/index.ts`, `runtime/index.ts`, `graphs/index.ts`, `langgraph.json`
-- **Dev entrypoints:** `src/graphs/poet/dev.ts`, `src/graphs/ponderer/dev.ts` — Pre-compiled graphs for `langgraph dev` server
+- **Server entrypoints:** `src/graphs/*/server.ts` — LangGraph dev server (uses `makeServerGraph`)
+- **Cogni entrypoints:** `src/graphs/*/cogni-exec.ts` — Cogni executor (uses `makeCogniGraph`)
 
 ## Ports
 
@@ -91,11 +88,12 @@ pnpm --filter @cogni/langgraph-graphs test
 
 - All `@langchain/*` imports must stay in this package (NO_LANGCHAIN_IN_SRC)
 - Graph factories are pure functions — no env reads, no side effects
-- Message types compatible with `src/core/chat/model.ts` (will migrate to ai-core)
-- Tools wrapped via `toLangChainTool()` must delegate to injected exec function
+- PURE_GRAPH_FACTORY: `graph.ts` has no env/ALS/entrypoint wiring
+- TYPE_TRANSPARENT_RETURN: Graph factories have NO explicit return type annotation to preserve `CompiledStateGraph` for CLI schema extraction
+- ENTRYPOINT_IS_THIN: `server.ts` and `cogni-exec.ts` are ~1-liners calling `makeServerGraph`/`makeCogniGraph`
+- NO_CROSSING_THE_STREAMS: `server.ts` uses `initChatModel`; `cogni-exec.ts` uses ALS — never mix
 - TOOLS_DENY_BY_DEFAULT: toLangChainTool checks configurable.toolIds; returns policy_denied if not in list
 - TOOL_CATALOG_IS_CANONICAL: `LANGGRAPH_CATALOG` entries use `toolIds: string[]` references; providers resolve from `TOOL_CATALOG`
-- Dev entrypoints (`dev.ts`) read process.env for LiteLLM config — only for `langgraph dev` server use
 
 ## Dependencies
 
@@ -114,3 +112,4 @@ pnpm --filter @cogni/langgraph-graphs test
 - Per PACKAGES_NO_SRC_IMPORTS: This package cannot import from `src/**`
 - `LangGraphInProcProvider` in `src/adapters/server/ai/langgraph/` wires this package
 - Package isolation enables LangGraph Server to import graphs without Next.js deps
+- **Dual tsconfig:** LangGraph CLI generates runtime `.ts` files (`__langgraph__*.ts`) that break `composite` mode. This package uses `tsconfig.json` (noEmit, for CLI) + `tsconfig.build.json` (composite, for `tsc -b`). Root tsconfig.json references the build config explicitly. This is not proper form, but a valid workaround.

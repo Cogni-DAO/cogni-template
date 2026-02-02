@@ -4,44 +4,59 @@
 /**
  * Module: `@cogni/langgraph-graphs/runtime`
  * Purpose: LangChain runtime utilities for graph execution.
- * Scope: Message converters, tool wrappers, LLM wrapper, async queue. Does not contain graph definitions.
+ * Scope: Re-exports from core/ (generic) and cogni/ (Cogni executor-specific). Does NOT contain implementation logic.
  * Invariants:
- *   - All LangChain imports contained here
- *   - Utilities are pure functions (no side effects)
- *   - CompletionUnitLLM routes through injected CompletionFn
+ *   - CORE_NO_ALS: core/ modules have no ALS dependencies
+ *   - COGNI_USES_ALS: cogni/ modules use CogniExecContext (AsyncLocalStorage)
  * Side-effects: none
  * Links: LANGGRAPH_AI.md, TOOL_USE_SPEC.md
  * @public
  */
 
-// Async queue for streaming
-export { AsyncQueue } from "./async-queue";
-// CompletionUnitLLM wrapper
+// ============================================================================
+// Core (generic, no ALS)
+// ============================================================================
+
 export {
-  type CompletionFn,
-  type CompletionResult,
-  CompletionUnitLLM,
-} from "./completion-unit-llm";
-// InProc runtime context (ALS-based)
-export {
-  getInProcRuntime,
-  hasInProcRuntime,
-  type InProcRuntime,
-  runWithInProcContext,
-} from "./inproc-runtime";
-// Tool wrappers
-export {
-  type ToLangChainToolOptions,
-  type ToLangChainToolsOptions,
-  type ToolExecFn,
-  type ToolExecResult,
-  toLangChainTool,
-  toLangChainTools,
-} from "./langchain-tools";
-// Message types and converters
-export {
+  // Async queue
+  AsyncQueue,
+  // Tool wrappers
+  type ExecResolver,
+  // Message types
   fromBaseMessage,
+  type MakeLangChainToolOptions,
+  type MakeLangChainToolsOptions,
+  // Server graph helper
   type Message,
   type MessageToolCall,
+  makeLangChainTool,
+  makeLangChainTools,
+  makeServerGraph,
+  type ToLangChainToolsCapturedOptions,
+  type ToolExecFn,
+  type ToolExecResult,
   toBaseMessage,
-} from "./message-converters";
+  toLangChainToolsCaptured,
+} from "./core";
+
+// ============================================================================
+// Cogni executor-specific (uses ALS)
+// ============================================================================
+
+export {
+  // Completion adapter
+  CogniCompletionAdapter,
+  // Execution context
+  type CogniExecContext,
+  type CompletionFn,
+  type CompletionResult,
+  getCogniExecContext,
+  hasCogniExecContext,
+  // Cogni graph helper
+  makeCogniGraph,
+  runWithCogniExecContext,
+  type TokenSink,
+  type ToLangChainToolsFromContextOptions,
+  type ToolCall,
+  toLangChainToolsFromContext,
+} from "./cogni";

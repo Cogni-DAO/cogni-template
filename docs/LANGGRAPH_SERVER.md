@@ -209,20 +209,22 @@ One canonical way to run LangGraph graphs (dev, container, hosted) such that:
 
 16. **MODEL_ALLOWLIST_LITELLM_CANONICAL**: LiteLLM `/model/info` is the canonical model allowlist. Next.js caches via SWR; langgraph-server validates against same source. No split-brain.
 
-17. **USAGE_SOURCE_RESPONSE_HEADERS**: P0 usage data comes from LiteLLM response headers (`x-litellm-response-cost`) and body (`id`, `usage`), NOT spend_logs polling. Spend logs are for activity dashboard only.
+17. **BILLING_VIA_END_USER_RECONCILIATION**: Billing uses async reconciliation via `end_user` correlation. Provider sets `configurable.user = ${runId}/${attempt}` server-side; reconciler queries `GET /spend/logs?end_user=...` and calls `commitUsageFact()` per entry. See [EXTERNAL_EXECUTOR_BILLING.md](EXTERNAL_EXECUTOR_BILLING.md).
 
-18. **USAGE_EMIT_ON_FINAL_ONLY**: For `langgraph_server`, emit `usage_report` only at completion (after final LLM response). If usage/cost unavailable, complete UI response but emit `billing_failed` metric and mark run unbilled for reconciliation. Never fail user-visible response due to missing billing data.
+18. **CONFIGURABLE_USER_SERVER_SET**: `initChatModel` must include `"user"` in `configurableFields`. Provider overwrites any client-supplied value with `${runId}/${attempt}`. Never trust client configurable for billing.
 
-**Billing Contract Divergence (P0 Known Issue):**
+19. **USAGE_REPORT_IS_UX_ONLY**: Stream `usage_report` events are telemetry hints for UI. Authoritative billing flows through reconciliation only. Never fail user response due to missing billing data.
 
-| Field                       | InProc | Server | Notes                              |
-| --------------------------- | ------ | ------ | ---------------------------------- |
-| usageUnitId (litellmCallId) | Yes    | No     | Requires `x-litellm-call-id`       |
-| costUsd                     | Yes    | No     | Requires `x-litellm-response-cost` |
-| model (resolved)            | Yes    | No     | Requires resolved model from proxy |
-| inputTokens / outputTokens  | Yes    | Yes    | Available from response body       |
+**Billing via Reconciliation (Validated):**
 
-**P0 decision:** Server path is internal/experimental only. Cannot be customer-billable until billing parity achieved.
+| Step | Component   | Action                                               |
+| ---- | ----------- | ---------------------------------------------------- |
+| 1    | `server.ts` | `configurableFields: ["model", "user"]`              |
+| 2    | Provider    | `configurable.user = ${runId}/${attempt}`            |
+| 3    | LiteLLM     | Stores as `end_user` in spend_logs                   |
+| 4    | Reconciler  | `GET /spend/logs?end_user=...` → `commitUsageFact()` |
+
+**P0 status:** `end_user` correlation validated. Reconciler implementation in progress.
 
 ### Type Translation
 

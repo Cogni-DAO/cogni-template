@@ -2,14 +2,14 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/langgraph-graphs/runtime/langchain-tools`
+ * Module: `@cogni/langgraph-graphs/runtime/core/langchain-tools`
  * Purpose: Convert @cogni/ai-tools contracts to LangChain StructuredTool format.
- * Scope: Tool wrappers that delegate to injected exec function. Does not execute tools directly.
+ * Scope: Tool wrappers that delegate to exec function resolved at invocation time. Does NOT execute tools directly.
  * Invariants:
- *   - TOOLS_VIA_TOOLRUNNER: All tool calls delegate to exec function
+ *   - TOOLS_VIA_TOOLRUNNER: All tool calls delegate to toolRunner.exec()
  *   - TOOLS_DENY_BY_DEFAULT: If toolIds missing or tool not in list, return policy_denied
  *   - TOOL_CONFIG_PROPAGATION: LangChain tool func receives config param for authorization
- *   - Tools wrapped here do NOT execute directly — exec is injected at runtime
+ *   - SINGLE_IMPLEMENTATION: makeLangChainTools is the single core impl
  *   - Uses contract.inputSchema directly (no separate schema param)
  * Side-effects: none
  * Links: TOOL_USE_SPEC.md, LANGGRAPH_AI.md
@@ -29,20 +29,16 @@ import type { z } from "zod";
 export type { ToolExecFn, ToolExecResult } from "@cogni/ai-core";
 
 /**
- * Options for toLangChainTool().
+ * Resolver that provides ToolExecFn at tool invocation time.
+ * - Captured: returns toolExecFn captured at bind time
+ * - FromContext: reads from ALS at invocation time
  */
-export interface ToLangChainToolOptions {
-  /** Tool contract from @cogni/ai-tools (includes inputSchema) */
-  readonly contract: ToolContract<string, unknown, unknown, unknown>;
-  /** Exec function that runs through toolRunner */
-  readonly exec: ToolExecFn;
-}
+export type ExecResolver = (config?: RunnableConfig) => ToolExecFn;
 
 /**
  * Internal factory that constructs DynamicStructuredTool without triggering TS2589.
  * Quarantines `any` at the constructor call to prevent TypeScript from attempting
- * deep generic instantiation. The public boundary (toLangChainTool) returns
- * StructuredToolInterface — no `any` leaks.
+ * deep generic instantiation. The public boundary returns StructuredToolInterface.
  *
  * Per TOOL_CONFIG_PROPAGATION: func receives (args, runManager?, config?) from LangChain.
  */
@@ -56,33 +52,42 @@ function createTool(toolConfig: {
     config?: RunnableConfig
   ) => Promise<string>;
 }): unknown {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   // biome-ignore lint/suspicious/noExplicitAny: TS2589 workaround - breaks deep generic instantiation
   const UntypedToolClass: any = DynamicStructuredTool;
   return new UntypedToolClass(toolConfig);
 }
 
+// ============================================================================
+// Core Implementation (single impl, per SINGLE_IMPLEMENTATION)
+// ============================================================================
+
 /**
- * Convert a tool contract to a LangChain StructuredToolInterface.
+ * Options for makeLangChainTool (core implementation).
+ */
+export interface MakeLangChainToolOptions {
+  /** Tool contract from @cogni/ai-tools (includes inputSchema) */
+  readonly contract: ToolContract<string, unknown, unknown, unknown>;
+  /** Resolver that provides ToolExecFn at invocation time */
+  readonly execResolver: ExecResolver;
+}
+
+/**
+ * Core implementation: Convert a tool contract to a LangChain StructuredToolInterface.
  *
- * Uses contract.inputSchema directly — no separate schema parameter needed.
- * The tool delegates execution to the injected `exec` function,
- * which should be wired to `toolRunner.exec()` to preserve validation and redaction.
+ * Uses execResolver to obtain ToolExecFn at invocation time (not bind time).
+ * This enables server (captured fn) and inproc (ALS) to share the same core logic.
  *
  * Per TOOLS_DENY_BY_DEFAULT: Wrapper performs cheap prefilter on toolIds.
  * If toolIds is missing/empty or tool not in list, returns policy_denied.
  * Real policy enforcement (ToolEffect, approval) remains in ToolRunner.
  *
- * Returns StructuredToolInterface (not DynamicStructuredTool) to avoid TS2589
- * generic instantiation blowups. This is the interface createReactAgent requires.
- *
- * @param opts - Tool options with contract and exec function
+ * @param opts - Tool options with contract and execResolver
  * @returns LangChain StructuredToolInterface
  */
-export function toLangChainTool(
-  opts: ToLangChainToolOptions
+export function makeLangChainTool(
+  opts: MakeLangChainToolOptions
 ): StructuredToolInterface {
-  const { contract, exec } = opts;
+  const { contract, execResolver } = opts;
   const toolName = contract.name;
 
   const tool = createTool({
@@ -95,7 +100,6 @@ export function toLangChainTool(
       config?: RunnableConfig
     ): Promise<string> => {
       // TOOLS_DENY_BY_DEFAULT: Check toolIds allowlist from configurable
-      // This is a cheap prefilter; real policy enforcement is in ToolRunner
       const configurable = config?.configurable as
         | { toolIds?: string[] }
         | undefined;
@@ -117,9 +121,10 @@ export function toLangChainTool(
         });
       }
 
+      // Resolve exec at invocation time (server: captured, inproc: ALS)
+      const exec = execResolver(config);
+
       // Tool is in allowlist — delegate to exec (ToolRunner handles full policy)
-      // P0: toolRunner generates canonical toolCallId (per TOOLCALLID_STABLE)
-      // P1: extract providerToolCallId from AIMessage.tool_calls in runner layer
       const result = await exec(toolName, args, undefined);
 
       if (result.ok) {
@@ -133,31 +138,65 @@ export function toLangChainTool(
     },
   });
 
-  // Single quarantined cast from unknown to StructuredToolInterface
   return tool as StructuredToolInterface;
 }
 
 /**
- * Options for toLangChainTools().
+ * Options for makeLangChainTools (core implementation, array version).
  */
-export interface ToLangChainToolsOptions {
+export interface MakeLangChainToolsOptions {
   /** Array of tool contracts */
   readonly contracts: ReadonlyArray<
     ToolContract<string, unknown, unknown, unknown>
   >;
-  /** Exec function for all tools */
-  readonly exec: ToolExecFn;
+  /** Resolver that provides ToolExecFn at invocation time */
+  readonly execResolver: ExecResolver;
 }
 
 /**
- * Convert multiple tool contracts to LangChain StructuredToolInterface[].
+ * Core implementation: Convert multiple tool contracts to LangChain tools.
  *
- * @param opts - Options with contracts and exec function
+ * @param opts - Options with contracts and execResolver
  * @returns Array of LangChain StructuredToolInterface
  */
-export function toLangChainTools(
-  opts: ToLangChainToolsOptions
+export function makeLangChainTools(
+  opts: MakeLangChainToolsOptions
 ): StructuredToolInterface[] {
-  const { contracts, exec } = opts;
-  return contracts.map((contract) => toLangChainTool({ contract, exec }));
+  const { contracts, execResolver } = opts;
+  return contracts.map((contract) =>
+    makeLangChainTool({ contract, execResolver })
+  );
+}
+
+// ============================================================================
+// Thin Wrapper (captured exec at bind time)
+// ============================================================================
+
+/**
+ * Options for toLangChainToolsCaptured.
+ */
+export interface ToLangChainToolsCapturedOptions {
+  /** Array of tool contracts */
+  readonly contracts: ReadonlyArray<
+    ToolContract<string, unknown, unknown, unknown>
+  >;
+  /** Tool exec function (captured at bind time) */
+  readonly toolExecFn: ToolExecFn;
+}
+
+/**
+ * Captured wrapper: Convert tool contracts to LangChain tools.
+ * Captures toolExecFn at bind time — used when exec is known upfront.
+ *
+ * @param opts - Options with contracts and toolExecFn
+ * @returns Array of LangChain StructuredToolInterface
+ */
+export function toLangChainToolsCaptured(
+  opts: ToLangChainToolsCapturedOptions
+): StructuredToolInterface[] {
+  const { contracts, toolExecFn } = opts;
+  return makeLangChainTools({
+    contracts,
+    execResolver: () => toolExecFn, // captured at bind time
+  });
 }
