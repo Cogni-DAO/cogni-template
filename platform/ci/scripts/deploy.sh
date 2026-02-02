@@ -773,8 +773,8 @@ ssh $SSH_OPTS root@"$VM_HOST" \
 # Health validation
 log_info "Validating deployment health..."
 
-max_attempts=3
-sleep_seconds=3
+max_attempts=6
+sleep_seconds=5
 
 check_url() {
   local url="$1"
