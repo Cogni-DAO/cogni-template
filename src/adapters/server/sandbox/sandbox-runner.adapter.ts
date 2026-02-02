@@ -53,13 +53,25 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
   }
 
   async runOnce(spec: SandboxRunSpec): Promise<SandboxRunResult> {
-    const { runId, workspacePath, command, limits } = spec;
+    const { runId, workspacePath, command, limits, mounts = [] } = spec;
     const containerName = `sandbox-${runId}-${Date.now()}`;
 
     this.log.debug(
-      { runId, containerName, command, workspacePath },
+      {
+        runId,
+        containerName,
+        command,
+        workspacePath,
+        mountCount: mounts.length,
+      },
       "Starting sandbox container"
     );
+
+    // Build bind mounts: workspace (always rw) + additional mounts
+    const binds = [
+      `${workspacePath}:/workspace:rw`,
+      ...mounts.map((m) => `${m.hostPath}:${m.containerPath}:${m.mode}`),
+    ];
 
     let container: Docker.Container | undefined;
 
@@ -76,8 +88,8 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
           // Memory limit
           Memory: limits.maxMemoryMb * 1024 * 1024,
           MemorySwap: limits.maxMemoryMb * 1024 * 1024, // No swap
-          // Mount workspace
-          Binds: [`${workspacePath}:/workspace:rw`],
+          // Mount workspace + additional mounts
+          Binds: binds,
           // Manual removal - AutoRemove races with log collection
           AutoRemove: false,
           // Security: read-only root filesystem except /workspace and /tmp

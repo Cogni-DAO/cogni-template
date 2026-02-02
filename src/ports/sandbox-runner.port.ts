@@ -15,6 +15,18 @@
  */
 
 /**
+ * Mount specification for binding host paths into the container.
+ */
+export interface SandboxMount {
+  /** Host filesystem path to mount */
+  readonly hostPath: string;
+  /** Path inside container where mount appears */
+  readonly containerPath: string;
+  /** Mount mode: 'ro' for read-only, 'rw' for read-write */
+  readonly mode: "ro" | "rw";
+}
+
+/**
  * Specification for a single sandbox command execution.
  */
 export interface SandboxRunSpec {
@@ -31,6 +43,8 @@ export interface SandboxRunSpec {
     /** Maximum memory in megabytes */
     readonly maxMemoryMb: number;
   };
+  /** Additional mounts (e.g., repo snapshot at /repo:ro) */
+  readonly mounts?: readonly SandboxMount[];
 }
 
 /**
