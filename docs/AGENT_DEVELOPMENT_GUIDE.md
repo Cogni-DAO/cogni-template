@@ -25,6 +25,9 @@ packages/langgraph-graphs/src/graphs/<name>/
 6. Add entry to `catalog.ts` — `toolIds`, `graphFactory`
 7. Add to `langgraph.json` — `"name": "./src/graphs/<name>/server.ts:x"`
 8. Export from `graphs/index.ts`
+9. **P0 workaround:** Add to `AVAILABLE_GRAPHS` in `src/features/ai/components/ChatComposerExtras.tsx`
+
+> **Note:** Step 9 is a temporary workaround. The chat UI uses a hardcoded graph list instead of fetching from `/api/v1/ai/agents`. See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) P1 checklist for the fix.
 
 **Template:** Copy from `ponderer/`
 

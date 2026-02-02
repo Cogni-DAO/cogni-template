@@ -30,6 +30,14 @@ export type {
   ClockCapability,
   ToolCapabilities,
 } from "./types";
+// Web search capability
+export type {
+  WebSearchCapability,
+  WebSearchParams,
+  WebSearchResult,
+  WebSearchResultItem,
+  WebSearchTopic,
+} from "./web-search";
 
 import type { AuthCapability, ClockCapability } from "./types";
 

@@ -15,6 +15,22 @@
 
 5. **OBO_SUBJECT_MUST_BE_BOUND**: `subjectId` cannot be supplied by agents, tools, or request parameters. It is set ONLY from server-issued grants, sessions, or execution contexts. Prevents impersonation-by-parameter attacks.
 
+6. **AUTHZ_FAIL_CLOSED_WITH_DISTINCTION**: `AuthorizationPort.check()` returns `deny` on infrastructure failure (timeout, network error, OpenFGA error). Use distinct error codes: `authz_denied` (OpenFGA returned DENY) vs `authz_unavailable` (infrastructure failure). Emit metric `authz.unavailable` on infrastructure failure. Never return `allow` on failure.
+
+---
+
+## Layered Authorization Model
+
+Authorization operates across three distinct layers with different purposes:
+
+| Layer                  | Location         | Purpose                                           | Error Code      |
+| ---------------------- | ---------------- | ------------------------------------------------- | --------------- |
+| **ToolPolicy**         | In-memory config | Capability gating (which tools exist in this env) | `policy_denied` |
+| **Grant Intersection** | In-memory set op | Connection scope narrowing (defense-in-depth)     | `policy_denied` |
+| **OpenFGA**            | External service | Permission + delegation verification              | `authz_denied`  |
+
+**OpenFGA is the sole source of truth for permission and delegation relationships.** ToolPolicy and Grant Intersection are capability/safety gates that execute before OpenFGA (fail-fast on capability denial). They are NOT authorization in the identity/access sense—they answer "does this capability exist?" not "is this actor permitted?"
+
 ---
 
 ## Actor Types
@@ -199,6 +215,18 @@ type connection
 
 **Parent Relations:** `tool.graph` and `connection.tenant` are required for computed permissions (`can_invoke from graph`, `member from tenant`).
 
+### Known Limitation: Global Delegation (P0)
+
+The current `user.delegates` relation is global—not scoped to tenant or graph. An agent with delegation can act on behalf of the user across all resources the user can access.
+
+**P0 Mitigations:**
+
+1. Only first-party agents (graphs defined in this repository) may receive delegation
+2. MCP-discovered agents MUST NOT receive delegation (per MCP_UNTRUSTED_BY_DEFAULT)
+3. Delegation issuance requires explicit user action in UI
+
+**P1 Scope:** Implement scoped delegation via `delegation` type with `{tenant, graph}` binding.
+
 ---
 
 ## Action→Relation Mapping
@@ -320,11 +348,12 @@ toolRunner.exec(toolId, rawArgs, ctx)
     └─ 5. Tool execution proceeds
 ```
 
-| Error Code      | Meaning                                                       | Source            |
-| --------------- | ------------------------------------------------------------- | ----------------- |
-| `policy_denied` | Tool not in allowlist OR connection not in grant intersection | ToolPolicy, Grant |
-| `authz_denied`  | OpenFGA check returned DENY (permission or delegation)        | AuthorizationPort |
-| `unavailable`   | Tool not found in catalog                                     | ToolSourcePort    |
+| Error Code          | Meaning                                                       | Source            |
+| ------------------- | ------------------------------------------------------------- | ----------------- |
+| `policy_denied`     | Tool not in allowlist OR connection not in grant intersection | ToolPolicy, Grant |
+| `authz_denied`      | OpenFGA check returned DENY (permission or delegation)        | AuthorizationPort |
+| `authz_unavailable` | OpenFGA timeout/network error (infrastructure failure)        | AuthorizationPort |
+| `unavailable`       | Tool not found in catalog                                     | ToolSourcePort    |
 
 **Key:** `policy_denied` is local/cheap checks; `authz_denied` is centralized OpenFGA.
 
@@ -365,15 +394,16 @@ Subject included in cache key because delegation status can change independently
 
 ## Anti-Patterns
 
-| Pattern                             | Problem                         |
-| ----------------------------------- | ------------------------------- |
-| Subject from request body           | Impersonation-by-parameter      |
-| Single check for OBO                | Missing delegation verification |
-| Actor-only audit logging            | Can't trace delegation chain    |
-| Caching without subject in key      | Stale delegation decisions      |
-| Bespoke role tables per service     | Fragmented policy               |
-| Checking authz after broker.resolve | Token already materialized      |
-| Allowing by default if check fails  | Fails open; must fail closed    |
+| Pattern                                | Problem                                            |
+| -------------------------------------- | -------------------------------------------------- |
+| Subject from request body              | Impersonation-by-parameter                         |
+| Single check for OBO                   | Missing delegation verification                    |
+| Actor-only audit logging               | Can't trace delegation chain                       |
+| Caching without subject in key         | Stale delegation decisions                         |
+| Bespoke role tables per service        | Fragmented policy                                  |
+| Checking authz after broker.resolve    | Token already materialized                         |
+| Allowing by default if check fails     | Fails open; must fail closed                       |
+| Treating authz timeout as authz_denied | Masks infrastructure issues; use authz_unavailable |
 
 ---
 
@@ -386,5 +416,5 @@ Subject included in cache key because delegation status can change independently
 
 ---
 
-**Last Updated**: 2026-02-01
-**Status**: Draft (Rev 2 - Actor/subject separation for agent delegation)
+**Last Updated**: 2026-02-02
+**Status**: Draft (Rev 3 - Added #6 AUTHZ_FAIL_CLOSED_WITH_DISTINCTION; added Layered Authorization Model section clarifying ToolPolicy vs OpenFGA; documented Global Delegation P0 limitation; added authz_unavailable error code)

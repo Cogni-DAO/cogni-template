@@ -9,7 +9,7 @@
 
 2. **ONE_WORKSPACE_PER_DAO**: Persistent bind-mounted workspace at `/dao/<daoId>`. All sessions share the workspace. Skills and state persist.
 
-3. **ALL_MODELS_VIA_LITELLM**: Configure `models.providers.cogni` with `baseUrl` pointing to LiteLLM. No direct upstream provider keys.
+3. **ALL_MODELS_VIA_LITELLM**: Configure `models.providers.cogni` with `baseUrl` pointing to LiteLLM (standalone) or CogniGateway (in-sandbox). No direct upstream provider keys.
 
 4. **HEADER_BASED_BILLING**: Adapter sets `x-litellm-end-user-id: ${runId}/${attempt}` header for billing correlation. `user` field reserved for Moltbot session routing (stable: `daoId` or `daoId/endUserId`).
 
@@ -209,13 +209,47 @@ If P0 validation shows Clawdbot does NOT forward `x-litellm-end-user-id` header:
 
 ---
 
+## Sandbox Deployment Model (P0.5+)
+
+> See [SANDBOXED_AGENTS.md](SANDBOXED_AGENTS.md) for full specification.
+
+Clawdbot can run inside a network-isolated sandbox container:
+
+| Aspect           | Standalone Service                        | In-Sandbox (P0.5+)                            |
+| ---------------- | ----------------------------------------- | --------------------------------------------- |
+| Network          | Direct to LiteLLM                         | `network=none`, via CogniGateway              |
+| LLM routing      | Clawdbot → LiteLLM                        | Clawdbot → localhost:8080 → Gateway → LiteLLM |
+| Header injection | Clawdbot forwards `x-litellm-end-user-id` | Gateway injects (client-sent ignored)         |
+| Workspace        | Persistent `/dao/<daoId>`                 | Ephemeral or persistent via volume            |
+| Billing          | Reconciliation via `/spend/logs`          | Same, gateway ensures header injection        |
+
+**In-Sandbox Clawdbot Config**:
+
+```json
+{
+  "models": {
+    "providers": {
+      "cogni": {
+        "baseUrl": "http://localhost:8080",
+        "apiKey": "not-used-gateway-handles-auth"
+      }
+    }
+  }
+}
+```
+
+**Why Sandbox?** Stricter isolation—no direct network egress, all IO audited by host.
+
+---
+
 ## Related Docs
 
 - [EXTERNAL_EXECUTOR_BILLING.md](EXTERNAL_EXECUTOR_BILLING.md) — Reconciliation pattern
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — GraphExecutorPort, invariants 41-47
 - [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool execution, CONNECTION_ID_ONLY (P1)
+- [SANDBOXED_AGENTS.md](SANDBOXED_AGENTS.md) — Sandbox phases (P0/P0.5/P1)
 
 ---
 
-**Last Updated**: 2026-01-30
+**Last Updated**: 2026-02-02
 **Status**: Draft (MVP)

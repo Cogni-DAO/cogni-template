@@ -27,6 +27,9 @@ import type {
   TemplateQueryResult,
   TemplateSummary,
 } from "@/ports";
+import { EVENT_NAMES, makeLogger } from "@/shared/observability";
+
+const logger = makeLogger({ component: "MimirMetricsAdapter" });
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Template Query Configuration (GOVERNED_METRICS)
@@ -165,6 +168,14 @@ export class MimirMetricsAdapter implements MetricsQueryPort {
   ): Promise<TemplateQueryResult> {
     // Validate template
     if (!ALLOWED_TEMPLATES.includes(params.template)) {
+      logger.error(
+        {
+          event: EVENT_NAMES.ADAPTER_MIMIR_ERROR,
+          dep: "mimir",
+          reasonCode: "unknown_template",
+        },
+        EVENT_NAMES.ADAPTER_MIMIR_ERROR
+      );
       throw new TemplateQueryError(
         "UNKNOWN_TEMPLATE",
         `Unknown template: ${params.template}`
@@ -173,6 +184,14 @@ export class MimirMetricsAdapter implements MetricsQueryPort {
 
     // Validate service allowlist
     if (!(ALLOWED_SERVICES as readonly string[]).includes(params.service)) {
+      logger.error(
+        {
+          event: EVENT_NAMES.ADAPTER_MIMIR_ERROR,
+          dep: "mimir",
+          reasonCode: "service_not_allowed",
+        },
+        EVENT_NAMES.ADAPTER_MIMIR_ERROR
+      );
       throw new TemplateQueryError(
         "SERVICE_NOT_ALLOWED",
         `Service not in allowlist: ${params.service}`
@@ -200,6 +219,14 @@ export class MimirMetricsAdapter implements MetricsQueryPort {
 
     // FAIL CLOSED: reject multi-series results
     if (rawResult.result.length > 1) {
+      logger.error(
+        {
+          event: EVENT_NAMES.ADAPTER_MIMIR_ERROR,
+          dep: "mimir",
+          reasonCode: "multi_series_result",
+        },
+        EVENT_NAMES.ADAPTER_MIMIR_ERROR
+      );
       throw new TemplateQueryError(
         "MULTI_SERIES_RESULT",
         `Template query returned ${rawResult.result.length} series; expected 1`
@@ -298,6 +325,15 @@ export class MimirMetricsAdapter implements MetricsQueryPort {
       });
 
       if (!response.ok) {
+        logger.error(
+          {
+            event: EVENT_NAMES.ADAPTER_MIMIR_ERROR,
+            dep: "mimir",
+            reasonCode: "http_error",
+            status: response.status,
+          },
+          EVENT_NAMES.ADAPTER_MIMIR_ERROR
+        );
         throw new Error(
           `Mimir query failed: ${response.status} ${response.statusText}`
         );
@@ -307,14 +343,44 @@ export class MimirMetricsAdapter implements MetricsQueryPort {
 
       // Prometheus API wraps results in { status: "success", data: ... }
       if (json.status !== "success") {
+        logger.error(
+          {
+            event: EVENT_NAMES.ADAPTER_MIMIR_ERROR,
+            dep: "mimir",
+            reasonCode: "api_error",
+          },
+          EVENT_NAMES.ADAPTER_MIMIR_ERROR
+        );
         throw new Error(`Mimir query error: ${json.error || "Unknown error"}`);
       }
 
       return json.data as T;
     } catch (error) {
       if (error instanceof Error && error.name === "AbortError") {
+        logger.error(
+          {
+            event: EVENT_NAMES.ADAPTER_MIMIR_ERROR,
+            dep: "mimir",
+            reasonCode: "timeout",
+            durationMs: this.config.timeoutMs,
+          },
+          EVENT_NAMES.ADAPTER_MIMIR_ERROR
+        );
         throw new Error(`Mimir query timeout after ${this.config.timeoutMs}ms`);
       }
+      // Log network-level errors (DNS, connection refused, TLS, etc.)
+      const reasonCode =
+        error instanceof Error && error.message === "fetch failed"
+          ? "network_error"
+          : "unknown_error";
+      logger.error(
+        {
+          event: EVENT_NAMES.ADAPTER_MIMIR_ERROR,
+          dep: "mimir",
+          reasonCode,
+        },
+        EVENT_NAMES.ADAPTER_MIMIR_ERROR
+      );
       throw error;
     } finally {
       clearTimeout(timeoutId);

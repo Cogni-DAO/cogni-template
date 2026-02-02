@@ -744,7 +744,7 @@ export interface WorkItemPort {
 
 **Temporal Setup:**
 
-- [ ] Deploy Temporal OSS (dev: docker-compose, prod: managed)
+- [x] Deploy Temporal OSS (dev: docker-compose, prod: managed)
 - [ ] Create `governance` namespace
 - [ ] Configure worker with task queue `governance-tasks`
 
@@ -1029,6 +1029,7 @@ The following items were identified during architecture review and are deferred 
 
 ## Related Documents
 
+- [GOV_DATA_COLLECTORS.md](GOV_DATA_COLLECTORS.md) — SourceAdapter registry (Prometheus, OpenRouter, etc.)
 - [TEMPORAL_PATTERNS.md](TEMPORAL_PATTERNS.md) — Canonical Temporal patterns and anti-patterns
 - [SYSTEM_TENANT_DESIGN.md](SYSTEM_TENANT_DESIGN.md) — System tenant foundation
 - [SCHEDULER_SPEC.md](SCHEDULER_SPEC.md) — Scheduled graph execution

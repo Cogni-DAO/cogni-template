@@ -126,6 +126,11 @@ export interface GraphResult {
   };
   readonly finishReason?: string;
   readonly error?: AiExecutionErrorCode;
+  /**
+   * Error message for logging/debugging at adapter boundary.
+   * Only populated on failure (ok: false). Not sent to clients.
+   */
+  readonly errorMessage?: string;
   /** Final assistant response content (for trace output) */
   readonly content?: string;
 }

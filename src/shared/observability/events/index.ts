@@ -63,6 +63,9 @@ export const EVENT_NAMES = {
   ADAPTER_LITELLM_COMPLETION_RESULT: "adapter.litellm.completion_result",
   ADAPTER_LITELLM_STREAM_RESULT: "adapter.litellm.stream_result",
   ADAPTER_LITELLM_USAGE_ERROR: "adapter.litellm.usage_error",
+  ADAPTER_MIMIR_ERROR: "adapter.mimir.error",
+  ADAPTER_TAVILY_ERROR: "adapter.tavily.error",
+  ADAPTER_LANGGRAPH_INPROC_ERROR: "adapter.langgraph_inproc.error",
 
   // Invariant Warnings
   INV_PROVIDER_META_MODEL_MISSING: "inv_provider_meta_model_missing",

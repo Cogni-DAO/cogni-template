@@ -21,6 +21,11 @@ import {
   PONDERER_GRAPH_NAME,
 } from "./graphs/ponderer/graph";
 import { PONDERER_TOOL_IDS } from "./graphs/ponderer/tools";
+import {
+  createResearchGraph,
+  RESEARCH_GRAPH_NAME,
+} from "./graphs/research/graph";
+import { RESEARCH_TOOL_IDS } from "./graphs/research/tools";
 import type { CreateGraphFn } from "./inproc/types";
 
 /**
@@ -69,6 +74,17 @@ export const LANGGRAPH_CATALOG: Readonly<Record<string, CatalogEntry>> = {
     toolIds: PONDERER_TOOL_IDS,
     graphFactory: createPondererGraph,
   },
+
+  /**
+   * Research graph - deep research agent with web search.
+   * Conducts thorough research and produces structured reports.
+   */
+  [RESEARCH_GRAPH_NAME]: {
+    displayName: "Research",
+    description: "Deep research agent with web search and report generation",
+    toolIds: RESEARCH_TOOL_IDS,
+    graphFactory: createResearchGraph,
+  },
 } as const;
 
 /**
@@ -88,6 +104,7 @@ export const LANGGRAPH_PROVIDER_ID = "langgraph" as const;
 export const LANGGRAPH_GRAPH_IDS = {
   poet: `${LANGGRAPH_PROVIDER_ID}:${POET_GRAPH_NAME}`,
   ponderer: `${LANGGRAPH_PROVIDER_ID}:${PONDERER_GRAPH_NAME}`,
+  research: `${LANGGRAPH_PROVIDER_ID}:${RESEARCH_GRAPH_NAME}`,
 } as const;
 
 /**

@@ -17,6 +17,8 @@
 import {
   AIMessage,
   type BaseMessage,
+  type BaseMessageLike,
+  coerceMessageLikeToMessage,
   HumanMessage,
   SystemMessage,
   ToolMessage,
@@ -91,28 +93,41 @@ export function toBaseMessage(msg: Message): BaseMessage {
 
 /**
  * Convert LangChain BaseMessage to app Message.
+ * Handles both proper BaseMessage instances and plain objects from state serialization.
  *
- * @param msg - LangChain BaseMessage
+ * @param msg - LangChain BaseMessage or BaseMessageLike (from serialized state)
  * @returns App message format
  */
-export function fromBaseMessage(msg: BaseMessage): Message {
-  const msgType = msg._getType();
+export function fromBaseMessage(msg: BaseMessage | BaseMessageLike): Message {
+  const baseMsg = coerceMessageLikeToMessage(msg);
+  // After coercion, baseMsg is a proper BaseMessage instance with getType()
+  // Resolution order: getType() → .type → _getType() → error
+  const msgType =
+    baseMsg.getType?.() ??
+    (baseMsg as unknown as { type?: string }).type ??
+    baseMsg._getType?.();
+
+  if (!msgType) {
+    throw new Error(
+      `Cannot determine message type in fromBaseMessage: keys=${JSON.stringify(Object.keys(baseMsg))}`
+    );
+  }
 
   switch (msgType) {
     case "human":
       return {
         role: "user",
-        content: typeof msg.content === "string" ? msg.content : "",
+        content: typeof baseMsg.content === "string" ? baseMsg.content : "",
       };
 
     case "system":
       return {
         role: "system",
-        content: typeof msg.content === "string" ? msg.content : "",
+        content: typeof baseMsg.content === "string" ? baseMsg.content : "",
       };
 
     case "ai": {
-      const aiMsg = msg as AIMessage;
+      const aiMsg = baseMsg as AIMessage;
       const content = typeof aiMsg.content === "string" ? aiMsg.content : "";
 
       // Convert tool calls from LangChain format
@@ -130,7 +145,7 @@ export function fromBaseMessage(msg: BaseMessage): Message {
     }
 
     case "tool": {
-      const toolMsg = msg as ToolMessage;
+      const toolMsg = baseMsg as ToolMessage;
       return {
         role: "tool",
         content: typeof toolMsg.content === "string" ? toolMsg.content : "",
@@ -142,7 +157,7 @@ export function fromBaseMessage(msg: BaseMessage): Message {
       // Fallback for unknown types
       return {
         role: "assistant",
-        content: typeof msg.content === "string" ? msg.content : "",
+        content: typeof baseMsg.content === "string" ? baseMsg.content : "",
       };
   }
 }

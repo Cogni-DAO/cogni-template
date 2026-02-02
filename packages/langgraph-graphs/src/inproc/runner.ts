@@ -170,12 +170,18 @@ export function createInProcGraphRunner<TTool = unknown>(
       // Per ERROR_NORMALIZATION_ONCE: normalize at catch boundary
       const code = normalizeErrorToExecutionCode(error);
 
+      // Capture error message for logging at adapter boundary (not sent to clients)
+      const errorMessage =
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : String(error);
+
       // Per ERROR_NORMALIZATION: emit code only, not message
       emit({ type: "error", error: code });
       // Per GRAPH_FINALIZATION_ONCE: always emit done as final event
       emit({ type: "done" });
 
-      return { ok: false, error: code };
+      return { ok: false, error: code, errorMessage };
     } finally {
       queue.close();
     }

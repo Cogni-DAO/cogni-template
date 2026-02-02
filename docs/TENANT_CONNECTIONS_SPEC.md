@@ -13,17 +13,19 @@
 
 4. **ENCRYPTED_AT_REST**: Credentials stored encrypted with AEAD. AAD binding: `{billing_account_id, connection_id, provider}` prevents ciphertext rebind across tenants. Key from env, not DB. Versioned key IDs for rotation.
 
-5. **GRANT_AUTHORIZES_CONNECTION**: Request-provided `connectionIds` is a declaration, not authorization. Authorization comes from ExecutionGrant scopes only. Effective allowlist = `grantAllowed ∩ requestDeclared`. Enforce membership before `broker.resolve()` (deny fast).
+5. **GRANT_AUTHORIZES_CONNECTION**: Request-provided `connectionIds` is a declaration, not authorization. Authorization comes from ExecutionGrant scopes only. Effective allowlist = `grant.allowedConnectionIds ∩ request.connectionIds`. Enforce membership before `broker.resolve()` (deny fast).
 
 6. **SINGLE_AUTH_PATH**: Same credential resolution for all tools regardless of source (`@cogni/ai-tools` or MCP). No forked logic.
 
 7. **REFRESH_WITH_TIMEOUT**: Background refresh preferred (jittered window before expiry). Synchronous refresh allowed with bounded timeout. On timeout/failure: typed error, metric emitted, tool invocation fails.
 
-8. **CONNECTION_IN_CONTEXT_NOT_ARGS**: Authenticated tool invocations specify `connectionId` via `ToolInvocationContext` (out-of-band), NOT in tool args. This keeps tool input schemas pure business args, reduces injection surface, and prevents schema pollution. `connectionId` is uuid-validated at toolRunner boundary.
+8. **CONNECTION_IN_CONTEXT_NOT_ARGS**: Authenticated tool invocations specify `connectionId` via `ToolInvocationContext` (out-of-band), NOT in tool args. This keeps tool input schemas pure business args, reduces injection surface, and prevents schema pollution. `connectionId` is uuid-validated at toolRunner boundary. See also [TOOL_USE_SPEC.md#26a](TOOL_USE_SPEC.md) (CONNECTION_ID_VIA_CONTEXT) for schema rejection at derivation time.
 
-9. **AUTH_VIA_CAPABILITY_NOT_CONTEXT**: Broker outputs (access tokens, API keys, headers) must NEVER be placed into `ToolInvocationContext`, `RunnableConfig`, or ALS context. Tools receive auth via injected capability interfaces (e.g., `AuthCapability.getAccessToken(connectionId)`). This prevents secret leakage into logs, traces, telemetry, and exception messages.
+9. **AUTH_VIA_CAPABILITY_NOT_CONTEXT**: Broker outputs (access tokens, API keys, headers) must NEVER be placed into `ToolInvocationContext`, `RunnableConfig`, or ALS context. Tools receive auth via injected capability interfaces. This prevents secret leakage into logs, traces, telemetry, and exception messages.
 
-10. **GRANT_INTERSECTION_BEFORE_RESOLVE**: `toolRunner.exec()` computes `effectiveAllowed = executionGrant.allowedConnectionIds ∩ request.allowedConnectionIds`. Membership check (`connectionId ∈ effectiveAllowed`) happens BEFORE `broker.resolveForTool()`. Empty intersection or missing connectionId = `policy_denied`. This prevents confused-deputy attacks where malicious UI declares connections the grant doesn't authorize.
+9a. **AUTH_CAPABILITY_INVOCATION_SCOPED**: `AuthCapability` is constructed inside `toolRunner.exec()` per invocation, bound to `ctx.connectionId`. Methods take NO connectionId parameter. Never cache or reuse across invocations. See [TOOL_USE_SPEC.md#29a](TOOL_USE_SPEC.md).
+
+10. **GRANT_INTERSECTION_BEFORE_RESOLVE**: `toolRunner.exec()` computes `effectiveConnectionIds = grant.allowedConnectionIds ∩ request.connectionIds`. Membership check (`connectionId ∈ effectiveConnectionIds`) happens BEFORE `broker.resolveForTool()`. Empty intersection or missing connectionId = `policy_denied`. This prevents confused-deputy attacks where malicious UI declares connections the grant doesn't authorize.
 
 ---
 
@@ -81,7 +83,7 @@ Per invariants **CONNECTION_IN_CONTEXT_NOT_ARGS**, **AUTH_VIA_CAPABILITY_NOT_CON
 - [ ] Implement `computeEffectiveConnectionIds(grant, request)`:
   ```typescript
   const effective = grant.allowedConnectionIds.filter((id) =>
-    request.allowedConnectionIds.includes(id)
+    request.connectionIds.includes(id)
   );
   ```
 - [ ] Check `connectionId ∈ effective` BEFORE any broker call
@@ -90,11 +92,12 @@ Per invariants **CONNECTION_IN_CONTEXT_NOT_ARGS**, **AUTH_VIA_CAPABILITY_NOT_CON
 
 **Capability interfaces (`@cogni/ai-tools/capabilities/`):**
 
-- [ ] Create `AuthCapability` interface:
+- [ ] Create `AuthCapability` interface (invocation-scoped, no connectionId param):
   ```typescript
+  /** Pre-bound to ctx.connectionId — no param needed (per AUTH_CAPABILITY_INVOCATION_SCOPED) */
   interface AuthCapability {
-    getAccessToken(connectionId: string): Promise<string>;
-    getAuthHeaders(connectionId: string): Promise<Record<string, string>>;
+    getAccessToken(): Promise<string>;
+    getAuthHeaders(): Promise<Record<string, string>>;
   }
   ```
 - [ ] Create `ConnectionClientFactory` interface for typed clients
@@ -158,12 +161,12 @@ Connections are tenant-scoped, not tool-scoped. A GitHub connection serves any t
 
 1. Request declares `connectionIds[]` (intent) in `GraphRunRequest`
 2. ExecutionGrant contains `connection:use:{id}` scopes (authorization)
-3. toolRunner computes `effectiveAllowed = grant.allowedConnectionIds ∩ request.connectionIds`
+3. toolRunner computes `effectiveConnectionIds = grant.allowedConnectionIds ∩ request.connectionIds`
 4. Tool invocation specifies `connectionId` via `ToolInvocationContext` (out-of-band, not args)
-5. Membership check (`connectionId ∈ effectiveAllowed`) BEFORE `broker.resolveForTool()` — deny fast
+5. Membership check (`connectionId ∈ effectiveConnectionIds`) BEFORE `broker.resolveForTool()` — deny fast
 6. Broker verifies `connection.billing_account_id == subject.billingAccountId` (defense-in-depth)
 7. Broker returns `ToolCredential`; toolRunner wraps in `AuthCapability` interface
-8. Tool receives `capabilities.auth.getAccessToken(connectionId)` — never raw secrets in context
+8. Tool receives `capabilities.auth.getAccessToken()` — pre-bound to ctx.connectionId, no param
 
 ```
 GraphRunRequest { connectionIds: ["conn-1", "conn-2"] }
@@ -172,13 +175,13 @@ GraphRunRequest { connectionIds: ["conn-1", "conn-2"] }
 ExecutionGrant { allowedConnectionIds: ["conn-1", "conn-3"] }
                      │
                      ▼
-effectiveAllowed = ["conn-1"]  (intersection)
+effectiveConnectionIds = ["conn-1"]  (intersection)
                      │
                      ▼
 ToolInvocationContext { connectionId: "conn-1" }
                      │
                      ▼
-toolRunner: assert("conn-1" ∈ effectiveAllowed) ✓
+toolRunner: assert("conn-1" ∈ effectiveConnectionIds) ✓
                      │
                      ▼
 broker.resolveForTool("conn-1") → ToolCredential
@@ -190,7 +193,7 @@ capabilities.auth = BrokerBackedAuthCapability(credential)
 boundTool.exec(args, ctx, { auth: capabilities.auth })
                      │
                      ▼
-Tool calls: await capabilities.auth.getAccessToken("conn-1")
+Tool calls: await capabilities.auth.getAccessToken()  // bound to ctx.connectionId
 ```
 
 ---
@@ -220,5 +223,5 @@ Tool calls: await capabilities.auth.getAccessToken("conn-1")
 
 ---
 
-**Last Updated**: 2026-01-29
-**Status**: Draft (Rev 2 - Added CONNECTION_IN_CONTEXT_NOT_ARGS, AUTH_VIA_CAPABILITY_NOT_CONTEXT, GRANT_INTERSECTION_BEFORE_RESOLVE; P0 checklist for capability auth)
+**Last Updated**: 2026-02-02
+**Status**: Draft (Rev 5 - #9a per-invocation construction; canonical naming: effectiveConnectionIds, grant.allowedConnectionIds ∩ request.connectionIds)

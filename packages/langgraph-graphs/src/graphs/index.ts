@@ -18,6 +18,8 @@
 export { createPoetGraph, POET_GRAPH_NAME } from "./poet/graph";
 // Ponderer graph (philosophical thinker)
 export { createPondererGraph, PONDERER_GRAPH_NAME } from "./ponderer/graph";
+// Research graph (deep research with web search)
+export { createResearchGraph, RESEARCH_GRAPH_NAME } from "./research/graph";
 // Shared graph types
 export type {
   CreateReactAgentGraphOptions,

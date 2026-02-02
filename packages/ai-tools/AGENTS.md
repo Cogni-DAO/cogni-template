@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-02-01
+- **Last reviewed:** 2026-02-02
 - **Status:** draft
 
 ## Purpose
@@ -47,6 +47,8 @@ Pure tool definitions for AI agent execution. Defines `ToolContract`, `ToolImple
   - `ToolResult`, `ToolErrorCode` - Execution result types
   - `getCurrentTimeBoundTool`, `GET_CURRENT_TIME_NAME` - Time tool
   - `metricsQueryBoundTool`, `METRICS_QUERY_NAME`, `createMetricsQueryImplementation` - Metrics query tool
+  - `webSearchBoundTool`, `WEB_SEARCH_NAME`, `createWebSearchImplementation` - Web search tool
+  - `WebSearchCapability`, `WebSearchParams`, `WebSearchResult`, `WebSearchResultItem` - Web search types
   - `toToolSpec()`, `toToolSpecs()` - Compile ToolContract to ToolSpec (Zod → JSONSchema7)
   - `TOOL_CATALOG` - Singleton catalog of all registered tools (Record<string, CatalogBoundTool>)
   - `createToolCatalog()`, `getToolById()`, `getToolIds()`, `hasToolId()` - Catalog accessors

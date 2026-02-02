@@ -18,6 +18,17 @@ import { ZodError, z } from "zod";
 import { buildDatabaseUrl } from "@/shared/db";
 import { assertEnvInvariants } from "./invariants";
 
+// Env vars are strings - empty string "" should be treated as "not set" for optional fields.
+// Docker-compose passes through empty strings from shell even when .env file omits the var.
+// Note: whitespace-only strings are kept as-is (will fail validation, not silently accepted).
+const emptyToUndefined = (v: unknown) =>
+  typeof v === "string" && v === "" ? undefined : v;
+const optionalUrl = z.preprocess(emptyToUndefined, z.string().url().optional());
+const optionalString = z.preprocess(
+  emptyToUndefined,
+  z.string().min(1).optional()
+);
+
 export interface EnvValidationMeta {
   code: "INVALID_ENV";
   missing: string[];
@@ -100,10 +111,10 @@ export const serverSchema = z.object({
   // Query URL derived from PROMETHEUS_REMOTE_WRITE_URL (must end with /api/prom/push)
   // Or set PROMETHEUS_QUERY_URL explicitly for non-standard endpoints
   // Security: Use read-only token, separate from Alloy's write token
-  PROMETHEUS_REMOTE_WRITE_URL: z.string().url().optional(),
-  PROMETHEUS_QUERY_URL: z.string().url().optional(),
-  PROMETHEUS_READ_USERNAME: z.string().min(1).optional(),
-  PROMETHEUS_READ_PASSWORD: z.string().min(1).optional(),
+  PROMETHEUS_REMOTE_WRITE_URL: optionalUrl,
+  PROMETHEUS_QUERY_URL: optionalUrl,
+  PROMETHEUS_READ_USERNAME: optionalString,
+  PROMETHEUS_READ_PASSWORD: optionalString,
   ANALYTICS_K_THRESHOLD: z.coerce.number().int().positive().default(50),
   ANALYTICS_QUERY_TIMEOUT_MS: z.coerce.number().int().positive().default(5000),
 
@@ -125,6 +136,10 @@ export const serverSchema = z.object({
   // When set, graph execution uses langgraph dev server instead of in-process
   // Per LANGGRAPH_SERVER.md MVP: default port 2024 for langgraph dev
   LANGGRAPH_DEV_URL: z.string().url().optional(),
+
+  // Tavily Web Search - Optional
+  // Required for research graph web search capability
+  TAVILY_API_KEY: z.string().min(1).optional(),
 
   // Temporal (Schedule orchestration) - Required
   // Per SCHEDULER_SPEC.md: Temporal is required infrastructure, no fallback

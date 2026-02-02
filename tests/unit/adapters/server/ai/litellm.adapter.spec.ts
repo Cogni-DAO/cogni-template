@@ -90,7 +90,7 @@ describe("LiteLlmAdapter", () => {
             model: "gpt-3.5-turbo", // explicitly provided (required)
             messages: [{ role: "user", content: "Hello world" }],
             temperature: 0.7, // default
-            max_tokens: 2048, // default
+            max_tokens: 4096, // default
             user: "test-user-123", // billingAccountId for cost attribution
             metadata: {
               cogni_billing_account_id: "test-user-123",

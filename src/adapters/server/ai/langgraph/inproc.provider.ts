@@ -43,7 +43,7 @@ import type {
   LlmToolDefinition,
   Message,
 } from "@/ports";
-import { makeLogger } from "@/shared/observability";
+import { EVENT_NAMES, makeLogger } from "@/shared/observability";
 
 import type { GraphProvider } from "../graph-provider";
 import type { CompletionUnitParams } from "../inproc-completion-unit.adapter";
@@ -228,7 +228,12 @@ export class LangGraphInProcProvider implements GraphProvider {
     });
 
     // Map package result to GraphFinal
-    const mappedFinal = this.mapToGraphFinal(final, runId, ingressRequestId);
+    const mappedFinal = this.mapToGraphFinal(
+      final,
+      runId,
+      ingressRequestId,
+      graphName
+    );
 
     return { stream, final: mappedFinal };
   }
@@ -289,15 +294,30 @@ export class LangGraphInProcProvider implements GraphProvider {
   /**
    * Map package GraphResult to port GraphFinal.
    * GraphResult.error is now AiExecutionErrorCode - direct passthrough.
+   * Logs errors at adapter boundary for debugging.
    */
   private async mapToGraphFinal(
     final: Promise<GraphResult>,
     runId: string,
-    requestId: string
+    requestId: string,
+    graphName: string
   ): Promise<GraphFinal> {
     const result = await final;
 
     if (!result.ok) {
+      // Log error at adapter boundary (per OBSERVABILITY.md: adapter ERROR log)
+      this.log.error(
+        {
+          runId,
+          reqId: requestId,
+          graphName,
+          errorCode: result.error ?? "internal",
+          errorMessage: result.errorMessage,
+          event: EVENT_NAMES.ADAPTER_LANGGRAPH_INPROC_ERROR,
+        },
+        EVENT_NAMES.ADAPTER_LANGGRAPH_INPROC_ERROR
+      );
+
       // Direct passthrough - GraphResult.error is already AiExecutionErrorCode
       return { ok: false, runId, requestId, error: result.error ?? "internal" };
     }
