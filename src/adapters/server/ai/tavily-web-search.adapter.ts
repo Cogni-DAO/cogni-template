@@ -21,14 +21,15 @@ import type {
 
 /**
  * Tavily API response shape.
+ * Note: Optional fields may be null or undefined depending on request params.
  */
 interface TavilySearchResponse {
   results: Array<{
     title: string;
     url: string;
     content: string;
-    score?: number;
-    raw_content?: string;
+    score?: number | null;
+    raw_content?: string | null;
   }>;
   query: string;
 }
@@ -95,8 +96,9 @@ export class TavilyWebSearchAdapter implements WebSearchCapability {
           url: r.url,
           content: r.content,
           // Conditionally include optional fields to satisfy exactOptionalPropertyTypes
-          ...(r.score !== undefined && { score: r.score }),
-          ...(r.raw_content !== undefined && { rawContent: r.raw_content }),
+          // Note: Tavily API may return null for optional fields, so we check both
+          ...(r.score != null && { score: r.score }),
+          ...(r.raw_content != null && { rawContent: r.raw_content }),
         })),
       };
     } finally {
