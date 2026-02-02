@@ -18,6 +18,9 @@
 import type { LanguageModelLike } from "@langchain/core/language_models/base";
 import {
   AIMessage,
+  type BaseMessage,
+  type BaseMessageLike,
+  coerceMessageLikeToMessage,
   HumanMessage,
   SystemMessage,
 } from "@langchain/core/messages";
@@ -97,6 +100,23 @@ function getNotesFromMessages(
   return messages
     .filter((m) => m.content && typeof m.content === "string")
     .map((m) => m.content as string);
+}
+
+/**
+ * Coerce state messages to proper BaseMessage instances.
+ * Messages may lose their prototype when passing through LangGraph state serialization.
+ */
+function coerceMessages(
+  messages: readonly BaseMessageLike[] | undefined
+): BaseMessage[] {
+  return (messages ?? []).map((m) => coerceMessageLikeToMessage(m));
+}
+
+/**
+ * Get message type using public accessor with fallback.
+ */
+function getMessageType(msg: BaseMessage): string {
+  return msg.getType?.() ?? (msg as unknown as { type?: string }).type ?? "";
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -458,8 +478,8 @@ export function createResearchGraph(opts: CreateReactAgentGraphOptions) {
     state: ResearchState,
     config: RunnableConfig
   ) {
-    const userMessages =
-      state.messages?.filter((m) => m._getType() === "human") ?? [];
+    const messages = coerceMessages(state.messages);
+    const userMessages = messages.filter((m) => getMessageType(m) === "human");
     const lastUserMessage = userMessages[userMessages.length - 1];
     const userQuestion =
       lastUserMessage && typeof lastUserMessage.content === "string"
@@ -515,8 +535,8 @@ export function createResearchGraph(opts: CreateReactAgentGraphOptions) {
 
   // Node: Generate final report
   async function finalReport(state: ResearchState, config: RunnableConfig) {
-    const userMessages =
-      state.messages?.filter((m) => m._getType() === "human") ?? [];
+    const messages = coerceMessages(state.messages);
+    const userMessages = messages.filter((m) => getMessageType(m) === "human");
     const lastUserMessage = userMessages[userMessages.length - 1];
     const userQuestion =
       lastUserMessage && typeof lastUserMessage.content === "string"
