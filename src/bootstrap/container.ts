@@ -13,7 +13,7 @@
  */
 
 import type { ToolSourcePort } from "@cogni/ai-core";
-import type { MetricsCapability } from "@cogni/ai-tools";
+import type { MetricsCapability, WebSearchCapability } from "@cogni/ai-tools";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { Logger } from "pino";
 import {
@@ -49,6 +49,7 @@ import {
   createMetricsCapability,
   derivePrometheusQueryUrl,
 } from "@/bootstrap/capabilities/metrics";
+import { createWebSearchCapability } from "@/bootstrap/capabilities/web-search";
 import type { RateLimitBypassConfig } from "@/bootstrap/http/wrapPublicRoute";
 import type {
   AccountService,
@@ -107,6 +108,8 @@ export interface Container {
   scheduleManager: ScheduleManagerPort;
   /** Metrics capability for AI tools - requires PROMETHEUS_URL to be configured */
   metricsCapability: MetricsCapability;
+  /** Web search capability for AI tools - requires TAVILY_API_KEY to be configured */
+  webSearchCapability: WebSearchCapability;
   /** Tool source with real implementations for AI tool execution */
   toolSource: ToolSourcePort;
 }
@@ -290,8 +293,14 @@ function createContainer(): Container {
   // MetricsCapability for AI tools (requires PROMETHEUS_URL)
   const metricsCapability = createMetricsCapability(env);
 
+  // WebSearchCapability for AI tools (requires TAVILY_API_KEY)
+  const webSearchCapability = createWebSearchCapability(env);
+
   // ToolSource with real implementations (per CAPABILITY_INJECTION)
-  const toolBindings = createToolBindings({ metricsCapability });
+  const toolBindings = createToolBindings({
+    metricsCapability,
+    webSearchCapability,
+  });
   const toolSource = createBoundToolSource(toolBindings);
 
   // Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
@@ -328,6 +337,7 @@ function createContainer(): Container {
     scheduleRunRepository,
     scheduleManager,
     metricsCapability,
+    webSearchCapability,
     toolSource,
   };
 }

@@ -14,12 +14,18 @@
  * @internal
  */
 
-import type { MetricsCapability, ToolImplementation } from "@cogni/ai-tools";
+import type {
+  MetricsCapability,
+  ToolImplementation,
+  WebSearchCapability,
+} from "@cogni/ai-tools";
 import {
   createMetricsQueryImplementation,
+  createWebSearchImplementation,
   GET_CURRENT_TIME_NAME,
   getCurrentTimeImplementation,
   METRICS_QUERY_NAME,
+  WEB_SEARCH_NAME,
 } from "@cogni/ai-tools";
 
 /**
@@ -28,6 +34,7 @@ import {
  */
 export interface ToolBindingDeps {
   readonly metricsCapability: MetricsCapability;
+  readonly webSearchCapability: WebSearchCapability;
 }
 
 /**
@@ -62,6 +69,10 @@ export function createToolBindings(deps: ToolBindingDeps): ToolBindings {
     // I/O tools (require capability injection)
     [METRICS_QUERY_NAME]: createMetricsQueryImplementation({
       metricsCapability: deps.metricsCapability,
+    }) as AnyToolImplementation,
+
+    [WEB_SEARCH_NAME]: createWebSearchImplementation({
+      webSearchCapability: deps.webSearchCapability,
     }) as AnyToolImplementation,
   };
 }

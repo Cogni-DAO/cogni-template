@@ -22,6 +22,11 @@ export type {
   MetricWindow,
   TemplateQueryParams,
   ToolCapabilities,
+  WebSearchCapability,
+  WebSearchParams,
+  WebSearchResult,
+  // Note: WebSearchResultItem exported from tools/web-search to avoid duplicate
+  WebSearchTopic,
 } from "./capabilities";
 // Capabilities
 export {
@@ -77,6 +82,21 @@ export {
   metricsQueryContract,
   metricsQueryStubImplementation,
 } from "./tools/metrics-query";
+export {
+  createWebSearchImplementation,
+  WEB_SEARCH_NAME,
+  type WebSearchDeps,
+  type WebSearchInput,
+  WebSearchInputSchema,
+  type WebSearchOutput,
+  WebSearchOutputSchema,
+  type WebSearchRedacted,
+  type WebSearchResultItem,
+  WebSearchResultItemSchema,
+  webSearchBoundTool,
+  webSearchContract,
+  webSearchStubImplementation,
+} from "./tools/web-search";
 // Tool types
 export type {
   BoundTool,

@@ -62,6 +62,10 @@ export { LiteLlmUsageServiceAdapter } from "./ai/litellm.usage-service.adapter";
 export type { ObservabilityDecoratorConfig } from "./ai/observability-executor.decorator";
 // Observability decorator for Langfuse traces
 export { ObservabilityGraphExecutorDecorator } from "./ai/observability-executor.decorator";
+export {
+  TavilyWebSearchAdapter,
+  type TavilyWebSearchConfig,
+} from "./ai/tavily-web-search.adapter";
 export { DrizzleAiTelemetryAdapter } from "./ai-telemetry/drizzle.adapter";
 export {
   type CreateTraceWithIOParams,

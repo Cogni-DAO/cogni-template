@@ -126,6 +126,10 @@ export const serverSchema = z.object({
   // Per LANGGRAPH_SERVER.md MVP: default port 2024 for langgraph dev
   LANGGRAPH_DEV_URL: z.string().url().optional(),
 
+  // Tavily Web Search - Optional
+  // Required for research graph web search capability
+  TAVILY_API_KEY: z.string().min(1).optional(),
+
   // Temporal (Schedule orchestration) - Required
   // Per SCHEDULER_SPEC.md: Temporal is required infrastructure, no fallback
   // Start Temporal with: pnpm dev:infra
