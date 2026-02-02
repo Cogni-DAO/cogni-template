@@ -43,6 +43,11 @@ const AVAILABLE_GRAPHS: readonly GraphOption[] = [
     name: "Ponderer",
     description: "Philosophical thinker",
   },
+  {
+    graphId: "langgraph:research" satisfies GraphId,
+    name: "Research",
+    description: "Deep research with web search",
+  },
 ];
 
 /** Default graph ID - exported for page initialization */

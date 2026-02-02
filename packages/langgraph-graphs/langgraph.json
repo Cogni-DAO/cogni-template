@@ -2,6 +2,7 @@
   "node_version": "20",
   "graphs": {
     "poet": "./src/graphs/poet/server.ts:poet",
-    "ponderer": "./src/graphs/ponderer/server.ts:ponderer"
+    "ponderer": "./src/graphs/ponderer/server.ts:ponderer",
+    "research": "./src/graphs/research/server.ts:research"
   }
 }
