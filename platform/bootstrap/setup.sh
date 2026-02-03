@@ -63,9 +63,9 @@ echo -e "${GREEN}╚════════════════════
 
 # Determine step count
 if [[ "$INSTALL_ALL" == "true" ]]; then
-    TOTAL_STEPS=5
+    TOTAL_STEPS=6
 else
-    TOTAL_STEPS=3
+    TOTAL_STEPS=4
 fi
 
 CURRENT_STEP=0
@@ -80,7 +80,12 @@ log_step "Step ${CURRENT_STEP}/${TOTAL_STEPS}: Installing Node.js & pnpm (via Vo
 log_step "Step ${CURRENT_STEP}/${TOTAL_STEPS}: Installing Docker"
 "$INSTALL_DIR/install-docker.sh"
 
-# Step 3: Project dependencies and packages
+# Step 3: Ripgrep (required by brain repo search)
+((CURRENT_STEP++))
+log_step "Step ${CURRENT_STEP}/${TOTAL_STEPS}: Installing ripgrep (brain repo search)"
+"$INSTALL_DIR/install-ripgrep.sh"
+
+# Step 4: Project dependencies and packages
 ((CURRENT_STEP++))
 log_step "Step ${CURRENT_STEP}/${TOTAL_STEPS}: Installing project dependencies"
 "$INSTALL_DIR/install-project.sh"
@@ -141,6 +146,14 @@ if ! docker compose version >/dev/null 2>&1; then
     exit 1
 fi
 log_info "✓ Docker compose $(docker compose version --short)"
+
+# Check ripgrep
+if ! command -v rg >/dev/null 2>&1; then
+    log_error "ripgrep (rg) not found in PATH."
+    log_error "Run: bash platform/bootstrap/install/install-ripgrep.sh"
+    exit 1
+fi
+log_info "✓ ripgrep $(rg --version | head -1)"
 
 # Ensure .env.local exists
 "$SCRIPT_DIR/simple-local-env-setup.sh"
