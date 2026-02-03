@@ -39,7 +39,7 @@ beforeAll(() => {
 });
 
 afterAll(() => {
-  cleanupTempGitRepo(repo);
+  if (repo) cleanupTempGitRepo(repo);
 });
 
 describe("RipgrepAdapter", () => {

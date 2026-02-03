@@ -80,7 +80,8 @@ export function assertBinariesAvailable(): void {
  * @returns TempGitRepo with root path and sha7
  */
 export function createTempGitRepo(): TempGitRepo {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "repo-test-"));
+  // Resolve symlinks (macOS: /tmp → /private/tmp) so validatePath's realpath check passes
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "repo-test-")));
 
   const git = (cmd: string) =>
     execSync(cmd, { cwd: root, env: { ...process.env, ...GIT_ENV }, stdio: "pipe" });
