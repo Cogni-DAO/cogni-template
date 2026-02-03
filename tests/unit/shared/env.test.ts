@@ -44,7 +44,8 @@ describe("env schemas", () => {
     const { clientEnv } = await import("@/shared/env/client");
 
     const env = serverEnv();
-    expect(env.DATABASE_URL).toBe("postgresql://u:p@h:5432/db");
+    // Non-localhost host gets sslmode=require appended per DATABASE_RLS_SPEC.md
+    expect(env.DATABASE_URL).toBe("postgresql://u:p@h:5432/db?sslmode=require");
     expect(clientEnv().NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID).toBe(
       "test-project-id"
     );

@@ -13,3 +13,4 @@
  */
 
 export { type Database, getDb } from "./drizzle.client";
+export { setTenantContext, withTenantScope } from "./tenant-scope";

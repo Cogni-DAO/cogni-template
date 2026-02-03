@@ -44,5 +44,14 @@ export function buildDatabaseUrl(env: DbEnvInput): string {
     throw new TypeError(`Invalid DB_PORT value: ${env.DB_PORT}`);
   }
 
-  return `postgresql://${user}:${password}@${host}:${port}/${db}`;
+  const base = `postgresql://${user}:${password}@${host}:${port}/${db}`;
+
+  // Per DATABASE_RLS_SPEC.md §SSL_REQUIRED_NON_LOCAL: non-localhost connections
+  // must use sslmode=require (or stricter) to prevent credential sniffing.
+  const isLocalhost = host === "localhost" || host === "127.0.0.1";
+  if (!isLocalhost) {
+    return `${base}?sslmode=require`;
+  }
+
+  return base;
 }

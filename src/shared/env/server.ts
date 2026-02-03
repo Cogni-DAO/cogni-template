@@ -190,6 +190,25 @@ export function serverEnv(): ServerEnv {
       if (parsed.DATABASE_URL) {
         // Direct DATABASE_URL provided (e.g., CI with sqlite://build.db)
         DATABASE_URL = parsed.DATABASE_URL;
+
+        // Per DATABASE_RLS_SPEC.md §SSL_REQUIRED_NON_LOCAL: reject non-localhost
+        // PostgreSQL URLs without sslmode= to prevent credential sniffing.
+        if (DATABASE_URL.startsWith("postgresql://")) {
+          try {
+            const dbUrl = new URL(DATABASE_URL);
+            const host = dbUrl.hostname;
+            const isLocal = host === "localhost" || host === "127.0.0.1";
+            if (!isLocal && !dbUrl.searchParams.has("sslmode")) {
+              throw new Error(
+                `DATABASE_URL points to non-localhost host "${host}" but is missing sslmode= parameter. ` +
+                  "Add ?sslmode=require (or stricter) for production safety."
+              );
+            }
+          } catch (e) {
+            // URL parse failure on non-standard schemes (e.g., sqlite://) is fine
+            if (e instanceof Error && e.message.includes("sslmode")) throw e;
+          }
+        }
       } else {
         // Construct from component pieces (e.g., local development)
         if (
