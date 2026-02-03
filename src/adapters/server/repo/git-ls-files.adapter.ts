@@ -22,7 +22,7 @@ import { promisify } from "node:util";
 
 import type { RepoListParams, RepoListResult } from "@cogni/ai-tools";
 
-import { makeLogger } from "@/shared/observability";
+import { EVENT_NAMES, makeLogger } from "@/shared/observability";
 
 const execFileAsync = promisify(execFile);
 const logger = makeLogger({ component: "GitLsFilesAdapter" });
@@ -136,7 +136,14 @@ export class GitLsFilesAdapter {
           "git binary not found. Ensure git is installed and available in PATH."
         );
       }
-      logger.error({ err: error, glob: params.glob }, "git ls-files failed");
+      logger.error(
+        {
+          event: EVENT_NAMES.ADAPTER_GIT_LS_FILES_ERROR,
+          reasonCode: "list_failed",
+          glob: params.glob,
+        },
+        "git ls-files failed"
+      );
       throw error;
     }
 
@@ -150,7 +157,12 @@ export class GitLsFilesAdapter {
     const paths = allPaths.slice(0, limit);
 
     logger.debug(
-      { glob: params.glob, pathCount: paths.length, truncated },
+      {
+        event: EVENT_NAMES.ADAPTER_GIT_LS_FILES_LIST,
+        glob: params.glob,
+        pathCount: paths.length,
+        truncated,
+      },
       "git ls-files completed"
     );
 

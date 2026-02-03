@@ -66,6 +66,8 @@ export const EVENT_NAMES = {
   ADAPTER_MIMIR_ERROR: "adapter.mimir.error",
   ADAPTER_TAVILY_ERROR: "adapter.tavily.error",
   ADAPTER_LANGGRAPH_INPROC_ERROR: "adapter.langgraph_inproc.error",
+  ADAPTER_GIT_LS_FILES_ERROR: "adapter.git_ls_files.error",
+  ADAPTER_GIT_LS_FILES_LIST: "adapter.git_ls_files.list",
   ADAPTER_RIPGREP_ERROR: "adapter.ripgrep.error",
   ADAPTER_RIPGREP_SEARCH: "adapter.ripgrep.search",
   ADAPTER_RIPGREP_OPEN: "adapter.ripgrep.open",
