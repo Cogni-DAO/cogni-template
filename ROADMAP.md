@@ -165,6 +165,8 @@ Requirements:
 - **Internal JWTs**: 5-15 min TTL, rotating keys, clock skew tolerance 60-120s
 - **Headers**: `X-Node-ID` required on internal API calls
 
+**Known gap — Database-layer isolation:** No PostgreSQL RLS policies exist. Tenant isolation is application-layer only (OpenFGA). See [Database RLS Spec](docs/DATABASE_RLS_SPEC.md) for the remediation plan.
+
 ---
 
 ## Related Docs

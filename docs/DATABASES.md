@@ -408,7 +408,19 @@ export default defineConfig({
 
 ## 6. Future Improvements (If/When Needed)
 
-### 6.1 Migrator Image Optimization
+### 6.1 Row-Level Security (RLS)
+
+No RLS policies exist today. All tenant isolation is application-layer only (OpenFGA + session auth). If the app layer is bypassed, the database has no secondary isolation. Design and implementation plan: [Database RLS Spec](DATABASE_RLS_SPEC.md).
+
+### 6.2 SSL Enforcement
+
+Non-localhost `DATABASE_URL` values do not currently require `sslmode=require`. Covered in [Database RLS Spec](DATABASE_RLS_SPEC.md).
+
+### 6.3 Least-Privilege App Role
+
+`provision.sh` creates the `app_user` role but does not restrict it from DDL operations. Production deployments should revoke `CREATE`, `DROP`, `TRUNCATE`, `ALTER` from the app role. Covered in [Database RLS Spec](DATABASE_RLS_SPEC.md).
+
+### 6.4 Migrator Image Optimization
 
 The migrator image (~480MB) includes full node_modules. Potential optimizations:
 
