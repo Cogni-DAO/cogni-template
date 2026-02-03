@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Repository access adapter implementing RepoCapability. Provides code search (ripgrep) and file retrieval with path validation and SHA stamping.
+Repository access adapters implementing RepoCapability. RipgrepAdapter provides code search and file retrieval; GitLsFilesAdapter provides file listing and SHA resolution. Composed into a single RepoCapability by the bootstrap factory.
 
 ## Pointers
 
@@ -30,9 +30,9 @@ Repository access adapter implementing RepoCapability. Provides code search (rip
 
 ## Public Surface
 
-- **Exports:** `RipgrepAdapter`, `RipgrepAdapterConfig`, `RepoPathError`
-- **Env/Config keys:** `COGNI_REPO_SHA` (optional SHA override)
-- **Files considered API:** `ripgrep.adapter.ts`, `index.ts`
+- **Exports:** `RipgrepAdapter`, `RipgrepAdapterConfig`, `RepoPathError`, `GitLsFilesAdapter`, `GitLsFilesAdapterConfig`
+- **Env/Config keys:** `COGNI_REPO_SHA` (optional SHA override, consumed by GitLsFilesAdapter)
+- **Files considered API:** `ripgrep.adapter.ts`, `git-ls-files.adapter.ts`, `index.ts`
 
 ## Ports
 
@@ -41,19 +41,20 @@ Repository access adapter implementing RepoCapability. Provides code search (rip
 
 ## Responsibilities
 
-- This directory **does**: Implement RepoCapability for code search and file retrieval
-- This directory **does not**: Define tool contracts (owned by @cogni/ai-tools), handle billing/telemetry
+- This directory **does**: Implement RepoCapability via RipgrepAdapter (search, open) and GitLsFilesAdapter (list, getSha)
+- This directory **does not**: Define tool contracts (owned by @cogni/ai-tools), compose adapters (owned by bootstrap), handle billing/telemetry
 
 ## Usage
 
-Imported via server barrel (`@/adapters/server`) and instantiated by `createRepoCapability()` in `src/bootstrap/capabilities/repo.ts`. Consumed by `core__repo_search` and `core__repo_open` tool implementations. Not used directly — always accessed through `RepoCapability` interface.
+Imported via server barrel (`@/adapters/server`) and composed by `createRepoCapability()` in `src/bootstrap/capabilities/repo.ts`. Consumed by `core__repo_search`, `core__repo_open`, and `core__repo_list` tool implementations. Not used directly — always accessed through `RepoCapability` interface.
 
 ```typescript
-// Bootstrap wires it:
-import { RipgrepAdapter } from "@/adapters/server";
-const adapter = new RipgrepAdapter({
+// Bootstrap composes both adapters:
+const gitAdapter = new GitLsFilesAdapter({ repoRoot: env.COGNI_REPO_ROOT });
+const rgAdapter = new RipgrepAdapter({
   repoRoot: env.COGNI_REPO_ROOT,
   repoId: "main",
+  getSha: () => gitAdapter.getSha(),
 });
 ```
 
@@ -63,7 +64,8 @@ const adapter = new RipgrepAdapter({
 - REPO_ROOT_ONLY: All paths validated (rejects `..`, symlink escapes)
 - SHA_STAMPED: All results include HEAD sha7
 - HARD_BOUNDS: search≤50 hits, snippet≤20 lines, open≤200 lines, max 256KB
-- NO_EXEC_IN_BRAIN: Only spawns `rg` and `git rev-parse` with fixed flags
+- PATH_CANONICAL: All output paths use canonical format (no leading ./)
+- NO_EXEC_IN_BRAIN: Only spawns `rg`, `git ls-files`, and `git rev-parse` with fixed flags
 - RG_BINARY_NOT_NPM: Uses system `rg` binary via child_process
 
 ## Dependencies
@@ -79,4 +81,5 @@ const adapter = new RipgrepAdapter({
 ## Notes
 
 - Requires system `rg` and `git` binaries at runtime (not npm packages)
-- COGNI_REPO_SHA override is reserved but not yet wired (deferred until mounts without .git)
+- COGNI_REPO_SHA override is wired in GitLsFilesAdapter (used for mounts without .git)
+- GitLsFilesAdapter owns SHA resolution; RipgrepAdapter receives getSha as an injected callback

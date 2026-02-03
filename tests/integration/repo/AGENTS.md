@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Integration tests for RipgrepAdapter against real temp git repos. Validates path security, search bounds, SHA stamping, and file retrieval.
+Integration tests for RipgrepAdapter and GitLsFilesAdapter against real temp git repos. Validates path security, search bounds, SHA stamping, file retrieval, file listing, and cross-tool path canonicalization.
 
 ## Pointers
 
@@ -38,7 +38,7 @@ Integration tests for RipgrepAdapter against real temp git repos. Validates path
 
 ## Responsibilities
 
-- This directory **does**: Test RipgrepAdapter against real git repos with real `rg` and `git` binaries
+- This directory **does**: Test RipgrepAdapter and GitLsFilesAdapter against real git repos with real `rg` and `git` binaries
 - This directory **does not**: Test tool layer (see brain/), test DI container wiring, test citation guard
 
 ## Usage
@@ -52,7 +52,7 @@ pnpm test:int -- tests/integration/repo
 - Requires system `rg` and `git` binaries (preflight via `assertBinariesAvailable()`)
 - Temp repos created in os.tmpdir with `realpathSync` (macOS /tmp symlink safe)
 - Cleanup always runs via afterAll guard (`if (repo) cleanupTempGitRepo(repo)`)
-- Tests cover: path validation (traversal, symlink escape, absolute), size bounds, SHA stamping, search bounds
+- Tests cover: path validation (traversal, symlink escape, absolute), size bounds, SHA stamping, search bounds, list with glob/limit, cross-tool path canonicalization
 
 ## Dependencies
 

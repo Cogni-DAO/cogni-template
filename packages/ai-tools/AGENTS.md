@@ -51,7 +51,8 @@ Pure tool definitions for AI agent execution. Defines `ToolContract`, `ToolImple
   - `WebSearchCapability`, `WebSearchParams`, `WebSearchResult`, `WebSearchResultItem` - Web search types
   - `repoSearchBoundTool`, `REPO_SEARCH_NAME`, `createRepoSearchImplementation` - Repo search tool
   - `repoOpenBoundTool`, `REPO_OPEN_NAME`, `createRepoOpenImplementation` - Repo open tool
-  - `RepoCapability`, `RepoSearchHit`, `RepoSearchResult`, `RepoOpenResult` - Repo capability types
+  - `repoListBoundTool`, `REPO_LIST_NAME`, `createRepoListImplementation` - Repo list tool
+  - `RepoCapability`, `RepoSearchHit`, `RepoSearchResult`, `RepoOpenResult`, `RepoListParams`, `RepoListResult` - Repo capability types
   - `makeRepoCitation()`, `REPO_CITATION_REGEX` - Citation helpers
   - `toToolSpec()`, `toToolSpecs()` - Compile ToolContract to ToolSpec (Zod → JSONSchema7)
   - `TOOL_CATALOG` - Singleton catalog of all registered tools (Record<string, CatalogBoundTool>)

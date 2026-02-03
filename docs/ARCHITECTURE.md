@@ -66,7 +66,7 @@ Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause 
 - **src/ports/** → Contracts/interfaces only.
 - **src/core/** → Pure domain. No I/O/time/RNG; inject via ports.
 - **src/adapters/** → Infra implementations of ports. No UI.
-  - `server/` (drizzle, langfuse, pino, siwe, viem, litellm, rate-limit, clock, rng, repo/ripgrep)
+  - `server/` (drizzle, langfuse, pino, siwe, viem, litellm, rate-limit, clock, rng, repo/ripgrep, repo/git-ls-files)
   - `test/` (fake implementations for CI; selected via `APP_ENV=test`, includes fake-repo)
   - `worker/`, `cli/` (future)
 - **src/shared/** → Small, pure utilities: env/, schemas/ (DTOs, mappers), constants/, util/.

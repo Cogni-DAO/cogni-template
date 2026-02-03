@@ -74,6 +74,7 @@
 ### P1: Production Hardening
 
 - [ ] Add git-fetch cron/webhook to keep `/repo` at HEAD
+- [ ] Full git clone volume for history tools (`git log`, `git show`); P0 snapshot is depth=1, no history
 - [ ] Add `core__repo_symbol` tool (tree-sitter index) if needed
 - [ ] Structured docs index with trust_level metadata
 
