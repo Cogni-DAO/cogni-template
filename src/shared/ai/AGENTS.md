@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2026-01-12
+- **Last reviewed:** 2026-02-03
 - **Status:** stable
 
 ## Purpose
@@ -39,7 +39,7 @@ Shared AI utilities for prompt hashing, model catalog, and tool execution. Pure 
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** `LITELLM_BASE_URL` (model-catalog.server.ts)
-- **Files considered API:** prompt-hash.ts, model-catalog.server.ts, tool-runner.ts, langfuse-scrubbing.ts, tool-policy.ts
+- **Files considered API:** prompt-hash.ts, model-catalog.server.ts, tool-runner.ts, langfuse-scrubbing.ts, tool-policy.ts, guards/citation.guard.ts
 
 ## Responsibilities
 

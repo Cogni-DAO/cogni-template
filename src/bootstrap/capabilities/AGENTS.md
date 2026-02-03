@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-02-01
+- **Last reviewed:** 2026-02-03
 - **Status:** stable
 
 ## Purpose
@@ -29,11 +29,11 @@ Capability factories bridging ai-tools interfaces to adapters. Creates environme
 
 ## Public Surface
 
-- **Exports:** `createMetricsCapability()`, `stubMetricsCapability`
+- **Exports:** `createMetricsCapability()`, `stubMetricsCapability`, `createRepoCapability()`, `stubRepoCapability`, `createWebSearchCapability()`
 - **Routes (if any):** none
 - **CLI (if any):** none
-- **Env/Config keys:** Uses PROMETHEUS_REMOTE_WRITE_URL, PROMETHEUS_QUERY_URL, PROMETHEUS_READ_USERNAME, PROMETHEUS_READ_PASSWORD via ServerEnv
-- **Files considered API:** `metrics.ts`
+- **Env/Config keys:** PROMETHEUS_REMOTE_WRITE_URL, PROMETHEUS_QUERY_URL, PROMETHEUS_READ_USERNAME, PROMETHEUS_READ_PASSWORD, COGNI_REPO_PATH, COGNI_REPO_ROOT, TAVILY_API_KEY via ServerEnv
+- **Files considered API:** `metrics.ts`, `repo.ts`, `web-search.ts`
 
 ## Ports (optional)
 
@@ -53,7 +53,7 @@ Capability factories bridging ai-tools interfaces to adapters. Creates environme
 
 ## Standards
 
-- Test mode returns FakeMetricsAdapter-backed capability
+- Test mode returns fake adapter-backed capability
 - Missing config returns stub that throws
 
 ## Dependencies
