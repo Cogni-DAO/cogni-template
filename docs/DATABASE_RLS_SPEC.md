@@ -57,6 +57,12 @@
 - [x] Integration test: cross-tenant INSERT rejected by `WITH CHECK` policy
 - [x] Integration test: production `withTenantScope` / `setTenantContext` helpers verified
 
+#### Adapter Wiring Gate Test
+
+- [x] Gate test: `DrizzleScheduleManagerAdapter.listSchedules` under RLS-enforced connection (currently failing — adapter does not call `setTenantContext`)
+- [x] Gate test: `DrizzleAccountService.getOrCreateBillingAccountForUser` under RLS-enforced connection (currently failing — 42501 WITH CHECK rejection)
+- [x] Sanity checks: superuser reads seeded schedule and billing account (proves data exists, failure is from RLS)
+
 #### Chores
 
 - [ ] Observability instrumentation [observability.md](../.agent/workflows/observability.md)
@@ -83,18 +89,19 @@
 
 ## File Pointers (P0 Scope)
 
-| File                                                         | Change                                                         |
-| ------------------------------------------------------------ | -------------------------------------------------------------- |
-| `platform/infra/services/runtime/postgres-init/provision.sh` | Add DML grants, `app_service` role, `ALTER DEFAULT PRIVILEGES` |
-| `src/adapters/server/db/migrations/0004_enable_rls.sql`      | RLS + policies on 10 tables (hand-written SQL migration)       |
-| `packages/db-schema/src/index.ts`                            | Root barrel re-exporting all schema slices                     |
-| `packages/db-client/src/client.ts`                           | `createAppDbClient` + `createServiceDbClient` (full schema)    |
-| `packages/db-client/src/tenant-scope.ts`                     | `withTenantScope` + `setTenantContext` (generic)               |
-| `src/adapters/server/db/drizzle.client.ts`                   | `getDb()` wraps `createAppDbClient(serverEnv().DATABASE_URL)`  |
-| `src/adapters/server/db/tenant-scope.ts`                     | Re-exports from `@cogni/db-client`                             |
-| `src/shared/db/db-url.ts`                                    | Append `?sslmode=require` for non-localhost URLs               |
-| `src/shared/env/server.ts`                                   | Add Zod refine rejecting non-localhost URLs without `sslmode`  |
-| `tests/integration/db/rls-tenant-isolation.int.test.ts`      | New: cross-tenant isolation + missing-context tests            |
+| File                                                         | Change                                                             |
+| ------------------------------------------------------------ | ------------------------------------------------------------------ |
+| `platform/infra/services/runtime/postgres-init/provision.sh` | Add DML grants, `app_service` role, `ALTER DEFAULT PRIVILEGES`     |
+| `src/adapters/server/db/migrations/0004_enable_rls.sql`      | RLS + policies on 10 tables (hand-written SQL migration)           |
+| `packages/db-schema/src/index.ts`                            | Root barrel re-exporting all schema slices                         |
+| `packages/db-client/src/client.ts`                           | `createAppDbClient` + `createServiceDbClient` (full schema)        |
+| `packages/db-client/src/tenant-scope.ts`                     | `withTenantScope` + `setTenantContext` (generic)                   |
+| `src/adapters/server/db/drizzle.client.ts`                   | `getDb()` wraps `createAppDbClient(serverEnv().DATABASE_URL)`      |
+| `src/adapters/server/db/tenant-scope.ts`                     | Re-exports from `@cogni/db-client`                                 |
+| `src/shared/db/db-url.ts`                                    | Append `?sslmode=require` for non-localhost URLs                   |
+| `src/shared/env/server.ts`                                   | Add Zod refine rejecting non-localhost URLs without `sslmode`      |
+| `tests/integration/db/rls-tenant-isolation.int.test.ts`      | Cross-tenant isolation + missing-context tests                     |
+| `tests/integration/db/rls-adapter-wiring.int.test.ts`        | Adapter wiring gate (failing until adapters call setTenantContext) |
 
 ---
 
@@ -338,4 +345,4 @@ Methods that touch user-scoped tables and need `withTenantScope` / `setTenantCon
 ---
 
 **Last Updated**: 2026-02-04
-**Status**: P0 Implemented (dual DB client done; adapter wiring pending)
+**Status**: P0 Implemented (dual DB client done; adapter wiring gate test added — failing; wiring pending)
