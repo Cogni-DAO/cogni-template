@@ -12,7 +12,11 @@
  * @internal
  */
 
-import { createAppDbClient, type Database } from "@cogni/db-client";
+import {
+  createAppDbClient,
+  createServiceDbClient,
+  type Database,
+} from "@cogni/db-client";
 
 import { serverEnv } from "@/shared/env";
 
@@ -28,5 +32,20 @@ function createDb(): Database {
   return _db;
 }
 
-// Export lazy database getter to avoid top-level runtime env access
+// Lazy service-role connection (BYPASSRLS) for pre-auth lookups and worker paths.
+// Falls back to DATABASE_URL when DATABASE_SERVICE_URL is not configured (local dev).
+let _serviceDb: Database | null = null;
+
+function createServiceDb(): Database {
+  if (!_serviceDb) {
+    const env = serverEnv();
+    _serviceDb = createServiceDbClient(
+      env.DATABASE_SERVICE_URL ?? env.DATABASE_URL
+    );
+  }
+  return _serviceDb;
+}
+
+// Export lazy database getters to avoid top-level runtime env access
 export const getDb = createDb;
+export const getServiceDb = createServiceDb;

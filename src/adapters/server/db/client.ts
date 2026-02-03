@@ -12,5 +12,5 @@
  * @public
  */
 
-export { type Database, getDb } from "./drizzle.client";
+export { type Database, getDb, getServiceDb } from "./drizzle.client";
 export { setTenantContext, withTenantScope } from "./tenant-scope";

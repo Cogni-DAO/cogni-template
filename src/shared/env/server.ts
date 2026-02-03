@@ -87,6 +87,12 @@ export const serverSchema = z.object({
 
   // Database connection: either provide DATABASE_URL directly OR component pieces
   DATABASE_URL: z.string().url().optional(),
+  // Service role connection (app_service with BYPASSRLS) — for pre-auth lookups and worker paths.
+  // Per DATABASE_RLS_SPEC.md: separate credentials from app_user. Falls back to DATABASE_URL if unset.
+  DATABASE_SERVICE_URL: z.preprocess(
+    emptyToUndefined,
+    z.string().url().optional()
+  ),
   POSTGRES_USER: z.string().min(1).optional(),
   POSTGRES_PASSWORD: z.string().min(1).optional(),
   POSTGRES_DB: z.string().min(1).optional(),
@@ -163,6 +169,8 @@ export const serverSchema = z.object({
 
 type ServerEnv = z.infer<typeof serverSchema> & {
   DATABASE_URL: string;
+  /** Service role connection URL (BYPASSRLS). Falls back to DATABASE_URL if unset. */
+  DATABASE_SERVICE_URL?: string;
   /** Validated repo root path (resolved from COGNI_REPO_PATH) */
   COGNI_REPO_ROOT: string;
   isDev: boolean;
@@ -228,6 +236,23 @@ export function serverEnv(): ServerEnv {
           DB_HOST: parsed.DB_HOST,
           DB_PORT: parsed.DB_PORT,
         });
+      }
+
+      // Per DATABASE_RLS_SPEC.md §SSL_REQUIRED_NON_LOCAL: enforce sslmode on DATABASE_SERVICE_URL too.
+      if (parsed.DATABASE_SERVICE_URL?.startsWith("postgresql://")) {
+        try {
+          const svcUrl = new URL(parsed.DATABASE_SERVICE_URL);
+          const host = svcUrl.hostname;
+          const isLocal = host === "localhost" || host === "127.0.0.1";
+          if (!isLocal && !svcUrl.searchParams.has("sslmode")) {
+            throw new Error(
+              `DATABASE_SERVICE_URL points to non-localhost host "${host}" but is missing sslmode= parameter. ` +
+                "Add ?sslmode=require (or stricter) for production safety."
+            );
+          }
+        } catch (e) {
+          if (e instanceof Error && e.message.includes("sslmode")) throw e;
+        }
       }
 
       // Resolve COGNI_REPO_ROOT from required COGNI_REPO_PATH (no cwd fallback)

@@ -22,7 +22,7 @@ import Credentials from "next-auth/providers/credentials";
 import { getCsrfToken } from "next-auth/react";
 import { SiweMessage } from "siwe";
 
-import { getDb } from "@/adapters/server/db/client";
+import { getServiceDb } from "@/adapters/server/db/client";
 import { users } from "@/shared/db/schema";
 import { makeLogger } from "@/shared/observability";
 
@@ -119,7 +119,10 @@ export const authOptions: NextAuthOptions = {
           }
 
           const { data: fields } = result;
-          const db = getDb();
+          // Pre-auth wallet lookup must use serviceDb (BYPASSRLS) because
+          // the user ID is unknown before authentication completes.
+          // Per DATABASE_RLS_SPEC.md: SIWE auth callback uses app_service role.
+          const db = getServiceDb();
 
           // Check for existing user
           let user = await db.query.users.findFirst({
