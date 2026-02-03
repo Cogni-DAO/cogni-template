@@ -16,15 +16,22 @@
 
 import type {
   MetricsCapability,
+  RepoCapability,
   ToolImplementation,
   WebSearchCapability,
 } from "@cogni/ai-tools";
 import {
   createMetricsQueryImplementation,
+  createRepoListImplementation,
+  createRepoOpenImplementation,
+  createRepoSearchImplementation,
   createWebSearchImplementation,
   GET_CURRENT_TIME_NAME,
   getCurrentTimeImplementation,
   METRICS_QUERY_NAME,
+  REPO_LIST_NAME,
+  REPO_OPEN_NAME,
+  REPO_SEARCH_NAME,
   WEB_SEARCH_NAME,
 } from "@cogni/ai-tools";
 
@@ -35,6 +42,7 @@ import {
 export interface ToolBindingDeps {
   readonly metricsCapability: MetricsCapability;
   readonly webSearchCapability: WebSearchCapability;
+  readonly repoCapability: RepoCapability;
 }
 
 /**
@@ -73,6 +81,18 @@ export function createToolBindings(deps: ToolBindingDeps): ToolBindings {
 
     [WEB_SEARCH_NAME]: createWebSearchImplementation({
       webSearchCapability: deps.webSearchCapability,
+    }) as AnyToolImplementation,
+
+    [REPO_LIST_NAME]: createRepoListImplementation({
+      repoCapability: deps.repoCapability,
+    }) as AnyToolImplementation,
+
+    [REPO_OPEN_NAME]: createRepoOpenImplementation({
+      repoCapability: deps.repoCapability,
+    }) as AnyToolImplementation,
+
+    [REPO_SEARCH_NAME]: createRepoSearchImplementation({
+      repoCapability: deps.repoCapability,
     }) as AnyToolImplementation,
   };
 }

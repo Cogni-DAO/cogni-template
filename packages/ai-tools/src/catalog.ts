@@ -16,6 +16,9 @@
 
 import { getCurrentTimeBoundTool } from "./tools/get-current-time";
 import { metricsQueryBoundTool } from "./tools/metrics-query";
+import { repoListBoundTool } from "./tools/repo-list";
+import { repoOpenBoundTool } from "./tools/repo-open";
+import { repoSearchBoundTool } from "./tools/repo-search";
 import { webSearchBoundTool } from "./tools/web-search";
 import type { BoundTool } from "./types";
 
@@ -91,6 +94,9 @@ export const TOOL_CATALOG: ToolCatalog = createToolCatalog([
   // Core tools (core__ prefix)
   getCurrentTimeBoundTool as CatalogBoundTool,
   metricsQueryBoundTool as CatalogBoundTool,
+  repoListBoundTool as CatalogBoundTool,
+  repoOpenBoundTool as CatalogBoundTool,
+  repoSearchBoundTool as CatalogBoundTool,
   webSearchBoundTool as CatalogBoundTool,
 ]);
 

@@ -140,6 +140,13 @@ export {
   TxHashAlreadyBoundPortError,
 } from "./payment-attempt.port";
 export type {
+  SandboxErrorCode,
+  SandboxMount,
+  SandboxRunnerPort,
+  SandboxRunResult,
+  SandboxRunSpec,
+} from "./sandbox-runner.port";
+export type {
   EmitAiEvent,
   ToolEffect,
   ToolExecFn,

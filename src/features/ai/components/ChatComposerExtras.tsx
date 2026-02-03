@@ -34,6 +34,11 @@ import type { GraphId } from "@/ports";
  */
 const AVAILABLE_GRAPHS: readonly GraphOption[] = [
   {
+    graphId: "langgraph:brain" satisfies GraphId,
+    name: "Brain",
+    description: "Code-aware assistant with repo access",
+  },
+  {
     graphId: "langgraph:poet" satisfies GraphId,
     name: "Poet",
     description: "Poetic AI assistant with structured verse",

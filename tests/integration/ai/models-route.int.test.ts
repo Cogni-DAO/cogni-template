@@ -31,26 +31,25 @@ vi.mock("@/shared/ai/model-catalog.server", () => ({
 }));
 
 vi.mock("@/shared/env", () => ({
-  serverEnv: vi.fn(),
+  serverEnv: vi.fn().mockReturnValue({
+    LITELLM_BASE_URL: "http://localhost:4000",
+    LITELLM_MASTER_KEY: "test-key",
+    // Required by container.ts for ScheduleControlPort
+    TEMPORAL_ADDRESS: "localhost:7233",
+    TEMPORAL_NAMESPACE: "test-namespace",
+    // Required by container.ts for RepoCapability (real RipgrepAdapter, not called in this test)
+    COGNI_REPO_ROOT: process.cwd(),
+  }),
 }));
 
 // Import after mocks
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { GET } from "@/app/api/v1/ai/models/route";
 import { getCachedModels } from "@/shared/ai/model-catalog.server";
-import { serverEnv } from "@/shared/env";
 
 describe("/api/v1/ai/models integration tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // serverEnv still needed for LITELLM_* vars in error logging
-    vi.mocked(serverEnv).mockReturnValue({
-      LITELLM_BASE_URL: "http://localhost:4000",
-      LITELLM_MASTER_KEY: "test-key",
-      // Required by container.ts for ScheduleControlPort
-      TEMPORAL_ADDRESS: "localhost:7233",
-      TEMPORAL_NAMESPACE: "test-namespace",
-    } as ReturnType<typeof serverEnv>);
   });
 
   it("should return 200 with contract-valid response when authenticated", async () => {

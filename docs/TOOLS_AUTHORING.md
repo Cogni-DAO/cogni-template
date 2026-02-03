@@ -125,6 +125,8 @@ export function createMyCapability(env: ServerEnv): MyCapability {
 }
 ```
 
+> **Composed capabilities:** When a capability needs multiple backends (e.g., git + ripgrep → `RepoCapability`), create separate adapters and compose them in the factory. Adapters should not claim partial interface compliance (`implements Omit<Capability, 'x'>`). The factory returns the single object that satisfies the full interface.
+
 ### 7. Wire Bindings (`src/bootstrap/ai/tool-bindings.ts`)
 
 ```typescript
@@ -185,4 +187,4 @@ it("executes via adapter", async () => {
 
 ---
 
-**Last Updated:** 2026-02-01
+**Last Updated:** 2026-02-03

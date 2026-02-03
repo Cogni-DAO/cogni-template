@@ -41,8 +41,9 @@ export default defineConfig({
     include: ["tests/stack/**/*.stack.test.ts"],
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
-    // Global setup: wait for probes, then reset DB (order matters)
+    // Global setup: preflight binaries → wait for probes → reset DB (order matters)
     globalSetup: [
+      "./tests/stack/setup/preflight-binaries.ts",
       "./tests/stack/setup/wait-for-probes.ts",
       "./tests/stack/setup/reset-db.ts",
     ],

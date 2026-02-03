@@ -126,6 +126,8 @@ jobs:
       SCHEDULER_WORKER_IMAGE: ${{ needs.build.outputs.scheduler_worker_image }}
       DEPLOY_ENVIRONMENT: preview
       APP_ENV: production
+      COGNI_REPO_URL: https://github.com/${{ github.repository }}.git
+      COGNI_REPO_REF: ${{ github.sha }}
       DOMAIN: ${{ vars.DOMAIN }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       POSTGRES_ROOT_USER: ${{ secrets.POSTGRES_ROOT_USER }}

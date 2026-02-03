@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-17
+- **Last reviewed:** 2026-02-03
 - **Status:** draft
 
 ## Purpose
@@ -43,7 +43,7 @@ Pure adapter integration tests using testcontainers. Tests adapter implementatio
 
 ## Responsibilities
 
-- This directory **does:** run port test suites against concrete adapters; smoke test infra clients (DB, LLM proxy, wallet verification)
+- This directory **does:** run port test suites against concrete adapters; smoke test infra clients (DB, LLM proxy, wallet verification); test repo adapter and brain tool wiring against real git repos
 - This directory **does not:** test domain/business logic, UI, or Next routes
 
 ## Usage
@@ -63,8 +63,8 @@ pnpm test tests/integration/adapters/ai
 
 ## Dependencies
 
-- **Internal:** src/adapters, src/ports, src/shared, tests/ports
-- **External:** vitest, docker (for local testing), test environment configs
+- **Internal:** src/adapters, src/ports, src/shared, tests/ports, @cogni/ai-tools
+- **External:** vitest, docker (for local testing), test environment configs, ripgrep binary (for repo/ and brain/ tests)
 
 ## Change Protocol
 

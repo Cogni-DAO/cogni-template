@@ -24,6 +24,18 @@ export type {
   MetricWindow,
   TemplateQueryParams,
 } from "./metrics";
+// Repository capability (per COGNI_BRAIN_SPEC)
+export type {
+  RepoCapability,
+  RepoListParams,
+  RepoListResult,
+  RepoOpenParams,
+  RepoOpenResult,
+  RepoSearchHit,
+  RepoSearchParams,
+  RepoSearchResult,
+} from "./repo";
+export { makeRepoCitation, REPO_CITATION_REGEX } from "./repo";
 // Export capability interfaces (defined here, NOT in ai-core)
 export type {
   AuthCapability,

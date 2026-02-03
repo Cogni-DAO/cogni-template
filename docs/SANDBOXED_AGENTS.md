@@ -29,54 +29,105 @@
 
 ## Phase Definitions
 
-| Phase    | LLM Location | Gateway      | Description                                                  |
-| -------- | ------------ | ------------ | ------------------------------------------------------------ |
-| **P0**   | Host         | ToolGateway  | Host owns LLM loop. Sandbox is command executor.             |
-| **P0.5** | Sandbox      | CogniGateway | Agent in sandbox calls LLM via gateway. No auth tools.       |
-| **P1**   | Sandbox      | CogniGateway | Clawdbot runtime + authenticated tools via ConnectionBroker. |
+| Phase    | LLM Location | Gateway      | Description                                                    |
+| -------- | ------------ | ------------ | -------------------------------------------------------------- |
+| **P0**   | N/A          | None         | Spike: prove network isolation + workspace I/O + one-shot exec |
+| **P0.5** | Host         | ToolGateway  | Host owns LLM loop. Sandbox is command executor via gateway.   |
+| **P1**   | Sandbox      | CogniGateway | Agent in sandbox calls LLM via gateway. No auth tools.         |
+| **P1.5** | Sandbox      | CogniGateway | Clawdbot runtime + authenticated tools via ConnectionBroker.   |
 
-> **Confusion Avoidance**: If LLM calls originate inside sandbox, that's P0.5+, not P0.
+> **Confusion Avoidance**: If LLM calls originate inside sandbox, that's P1+, not P0/P0.5.
 
 ---
 
 ## Implementation Checklist
 
-### P0: Host-Owned LLM Loop
+### P0: Sandbox Spike (COMPLETE)
 
-Host owns LLM loop via LiteLLM. Sandbox is command executor only (no LLM calls from sandbox).
+Prove network isolation, workspace I/O, and one-shot container lifecycle. No LLM integration, no gateway, no Temporal.
 
 #### Infrastructure
 
-- [ ] Create `services/sandbox-runtime/Dockerfile`:
+- [x] Create `services/sandbox-runtime/Dockerfile`:
   - Base: `node:20-slim`
-  - Install: git (for local ops), pnpm, jq, rg, fd-find, bash
-  - Copy: `cogni-tool` CLI
-  - No autonomous entrypoint — container receives commands via gateway
+  - Install: curl, git, jq, bash
+  - User: non-root `sandboxer`
+  - Entrypoint: `bash -c` for one-shot command execution
+
+#### Ports (`src/ports/`)
+
+- [x] Create `src/ports/sandbox-runner.port.ts`:
+  ```typescript
+  interface SandboxRunnerPort {
+    runOnce(spec: SandboxRunSpec): Promise<SandboxRunResult>;
+  }
+  interface SandboxRunSpec {
+    runId: string;
+    workspacePath: string;
+    command: string; // Passed to bash -c
+    limits: { maxRuntimeSec: number; maxMemoryMb: number };
+  }
+  interface SandboxRunResult {
+    ok: boolean;
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+    errorCode?: "timeout" | "oom_killed" | "internal" | "container_failed";
+  }
+  ```
+- [x] Export from `src/ports/index.ts`
+
+#### Adapters (`src/adapters/server/sandbox/`)
+
+- [x] Create `sandbox-runner.adapter.ts`:
+  - Implements `SandboxRunnerPort`
+  - Uses dockerode for container lifecycle
+  - `docker create` with `NetworkMode: 'none'`, memory limits, capability drop
+  - Volume mount: `${workspacePath}:/workspace:rw`
+  - Timeout handling with container kill
+  - Log collection (demuxed stdout/stderr)
+  - Cleanup in `finally` block (no orphan containers)
+- [x] Create `index.ts` barrel export
+- [x] Export `SandboxRunnerAdapter` from `src/adapters/server/index.ts`
+
+#### Tests (Merge Gates)
+
+- [x] **Network isolation**: `curl` from sandbox fails (network=none enforced)
+- [x] **Workspace read/write**: Container can read/write `/workspace`, host sees changes
+- [x] **Stdout/stderr separation**: Logs captured correctly
+- [x] **Exit code propagation**: Non-zero exit codes returned
+- [x] **Timeout handling**: Long-running commands killed, returns `errorCode: 'timeout'`
+- [x] **No orphan containers**: Cleanup verified in afterEach hook
+
+#### File Pointers (P0)
+
+| File                                                      | Status   |
+| --------------------------------------------------------- | -------- |
+| `services/sandbox-runtime/Dockerfile`                     | Complete |
+| `src/ports/sandbox-runner.port.ts`                        | Complete |
+| `src/ports/index.ts`                                      | Updated  |
+| `src/adapters/server/sandbox/sandbox-runner.adapter.ts`   | Complete |
+| `src/adapters/server/sandbox/index.ts`                    | Complete |
+| `src/adapters/server/index.ts`                            | Updated  |
+| `tests/integration/sandbox/network-isolation.int.test.ts` | Complete |
+
+---
+
+### P0.5: Host-Owned LLM Loop + Gateway
+
+Host owns LLM loop via LiteLLM. Sandbox is command executor via ToolGateway (no LLM calls from sandbox).
+
+#### Infrastructure
+
 - [ ] Create `services/sandbox-runtime/cogni-tool/` CLI:
   - Reads socket path from `COGNI_GATEWAY_SOCK` env
   - Commands: `cogni-tool exec <tool> '<args-json>'`
   - Protocol: JSON over unix socket
 - [ ] Add `sandbox-isolated` network to docker-compose (no external connectivity)
+- [ ] Update Dockerfile to include `cogni-tool` CLI
 
 #### Ports (`src/ports/`)
 
-- [ ] Create `src/ports/sandbox-runner.port.ts`:
-  ```typescript
-  interface SandboxRunnerPort {
-    execCommand(spec: SandboxCommandSpec): Promise<SandboxCommandResult>;
-  }
-  interface SandboxCommandSpec {
-    runId: string;
-    workspacePath: string; // Pre-cloned by host
-    command: { type: "exec" | "read" | "write"; args: Record<string, unknown> };
-    limits: { maxRuntimeSec: number; maxMemoryMb: number };
-  }
-  interface SandboxCommandResult {
-    ok: boolean;
-    output?: string;
-    errorCode?: "timeout" | "oom_killed" | "internal" | "command_failed";
-  }
-  ```
 - [ ] Create `src/ports/repo.port.ts`:
   ```typescript
   interface RepoPort {
@@ -106,16 +157,6 @@ Host owns LLM loop via LiteLLM. Sandbox is command executor only (no LLM calls f
   - Call `toolRunner.exec()` with policy from run config
   - Return `{ok, value?, errorCode?, safeMessage?}`
   - Log all calls to audit stream
-- [ ] Create `sandbox-runner.adapter.ts`:
-  - Implements `SandboxRunnerPort`
-  - Start gateway server before container
-  - `docker run --rm --network=none --memory={limit}m`
-  - Volume mounts: workspace (rw), gateway socket, artifacts dir
-  - Env: `COGNI_GATEWAY_SOCK`, `RUN_ID`
-  - Wait for exit or timeout (SIGKILL on timeout)
-  - Collect patches from `/artifacts/`
-  - Collect audit log from gateway
-  - Cleanup socket + container
 - [ ] Create `sandbox.provider.ts`:
   - Implements `GraphProvider`
   - `providerId: 'sandbox'`
@@ -124,15 +165,21 @@ Host owns LLM loop via LiteLLM. Sandbox is command executor only (no LLM calls f
     1. Validate grant has `allowSandbox: true`
     2. Call `repoPort.cloneToWorkspace()` (host-side clone)
     3. **Host runs LLM loop**, generates commands
-    4. Call `sandboxRunner.execCommand()` for each command
+    4. Call `sandboxRunner.runOnce()` for each command
     5. Feed results back to LLM, repeat until done
     6. Collect patches, optionally push branch
     7. Return `GraphRunResult` (stream + final)
+- [ ] Extend `SandboxRunnerAdapter`:
+  - Start gateway server before container
+  - Volume mounts: workspace (rw), gateway socket, artifacts dir
+  - Env: `COGNI_GATEWAY_SOCK`, `RUN_ID`
+  - Collect patches from `/artifacts/`
+  - Collect audit log from gateway
 
 #### Bootstrap (`src/bootstrap/`)
 
 - [ ] Wire `SandboxRunnerPort` in `container.ts`
-- [ ] Wire `RepoPort` stub in `container.ts` (GitHub impl P1)
+- [ ] Wire `RepoPort` stub in `container.ts` (GitHub impl P1.5)
 - [ ] Add `SandboxGraphProvider` to `AggregatingGraphExecutor` in `graph-executor.factory.ts`
 - [ ] Add `SANDBOX_ENABLED` feature flag (default false)
 - [ ] Add `allowSandbox` field to `ExecutionGrant` schema
@@ -147,7 +194,6 @@ Host owns LLM loop via LiteLLM. Sandbox is command executor only (no LLM calls f
 
 #### Tests (Merge Gates)
 
-- [ ] **Network isolation**: `curl` from sandbox fails (network=none enforced)
 - [ ] **Grant gate**: Invocation without `allowSandbox: true` returns `authz_denied`
 - [ ] **Gateway enforcement**: runId mismatch rejected, tool allowlist enforced
 - [ ] **Audit completeness**: All tool calls appear in host-written `auditLog`
@@ -158,7 +204,9 @@ Host owns LLM loop via LiteLLM. Sandbox is command executor only (no LLM calls f
 - [ ] Observability: `sandbox.run.*` Prometheus metrics
 - [ ] Documentation updates
 
-### P0.5: CogniGateway LLM Routing
+---
+
+### P1: CogniGateway LLM Routing
 
 **Trigger**: When agent runtime inside sandbox needs to call LLM itself.
 
@@ -205,14 +253,16 @@ Host owns LLM loop via LiteLLM. Sandbox is command executor only (no LLM calls f
 - [ ] Create `cogni-gateway-sidecar` for in-container forwarding
 - [ ] Update sandbox Dockerfile to include sidecar
 
-#### Merge Gates (P0.5)
+#### Merge Gates (P1)
 
 - [ ] `curl google.com` from sandbox fails
 - [ ] LLM request reaches LiteLLM with injected `end-user-id`
 - [ ] Usage headers/logs attribute to runId
 - [ ] No secrets in sandbox logs/artifacts
 
-### P1: Clawdbot Agent Runtime + Authenticated Tools
+---
+
+### P1.5: Clawdbot Agent Runtime + Authenticated Tools
 
 - [ ] Clawdbot runs inside sandbox, uses CogniGateway for LLM
 - [ ] Clawdbot config: `baseUrl: http://localhost:8080` (gateway sidecar)
@@ -220,40 +270,20 @@ Host owns LLM loop via LiteLLM. Sandbox is command executor only (no LLM calls f
 - [ ] Add authenticated tools via ConnectionBroker integration
 - [ ] Persistent workspace option for long-running DAO agents
 
+---
+
 ### P2: Full Agent Autonomy (Do NOT Build Yet)
 
 - [ ] Multi-turn Clawdbot sessions with persistent workspace
 - [ ] `.cogni/index.json` repo memory
 - [ ] Sandbox warm pools
-- [ ] Condition: P0 and P1 must be boring first
-
----
-
-## File Pointers (P0)
-
-| File                                                                    | Change                                 |
-| ----------------------------------------------------------------------- | -------------------------------------- |
-| `src/ports/sandbox-runner.port.ts`                                      | New: `SandboxRunnerPort` interface     |
-| `src/ports/repo.port.ts`                                                | New: `RepoPort` interface              |
-| `src/ports/index.ts`                                                    | Export new ports                       |
-| `src/adapters/server/sandbox/tool-gateway.server.ts`                    | New: unix socket gateway               |
-| `src/adapters/server/sandbox/sandbox-runner.adapter.ts`                 | New: Docker runner                     |
-| `src/adapters/server/sandbox/sandbox.provider.ts`                       | New: GraphProvider impl                |
-| `src/adapters/server/sandbox/index.ts`                                  | Barrel export                          |
-| `src/adapters/server/index.ts`                                          | Export sandbox adapters                |
-| `src/bootstrap/container.ts`                                            | Wire ports                             |
-| `src/bootstrap/graph-executor.factory.ts`                               | Add SandboxGraphProvider to aggregator |
-| `services/sandbox-runtime/Dockerfile`                                   | New: sandbox image                     |
-| `services/sandbox-runtime/cogni-tool/`                                  | New: gateway CLI                       |
-| `services/scheduler-worker/src/workflows/sandbox-agent-run.workflow.ts` | New: Temporal workflow                 |
-| `platform/infra/services/runtime/docker-compose.yml`                    | Add sandbox-isolated network           |
-| `src/shared/db/schema.grants.ts`                                        | Add `allowSandbox` field               |
+- [ ] Condition: P0.5 and P1 must be boring first
 
 ---
 
 ## Design Decisions
 
-### 1. Host Owns LLM Loop (P0)
+### 1. Host Owns LLM Loop (P0.5)
 
 **Decision**: Host-side GraphProvider runs the LLM conversation loop. Sandbox executes commands only.
 
@@ -284,14 +314,14 @@ Host owns LLM loop via LiteLLM. Sandbox is command executor only (no LLM calls f
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Why**: Keeps P0 simple. Host controls all LLM I/O, billing, and orchestration. Sandbox is a pure command executor with no autonomy.
+**Why**: Keeps P0.5 simple. Host controls all LLM I/O, billing, and orchestration. Sandbox is a pure command executor with no autonomy.
 
-### 2. P0.5+: Agent Runtime Inside Sandbox
+### 2. P1+: Agent Runtime Inside Sandbox
 
 **Decision**: Agent runtime (any, including Clawdbot) runs inside sandbox via CogniGateway.
 
 ```
-P0.5+:
+P1+:
 ┌─────────────────────────────────────────────────────────────────────┐
 │ SANDBOX: Agent Runtime (network=none)                               │
 │ ─────────────────────────────────────                               │
@@ -302,20 +332,20 @@ P0.5+:
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-**Why P1 uses Clawdbot**: Already has sandbox mode, skill persistence, workspace management. Reuse rather than rebuild.
+**Why P1.5 uses Clawdbot**: Already has sandbox mode, skill persistence, workspace management. Reuse rather than rebuild.
 
-### 3. No ConnectionBroker in P0
+### 3. No ConnectionBroker in P0.5
 
-**Decision**: P0 tools are non-auth read-only only. No `ConnectionBrokerPort` integration.
+**Decision**: P0.5 tools are non-auth read-only only. No `ConnectionBrokerPort` integration.
 
-**P0 Tool Allowlist**:
+**P0.5 Tool Allowlist**:
 
 - `core__get_current_time` — pure computation
 - `core__metrics_query` — read-only metrics (if configured)
 
-**P1 adds authenticated tools** via ConnectionBroker.
+**P1.5 adds authenticated tools** via ConnectionBroker.
 
-**Why**: Simplifies P0. Auth tools require broker, grant intersection, credential resolution — all deferred.
+**Why**: Simplifies P0.5. Auth tools require broker, grant intersection, credential resolution — all deferred.
 
 ### 4. Host-Side Clone + Push
 
@@ -337,31 +367,34 @@ HOST: repoPort.pushBranchFromPatches()
 
 ## Anti-Patterns
 
-| Pattern                     | Problem                                     |
-| --------------------------- | ------------------------------------------- |
-| LLM calls from sandbox (P0) | P0 = host owns LLM loop. Use P0.5+ for this |
-| GitHub token in sandbox env | Credential exfiltration risk                |
-| Clone inside sandbox        | Needs credentials; clone on host            |
-| Direct network from sandbox | Bypasses gateway policy, no audit           |
-| Auth tools before P1        | Requires ConnectionBroker; defer to P1      |
-| Auto-PR every run           | Noisy, no review gate                       |
-| Shell tool in gateway       | Escapes all policy                          |
-| Sandbox self-reported audit | Can't trust; host must write audit          |
-| runId from sandbox input    | Must be host-generated                      |
-| Wire into user chat API     | Must require system grant                   |
+| Pattern                       | Problem                                     |
+| ----------------------------- | ------------------------------------------- |
+| LLM calls from sandbox (P0.5) | P0.5 = host owns LLM loop. Use P1+ for this |
+| GitHub token in sandbox env   | Credential exfiltration risk                |
+| Clone inside sandbox          | Needs credentials; clone on host            |
+| Direct network from sandbox   | Bypasses gateway policy, no audit           |
+| Auth tools before P1.5        | Requires ConnectionBroker; defer to P1.5    |
+| Auto-PR every run             | Noisy, no review gate                       |
+| Shell tool in gateway         | Escapes all policy                          |
+| Sandbox self-reported audit   | Can't trust; host must write audit          |
+| runId from sandbox input      | Must be host-generated                      |
+| Wire into user chat API       | Must require system grant                   |
 
 ---
 
-## Merge Gates (P0)
+## Merge Gates Summary
 
-| Gate                   | Test                                          |
-| ---------------------- | --------------------------------------------- |
-| Network isolation      | `curl google.com` from sandbox → fails        |
-| Grant enforcement      | Missing `allowSandbox: true` → `authz_denied` |
-| Gateway runId check    | Wrong runId → rejected                        |
-| Gateway tool allowlist | Disallowed tool → `policy_denied`             |
-| Audit is host-written  | All gateway calls logged by host              |
-| E2E flow               | clone@sha → edit → test → push branch         |
+| Phase | Gate                   | Test                                          |
+| ----- | ---------------------- | --------------------------------------------- |
+| P0    | Network isolation      | `curl` from sandbox → fails                   |
+| P0    | Workspace I/O          | Read/write `/workspace` from container + host |
+| P0    | Timeout handling       | Long command killed, `errorCode: 'timeout'`   |
+| P0    | No orphans             | No containers left after test                 |
+| P0.5  | Grant enforcement      | Missing `allowSandbox: true` → `authz_denied` |
+| P0.5  | Gateway runId check    | Wrong runId → rejected                        |
+| P0.5  | Gateway tool allowlist | Disallowed tool → `policy_denied`             |
+| P0.5  | Audit is host-written  | All gateway calls logged by host              |
+| P0.5  | E2E flow               | clone@sha → edit → test → push branch         |
 
 ---
 
@@ -369,11 +402,11 @@ HOST: repoPort.pushBranchFromPatches()
 
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — GraphExecutorPort, billing
 - [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool execution, DENY_BY_DEFAULT
-- [CLAWDBOT_ADAPTER_SPEC.md](CLAWDBOT_ADAPTER_SPEC.md) — Clawdbot runtime (P0.5+ agent option)
+- [CLAWDBOT_ADAPTER_SPEC.md](CLAWDBOT_ADAPTER_SPEC.md) — Clawdbot runtime (P1+ agent option)
 - [RBAC_SPEC.md](RBAC_SPEC.md) — ExecutionGrant, allowSandbox gate
-- [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md) — ConnectionBroker (P1)
+- [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md) — ConnectionBroker (P1.5)
 
 ---
 
-**Last Updated**: 2026-02-02
-**Status**: Draft
+**Last Updated**: 2026-02-03
+**Status**: P0 Complete, P0.5 Not Started

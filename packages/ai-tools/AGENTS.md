@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @Cogni-DAO
-- **Last reviewed:** 2026-02-02
+- **Last reviewed:** 2026-02-03
 - **Status:** draft
 
 ## Purpose
@@ -49,11 +49,16 @@ Pure tool definitions for AI agent execution. Defines `ToolContract`, `ToolImple
   - `metricsQueryBoundTool`, `METRICS_QUERY_NAME`, `createMetricsQueryImplementation` - Metrics query tool
   - `webSearchBoundTool`, `WEB_SEARCH_NAME`, `createWebSearchImplementation` - Web search tool
   - `WebSearchCapability`, `WebSearchParams`, `WebSearchResult`, `WebSearchResultItem` - Web search types
+  - `repoSearchBoundTool`, `REPO_SEARCH_NAME`, `createRepoSearchImplementation` - Repo search tool
+  - `repoOpenBoundTool`, `REPO_OPEN_NAME`, `createRepoOpenImplementation` - Repo open tool
+  - `repoListBoundTool`, `REPO_LIST_NAME`, `createRepoListImplementation` - Repo list tool
+  - `RepoCapability`, `RepoSearchHit`, `RepoSearchResult`, `RepoOpenResult`, `RepoListParams`, `RepoListResult` - Repo capability types
+  - `makeRepoCitation()`, `REPO_CITATION_REGEX` - Citation helpers
   - `toToolSpec()`, `toToolSpecs()` - Compile ToolContract to ToolSpec (Zod → JSONSchema7)
   - `TOOL_CATALOG` - Singleton catalog of all registered tools (Record<string, CatalogBoundTool>)
   - `createToolCatalog()`, `getToolById()`, `getToolIds()`, `hasToolId()` - Catalog accessors
   - `toBoundToolRuntime()`, `contractToRuntime()` - Runtime adapter converters (contractToRuntime for DI)
-  - `ToolCapabilities`, `AuthCapability`, `ClockCapability`, `MetricsCapability` - Capability interfaces
+  - `ToolCapabilities`, `AuthCapability`, `ClockCapability`, `MetricsCapability`, `RepoCapability` - Capability interfaces
 - **CLI:** none
 - **Env/Config keys:** none
 - **Files considered API:** `index.ts`, `types.ts`, `schema.ts`, `catalog.ts`, `runtime-adapter.ts`, `capabilities/*.ts`, `tools/*.ts`

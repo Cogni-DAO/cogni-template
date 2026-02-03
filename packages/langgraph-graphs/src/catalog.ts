@@ -14,6 +14,8 @@
  * @public
  */
 
+import { BRAIN_GRAPH_NAME, createBrainGraph } from "./graphs/brain/graph";
+import { BRAIN_TOOL_IDS } from "./graphs/brain/tools";
 import { createPoetGraph, POET_GRAPH_NAME } from "./graphs/poet/graph";
 import { POET_TOOL_IDS } from "./graphs/poet/tools";
 import {
@@ -53,6 +55,17 @@ interface CatalogEntry {
  * Per CATALOG_SINGLE_SOURCE_OF_TRUTH: graphs are defined here, not in bootstrap.
  */
 export const LANGGRAPH_CATALOG: Readonly<Record<string, CatalogEntry>> = {
+  /**
+   * Brain graph - code-aware assistant with repository access.
+   * Uses createReactAgent with repo search and file open tools.
+   */
+  [BRAIN_GRAPH_NAME]: {
+    displayName: "Brain",
+    description: "Code-aware assistant with repository search and file access",
+    toolIds: BRAIN_TOOL_IDS,
+    graphFactory: createBrainGraph,
+  },
+
   /**
    * Poet graph - poetic AI assistant.
    * Uses createReactAgent with tool-calling loop.
@@ -102,6 +115,7 @@ export const LANGGRAPH_PROVIDER_ID = "langgraph" as const;
  * Per GRAPH_ID_NAMESPACED: format is ${providerId}:${graphName}
  */
 export const LANGGRAPH_GRAPH_IDS = {
+  brain: `${LANGGRAPH_PROVIDER_ID}:${BRAIN_GRAPH_NAME}`,
   poet: `${LANGGRAPH_PROVIDER_ID}:${POET_GRAPH_NAME}`,
   ponderer: `${LANGGRAPH_PROVIDER_ID}:${PONDERER_GRAPH_NAME}`,
   research: `${LANGGRAPH_PROVIDER_ID}:${RESEARCH_GRAPH_NAME}`,

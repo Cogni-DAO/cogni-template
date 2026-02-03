@@ -13,6 +13,11 @@
  * @public
  */
 
+import "server-only";
+
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
 import { ZodError, z } from "zod";
 
 import { buildDatabaseUrl } from "@/shared/db";
@@ -147,10 +152,18 @@ export const serverSchema = z.object({
   TEMPORAL_ADDRESS: z.string().min(1), // e.g., "localhost:7233" or "temporal:7233"
   TEMPORAL_NAMESPACE: z.string().min(1), // e.g., "cogni-test" or "cogni-production"
   TEMPORAL_TASK_QUEUE: z.string().default("scheduler-tasks"),
+
+  // Repo access (in-process ripgrep)
+  // Required in production; defaults to process.cwd() in dev/test
+  COGNI_REPO_PATH: optionalString, // e.g., "/repo/main"
+  // Reserved: SHA override for mounts without .git (not yet wired)
+  COGNI_REPO_SHA: optionalString,
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {
   DATABASE_URL: string;
+  /** Validated repo root path (from COGNI_REPO_PATH or cwd fallback in dev) */
+  COGNI_REPO_ROOT: string;
   isDev: boolean;
   isTest: boolean;
   isProd: boolean;
@@ -197,9 +210,34 @@ export function serverEnv(): ServerEnv {
         });
       }
 
+      // Resolve COGNI_REPO_ROOT: explicit path or cwd fallback (dev only)
+      let COGNI_REPO_ROOT: string;
+      if (parsed.COGNI_REPO_PATH) {
+        COGNI_REPO_ROOT = parsed.COGNI_REPO_PATH;
+      } else if (isProd) {
+        throw new Error(
+          "COGNI_REPO_PATH is required in production. Set it to the repo mount path."
+        );
+      } else {
+        COGNI_REPO_ROOT = process.cwd();
+      }
+      // Boot validation: path must exist and look like a repo root
+      if (!existsSync(COGNI_REPO_ROOT)) {
+        throw new Error(`COGNI_REPO_ROOT does not exist: ${COGNI_REPO_ROOT}`);
+      }
+      if (
+        !existsSync(join(COGNI_REPO_ROOT, "package.json")) &&
+        !existsSync(join(COGNI_REPO_ROOT, ".git"))
+      ) {
+        throw new Error(
+          `COGNI_REPO_ROOT missing package.json and .git: ${COGNI_REPO_ROOT}`
+        );
+      }
+
       ENV = {
         ...parsed,
         DATABASE_URL,
+        COGNI_REPO_ROOT,
         isDev,
         isTest,
         isProd,

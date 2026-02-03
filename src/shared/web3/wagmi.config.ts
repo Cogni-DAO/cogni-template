@@ -17,7 +17,7 @@
 import { getDefaultConfig } from "@rainbow-me/rainbowkit";
 import { cookieStorage, createStorage } from "wagmi";
 
-import { clientEnv } from "@/shared/env";
+import { clientEnv } from "@/shared/env/client";
 import { CHAIN } from "./evm-wagmi";
 
 /**

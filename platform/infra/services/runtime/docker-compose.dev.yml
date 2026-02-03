@@ -48,10 +48,14 @@ services:
       - PROMETHEUS_QUERY_URL
       - PROMETHEUS_READ_USERNAME
       - PROMETHEUS_READ_PASSWORD
+      # Brain repo tools (COGNI_BRAIN_SPEC.md Step 4)
+      - COGNI_REPO_PATH=${COGNI_REPO_PATH:-/repo/current}
       # Temporal schedule orchestration (per SCHEDULER_SPEC.md)
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV:-dev}
       - TEMPORAL_TASK_QUEUE=scheduler-tasks
+    volumes:
+      - repo_data:/repo:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -59,6 +63,8 @@ services:
         condition: service_healthy
       temporal:
         condition: service_healthy
+      git-sync:
+        condition: service_completed_successfully
 
   litellm:
     image: ghcr.io/berriai/litellm@sha256:7e7816d58c265c182be5f3568ed8e5d999f11a5deda1d85e8e347a18bc578f64
@@ -189,6 +195,22 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  git-sync:
+    image: registry.k8s.io/git-sync/git-sync:v4.4.0
+    container_name: git-sync
+    user: "0:0"
+    restart: "no"
+    volumes:
+      - ../../../../:/src:ro
+      - repo_data:/repo
+    environment:
+      - GITSYNC_REPO=file:///src
+      - GITSYNC_REF=${COGNI_REPO_REF:-HEAD}
+      - GITSYNC_ROOT=/repo
+      - GITSYNC_LINK=current
+      - GITSYNC_ONE_TIME=true
+      - GITSYNC_DEPTH=1
 
   loki:
     image: grafana/loki:2.9.10
@@ -403,3 +425,5 @@ volumes:
     name: grafana_data
   temporal_postgres_data:
     name: temporal_postgres_data
+  repo_data:
+    name: repo_data
