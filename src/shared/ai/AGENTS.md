@@ -35,7 +35,7 @@ Shared AI utilities for prompt hashing, model catalog, and tool execution. Pure 
 
 ## Public Surface
 
-- **Exports:** `computePromptHash`, `PROMPT_HASH_VERSION`, `isModelAllowed`, `getDefaults`, `createToolRunner`, `ToolRunner`, `EmitAiEvent`, `scrubTraceInput`, `scrubTraceOutput`, `scrubToolInput`, `scrubToolOutput`, `applyUserMaskingPreference`, `applyToolMaskingPreference`, `isValidOtelTraceId`, `truncateSessionId`, `PAYLOAD_LIMITS`
+- **Exports:** `computePromptHash`, `PROMPT_HASH_VERSION`, `isModelAllowed`, `getDefaults`, `createToolRunner`, `ToolRunner`, `EmitAiEvent`, `scrubTraceInput`, `scrubTraceOutput`, `scrubToolInput`, `scrubToolOutput`, `applyUserMaskingPreference`, `applyToolMaskingPreference`, `isValidOtelTraceId`, `truncateSessionId`, `PAYLOAD_LIMITS`, `validateResponseCitations`, `needsCitationRetry`, `parseCitation`, `INSUFFICIENT_CITATION_MESSAGE`
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** `LITELLM_BASE_URL` (model-catalog.server.ts)
@@ -43,7 +43,7 @@ Shared AI utilities for prompt hashing, model catalog, and tool execution. Pure 
 
 ## Responsibilities
 
-- This directory **does:** Compute deterministic prompt hashes, validate models against cached allowlist, execute tools with validation/redaction, scrub sensitive data from Langfuse trace I/O (key-based + regex), enforce payload size limits, validate OTel trace IDs
+- This directory **does:** Compute deterministic prompt hashes, validate models against cached allowlist, execute tools with validation/redaction, scrub sensitive data from Langfuse trace I/O (key-based + regex), enforce payload size limits, validate OTel trace IDs, validate repo citations in AI responses
 - This directory **does not:** Perform direct IO, import from adapters or features or ports
 
 ## Usage

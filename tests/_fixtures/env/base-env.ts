@@ -63,6 +63,7 @@ export const PRODUCTION_VALID_ENV = {
   APP_ENV: "production",
   DB_HOST: "postgres",
   EVM_RPC_URL: "https://eth-sepolia.example.com/v2/test-key",
+  COGNI_REPO_PATH: process.cwd(), // Required in production per server.ts fail-fast
 } as const;
 
 /**
@@ -83,6 +84,7 @@ export const MOCK_SERVER_ENV = {
   ...BASE_VALID_ENV,
   // Computed fields that serverEnv() adds
   DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/test_db",
+  COGNI_REPO_ROOT: process.cwd(),
   isDev: false,
   isTest: true,
   isProd: false,

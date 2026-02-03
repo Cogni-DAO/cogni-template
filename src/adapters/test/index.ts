@@ -26,3 +26,4 @@ export {
   getTestOnChainVerifier,
   resetTestOnChainVerifier,
 } from "./payments/fake-onchain-verifier.adapter";
+export { FakeRepoAdapter } from "./repo/fake-repo.adapter";
