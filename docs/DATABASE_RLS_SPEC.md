@@ -87,8 +87,11 @@
 | ------------------------------------------------------------ | -------------------------------------------------------------- |
 | `platform/infra/services/runtime/postgres-init/provision.sh` | Add DML grants, `app_service` role, `ALTER DEFAULT PRIVILEGES` |
 | `src/adapters/server/db/migrations/0004_enable_rls.sql`      | RLS + policies on 10 tables (hand-written SQL migration)       |
-| `src/adapters/server/db/tenant-scope.ts`                     | `withTenantScope(userId, fn)` + `setTenantContext(tx, userId)` |
-| `src/adapters/server/db/client.ts`                           | Re-exports tenant-scope helpers                                |
+| `packages/db-schema/src/index.ts`                            | Root barrel re-exporting all schema slices                     |
+| `packages/db-client/src/client.ts`                           | `createAppDbClient` + `createServiceDbClient` (full schema)    |
+| `packages/db-client/src/tenant-scope.ts`                     | `withTenantScope` + `setTenantContext` (generic)               |
+| `src/adapters/server/db/drizzle.client.ts`                   | `getDb()` wraps `createAppDbClient(serverEnv().DATABASE_URL)`  |
+| `src/adapters/server/db/tenant-scope.ts`                     | Re-exports from `@cogni/db-client`                             |
 | `src/shared/db/db-url.ts`                                    | Append `?sslmode=require` for non-localhost URLs               |
 | `src/shared/env/server.ts`                                   | Add Zod refine rejecting non-localhost URLs without `sslmode`  |
 | `tests/integration/db/rls-tenant-isolation.int.test.ts`      | New: cross-tenant isolation + missing-context tests            |
@@ -225,16 +228,16 @@ Both roles have identical DML grants. Only RLS behavior differs. This avoids "go
 
 ### 5. Dual DB Client in `packages/db-client`
 
-**Current state:** `tenant-scope.ts` lives in `src/adapters/server/db/` and is typed against the full-schema `Database`. `packages/db-client` has a single `createDbClient(url)` factory typed against `schedulingSchema` only.
-
-**Target state (P0):** `packages/db-client` exports:
+`packages/db-client` is the universal DB entrypoint. It imports the full schema from `@cogni/db-schema` (root barrel) and exports:
 
 - `createAppDbClient(url)` — app_user connection, RLS enforced
 - `createServiceDbClient(url)` — app_user_service connection, BYPASSRLS
-- `withTenantScope<Db>(db, userId, fn)` and `setTenantContext<Tx>(tx, userId)` — generic over any Drizzle `Database` type so both Next.js (full schema) and workers (scheduling schema) share scoping semantics
-- Adapters that accept an injected `db` handle
+- `withTenantScope<T, TSchema>(db, userId, fn)` and `setTenantContext(tx, userId)` — generic over any Drizzle `Database` type
+- `Database` type — `PostgresJsDatabase<typeof fullSchema>`, single source of truth
 
-**Enforcement:** dependency-cruiser rule blocks `createServiceDbClient` import from Next.js web runtime code. Workers may import either client. This is the minimal enforcement of the app_user vs BYPASSRLS boundary — not new architecture, just packaging the separation already committed to in `provision.sh`.
+Next.js `getDb()` delegates to `createAppDbClient(serverEnv().DATABASE_URL)` — no separate client construction. `src/adapters/server/db/tenant-scope.ts` re-exports from `@cogni/db-client`.
+
+**Enforcement:** depcruiser cannot enforce named-import restrictions (both exports share the same entrypoint). Real enforcement is environmental: `APP_DB_SERVICE_PASSWORD` is absent from the web runtime. P1: evaluate sub-path export for static enforcement.
 
 ### 6. `users.id` UUID Assumption
 
@@ -334,5 +337,5 @@ Methods that touch user-scoped tables and need `withTenantScope` / `setTenantCon
 
 ---
 
-**Last Updated**: 2026-02-03
-**Status**: P0 Implemented (adapter wiring pending)
+**Last Updated**: 2026-02-04
+**Status**: P0 Implemented (dual DB client done; adapter wiring pending)

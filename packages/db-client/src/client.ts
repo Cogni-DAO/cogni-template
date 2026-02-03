@@ -14,7 +14,7 @@
  * @public
  */
 
-import * as schedulingSchema from "@cogni/db-schema/scheduling";
+import * as fullSchema from "@cogni/db-schema";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
@@ -30,8 +30,8 @@ export interface LoggerLike {
   debug: (obj: Record<string, unknown>, msg: string) => void;
 }
 
-// Database type with scheduling schema
-export type Database = PostgresJsDatabase<typeof schedulingSchema>;
+// Database type with full schema (all domain slices)
+export type Database = PostgresJsDatabase<typeof fullSchema>;
 
 function buildClient(
   connectionString: string,
@@ -46,7 +46,7 @@ function buildClient(
     },
   });
 
-  return drizzle(client, { schema: schedulingSchema });
+  return drizzle(client, { schema: fullSchema });
 }
 
 /**
@@ -54,7 +54,7 @@ function buildClient(
  * Use this for all user-facing request paths.
  */
 export function createAppDbClient(connectionString: string): Database {
-  return buildClient(connectionString, "cogni_app");
+  return buildClient(connectionString, "cogni_template_app");
 }
 
 /**

@@ -3,41 +3,27 @@
 
 /**
  * Module: `@adapters/server/db/drizzle.client`
- * Purpose: Drizzle database client configuration and connection management.
- * Scope: Database connection setup and Drizzle ORM instance. Does not handle business logic or migrations.
- * Invariants: Single database connection instance; properly configured with schema; lazy initialization
+ * Purpose: Lazy database singleton for the Next.js web runtime.
+ * Scope: Wraps createAppDbClient with env-derived connection string. Does not handle business logic or migrations.
+ * Invariants: Single database connection instance; lazy initialization prevents build-time env access
  * Side-effects: IO (database connections) - only on first access
- * Notes: Uses postgres driver with Drizzle ORM; connection string from runtime environment; lazy loading prevents build-time env access
- * Links: Used by database adapters for queries
+ * Notes: Database type is re-exported from @cogni/db-client so all consumers share one type.
+ * Links: docs/DATABASE_RLS_SPEC.md
  * @internal
  */
 
-import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { createAppDbClient, type Database } from "@cogni/db-client";
 
-import * as schema from "@/shared/db";
 import { serverEnv } from "@/shared/env";
 
-// Schema-aware database type
-export type Database = PostgresJsDatabase<typeof schema>;
+export type { Database };
 
 // Lazy database connection - only created when first accessed
 let _db: Database | null = null;
 
 function createDb(): Database {
   if (!_db) {
-    const env = serverEnv();
-    const client = postgres(env.DATABASE_URL, {
-      max: 10,
-      idle_timeout: 20,
-      connect_timeout: 10,
-      connection: {
-        application_name: "cogni_template_app",
-      },
-    });
-
-    _db = drizzle(client, { schema });
+    _db = createAppDbClient(serverEnv().DATABASE_URL);
   }
   return _db;
 }

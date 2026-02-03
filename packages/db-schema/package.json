@@ -4,8 +4,12 @@
   "version": "0.0.0",
   "type": "module",
   "sideEffects": false,
-  "types": "./dist/refs.d.ts",
+  "types": "./dist/index.d.ts",
   "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
     "./refs": {
       "types": "./dist/refs.d.ts",
       "import": "./dist/refs.js"
@@ -32,7 +36,7 @@
   ],
   "scripts": {
     "build": "tsup",
-    "postbuild": "node -e \"const fs=require('fs'); if(!fs.existsSync('dist/refs.js')){console.error('ERROR: dist/refs.js missing'); process.exit(1)}\"",
+    "postbuild": "node -e \"const fs=require('fs'); for(const f of ['dist/index.js','dist/refs.js']){if(!fs.existsSync(f)){console.error('ERROR: '+f+' missing'); process.exit(1)}}\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

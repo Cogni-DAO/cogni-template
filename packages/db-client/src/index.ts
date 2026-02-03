@@ -7,14 +7,14 @@
  * Scope: Drizzle client factory + adapter implementations. Does not contain business logic.
  * Invariants:
  * - FORBIDDEN: @/shared/env, process.env, Next.js imports
- * - Re-exports ONLY scheduling schema (not auth/billing slices)
+ * - Re-exports full schema (all domain slices)
  * Side-effects: IO (database operations)
  * Links: docs/PACKAGES_ARCHITECTURE.md
  * @public
  */
 
-// Re-export scheduling schema (worker gets schema transitively through db-client)
-export * from "@cogni/db-schema/scheduling";
+// Re-export full schema (consumers get all tables transitively through db-client)
+export * from "@cogni/db-schema";
 export { DrizzleExecutionRequestAdapter } from "./adapters/drizzle-execution-request.adapter";
 // Adapters
 export { DrizzleExecutionGrantAdapter } from "./adapters/drizzle-grant.adapter";
