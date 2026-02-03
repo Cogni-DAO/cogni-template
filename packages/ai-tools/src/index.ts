@@ -20,6 +20,12 @@ export type {
   MetricsCapability,
   MetricTemplate,
   MetricWindow,
+  RepoCapability,
+  RepoOpenParams,
+  RepoOpenResult,
+  RepoSearchHit,
+  RepoSearchParams,
+  RepoSearchResult,
   TemplateQueryParams,
   ToolCapabilities,
   WebSearchCapability,
@@ -31,6 +37,8 @@ export type {
 // Capabilities
 export {
   createFixedClock,
+  makeRepoCitation,
+  REPO_CITATION_REGEX,
   stubAuthCapability,
   systemClock,
 } from "./capabilities";
@@ -82,6 +90,34 @@ export {
   metricsQueryContract,
   metricsQueryStubImplementation,
 } from "./tools/metrics-query";
+export {
+  createRepoOpenImplementation,
+  REPO_OPEN_NAME,
+  type RepoOpenDeps,
+  type RepoOpenInput,
+  RepoOpenInputSchema,
+  type RepoOpenOutput,
+  RepoOpenOutputSchema,
+  type RepoOpenRedacted,
+  repoOpenBoundTool,
+  repoOpenContract,
+  repoOpenStubImplementation,
+} from "./tools/repo-open";
+export {
+  createRepoSearchImplementation,
+  REPO_SEARCH_NAME,
+  type RepoSearchDeps,
+  type RepoSearchHitOutput,
+  RepoSearchHitSchema,
+  type RepoSearchInput,
+  RepoSearchInputSchema,
+  type RepoSearchOutput,
+  RepoSearchOutputSchema,
+  type RepoSearchRedacted,
+  repoSearchBoundTool,
+  repoSearchContract,
+  repoSearchStubImplementation,
+} from "./tools/repo-search";
 export {
   createWebSearchImplementation,
   WEB_SEARCH_NAME,

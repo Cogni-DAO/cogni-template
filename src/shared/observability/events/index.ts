@@ -66,6 +66,9 @@ export const EVENT_NAMES = {
   ADAPTER_MIMIR_ERROR: "adapter.mimir.error",
   ADAPTER_TAVILY_ERROR: "adapter.tavily.error",
   ADAPTER_LANGGRAPH_INPROC_ERROR: "adapter.langgraph_inproc.error",
+  ADAPTER_RIPGREP_ERROR: "adapter.ripgrep.error",
+  ADAPTER_RIPGREP_SEARCH: "adapter.ripgrep.search",
+  ADAPTER_RIPGREP_OPEN: "adapter.ripgrep.open",
 
   // Invariant Warnings
   INV_PROVIDER_META_MODEL_MISSING: "inv_provider_meta_model_missing",

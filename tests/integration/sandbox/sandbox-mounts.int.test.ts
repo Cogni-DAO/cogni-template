@@ -31,12 +31,12 @@ describe("Sandbox Mounts", () => {
 
   describe("workspace (rw)", () => {
     it("container can write to /workspace", async () => {
-      if (!fixture.imageAvailable) return;
+      if (!fixture.imageAvailable || !fixture.runner) return;
 
       const workspace = await mkWorkspace();
 
       try {
-        const result = await fixture.runner!.runOnce({
+        const result = await fixture.runner.runOnce({
           runId: "test-workspace-write",
           workspacePath: workspace,
           command:
@@ -53,12 +53,12 @@ describe("Sandbox Mounts", () => {
     });
 
     it("host sees files written by container", async () => {
-      if (!fixture.imageAvailable) return;
+      if (!fixture.imageAvailable || !fixture.runner) return;
 
       const workspace = await mkWorkspace();
 
       try {
-        await fixture.runner!.runOnce({
+        await fixture.runner.runOnce({
           runId: "test-workspace-host-read",
           workspacePath: workspace,
           command: 'echo "visible-to-host" > /workspace/output.txt',
@@ -85,14 +85,14 @@ describe("Sandbox Mounts", () => {
      */
 
     it("container can read /repo", async () => {
-      if (!fixture.imageAvailable) return;
+      if (!fixture.imageAvailable || !fixture.runner) return;
 
       const workspace = await mkWorkspace();
       const repoPath = getRepoRootPath();
 
       try {
         // Use jq for robust JSON parsing - works in CI and locally
-        const result = await fixture.runner!.runOnce({
+        const result = await fixture.runner.runOnce({
           runId: "test-repo-readable",
           workspacePath: workspace,
           command:
@@ -110,13 +110,13 @@ describe("Sandbox Mounts", () => {
     });
 
     it("container cannot write to /repo (read-only enforced)", async () => {
-      if (!fixture.imageAvailable) return;
+      if (!fixture.imageAvailable || !fixture.runner) return;
 
       const workspace = await mkWorkspace();
       const repoPath = getRepoRootPath();
 
       try {
-        const result = await fixture.runner!.runOnce({
+        const result = await fixture.runner.runOnce({
           runId: "test-repo-readonly",
           workspacePath: workspace,
           command:

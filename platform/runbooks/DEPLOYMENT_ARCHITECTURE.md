@@ -75,10 +75,11 @@ platform/infra/
 
 **Runtime containers** (project: `cogni-runtime`, updated each deploy):
 
-- `app`: Next.js application with environment-specific runtime config (lean, no migration tools)
+- `app`: Next.js application with environment-specific runtime config (lean, includes `ripgrep` + `git` for brain repo tools)
 - `postgres`: Database server
 - `litellm`: AI proxy service
 - `alloy`: Log collection and forwarding
+- `git-sync`: Clones repo at pinned SHA into `repo_data` volume (bootstrap profile, `--one-time`). App reads via `/repo/current` symlink.
 - `db-provision`: Database user/schema provisioning (bootstrap profile)
 - `db-migrate`: Database migrations via dedicated migrator image (bootstrap profile)
 - `sourcecred`: Cred analysis and UI (separate compose project, shares network)
@@ -129,6 +130,8 @@ See [CI-CD.md](../../docs/CI-CD.md) for complete workflow documentation.
 
 - `APP_IMAGE`: Derived from `IMAGE_NAME:IMAGE_TAG`
 - `MIGRATOR_IMAGE`: Derived from `IMAGE_NAME:IMAGE_TAG-migrate` (tag coupling invariant)
+- `COGNI_REPO_URL`: Derived from `github.repository` (`https://github.com/<org>/<repo>.git`)
+- `COGNI_REPO_REF`: Pinned to deploy commit SHA (`github.sha` or `workflow_run.head_sha`)
 
 **Private Registry Access**: `GHCR_DEPLOY_TOKEN` enables pulling private images from GitHub Container Registry using `Cogni-1729` bot account.
 
@@ -188,3 +191,4 @@ POSTGRES_DB=${APP_DB_NAME}
 - [CI/CD Pipeline Flow](../../docs/CI-CD.md) - Branch model, workflows, and deployment automation
 - [Infrastructure Setup](INFRASTRUCTURE_SETUP.md) - VM provisioning and disaster recovery
 - [Application Architecture](../../docs/ARCHITECTURE.md) - Hexagonal design and code organization
+- [Cogni Brain Spec](../../docs/COGNI_BRAIN_SPEC.md) - Brain repo tools, git-sync mount, citation guard

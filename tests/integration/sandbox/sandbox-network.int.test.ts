@@ -25,12 +25,12 @@ describe("Sandbox Network Isolation", () => {
   const fixture = useSandboxFixture();
 
   it("network=none blocks external access", async () => {
-    if (!fixture.imageAvailable) return;
+    if (!fixture.imageAvailable || !fixture.runner) return;
 
     const workspace = await mkWorkspace();
 
     try {
-      const result = await fixture.runner!.runOnce({
+      const result = await fixture.runner.runOnce({
         runId: "test-network-isolation",
         workspacePath: workspace,
         command:
@@ -49,12 +49,12 @@ describe("Sandbox Network Isolation", () => {
   });
 
   it("DNS resolution fails (no network)", async () => {
-    if (!fixture.imageAvailable) return;
+    if (!fixture.imageAvailable || !fixture.runner) return;
 
     const workspace = await mkWorkspace();
 
     try {
-      const result = await fixture.runner!.runOnce({
+      const result = await fixture.runner.runOnce({
         runId: "test-dns-blocked",
         workspacePath: workspace,
         command: "getent hosts example.com 2>&1 || echo 'DNS_BLOCKED'",

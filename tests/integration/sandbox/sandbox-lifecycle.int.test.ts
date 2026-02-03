@@ -28,12 +28,12 @@ describe("Sandbox Lifecycle", () => {
 
   describe("output capture", () => {
     it("captures stdout and stderr separately", async () => {
-      if (!fixture.imageAvailable) return;
+      if (!fixture.imageAvailable || !fixture.runner) return;
 
       const workspace = await mkWorkspace();
 
       try {
-        const result = await fixture.runner!.runOnce({
+        const result = await fixture.runner.runOnce({
           runId: "test-stdout-stderr",
           workspacePath: workspace,
           command: 'echo "stdout-content" && echo "stderr-content" >&2',
@@ -51,12 +51,12 @@ describe("Sandbox Lifecycle", () => {
 
   describe("exit codes", () => {
     it("returns exit code 0 on success", async () => {
-      if (!fixture.imageAvailable) return;
+      if (!fixture.imageAvailable || !fixture.runner) return;
 
       const workspace = await mkWorkspace();
 
       try {
-        const result = await fixture.runner!.runOnce({
+        const result = await fixture.runner.runOnce({
           runId: "test-exit-zero",
           workspacePath: workspace,
           command: "exit 0",
@@ -71,12 +71,12 @@ describe("Sandbox Lifecycle", () => {
     });
 
     it("returns non-zero exit code on failure", async () => {
-      if (!fixture.imageAvailable) return;
+      if (!fixture.imageAvailable || !fixture.runner) return;
 
       const workspace = await mkWorkspace();
 
       try {
-        const result = await fixture.runner!.runOnce({
+        const result = await fixture.runner.runOnce({
           runId: "test-exit-code",
           workspacePath: workspace,
           command: "exit 42",
@@ -93,12 +93,12 @@ describe("Sandbox Lifecycle", () => {
 
   describe("timeouts", () => {
     it("kills container and returns timeout error", async () => {
-      if (!fixture.imageAvailable) return;
+      if (!fixture.imageAvailable || !fixture.runner) return;
 
       const workspace = await mkWorkspace();
 
       try {
-        const result = await fixture.runner!.runOnce({
+        const result = await fixture.runner.runOnce({
           runId: "test-timeout",
           workspacePath: workspace,
           command: "sleep 60",

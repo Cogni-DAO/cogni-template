@@ -32,7 +32,12 @@ Object.assign(process.env, {
   // Stack tests override these via .env.test
   TEMPORAL_ADDRESS: process.env.TEMPORAL_ADDRESS ?? "localhost:7233",
   TEMPORAL_NAMESPACE: process.env.TEMPORAL_NAMESPACE ?? "test-namespace",
+  // Repo access: integration tests use real RepoCapability, default to repo checkout
+  COGNI_REPO_PATH: process.env.COGNI_REPO_PATH ?? process.cwd(),
 });
+
+// server-only throws at import time outside Next.js server context; stub it for Vitest
+vi.mock("server-only", () => ({}));
 
 // Minimal RainbowKit mock to prevent browser-only dependencies from loading in Node
 vi.mock("@rainbow-me/rainbowkit", () => ({

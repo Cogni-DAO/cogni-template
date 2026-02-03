@@ -69,7 +69,7 @@ WORKDIR /app
 # Create non-root user
 RUN addgroup --system --gid 1001 nodejs \
   && adduser --system --uid 1001 nextjs \
-  && apk add --no-cache curl
+  && apk add --no-cache curl ripgrep git
 
 ENV NODE_ENV=production
 ENV PORT=3000

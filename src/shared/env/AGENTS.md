@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-01
+- **Last reviewed:** 2026-02-03
 - **Status:** draft
 
 ## Purpose
@@ -85,6 +85,15 @@ Temporal (required infrastructure):
 - TEMPORAL_ADDRESS (required, e.g., localhost:7233)
 - TEMPORAL_NAMESPACE (required, e.g., cogni-test)
 - TEMPORAL_TASK_QUEUE (optional, default scheduler-tasks)
+
+Repo access:
+
+- COGNI_REPO_PATH (optional, e.g., "/repo/main") — explicit repo mount path
+- COGNI_REPO_SHA (optional) — SHA override when .git is absent
+
+Constructed:
+
+- COGNI_REPO_ROOT — resolved from COGNI_REPO_PATH or cwd fallback (dev only; required in production)
 
 Optional:
 
