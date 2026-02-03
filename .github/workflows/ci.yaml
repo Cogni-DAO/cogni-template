@@ -158,6 +158,9 @@ jobs:
       - name: Build workspace packages
         run: pnpm packages:build
 
+      - name: Build sandbox runtime image
+        run: pnpm sandbox:docker:build
+
       - name: Integration tests (testcontainers)
         run: pnpm test:int
 
