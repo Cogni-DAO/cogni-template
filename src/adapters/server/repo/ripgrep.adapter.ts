@@ -240,7 +240,9 @@ export class RipgrepAdapter implements RepoCapability {
     if (params.glob) {
       args.push("-g", params.glob);
     }
-    args.push("--", params.query);
+    // Explicit '.' prevents rg from blocking on stdin when spawned via execFile
+    // (no TTY → rg defaults to reading stdin instead of walking cwd)
+    args.push("--", params.query, ".");
 
     let stdout: string;
     try {
