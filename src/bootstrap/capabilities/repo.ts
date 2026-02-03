@@ -15,7 +15,7 @@
 
 import type { RepoCapability } from "@cogni/ai-tools";
 
-import { RipgrepAdapter } from "@/adapters/server";
+import { GitLsFilesAdapter, RipgrepAdapter } from "@/adapters/server";
 import { FakeRepoAdapter } from "@/adapters/test";
 import type { ServerEnv } from "@/shared/env";
 
@@ -31,6 +31,11 @@ export const stubRepoCapability: RepoCapability = {
   open: async () => {
     throw new Error(
       "RepoCapability not configured. Set COGNI_REPO_PATH or ensure rg is available."
+    );
+  },
+  list: async () => {
+    throw new Error(
+      "RepoCapability not configured. Set COGNI_REPO_PATH or ensure git is available."
     );
   },
   getSha: async () => {
@@ -55,17 +60,23 @@ export function createRepoCapability(env: ServerEnv): RepoCapability {
     return {
       search: (p) => fake.search(p),
       open: (p) => fake.open(p),
+      list: (p) => fake.list(p),
       getSha: () => fake.getSha(),
     };
   }
 
-  const adapter = new RipgrepAdapter({
+  const ripgrepAdapter = new RipgrepAdapter({
     repoRoot: env.COGNI_REPO_ROOT,
     repoId: "main",
   });
+  const gitLsFilesAdapter = new GitLsFilesAdapter({
+    repoRoot: env.COGNI_REPO_ROOT,
+    getSha: () => ripgrepAdapter.getSha(),
+  });
   return {
-    search: (p) => adapter.search(p),
-    open: (p) => adapter.open(p),
-    getSha: () => adapter.getSha(),
+    search: (p) => ripgrepAdapter.search(p),
+    open: (p) => ripgrepAdapter.open(p),
+    list: (p) => gitLsFilesAdapter.list(p),
+    getSha: () => ripgrepAdapter.getSha(),
   };
 }

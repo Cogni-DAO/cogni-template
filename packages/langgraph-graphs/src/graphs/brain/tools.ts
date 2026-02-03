@@ -13,13 +13,21 @@
  * @public
  */
 
-import { REPO_OPEN_NAME, REPO_SEARCH_NAME } from "@cogni/ai-tools";
+import {
+  REPO_LIST_NAME,
+  REPO_OPEN_NAME,
+  REPO_SEARCH_NAME,
+} from "@cogni/ai-tools";
 
 /**
  * Tool IDs for brain graph.
  * Single source of truth - imported by server.ts, cogni-exec.ts, and catalog.ts.
  */
-export const BRAIN_TOOL_IDS = [REPO_SEARCH_NAME, REPO_OPEN_NAME] as const;
+export const BRAIN_TOOL_IDS = [
+  REPO_LIST_NAME,
+  REPO_SEARCH_NAME,
+  REPO_OPEN_NAME,
+] as const;
 
 /**
  * Type for brain tool IDs.
