@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-01
+- **Last reviewed:** 2026-02-03
 - **Status:** stable
 
 ## Purpose
@@ -50,7 +50,7 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
 - **Exports:**
   - `getContainer()` - Singleton DI container with logger and config
   - `resetContainer()` - Reset singleton (tests only)
-  - `Container` interface - Ports + logger + config (includes metricsQuery, metricsCapability, toolSource)
+  - `Container` interface - Ports + logger + config (includes metricsQuery, metricsCapability, repoCapability, toolSource)
   - `ContainerConfig` interface - Runtime config (unhandledErrorPolicy, rateLimitBypass, DEPLOY_ENVIRONMENT)
   - `UnhandledErrorPolicy` type - `"rethrow" | "respond_500"`
   - `resolveAiAdapterDeps()` - AI adapter dependencies for factory
@@ -69,7 +69,7 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
 **Subdirectories:**
 
 - `ai/` - AI tool bindings and tool source factory
-- `capabilities/` - Capability factories (e.g., MetricsCapability)
+- `capabilities/` - Capability factories (MetricsCapability, RepoCapability, WebSearchCapability)
 - `http/` - Route wrappers and rate limiting
 
 ## Responsibilities
@@ -78,7 +78,7 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
   - Dependency injection wiring with singleton container
   - Factory functions for adapter construction (e.g., createInProcGraphExecutor, createAgentCatalog)
   - Discovery factory for agent listing (listAgentsForApi per DISCOVERY_PIPELINE invariant)
-  - Environment-based adapter selection (APP_ENV=test → fakes, production → real)
+  - Environment-based adapter selection (APP_ENV=test → fakes, production → real adapters including RipgrepAdapter)
   - Logger initialization (one per process)
   - Route logging wrapper with type-safe auth config (envelope-only)
   - Public API rate limiting (10 req/min/IP + burst 5) with test bypass via wrapPublicRoute()
