@@ -21,16 +21,19 @@ import { type Database, DrizzleScheduleUserAdapter } from "@cogni/db-client";
 import {
   billingAccounts,
   executionGrants,
+  paymentAttempts,
   schedules,
   users,
   virtualKeys,
 } from "@cogni/db-schema";
+import { toUserId } from "@cogni/ids";
 import { generateTestWallet } from "@tests/_fixtures/auth/db-helpers";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { DrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
+import { UserDrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
 import { getDb } from "@/adapters/server/db/client";
+import { UserDrizzlePaymentAttemptRepository } from "@/adapters/server/payments/drizzle-payment-attempt.adapter";
 
 interface TestTenant {
   userId: string;
@@ -145,19 +148,92 @@ describe("RLS Adapter Wiring Gate", () => {
     });
   });
 
-  describe("DrizzleAccountService", () => {
-    let service: DrizzleAccountService;
+  describe("UserDrizzleAccountService", () => {
+    let service: UserDrizzleAccountService;
 
     beforeAll(() => {
-      service = new DrizzleAccountService(rlsDb);
+      service = new UserDrizzleAccountService(rlsDb, toUserId(tenantA.userId));
     });
 
-    // TODO(rls): unskip when adapters call withTenantScope (Commit 3)
-    it.skip("getOrCreateBillingAccountForUser returns account for existing user", async () => {
+    it("getOrCreateBillingAccountForUser returns account for existing user", async () => {
       const result = await service.getOrCreateBillingAccountForUser({
         userId: tenantA.userId,
       });
       expect(result.ownerUserId).toBe(tenantA.userId);
+    });
+  });
+
+  describe("UserDrizzlePaymentAttemptRepository", () => {
+    let repo: UserDrizzlePaymentAttemptRepository;
+
+    beforeAll(() => {
+      repo = new UserDrizzlePaymentAttemptRepository(
+        rlsDb,
+        toUserId(tenantA.userId)
+      );
+    });
+
+    it("create succeeds for correct tenant under RLS", async () => {
+      const attempt = await repo.create({
+        billingAccountId: tenantA.billingAccountId,
+        fromAddress: generateTestWallet("rls-gate-pay"),
+        chainId: 84532,
+        token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+        toAddress: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
+        amountRaw: 5_000_000n,
+        amountUsdCents: 500,
+        expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+      });
+
+      expect(attempt.id).toBeDefined();
+      expect(attempt.status).toBe("CREATED_INTENT");
+      expect(attempt.billingAccountId).toBe(tenantA.billingAccountId);
+
+      // Cleanup
+      await superDb
+        .delete(paymentAttempts)
+        .where(eq(paymentAttempts.id, attempt.id));
+    });
+
+    it("findById returns null for other-tenant attempt", async () => {
+      // Seed an attempt via superuser for a different billing account
+      const otherUserId = randomUUID();
+      const otherBillingAccountId = randomUUID();
+
+      await superDb.insert(users).values({
+        id: otherUserId,
+        name: "RLS Gate Other User",
+        walletAddress: generateTestWallet("rls-gate-other"),
+      });
+      await superDb.insert(billingAccounts).values({
+        id: otherBillingAccountId,
+        ownerUserId: otherUserId,
+        balanceCredits: 0n,
+      });
+      const [otherAttempt] = await superDb
+        .insert(paymentAttempts)
+        .values({
+          billingAccountId: otherBillingAccountId,
+          fromAddress: generateTestWallet("rls-gate-other-pay"),
+          chainId: 84532,
+          token: "0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238",
+          toAddress: "0x0702e6969ec03f30cf3684c802b264c68a61d219",
+          amountRaw: 5_000_000n,
+          amountUsdCents: 500,
+          status: "CREATED_INTENT",
+          expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        })
+        .returning({ id: paymentAttempts.id });
+
+      // tenantA's repo cannot see otherUser's attempt
+      const result = await repo.findById(
+        otherAttempt!.id,
+        otherBillingAccountId
+      );
+      expect(result).toBeNull();
+
+      // Cleanup (CASCADE from users)
+      await superDb.delete(users).where(eq(users.id, otherUserId));
     });
   });
 });
