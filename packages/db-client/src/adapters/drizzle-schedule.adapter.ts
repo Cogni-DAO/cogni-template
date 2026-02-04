@@ -168,12 +168,13 @@ export class DrizzleScheduleUserAdapter implements ScheduleUserPort {
     } catch (error) {
       // Atomicity cleanup: delete DB row if it was created
       if (row) {
+        const rowId = row.id;
         this.logger.warn(
-          { scheduleId: row.id },
+          { scheduleId: rowId },
           "Rolling back schedule DB row after scheduleControl failure"
         );
         await withTenantScope(this.db, actorId, async (tx) => {
-          await tx.delete(schedules).where(eq(schedules.id, row.id));
+          await tx.delete(schedules).where(eq(schedules.id, rowId));
         });
       }
 
