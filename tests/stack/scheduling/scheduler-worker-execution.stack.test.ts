@@ -123,10 +123,7 @@ describe("[scheduling] scheduler-worker execution", () => {
     await triggerSchedule(createdScheduleId);
 
     // 3. Wait for schedule_runs row to be created and reach terminal status
-    const scheduleRun = await waitForScheduleRunCompleted(
-      createdScheduleId,
-      30_000
-    );
+    const scheduleRun = await waitForScheduleRunCompleted(createdScheduleId);
 
     // 4. Assert schedule_runs record
     expect(scheduleRun.scheduleId).toBe(createdScheduleId);
