@@ -138,6 +138,7 @@
     "@cogni/aragon-osx": "workspace:*",
     "@cogni/cogni-contracts": "workspace:*",
     "@cogni/db-client": "workspace:*",
+    "@cogni/ids": "workspace:*",
     "@cogni/db-schema": "workspace:*",
     "@cogni/langgraph-graphs": "workspace:*",
     "@cogni/scheduler-core": "workspace:*",
