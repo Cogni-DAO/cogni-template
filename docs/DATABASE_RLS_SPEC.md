@@ -376,13 +376,6 @@ Methods that touch user-scoped tables and need `withTenantScope` / `setTenantCon
 | `findCreditLedgerEntryByReference({ billingAccountId })` | `credit_ledger`                                        | Yes  | Constructor (`userActor(userId)`) | [x]    |
 | `listChargeReceipts({ billingAccountId, … })`            | `charge_receipts`                                      | Yes  | Constructor (`userActor(userId)`) | [x]    |
 
-### `DrizzleUsageAdapter` (`src/adapters/server/accounts/drizzle.usage.adapter.ts`) — deprecated
-
-| Method                                   | Tables            | Txn? | userId source        | Wired? |
-| ---------------------------------------- | ----------------- | ---- | -------------------- | ------ |
-| `getUsageStats({ billingAccountId, … })` | `charge_receipts` | No   | Via billingAccountId | [ ]    |
-| `listUsageLogs({ billingAccountId, … })` | `charge_receipts` | No   | Via billingAccountId | [ ]    |
-
 ### `UserDrizzlePaymentAttemptRepository` (`src/adapters/server/payments/drizzle-payment-attempt.adapter.ts`)
 
 > UserId bound at construction; `actorId = userActor(userId)` derived once. Every method wraps in `withTenantScope(this.db, this.actorId, tx => …)`.
@@ -465,4 +458,4 @@ Methods that touch user-scoped tables and need `withTenantScope` / `setTenantCon
 ---
 
 **Last Updated**: 2026-02-05
-**Status**: P0 In Progress — Commits 1–4 done (dual DB client, schedules/grants, accounts, payment attempts wired). Remaining: integration test unskip, port harness dual-repo update, `DrizzleUsageAdapter` wiring (deprecated).
+**Status**: P0 In Progress — Commits 1–4 done (dual DB client, schedules/grants, accounts, payment attempts wired). Commit 5: deleted deprecated `DrizzleUsageAdapter` (replaced by `LiteLlmUsageServiceAdapter`), deleted deprecated `createDbClient` (replaced by `createServiceDbClient` in scheduler-worker). Remaining: observability instrumentation, documentation updates.

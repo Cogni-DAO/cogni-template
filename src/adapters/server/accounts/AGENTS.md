@@ -29,21 +29,21 @@ PostgreSQL implementations of account service ports for credit accounting and ch
 
 ## Public Surface
 
-- **Exports:** UserDrizzleAccountService (RLS-enforced, user-scoped), ServiceDrizzleAccountService (BYPASSRLS, service-role), DrizzleUsageAdapter
+- **Exports:** UserDrizzleAccountService (RLS-enforced, user-scoped), ServiceDrizzleAccountService (BYPASSRLS, service-role)
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** DATABASE_URL
-- **Files considered API:** drizzle.adapter.ts, drizzle.usage.adapter.ts
+- **Files considered API:** drizzle.adapter.ts
 
 ## Ports (optional)
 
 - **Uses ports:** none
-- **Implements ports:** AccountService, ServiceAccountService, UsageService
+- **Implements ports:** AccountService, ServiceAccountService
 - **Contracts (required if implementing):** AccountService contract tests pending
 
 ## Responsibilities
 
-- This directory **does**: Implement AccountService using PostgreSQL via Drizzle ORM; atomic recordChargeReceipt (idempotent, non-blocking per ACTIVITY_METRICS.md); virtual key provisioning via LiteLLM API; UsageService for activity queries with telemetrySource fallback
+- This directory **does**: Implement AccountService using PostgreSQL via Drizzle ORM; atomic recordChargeReceipt (idempotent, non-blocking per ACTIVITY_METRICS.md); virtual key provisioning via LiteLLM API
 - This directory **does not**: Handle business logic or authentication; compute pricing (uses pre-calculated values from features layer); store model/tokens (LiteLLM is canonical)
 
 ## Usage
