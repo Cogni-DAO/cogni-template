@@ -479,6 +479,9 @@ importers:
       '@cogni/db-schema':
         specifier: workspace:*
         version: link:../db-schema
+      '@cogni/ids':
+        specifier: workspace:*
+        version: link:../ids
       '@cogni/scheduler-core':
         specifier: workspace:*
         version: link:../scheduler-core
@@ -567,6 +570,9 @@ importers:
       '@cogni/db-schema':
         specifier: workspace:*
         version: link:../db-schema
+      '@cogni/ids':
+        specifier: workspace:*
+        version: link:../ids
       type-fest:
         specifier: ^5.4.1
         version: 5.4.1
