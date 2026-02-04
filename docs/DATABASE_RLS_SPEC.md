@@ -78,6 +78,7 @@
 - [ ] Evaluate `pgcrypto` for column-level encryption on `schedules.input` (may contain secrets)
 - [ ] Restrict `app_service` grants to only the tables the scheduler actually needs (`execution_grants`, `schedules`, `schedule_runs`, `execution_requests`) instead of all tables
 - [ ] Evaluate `SECURITY DEFINER` functions for the SIWE auth lookup as an alternative to using `app_service` role in the auth callback
+- [ ] **Enforce real role separation in dev**: see design decision 7
 
 ### P2: Per-Table Optimization (Do NOT Build Yet)
 
@@ -315,6 +316,21 @@ At the adapter layer, singletons are also split:
 `actor.ts` validates raw strings against `UUID_RE` at brand construction time (`toUserId`). `tenant-scope.ts` accepts only branded `ActorId` and interpolates via `sql.raw()`. The `users.id` column is `text`, not `uuid` — so the schema allows non-UUID values. The UUID validation is a defense-in-depth measure against SQL injection (SET LOCAL cannot use `$1` parameterized placeholders). If user IDs ever deviate from UUID format, `toUserId` will reject them.
 
 ---
+
+### 7. - [ ] **Dev parity: enforce real DB role separation**
+
+      Local dev MUST provision and use two distinct DB roles:
+      - DATABASE_URL  -> app_user (RLS enforced)
+      - DATABASE_SERVICE_URL -> app_service (BYPASSRLS)
+
+      Requirements:
+      1) docker-compose brings up Postgres, then runs provisioning (idempotent) that creates roles/grants/policies BEFORE Next.js starts.
+      2) App consumes TWO explicit DSN secrets only (no ${APP_DB_USER}_service concatenation; no fallback; no DSN construction in runtime code).
+      3) `.env.local.example` shows two different DSNs with different users (and uses the provisioned roles).
+      4) Startup invariants hard-fail if:
+         - DATABASE_URL.user == DATABASE_SERVICE_URL.user
+         - either DSN user is postgres/root/superuser
+         - either DSN is missing
 
 ## Adapter Wiring Tracker
 

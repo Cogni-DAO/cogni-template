@@ -19,7 +19,7 @@
 interface ParsedEnv {
   APP_ENV: "test" | "production";
   NODE_ENV: "development" | "test" | "production";
-  DATABASE_SERVICE_URL?: string | undefined;
+  DATABASE_SERVICE_URL: string;
   LITELLM_MASTER_KEY?: string | undefined;
 }
 
@@ -30,16 +30,8 @@ interface ParsedEnv {
  * @throws Error if invariants are violated
  */
 export function assertEnvInvariants(env: ParsedEnv): void {
-  // RLS requires separate service-role credentials in production.
-  // APP_ENV=test uses fakes; production/staging must have explicit
-  // app_service credentials to enforce role separation.
-  if (env.APP_ENV === "production" && !env.DATABASE_SERVICE_URL) {
-    throw new Error(
-      "DATABASE_SERVICE_URL is required when APP_ENV=production. " +
-        "Set it to the app_service (BYPASSRLS) connection string. " +
-        "See docs/DATABASE_RLS_SPEC.md for provisioning details."
-    );
-  }
+  // DATABASE_SERVICE_URL is now required in all environments (enforced by Zod schema).
+  // Dev parity: both app_user (RLS) and app_service (BYPASSRLS) DSNs must always be present.
 }
 
 /**

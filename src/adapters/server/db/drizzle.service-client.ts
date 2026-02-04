@@ -18,16 +18,14 @@ import { createServiceDbClient } from "@cogni/db-client/service";
 
 import { serverEnv } from "@/shared/env";
 
-// Lazy service-role connection (BYPASSRLS) for pre-auth lookups and worker paths.
-// Falls back to DATABASE_URL when DATABASE_SERVICE_URL is not configured (local dev).
+// Lazy service-role connection (BYPASSRLS) for auth, workers, and bootstrap.
+// DATABASE_SERVICE_URL is required in all environments (no fallback).
 let _serviceDb: Database | null = null;
 
 function createServiceDb(): Database {
   if (!_serviceDb) {
     const env = serverEnv();
-    _serviceDb = createServiceDbClient(
-      env.DATABASE_SERVICE_URL ?? env.DATABASE_URL
-    );
+    _serviceDb = createServiceDbClient(env.DATABASE_SERVICE_URL);
   }
   return _serviceDb;
 }

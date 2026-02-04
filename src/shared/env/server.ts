@@ -87,12 +87,9 @@ export const serverSchema = z.object({
 
   // Database connection: either provide DATABASE_URL directly OR component pieces
   DATABASE_URL: z.string().url().optional(),
-  // Service role connection (app_service with BYPASSRLS) — for pre-auth lookups and worker paths.
-  // Per DATABASE_RLS_SPEC.md: separate credentials from app_user. Falls back to DATABASE_URL if unset.
-  DATABASE_SERVICE_URL: z.preprocess(
-    emptyToUndefined,
-    z.string().url().optional()
-  ),
+  // Service role connection (app_service with BYPASSRLS) — for auth, workers, bootstrap.
+  // Per DATABASE_RLS_SPEC.md: always required. Dev parity: both DSNs present even if same credentials.
+  DATABASE_SERVICE_URL: z.string().url(),
   POSTGRES_USER: z.string().min(1).optional(),
   POSTGRES_PASSWORD: z.string().min(1).optional(),
   POSTGRES_DB: z.string().min(1).optional(),
