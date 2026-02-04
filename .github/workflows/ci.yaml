@@ -249,6 +249,9 @@ jobs:
       TEMPORAL_ADDRESS: localhost:7233
       TEMPORAL_NAMESPACE: cogni-test
       TEMPORAL_TASK_QUEUE: scheduler-tasks
+      # Brain repo tools — vitest runs on host, point to GHA checkout
+      # tests/setup.ts falls back to cwd() but we make it explicit for clarity
+      COGNI_REPO_PATH: ${{ github.workspace }}
       # All fake keys: DO NOT expose any real keys here
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4

@@ -156,7 +156,7 @@ export const serverSchema = z.object({
   // Repo access (in-process ripgrep)
   // Required in production; defaults to process.cwd() in dev/test
   COGNI_REPO_PATH: optionalString, // e.g., "/repo/main"
-  // Reserved: SHA override for mounts without .git (not yet wired)
+  // SHA override for mounts without .git (e.g., git-sync worktree)
   COGNI_REPO_SHA: optionalString,
 });
 
