@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-03
+- **Last reviewed:** 2026-02-04
 - **Status:** draft
 
 ## Purpose
@@ -88,12 +88,12 @@ Temporal (required infrastructure):
 
 Repo access:
 
-- COGNI_REPO_PATH (optional, e.g., "/repo/main") — explicit repo mount path
-- COGNI_REPO_SHA (optional) — SHA override when .git is absent
+- COGNI_REPO_PATH (required, e.g., "/repo/current" or ".") — explicit repo mount path, no cwd fallback
+- COGNI_REPO_SHA (optional) — SHA override for git-sync worktree mounts without usable .git
 
 Constructed:
 
-- COGNI_REPO_ROOT — resolved from COGNI_REPO_PATH or cwd fallback (dev only; required in production)
+- COGNI_REPO_ROOT — resolved from COGNI_REPO_PATH (required in all environments)
 
 Optional:
 

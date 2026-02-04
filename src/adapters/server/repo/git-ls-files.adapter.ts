@@ -38,7 +38,7 @@ export interface GitLsFilesAdapterConfig {
   /** Absolute path to repository root */
   repoRoot: string;
   /** Optional SHA override (from COGNI_REPO_SHA env) for mounts without .git */
-  shaOverride?: string;
+  shaOverride?: string | undefined;
   /** Execution timeout in milliseconds (default: 30000) */
   timeoutMs?: number;
 }

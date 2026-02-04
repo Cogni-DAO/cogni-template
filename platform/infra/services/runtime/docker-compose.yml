@@ -157,12 +157,25 @@ services:
       postgres:
         condition: service_healthy
 
+  repo-init:
+    image: busybox
+    user: "0:0"
+    command: ["sh", "-c", "chown -R 1001:1001 /repo"]
+    volumes:
+      - repo_data:/repo
+    restart: "no"
+
   git-sync:
     image: registry.k8s.io/git-sync/git-sync:v4.4.0
-    user: "0:0"
+    # Must match app's nextjs UID:GID (1001:1001 from Dockerfile)
+    # so the repo volume ownership aligns — git 2.35.2+ rejects cross-user repos
+    user: "1001:1001"
     restart: "no"
     volumes:
       - repo_data:/repo
+    depends_on:
+      repo-init:
+        condition: service_completed_successfully
     environment:
       - GITSYNC_REPO=${COGNI_REPO_URL}
       - GITSYNC_REF=${COGNI_REPO_REF}
@@ -170,8 +183,8 @@ services:
       - GITSYNC_LINK=current
       - GITSYNC_ONE_TIME=true
       - GITSYNC_DEPTH=1
-      - GITSYNC_USERNAME=${GHCR_USERNAME:-}
-      - GITSYNC_PASSWORD=${GHCR_DEPLOY_TOKEN:-}
+      - GITSYNC_USERNAME=${GIT_READ_USERNAME:-}
+      - GITSYNC_PASSWORD=${GIT_READ_TOKEN:-}
 
   alloy:
     image: grafana/alloy:v1.9.2

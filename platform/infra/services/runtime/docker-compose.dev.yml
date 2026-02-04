@@ -50,6 +50,7 @@ services:
       - PROMETHEUS_READ_PASSWORD
       # Brain repo tools (COGNI_BRAIN_SPEC.md Step 4)
       - COGNI_REPO_PATH=${COGNI_REPO_PATH:-/repo/current}
+      - COGNI_REPO_SHA=${COGNI_REPO_REF:-}
       # Temporal schedule orchestration (per SCHEDULER_SPEC.md)
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV:-dev}
@@ -196,21 +197,36 @@ services:
       postgres:
         condition: service_healthy
 
+  repo-init:
+    image: busybox
+    container_name: repo-init
+    user: "0:0"
+    command: ["sh", "-c", "chown -R 1001:1001 /repo"]
+    volumes:
+      - repo_data:/repo
+    restart: "no"
+
   git-sync:
     image: registry.k8s.io/git-sync/git-sync:v4.4.0
     container_name: git-sync
-    user: "0:0"
+    # Must match app's nextjs UID:GID (1001:1001 from Dockerfile)
+    # so the repo volume ownership aligns — git 2.35.2+ rejects cross-user repos
+    user: "1001:1001"
     restart: "no"
     volumes:
-      - ../../../../:/src:ro
       - repo_data:/repo
+    depends_on:
+      repo-init:
+        condition: service_completed_successfully
     environment:
-      - GITSYNC_REPO=file:///src
-      - GITSYNC_REF=${COGNI_REPO_REF:-HEAD}
+      - GITSYNC_REPO=${COGNI_REPO_URL}
+      - GITSYNC_REF=${COGNI_REPO_REF}
       - GITSYNC_ROOT=/repo
       - GITSYNC_LINK=current
       - GITSYNC_ONE_TIME=true
       - GITSYNC_DEPTH=1
+      - GITSYNC_USERNAME=${GIT_READ_USERNAME:-}
+      - GITSYNC_PASSWORD=${GIT_READ_TOKEN:-}
 
   loki:
     image: grafana/loki:2.9.10

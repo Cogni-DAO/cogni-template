@@ -115,7 +115,7 @@ export interface Container {
   metricsCapability: MetricsCapability;
   /** Web search capability for AI tools - requires TAVILY_API_KEY to be configured */
   webSearchCapability: WebSearchCapability;
-  /** Repo capability for AI tools - uses COGNI_REPO_PATH or cwd */
+  /** Repo capability for AI tools - requires COGNI_REPO_PATH */
   repoCapability: RepoCapability;
   /** Tool source with real implementations for AI tool execution */
   toolSource: ToolSourcePort;
@@ -303,7 +303,7 @@ function createContainer(): Container {
   // WebSearchCapability for AI tools (requires TAVILY_API_KEY)
   const webSearchCapability = createWebSearchCapability(env);
 
-  // RepoCapability for AI tools (COGNI_REPO_PATH or cwd)
+  // RepoCapability for AI tools (requires COGNI_REPO_PATH)
   const repoCapability = createRepoCapability(env);
 
   // ToolSource with real implementations (per CAPABILITY_INJECTION)

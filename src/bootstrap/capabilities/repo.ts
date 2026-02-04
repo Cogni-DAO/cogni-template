@@ -73,6 +73,7 @@ export function createRepoCapability(env: ServerEnv): RepoCapability {
   // GitLsFilesAdapter owns git concerns: SHA resolution + file listing
   const gitAdapter = new GitLsFilesAdapter({
     repoRoot: env.COGNI_REPO_ROOT,
+    shaOverride: env.COGNI_REPO_SHA,
   });
 
   // RipgrepAdapter owns rg concerns: search + file open

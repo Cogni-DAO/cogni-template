@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-01-22
+- **Last reviewed:** 2026-02-04
 - **Status:** stable
 
 ## Purpose
@@ -23,7 +23,7 @@ Full-stack HTTP API integration tests requiring running Docker Compose infrastru
 ```json
 {
   "layer": "tests",
-  "may_import": ["app", "adapters", "shared", "types"],
+  "may_import": ["app", "adapters", "bootstrap", "shared", "types"],
   "must_not_import": ["features", "core", "ports"],
   "database_access": "via_getDb_for_assertions"
 }
@@ -34,7 +34,7 @@ Full-stack HTTP API integration tests requiring running Docker Compose infrastru
 - **Exports:** none (test-only directory)
 - **Routes (if any):** none
 - **CLI (if any):** pnpm test:stack:dev, pnpm test:stack:docker, pnpm db:migrate:test
-- **Env/Config keys:** TEST_BASE_URL, DATABASE_URL, POSTGRES_DB, APP_ENV
+- **Env/Config keys:** TEST_BASE_URL, DATABASE_URL, POSTGRES_DB, APP_ENV, COGNI_REPO_PATH
 - **Files considered API:** \*.stack.test.ts files
 
 ## Responsibilities
@@ -73,7 +73,7 @@ pnpm test:stack:dev  # or pnpm test:stack:docker
 
 ## Dependencies
 
-- **Internal:** app/\_facades/, adapters/server/db, adapters/test, shared/
+- **Internal:** app/\_facades/, adapters/server/db, adapters/test, bootstrap/capabilities, shared/
 - **External:** Running Next.js app, PostgreSQL database, Temporal server
 
 ## Change Protocol

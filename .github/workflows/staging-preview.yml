@@ -128,6 +128,8 @@ jobs:
       APP_ENV: production
       COGNI_REPO_URL: https://github.com/${{ github.repository }}.git
       COGNI_REPO_REF: ${{ github.sha }}
+      GIT_READ_USERNAME: Cogni-1729
+      GIT_READ_TOKEN: ${{ secrets.GIT_READ_TOKEN }}
       DOMAIN: ${{ vars.DOMAIN }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       POSTGRES_ROOT_USER: ${{ secrets.POSTGRES_ROOT_USER }}
