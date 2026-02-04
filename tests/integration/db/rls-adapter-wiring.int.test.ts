@@ -6,9 +6,8 @@
  * Purpose: Gate tests that FAIL until adapters internally call setTenantContext under RLS.
  * Scope: Calls real adapter methods through an RLS-enforced connection with no external withTenantScope wrapper. Does not test cross-tenant isolation (see rls-tenant-isolation.int.test.ts).
  * Invariants:
- * - Tests FAIL today because adapters don't call setTenantContext yet
- * - Tests PASS once each adapter is wired — that's the gate
  * - Adapters must scope themselves; the caller does NOT wrap in withTenantScope
+ * - All wiring gates pass (schedules, accounts, payment attempts wired)
  * Side-effects: IO (database operations via testcontainers)
  * Notes: Uses production app_user role (FORCE RLS via provision.sh) for rlsDb.
  *        getSeedDb() (app_user_service, BYPASSRLS) handles seed/cleanup.
@@ -127,9 +126,6 @@ describe("RLS Adapter Wiring Gate", () => {
   //
   // These tests call adapter methods directly — NO withTenantScope wrapper.
   // The adapter must internally call setTenantContext to pass.
-  //
-  // Today: adapters don't scope → RLS blocks → tests FAIL.
-  // After wiring: adapters scope themselves → tests PASS.
 
   describe("DrizzleScheduleUserAdapter", () => {
     let adapter: DrizzleScheduleUserAdapter;
@@ -140,9 +136,8 @@ describe("RLS Adapter Wiring Gate", () => {
       adapter = new DrizzleScheduleUserAdapter(rlsDb, {} as any, {} as any);
     });
 
-    // TODO(rls): unskip when adapters call withTenantScope (Commit 2)
-    it.skip("listSchedules returns schedules for the calling user", async () => {
-      const result = await adapter.listSchedules(tenantA.userId);
+    it("listSchedules returns schedules for the calling user", async () => {
+      const result = await adapter.listSchedules(toUserId(tenantA.userId));
       expect(result.length).toBeGreaterThanOrEqual(1);
       expect(result[0]?.ownerUserId).toBe(tenantA.userId);
     });
