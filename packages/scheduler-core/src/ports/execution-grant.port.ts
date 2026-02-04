@@ -3,8 +3,8 @@
 
 /**
  * Module: `@ports/execution-grant`
- * Purpose: Execution grant port for scheduled graph authorization.
- * Scope: Defines contract for durable grants that authorize scheduled runs (not user sessions).
+ * Purpose: Execution grant port interfaces split by trust boundary (user vs worker).
+ * Scope: Defines contracts for durable grants that authorize scheduled runs (not user sessions).
  * Invariants:
  * - Per GRANT_NOT_SESSION: Workers authenticate via grants, never user sessions
  * - Per GRANT_SCOPES_CONSTRAIN_GRAPHS: Scopes specify which graphIds can execute
@@ -14,6 +14,7 @@
  * @public
  */
 
+import type { ActorId, UserId } from "@cogni/ids";
 import type { ExecutionGrant } from "../types";
 
 // Re-export type for adapter convenience
@@ -96,44 +97,53 @@ export function isGrantScopeMismatchError(
 }
 
 /**
- * Execution grant port for scheduled graph authorization.
+ * User-facing grant operations. callerUserId required for RLS scoping.
+ * Constructed with appDb (RLS enforced).
+ * Function properties (not methods) for contravariant param checking on branded types.
  */
-export interface ExecutionGrantPort {
+export interface ExecutionGrantUserPort {
   /**
    * Creates a new execution grant for scheduled runs.
+   * input.userId is the tenant scope for RLS.
    * Note: virtualKeyId is resolved at runtime via AccountService, not stored in grant.
    */
-  createGrant(input: {
-    userId: string;
+  createGrant: (input: {
+    userId: UserId;
     billingAccountId: string;
     scopes: readonly string[];
     expiresAt?: Date;
-  }): Promise<ExecutionGrant>;
+  }) => Promise<ExecutionGrant>;
 
+  /** Revokes a grant (soft delete via revoked_at timestamp). */
+  revokeGrant: (callerUserId: UserId, grantId: string) => Promise<void>;
+
+  /**
+   * Deletes a grant permanently (hard delete).
+   * Used for atomicity cleanup when schedule creation fails.
+   */
+  deleteGrant: (callerUserId: UserId, grantId: string) => Promise<void>;
+}
+
+/**
+ * Worker-only grant validation. actorId required for audit trail.
+ * Constructed with serviceDb (BYPASSRLS) — setTenantContext is no-op but keeps invariant uniform.
+ * Function properties (not methods) for contravariant param checking on branded types.
+ */
+export interface ExecutionGrantWorkerPort {
   /**
    * Validates grant exists and is not expired/revoked.
    * @throws GrantNotFoundError, GrantExpiredError, GrantRevokedError
    */
-  validateGrant(grantId: string): Promise<ExecutionGrant>;
+  validateGrant: (actorId: ActorId, grantId: string) => Promise<ExecutionGrant>;
 
   /**
    * Validates grant can execute specific graphId.
    * Per GRANT_SCOPES_CONSTRAIN_GRAPHS: checks scope includes graphId.
    * @throws GrantNotFoundError, GrantExpiredError, GrantRevokedError, GrantScopeMismatchError
    */
-  validateGrantForGraph(
+  validateGrantForGraph: (
+    actorId: ActorId,
     grantId: string,
     graphId: string
-  ): Promise<ExecutionGrant>;
-
-  /**
-   * Revokes a grant (soft delete via revoked_at timestamp).
-   */
-  revokeGrant(grantId: string): Promise<void>;
-
-  /**
-   * Deletes a grant permanently (hard delete).
-   * Used for atomicity cleanup when schedule creation fails.
-   */
-  deleteGrant(grantId: string): Promise<void>;
+  ) => Promise<ExecutionGrant>;
 }

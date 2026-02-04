@@ -24,12 +24,13 @@ export {
 } from "./payloads";
 // Ports
 export {
-  // ScheduleManagerPort
+  // ScheduleUserPort + ScheduleWorkerPort
   type CreateScheduleInput,
   // ScheduleControlPort
   type CreateScheduleParams,
-  // ExecutionGrantPort
-  type ExecutionGrantPort,
+  // ExecutionGrantUserPort + ExecutionGrantWorkerPort
+  type ExecutionGrantUserPort,
+  type ExecutionGrantWorkerPort,
   // ExecutionRequestPort
   type ExecutionOutcome,
   type ExecutionRequest,
@@ -58,10 +59,11 @@ export {
   type ScheduleControlPort,
   ScheduleControlUnavailableError,
   type ScheduleDescription,
-  type ScheduleManagerPort,
   ScheduleNotFoundError,
   // ScheduleRunRepository
   type ScheduleRunRepository,
+  type ScheduleUserPort,
+  type ScheduleWorkerPort,
   type UpdateScheduleInput,
 } from "./ports";
 // Types

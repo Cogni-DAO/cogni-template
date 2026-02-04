@@ -13,7 +13,8 @@
 
 export {
   type ExecutionGrant,
-  type ExecutionGrantPort,
+  type ExecutionGrantUserPort,
+  type ExecutionGrantWorkerPort,
   GrantExpiredError,
   GrantNotFoundError,
   GrantRevokedError,
@@ -49,9 +50,10 @@ export {
   isScheduleAccessDeniedError,
   isScheduleNotFoundError,
   ScheduleAccessDeniedError,
-  type ScheduleManagerPort,
   ScheduleNotFoundError,
   type ScheduleSpec,
+  type ScheduleUserPort,
+  type ScheduleWorkerPort,
   type UpdateScheduleInput,
 } from "./schedule-manager.port";
 export type {

@@ -3,8 +3,8 @@
 
 /**
  * Module: `@ports/schedule-manager`
- * Purpose: Schedule manager port for schedule CRUD operations.
- * Scope: Defines contract for schedule lifecycle. Does not contain implementations.
+ * Purpose: Schedule port interfaces split by trust boundary (user vs worker).
+ * Scope: Defines contracts for schedule lifecycle. Does not contain implementations.
  * Invariants:
  * - Per CRUD_IS_TEMPORAL_AUTHORITY: createSchedule creates grant + DB + scheduleControl
  * - Per SCHEDULER_SPEC.md: next_run_at is cache-only (Temporal is authoritative)
@@ -14,6 +14,7 @@
  * @public
  */
 
+import type { ActorId, UserId } from "@cogni/ids";
 import type { ScheduleSpec } from "../types";
 
 // Re-export type for adapter convenience
@@ -104,57 +105,74 @@ export interface UpdateScheduleInput {
 }
 
 /**
- * Schedule manager port for schedule CRUD operations.
+ * User-facing schedule CRUD. All methods require callerUserId for RLS scoping.
+ * Constructed with appDb (RLS enforced).
+ * Function properties (not methods) for contravariant param checking on branded types.
  */
-export interface ScheduleManagerPort {
+export interface ScheduleUserPort {
   /**
    * Creates schedule with grant and scheduleControl.
    * Per CRUD_IS_TEMPORAL_AUTHORITY: grant → DB → scheduleControl.
    */
-  createSchedule(
-    callerUserId: string,
+  createSchedule: (
+    callerUserId: UserId,
     billingAccountId: string,
     input: CreateScheduleInput
-  ): Promise<ScheduleSpec>;
+  ) => Promise<ScheduleSpec>;
 
-  /**
-   * Lists schedules owned by caller.
-   */
-  listSchedules(callerUserId: string): Promise<readonly ScheduleSpec[]>;
+  /** Lists schedules owned by caller. */
+  listSchedules: (callerUserId: UserId) => Promise<readonly ScheduleSpec[]>;
 
-  /**
-   * Gets schedule by ID (null if not found).
-   */
-  getSchedule(scheduleId: string): Promise<ScheduleSpec | null>;
+  /** Gets schedule by ID, scoped to caller via RLS. */
+  getSchedule: (
+    callerUserId: UserId,
+    scheduleId: string
+  ) => Promise<ScheduleSpec | null>;
 
   /**
    * Updates schedule. Recomputes next_run_at if cron/timezone/enabled changed.
    * @throws ScheduleNotFoundError, ScheduleAccessDeniedError
    */
-  updateSchedule(
-    callerUserId: string,
+  updateSchedule: (
+    callerUserId: UserId,
     scheduleId: string,
     patch: UpdateScheduleInput
-  ): Promise<ScheduleSpec>;
+  ) => Promise<ScheduleSpec>;
 
   /**
    * Deletes schedule and revokes associated grant.
    * @throws ScheduleNotFoundError, ScheduleAccessDeniedError
    */
-  deleteSchedule(callerUserId: string, scheduleId: string): Promise<void>;
+  deleteSchedule: (callerUserId: UserId, scheduleId: string) => Promise<void>;
+}
 
-  /**
-   * Updates next_run_at after execution (used by worker).
-   */
-  updateNextRunAt(scheduleId: string, nextRunAt: Date): Promise<void>;
+/**
+ * Worker-only schedule operations (Temporal worker, reconciler).
+ * actorId = system actor or grant userId for audit trail.
+ * Constructed with serviceDb (BYPASSRLS).
+ * Function properties (not methods) for contravariant param checking on branded types.
+ */
+export interface ScheduleWorkerPort {
+  /** Gets schedule by ID for worker processing. */
+  getScheduleForWorker: (
+    actorId: ActorId,
+    scheduleId: string
+  ) => Promise<ScheduleSpec | null>;
 
-  /**
-   * Updates last_run_at when execution starts (used by worker).
-   */
-  updateLastRunAt(scheduleId: string, lastRunAt: Date): Promise<void>;
+  /** Updates next_run_at after execution (used by worker). */
+  updateNextRunAt: (
+    actorId: ActorId,
+    scheduleId: string,
+    nextRunAt: Date
+  ) => Promise<void>;
 
-  /**
-   * Finds enabled schedules with stale next_run_at (used by reconciler).
-   */
-  findStaleSchedules(): Promise<readonly ScheduleSpec[]>;
+  /** Updates last_run_at when execution starts (used by worker). */
+  updateLastRunAt: (
+    actorId: ActorId,
+    scheduleId: string,
+    lastRunAt: Date
+  ) => Promise<void>;
+
+  /** Finds enabled schedules with stale next_run_at (used by reconciler). */
+  findStaleSchedules: (actorId: ActorId) => Promise<readonly ScheduleSpec[]>;
 }
