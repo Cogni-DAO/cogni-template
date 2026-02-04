@@ -3,20 +3,16 @@
 
 /**
  * Module: `@adapters/server/db/drizzle.client`
- * Purpose: Lazy database singleton for the Next.js web runtime.
- * Scope: Wraps createAppDbClient with env-derived connection string. Does not handle business logic or migrations.
+ * Purpose: Lazy app-role database singleton (RLS enforced) for the Next.js web runtime.
+ * Scope: Wraps createAppDbClient with env-derived connection string. Does not handle business logic, migrations, or service-role access.
  * Invariants: Single database connection instance; lazy initialization prevents build-time env access
  * Side-effects: IO (database connections) - only on first access
- * Notes: Database type is re-exported from @cogni/db-client so all consumers share one type.
+ * Notes: Service-role singleton (BYPASSRLS) lives in drizzle.service-client.ts, NOT here.
  * Links: docs/DATABASE_RLS_SPEC.md
  * @internal
  */
 
-import {
-  createAppDbClient,
-  createServiceDbClient,
-  type Database,
-} from "@cogni/db-client";
+import { createAppDbClient, type Database } from "@cogni/db-client";
 
 import { serverEnv } from "@/shared/env";
 
@@ -32,20 +28,5 @@ function createDb(): Database {
   return _db;
 }
 
-// Lazy service-role connection (BYPASSRLS) for pre-auth lookups and worker paths.
-// Falls back to DATABASE_URL when DATABASE_SERVICE_URL is not configured (local dev).
-let _serviceDb: Database | null = null;
-
-function createServiceDb(): Database {
-  if (!_serviceDb) {
-    const env = serverEnv();
-    _serviceDb = createServiceDbClient(
-      env.DATABASE_SERVICE_URL ?? env.DATABASE_URL
-    );
-  }
-  return _serviceDb;
-}
-
-// Export lazy database getters to avoid top-level runtime env access
+// Export lazy database getter to avoid top-level runtime env access
 export const getDb = createDb;
-export const getServiceDb = createServiceDb;

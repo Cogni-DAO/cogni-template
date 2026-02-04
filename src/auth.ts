@@ -22,7 +22,7 @@ import Credentials from "next-auth/providers/credentials";
 import { getCsrfToken } from "next-auth/react";
 import { SiweMessage } from "siwe";
 
-import { getServiceDb } from "@/adapters/server/db/client";
+import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import { users } from "@/shared/db/schema";
 import { makeLogger } from "@/shared/observability";
 

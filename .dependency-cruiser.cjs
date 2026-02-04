@@ -407,18 +407,19 @@ module.exports = {
     },
 
     // Block deep imports into package internals (force use of package exports)
-    // Allows index.ts (entrypoint), blocks other internal files
+    // Allows index.ts (entrypoint) and declared sub-path exports (db-client/service)
     {
       name: "no-deep-package-imports",
       severity: "error",
       from: {
-        path: "^src/", // was "^(src|services)/"
+        path: "^src/",
       },
       to: {
         path: "^packages/[^/]+/src/(?!index\\.ts$)",
+        pathNot: "^packages/db-client/(src|dist)/service\\.(ts|js)$",
       },
       comment:
-        "Import from package root (@cogni/setup-core), not internal paths",
+        "Import from package root or declared sub-path exports, not internal paths",
     },
 
     // NOTE: NO_LANGCHAIN_IN_SRC is enforced via Biome noRestrictedImports
@@ -504,12 +505,37 @@ module.exports = {
         "db-client contains postgres/drizzle; only server layers may import",
     },
 
-    // NOTE: createServiceDbClient import boundary (DATABASE_RLS_SPEC.md §3)
-    // depcruiser cannot enforce named-import restrictions — both createAppDbClient
-    // and createServiceDbClient are exported from the same @cogni/db-client entrypoint.
-    // Enforcement is environmental: APP_DB_SERVICE_PASSWORD is absent from the
-    // web runtime env, so createServiceDbClient would fail to connect.
-    // P1: evaluate sub-path export (@cogni/db-client/service) for static enforcement.
+    // Layer 1 (package): @cogni/db-client/service only from the service-client adapter.
+    // Depcruiser resolves workspace sub-path exports to dist/, so match both src/ and dist/.
+    {
+      name: "no-service-db-package-import",
+      severity: "error",
+      from: {
+        path: "^src/",
+        pathNot: "^src/adapters/server/db/drizzle\\.service-client\\.ts$",
+      },
+      to: {
+        path: "^packages/db-client/(src|dist)/service\\.(ts|js)$",
+      },
+      comment:
+        "Only drizzle.service-client.ts may import @cogni/db-client/service (BYPASSRLS)",
+    },
+
+    // Layer 2 (adapter): drizzle.service-client.ts only from auth.ts (+ explicit allowlist).
+    // This prevents the BYPASSRLS singleton from leaking through barrels.
+    {
+      name: "no-service-db-adapter-import",
+      severity: "error",
+      from: {
+        path: "^src/",
+        pathNot: "^src/auth\\.ts$",
+      },
+      to: {
+        path: "^src/adapters/server/db/drizzle\\.service-client\\.ts$",
+      },
+      comment:
+        "Only auth.ts may import the service-db adapter (BYPASSRLS singleton)",
+    },
 
     // =========================================================================
     // Services internal clean architecture (opt-in when folders exist)

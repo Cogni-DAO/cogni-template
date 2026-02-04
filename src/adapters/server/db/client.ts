@@ -3,14 +3,14 @@
 
 /**
  * Module: `@adapters/server/db`
- * Purpose: Database adapter entry point for server-side database access.
- * Scope: Re-exports database client and types. Does not contain implementation logic.
- * Invariants: Clean entry point for database access
+ * Purpose: Safe database adapter barrel for server-side database access.
+ * Scope: Re-exports app-role client, Database type, and tenant-scoping helpers. Does NOT export getServiceDb (BYPASSRLS).
+ * Invariants: No BYPASSRLS access through this barrel
  * Side-effects: none (re-exports only)
- * Notes: Provides access to Drizzle database instance
- * Links: Used by other adapters and services
+ * Notes: Service-role access requires direct import from drizzle.service-client.ts (depcruiser-gated).
+ * Links: docs/DATABASE_RLS_SPEC.md
  * @public
  */
 
-export { type Database, getDb, getServiceDb } from "./drizzle.client";
+export { type Database, getDb } from "./drizzle.client";
 export { setTenantContext, withTenantScope } from "./tenant-scope";

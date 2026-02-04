@@ -73,7 +73,7 @@ export {
   type LangfuseAdapterConfig,
   type LangfuseSpanHandle,
 } from "./ai-telemetry/langfuse.adapter";
-export { type Database, getDb, getServiceDb } from "./db/client";
+export { type Database, getDb } from "./db/client";
 export {
   type MimirAdapterConfig,
   MimirMetricsAdapter,
