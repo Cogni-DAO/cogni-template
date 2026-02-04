@@ -15,6 +15,7 @@
 import { vi } from "vitest";
 
 import type { AccountService } from "@/ports";
+import { TEST_USER_ID_1 } from "../ids";
 
 /**
  * Creates a mock AccountService with vi.fn() for all methods
@@ -56,7 +57,7 @@ export function createMockAccountServiceWithDefaults(
   return {
     getOrCreateBillingAccountForUser: vi.fn().mockResolvedValue({
       id: "billing-test-account-id",
-      ownerUserId: "test-user",
+      ownerUserId: TEST_USER_ID_1,
       balanceCredits,
       defaultVirtualKeyId: "virtual-key-1",
     }),

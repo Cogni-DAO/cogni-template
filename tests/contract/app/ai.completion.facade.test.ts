@@ -18,6 +18,7 @@ import {
   createMockAccountServiceWithDefaults,
   FakeAiTelemetryAdapter,
   FakeClock,
+  TEST_SESSION_USER_1,
 } from "@tests/_fakes";
 import { TEST_MODEL_ID } from "@tests/_fakes/ai/fakes";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,7 +30,6 @@ import type {
   GraphRunRequest,
   GraphRunResult,
 } from "@/ports";
-import type { SessionUser } from "@/shared/auth";
 import type { RequestContext } from "@/shared/observability";
 import { makeNoopLogger } from "@/shared/observability";
 import type { AiEvent } from "@/types/ai-events";
@@ -98,10 +98,7 @@ function createFakeGraphExecutor(options: {
 }
 
 describe("app/_facades/ai/completion.server", () => {
-  const sessionUser: SessionUser = {
-    id: "test-user",
-    walletAddress: "0xabc123",
-  };
+  const sessionUser = TEST_SESSION_USER_1;
 
   beforeEach(() => {
     vi.resetAllMocks();

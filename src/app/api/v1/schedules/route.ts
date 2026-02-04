@@ -122,10 +122,12 @@ export const POST = wrapRouteHandlerWithLogging(
       const container = getContainer();
 
       // Get billing account for user
-      const account =
-        await container.accountService.getOrCreateBillingAccountForUser({
-          userId: sessionUser.id,
-        });
+      const accountService = container.accountsForUser(
+        toUserId(sessionUser.id)
+      );
+      const account = await accountService.getOrCreateBillingAccountForUser({
+        userId: sessionUser.id,
+      });
 
       // Create schedule
       const schedule = await container.scheduleManager.createSchedule(

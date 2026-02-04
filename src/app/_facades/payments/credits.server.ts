@@ -12,6 +12,7 @@
  * @public
  */
 
+import { toUserId } from "@cogni/ids";
 import { getContainer } from "@/bootstrap/container";
 import type { CreditsConfirmOutput } from "@/contracts/payments.credits.confirm.v1.contract";
 import type { CreditsSummaryOutput } from "@/contracts/payments.credits.summary.v1.contract";
@@ -35,7 +36,9 @@ export async function confirmCreditsPaymentFacade(
   ctx: RequestContext
 ): Promise<CreditsConfirmOutput> {
   const start = performance.now();
-  const { accountService } = getContainer();
+  const accountService = getContainer().accountsForUser(
+    toUserId(params.sessionUser.id)
+  );
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>
@@ -99,7 +102,9 @@ export async function getCreditsSummaryFacade(
   },
   _ctx: RequestContext
 ): Promise<CreditsSummaryOutput> {
-  const { accountService } = getContainer();
+  const accountService = getContainer().accountsForUser(
+    toUserId(params.sessionUser.id)
+  );
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>

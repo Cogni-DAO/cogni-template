@@ -22,5 +22,25 @@ export * from "./ai/fakes";
 export { FakeClock } from "./fake-clock";
 export { FakeRng } from "./fake-rng";
 export { FakeTelemetry } from "./fake-telemetry";
+export {
+  newTestSessionUser,
+  newTestUserId,
+  TEST_SESSION_USER_1,
+  TEST_SESSION_USER_2,
+  TEST_SESSION_USER_3,
+  TEST_SESSION_USER_4,
+  TEST_SESSION_USER_5,
+  TEST_USER_ID_1,
+  TEST_USER_ID_2,
+  TEST_USER_ID_3,
+  TEST_USER_ID_4,
+  TEST_USER_ID_5,
+  TEST_WALLET_1,
+  TEST_WALLET_2,
+  TEST_WALLET_3,
+  TEST_WALLET_4,
+  TEST_WALLET_5,
+  testUser,
+} from "./ids";
 export * from "./payments/fakes";
 export { makeTestCtx, type TestCtxOptions } from "./test-context";

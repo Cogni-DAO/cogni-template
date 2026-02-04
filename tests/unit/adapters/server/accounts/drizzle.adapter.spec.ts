@@ -12,8 +12,9 @@
  * Links: `src/adapters/server/accounts/drizzle.adapter.ts`, docs/ACTIVITY_METRICS.md, types/billing.ts
  */
 
+import type { UserId } from "@cogni/ids";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { DrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
+import { UserDrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
 
 // Mock the db module
 const mockTx = {
@@ -28,6 +29,7 @@ const mockTx = {
       findFirst: vi.fn(),
     },
   },
+  execute: vi.fn(),
   insert: vi.fn().mockReturnThis(),
   values: vi.fn().mockReturnThis(),
   onConflictDoNothing: vi.fn().mockReturnThis(),
@@ -55,8 +57,10 @@ vi.mock("@/adapters/server/db", () => ({
   db: mockDb,
 }));
 
-describe("DrizzleAccountService", () => {
-  let service: DrizzleAccountService;
+const TEST_USER_ID = "00000000-0000-4000-a000-000000000001" as UserId;
+
+describe("UserDrizzleAccountService", () => {
+  let service: UserDrizzleAccountService;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -67,26 +71,29 @@ describe("DrizzleAccountService", () => {
     mockTx.query.chargeReceipts.findFirst.mockReset();
     mockTx.returning.mockReset();
     mockTx.onConflictDoNothing.mockReset().mockReturnThis();
-    service = new DrizzleAccountService(mockDb);
+    service = new UserDrizzleAccountService(mockDb, TEST_USER_ID);
   });
 
   describe("getBillingAccountById", () => {
     it("returns billing account with default virtual key when both exist", async () => {
-      // Mock finding account
-      mockDb.query.billingAccounts.findFirst.mockResolvedValue({
+      // Mock finding account (now inside withTenantScope transaction)
+      mockTx.query.billingAccounts.findFirst.mockResolvedValue({
         id: "acc-123",
         ownerUserId: "user-456",
         balanceCredits: 100000n,
       });
 
       // Mock finding default virtual key
-      mockDb.query.virtualKeys.findFirst.mockResolvedValue({
+      mockTx.query.virtualKeys.findFirst.mockResolvedValue({
         id: "vk-789",
         billingAccountId: "acc-123",
         isDefault: true,
       });
 
       const result = await service.getBillingAccountById("acc-123");
+
+      // withTenantScope must execute SET LOCAL preamble before any queries
+      expect(mockTx.execute).toHaveBeenCalledTimes(1);
 
       expect(result).toEqual({
         id: "acc-123",
@@ -97,25 +104,25 @@ describe("DrizzleAccountService", () => {
     });
 
     it("returns null when billing account not found", async () => {
-      mockDb.query.billingAccounts.findFirst.mockResolvedValue(null);
+      mockTx.query.billingAccounts.findFirst.mockResolvedValue(null);
 
       const result = await service.getBillingAccountById("nonexistent");
 
       expect(result).toBeNull();
       // Should not attempt to fetch virtual key
-      expect(mockDb.query.virtualKeys.findFirst).not.toHaveBeenCalled();
+      expect(mockTx.query.virtualKeys.findFirst).not.toHaveBeenCalled();
     });
 
     it("returns null when billing account exists but has no default virtual key", async () => {
       // Mock finding account
-      mockDb.query.billingAccounts.findFirst.mockResolvedValue({
+      mockTx.query.billingAccounts.findFirst.mockResolvedValue({
         id: "acc-123",
         ownerUserId: "user-456",
         balanceCredits: 100000n,
       });
 
       // Mock no default virtual key found
-      mockDb.query.virtualKeys.findFirst.mockResolvedValue(null);
+      mockTx.query.virtualKeys.findFirst.mockResolvedValue(null);
 
       const result = await service.getBillingAccountById("acc-123");
 

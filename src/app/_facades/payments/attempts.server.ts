@@ -12,8 +12,8 @@
  * @public
  */
 
+import { toUserId } from "@cogni/ids";
 import { getAddress } from "viem";
-
 import { getContainer } from "@/bootstrap/container";
 import type { PaymentIntentOutput } from "@/contracts/payments.intent.v1.contract";
 import type { PaymentStatusOutput } from "@/contracts/payments.status.v1.contract";
@@ -50,7 +50,11 @@ export async function createPaymentIntentFacade(
   ctx: RequestContext
 ): Promise<PaymentIntentOutput> {
   const start = performance.now();
-  const { accountService, paymentAttemptRepository, clock } = getContainer();
+  const container = getContainer();
+  const accountService = container.accountsForUser(
+    toUserId(params.sessionUser.id)
+  );
+  const { paymentAttemptRepository, clock } = container;
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>
@@ -133,8 +137,11 @@ export async function submitPaymentTxHashFacade(
   ctx: RequestContext
 ): Promise<PaymentSubmitOutput> {
   const start = performance.now();
-  const { accountService, paymentAttemptRepository, onChainVerifier, clock } =
-    getContainer();
+  const container = getContainer();
+  const accountService = container.accountsForUser(
+    toUserId(params.sessionUser.id)
+  );
+  const { paymentAttemptRepository, onChainVerifier, clock } = container;
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>
@@ -222,8 +229,11 @@ export async function getPaymentStatusFacade(
   ctx: RequestContext
 ): Promise<PaymentStatusOutput> {
   const start = performance.now();
-  const { accountService, paymentAttemptRepository, onChainVerifier, clock } =
-    getContainer();
+  const container = getContainer();
+  const accountService = container.accountsForUser(
+    toUserId(params.sessionUser.id)
+  );
+  const { paymentAttemptRepository, onChainVerifier, clock } = container;
 
   let billingAccount: Awaited<
     ReturnType<typeof getOrCreateBillingAccountForUser>

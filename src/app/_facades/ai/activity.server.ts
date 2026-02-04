@@ -18,8 +18,8 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { toUserId } from "@cogni/ids";
 import type { z } from "zod";
-
 import { resolveActivityDeps } from "@/bootstrap/container";
 import {
   type aiActivityOperation,
@@ -79,7 +79,9 @@ export async function getActivity(
 ): Promise<ActivityOutput> {
   const startTime = performance.now();
   const effectiveReqId = input.reqId ?? randomUUID();
-  const { usageService, accountService } = resolveActivityDeps();
+  const { usageService, accountService } = resolveActivityDeps(
+    toUserId(input.sessionUser.id)
+  );
 
   const billingAccount = await getOrCreateBillingAccountForUser(
     accountService,

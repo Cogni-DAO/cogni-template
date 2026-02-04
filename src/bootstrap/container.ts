@@ -18,10 +18,10 @@ import type {
   RepoCapability,
   WebSearchCapability,
 } from "@cogni/ai-tools";
+import type { UserId } from "@cogni/ids";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { Logger } from "pino";
 import {
-  DrizzleAccountService,
   DrizzleAiTelemetryAdapter,
   DrizzleExecutionGrantUserAdapter,
   DrizzleExecutionGrantWorkerAdapter,
@@ -39,9 +39,11 @@ import {
   MimirMetricsAdapter,
   SystemClock,
   TemporalScheduleControlAdapter,
+  UserDrizzleAccountService,
   ViemEvmOnchainClient,
   ViemTreasuryAdapter,
 } from "@/adapters/server";
+import { ServiceDrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import {
   FakeLlmAdapter,
@@ -72,6 +74,7 @@ import type {
   PaymentAttemptRepository,
   ScheduleRunRepository,
   ScheduleUserPort,
+  ServiceAccountService,
   TreasuryReadPort,
   UsageLogEntry,
   UsageLogsByRangeParams,
@@ -96,7 +99,8 @@ export interface Container {
   log: Logger;
   config: ContainerConfig;
   llmService: LlmService;
-  accountService: AccountService;
+  accountsForUser(userId: UserId): AccountService;
+  serviceAccountService: ServiceAccountService;
   usageService: UsageService;
   clock: Clock;
   paymentAttemptRepository: PaymentAttemptRepository;
@@ -126,11 +130,14 @@ export interface Container {
 }
 
 // Feature-specific dependency types
-// AI adapter deps: used internally by createInProcGraphExecutor
-export type AiAdapterDeps = Pick<
-  Container,
-  "llmService" | "accountService" | "clock" | "aiTelemetry" | "langfuse"
->;
+// AI adapter deps: used internally by createGraphExecutor
+export type AiAdapterDeps = {
+  llmService: LlmService;
+  accountService: AccountService;
+  clock: Clock;
+  aiTelemetry: AiTelemetryPort;
+  langfuse: LangfusePort | undefined;
+};
 
 /**
  * Activity dashboard dependencies.
@@ -237,7 +244,9 @@ function createContainer(): Container {
 
   // Always use real database adapters
   // Testing strategy: unit tests mock the port, integration tests use real DB
-  const accountService = new DrizzleAccountService(db);
+  const serviceAccountService = new ServiceDrizzleAccountService(
+    getServiceDb()
+  );
   const paymentAttemptRepository = new DrizzlePaymentAttemptRepository(db);
 
   // UsageService: P1 - LiteLLM is canonical usage log source for Activity (no fallback)
@@ -348,7 +357,9 @@ function createContainer(): Container {
     log,
     config,
     llmService,
-    accountService,
+    accountsForUser: (userId: UserId) =>
+      new UserDrizzleAccountService(db, userId),
+    serviceAccountService,
     usageService,
     clock,
     paymentAttemptRepository,
@@ -375,22 +386,22 @@ function createContainer(): Container {
  * Resolves dependencies for AI adapter construction.
  * Used by graph-executor.factory.ts.
  */
-export function resolveAiAdapterDeps(): AiAdapterDeps {
+export function resolveAiAdapterDeps(userId: UserId): AiAdapterDeps {
   const container = getContainer();
   return {
     llmService: container.llmService,
-    accountService: container.accountService,
+    accountService: container.accountsForUser(userId),
     clock: container.clock,
     aiTelemetry: container.aiTelemetry,
     langfuse: container.langfuse,
   };
 }
 
-export function resolveActivityDeps(): ActivityDeps {
+export function resolveActivityDeps(userId: UserId): ActivityDeps {
   const container = getContainer();
   return {
     usageService: container.usageService as ActivityDeps["usageService"],
-    accountService: container.accountService,
+    accountService: container.accountsForUser(userId),
   };
 }
 
@@ -405,7 +416,6 @@ export type SchedulingDeps = Pick<
   | "executionGrantWorkerPort"
   | "scheduleRunRepository"
   | "scheduleManager"
-  | "accountService"
 >;
 
 export function resolveSchedulingDeps(): SchedulingDeps {
@@ -416,6 +426,5 @@ export function resolveSchedulingDeps(): SchedulingDeps {
     executionGrantWorkerPort: container.executionGrantWorkerPort,
     scheduleRunRepository: container.scheduleRunRepository,
     scheduleManager: container.scheduleManager,
-    accountService: container.accountService,
   };
 }

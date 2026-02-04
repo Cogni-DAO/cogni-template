@@ -11,11 +11,11 @@
  * @internal
  */
 
+import { TEST_SESSION_USER_1 } from "@tests/_fakes";
 import { describe, expect, it, vi } from "vitest";
 
 import { getActivity } from "@/app/_facades/ai/activity.server";
 import { aiActivityOperation } from "@/contracts/ai.activity.v1.contract";
-import type { SessionUser } from "@/shared/auth";
 
 // Mock dependencies
 vi.mock("@/bootstrap/container", () => ({
@@ -98,16 +98,11 @@ vi.mock("@/lib/auth/mapping", () => ({
 
 describe("Activity Facade", () => {
   it("should return valid contract data", async () => {
-    const sessionUser: SessionUser = {
-      id: "user-1",
-      walletAddress: "0x123",
-    };
-
     const input = {
       from: "2024-01-01T00:00:00Z",
       to: "2024-01-02T00:00:00Z",
       limit: 10,
-      sessionUser,
+      sessionUser: TEST_SESSION_USER_1,
     };
 
     const result = await getActivity(input);

@@ -67,6 +67,7 @@ export {
   isBillingAccountNotFoundPortError,
   isInsufficientCreditsPortError,
   isVirtualKeyNotFoundPortError,
+  type ServiceAccountService,
   VirtualKeyNotFoundPortError,
 } from "./accounts.port";
 export type { AgentCatalogPort, AgentDescriptor } from "./agent-catalog.port";

@@ -18,9 +18,8 @@
  */
 
 import { createHash } from "node:crypto";
-
+import { toUserId } from "@cogni/ids";
 import type { z } from "zod";
-
 import { resolveAiAdapterDeps } from "@/bootstrap/container";
 import { createGraphExecutor } from "@/bootstrap/graph-executor.factory";
 import type { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
@@ -88,7 +87,8 @@ export async function completion(
   input: CompletionInput,
   ctx: RequestContext
 ): Promise<CompletionOutput> {
-  const { clock } = resolveAiAdapterDeps();
+  const userId = toUserId(input.sessionUser.id);
+  const { clock } = resolveAiAdapterDeps(userId);
 
   // Delegate to streaming path (UNIFIED_GRAPH_EXECUTOR)
   const { stream, final } = await completionStream(input, ctx);
@@ -153,14 +153,17 @@ export async function completionStream(
   stream: AsyncIterable<AiEvent>;
   final: Promise<StreamFinalResult>;
 }> {
+  // Parse once at edge — single branded UserId for all downstream calls
+  const userId = toUserId(input.sessionUser.id);
+
   // Per UNIFIED_GRAPH_EXECUTOR: use bootstrap factory (app → bootstrap → adapters)
   // Facade CANNOT import adapters - architecture boundary enforced by depcruise
   // Per PROVIDER_AGGREGATION: AggregatingGraphExecutor routes by graphId to providers
-  const { accountService, clock } = resolveAiAdapterDeps();
+  const { accountService, clock } = resolveAiAdapterDeps(userId);
 
   // Create graph executor via bootstrap factory
   // Routing is handled by AggregatingGraphExecutor - facade is graph-agnostic
-  const graphExecutor = createGraphExecutor(executeStream);
+  const graphExecutor = createGraphExecutor(executeStream, userId);
 
   const billingAccount = await getOrCreateBillingAccountForUser(
     accountService,

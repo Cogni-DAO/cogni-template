@@ -14,10 +14,14 @@
  * @internal
  */
 
+import {
+  TEST_SESSION_USER_1,
+  TEST_SESSION_USER_2,
+  TEST_SESSION_USER_3,
+} from "@tests/_fakes";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CREDITS_PER_USD } from "@/core/billing/pricing";
-import type { SessionUser } from "@/shared/auth";
 
 // Mock the dependencies before importing getActivity
 const mockListUsageLogsByRange = vi.fn();
@@ -82,16 +86,11 @@ describe("Activity Facade - Billing Display Regression Tests", () => {
     });
     mockListChargeReceipts.mockResolvedValue([mockReceipt]);
 
-    const sessionUser: SessionUser = {
-      id: "user-test-123",
-      walletAddress: "0xTEST",
-    };
-
     const input = {
       from: "2024-01-01T00:00:00Z",
       to: "2024-01-02T00:00:00Z",
       limit: 10,
-      sessionUser,
+      sessionUser: TEST_SESSION_USER_1,
     };
 
     const result = await getActivity(input);
@@ -147,16 +146,11 @@ describe("Activity Facade - Billing Display Regression Tests", () => {
     });
     mockListChargeReceipts.mockResolvedValue([mockReceipt]);
 
-    const sessionUser: SessionUser = {
-      id: "user-test-no-cost",
-      walletAddress: "0xTEST2",
-    };
-
     const input = {
       from: "2024-01-01T00:00:00Z",
       to: "2024-01-02T00:00:00Z",
       limit: 10,
-      sessionUser,
+      sessionUser: TEST_SESSION_USER_2,
     };
 
     const result = await getActivity(input);
@@ -226,16 +220,11 @@ describe("Activity Facade - Billing Display Regression Tests", () => {
     });
     mockListChargeReceipts.mockResolvedValue(receipts);
 
-    const sessionUser: SessionUser = {
-      id: "user-aggregate-test",
-      walletAddress: "0xTEST3",
-    };
-
     const input = {
       from: "2024-01-01T00:00:00Z",
       to: "2024-01-02T00:00:00Z",
       limit: 10,
-      sessionUser,
+      sessionUser: TEST_SESSION_USER_3,
     };
 
     const result = await getActivity(input);

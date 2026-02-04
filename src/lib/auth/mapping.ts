@@ -14,7 +14,7 @@
 import type { AccountService, BillingAccount } from "@/ports";
 
 export async function getOrCreateBillingAccountForUser(
-  accountService: AccountService,
+  accountService: Pick<AccountService, "getOrCreateBillingAccountForUser">,
   params: { userId: string; walletAddress?: string; displayName?: string }
 ): Promise<BillingAccount> {
   return accountService.getOrCreateBillingAccountForUser(params);

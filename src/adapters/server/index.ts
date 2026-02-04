@@ -24,7 +24,7 @@ export {
   type LoggerLike,
 } from "@cogni/db-client";
 export type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
-export { DrizzleAccountService } from "./accounts/drizzle.adapter";
+export { UserDrizzleAccountService } from "./accounts/drizzle.adapter";
 export { DrizzleUsageAdapter } from "./accounts/drizzle.usage.adapter";
 export type { AgentCatalogProvider } from "./ai/agent-catalog.provider";
 // Agent discovery infrastructure

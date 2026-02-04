@@ -150,6 +150,22 @@ export type ChargeReceiptParams = {
   sourceReference: string;
 };
 
+/**
+ * Strict subset of AccountService for service-role (BYPASSRLS) callers.
+ * Only exposes methods needed by auth mapping and internal routes.
+ */
+export interface ServiceAccountService {
+  getBillingAccountById(
+    billingAccountId: string
+  ): Promise<BillingAccount | null>;
+
+  getOrCreateBillingAccountForUser(params: {
+    userId: string;
+    walletAddress?: string;
+    displayName?: string;
+  }): Promise<BillingAccount>;
+}
+
 export interface AccountService {
   /**
    * Read-only lookup of billing account by ID.

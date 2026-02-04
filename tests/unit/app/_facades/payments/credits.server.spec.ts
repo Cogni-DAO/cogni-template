@@ -12,7 +12,11 @@
  * @public
  */
 
-import { createMockAccountService, makeTestCtx } from "@tests/_fakes";
+import {
+  createMockAccountService,
+  makeTestCtx,
+  TEST_SESSION_USER_1,
+} from "@tests/_fakes";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { confirmCreditsPaymentFacade } from "@/app/_facades/payments/credits.server";
@@ -21,7 +25,6 @@ import { AuthUserNotFoundError } from "@/features/payments/errors";
 import { confirmCreditsPayment } from "@/features/payments/services/creditsConfirm";
 import { getOrCreateBillingAccountForUser } from "@/lib/auth/mapping";
 import type { AccountService } from "@/ports";
-import type { SessionUser } from "@/shared/auth";
 import type { RequestContext } from "@/shared/observability";
 
 vi.mock("@/bootstrap/container", () => ({
@@ -43,10 +46,7 @@ const mockGetOrCreateBillingAccountForUser = vi.mocked(
 );
 
 describe("app/_facades/payments/credits.server", () => {
-  const sessionUser: SessionUser = {
-    id: "user-123",
-    walletAddress: "0xabc",
-  };
+  const sessionUser = TEST_SESSION_USER_1;
 
   let accountService: AccountService;
   let testCtx: RequestContext;
@@ -58,8 +58,8 @@ describe("app/_facades/payments/credits.server", () => {
     testCtx = makeTestCtx();
 
     mockGetContainer.mockReturnValue({
-      accountService,
-      // Unused in this facade, but required by Container type
+      accountsForUser: () => accountService,
+      serviceAccountService: {} as never,
       log: {} as never,
       config: {
         unhandledErrorPolicy: "rethrow",

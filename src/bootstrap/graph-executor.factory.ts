@@ -15,8 +15,8 @@
  * @public
  */
 
+import type { UserId } from "@cogni/ids";
 import { LANGGRAPH_CATALOG } from "@cogni/langgraph-graphs";
-
 import {
   AggregatingGraphExecutor,
   type CompletionStreamFn,
@@ -26,11 +26,13 @@ import {
   LangGraphInProcProvider,
   ObservabilityGraphExecutorDecorator,
 } from "@/adapters/server";
-
 import type { GraphExecutorPort } from "@/ports";
 import { serverEnv } from "@/shared/env";
-
-import { getContainer, resolveAiAdapterDeps } from "./container";
+import {
+  type AiAdapterDeps,
+  getContainer,
+  resolveAiAdapterDeps,
+} from "./container";
 
 /**
  * Factory for creating AggregatingGraphExecutor with all configured providers.
@@ -46,9 +48,10 @@ import { getContainer, resolveAiAdapterDeps } from "./container";
  * @returns GraphExecutorPort implementation (AggregatingGraphExecutor)
  */
 export function createGraphExecutor(
-  completionStreamFn: CompletionStreamFn
+  completionStreamFn: CompletionStreamFn,
+  userId: UserId
 ): GraphExecutorPort {
-  const deps = resolveAiAdapterDeps();
+  const deps = resolveAiAdapterDeps(userId);
   const container = getContainer();
 
   // Per MUTUAL_EXCLUSION: choose provider based on LANGGRAPH_DEV_URL env
@@ -77,7 +80,7 @@ export function createGraphExecutor(
  * Per CAPABILITY_INJECTION: toolSource contains real implementations with I/O.
  */
 function createInProcProvider(
-  deps: ReturnType<typeof resolveAiAdapterDeps>,
+  deps: AiAdapterDeps,
   completionStreamFn: CompletionStreamFn
 ): LangGraphInProcProvider {
   const container = getContainer();
@@ -96,14 +99,4 @@ function createDevProvider(apiUrl: string): LangGraphDevProvider {
   const client = createLangGraphDevClient({ apiUrl });
   const availableGraphs = Object.keys(LANGGRAPH_CATALOG);
   return new LangGraphDevProvider(client, { availableGraphs });
-}
-
-/**
- * @deprecated Use createGraphExecutor instead.
- * Kept for backwards compatibility during migration.
- */
-export function createInProcGraphExecutor(
-  completionStreamFn: CompletionStreamFn
-): GraphExecutorPort {
-  return createGraphExecutor(completionStreamFn);
 }

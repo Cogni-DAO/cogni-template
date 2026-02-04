@@ -12,7 +12,7 @@
  * @public
  */
 
-import { TEST_MODEL_ID } from "@tests/_fakes";
+import { TEST_MODEL_ID, TEST_SESSION_USER_1 } from "@tests/_fakes";
 import {
   createContainerMock,
   createGraphExecutorFactoryMock,
@@ -70,7 +70,7 @@ describe("completion facade contract", () => {
       {
         messages: [{ role: "user", content: "test" }],
         model: TEST_MODEL_ID,
-        sessionUser: { id: "test-user", walletAddress: "0x123" },
+        sessionUser: TEST_SESSION_USER_1,
       },
       testCtx
     );
@@ -119,7 +119,7 @@ describe("completion facade contract", () => {
       {
         messages: [{ role: "user", content: "test" }],
         model: TEST_MODEL_ID,
-        sessionUser: { id: "test-user", walletAddress: "0x123" },
+        sessionUser: TEST_SESSION_USER_1,
       },
       testCtx
     );

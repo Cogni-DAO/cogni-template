@@ -39,9 +39,9 @@
 - [x] Dual DB client in `packages/db-client`: `createAppDbClient(url)` (app_user, RLS enforced) and `createServiceDbClient(url)` (app_user_service, BYPASSRLS)
 - [x] Move `withTenantScope` / `setTenantContext` to `packages/db-client` (generic over `Database` type so both Next.js and worker services share scoping semantics)
 - [x] Import boundary: `createServiceDbClient` isolated in `@cogni/db-client/service` sub-path export. Adapter singleton `getServiceDb` isolated in `drizzle.service-client.ts` (outside barrel). Depcruiser `no-service-db-adapter-import` rule enforces only `auth.ts` may import it. Environmental enforcement (`APP_DB_SERVICE_PASSWORD` absent from web runtime) remains as defense-in-depth.
-- [ ] Wire `withTenantScope`/`setTenantContext` into all DB adapter methods that touch user-scoped tables (see Adapter Wiring Tracker below)
-- [ ] Ensure `userId` originates from session JWT (server-side), never from request body
-- [ ] SIWE auth callback (`src/auth.ts`) uses `serviceDb` for pre-auth wallet lookup
+- [ ] Wire `withTenantScope`/`setTenantContext` into all DB adapter methods that touch user-scoped tables (see Adapter Wiring Tracker below). Accounts: done (Commit 3). Payment attempts: pending (Commit 4).
+- [ ] Ensure `userId` originates from session JWT (server-side), never from request body. Accounts: done (facades use `toUserId(sessionUser.id)` at edge). Payment attempts: pending.
+- [x] SIWE auth callback (`src/auth.ts`) uses `serviceDb` for pre-auth wallet lookup
 
 #### SSL Enforcement
 
@@ -135,22 +135,36 @@
 
 ### Commit 3: Accounts
 
-| File                                                       | Change                                                      | Done |
-| ---------------------------------------------------------- | ----------------------------------------------------------- | ---- |
-| `src/ports/accounts.port.ts`                               | Add `callerUserId: UserId` to all methods                   | [ ]  |
-| `src/adapters/server/accounts/drizzle.adapter.ts`          | `withTenantScope` on all methods                            | [ ]  |
-| `src/features/ai/services/billing.ts`                      | Thread `userId` through `BillingContext`, `commitUsageFact` | [ ]  |
-| `src/adapters/server/ai/inproc-completion-unit.adapter.ts` | Set `fact.userId`                                           | [ ]  |
-| `src/app/_facades/ai/completion.server.ts`                 | Thread `sessionUser.id`                                     | [ ]  |
-| `src/app/_facades/ai/activity.server.ts`                   | Thread `sessionUser.id`                                     | [ ]  |
-| `src/app/_facades/payments/credits.server.ts`              | Thread `sessionUser.id`                                     | [ ]  |
-| `src/features/ai/services/preflight-credit-check.ts`       | Add `callerUserId` to params                                | [ ]  |
-| `src/features/payments/services/creditsConfirm.ts`         | Add `callerUserId` to input                                 | [ ]  |
-| `src/features/payments/services/creditsSummary.ts`         | Add `callerUserId` to input                                 | [ ]  |
-| `src/bootstrap/container.ts`                               | Add `serviceAccountService` (serviceDb instance)            | [ ]  |
-| `tests/_fakes/accounts/mock-account.service.ts`            | Update mock signatures                                      | [ ]  |
-| `tests/integration/db/rls-adapter-wiring.int.test.ts`      | Unskip `getOrCreateBillingAccountForUser` gate test         | [ ]  |
-| `docs/DATABASE_RLS_SPEC.md`                                | Mark account rows `[x]` Wired                               | [ ]  |
+> **Design change:** Original plan threaded `callerUserId` through features/billing. Actual implementation binds `UserId` once at construction via `accountsForUser(userId)` factory — downstream code receives a pre-scoped `AccountService` with no signature changes. Features/billing/payment services untouched.
+
+| File                                                          | Change                                                                                                                                                            | Done |
+| ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| `src/ports/accounts.port.ts`                                  | Add `ServiceAccountService` interface (2-method subset for BYPASSRLS callers)                                                                                     | [x]  |
+| `src/ports/index.ts`                                          | Re-export `ServiceAccountService`                                                                                                                                 | [x]  |
+| `src/adapters/server/accounts/drizzle.adapter.ts`             | Split → `UserDrizzleAccountService` (appDb, `withTenantScope`) + `ServiceDrizzleAccountService` (serviceDb, BYPASSRLS). Extract shared helpers to free functions. | [x]  |
+| `src/adapters/server/index.ts`                                | Barrel rename `DrizzleAccountService` → `UserDrizzleAccountService`                                                                                               | [x]  |
+| `src/bootstrap/container.ts`                                  | `accountsForUser(UserId)` factory + `serviceAccountService` singleton via `getServiceDb()`                                                                        | [x]  |
+| `src/bootstrap/graph-executor.factory.ts`                     | Add `userId: UserId` param, pass through to `resolveAiAdapterDeps`                                                                                                | [x]  |
+| `src/lib/auth/mapping.ts`                                     | Param type → `Pick<AccountService, 'getOrCreateBillingAccountForUser'>`                                                                                           | [x]  |
+| `src/app/_facades/ai/completion.server.ts`                    | `toUserId(sessionUser.id)` at edge → `resolveAiAdapterDeps(userId)` + `createGraphExecutor(…, userId)`                                                            | [x]  |
+| `src/app/_facades/ai/activity.server.ts`                      | `resolveActivityDeps(toUserId(sessionUser.id))`                                                                                                                   | [x]  |
+| `src/app/_facades/payments/credits.server.ts`                 | `accountsForUser(toUserId(sessionUser.id))`                                                                                                                       | [x]  |
+| `src/app/_facades/payments/attempts.server.ts`                | `accountsForUser(toUserId(sessionUser.id))` in all 3 functions                                                                                                    | [x]  |
+| `src/app/api/v1/schedules/route.ts`                           | `accountsForUser(toUserId(sessionUser.id))` for billing account lookup                                                                                            | [x]  |
+| `src/app/api/internal/graphs/[graphId]/runs/route.ts`         | `serviceAccountService` for billing lookup + `toUserId(grant.userId)` for executor                                                                                | [x]  |
+| `tests/_fakes/ids.ts`                                         | Branded UUID test fixtures (`TEST_USER_ID_1..5`, `TEST_SESSION_USER_1..5`)                                                                                        | [x]  |
+| `tests/_fakes/accounts/mock-account.service.ts`               | Use `TEST_USER_ID_1` for `ownerUserId`                                                                                                                            | [x]  |
+| `tests/unit/adapters/server/accounts/drizzle.adapter.spec.ts` | Update mocks for `UserDrizzleAccountService` constructor + `withTenantScope` tx pattern                                                                           | [x]  |
+| `tests/unit/app/_facades/ai/completion.server.spec.ts`        | Use `TEST_SESSION_USER_1` fixtures                                                                                                                                | [x]  |
+| `tests/unit/app/_facades/payments/credits.server.spec.ts`     | Use `TEST_SESSION_USER_1` + fix container mock (`accountsForUser` factory)                                                                                        | [x]  |
+| `tests/unit/app/activity.facade.billing-display.spec.ts`      | Use `TEST_SESSION_USER_1..3` fixtures                                                                                                                             | [x]  |
+| `tests/contract/app/ai.activity.facade.test.ts`               | Use `TEST_SESSION_USER_1` fixture                                                                                                                                 | [x]  |
+| `tests/contract/app/ai.completion.facade.test.ts`             | Use `TEST_SESSION_USER_1` fixture                                                                                                                                 | [x]  |
+| `tests/integration/db/rls-adapter-wiring.int.test.ts`         | Unskip `getOrCreateBillingAccountForUser` gate test                                                                                                               | [ ]  |
+| `docs/DATABASE_RLS_SPEC.md`                                   | Update tracker to reflect actual implementation                                                                                                                   | [x]  |
+
+**Files intentionally NOT changed** (no `callerUserId` threading needed with construction-time binding):
+`src/features/ai/services/billing.ts`, `src/adapters/server/ai/inproc-completion-unit.adapter.ts`, `src/features/ai/services/preflight-credit-check.ts`, `src/features/payments/services/creditsConfirm.ts`, `src/features/payments/services/creditsSummary.ts`
 
 ### Commit 4: Payment Attempts
 
@@ -344,19 +358,21 @@ Methods that touch user-scoped tables and need `withTenantScope` / `setTenantCon
 - **Via billingAccountId**: caller has it, `SET LOCAL` uses the owning userId
 - **None**: method has only a resource ID; caller must supply userId or use service-role bypass
 
-### `DrizzleAccountService` (`src/adapters/server/accounts/drizzle.adapter.ts`)
+### `UserDrizzleAccountService` (`src/adapters/server/accounts/drizzle.adapter.ts`)
 
-| Method                                                   | Tables                                                 | Txn? | userId source        | Wired? |
-| -------------------------------------------------------- | ------------------------------------------------------ | ---- | -------------------- | ------ |
-| `getOrCreateBillingAccountForUser({ userId })`           | `billing_accounts`, `virtual_keys`                     | Yes  | Direct               | [ ]    |
-| `getBillingAccountById(billingAccountId)`                | `billing_accounts`, `virtual_keys`                     | No   | Via billingAccountId | [ ]    |
-| `getBalance(billingAccountId)`                           | `billing_accounts`                                     | No   | Via billingAccountId | [ ]    |
-| `debitForUsage({ billingAccountId, … })`                 | `billing_accounts`, `credit_ledger`                    | Yes  | Via billingAccountId | [ ]    |
-| `recordChargeReceipt(params)`                            | `charge_receipts`, `billing_accounts`, `credit_ledger` | Yes  | Via billingAccountId | [ ]    |
-| `creditAccount({ billingAccountId, … })`                 | `billing_accounts`, `credit_ledger`                    | Yes  | Via billingAccountId | [ ]    |
-| `listCreditLedgerEntries({ billingAccountId })`          | `credit_ledger`                                        | No   | Via billingAccountId | [ ]    |
-| `findCreditLedgerEntryByReference({ billingAccountId })` | `credit_ledger`                                        | No   | Via billingAccountId | [ ]    |
-| `listChargeReceipts({ billingAccountId, … })`            | `charge_receipts`                                      | No   | Via billingAccountId | [ ]    |
+> Renamed from `DrizzleAccountService`. UserId bound at construction; `actorId = userActor(userId)` derived once. Every method wraps in `withTenantScope(this.db, this.actorId, tx => …)`. `ServiceDrizzleAccountService` (serviceDb, BYPASSRLS) exposes only `getBillingAccountById` and `getOrCreateBillingAccountForUser`.
+
+| Method                                                   | Tables                                                 | Txn? | userId source                     | Wired? |
+| -------------------------------------------------------- | ------------------------------------------------------ | ---- | --------------------------------- | ------ |
+| `getOrCreateBillingAccountForUser({ userId })`           | `billing_accounts`, `virtual_keys`                     | Yes  | Constructor (`userActor(userId)`) | [x]    |
+| `getBillingAccountById(billingAccountId)`                | `billing_accounts`, `virtual_keys`                     | Yes  | Constructor (`userActor(userId)`) | [x]    |
+| `getBalance(billingAccountId)`                           | `billing_accounts`                                     | Yes  | Constructor (`userActor(userId)`) | [x]    |
+| `debitForUsage({ billingAccountId, … })`                 | `billing_accounts`, `credit_ledger`                    | Yes  | Constructor (`userActor(userId)`) | [x]    |
+| `recordChargeReceipt(params)`                            | `charge_receipts`, `billing_accounts`, `credit_ledger` | Yes  | Constructor (`userActor(userId)`) | [x]    |
+| `creditAccount({ billingAccountId, … })`                 | `billing_accounts`, `credit_ledger`                    | Yes  | Constructor (`userActor(userId)`) | [x]    |
+| `listCreditLedgerEntries({ billingAccountId })`          | `credit_ledger`                                        | Yes  | Constructor (`userActor(userId)`) | [x]    |
+| `findCreditLedgerEntryByReference({ billingAccountId })` | `credit_ledger`                                        | Yes  | Constructor (`userActor(userId)`) | [x]    |
+| `listChargeReceipts({ billingAccountId, … })`            | `charge_receipts`                                      | Yes  | Constructor (`userActor(userId)`) | [x]    |
 
 ### `DrizzleUsageAdapter` (`src/adapters/server/accounts/drizzle.usage.adapter.ts`) — deprecated
 
@@ -421,9 +437,9 @@ Methods that touch user-scoped tables and need `withTenantScope` / `setTenantCon
 
 ### Special: SIWE Auth Callback (`src/auth.ts`)
 
-| Method                        | Tables  | Txn? | userId source                            | Wired? |
-| ----------------------------- | ------- | ---- | ---------------------------------------- | ------ |
-| `authorize(credentials, req)` | `users` | No   | None (pre-auth — must use `app_service`) | [ ]    |
+| Method                        | Tables  | Txn? | userId source                           | Wired? |
+| ----------------------------- | ------- | ---- | --------------------------------------- | ------ |
+| `authorize(credentials, req)` | `users` | No   | None (pre-auth — uses `getServiceDb()`) | [x]    |
 
 ---
 
@@ -437,5 +453,5 @@ Methods that touch user-scoped tables and need `withTenantScope` / `setTenantCon
 
 ---
 
-**Last Updated**: 2026-02-04
-**Status**: P0 Implemented (dual DB client done; adapter wiring gate test added — failing; wiring pending)
+**Last Updated**: 2026-02-05
+**Status**: P0 In Progress — Commits 1–3 done (dual DB client, schedules/grants, accounts wired). Commit 4 pending (payment attempts).
