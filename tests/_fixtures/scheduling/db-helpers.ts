@@ -19,10 +19,10 @@ import { getDb } from "@/adapters/server/db/client";
 import { executionRequests, scheduleRuns } from "@/shared/db/schema";
 
 /** Default poll interval for waiting */
-const POLL_INTERVAL_MS = 500;
+const POLL_INTERVAL_MS = 100;
 
 /** Default timeout for waiting operations */
-const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_TIMEOUT_MS = 10_000;
 
 /**
  * Polls for a schedule_runs row to appear for the given scheduleId.
