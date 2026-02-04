@@ -10,18 +10,14 @@
  * - Tests PASS once each adapter is wired — that's the gate
  * - Adapters must scope themselves; the caller does NOT wrap in withTenantScope
  * Side-effects: IO (database operations via testcontainers)
- * Notes: Uses a dedicated LOGIN role (not superuser) so RLS is enforced. Superuser
- *        bypasses RLS even with FORCE, so adapter tests require a real non-superuser connection.
+ * Notes: Uses production app_user role (FORCE RLS via provision.sh) for rlsDb.
+ *        getSeedDb() (app_user_service, BYPASSRLS) handles seed/cleanup.
  * Links: docs/DATABASE_RLS_SPEC.md (Adapter Wiring Tracker), rls-tenant-isolation.int.test.ts
  * @public
  */
 
 import { randomUUID } from "node:crypto";
-import {
-  createAppDbClient,
-  type Database,
-  DrizzleScheduleUserAdapter,
-} from "@cogni/db-client";
+import { type Database, DrizzleScheduleUserAdapter } from "@cogni/db-client";
 import {
   billingAccounts,
   executionGrants,
@@ -30,14 +26,11 @@ import {
   virtualKeys,
 } from "@cogni/db-schema";
 import { generateTestWallet } from "@tests/_fixtures/auth/db-helpers";
-import { eq, sql } from "drizzle-orm";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { DrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
 import { getDb } from "@/adapters/server/db/client";
-
-// Dedicated LOGIN role — not the superuser, so RLS is enforced
-const RLS_ROLE = "app_user_rls_test";
-const RLS_PASSWORD = "rls_test_password";
 
 interface TestTenant {
   userId: string;
@@ -52,34 +45,10 @@ describe("RLS Adapter Wiring Gate", () => {
   let tenantA: TestTenant;
 
   beforeAll(async () => {
-    superDb = getDb();
-
-    // Create LOGIN role for RLS-enforced connection (idempotent)
-    await superDb.execute(
-      sql.raw(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${RLS_ROLE}') THEN
-          CREATE ROLE "${RLS_ROLE}" LOGIN PASSWORD '${RLS_PASSWORD}';
-        END IF;
-      END
-      $$;
-    `)
-    );
-    await superDb.execute(
-      sql.raw(
-        `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${RLS_ROLE}"`
-      )
-    );
-
-    // Build connection as RLS-enforced role
-    const databaseUrl = process.env.DATABASE_URL;
-    if (!databaseUrl) throw new Error("DATABASE_URL not set by testcontainers");
-    const superUrl = new URL(databaseUrl);
-    const rlsUrl = new URL(superUrl.toString());
-    rlsUrl.username = RLS_ROLE;
-    rlsUrl.password = RLS_PASSWORD;
-    rlsDb = createAppDbClient(rlsUrl.toString());
+    // superDb uses service role (BYPASSRLS) for seed/cleanup
+    superDb = getSeedDb();
+    // rlsDb uses app_user role (FORCE RLS) — production roles from provision.sh
+    rlsDb = getDb();
 
     // Seed tenant data as superuser (bypasses RLS)
     tenantA = {

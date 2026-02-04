@@ -9,15 +9,15 @@
  * - User A cannot SELECT user B's billing_accounts, virtual_keys, or users row
  * - Missing SET LOCAL (no tenant context) returns zero rows
  * Side-effects: IO (database operations via testcontainers)
- * Notes: Tests connect as postgres superuser (testcontainers default). We use
- *        `SET LOCAL ROLE app_user` inside transactions to simulate the non-superuser
- *        app connection, since superusers bypass RLS even with FORCE.
- *        The app_user role is created in beforeAll (testcontainers has no provision.sh).
+ * Notes: getDb() connects as app_user (FORCE RLS via provision.sh). getSeedDb()
+ *        connects as app_user_service (BYPASSRLS) for seed/cleanup.
  * Links: docs/DATABASE_RLS_SPEC.md, src/adapters/server/db/tenant-scope.ts
  * @public
  */
 
 import { randomUUID } from "node:crypto";
+import { toUserId, userActor } from "@cogni/ids";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Database } from "@/adapters/server/db/client";
@@ -25,14 +25,8 @@ import {
   getDb,
   withTenantScope as productionWithTenantScope,
   setTenantContext,
-  toUserId,
-  userActor,
 } from "@/adapters/server/db/client";
 import { billingAccounts, users, virtualKeys } from "@/shared/db/schema";
-
-// Role names matching provision.sh convention
-const APP_USER_ROLE = "app_user_test";
-const APP_SERVICE_ROLE = "app_user_service_test";
 
 interface TestTenant {
   userId: string;
@@ -42,8 +36,7 @@ interface TestTenant {
 
 /**
  * Helper: run a callback inside a transaction with RLS active.
- * 1. SET LOCAL ROLE to a non-superuser (so RLS is enforced)
- * 2. SET LOCAL app.current_user_id for tenant scoping
+ * app_user already has FORCE RLS via provision.sh — only tenant context needed.
  */
 async function withTenantScope<T>(
   db: Database,
@@ -51,7 +44,6 @@ async function withTenantScope<T>(
   fn: (tx: Parameters<Parameters<Database["transaction"]>[0]>[0]) => Promise<T>
 ): Promise<T> {
   return db.transaction(async (tx) => {
-    await tx.execute(sql.raw(`SET LOCAL ROLE "${APP_USER_ROLE}"`));
     await tx.execute(sql`SET LOCAL app.current_user_id = '${sql.raw(userId)}'`);
     return fn(tx);
   });
@@ -66,7 +58,6 @@ async function withoutTenantScope<T>(
   fn: (tx: Parameters<Parameters<Database["transaction"]>[0]>[0]) => Promise<T>
 ): Promise<T> {
   return db.transaction(async (tx) => {
-    await tx.execute(sql.raw(`SET LOCAL ROLE "${APP_USER_ROLE}"`));
     return fn(tx);
   });
 }
@@ -77,44 +68,9 @@ describe("RLS Tenant Isolation", () => {
   let tenantB: TestTenant;
 
   beforeAll(async () => {
+    // app_user (FORCE RLS) for assertion queries; getSeedDb (BYPASSRLS) for seed/cleanup
     db = getDb();
-
-    // Create a non-superuser role for RLS testing (idempotent).
-    // Superusers bypass RLS even with FORCE; SET LOCAL ROLE simulates app connection.
-    await db.execute(
-      sql.raw(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${APP_USER_ROLE}') THEN
-          CREATE ROLE "${APP_USER_ROLE}" NOLOGIN;
-        END IF;
-      END
-      $$;
-    `)
-    );
-    await db.execute(
-      sql.raw(
-        `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${APP_USER_ROLE}"`
-      )
-    );
-
-    // Create a BYPASSRLS role for service bypass testing (idempotent).
-    await db.execute(
-      sql.raw(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${APP_SERVICE_ROLE}') THEN
-          CREATE ROLE "${APP_SERVICE_ROLE}" NOLOGIN BYPASSRLS;
-        END IF;
-      END
-      $$;
-    `)
-    );
-    await db.execute(
-      sql.raw(
-        `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO "${APP_SERVICE_ROLE}"`
-      )
-    );
+    const seedDb = getSeedDb();
 
     tenantA = {
       userId: randomUUID(),
@@ -127,8 +83,8 @@ describe("RLS Tenant Isolation", () => {
       virtualKeyId: randomUUID(),
     };
 
-    // Seed as superuser (bypasses RLS for data setup)
-    await db.insert(users).values({
+    // Seed via service role (bypasses RLS)
+    await seedDb.insert(users).values({
       id: tenantA.userId,
       name: "Tenant A",
       walletAddress:
@@ -137,18 +93,18 @@ describe("RLS Tenant Isolation", () => {
           42
         ),
     });
-    await db.insert(billingAccounts).values({
+    await seedDb.insert(billingAccounts).values({
       id: tenantA.billingAccountId,
       ownerUserId: tenantA.userId,
       balanceCredits: 1000n,
     });
-    await db.insert(virtualKeys).values({
+    await seedDb.insert(virtualKeys).values({
       id: tenantA.virtualKeyId,
       billingAccountId: tenantA.billingAccountId,
       isDefault: true,
     });
 
-    await db.insert(users).values({
+    await seedDb.insert(users).values({
       id: tenantB.userId,
       name: "Tenant B",
       walletAddress:
@@ -157,12 +113,12 @@ describe("RLS Tenant Isolation", () => {
           42
         ),
     });
-    await db.insert(billingAccounts).values({
+    await seedDb.insert(billingAccounts).values({
       id: tenantB.billingAccountId,
       ownerUserId: tenantB.userId,
       balanceCredits: 2000n,
     });
-    await db.insert(virtualKeys).values({
+    await seedDb.insert(virtualKeys).values({
       id: tenantB.virtualKeyId,
       billingAccountId: tenantB.billingAccountId,
       isDefault: true,
@@ -170,8 +126,8 @@ describe("RLS Tenant Isolation", () => {
   });
 
   afterAll(async () => {
-    // Cleanup as superuser (bypasses RLS)
-    await db
+    // Cleanup via service role (bypasses RLS)
+    await getSeedDb()
       .delete(users)
       .where(sql`id IN (${tenantA.userId}, ${tenantB.userId})`);
   });
@@ -311,11 +267,8 @@ describe("RLS Tenant Isolation", () => {
 
   describe("service role BYPASSRLS", () => {
     it("service role sees all tenants' data without tenant context", async () => {
-      const rows = await db.transaction(async (tx) => {
-        await tx.execute(sql.raw(`SET LOCAL ROLE "${APP_SERVICE_ROLE}"`));
-        // Deliberately NOT setting app.current_user_id
-        return tx.select().from(billingAccounts);
-      });
+      // getSeedDb() connects as app_user_service (BYPASSRLS) — no tenant context needed
+      const rows = await getSeedDb().select().from(billingAccounts);
       const ids = rows.map((r) => r.id);
       expect(ids).toContain(tenantA.billingAccountId);
       expect(ids).toContain(tenantB.billingAccountId);

@@ -13,9 +13,9 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getDb } from "@/adapters/server/db/client";
 import type {
   CreatePaymentAttemptParams,
   PaymentAttemptRepository,
@@ -46,18 +46,18 @@ export function registerPaymentAttemptRepositoryContract(
       repo = await makeRepository(h);
 
       // Create test users and billing accounts for FK constraints
-      const db = getDb();
+      const seedDb = getSeedDb();
 
       // Create first user
       testUserId = randomUUID();
-      await db.insert(users).values({
+      await seedDb.insert(users).values({
         id: testUserId,
         walletAddress: `0x${"1".repeat(40)}`,
         name: "Test User 1",
       });
 
       // Create first billing account with explicit ID
-      const [billingAccount] = await db
+      const [billingAccount] = await seedDb
         .insert(billingAccounts)
         .values({
           id: randomUUID(),
@@ -73,14 +73,14 @@ export function registerPaymentAttemptRepositoryContract(
 
       // Create second user for ownership tests
       testUser2Id = randomUUID();
-      await db.insert(users).values({
+      await seedDb.insert(users).values({
         id: testUser2Id,
         walletAddress: `0x${"2".repeat(40)}`,
         name: "Test User 2",
       });
 
       // Create second billing account with explicit ID
-      const [billingAccount2] = await db
+      const [billingAccount2] = await seedDb
         .insert(billingAccounts)
         .values({
           id: randomUUID(),
@@ -97,9 +97,9 @@ export function registerPaymentAttemptRepositoryContract(
 
     afterAll(async () => {
       // Cleanup cascades via FK
-      const db = getDb();
-      await db.delete(users).where(eq(users.id, testUserId));
-      await db.delete(users).where(eq(users.id, testUser2Id));
+      const seedDb = getSeedDb();
+      await seedDb.delete(users).where(eq(users.id, testUserId));
+      await seedDb.delete(users).where(eq(users.id, testUser2Id));
       await dispose(h);
     });
 
