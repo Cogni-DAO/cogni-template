@@ -348,11 +348,8 @@ jobs:
           docker compose -f platform/infra/services/runtime/docker-compose.dev.yml \
             up -d app postgres litellm caddy temporal-postgres temporal temporal-ui scheduler-worker git-sync
 
-      - name: Probe container-boundary (git-sync volume + UID alignment)
-        run: |
-          docker exec app git -C /repo/current rev-parse HEAD
-          docker exec app git -C /repo/current ls-files -- LICENSE*
-          docker exec app rg --version
+      - name: Probe container-boundary (git-sync volume)
+        run: platform/ci/scripts/probe-repo-volume.sh
 
       - name: Run migrations
         run: |
