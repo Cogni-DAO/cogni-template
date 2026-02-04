@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/integration/setup/testcontainers-postgres.global`
  * Purpose: Vitest global setup for testcontainers-based PostgreSQL integration tests.
- * Scope: Manages PostgreSQL container lifecycle with proper role separation via provision.sh.
+ * Scope: Manages PostgreSQL container lifecycle with proper role separation via provision.sh. Does not run application code or tests directly.
  * Invariants:
  *   - Runs provision.sh inside the container (psql available there, not on host)
  *   - DATABASE_URL → app_user (RLS-enforced, DB owner)

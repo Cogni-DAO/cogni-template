@@ -78,7 +78,8 @@ Unified serverEnv() provides all vars:
 
 Constructed:
 
-- DATABASE*URL (built from POSTGRES*\_ and DB\_\_ components)
+- DATABASE_URL (built from POSTGRES\_\* and DB\_\* components)
+- DATABASE_SERVICE_URL (required, service-role connection for BYPASSRLS operations)
 
 Temporal (required infrastructure):
 

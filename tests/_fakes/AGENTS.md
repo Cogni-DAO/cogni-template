@@ -5,8 +5,8 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-01
-- **Status:** draft
+- **Last reviewed:** 2026-02-05
+- **Status:** stable
 
 ## Purpose
 
@@ -41,13 +41,14 @@ Deterministic test doubles for unit tests with no I/O dependencies.
   - FakeTelemetry (no-op telemetry)
   - FakeLlmAdapter (deterministic LLM responses)
   - MockAccountService (account/credits test doubles)
+  - Test identity fixtures (TEST_USER_ID_1–5, TEST_SESSION_USER_1–5, TEST_WALLET_1–5, testUser(), newTestUserId(), newTestSessionUser())
   - Payment builders (createPaymentAttempt, createIntentAttempt, createPendingAttempt, createCreditedAttempt, createRejectedAttempt, createFailedAttempt, createExpiredIntent, createTimedOutPending)
   - makeTestCtx (RequestContext factory for facade/service tests)
   - Tool test helpers (createTestBoundToolRuntime, createTestToolSource, createEventCollector)
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** index.ts, payments/fakes.ts, ai/fakes.ts, ai/tool-builders.ts, test-context.ts
+- **Files considered API:** index.ts, ids.ts, payments/fakes.ts, ai/fakes.ts, ai/tool-builders.ts, test-context.ts
 
 ## Responsibilities
 

@@ -4,9 +4,7 @@
 /**
  * Module: `@tests/_fixtures/db/seed-client`
  * Purpose: Service-role database client for test fixture seeding and cleanup.
- * Scope: Provides getSeedDb() — a lazy singleton using DATABASE_SERVICE_URL (BYPASSRLS).
- *   Test code MUST use this for INSERT/DELETE operations, never getDb() (which is RLS-enforced).
- *   getDb() should only be used for adapter construction and assertion queries under RLS.
+ * Scope: Provides getSeedDb() — a lazy singleton using DATABASE_SERVICE_URL (BYPASSRLS). Does not provide app-role access or RLS-enforced queries.
  * Invariants: Requires DATABASE_SERVICE_URL in env (set by testcontainers global setup)
  * Side-effects: IO (database connection) — only on first access
  * Links: tests/integration/setup/testcontainers-postgres.global.ts

@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Branded ID types for compile-time RLS enforcement across the monorepo. Provides `UserId` and `ActorId` via `type-fest` `Tagged<>`, boundary constructors (`toUserId`, `toActorId`), and the `SYSTEM_ACTOR` constant. Zero-dep leaf package (only `type-fest`).
+Branded ID types for compile-time RLS enforcement across the monorepo. Provides `UserId` and `ActorId` via `type-fest` `Tagged<>`, boundary constructors (`toUserId`, `userActor`), and the `SYSTEM_ACTOR` constant. Zero-dep leaf package (only `type-fest`).
 
 ## Pointers
 
@@ -74,7 +74,7 @@ pnpm --filter @cogni/ids build
 - Per `FORBIDDEN`: No I/O, no `@/`, no `src/`, no framework imports
 - Per `ALLOWED`: Pure TypeScript types and validation only
 - No `as UserId` / `as ActorId` casts outside test fixtures — enforced by PR review
-- Only edge code (HTTP handlers, env parsing, test fixtures) should call `toUserId`/`toActorId`
+- Only edge code (HTTP handlers, env parsing, test fixtures) should call `toUserId`/`userActor`
 
 ## Dependencies
 
