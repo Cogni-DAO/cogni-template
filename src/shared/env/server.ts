@@ -153,16 +153,17 @@ export const serverSchema = z.object({
   TEMPORAL_NAMESPACE: z.string().min(1), // e.g., "cogni-test" or "cogni-production"
   TEMPORAL_TASK_QUEUE: z.string().default("scheduler-tasks"),
 
-  // Repo access (in-process ripgrep)
-  // Required in production; defaults to process.cwd() in dev/test
-  COGNI_REPO_PATH: optionalString, // e.g., "/repo/main"
+  // Repo access (in-process ripgrep) — required, no default
+  // Must be explicitly set in every environment (.env.local, CI, compose)
+  // to prevent green-CI / broken-prod blind spots from silent cwd() fallback
+  COGNI_REPO_PATH: z.string().min(1),
   // SHA override for mounts without .git (e.g., git-sync worktree)
   COGNI_REPO_SHA: optionalString,
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {
   DATABASE_URL: string;
-  /** Validated repo root path (from COGNI_REPO_PATH or cwd fallback in dev) */
+  /** Validated repo root path (resolved from COGNI_REPO_PATH) */
   COGNI_REPO_ROOT: string;
   isDev: boolean;
   isTest: boolean;
@@ -210,17 +211,8 @@ export function serverEnv(): ServerEnv {
         });
       }
 
-      // Resolve COGNI_REPO_ROOT: explicit path or cwd fallback (dev only)
-      let COGNI_REPO_ROOT: string;
-      if (parsed.COGNI_REPO_PATH) {
-        COGNI_REPO_ROOT = parsed.COGNI_REPO_PATH;
-      } else if (isProd) {
-        throw new Error(
-          "COGNI_REPO_PATH is required in production. Set it to the repo mount path."
-        );
-      } else {
-        COGNI_REPO_ROOT = process.cwd();
-      }
+      // Resolve COGNI_REPO_ROOT from required COGNI_REPO_PATH (no cwd fallback)
+      const COGNI_REPO_ROOT = parsed.COGNI_REPO_PATH;
       // Boot validation: path must exist and look like a repo root
       if (!existsSync(COGNI_REPO_ROOT)) {
         throw new Error(`COGNI_REPO_ROOT does not exist: ${COGNI_REPO_ROOT}`);

@@ -33,6 +33,8 @@ export const CORE_TEST_ENV = {
   // Temporal (required infrastructure)
   TEMPORAL_ADDRESS: "localhost:7233",
   TEMPORAL_NAMESPACE: "test-namespace",
+  // Repo access (required in all envs — no cwd fallback)
+  COGNI_REPO_PATH: process.cwd(),
 } as const;
 
 /**
@@ -63,7 +65,7 @@ export const PRODUCTION_VALID_ENV = {
   APP_ENV: "production",
   DB_HOST: "postgres",
   EVM_RPC_URL: "https://eth-sepolia.example.com/v2/test-key",
-  COGNI_REPO_PATH: process.cwd(), // Required in production per server.ts fail-fast
+  // COGNI_REPO_PATH inherited from CORE_TEST_ENV
 } as const;
 
 /**
