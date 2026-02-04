@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-01-19
+- **Last reviewed:** 2026-02-05
 - **Status:** stable
 
 ## Purpose
@@ -37,7 +37,8 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
 ## Public Surface
 
 - **Exports:**
-  - AccountService (getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordChargeReceipt, listChargeReceipts, listCreditLedgerEntries, findCreditLedgerEntryByReference)
+  - AccountService (user-scoped: getOrCreateBillingAccountForUser, getBalance, debitForUsage, creditAccount, recordChargeReceipt, listChargeReceipts, listCreditLedgerEntries, findCreditLedgerEntryByReference)
+  - ServiceAccountService (service-role: getBillingAccountById, getOrCreateBillingAccountForUser — BYPASSRLS subset)
   - LlmService (completion, completionStream with CompletionStreamParams including abortSignal, tools, toolChoice; returns providerCostUsd, litellmCallId, toolCalls)
   - AgentCatalogPort (listAgents; discovery-only interface per AGENT_DISCOVERY.md)
   - AgentDescriptor (agentId, graphId, name, description; P0_AGENT_GRAPH_IDENTITY: agentId === graphId)
@@ -47,7 +48,8 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
   - ActivityUsagePort (getSpendLogs, getSpendChart; LiteLLM-only telemetry for Activity dashboard)
   - UsageLogEntry, UsageLogsByRangeParams (types for log fetching)
   - ChatDeltaEvent (text_delta | error | done)
-  - PaymentAttemptRepository (create, findById, findByTxHash, updateStatus, bindTxHash, recordVerificationAttempt, logEvent)
+  - PaymentAttemptUserRepository (create, findById — RLS enforced, UserId bound at construction)
+  - PaymentAttemptServiceRepository (findByTxHash, updateStatus, bindTxHash, recordVerificationAttempt, logEvent — BYPASSRLS, billingAccountId defense-in-depth anchor)
   - OnChainVerifier (verify transaction against expected parameters)
   - MetricsQueryPort (queryRange, queryInstant for Prometheus-compatible backends)
   - AiTelemetryPort (recordInvocation for ai_invocation_summaries DB writes)
@@ -58,9 +60,12 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
   - normalizeErrorToExecutionCode (error-to-code normalization, re-exported for adapters)
   - LlmToolDefinition, LlmToolCall, LlmToolChoice (tool calling types)
   - Types (ChargeReceiptParams, ChargeReceiptProvenance, LlmCaller, BillingAccount, CreditLedgerEntry, CreatePaymentAttemptParams, LogPaymentEventParams, VerificationResult, VerificationStatus, CompletionStreamParams)
-  - JobQueuePort (enqueueJob for scheduler-agnostic job queuing)
-  - ExecutionGrantPort (createGrant, validateGrant, validateGrantForGraph, deleteGrant)
-  - ScheduleManagerPort (schedule CRUD, findStaleSchedules, updateNextRunAt/updateLastRunAt)
+  - ScheduleControlPort (create/pause/resume/delete schedule lifecycle)
+  - ScheduleUserPort (user-facing schedule CRUD, RLS-scoped)
+  - ScheduleWorkerPort (worker-only schedule reads/updates, BYPASSRLS)
+  - ExecutionGrantUserPort (user-facing grant create/revoke/delete)
+  - ExecutionGrantWorkerPort (worker-only grant validation)
+  - ExecutionRequestPort (idempotency layer for execution requests)
   - ScheduleRunRepository (run ledger: createRun, markRunStarted, markRunCompleted)
   - Grant errors (GrantNotFoundError, GrantExpiredError, GrantRevokedError, GrantScopeMismatchError)
   - Schedule errors (ScheduleNotFoundError, ScheduleAccessDeniedError, InvalidCronExpressionError, InvalidTimezoneError)
@@ -108,7 +113,7 @@ These tests are separate from edge tests for src/contracts/\*\*
 
 - Port tests are located in tests/ports/\*\* to validate adapter conformance
 - Ports define contracts for internal dependencies, separate from external API contracts
-- PaymentAttemptRepository enforces ownership (findById filters by billingAccountId)
+- PaymentAttemptUserRepository enforces ownership via RLS (withTenantScope) + billingAccountId filter; PaymentAttemptServiceRepository uses BYPASSRLS with billingAccountId defense-in-depth
 - OnChainVerifier is generic (no blockchain-specific types), returns VerificationResult with status (VERIFIED | PENDING | FAILED)
 - Port-level errors are thrown by adapters, caught and translated by feature layer
 - recordChargeReceipt is non-blocking (never throws InsufficientCredits post-call per ACTIVITY_METRICS.md)

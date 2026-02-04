@@ -39,8 +39,8 @@
 - [x] Dual DB client in `packages/db-client`: `createAppDbClient(url)` (app_user, RLS enforced) and `createServiceDbClient(url)` (app_user_service, BYPASSRLS)
 - [x] Move `withTenantScope` / `setTenantContext` to `packages/db-client` (generic over `Database` type so both Next.js and worker services share scoping semantics)
 - [x] Import boundary: `createServiceDbClient` isolated in `@cogni/db-client/service` sub-path export. Adapter singleton `getServiceDb` isolated in `drizzle.service-client.ts` (outside barrel). Depcruiser `no-service-db-adapter-import` rule enforces only `auth.ts` may import it. Environmental enforcement (`APP_DB_SERVICE_PASSWORD` absent from web runtime) remains as defense-in-depth.
-- [ ] Wire `withTenantScope`/`setTenantContext` into all DB adapter methods that touch user-scoped tables (see Adapter Wiring Tracker below). Accounts: done (Commit 3). Payment attempts: pending (Commit 4).
-- [ ] Ensure `userId` originates from session JWT (server-side), never from request body. Accounts: done (facades use `toUserId(sessionUser.id)` at edge). Payment attempts: pending.
+- [x] Wire `withTenantScope`/`setTenantContext` into all DB adapter methods that touch user-scoped tables (see Adapter Wiring Tracker below). Accounts: done (Commit 3). Payment attempts: done (Commit 4).
+- [x] Ensure `userId` originates from session JWT (server-side), never from request body. Accounts: done (facades use `toUserId(sessionUser.id)` at edge). Payment attempts: done (Commit 4).
 - [x] SIWE auth callback (`src/auth.ts`) uses `serviceDb` for pre-auth wallet lookup
 
 #### SSL Enforcement
@@ -168,14 +168,16 @@
 
 ### Commit 4: Payment Attempts
 
-| File                                                              | Change                                                         | Done |
-| ----------------------------------------------------------------- | -------------------------------------------------------------- | ---- |
-| `src/ports/payment-attempt.port.ts`                               | Split → `PaymentAttemptUserPort` + `PaymentAttemptServicePort` | [ ]  |
-| `src/adapters/server/payments/drizzle-payment-attempt.adapter.ts` | Split → User (appDb) + Service (serviceDb), `withTenantScope`  | [ ]  |
-| `src/features/payments/services/paymentService.ts`                | Dual-repo params, `callerUserId`                               | [ ]  |
-| `src/app/_facades/payments/attempts.server.ts`                    | Pass both repos + `callerUserId`                               | [ ]  |
-| `src/bootstrap/container.ts`                                      | Wire dual payment instances                                    | [ ]  |
-| `docs/DATABASE_RLS_SPEC.md`                                       | Mark all remaining rows `[x]` Wired, update status line        | [ ]  |
+> **Design change:** Follows the Commit 3 construction-time binding pattern. `UserDrizzlePaymentAttemptRepository(appDb, userId)` binds `actorId = userActor(userId)` at construction; every method wraps in `withTenantScope`. Service methods on `ServiceDrizzlePaymentAttemptRepository(serviceDb)` include `billingAccountId` in WHERE clauses as defense-in-depth tenant anchor.
+
+| File                                                              | Change                                                                                         | Done |
+| ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ---- |
+| `src/ports/payment-attempt.port.ts`                               | Split → `PaymentAttemptUserRepository` + `PaymentAttemptServiceRepository`                     | [x]  |
+| `src/adapters/server/payments/drizzle-payment-attempt.adapter.ts` | Split → User (appDb, `withTenantScope`) + Service (serviceDb, BYPASSRLS)                       | [x]  |
+| `src/features/payments/services/paymentService.ts`                | Dual-repo params (`userRepo` + `serviceRepo`)                                                  | [x]  |
+| `src/app/_facades/payments/attempts.server.ts`                    | `paymentAttemptsForUser(toUserId(...))` + `paymentAttemptServiceRepository` from container     | [x]  |
+| `src/bootstrap/container.ts`                                      | `paymentAttemptsForUser` factory + `paymentAttemptServiceRepository` singleton via `serviceDb` | [x]  |
+| `docs/DATABASE_RLS_SPEC.md`                                       | Mark all remaining rows `[x]` Wired, update status line                                        | [x]  |
 
 ---
 
@@ -381,17 +383,26 @@ Methods that touch user-scoped tables and need `withTenantScope` / `setTenantCon
 | `getUsageStats({ billingAccountId, … })` | `charge_receipts` | No   | Via billingAccountId | [ ]    |
 | `listUsageLogs({ billingAccountId, … })` | `charge_receipts` | No   | Via billingAccountId | [ ]    |
 
-### `DrizzlePaymentAttemptRepository` (`src/adapters/server/payments/drizzle-payment-attempt.adapter.ts`)
+### `UserDrizzlePaymentAttemptRepository` (`src/adapters/server/payments/drizzle-payment-attempt.adapter.ts`)
 
-| Method                             | Tables                               | Txn? | userId source            | Wired? |
-| ---------------------------------- | ------------------------------------ | ---- | ------------------------ | ------ |
-| `create(params)`                   | `payment_attempts`, `payment_events` | Yes  | Via billingAccountId     | [ ]    |
-| `findById(id, billingAccountId)`   | `payment_attempts`                   | No   | Via billingAccountId     | [ ]    |
-| `findByTxHash(chainId, txHash)`    | `payment_attempts`                   | No   | None (cross-user lookup) | [ ]    |
-| `updateStatus(id, status)`         | `payment_attempts`, `payment_events` | Yes  | None (internal)          | [ ]    |
-| `bindTxHash(id, txHash, …)`        | `payment_attempts`, `payment_events` | Yes  | None (internal)          | [ ]    |
-| `recordVerificationAttempt(id, …)` | `payment_attempts`, `payment_events` | Yes  | None (internal)          | [ ]    |
-| `logEvent(params)`                 | `payment_events`                     | No   | None (event-only)        | [ ]    |
+> UserId bound at construction; `actorId = userActor(userId)` derived once. Every method wraps in `withTenantScope(this.db, this.actorId, tx => …)`.
+
+| Method                           | Tables                               | Txn? | userId source                     | Wired? |
+| -------------------------------- | ------------------------------------ | ---- | --------------------------------- | ------ |
+| `create(params)`                 | `payment_attempts`, `payment_events` | Yes  | Constructor (`userActor(userId)`) | [x]    |
+| `findById(id, billingAccountId)` | `payment_attempts`                   | Yes  | Constructor (`userActor(userId)`) | [x]    |
+
+### `ServiceDrizzlePaymentAttemptRepository` (`src/adapters/server/payments/drizzle-payment-attempt.adapter.ts`)
+
+> Uses serviceDb (BYPASSRLS). All mutators include `billingAccountId` in WHERE clause as defense-in-depth tenant anchor.
+
+| Method                                               | Tables                               | Txn? | userId source            | Wired? |
+| ---------------------------------------------------- | ------------------------------------ | ---- | ------------------------ | ------ |
+| `findByTxHash(chainId, txHash)`                      | `payment_attempts`                   | No   | None (cross-user lookup) | [x]    |
+| `updateStatus(id, billingAccountId, status)`         | `payment_attempts`, `payment_events` | Yes  | Via billingAccountId     | [x]    |
+| `bindTxHash(id, billingAccountId, txHash, …)`        | `payment_attempts`, `payment_events` | Yes  | Via billingAccountId     | [x]    |
+| `recordVerificationAttempt(id, billingAccountId, …)` | `payment_attempts`, `payment_events` | Yes  | Via billingAccountId     | [x]    |
+| `logEvent(params)`                                   | `payment_events`                     | No   | None (event-only)        | [x]    |
 
 ### `DrizzleExecutionGrantUserAdapter` (`packages/db-client/…/drizzle-grant.adapter.ts`)
 
@@ -454,4 +465,4 @@ Methods that touch user-scoped tables and need `withTenantScope` / `setTenantCon
 ---
 
 **Last Updated**: 2026-02-05
-**Status**: P0 In Progress — Commits 1–3 done (dual DB client, schedules/grants, accounts wired). Commit 4 pending (payment attempts).
+**Status**: P0 In Progress — Commits 1–4 done (dual DB client, schedules/grants, accounts, payment attempts wired). Remaining: integration test unskip, port harness dual-repo update, `DrizzleUsageAdapter` wiring (deprecated).

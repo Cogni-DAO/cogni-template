@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2024-12-11
+- **Last reviewed:** 2026-02-05
 - **Status:** draft
 
 ## Purpose
@@ -32,9 +32,9 @@ Feature layer for USDC payment attempts with backend verification. Handles payme
 ## Public Surface
 
 - **Exports (services/):**
-  - `createIntent(repository, clock, input)` - Create payment intent with on-chain transfer params
-  - `submitTxHash(repository, accountService, verifier, clock, log, input)` - Submit txHash for verification
-  - `getStatus(repository, accountService, verifier, clock, log, input)` - Poll status with throttled verification
+  - `createIntent(userRepo, clock, input)` - Create payment intent with on-chain transfer params (user repo only)
+  - `submitTxHash(userRepo, serviceRepo, accountService, verifier, clock, log, input)` - Submit txHash for verification (dual repos)
+  - `getStatus(userRepo, serviceRepo, accountService, verifier, clock, log, input)` - Poll status with throttled verification (dual repos)
   - `confirmCreditsPayment(accountService, input)` - Atomic credit settlement; idempotent on clientPaymentId
   - `getCreditsSummary(accountService, input)` - Fetch balance and recent ledger entries
 - **Exports (hooks/):**
@@ -56,7 +56,7 @@ Feature layer for USDC payment attempts with backend verification. Handles payme
 
 ## Ports
 
-- **Uses ports:** `PaymentAttemptRepository`, `OnChainVerifier`, `AccountService`, `Clock`
+- **Uses ports:** `PaymentAttemptUserRepository`, `PaymentAttemptServiceRepository`, `OnChainVerifier`, `AccountService`, `Clock`
 - **Implements ports:** none
 
 ## Responsibilities
@@ -82,7 +82,7 @@ const result = await confirmCreditsPayment(accountService, {
 
 ## Standards
 
-- Payment services accept ports as first parameters (repository, accountService, verifier, clock)
+- Payment services accept ports as first parameters (userRepo, serviceRepo, accountService, verifier, clock); createIntent takes userRepo only, verifyAndSettle takes serviceRepo only
 - State machine transitions validated via `core/rules.isValidTransition()`
 - Settlement exclusively via `confirmCreditsPayment()` for atomic ledger+balance updates
 - Credit conversion: 1 cent = 10 credits (integer math only)
