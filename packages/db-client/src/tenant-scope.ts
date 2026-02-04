@@ -6,53 +6,51 @@
  * Purpose: Transaction helpers that set PostgreSQL RLS tenant context via SET LOCAL.
  * Scope: Generic over any Drizzle PostgresJsDatabase schema type. Does not handle role switching or connection pooling.
  * Invariants:
- * - userId must be a valid UUID v4 (validated before interpolation into SQL)
+ * - actorId must be a branded ActorId (UUID validation happens at brand construction in actor.ts)
  * - SET LOCAL scopes the setting to the current transaction only (no cross-request leakage)
- * - If userId is invalid, throws immediately (never reaches SQL)
  * Side-effects: IO (database transaction)
  * Notes: SET LOCAL does not accept parameterized $1 placeholders in PostgreSQL.
  *        We use sql.raw() after UUID format validation. This is safe because:
  *        1. The regex strictly limits the value to hex digits and hyphens
  *        2. The value comes from server-side JWT sessions, never from request body
- * Links: docs/DATABASE_RLS_SPEC.md
+ *        3. ActorId branded type guarantees the value was validated at construction time
+ * Links: docs/DATABASE_RLS_SPEC.md, actor.ts
  * @public
  */
 
 import { type SQL, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import type { ActorId } from "./actor";
 
-const UUID_RE =
+/** Single source of truth for UUID v4 validation. Used by actor.ts for branded type construction. */
+export const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Run `fn` inside a Drizzle transaction with `app.current_user_id` set for RLS.
  *
- * Every query inside `fn` sees only rows belonging to `userId` per the
+ * Every query inside `fn` sees only rows belonging to the actor per the
  * RLS policies defined in migration 0004_enable_rls.sql.
  *
  * Generic over any PostgresJsDatabase schema type — callers pass their
  * concrete `db` instance and TypeScript infers the schema.
  *
- * @throws {Error} If userId is not a valid UUID v4
+ * @param actorId - Branded ActorId (validated UUID at construction time)
  */
 export async function withTenantScope<
   T,
   TSchema extends Record<string, unknown> = Record<string, never>,
 >(
   db: PostgresJsDatabase<TSchema>,
-  userId: string,
+  actorId: ActorId,
   fn: (
     tx: Parameters<Parameters<PostgresJsDatabase<TSchema>["transaction"]>[0]>[0]
   ) => Promise<T>
 ): Promise<T> {
-  if (!UUID_RE.test(userId)) {
-    throw new Error(
-      `withTenantScope: invalid userId format (expected UUID v4): ${userId}`
-    );
-  }
-
   return db.transaction(async (tx) => {
-    await tx.execute(sql`SET LOCAL app.current_user_id = '${sql.raw(userId)}'`);
+    await tx.execute(
+      sql`SET LOCAL app.current_user_id = '${sql.raw(actorId)}'`
+    );
     return fn(tx);
   });
 }
@@ -66,17 +64,11 @@ export async function withTenantScope<
  * Accepts any Drizzle transaction-like object with an `execute` method,
  * so it works with any schema type.
  *
- * @throws {Error} If userId is not a valid UUID v4
+ * @param actorId - Branded ActorId (validated UUID at construction time)
  */
 export async function setTenantContext(
   tx: { execute(query: SQL): Promise<unknown> },
-  userId: string
+  actorId: ActorId
 ): Promise<void> {
-  if (!UUID_RE.test(userId)) {
-    throw new Error(
-      `setTenantContext: invalid userId format (expected UUID v4): ${userId}`
-    );
-  }
-
-  await tx.execute(sql`SET LOCAL app.current_user_id = '${sql.raw(userId)}'`);
+  await tx.execute(sql`SET LOCAL app.current_user_id = '${sql.raw(actorId)}'`);
 }

@@ -528,13 +528,13 @@ module.exports = {
       severity: "error",
       from: {
         path: "^src/",
-        pathNot: "^src/auth\\.ts$",
+        pathNot: "^src/(auth\\.ts|bootstrap/container\\.ts)$",
       },
       to: {
         path: "^src/adapters/server/db/drizzle\\.service-client\\.ts$",
       },
       comment:
-        "Only auth.ts may import the service-db adapter (BYPASSRLS singleton)",
+        "Only auth.ts and container.ts may import the service-db adapter (BYPASSRLS singleton)",
     },
 
     // =========================================================================

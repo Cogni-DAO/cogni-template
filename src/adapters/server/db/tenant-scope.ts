@@ -3,14 +3,22 @@
 
 /**
  * Module: `@adapters/server/db/tenant-scope`
- * Purpose: Re-exports tenant-scope helpers from @cogni/db-client.
+ * Purpose: Re-exports tenant-scope helpers and actor types from @cogni/db-client.
  * Scope: Passthrough — canonical implementation lives in packages/db-client. Does not contain implementation logic.
  * Invariants:
- * - userId must be a valid UUID v4 (validated before interpolation into SQL)
+ * - actorId must be a branded ActorId (validated at construction time)
  * - SET LOCAL scopes the setting to the current transaction only (no cross-request leakage)
  * Side-effects: none (re-export only)
  * Links: docs/DATABASE_RLS_SPEC.md, packages/db-client/src/tenant-scope.ts
  * @public
  */
 
-export { setTenantContext, withTenantScope } from "@cogni/db-client";
+export {
+  type ActorId,
+  SYSTEM_ACTOR,
+  setTenantContext,
+  toUserId,
+  type UserId,
+  userActor,
+  withTenantScope,
+} from "@cogni/db-client";

@@ -25,6 +25,8 @@ import {
   getDb,
   withTenantScope as productionWithTenantScope,
   setTenantContext,
+  toUserId,
+  userActor,
 } from "@/adapters/server/db/client";
 import { billingAccounts, users, virtualKeys } from "@/shared/db/schema";
 
@@ -273,17 +275,16 @@ describe("RLS Tenant Isolation", () => {
   });
 
   describe("production tenant-scope helpers", () => {
-    it("withTenantScope rejects non-UUID userId before SQL", async () => {
-      await expect(
-        productionWithTenantScope(db, "not-a-uuid", async () => {})
-      ).rejects.toThrow("invalid userId format");
+    it("toUserId rejects non-UUID string before SQL", () => {
+      expect(() => toUserId("not-a-uuid")).toThrow("Invalid UserId");
     });
 
     it("withTenantScope sets current_setting correctly", async () => {
       const validId = randomUUID();
+      const actorId = userActor(toUserId(validId));
       const result = await productionWithTenantScope(
         db,
-        validId,
+        actorId,
         async (tx) => {
           const rows = await tx.execute(
             sql`SELECT current_setting('app.current_user_id') AS uid`
@@ -296,8 +297,9 @@ describe("RLS Tenant Isolation", () => {
 
     it("setTenantContext sets current_setting in existing transaction", async () => {
       const validId = randomUUID();
+      const actorId = userActor(toUserId(validId));
       const result = await db.transaction(async (tx) => {
-        await setTenantContext(tx, validId);
+        await setTenantContext(tx, actorId);
         const rows = await tx.execute(
           sql`SELECT current_setting('app.current_user_id') AS uid`
         );

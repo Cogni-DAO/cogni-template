@@ -16,6 +16,14 @@
 
 // Re-export full schema (consumers get all tables transitively through db-client)
 export * from "@cogni/db-schema";
+// Branded actor types for RLS identity
+export {
+  type ActorId,
+  SYSTEM_ACTOR,
+  toUserId,
+  type UserId,
+  userActor,
+} from "./actor";
 export { DrizzleExecutionRequestAdapter } from "./adapters/drizzle-execution-request.adapter";
 // Adapters
 export { DrizzleExecutionGrantAdapter } from "./adapters/drizzle-grant.adapter";
