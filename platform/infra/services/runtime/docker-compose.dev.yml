@@ -30,6 +30,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=${POSTGRES_DB:-cogni_template_dev}
+      - DATABASE_SERVICE_URL=postgresql://${POSTGRES_USER:-user}_service:${APP_DB_SERVICE_PASSWORD:-service_password}@postgres:5432/${POSTGRES_DB:-cogni_template_dev}
       - DB_HOST=postgres
       - DB_PORT=5432
       - LITELLM_BASE_URL=http://litellm:4000
