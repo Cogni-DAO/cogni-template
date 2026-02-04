@@ -25,7 +25,7 @@ import type { ServerEnv } from "@/shared/env";
 const SYNTHETIC_SHA = "deadbeef01234567890abcdef";
 const SYNTHETIC_SHA7 = SYNTHETIC_SHA.slice(0, 7);
 
-const REPO_PATH = process.env.COGNI_REPO_PATH;
+const REPO_PATH = process.env.COGNI_REPO_PATH ?? "";
 
 describe("Brain repo SHA override (production path)", () => {
   beforeAll(() => {
@@ -35,7 +35,7 @@ describe("Brain repo SHA override (production path)", () => {
   describe("adapter-level: GitLsFilesAdapter.shaOverride", () => {
     it("getSha() returns the override, not git rev-parse", async () => {
       const adapter = new GitLsFilesAdapter({
-        repoRoot: REPO_PATH!,
+        repoRoot: REPO_PATH,
         shaOverride: SYNTHETIC_SHA,
       });
 
@@ -45,11 +45,11 @@ describe("Brain repo SHA override (production path)", () => {
 
     it("search results carry the overridden SHA", async () => {
       const gitAdapter = new GitLsFilesAdapter({
-        repoRoot: REPO_PATH!,
+        repoRoot: REPO_PATH,
         shaOverride: SYNTHETIC_SHA,
       });
       const rgAdapter = new RipgrepAdapter({
-        repoRoot: REPO_PATH!,
+        repoRoot: REPO_PATH,
         repoId: "main",
         getSha: () => gitAdapter.getSha(),
         timeoutMs: 5_000,
@@ -67,11 +67,11 @@ describe("Brain repo SHA override (production path)", () => {
 
     it("open results carry the overridden SHA", async () => {
       const gitAdapter = new GitLsFilesAdapter({
-        repoRoot: REPO_PATH!,
+        repoRoot: REPO_PATH,
         shaOverride: SYNTHETIC_SHA,
       });
       const rgAdapter = new RipgrepAdapter({
-        repoRoot: REPO_PATH!,
+        repoRoot: REPO_PATH,
         repoId: "main",
         getSha: () => gitAdapter.getSha(),
         timeoutMs: 5_000,
@@ -88,7 +88,7 @@ describe("Brain repo SHA override (production path)", () => {
       // Minimal ServerEnv mock — only fields consumed by createRepoCapability
       const fakeEnv = {
         isTestMode: false,
-        COGNI_REPO_ROOT: REPO_PATH!,
+        COGNI_REPO_ROOT: REPO_PATH,
         COGNI_REPO_SHA: SYNTHETIC_SHA,
       } as ServerEnv;
 
@@ -103,7 +103,7 @@ describe("Brain repo SHA override (production path)", () => {
     it("capability.search() returns citations with the overridden SHA", async () => {
       const fakeEnv = {
         isTestMode: false,
-        COGNI_REPO_ROOT: REPO_PATH!,
+        COGNI_REPO_ROOT: REPO_PATH,
         COGNI_REPO_SHA: SYNTHETIC_SHA,
       } as ServerEnv;
 
