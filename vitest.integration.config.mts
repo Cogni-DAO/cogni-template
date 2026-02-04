@@ -25,8 +25,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const env = config({ path: ".env.test" });
 expand(env);
 
-// Repo access: default to repo checkout when not explicitly set
-process.env.COGNI_REPO_PATH ??= process.cwd();
+// Repo access: tests/setup.ts provides fallback for COGNI_REPO_PATH
 
 export default defineConfig({
   plugins: [tsconfigPaths({ projects: ["./tsconfig.base.json"] })],

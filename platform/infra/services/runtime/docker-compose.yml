@@ -170,8 +170,8 @@ services:
       - GITSYNC_LINK=current
       - GITSYNC_ONE_TIME=true
       - GITSYNC_DEPTH=1
-      - GITSYNC_USERNAME=${GHCR_USERNAME:-}
-      - GITSYNC_PASSWORD=${GHCR_DEPLOY_TOKEN:-}
+      - GITSYNC_USERNAME=${GIT_READ_USERNAME:-}
+      - GITSYNC_PASSWORD=${GIT_READ_TOKEN:-}
 
   alloy:
     image: grafana/alloy:v1.9.2

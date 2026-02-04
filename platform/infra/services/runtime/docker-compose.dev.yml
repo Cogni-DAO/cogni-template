@@ -50,6 +50,7 @@ services:
       - PROMETHEUS_READ_PASSWORD
       # Brain repo tools (COGNI_BRAIN_SPEC.md Step 4)
       - COGNI_REPO_PATH=${COGNI_REPO_PATH:-/repo/current}
+      - COGNI_REPO_SHA=${COGNI_REPO_REF:-}
       # Temporal schedule orchestration (per SCHEDULER_SPEC.md)
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV:-dev}
@@ -202,15 +203,16 @@ services:
     user: "0:0"
     restart: "no"
     volumes:
-      - ../../../../:/src:ro
       - repo_data:/repo
     environment:
-      - GITSYNC_REPO=file:///src
-      - GITSYNC_REF=${COGNI_REPO_REF:-HEAD}
+      - GITSYNC_REPO=${COGNI_REPO_URL}
+      - GITSYNC_REF=${COGNI_REPO_REF}
       - GITSYNC_ROOT=/repo
       - GITSYNC_LINK=current
       - GITSYNC_ONE_TIME=true
       - GITSYNC_DEPTH=1
+      - GITSYNC_USERNAME=${GIT_READ_USERNAME:-}
+      - GITSYNC_PASSWORD=${GIT_READ_TOKEN:-}
 
   loki:
     image: grafana/loki:2.9.10

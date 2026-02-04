@@ -119,6 +119,8 @@ jobs:
           APP_ENV: production
           COGNI_REPO_URL: https://github.com/${{ github.repository }}.git
           COGNI_REPO_REF: ${{ github.event.workflow_run.head_sha }}
+          GIT_READ_USERNAME: Cogni-1729
+          GIT_READ_TOKEN: ${{ secrets.GIT_READ_TOKEN }}
           APP_IMAGE: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
           MIGRATOR_IMAGE: ${{ env.MIGRATOR_IMAGE }}
           SCHEDULER_WORKER_IMAGE: ${{ env.SCHEDULER_WORKER_IMAGE }}

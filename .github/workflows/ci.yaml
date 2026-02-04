@@ -249,6 +249,11 @@ jobs:
       TEMPORAL_ADDRESS: localhost:7233
       TEMPORAL_NAMESPACE: cogni-test
       TEMPORAL_TASK_QUEUE: scheduler-tasks
+      # git-sync HTTPS clone (same path as prod — no file:// shortcut)
+      COGNI_REPO_URL: https://github.com/${{ github.repository }}.git
+      COGNI_REPO_REF: ${{ github.sha }}
+      GIT_READ_TOKEN: ${{ secrets.GIT_READ_TOKEN }}
+      GIT_READ_USERNAME: Cogni-1729
       # All fake keys: DO NOT expose any real keys here
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -350,6 +355,9 @@ jobs:
 
       - name: Run stack tests
         run: pnpm test:stack:docker
+        env:
+          # Host-side vitest needs repo checkout; compose uses /repo/current default
+          COGNI_REPO_PATH: ${{ github.workspace }}
         # Note: wait-for-probes.ts globalSetup polls /livez then /readyz before tests run
 
       - name: CI Telemetry

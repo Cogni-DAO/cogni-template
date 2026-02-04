@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-03
+- **Last reviewed:** 2026-02-04
 - **Status:** draft
 
 ## Purpose
@@ -84,4 +84,4 @@ scripts/fetch_github_job_logs.sh  # Fetch job logs from GitHub Actions API (requ
 - PLATFORM env: native locally (fast), linux/amd64 in CI
 - `deploy.sh` uses checksum-gated restart for LiteLLM: compares SHA256 of config file against stored hash at `/var/lib/cogni/litellm-config.sha256`, restarts only if changed
 - `deploy.sh` runs `git-sync` as a bootstrap step (Step 7.5) before db-provision to populate `/repo` volume for brain tools
-- `COGNI_REPO_URL` and `COGNI_REPO_REF` are required env vars for deploy.sh, set by CI workflows
+- `COGNI_REPO_URL`, `COGNI_REPO_REF`, `GIT_READ_TOKEN`, and `GIT_READ_USERNAME` are required env vars for deploy.sh, set by CI workflows
