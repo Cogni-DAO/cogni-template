@@ -249,6 +249,9 @@ jobs:
       TEMPORAL_ADDRESS: localhost:7233
       TEMPORAL_NAMESPACE: cogni-test
       TEMPORAL_TASK_QUEUE: scheduler-tasks
+      # Service role DSN for host-side vitest (provision.sh creates user_service role)
+      APP_DB_SERVICE_PASSWORD: service_password
+      DATABASE_SERVICE_URL: postgresql://user_service:service_password@localhost:55432/cogni_template_test
       # git-sync HTTPS clone (same path as prod — no file:// shortcut)
       COGNI_REPO_URL: https://github.com/${{ github.repository }}.git
       COGNI_REPO_REF: ${{ github.sha }}
@@ -350,6 +353,11 @@ jobs:
 
       - name: Probe container-boundary (git-sync volume)
         run: platform/ci/scripts/probe-repo-volume.sh
+
+      - name: Provision database roles
+        run: |
+          docker compose -f platform/infra/services/runtime/docker-compose.dev.yml \
+            --profile bootstrap run --rm db-provision
 
       - name: Run migrations
         run: |
