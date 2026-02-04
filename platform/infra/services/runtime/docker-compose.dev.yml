@@ -197,6 +197,15 @@ services:
       postgres:
         condition: service_healthy
 
+  repo-init:
+    image: busybox
+    container_name: repo-init
+    user: "0:0"
+    command: ["sh", "-c", "chown -R 1001:1001 /repo"]
+    volumes:
+      - repo_data:/repo
+    restart: "no"
+
   git-sync:
     image: registry.k8s.io/git-sync/git-sync:v4.4.0
     container_name: git-sync
@@ -206,6 +215,9 @@ services:
     restart: "no"
     volumes:
       - repo_data:/repo
+    depends_on:
+      repo-init:
+        condition: service_completed_successfully
     environment:
       - GITSYNC_REPO=${COGNI_REPO_URL}
       - GITSYNC_REF=${COGNI_REPO_REF}
