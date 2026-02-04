@@ -61,6 +61,7 @@ else
 fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+run_check "packages:build" "pnpm packages:build > /dev/null"
 run_check "typecheck" "pnpm typecheck"
 
 if [ "$FIX_MODE" = true ]; then
