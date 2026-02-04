@@ -9,7 +9,7 @@
 
 2. **NO_CLAIMS_WITHOUT_CITES**: Responses mentioning code/files must include citations (`path:L10-L20@sha`). Guard rejects uncited claims.
 
-3. **REPO_ROOT_ONLY**: Tools access only files under the configured repo root (`COGNI_REPO_PATH` or cwd). Reject absolute paths, `..` segments, AND symlink-resolved paths outside repo root via realpath checks. Allow regular files only.
+3. **REPO_ROOT_ONLY**: Tools access only files under the configured repo root (`COGNI_REPO_PATH`, required in all environments). Reject absolute paths, `..` segments, AND symlink-resolved paths outside repo root via realpath checks. Allow regular files only.
 
 4. **SHA_STAMPED**: Every tool result includes current HEAD sha7 from `git rev-parse HEAD` OR env `COGNI_REPO_SHA`. Tool returns 7-char prefix.
 
@@ -27,7 +27,7 @@
 
 **Step 1: In-process repo access**
 
-- [x] Add `COGNI_REPO_PATH` / `COGNI_REPO_SHA` optional env vars to `src/shared/env/server.ts`
+- [x] Add `COGNI_REPO_PATH` (required) / `COGNI_REPO_SHA` (optional) env vars to `src/shared/env/server.ts`
 - [x] Create `RepoCapability` factory in `src/bootstrap/capabilities/repo.ts` (test/real/stub)
 - [x] Create `FakeRepoAdapter` in `src/adapters/test/repo/` for deterministic test doubles
 - [x] Wire `RepoCapability` into DI container (`src/bootstrap/container.ts`)
@@ -106,7 +106,7 @@
 | `packages/langgraph-graphs/src/graphs/brain/tools.ts`    | Brain tool IDs (repo_search, repo_open)     |
 | `Dockerfile`                                             | Install ripgrep + git in runner stage       |
 | `platform/infra/services/runtime/docker-compose.yml`     | git-sync service + repo_data volume         |
-| `platform/infra/services/runtime/docker-compose.dev.yml` | Bind-mount repo root for local dev          |
+| `platform/infra/services/runtime/docker-compose.dev.yml` | HTTPS git-sync clone (same path as prod)    |
 | `platform/ci/scripts/deploy.sh`                          | COGNI_REPO_URL/BRANCH env + bootstrap step  |
 | `.github/workflows/staging-preview.yml`                  | Pass repo URL + branch to deploy            |
 | `.github/workflows/deploy-production.yml`                | Pass repo URL + branch to deploy            |
@@ -159,7 +159,7 @@ function makeRepoCitation(hit: RepoSearchHit | RepoOpenResult): string {
 
 **Token format**: `repo:<repoId>:<relpath>#L<start>-L<end>@<sha7>`
 
-**MVP**: Single repo accessed via `COGNI_REPO_PATH` (defaults to cwd), uses `repo:main:<path>#L...`.
+**MVP**: Single repo accessed via `COGNI_REPO_PATH` (required, no default), uses `repo:main:<path>#L...`.
 
 **Examples**:
 
@@ -217,18 +217,74 @@ Override only via server config, not user input.
 
 ---
 
+## Repo Access Modes
+
+> [!WARNING]
+> `COGNI_REPO_URL`, `COGNI_REPO_REF`, and `GIT_READ_TOKEN` are only consumed by the **git-sync Docker container**. The Next.js app process never reads them — it only sees `COGNI_REPO_PATH` and `COGNI_REPO_SHA`.
+
+There are two distinct repo access paths. Confusing them is a recurring source of "works locally, broken in prod" bugs.
+
+### Host mode (`pnpm dev`)
+
+```
+App (host process) ──reads──> local checkout (COGNI_REPO_PATH=.)
+                               └── .git exists → git rev-parse HEAD works
+```
+
+- **What's exercised**: `RipgrepAdapter` + `GitLsFilesAdapter` against local files
+- **What's NOT exercised**: git-sync, HTTPS clone, token auth, `COGNI_REPO_SHA` override
+- **SHA source**: `git rev-parse HEAD` on local `.git`
+- Git-sync env vars (`COGNI_REPO_URL`, `GIT_READ_TOKEN`) are **ignored** — the host process never reads them
+
+### Container mode (`docker:stack` / `docker:dev:stack` / CI / production)
+
+```
+git-sync container ──HTTPS clone──> GitHub (COGNI_REPO_URL + GIT_READ_TOKEN)
+        │
+        ▼
+   repo_data volume (/repo/current)   ← worktree, .git is a file not a directory
+        │
+        ▼
+App container ──reads──> /repo/current (COGNI_REPO_PATH=/repo/current)
+                          └── .git is a file → git rev-parse HEAD fails
+                          └── must use COGNI_REPO_SHA (set from COGNI_REPO_REF)
+```
+
+- **What's exercised**: Full production path — network clone, volume mount, SHA override
+- **SHA source**: `COGNI_REPO_SHA` env var (passed from `COGNI_REPO_REF`)
+- If git-sync fails, `service_completed_successfully` blocks app startup
+- `repo_data` is a **named Docker volume** — it persists across `docker compose down`. Use `docker:nuke` (which runs `down -v`) to force a fresh clone
+
+### Validation coverage
+
+| Scenario         | Host mode       | Container mode           |
+| ---------------- | --------------- | ------------------------ |
+| File read/search | Yes             | Yes                      |
+| SHA stamping     | `git rev-parse` | `COGNI_REPO_SHA`         |
+| HTTPS clone      | **No**          | Yes                      |
+| Token auth       | **No**          | Yes (if repo is private) |
+| git-sync wiring  | **No**          | Yes                      |
+| Volume mount     | **No**          | Yes                      |
+
+**Implication**: To validate the production git-sync flow locally, you must use `docker:dev:stack` or `docker:stack`, not `pnpm dev`.
+
+---
+
 ## Anti-Patterns
 
-| Pattern                        | Problem                                         |
-| ------------------------------ | ----------------------------------------------- |
-| npm ripgrep package in Next.js | Native dep bundling nightmares                  |
-| /repo mounted rw               | Security risk, brain should be read-only        |
-| Citations "added later"        | Model makes uncited claims, loses trust         |
-| HTTP endpoints before tools    | Duplicate logic, security surface               |
-| tree-sitter in v0              | Scope creep, rg is sufficient for MVP           |
-| Multi-repo before needed       | Design token for it, don't implement            |
-| trust_level/canonical filters  | Wait until doc structure is enforced            |
-| Separate brain container (P0)  | Dead architecture unless tools execute remotely |
+| Pattern                             | Problem                                                               |
+| ----------------------------------- | --------------------------------------------------------------------- |
+| npm ripgrep package in Next.js      | Native dep bundling nightmares                                        |
+| /repo mounted rw                    | Security risk, brain should be read-only                              |
+| Citations "added later"             | Model makes uncited claims, loses trust                               |
+| HTTP endpoints before tools         | Duplicate logic, security surface                                     |
+| tree-sitter in v0                   | Scope creep, rg is sufficient for MVP                                 |
+| Multi-repo before needed            | Design token for it, don't implement                                  |
+| trust_level/canonical filters       | Wait until doc structure is enforced                                  |
+| Separate brain container (P0)       | Dead architecture unless tools execute remotely                       |
+| Testing git-sync via `pnpm dev`     | Host mode never exercises git-sync/HTTPS/token — use `docker:stack`   |
+| `COGNI_REPO_PATH` with cwd fallback | Green CI / broken prod blind spot — field is required, no default     |
+| Named volume without `down -v`      | `repo_data` persists stale clones across restarts — use `docker:nuke` |
 
 ---
 
@@ -258,9 +314,9 @@ Review findings from code review on 2026-02-03. Ordered by severity.
 | [ ]    | MEDIUM   | Context lines wasted (`-C 10` parsed but discarded)                | Performance        | `ripgrep.adapter.ts:search()`       |
 | [ ]    | MEDIUM   | `--max-count` is per-file not total                                | HARD_BOUNDS (weak) | `ripgrep.adapter.ts:search()`       |
 | [ ]    | MEDIUM   | Test adapter imported in production bundle                         | Layering (minor)   | `bootstrap/capabilities/repo.ts`    |
-| [ ]    | MEDIUM   | `shaOverride` not wired from bootstrap env (`COGNI_REPO_SHA`)      | SHA_STAMPED        | `bootstrap/capabilities/repo.ts`    |
+| [x]    | MEDIUM   | `shaOverride` not wired from bootstrap env (`COGNI_REPO_SHA`)      | SHA_STAMPED        | `bootstrap/capabilities/repo.ts`    |
 
 ---
 
-**Last Updated**: 2026-02-03
+**Last Updated**: 2026-02-04
 **Status**: P0 MVP functional (brain graph + tools + deployment wiring complete; citation guard wiring deferred)
