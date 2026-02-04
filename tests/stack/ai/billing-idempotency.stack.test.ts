@@ -23,8 +23,9 @@ vi.mock("@/app/_lib/auth/session", () => ({
   getSessionUser: vi.fn(),
 }));
 
+import type { UserId } from "@cogni/ids";
 import { TEST_MODEL_ID } from "@tests/_fakes";
-import { DrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
+import { UserDrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
 import { getDb } from "@/adapters/server/db/client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as completionPOST } from "@/app/api/v1/ai/completion/route";
@@ -47,7 +48,6 @@ describe("Billing Idempotency (IDEMPOTENT_CHARGES)", () => {
     }
 
     const db = getDb();
-    const accountService = new DrizzleAccountService(db);
 
     // Setup: Create test user, billing account, virtual key
     const mockSessionUser: SessionUser = {
@@ -55,6 +55,11 @@ describe("Billing Idempotency (IDEMPOTENT_CHARGES)", () => {
       walletAddress: `0x${randomUUID().replace(/-/g, "").slice(0, 40)}`,
     };
     vi.mocked(getSessionUser).mockResolvedValue(mockSessionUser);
+
+    const accountService = new UserDrizzleAccountService(
+      db,
+      mockSessionUser.id as UserId
+    );
 
     await db.insert(users).values({
       id: mockSessionUser.id,
