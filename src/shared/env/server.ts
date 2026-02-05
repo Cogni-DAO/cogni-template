@@ -7,8 +7,8 @@
  * Scope: Validates process.env for server runtime; provides lazy server environment access. Does not handle client-side env vars.
  * Invariants: All required env vars validated on first access; provides boolean flags for runtime and test modes; fails fast on invalid env.
  * Side-effects: process.env
- * Notes: APP_ENV for adapter wiring; SERVICE_NAME for observability; LLM config; DATABASE_URL from direct var or component vars.
- *        Lazy init prevents build-time access.
+ * Notes: APP_ENV for adapter wiring; SERVICE_NAME for observability; LLM config; DATABASE_URL required (no component-piece fallback).
+ *        Lazy init prevents build-time access. Per DATABASE_RLS_SPEC.md design decision 7: no DSN construction in runtime code.
  * Links: Environment configuration specification
  * @public
  */
@@ -20,7 +20,6 @@ import { join } from "node:path";
 
 import { ZodError, z } from "zod";
 
-import { buildDatabaseUrl } from "@/shared/db";
 import { assertEnvInvariants } from "./invariants";
 
 // Env vars are strings - empty string "" should be treated as "not set" for optional fields.
@@ -85,16 +84,12 @@ export const serverSchema = z.object({
   // Billing (Stage 6.5)
   USER_PRICE_MARKUP_FACTOR: z.coerce.number().min(1.0).default(2.0),
 
-  // Database connection: either provide DATABASE_URL directly OR component pieces
-  DATABASE_URL: z.string().url().optional(),
-  // Service role connection (app_service with BYPASSRLS) — for auth, workers, bootstrap.
-  // Per DATABASE_RLS_SPEC.md: always required. Dev parity: both DSNs present even if same credentials.
+  // Database connections — both required, no component-piece fallback.
+  // Per DATABASE_RLS_SPEC.md design decision 7: runtime app consumes explicit DSNs only.
+  // app_user role (RLS enforced) — used by Next.js request paths
+  DATABASE_URL: z.string().url(),
+  // app_service role (BYPASSRLS) — used by auth, workers, bootstrap
   DATABASE_SERVICE_URL: z.string().url(),
-  POSTGRES_USER: z.string().min(1).optional(),
-  POSTGRES_PASSWORD: z.string().min(1).optional(),
-  POSTGRES_DB: z.string().min(1).optional(),
-  DB_HOST: z.string().optional(),
-  DB_PORT: z.coerce.number().default(5432),
 
   // NextAuth secret (required for JWT signing)
   AUTH_SECRET: z.string().min(32),
@@ -165,7 +160,6 @@ export const serverSchema = z.object({
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {
-  DATABASE_URL: string;
   /** Validated repo root path (resolved from COGNI_REPO_PATH) */
   COGNI_REPO_ROOT: string;
   isDev: boolean;
@@ -186,51 +180,26 @@ export function serverEnv(): ServerEnv {
       const isTestMode = parsed.APP_ENV === "test";
 
       // Cross-field invariants (beyond Zod schema)
+      // Per DATABASE_RLS_SPEC.md design decision 7: enforce role separation at boot
       assertEnvInvariants(parsed);
 
-      // Handle DATABASE_URL: use provided URL or construct from component pieces
-      let DATABASE_URL: string;
-      if (parsed.DATABASE_URL) {
-        // Direct DATABASE_URL provided (e.g., CI with sqlite://build.db)
-        DATABASE_URL = parsed.DATABASE_URL;
-
-        // Per DATABASE_RLS_SPEC.md §SSL_REQUIRED_NON_LOCAL: reject non-localhost
-        // PostgreSQL URLs without sslmode= to prevent credential sniffing.
-        if (DATABASE_URL.startsWith("postgresql://")) {
-          try {
-            const dbUrl = new URL(DATABASE_URL);
-            const host = dbUrl.hostname;
-            const isLocal = host === "localhost" || host === "127.0.0.1";
-            if (!isLocal && !dbUrl.searchParams.has("sslmode")) {
-              throw new Error(
-                `DATABASE_URL points to non-localhost host "${host}" but is missing sslmode= parameter. ` +
-                  "Add ?sslmode=require (or stricter) for production safety."
-              );
-            }
-          } catch (e) {
-            // URL parse failure on non-standard schemes (e.g., sqlite://) is fine
-            if (e instanceof Error && e.message.includes("sslmode")) throw e;
+      // Per DATABASE_RLS_SPEC.md §SSL_REQUIRED_NON_LOCAL: reject non-localhost
+      // PostgreSQL URLs without sslmode= to prevent credential sniffing.
+      if (parsed.DATABASE_URL.startsWith("postgresql://")) {
+        try {
+          const dbUrl = new URL(parsed.DATABASE_URL);
+          const host = dbUrl.hostname;
+          const isLocal = host === "localhost" || host === "127.0.0.1";
+          if (!isLocal && !dbUrl.searchParams.has("sslmode")) {
+            throw new Error(
+              `DATABASE_URL points to non-localhost host "${host}" but is missing sslmode= parameter. ` +
+                "Add ?sslmode=require (or stricter) for production safety."
+            );
           }
+        } catch (e) {
+          // URL parse failure on non-standard schemes (e.g., sqlite://) is fine
+          if (e instanceof Error && e.message.includes("sslmode")) throw e;
         }
-      } else {
-        // Construct from component pieces (e.g., local development)
-        if (
-          !parsed.POSTGRES_USER ||
-          !parsed.POSTGRES_PASSWORD ||
-          !parsed.POSTGRES_DB ||
-          !parsed.DB_HOST
-        ) {
-          throw new Error(
-            "Either DATABASE_URL or all component variables (POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_DB, DB_HOST) must be provided"
-          );
-        }
-        DATABASE_URL = buildDatabaseUrl({
-          POSTGRES_USER: parsed.POSTGRES_USER,
-          POSTGRES_PASSWORD: parsed.POSTGRES_PASSWORD,
-          POSTGRES_DB: parsed.POSTGRES_DB,
-          DB_HOST: parsed.DB_HOST,
-          DB_PORT: parsed.DB_PORT,
-        });
       }
 
       // Per DATABASE_RLS_SPEC.md §SSL_REQUIRED_NON_LOCAL: enforce sslmode on DATABASE_SERVICE_URL too.
@@ -267,7 +236,6 @@ export function serverEnv(): ServerEnv {
 
       ENV = {
         ...parsed,
-        DATABASE_URL,
         COGNI_REPO_ROOT,
         isDev,
         isTest,

@@ -42,9 +42,9 @@ describe("server env edge cases", () => {
     // Should return the same reference (cached)
     expect(env1).toBe(env2);
 
-    // Should have DATABASE_URL populated
+    // Should have DATABASE_URL populated (from BASE_VALID_ENV with app_user)
     expect(env1.DATABASE_URL).toBe(
-      "postgresql://postgres:postgres@localhost:5432/test_db"
+      "postgresql://app_user:password@localhost:5432/test_db"
     );
 
     // Should have computed flags

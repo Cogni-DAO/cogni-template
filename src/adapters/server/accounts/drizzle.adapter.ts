@@ -47,6 +47,21 @@ import type { SourceSystem } from "@/types/billing";
 
 const logger = makeLogger({ component: "DrizzleAccountService" });
 
+/**
+ * Extracts a human-readable fingerprint from DATABASE_URL for error messages.
+ * Returns "host:port/db" or the raw URL if parsing fails.
+ */
+function getDbFingerprint(databaseUrl: string): string {
+  try {
+    const url = new URL(databaseUrl);
+    const db = url.pathname.replace(/^\//, ""); // remove leading slash
+    return `${url.hostname}:${url.port || "5432"}/${db}`;
+  } catch {
+    // Fallback for non-standard URLs (e.g., sqlite://)
+    return databaseUrl;
+  }
+}
+
 interface QueryableDb extends Pick<Database, "query" | "insert"> {
   query: Database["query"];
   insert: Database["insert"];
@@ -217,8 +232,7 @@ export class UserDrizzleAccountService implements AccountService {
     displayName?: string;
   }): Promise<BillingAccount> {
     if (!isValidUuid(userId)) {
-      const env = serverEnv();
-      const dbFingerprint = `${env.DB_HOST}:${env.DB_PORT}/${env.POSTGRES_DB}`;
+      const dbFingerprint = getDbFingerprint(serverEnv().DATABASE_URL);
       throw new Error(
         `BUG: expected valid UUID v4 for owner_user_id, got: ${userId}. DB: ${dbFingerprint}`
       );
@@ -615,8 +629,7 @@ export class ServiceDrizzleAccountService implements ServiceAccountService {
     displayName?: string;
   }): Promise<BillingAccount> {
     if (!isValidUuid(userId)) {
-      const env = serverEnv();
-      const dbFingerprint = `${env.DB_HOST}:${env.DB_PORT}/${env.POSTGRES_DB}`;
+      const dbFingerprint = getDbFingerprint(serverEnv().DATABASE_SERVICE_URL);
       throw new Error(
         `BUG: expected valid UUID v4 for owner_user_id, got: ${userId}. DB: ${dbFingerprint}`
       );

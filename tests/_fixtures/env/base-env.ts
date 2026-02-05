@@ -15,16 +15,14 @@
  * Core env vars required by serverEnv() validation.
  * Does NOT include APP_ENV - let test suites control adapter wiring.
  * Used by tests/setup.ts for global test environment.
+ *
+ * Per DATABASE_RLS_SPEC.md design decision 7: both DSNs required with distinct users.
  */
 export const CORE_TEST_ENV = {
   NODE_ENV: "test",
-  // Database (components form DATABASE_URL if not provided)
-  POSTGRES_USER: "postgres",
-  POSTGRES_PASSWORD: "postgres",
-  POSTGRES_DB: "test_db",
-  DB_HOST: "localhost",
-  DB_PORT: "5432",
-  // Service role connection (required in all envs per DATABASE_RLS_SPEC.md)
+  // Database connections — both required, distinct users for RLS enforcement
+  // Per DATABASE_RLS_SPEC.md: no component-piece fallback in runtime
+  DATABASE_URL: "postgresql://app_user:password@localhost:5432/test_db",
   DATABASE_SERVICE_URL: "postgresql://app_service:svc@localhost:5432/test_db",
   // Auth
   AUTH_SECRET: "x".repeat(32),
@@ -65,8 +63,7 @@ export const PRODUCTION_VALID_ENV = {
   ...BASE_VALID_ENV,
   NODE_ENV: "test", // Keep test for logging silence
   APP_ENV: "production",
-  DB_HOST: "postgres",
-  DATABASE_SERVICE_URL: "postgresql://app_service:svc@localhost:5432/test_db",
+  // DSNs inherited from CORE_TEST_ENV (already have distinct users)
   EVM_RPC_URL: "https://eth-sepolia.example.com/v2/test-key",
   // COGNI_REPO_PATH inherited from CORE_TEST_ENV
 } as const;
@@ -87,8 +84,7 @@ export const PRODUCTION_VALID_ENV = {
  */
 export const MOCK_SERVER_ENV = {
   ...BASE_VALID_ENV,
-  // Computed fields that serverEnv() adds
-  DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/test_db",
+  // Computed fields that serverEnv() adds (DATABASE_URL already in BASE_VALID_ENV)
   COGNI_REPO_ROOT: process.cwd(),
   isDev: false,
   isTest: true,

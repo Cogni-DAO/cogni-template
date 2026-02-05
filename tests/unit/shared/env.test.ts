@@ -27,15 +27,9 @@ afterEach(() => {
 });
 
 describe("env schemas", () => {
-  it("parses minimal valid env", async () => {
-    Reflect.deleteProperty(process.env, "DATABASE_URL");
-
+  it("parses minimal valid env with distinct DB users", async () => {
     Object.assign(process.env, {
       ...BASE_VALID_ENV,
-      POSTGRES_USER: "u",
-      POSTGRES_PASSWORD: "p",
-      POSTGRES_DB: "db",
-      DB_HOST: "h",
       LITELLM_MASTER_KEY: "adminkey",
       NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: "test-project-id",
     });
@@ -44,8 +38,10 @@ describe("env schemas", () => {
     const { clientEnv } = await import("@/shared/env/client");
 
     const env = serverEnv();
-    // Non-localhost host gets sslmode=require appended per DATABASE_RLS_SPEC.md
-    expect(env.DATABASE_URL).toBe("postgresql://u:p@h:5432/db?sslmode=require");
+    // DATABASE_URL comes from BASE_VALID_ENV (app_user)
+    expect(env.DATABASE_URL).toBe(
+      "postgresql://app_user:password@localhost:5432/test_db"
+    );
     expect(clientEnv().NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID).toBe(
       "test-project-id"
     );
@@ -61,6 +57,72 @@ describe("env schemas", () => {
 
     const { serverEnv } = await import("@/shared/env/server");
 
+    const env = serverEnv();
+    expect(env.DATABASE_URL).toBe("sqlite://build.db");
+  });
+
+  it("throws when DATABASE_URL is missing", async () => {
+    const envWithoutDbUrl = { ...BASE_VALID_ENV };
+    // @ts-expect-error - intentionally removing required field for test
+    delete envWithoutDbUrl.DATABASE_URL;
+
+    Object.assign(process.env, envWithoutDbUrl);
+
+    const { serverEnv } = await import("@/shared/env/server");
+
+    expect(() => serverEnv()).toThrow();
+  });
+
+  it("throws when DATABASE_URL and DATABASE_SERVICE_URL use same user", async () => {
+    Object.assign(process.env, {
+      ...BASE_VALID_ENV,
+      // Both use same user - violates role separation requirement
+      DATABASE_URL: "postgresql://same_user:pass@localhost:5432/db",
+      DATABASE_SERVICE_URL: "postgresql://same_user:pass@localhost:5432/db",
+    });
+
+    const { serverEnv } = await import("@/shared/env/server");
+
+    expect(() => serverEnv()).toThrow(/same user/i);
+  });
+
+  it("throws when DATABASE_URL uses superuser", async () => {
+    Object.assign(process.env, {
+      ...BASE_VALID_ENV,
+      // Using postgres superuser - violates security requirement
+      DATABASE_URL: "postgresql://postgres:pass@localhost:5432/db",
+      DATABASE_SERVICE_URL: "postgresql://app_service:pass@localhost:5432/db",
+    });
+
+    const { serverEnv } = await import("@/shared/env/server");
+
+    expect(() => serverEnv()).toThrow(/superuser/i);
+  });
+
+  it("throws when DATABASE_SERVICE_URL uses superuser", async () => {
+    Object.assign(process.env, {
+      ...BASE_VALID_ENV,
+      DATABASE_URL: "postgresql://app_user:pass@localhost:5432/db",
+      // Using root superuser - violates security requirement
+      DATABASE_SERVICE_URL: "postgresql://root:pass@localhost:5432/db",
+    });
+
+    const { serverEnv } = await import("@/shared/env/server");
+
+    expect(() => serverEnv()).toThrow(/superuser/i);
+  });
+
+  it("allows non-PostgreSQL URLs to bypass role checks", async () => {
+    // sqlite URLs don't have meaningful usernames, so role checks are skipped
+    Object.assign(process.env, {
+      ...BASE_VALID_ENV,
+      DATABASE_URL: "sqlite://build.db",
+      DATABASE_SERVICE_URL: "sqlite://build.db",
+    });
+
+    const { serverEnv } = await import("@/shared/env/server");
+
+    // Should not throw - non-PostgreSQL URLs skip role separation checks
     const env = serverEnv();
     expect(env.DATABASE_URL).toBe("sqlite://build.db");
   });

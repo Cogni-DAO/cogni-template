@@ -19,22 +19,85 @@
 interface ParsedEnv {
   APP_ENV: "test" | "production";
   NODE_ENV: "development" | "test" | "production";
+  DATABASE_URL: string;
   DATABASE_SERVICE_URL: string;
   LITELLM_MASTER_KEY?: string | undefined;
+}
+
+/**
+ * Usernames that indicate superuser/admin access.
+ * These should never be used for app runtime connections.
+ */
+const SUPERUSER_NAMES = new Set(["postgres", "root", "superuser", "admin"]);
+
+/**
+ * Extracts the username from a PostgreSQL connection URL.
+ * Returns null if the URL is not parseable or has no username.
+ */
+function extractDbUsername(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    return parsed.username || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
  * Asserts cross-field environment invariants that Zod can't express cleanly.
  * Called after Zod schema validation passes.
  *
+ * Per DATABASE_RLS_SPEC.md design decision 7, enforces:
+ * 1. DATABASE_URL.user !== DATABASE_SERVICE_URL.user (distinct roles)
+ * 2. Neither user is a superuser (postgres, root, etc.)
+ * 3. Both DSNs are present (defense-in-depth, Zod also enforces)
+ *
  * @throws Error if invariants are violated
  */
 export function assertEnvInvariants(env: ParsedEnv): void {
-  // Defense-in-depth: Zod enforces this at parse time, but guard here too
-  // so future cross-field invariants have a clear pattern to follow.
-  // and we dont have to delete this code because of linter warnings
+  // Defense-in-depth: Zod enforces presence, but guard here too
+  if (!env.DATABASE_URL) {
+    throw new Error("DATABASE_URL is required in all environments");
+  }
   if (!env.DATABASE_SERVICE_URL) {
     throw new Error("DATABASE_SERVICE_URL is required in all environments");
+  }
+
+  // Extract usernames for role separation checks
+  const appUser = extractDbUsername(env.DATABASE_URL);
+  const serviceUser = extractDbUsername(env.DATABASE_SERVICE_URL);
+
+  // Only enforce role separation for PostgreSQL URLs
+  // (allows sqlite://build.db for Next.js build, etc.)
+  const isAppPostgres = env.DATABASE_URL.startsWith("postgresql://");
+  const isServicePostgres =
+    env.DATABASE_SERVICE_URL.startsWith("postgresql://");
+
+  if (isAppPostgres && isServicePostgres) {
+    // Check 1: Users must be distinct
+    if (appUser && serviceUser && appUser === serviceUser) {
+      throw new Error(
+        `DATABASE_URL and DATABASE_SERVICE_URL use the same user "${appUser}". ` +
+          "Per DATABASE_RLS_SPEC.md, these must be distinct roles (app_user vs app_service). " +
+          "Run provision.sh to create the required roles, then update your .env file."
+      );
+    }
+
+    // Check 2: Neither user should be a superuser
+    if (appUser && SUPERUSER_NAMES.has(appUser.toLowerCase())) {
+      throw new Error(
+        `DATABASE_URL uses superuser "${appUser}". ` +
+          "Per DATABASE_RLS_SPEC.md, runtime connections must use non-superuser roles (e.g., app_user). " +
+          "Run provision.sh to create the required roles, then update your .env file."
+      );
+    }
+    if (serviceUser && SUPERUSER_NAMES.has(serviceUser.toLowerCase())) {
+      throw new Error(
+        `DATABASE_SERVICE_URL uses superuser "${serviceUser}". ` +
+          "Per DATABASE_RLS_SPEC.md, even service connections should use dedicated roles (e.g., app_service), not superusers. " +
+          "Run provision.sh to create the required roles, then update your .env file."
+      );
+    }
   }
 }
 
