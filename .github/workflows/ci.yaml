@@ -249,7 +249,10 @@ jobs:
       TEMPORAL_ADDRESS: localhost:7233
       TEMPORAL_NAMESPACE: cogni-test
       TEMPORAL_TASK_QUEUE: scheduler-tasks
-      # Service role DSN for host-side vitest (provision.sh creates user_service role)
+      # Host-side DSNs for vitest preflight (dotenv doesn't interpolate ${VAR} syntax)
+      # App role (RLS-enforced)
+      DATABASE_URL: postgresql://user:password@localhost:55432/cogni_template_test
+      # Service role (BYPASSRLS) — provision.sh creates user_service role
       APP_DB_SERVICE_PASSWORD: service_password
       DATABASE_SERVICE_URL: postgresql://user_service:service_password@localhost:55432/cogni_template_test
       # git-sync HTTPS clone (same path as prod — no file:// shortcut)
