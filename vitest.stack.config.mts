@@ -28,11 +28,8 @@ function requireEnv(name: string): string {
 }
 
 // Fail fast if CI / local scripts didn't wire env correctly
-requireEnv("DB_HOST");
-requireEnv("DB_PORT");
-requireEnv("POSTGRES_USER");
-requireEnv("POSTGRES_PASSWORD");
-requireEnv("POSTGRES_DB");
+requireEnv("DATABASE_URL");
+requireEnv("DATABASE_SERVICE_URL");
 requireEnv("TEST_BASE_URL");
 
 export default defineConfig({

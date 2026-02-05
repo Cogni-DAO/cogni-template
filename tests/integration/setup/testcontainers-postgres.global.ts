@@ -8,7 +8,7 @@
  * Invariants:
  *   - Runs provision.sh inside the container (psql available there, not on host)
  *   - DATABASE_URL → app_user (RLS-enforced, DB owner)
- *   - DATABASE_SERVICE_URL → app_user_service (BYPASSRLS)
+ *   - DATABASE_SERVICE_URL → app_service (BYPASSRLS)
  *   - Migrations run as app_user (DB owner, same as production)
  * Side-effects: IO (Docker containers, process.env, file system)
  * Notes: Used by vitest.integration.config.mts as globalSetup; sets APP_ENV=test for fake adapters.
@@ -30,6 +30,7 @@ const PROVISION_SH = path.resolve(
 
 const APP_DB_USER = "app_user";
 const APP_DB_PASSWORD = "app_user_pass";
+const APP_DB_SERVICE_USER = "app_service";
 const APP_DB_SERVICE_PASSWORD = "service_pass";
 const APP_DB_NAME = "app_test_db";
 
@@ -45,7 +46,7 @@ export async function setup() {
   const superpass = c.getPassword();
 
   // Run provision.sh inside the container (where psql is available).
-  // Creates app_user (DB owner, RLS enforced) + app_user_service (BYPASSRLS),
+  // Creates app_user (DB owner, RLS enforced) + app_service (BYPASSRLS),
   // creates APP_DB_NAME database, grants DML to both roles.
   const result = await c.exec([
     "bash",
@@ -58,6 +59,7 @@ export async function setup() {
       `APP_DB_NAME=${APP_DB_NAME}`,
       `APP_DB_USER=${APP_DB_USER}`,
       `APP_DB_PASSWORD=${APP_DB_PASSWORD}`,
+      `APP_DB_SERVICE_USER=${APP_DB_SERVICE_USER}`,
       `APP_DB_SERVICE_PASSWORD=${APP_DB_SERVICE_PASSWORD}`,
       `bash /tmp/provision.sh`,
     ].join(" "),
@@ -73,7 +75,7 @@ export async function setup() {
   const host = c.getHost();
   const port = c.getMappedPort(5432);
   const appUserUri = `postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@${host}:${port}/${APP_DB_NAME}`;
-  const serviceUserUri = `postgresql://${APP_DB_USER}_service:${APP_DB_SERVICE_PASSWORD}@${host}:${port}/${APP_DB_NAME}`;
+  const serviceUserUri = `postgresql://${APP_DB_SERVICE_USER}:${APP_DB_SERVICE_PASSWORD}@${host}:${port}/${APP_DB_NAME}`;
 
   process.env.DATABASE_URL = appUserUri;
   process.env.DATABASE_SERVICE_URL = serviceUserUri;
@@ -86,12 +88,12 @@ export async function setup() {
   const serviceCheck = await c.exec([
     "bash",
     "-c",
-    `PGPASSWORD='${APP_DB_SERVICE_PASSWORD}' psql -h localhost -p 5432 -U ${APP_DB_USER}_service -d ${APP_DB_NAME} -tAc "SELECT current_user"`,
+    `PGPASSWORD='${APP_DB_SERVICE_PASSWORD}' psql -h localhost -p 5432 -U ${APP_DB_SERVICE_USER} -d ${APP_DB_NAME} -tAc "SELECT current_user"`,
   ]);
   const serviceUser = serviceCheck.output.trim();
-  if (serviceCheck.exitCode !== 0 || serviceUser !== `${APP_DB_USER}_service`) {
+  if (serviceCheck.exitCode !== 0 || serviceUser !== APP_DB_SERVICE_USER) {
     throw new Error(
-      `Preflight failed: cannot connect as ${APP_DB_USER}_service. ` +
+      `Preflight failed: cannot connect as ${APP_DB_SERVICE_USER}. ` +
         `provision.sh may not have created the service role.\n${serviceCheck.output}`
     );
   }

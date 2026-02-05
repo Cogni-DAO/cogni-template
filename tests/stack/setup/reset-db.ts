@@ -15,28 +15,17 @@
 
 import postgres from "postgres";
 
-import { buildDatabaseUrl } from "@/shared/db/db-url";
-
 export async function setup() {
   console.log("🧹 Resetting stack test database...");
 
-  // Build DATABASE_URL from environment pieces (consistent with app behavior)
-  const dbEnv: Record<string, string | number | undefined> = {
-    POSTGRES_USER: process.env.POSTGRES_USER,
-    POSTGRES_PASSWORD: process.env.POSTGRES_PASSWORD,
-    POSTGRES_DB: process.env.POSTGRES_DB,
-    DB_HOST: process.env.DB_HOST,
-    DB_PORT: process.env.DB_PORT,
-  };
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error("DATABASE_URL is required for stack test reset");
+  }
 
-  // Filter out undefined values to satisfy exactOptionalPropertyTypes
-  const filteredEnv = Object.fromEntries(
-    Object.entries(dbEnv).filter(([, value]) => value !== undefined)
-  );
-
-  const databaseUrl = process.env.DATABASE_URL ?? buildDatabaseUrl(filteredEnv);
-
-  // Verify we are connecting to the expected host/port = parsedUrl.hostname;
+  // Extract expected database name from URL for safety check
+  const parsedUrl = new URL(databaseUrl);
+  const expectedDb = parsedUrl.pathname.replace(/^\//, "");
 
   const sql = postgres(databaseUrl, {
     max: 1, // Use only one connection for setup
@@ -44,8 +33,6 @@ export async function setup() {
       application_name: "vitest_stack_reset",
     },
   });
-
-  const expectedDb = process.env.POSTGRES_DB;
 
   try {
     const [connectionInfo] = await sql<
