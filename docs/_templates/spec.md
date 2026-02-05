@@ -37,13 +37,30 @@ One paragraph: what this spec enables when implemented.
 
 2. **INVARIANT_NAME_002**: Description of the invariant.
 
+## Schema
+
+<!-- Optional: include for specs with database tables, API shapes, or config schemas -->
+<!-- Delete this section if not applicable -->
+
+**Table:** `table_name`
+
+| Column       | Type | Constraints      | Description       |
+| ------------ | ---- | ---------------- | ----------------- |
+| `column_one` | type | NOT NULL, UNIQUE | Brief description |
+
+**Why:** Rationale for schema design choices.
+
 ## Design
 
 <!-- Reference code touchpoints (paths) but don't embed large code blocks -->
 
 ### Key Decisions
 
-### Implementation Notes
+<!-- Number decisions with rationale. Example: -->
+<!-- ### 1. Why X over Y -->
+<!-- **Rule:** State the key principle derived from this decision. -->
+
+### File Pointers
 
 | File                  | Purpose           |
 | --------------------- | ----------------- |
@@ -75,4 +92,4 @@ How to adopt this spec if there's existing code/behavior to migrate.
 ## Related
 
 - [Related Spec](./related.md)
-- [Work Project](../../work/projects/wi.project.md)
+- [Initiative](../../work/initiatives/ini.name.md)
