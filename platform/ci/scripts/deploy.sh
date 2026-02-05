@@ -468,45 +468,45 @@ docker network create cogni-edge 2>/dev/null || true
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "Creating environment files..."
 
-# All env files use printf '%s\n' to safely handle shell metacharacters (backticks, $, etc).
-# No heredocs or echo - printf %s writes literal values without interpretation.
-
 # Edge env (minimal - just domain for Caddyfile)
-printf 'DOMAIN=%s\n' "$DOMAIN" > /opt/cogni-template-edge/.env
+cat > /opt/cogni-template-edge/.env << ENV_EOF
+DOMAIN=${DOMAIN}
+ENV_EOF
 
 # Runtime env (full app config)
 RUNTIME_ENV=/opt/cogni-template-runtime/.env
-{
-  printf '# Runtime environment\n'
-  printf 'DOMAIN=%s\n' "$DOMAIN"
-  printf 'APP_ENV=%s\n' "$APP_ENV"
-  printf 'APP_IMAGE=%s\n' "$APP_IMAGE"
-  printf 'MIGRATOR_IMAGE=%s\n' "$MIGRATOR_IMAGE"
-  printf 'SCHEDULER_WORKER_IMAGE=%s\n' "$SCHEDULER_WORKER_IMAGE"
-  printf 'APP_BASE_URL=https://%s\n' "$DOMAIN"
-  printf 'NEXTAUTH_URL=https://%s\n' "$DOMAIN"
-  printf 'POSTGRES_ROOT_USER=%s\n' "$POSTGRES_ROOT_USER"
-  printf 'APP_DB_USER=%s\n' "$APP_DB_USER"
-  printf 'APP_DB_SERVICE_USER=%s\n' "$APP_DB_SERVICE_USER"
-  printf 'APP_DB_NAME=%s\n' "$APP_DB_NAME"
-  printf 'DEPLOY_ENVIRONMENT=%s\n' "$DEPLOY_ENVIRONMENT"
-  printf 'TEMPORAL_DB_USER=%s\n' "$TEMPORAL_DB_USER"
-  printf 'COGNI_REPO_URL=%s\n' "$COGNI_REPO_URL"
-  printf 'COGNI_REPO_REF=%s\n' "$COGNI_REPO_REF"
-  printf 'GIT_READ_USERNAME=%s\n' "$GIT_READ_USERNAME"
-  # Secrets
-  printf 'DATABASE_URL=%s\n' "$DATABASE_URL"
-  printf 'DATABASE_SERVICE_URL=%s\n' "$DATABASE_SERVICE_URL"
-  printf 'LITELLM_MASTER_KEY=%s\n' "$LITELLM_MASTER_KEY"
-  printf 'OPENROUTER_API_KEY=%s\n' "$OPENROUTER_API_KEY"
-  printf 'AUTH_SECRET=%s\n' "$AUTH_SECRET"
-  printf 'POSTGRES_ROOT_PASSWORD=%s\n' "$POSTGRES_ROOT_PASSWORD"
-  printf 'APP_DB_PASSWORD=%s\n' "$APP_DB_PASSWORD"
-  printf 'APP_DB_SERVICE_PASSWORD=%s\n' "$APP_DB_SERVICE_PASSWORD"
-  printf 'EVM_RPC_URL=%s\n' "$EVM_RPC_URL"
-  printf 'TEMPORAL_DB_PASSWORD=%s\n' "$TEMPORAL_DB_PASSWORD"
-  printf 'GIT_READ_TOKEN=%s\n' "$GIT_READ_TOKEN"
-} > "$RUNTIME_ENV"
+cat > "$RUNTIME_ENV" << ENV_EOF
+# Required vars
+DOMAIN=${DOMAIN}
+APP_ENV=${APP_ENV}
+APP_IMAGE=${APP_IMAGE}
+MIGRATOR_IMAGE=${MIGRATOR_IMAGE}
+SCHEDULER_WORKER_IMAGE=${SCHEDULER_WORKER_IMAGE}
+APP_BASE_URL=https://${DOMAIN}
+NEXTAUTH_URL=https://${DOMAIN}
+DATABASE_URL=${DATABASE_URL}
+DATABASE_SERVICE_URL=${DATABASE_SERVICE_URL}
+LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
+OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+AUTH_SECRET=${AUTH_SECRET}
+POSTGRES_ROOT_USER=${POSTGRES_ROOT_USER}
+POSTGRES_ROOT_PASSWORD=${POSTGRES_ROOT_PASSWORD}
+APP_DB_USER=${APP_DB_USER}
+APP_DB_PASSWORD=${APP_DB_PASSWORD}
+APP_DB_SERVICE_USER=${APP_DB_SERVICE_USER}
+APP_DB_SERVICE_PASSWORD=${APP_DB_SERVICE_PASSWORD}
+APP_DB_NAME=${APP_DB_NAME}
+DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
+EVM_RPC_URL=${EVM_RPC_URL}
+# Temporal DB credentials (self-hosted)
+TEMPORAL_DB_USER=${TEMPORAL_DB_USER}
+TEMPORAL_DB_PASSWORD=${TEMPORAL_DB_PASSWORD}
+# Brain repo mount (COGNI_BRAIN_SPEC.md Step 4)
+COGNI_REPO_URL=${COGNI_REPO_URL}
+COGNI_REPO_REF=${COGNI_REPO_REF}
+GIT_READ_USERNAME=${GIT_READ_USERNAME}
+GIT_READ_TOKEN=${GIT_READ_TOKEN}
+ENV_EOF
 
 # Optional observability vars - only written if set (empty string breaks Zod validation)
 append_env_if_set "$RUNTIME_ENV" LOKI_WRITE_URL "${GRAFANA_CLOUD_LOKI_URL-}"
@@ -527,7 +527,9 @@ append_env_if_set "$RUNTIME_ENV" LANGFUSE_SECRET_KEY "${LANGFUSE_SECRET_KEY-}"
 append_env_if_set "$RUNTIME_ENV" LANGFUSE_BASE_URL "${LANGFUSE_BASE_URL-}"
 
 # SourceCred env
-printf 'SOURCECRED_GITHUB_TOKEN=%s\n' "$SOURCECRED_GITHUB_TOKEN" > /opt/cogni-template-sourcecred/.env
+cat > /opt/cogni-template-sourcecred/.env << ENV_EOF
+SOURCECRED_GITHUB_TOKEN=${SOURCECRED_GITHUB_TOKEN}
+ENV_EOF
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 2: Start edge stack (idempotent - only starts if not running)
@@ -778,65 +780,8 @@ rsync -av -e "ssh $SSH_OPTS" \
 
 # Upload and execute deployment script
 scp $SSH_OPTS "$ARTIFACT_DIR/deploy-remote.sh" root@"$VM_HOST":/tmp/deploy-remote.sh
-
-# Generate secrets file locally using printf to preserve special chars (backticks, $, etc)
-# This avoids passing secrets via SSH command line where they'd be shell-interpreted
-SECRETS_FILE="$ARTIFACT_DIR/deploy-secrets.env"
-# All values use printf %s to safely handle metacharacters
-{
-  printf 'DOMAIN=%s\n' "$DOMAIN"
-  printf 'APP_ENV=%s\n' "$APP_ENV"
-  printf 'DEPLOY_ENVIRONMENT=%s\n' "$DEPLOY_ENVIRONMENT"
-  printf 'APP_IMAGE=%s\n' "$APP_IMAGE"
-  printf 'MIGRATOR_IMAGE=%s\n' "$MIGRATOR_IMAGE"
-  printf 'SCHEDULER_WORKER_IMAGE=%s\n' "$SCHEDULER_WORKER_IMAGE"
-  printf 'POSTGRES_ROOT_USER=%s\n' "$POSTGRES_ROOT_USER"
-  printf 'APP_DB_USER=%s\n' "$APP_DB_USER"
-  printf 'APP_DB_SERVICE_USER=%s\n' "$APP_DB_SERVICE_USER"
-  printf 'APP_DB_NAME=%s\n' "$APP_DB_NAME"
-  printf 'TEMPORAL_DB_USER=%s\n' "$TEMPORAL_DB_USER"
-  printf 'COGNI_REPO_URL=%s\n' "$COGNI_REPO_URL"
-  printf 'COGNI_REPO_REF=%s\n' "$COGNI_REPO_REF"
-  printf 'GIT_READ_USERNAME=%s\n' "$GIT_READ_USERNAME"
-  printf 'GHCR_USERNAME=%s\n' "$GHCR_USERNAME"
-  printf 'COMMIT_SHA=%s\n' "${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}"
-  printf 'DEPLOY_ACTOR=%s\n' "${GITHUB_ACTOR:-$(whoami)}"
-} > "$SECRETS_FILE"
-
-# Secrets with potential special chars
-printf 'DATABASE_URL=%s\n' "$DATABASE_URL" >> "$SECRETS_FILE"
-printf 'DATABASE_SERVICE_URL=%s\n' "$DATABASE_SERVICE_URL" >> "$SECRETS_FILE"
-printf 'LITELLM_MASTER_KEY=%s\n' "$LITELLM_MASTER_KEY" >> "$SECRETS_FILE"
-printf 'OPENROUTER_API_KEY=%s\n' "$OPENROUTER_API_KEY" >> "$SECRETS_FILE"
-printf 'AUTH_SECRET=%s\n' "$AUTH_SECRET" >> "$SECRETS_FILE"
-printf 'POSTGRES_ROOT_PASSWORD=%s\n' "$POSTGRES_ROOT_PASSWORD" >> "$SECRETS_FILE"
-printf 'APP_DB_PASSWORD=%s\n' "$APP_DB_PASSWORD" >> "$SECRETS_FILE"
-printf 'APP_DB_SERVICE_PASSWORD=%s\n' "$APP_DB_SERVICE_PASSWORD" >> "$SECRETS_FILE"
-printf 'EVM_RPC_URL=%s\n' "$EVM_RPC_URL" >> "$SECRETS_FILE"
-printf 'TEMPORAL_DB_PASSWORD=%s\n' "$TEMPORAL_DB_PASSWORD" >> "$SECRETS_FILE"
-printf 'SOURCECRED_GITHUB_TOKEN=%s\n' "$SOURCECRED_GITHUB_TOKEN" >> "$SECRETS_FILE"
-printf 'GHCR_DEPLOY_TOKEN=%s\n' "$GHCR_DEPLOY_TOKEN" >> "$SECRETS_FILE"
-printf 'GIT_READ_TOKEN=%s\n' "$GIT_READ_TOKEN" >> "$SECRETS_FILE"
-
-# Optional vars - only write if set
-[[ -n "${GRAFANA_CLOUD_LOKI_URL:-}" ]] && printf 'GRAFANA_CLOUD_LOKI_URL=%s\n' "$GRAFANA_CLOUD_LOKI_URL" >> "$SECRETS_FILE"
-[[ -n "${GRAFANA_CLOUD_LOKI_USER:-}" ]] && printf 'GRAFANA_CLOUD_LOKI_USER=%s\n' "$GRAFANA_CLOUD_LOKI_USER" >> "$SECRETS_FILE"
-[[ -n "${GRAFANA_CLOUD_LOKI_API_KEY:-}" ]] && printf 'GRAFANA_CLOUD_LOKI_API_KEY=%s\n' "$GRAFANA_CLOUD_LOKI_API_KEY" >> "$SECRETS_FILE"
-[[ -n "${METRICS_TOKEN:-}" ]] && printf 'METRICS_TOKEN=%s\n' "$METRICS_TOKEN" >> "$SECRETS_FILE"
-[[ -n "${SCHEDULER_API_TOKEN:-}" ]] && printf 'SCHEDULER_API_TOKEN=%s\n' "$SCHEDULER_API_TOKEN" >> "$SECRETS_FILE"
-[[ -n "${PROMETHEUS_REMOTE_WRITE_URL:-}" ]] && printf 'PROMETHEUS_REMOTE_WRITE_URL=%s\n' "$PROMETHEUS_REMOTE_WRITE_URL" >> "$SECRETS_FILE"
-[[ -n "${PROMETHEUS_USERNAME:-}" ]] && printf 'PROMETHEUS_USERNAME=%s\n' "$PROMETHEUS_USERNAME" >> "$SECRETS_FILE"
-[[ -n "${PROMETHEUS_PASSWORD:-}" ]] && printf 'PROMETHEUS_PASSWORD=%s\n' "$PROMETHEUS_PASSWORD" >> "$SECRETS_FILE"
-[[ -n "${PROMETHEUS_QUERY_URL:-}" ]] && printf 'PROMETHEUS_QUERY_URL=%s\n' "$PROMETHEUS_QUERY_URL" >> "$SECRETS_FILE"
-[[ -n "${PROMETHEUS_READ_USERNAME:-}" ]] && printf 'PROMETHEUS_READ_USERNAME=%s\n' "$PROMETHEUS_READ_USERNAME" >> "$SECRETS_FILE"
-[[ -n "${PROMETHEUS_READ_PASSWORD:-}" ]] && printf 'PROMETHEUS_READ_PASSWORD=%s\n' "$PROMETHEUS_READ_PASSWORD" >> "$SECRETS_FILE"
-[[ -n "${LANGFUSE_PUBLIC_KEY:-}" ]] && printf 'LANGFUSE_PUBLIC_KEY=%s\n' "$LANGFUSE_PUBLIC_KEY" >> "$SECRETS_FILE"
-[[ -n "${LANGFUSE_SECRET_KEY:-}" ]] && printf 'LANGFUSE_SECRET_KEY=%s\n' "$LANGFUSE_SECRET_KEY" >> "$SECRETS_FILE"
-[[ -n "${LANGFUSE_BASE_URL:-}" ]] && printf 'LANGFUSE_BASE_URL=%s\n' "$LANGFUSE_BASE_URL" >> "$SECRETS_FILE"
-
-# Upload secrets file and execute remote script (source secrets file instead of env vars on command line)
-scp $SSH_OPTS "$SECRETS_FILE" root@"$VM_HOST":/tmp/deploy-secrets.env
-ssh $SSH_OPTS root@"$VM_HOST" "set -a && source /tmp/deploy-secrets.env && set +a && bash /tmp/deploy-remote.sh && rm -f /tmp/deploy-secrets.env"
+ssh $SSH_OPTS root@"$VM_HOST" \
+    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' APP_IMAGE='$APP_IMAGE' MIGRATOR_IMAGE='$MIGRATOR_IMAGE' SCHEDULER_WORKER_IMAGE='$SCHEDULER_WORKER_IMAGE' DATABASE_URL='$DATABASE_URL' DATABASE_SERVICE_URL='$DATABASE_SERVICE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_SERVICE_USER='$APP_DB_SERVICE_USER' APP_DB_SERVICE_PASSWORD='$APP_DB_SERVICE_PASSWORD' APP_DB_NAME='$APP_DB_NAME' EVM_RPC_URL='$EVM_RPC_URL' TEMPORAL_DB_USER='$TEMPORAL_DB_USER' TEMPORAL_DB_PASSWORD='$TEMPORAL_DB_PASSWORD' SOURCECRED_GITHUB_TOKEN='$SOURCECRED_GITHUB_TOKEN' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' SCHEDULER_API_TOKEN='${SCHEDULER_API_TOKEN:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' PROMETHEUS_QUERY_URL='${PROMETHEUS_QUERY_URL:-}' PROMETHEUS_READ_USERNAME='${PROMETHEUS_READ_USERNAME:-}' PROMETHEUS_READ_PASSWORD='${PROMETHEUS_READ_PASSWORD:-}' LANGFUSE_PUBLIC_KEY='${LANGFUSE_PUBLIC_KEY:-}' LANGFUSE_SECRET_KEY='${LANGFUSE_SECRET_KEY:-}' LANGFUSE_BASE_URL='${LANGFUSE_BASE_URL:-}' COGNI_REPO_URL='$COGNI_REPO_URL' COGNI_REPO_REF='$COGNI_REPO_REF' GIT_READ_USERNAME='$GIT_READ_USERNAME' GIT_READ_TOKEN='$GIT_READ_TOKEN' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-remote.sh"
 
 # Health validation
 log_info "Validating deployment health..."
