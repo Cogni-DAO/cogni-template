@@ -24,6 +24,7 @@ import {
   assertEvmRpcConfig,
   assertEvmRpcConnectivity,
   assertRuntimeSecrets,
+  assertSchedulerWorkerConnectivity,
   assertTemporalConnectivity,
   InfraConnectivityError,
   RuntimeSecretError,
@@ -98,6 +99,10 @@ export const GET = wrapRouteHandlerWithLogging(
       // Test Temporal connectivity (5s budget, triggers lazy connection)
       // This catches Temporal not running before stack tests execute
       await assertTemporalConnectivity(container.scheduleControl, env);
+
+      // Test scheduler-worker connectivity (5s budget)
+      // This ensures the Temporal worker is polling before stack tests run
+      await assertSchedulerWorkerConnectivity(env);
 
       const payload = {
         status: "healthy" as const,

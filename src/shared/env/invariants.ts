@@ -272,3 +272,46 @@ export async function assertTemporalConnectivity(
     );
   }
 }
+
+/**
+ * Extended env interface for scheduler-worker health check
+ */
+interface EnvWithSchedulerWorker extends ParsedEnv {
+  SCHEDULER_WORKER_HEALTH_URL: string;
+}
+
+/**
+ * Tests scheduler-worker connectivity by calling its /readyz endpoint.
+ * Budget: 5 seconds timeout for health check.
+ *
+ * This ensures the Temporal worker is actively polling before stack tests run,
+ * preventing race conditions where schedules are triggered but no worker is ready.
+ *
+ * @param env - Server environment with SCHEDULER_WORKER_HEALTH_URL
+ * @throws InfraConnectivityError if scheduler-worker unreachable or not ready
+ */
+export async function assertSchedulerWorkerConnectivity(
+  env: EnvWithSchedulerWorker
+): Promise<void> {
+  const url = `${env.SCHEDULER_WORKER_HEALTH_URL}/readyz`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+    const response = await fetch(url, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    // Success: scheduler-worker is ready and polling Temporal
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown scheduler-worker error";
+    throw new InfraConnectivityError(
+      `Scheduler-worker connectivity check failed: ${message}. ` +
+        `Verify scheduler-worker is running and SCHEDULER_WORKER_HEALTH_URL (${env.SCHEDULER_WORKER_HEALTH_URL}) is correct.`
+    );
+  }
+}

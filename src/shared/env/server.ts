@@ -151,6 +151,15 @@ export const serverSchema = z.object({
   TEMPORAL_NAMESPACE: z.string().min(1), // e.g., "cogni-test" or "cogni-production"
   TEMPORAL_TASK_QUEUE: z.string().default("scheduler-tasks"),
 
+  // Scheduler-worker health check URL
+  // Used by /readyz to verify scheduler-worker is ready before stack tests
+  // Default: http://scheduler-worker:9000 (Docker network)
+  // Override: http://localhost:9001 for test:stack:dev (app on host)
+  SCHEDULER_WORKER_HEALTH_URL: z
+    .string()
+    .url()
+    .default("http://scheduler-worker:9000"),
+
   // Repo access (in-process ripgrep) — required, no default
   // Must be explicitly set in every environment (.env.local, CI, compose)
   // to prevent green-CI / broken-prod blind spots from silent cwd() fallback

@@ -54,6 +54,10 @@ services:
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV:-dev}
       - TEMPORAL_TASK_QUEUE=scheduler-tasks
+      # Scheduler-worker health URL (for /readyz dependency check)
+      # Default: http://scheduler-worker:9000 for Docker networks
+      # Override via env for test:stack:dev where app runs on host
+      - SCHEDULER_WORKER_HEALTH_URL=${SCHEDULER_WORKER_HEALTH_URL:-http://scheduler-worker:9000}
     volumes:
       - repo_data:/repo:ro
     depends_on:
@@ -382,6 +386,8 @@ services:
     networks:
       - internal
       - cogni-edge
+    ports:
+      - "127.0.0.1:9001:9000" # Health endpoint for stack test wait-for-probes
     environment:
       # Temporal connection
       - TEMPORAL_ADDRESS=temporal:7233
@@ -406,14 +412,15 @@ services:
       temporal:
         condition: service_healthy
     healthcheck:
+      # Check /readyz (not /livez) - returns 200 only when worker is polling Temporal
       test:
         [
           "CMD-SHELL",
-          'node -e "require(''http'').get(''http://localhost:9000/livez'',r=>{process.exit(r.statusCode===200?0:1)})"',
+          'node -e "require(''http'').get(''http://localhost:9000/readyz'',r=>{process.exit(r.statusCode===200?0:1)})"',
         ]
       interval: 10s
       timeout: 2s
-      retries: 3
+      retries: 5
       start_period: 30s
 
 networks:
