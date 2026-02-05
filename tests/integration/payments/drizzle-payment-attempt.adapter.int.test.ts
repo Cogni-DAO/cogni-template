@@ -41,7 +41,7 @@ async function makeUserRepo(
 
 /**
  * Factory: ServiceDrizzlePaymentAttemptRepository (serviceDb, BYPASSRLS).
- * Uses getSeedDb() which connects via the app_user_service role.
+ * Uses getSeedDb() which connects via the app_service role.
  */
 async function makeServiceRepo(
   _harness: TestHarness

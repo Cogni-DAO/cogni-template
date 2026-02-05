@@ -10,7 +10,7 @@
  * - Missing SET LOCAL (no tenant context) returns zero rows
  * Side-effects: IO (database operations via testcontainers)
  * Notes: getDb() connects as app_user (FORCE RLS via provision.sh). getSeedDb()
- *        connects as app_user_service (BYPASSRLS) for seed/cleanup.
+ *        connects as app_service (BYPASSRLS) for seed/cleanup.
  * Links: docs/DATABASE_RLS_SPEC.md, src/adapters/server/db/tenant-scope.ts
  * @public
  */
@@ -267,7 +267,7 @@ describe("RLS Tenant Isolation", () => {
 
   describe("service role BYPASSRLS", () => {
     it("service role sees all tenants' data without tenant context", async () => {
-      // getSeedDb() connects as app_user_service (BYPASSRLS) — no tenant context needed
+      // getSeedDb() connects as app_service (BYPASSRLS) — no tenant context needed
       const rows = await getSeedDb().select().from(billingAccounts);
       const ids = rows.map((r) => r.id);
       expect(ids).toContain(tenantA.billingAccountId);

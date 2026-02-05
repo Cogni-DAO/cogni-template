@@ -10,7 +10,7 @@
  * - All wiring gates pass (schedules, accounts, payment attempts wired)
  * Side-effects: IO (database operations via testcontainers)
  * Notes: Uses production app_user role (FORCE RLS via provision.sh) for rlsDb.
- *        getSeedDb() (app_user_service, BYPASSRLS) handles seed/cleanup.
+ *        getSeedDb() (app_service, BYPASSRLS) handles seed/cleanup.
  * Links: docs/DATABASE_RLS_SPEC.md (Adapter Wiring Tracker), rls-tenant-isolation.int.test.ts
  * @public
  */
