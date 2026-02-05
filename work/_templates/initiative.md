@@ -3,7 +3,8 @@ work_item_id: ini.
 work_item_type: initiative
 title:
 state: Active
-priority: Medium
+priority: 1
+estimate: 3
 summary:
 outcome:
 assignees:

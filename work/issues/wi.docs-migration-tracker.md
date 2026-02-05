@@ -3,7 +3,8 @@ work_item_id: wi.docs-migration-tracker
 work_item_type: issue
 title: Docs Migration Tracker
 state: In Progress
-priority: High
+priority: 0
+estimate: 4
 summary: Track migration of 97 legacy docs to typed structure with YAML frontmatter
 outcome: All docs classified, migrated to typed directories, references updated
 spec_refs: docs/spec/spec-project-lifecycle.md, docs/spec/docs-work-system.md

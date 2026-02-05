@@ -3,7 +3,8 @@ work_item_id: wi.
 work_item_type: issue
 title:
 state: Backlog
-priority: Medium
+priority: 1
+estimate: 2
 summary:
 outcome:
 spec_refs:

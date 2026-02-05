@@ -3,7 +3,8 @@ work_item_id: ini.docs-system-infrastructure
 work_item_type: initiative
 title: Docs + Work System Infrastructure
 state: Active
-priority: High
+priority: 0
+estimate: 4
 summary: Engineering roadmap to build knowledge + project management infrastructure (Plane, MkDocs, CI gates, submodules)
 outcome: Automated CI enforcement, Plane as work canonical, MkDocs publishing, optional cogni-knowledge submodule
 assignees: derekg1729

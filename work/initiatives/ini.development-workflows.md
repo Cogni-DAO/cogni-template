@@ -3,7 +3,8 @@ work_item_id: ini.development-workflows
 work_item_type: initiative
 title: Development Workflows
 state: Active
-priority: High
+priority: 0
+estimate: 4
 summary: Standardized workflows for spec lifecycle, PR conventions, and agent operating model
 outcome: Documented workflows that persist as infrastructure evolves; agents and humans follow same conventions
 assignees: derekg1729

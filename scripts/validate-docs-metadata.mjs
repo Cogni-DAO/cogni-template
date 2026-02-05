@@ -26,7 +26,8 @@ const ADR_DECISION = ["proposed", "accepted", "deprecated", "superseded"];
 // === WORK ENUMS ===
 const INITIATIVE_STATE = ["Active", "Paused", "Done", "Dropped"];
 const ISSUE_STATE = ["Backlog", "Todo", "In Progress", "Done", "Cancelled"];
-const PRIORITY = ["Urgent", "High", "Medium", "Low", "None"];
+const PRIORITY = [0, 1, 2, 3];
+const ESTIMATE = [0, 1, 2, 3, 4, 5];
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -48,6 +49,7 @@ const INITIATIVE_REQUIRED = [
   "title",
   "state",
   "priority",
+  "estimate",
   "summary",
   "outcome",
   "assignees",
@@ -60,6 +62,7 @@ const ISSUE_REQUIRED = [
   "title",
   "state",
   "priority",
+  "estimate",
   "summary",
   "outcome",
   "assignees",
@@ -189,9 +192,14 @@ function validateInitiative(file, props, allIds) {
       `invalid state: ${props.state} (expected: ${INITIATIVE_STATE.join("|")})`
     );
   }
-  if (props.priority && !PRIORITY.includes(props.priority)) {
+  if (props.priority !== undefined && !PRIORITY.includes(props.priority)) {
     errors.push(
       `invalid priority: ${props.priority} (expected: ${PRIORITY.join("|")})`
+    );
+  }
+  if (props.estimate !== undefined && !ESTIMATE.includes(props.estimate)) {
+    errors.push(
+      `invalid estimate: ${props.estimate} (expected: ${ESTIMATE.join("|")})`
     );
   }
   if (props.work_item_id && !String(props.work_item_id).startsWith("ini.")) {
@@ -237,9 +245,14 @@ function validateIssue(file, props, allIds, initiativeIds) {
       `invalid state: ${props.state} (expected: ${ISSUE_STATE.join("|")})`
     );
   }
-  if (props.priority && !PRIORITY.includes(props.priority)) {
+  if (props.priority !== undefined && !PRIORITY.includes(props.priority)) {
     errors.push(
       `invalid priority: ${props.priority} (expected: ${PRIORITY.join("|")})`
+    );
+  }
+  if (props.estimate !== undefined && !ESTIMATE.includes(props.estimate)) {
+    errors.push(
+      `invalid estimate: ${props.estimate} (expected: ${ESTIMATE.join("|")})`
     );
   }
   if (props.work_item_id && !String(props.work_item_id).startsWith("wi.")) {
