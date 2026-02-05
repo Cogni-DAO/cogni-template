@@ -120,8 +120,9 @@ services:
     networks:
       - internal
     environment:
-      POSTGRES_USER: ${POSTGRES_ROOT_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_ROOT_PASSWORD}
+      # Root credentials for provisioning (must match postgres service)
+      POSTGRES_ROOT_USER: ${POSTGRES_ROOT_USER}
+      POSTGRES_ROOT_PASSWORD: ${POSTGRES_ROOT_PASSWORD}
       DB_HOST: postgres
       DB_PORT: 5432
       APP_DB_NAME: ${APP_DB_NAME}

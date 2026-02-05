@@ -65,10 +65,32 @@ function run_sql_as_root() {
   PGPASSWORD="$PG_PASS" psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$db" -v ON_ERROR_STOP=1 -c "$sql"
 }
 
-echo "⏳ Waiting for Postgres at $PG_HOST:$PG_PORT..."
+# Wait for Postgres with timeout (fail fast, not forever)
+PG_TIMEOUT="${PG_TIMEOUT:-120}"
+ELAPSED=0
+
+echo "⏳ Waiting for Postgres at $PG_HOST:$PG_PORT (user: $PG_USER, timeout: ${PG_TIMEOUT}s)..."
 until PGPASSWORD="$PG_PASS" psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "postgres" -c '\q' >/dev/null 2>&1; do
-  echo "   ... sleeping"
+  if [ "$ELAPSED" -ge "$PG_TIMEOUT" ]; then
+    echo ""
+    echo "❌ ERROR: Timed out waiting for Postgres after ${PG_TIMEOUT}s"
+    echo ""
+    echo "=== Diagnostics ==="
+    echo "Host: $PG_HOST"
+    echo "Port: $PG_PORT"
+    echo "User: $PG_USER"
+    echo "Pass: [${#PG_PASS} chars]"
+    echo ""
+    echo "=== Network check ==="
+    nc -zv "$PG_HOST" "$PG_PORT" 2>&1 || echo "(nc not available or connection refused)"
+    echo ""
+    echo "=== Auth check (last error) ==="
+    PGPASSWORD="$PG_PASS" psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "postgres" -c '\q' 2>&1 || true
+    exit 1
+  fi
+  echo "   ... waiting (${ELAPSED}s/${PG_TIMEOUT}s)"
   sleep 2
+  ELAPSED=$((ELAPSED + 2))
 done
 echo "✅ Postgres is up."
 
