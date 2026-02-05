@@ -388,8 +388,9 @@ services:
       - TEMPORAL_NAMESPACE=cogni-${APP_ENV:-dev}
       - TEMPORAL_TASK_QUEUE=scheduler-tasks
       # Database: service role (BYPASSRLS) for cross-tenant scheduler operations.
-      # Pass through DATABASE_SERVICE_URL — worker needs BYPASSRLS for cross-tenant reads.
-      - DATABASE_URL=${DATABASE_SERVICE_URL?DATABASE_SERVICE_URL is required}
+      # DATABASE_SERVICE_URL_DOCKER provides Docker-internal URL (postgres:5432) for test scripts.
+      # Falls back to DATABASE_SERVICE_URL for production/non-test contexts.
+      - DATABASE_URL=${DATABASE_SERVICE_URL_DOCKER:-${DATABASE_SERVICE_URL}}
       # Internal API (scheduler-worker → app)
       # Default: http://app:3000 for Docker-based stacks
       # Override: http://host.docker.internal:3000 for test:stack:dev (app on host)
