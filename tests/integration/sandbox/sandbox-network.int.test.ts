@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import {
   cleanupWorkspace,
   mkWorkspace,
+  uniqueRunId,
   useSandboxFixture,
 } from "./fixtures/sandbox-fixture";
 
@@ -31,10 +32,13 @@ describe("Sandbox Network Isolation", () => {
 
     try {
       const result = await fixture.runner.runOnce({
-        runId: "test-network-isolation",
+        runId: uniqueRunId("test-network-isolation"),
         workspacePath: workspace,
-        command:
+        argv: [
+          "bash",
+          "-lc",
           "curl -s --max-time 2 http://example.com 2>&1 || echo 'NETWORK_BLOCKED'",
+        ],
         limits: { maxRuntimeSec: 10, maxMemoryMb: 128 },
       });
 
@@ -55,9 +59,13 @@ describe("Sandbox Network Isolation", () => {
 
     try {
       const result = await fixture.runner.runOnce({
-        runId: "test-dns-blocked",
+        runId: uniqueRunId("test-dns-blocked"),
         workspacePath: workspace,
-        command: "getent hosts example.com 2>&1 || echo 'DNS_BLOCKED'",
+        argv: [
+          "bash",
+          "-lc",
+          "getent hosts example.com 2>&1 || echo 'DNS_BLOCKED'",
+        ],
         limits: { maxRuntimeSec: 10, maxMemoryMb: 128 },
       });
 

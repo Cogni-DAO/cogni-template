@@ -23,6 +23,7 @@ import {
   cleanupWorkspace,
   getRepoRootPath,
   mkWorkspace,
+  uniqueRunId,
   useSandboxFixture,
 } from "./fixtures/sandbox-fixture";
 
@@ -37,10 +38,13 @@ describe("Sandbox Mounts", () => {
 
       try {
         const result = await fixture.runner.runOnce({
-          runId: "test-workspace-write",
+          runId: uniqueRunId("test-workspace-write"),
           workspacePath: workspace,
-          command:
+          argv: [
+            "bash",
+            "-lc",
             'echo "hello-from-sandbox" > /workspace/test.txt && cat /workspace/test.txt',
+          ],
           limits: { maxRuntimeSec: 10, maxMemoryMb: 128 },
         });
 
@@ -59,9 +63,13 @@ describe("Sandbox Mounts", () => {
 
       try {
         await fixture.runner.runOnce({
-          runId: "test-workspace-host-read",
+          runId: uniqueRunId("test-workspace-host-read"),
           workspacePath: workspace,
-          command: 'echo "visible-to-host" > /workspace/output.txt',
+          argv: [
+            "bash",
+            "-lc",
+            'echo "visible-to-host" > /workspace/output.txt',
+          ],
           limits: { maxRuntimeSec: 10, maxMemoryMb: 128 },
         });
 
@@ -93,10 +101,13 @@ describe("Sandbox Mounts", () => {
       try {
         // Use jq for robust JSON parsing - works in CI and locally
         const result = await fixture.runner.runOnce({
-          runId: "test-repo-readable",
+          runId: uniqueRunId("test-repo-readable"),
           workspacePath: workspace,
-          command:
+          argv: [
+            "bash",
+            "-lc",
             "jq -er '.name' /repo/package.json >/dev/null && echo 'REPO_READABLE'",
+          ],
           limits: { maxRuntimeSec: 10, maxMemoryMb: 128 },
           mounts: [{ hostPath: repoPath, containerPath: "/repo", mode: "ro" }],
         });
@@ -117,10 +128,13 @@ describe("Sandbox Mounts", () => {
 
       try {
         const result = await fixture.runner.runOnce({
-          runId: "test-repo-readonly",
+          runId: uniqueRunId("test-repo-readonly"),
           workspacePath: workspace,
-          command:
+          argv: [
+            "bash",
+            "-lc",
             'echo "x" >> /repo/package.json 2>&1 || echo "WRITE_BLOCKED"',
+          ],
           limits: { maxRuntimeSec: 10, maxMemoryMb: 128 },
           mounts: [{ hostPath: repoPath, containerPath: "/repo", mode: "ro" }],
         });

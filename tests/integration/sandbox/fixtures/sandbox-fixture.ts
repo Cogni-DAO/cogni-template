@@ -38,6 +38,29 @@ async function checkImageAvailable(docker: Docker): Promise<boolean> {
 }
 
 /**
+ * Check if a Docker network exists.
+ * Used for conditional test execution when dev stack may not be running.
+ */
+export async function checkNetworkAvailable(
+  docker: Docker,
+  networkName: string
+): Promise<boolean> {
+  try {
+    await docker.getNetwork(networkName).inspect();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Generate a unique run ID for tests to avoid collision.
+ */
+export function uniqueRunId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
  * Create a temporary workspace directory.
  */
 export async function mkWorkspace(prefix = "sandbox-test-"): Promise<string> {

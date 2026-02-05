@@ -76,6 +76,7 @@ services:
     restart: unless-stopped
     networks:
       - cogni-edge
+      - sandbox-internal # P0.5a: Allow sandbox containers to reach LiteLLM
     ports:
       - "4000:4000"
     environment:
@@ -430,6 +431,9 @@ networks:
   internal:
     name: internal
     external: false
+  sandbox-internal:
+    name: sandbox-internal
+    internal: true # KEY: No external gateway - prevents internet egress
 
 volumes:
   caddy_data:

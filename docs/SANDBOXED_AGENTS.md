@@ -113,6 +113,47 @@ Prove network isolation, workspace I/O, and one-shot container lifecycle. No LLM
 
 ---
 
+### P0.5a: LiteLLM Reachability Spike (COMPLETE)
+
+Prove sandbox container can reach LiteLLM via internal Docker network while remaining isolated from the public internet.
+
+> **Known Gap**: P0.5a proves network connectivity (health endpoint) but NOT actual LLM completions. Per SECRETS_HOST_ONLY invariant, we cannot pass `LITELLM_MASTER_KEY` to the container. P0.5 CogniGateway will solve this by proxying authenticated requests from host.
+
+#### Infrastructure
+
+- [x] Add `sandbox-internal` network to `docker-compose.dev.yml`:
+  - `internal: true` — Prevents internet egress via external gateway
+  - Attach `litellm` service to this network
+- [x] Extend `SandboxRunSpec` with `networkMode` option:
+  - `mode: 'none'` (default) — Complete isolation (P0 baseline)
+  - `mode: 'internal'` + `networkName` — Attach to named internal network
+- [x] Change `SandboxRunSpec.command` to `argv: string[]` for explicit invocation
+- [x] Fix TIMEOUT_RACE_LEAK: clearTimeout when waitPromise wins
+- [x] Fix LOG_COLLECTION_INCORRECT: handle stream with demuxStream
+- [x] Fix NETWORK_FLAGS_CONFLICT: use only NetworkMode, remove NetworkDisabled
+- [x] Add SECURITY_HARDENING: no-new-privileges, PidsLimit, ReadonlyRootfs with Tmpfs
+- [x] Add OUTPUT_BOUNDS: truncate logs at configurable max bytes (default 2MB)
+
+#### Tests (Merge Gates)
+
+- [x] **LiteLLM reachable**: Container gets HTTP 200 from `http://litellm:4000/health/liveliness`
+- [x] **No default route**: `ip route show default` returns empty (definitive isolation proof)
+- [x] **DNS blocked**: `getent hosts example.com` fails
+- [x] **IP blocked**: `curl http://1.1.1.1` fails
+- [x] **No Docker socket**: `/var/run/docker.sock` not mounted
+- [x] **LiteLLM DNS resolves**: `getent hosts litellm` succeeds (internal DNS works)
+
+#### File Pointers (P0.5a)
+
+| File                                                     | Status   |
+| -------------------------------------------------------- | -------- |
+| `platform/infra/services/runtime/docker-compose.dev.yml` | Updated  |
+| `src/ports/sandbox-runner.port.ts`                       | Updated  |
+| `src/adapters/server/sandbox/sandbox-runner.adapter.ts`  | Updated  |
+| `tests/stack/sandbox/sandbox-litellm.stack.test.ts`      | Complete |
+
+---
+
 ### P0.5: Host-Owned LLM Loop + Gateway
 
 Host owns LLM loop via LiteLLM. Sandbox is command executor via ToolGateway (no LLM calls from sandbox).
@@ -123,7 +164,7 @@ Host owns LLM loop via LiteLLM. Sandbox is command executor via ToolGateway (no 
   - Reads socket path from `COGNI_GATEWAY_SOCK` env
   - Commands: `cogni-tool exec <tool> '<args-json>'`
   - Protocol: JSON over unix socket
-- [ ] Add `sandbox-isolated` network to docker-compose (no external connectivity)
+- [x] Add `sandbox-internal` network to docker-compose (P0.5a)
 - [ ] Update Dockerfile to include `cogni-tool` CLI
 
 #### Ports (`src/ports/`)
@@ -390,6 +431,12 @@ HOST: repoPort.pushBranchFromPatches()
 | P0    | Workspace I/O          | Read/write `/workspace` from container + host |
 | P0    | Timeout handling       | Long command killed, `errorCode: 'timeout'`   |
 | P0    | No orphans             | No containers left after test                 |
+| P0.5a | LiteLLM reachable      | HTTP 200 from `http://litellm:4000/health`    |
+| P0.5a | No default route       | `ip route show default` returns empty         |
+| P0.5a | DNS blocked            | `getent hosts example.com` fails              |
+| P0.5a | IP blocked             | `curl http://1.1.1.1` fails                   |
+| P0.5a | No Docker socket       | `/var/run/docker.sock` not present            |
+| P0.5a | LiteLLM DNS resolves   | `getent hosts litellm` succeeds               |
 | P0.5  | Grant enforcement      | Missing `allowSandbox: true` → `authz_denied` |
 | P0.5  | Gateway runId check    | Wrong runId → rejected                        |
 | P0.5  | Gateway tool allowlist | Disallowed tool → `policy_denied`             |
@@ -408,5 +455,5 @@ HOST: repoPort.pushBranchFromPatches()
 
 ---
 
-**Last Updated**: 2026-02-03
-**Status**: P0 Complete, P0.5 Not Started
+**Last Updated**: 2026-02-05
+**Status**: P0 Complete, P0.5a Complete, P0.5 In Progress

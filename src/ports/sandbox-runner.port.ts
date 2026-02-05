@@ -7,7 +7,7 @@
  * Scope: Defines contract for one-shot container execution. Does not implement execution logic.
  * Invariants:
  *   - Per SANDBOXED_AGENTS.md P0: One-shot containers, no long-lived sessions
- *   - Per NETWORK_DEFAULT_DENY: Container runs with network=none
+ *   - Per NETWORK_DEFAULT_DENY: Container runs with network=none by default
  *   - Per SECRETS_HOST_ONLY: No tokens/credentials passed to sandbox
  * Side-effects: none (interface definition only)
  * Links: docs/SANDBOXED_AGENTS.md
@@ -27,6 +27,20 @@ export interface SandboxMount {
 }
 
 /**
+ * Network mode configuration for sandbox containers.
+ */
+export interface SandboxNetworkMode {
+  /**
+   * Network mode for container execution.
+   * - 'none' (default): Complete network isolation (P0 baseline)
+   * - 'internal': Attach to named internal network (P0.5+)
+   */
+  readonly mode: "none" | "internal";
+  /** Required when mode='internal'. Must be a Docker network with internal:true */
+  readonly networkName?: string;
+}
+
+/**
  * Specification for a single sandbox command execution.
  */
 export interface SandboxRunSpec {
@@ -34,17 +48,28 @@ export interface SandboxRunSpec {
   readonly runId: string;
   /** Host filesystem path to mount as /workspace in container */
   readonly workspacePath: string;
-  /** Command to execute (passed to bash -c) */
-  readonly command: string;
+  /**
+   * Command arguments to execute.
+   * For shell commands, use: ['bash', '-lc', 'your command here']
+   * For direct binaries, use: ['/usr/bin/node', 'script.js']
+   */
+  readonly argv: readonly string[];
   /** Resource limits for the container */
   readonly limits: {
     /** Maximum runtime in seconds before timeout */
     readonly maxRuntimeSec: number;
     /** Maximum memory in megabytes */
     readonly maxMemoryMb: number;
+    /** Maximum combined stdout+stderr bytes (default: 2MB) */
+    readonly maxOutputBytes?: number;
   };
   /** Additional mounts (e.g., repo snapshot at /repo:ro) */
   readonly mounts?: readonly SandboxMount[];
+  /**
+   * Network mode for container. Defaults to { mode: 'none' } for complete isolation.
+   * Use { mode: 'internal', networkName: 'sandbox-internal' } for LiteLLM access.
+   */
+  readonly networkMode?: SandboxNetworkMode;
 }
 
 /**
@@ -54,7 +79,8 @@ export type SandboxErrorCode =
   | "timeout"
   | "oom_killed"
   | "internal"
-  | "container_failed";
+  | "container_failed"
+  | "output_truncated";
 
 /**
  * Result of a sandbox command execution.
@@ -70,6 +96,8 @@ export interface SandboxRunResult {
   readonly exitCode: number;
   /** Error code if execution failed (timeout, OOM, etc.) */
   readonly errorCode?: SandboxErrorCode;
+  /** True if output was truncated due to size limits */
+  readonly outputTruncated?: boolean;
 }
 
 /**
@@ -78,7 +106,7 @@ export interface SandboxRunResult {
  * Per SANDBOXED_AGENTS.md P0: Containers are ephemeral and one-shot.
  * Each `runOnce` call creates a new container, runs the command, and removes it.
  *
- * The container runs with network=none for isolation.
+ * The container runs with network=none for isolation by default.
  * Host mounts workspace directory for file I/O.
  */
 export interface SandboxRunnerPort {
