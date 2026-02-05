@@ -22,30 +22,32 @@ This is a master index of all specs, updated as specs are migrated.
 
 | ID                    | Title                       | State    | Domain     | Location                                               |
 | --------------------- | --------------------------- | -------- | ---------- | ------------------------------------------------------ |
-| architecture-spec     | Cogni-Template Architecture | active   | meta       | [architecture.md](./architecture.md)                   |
-| development-lifecycle | Development Lifecycle       | proposed | meta       | [development-lifecycle.md](./development-lifecycle.md) |
-| docs-work-system-spec | Docs + Work System Roadmap  | draft    | meta       | [docs-work-system.md](./docs-work-system.md)           |
-| scheduler-spec        | Scheduler Specification     | active   | ai-graphs  | [scheduler.md](./scheduler.md)                         |
-| rbac-spec             | RBAC Specification          | active   | auth       | [rbac.md](./rbac.md)                                   |
 | ai-setup-spec         | AI Setup Specification      | active   | ai-graphs  | [ai-setup.md](./ai-setup.md)                           |
+| scheduler-spec        | Scheduler Specification     | active   | ai-graphs  | [scheduler.md](./scheduler.md)                         |
 | cogni-brain-spec      | Cogni Brain Specification   | proposed | ai-graphs  | [cogni-brain.md](./cogni-brain.md)                     |
-| databases-spec        | Databases Specification     | active   | infra      | [databases.md](./databases.md)                         |
-| observability-spec    | Observability Specification | active   | infra      | [observability.md](./observability.md)                 |
+| rbac-spec             | RBAC Specification          | active   | auth       | [rbac.md](./rbac.md)                                   |
+| observability-spec    | Observability Specification | active   | data       | [observability.md](./observability.md)                 |
 | ci-cd-spec            | CI/CD Specification         | active   | deployment | [ci-cd.md](./ci-cd.md)                                 |
+| databases-spec        | Databases Specification     | active   | infra      | [databases.md](./databases.md)                         |
+| docs-work-system-spec | Docs + Work System Spec     | draft    | infra      | [docs-work-system.md](./docs-work-system.md)           |
+| architecture-spec     | Cogni-Template Architecture | active   | meta       | [architecture.md](./architecture.md)                   |
 | style-spec            | Style Specification         | active   | meta       | [style.md](./style.md)                                 |
+| development-lifecycle | Development Lifecycle       | proposed | workflows  | [development-lifecycle.md](./development-lifecycle.md) |
 
 ### Domains
 
 | Domain       | Description                                 |
 | ------------ | ------------------------------------------- |
-| `meta`       | Workflow, architecture, development process |
 | `ai-graphs`  | AI execution, LangGraph, prompts, tools     |
 | `auth`       | Authentication, authorization, RBAC         |
 | `billing`    | Credits, payments, metering                 |
-| `infra`      | Databases, observability, caching           |
-| `deployment` | CI/CD, environments, containers             |
-| `web3`       | Wallets, chains, DAO governance             |
 | `community`  | SourceCred, contributions                   |
+| `data`       | Observability, logging, metrics, tracing    |
+| `deployment` | CI/CD, environments, containers             |
+| `infra`      | Databases, caching, docs system             |
+| `meta`       | Architecture, style, cross-cutting concerns |
+| `web3`       | Wallets, chains, DAO governance             |
+| `workflows`  | Development lifecycle, PR conventions       |
 
 ## Pending Migration
 
