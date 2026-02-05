@@ -1,14 +1,16 @@
-id::
-type:: guide
-title::
-status:: draft
-trust:: draft
-summary::
-read_when::
-owner::
-created::
-verified::
-tags::
+---
+id:
+type: guide
+title:
+status: draft
+trust: draft
+summary:
+read_when:
+owner:
+created:
+verified:
+tags: []
+---
 
 # [Title]
 
