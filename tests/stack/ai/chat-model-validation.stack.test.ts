@@ -13,9 +13,9 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
-import { getDb } from "@/adapters/server/db/client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as chatPOST } from "@/app/api/v1/ai/chat/route";
 import { GET as modelsGET } from "@/app/api/v1/ai/models/route";
@@ -39,7 +39,7 @@ describe("Chat Model Validation Stack Test", () => {
       walletAddress,
     };
 
-    const db = getDb();
+    const db = getSeedDb();
 
     // Seed user
     await db.insert(users).values({

@@ -14,10 +14,9 @@
 
 import { generateTestWallet } from "@tests/_fixtures/auth/siwe-helpers";
 import { createSyntheticSession } from "@tests/_fixtures/auth/synthetic-session";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-
-import { getDb } from "@/adapters/server/db/client";
 import { billingAccounts, users, virtualKeys } from "@/shared/db/schema";
 
 function baseUrl(path = ""): string {
@@ -64,7 +63,7 @@ describe("API Auth Guard Stack Test", () => {
     });
 
     // Seed user, billing account, and virtual key in database
-    const db = getDb();
+    const db = getSeedDb();
 
     await db.insert(users).values({
       id: walletAddress,
@@ -159,7 +158,7 @@ describe("API Auth Guard Stack Test", () => {
     });
 
     // Seed database (no billing account - should get 403/500 from route, not 401 from proxy)
-    const db = getDb();
+    const db = getSeedDb();
 
     await db.insert(users).values({
       id: walletAddress,

@@ -22,7 +22,7 @@ vi.mock("@/app/_lib/auth/session", () => ({
 }));
 
 import { TEST_MODEL_ID } from "@tests/_fakes";
-import { getDb } from "@/adapters/server/db/client";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST } from "@/app/api/v1/ai/completion/route";
 import { aiCompletionOperation } from "@/contracts/ai.completion.v1.contract";
@@ -46,7 +46,7 @@ describe("Completion Billing Stack Test", () => {
     // Mock session
     vi.mocked(getSessionUser).mockResolvedValue(mockSessionUser);
 
-    const db = getDb();
+    const db = getSeedDb();
 
     // Seed user
     await db.insert(users).values({
@@ -174,7 +174,7 @@ describe("Completion Billing Stack Test", () => {
 
     vi.mocked(getSessionUser).mockResolvedValue(mockSessionUser);
 
-    const db = getDb();
+    const db = getSeedDb();
 
     // Seed user
     await db.insert(users).values({

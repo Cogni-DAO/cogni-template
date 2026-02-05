@@ -15,9 +15,9 @@
 import { randomUUID } from "node:crypto";
 import { makeTestCtx } from "@tests/_fakes";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { getDb } from "@/adapters/server/db/client";
 import {
   getTestOnChainVerifier,
   resetTestOnChainVerifier,
@@ -36,7 +36,7 @@ describe("MVP Payment Scenarios (9 critical flows)", () => {
   let testUser2Id: string;
   let sessionUser: SessionUser;
   let sessionUser2: SessionUser;
-  const db = getDb();
+  const db = getSeedDb();
 
   beforeEach(async () => {
     // Reset fake adapter to default VERIFIED state

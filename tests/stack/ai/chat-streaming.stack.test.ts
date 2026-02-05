@@ -14,6 +14,7 @@
 
 import { randomUUID } from "node:crypto";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import {
   isFinishMessageEvent,
   isTextDeltaEvent,
@@ -22,7 +23,6 @@ import {
 import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
-import { getDb } from "@/adapters/server/db/client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as chatPOST } from "@/app/api/v1/ai/chat/route";
 import { GET as modelsGET } from "@/app/api/v1/ai/models/route";
@@ -37,7 +37,7 @@ vi.mock("@/app/_lib/auth/session", () => ({
 describe("Chat Streaming", () => {
   it("streams text deltas incrementally (not buffered)", async () => {
     // Arrange - Seed authenticated user with credits
-    const db = getDb();
+    const db = getSeedDb();
     const { user } = await seedAuthenticatedUser(
       db,
       { id: randomUUID() },
@@ -145,7 +145,7 @@ describe("Chat Streaming", () => {
 
   it("streaming completion creates charge receipt", async () => {
     // Arrange - Seed authenticated user with credits
-    const db = getDb();
+    const db = getSeedDb();
     const { user } = await seedAuthenticatedUser(
       db,
       { id: randomUUID() },
@@ -225,7 +225,7 @@ describe("Chat Streaming", () => {
 
   it("stops streaming when aborted", async () => {
     // Arrange - Seed authenticated user with credits
-    const db = getDb();
+    const db = getSeedDb();
     const { user } = await seedAuthenticatedUser(
       db,
       { id: randomUUID() },

@@ -13,11 +13,10 @@
  */
 
 import { TEST_MODEL_ID } from "@tests/_fakes";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { desc, eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { getDb } from "@/adapters/server/db/client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST } from "@/app/api/v1/ai/completion/route";
 import type { SessionUser } from "@/shared/auth/session";
@@ -54,7 +53,7 @@ describe("AI Telemetry Stack Tests", () => {
 
       vi.mocked(getSessionUser).mockResolvedValue(mockSessionUser);
 
-      const db = getDb();
+      const db = getSeedDb();
 
       // Seed user
       await db.insert(users).values({
@@ -171,7 +170,7 @@ describe("AI Telemetry Stack Tests", () => {
 
       vi.mocked(getSessionUser).mockResolvedValue(mockSessionUser);
 
-      const db = getDb();
+      const db = getSeedDb();
 
       // Seed user
       await db.insert(users).values({

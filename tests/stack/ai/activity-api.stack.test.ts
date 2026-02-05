@@ -26,7 +26,7 @@ vi.mock("@/lib/auth/server", () => ({
   getServerSessionUser: vi.fn(),
 }));
 
-import { getDb } from "@/adapters/server/db/client";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { GET } from "@/app/api/v1/activity/route";
 import { getServerSessionUser } from "@/lib/auth/server";
 import type { SessionUser } from "@/shared/auth";
@@ -42,7 +42,7 @@ describe("Activity API Stack Tests", () => {
       throw new Error("This test must run in APP_ENV=test");
     }
 
-    const db = getDb();
+    const db = getSeedDb();
 
     // Create test user and billing account
     testUserId = randomUUID();
@@ -68,7 +68,7 @@ describe("Activity API Stack Tests", () => {
   });
 
   afterAll(async () => {
-    const db = getDb();
+    const db = getSeedDb();
     await db.delete(users).where(eq(users.id, testUserId));
   });
 

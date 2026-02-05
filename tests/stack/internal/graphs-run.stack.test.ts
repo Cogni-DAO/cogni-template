@@ -16,13 +16,11 @@
  */
 
 import { randomUUID } from "node:crypto";
-
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { seedTestActor, type TestActor } from "@tests/_fixtures/stack/seed";
 import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-
-import { getDb } from "@/adapters/server/db/client";
 import { POST } from "@/app/api/internal/graphs/[graphId]/runs/route";
 import { executionGrants, executionRequests, users } from "@/shared/db/schema";
 
@@ -44,7 +42,7 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
       );
     }
 
-    const db = getDb();
+    const db = getSeedDb();
     testActor = await seedTestActor(db);
 
     // Create execution grant for this user
@@ -58,7 +56,7 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
   });
 
   afterEach(async () => {
-    const db = getDb();
+    const db = getSeedDb();
     // Cleanup: delete user (cascades to billing_accounts, grants via FK)
     await db.delete(users).where(eq(users.id, testActor.user.id));
     // Don't resetContainer() - reuse connections across tests
@@ -157,7 +155,7 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
       expect(body.runId).toBeDefined();
 
       // Verify execution_requests record created
-      const db = getDb();
+      const db = getSeedDb();
       const records = await db
         .select()
         .from(executionRequests)
@@ -199,7 +197,7 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
       expect(body2.runId).toBe(body1.runId);
 
       // Only one execution_requests row
-      const db = getDb();
+      const db = getSeedDb();
       const records = await db
         .select()
         .from(executionRequests)
@@ -262,7 +260,7 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
 
     it("returns 403 when grant scope mismatch", async () => {
       // Create grant for different graph
-      const db = getDb();
+      const db = getSeedDb();
       const wrongScopeGrantId = randomUUID();
       await db.insert(executionGrants).values({
         id: wrongScopeGrantId,
@@ -288,7 +286,7 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
 
     it("returns 403 when grant is revoked", async () => {
       // Revoke the grant
-      const db = getDb();
+      const db = getSeedDb();
       await db
         .update(executionGrants)
         .set({ revokedAt: new Date() })

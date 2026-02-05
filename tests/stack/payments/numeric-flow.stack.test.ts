@@ -15,10 +15,10 @@
 import { randomUUID } from "node:crypto";
 import { makeTestCtx } from "@tests/_fakes";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { asNumber } from "@tests/_fixtures/db-utils";
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { getDb } from "@/adapters/server/db/client";
 import {
   getTestOnChainVerifier,
   resetTestOnChainVerifier,
@@ -39,13 +39,13 @@ import { CHAIN_ID } from "@/shared/web3/chain";
 describe("Payment Numeric Flow Validation", () => {
   let testUserId: string;
   let sessionUser: SessionUser;
-  const db = getDb();
+  const seedDb = getSeedDb();
 
   beforeEach(async () => {
     resetTestOnChainVerifier();
 
-    // Seed test user with billing account + virtual key
-    const seeded = await seedAuthenticatedUser(db, {
+    // Seed test user with billing account + virtual key (uses BYPASSRLS)
+    const seeded = await seedAuthenticatedUser(seedDb, {
       id: randomUUID(),
       name: "Numeric Flow Test User",
     });
@@ -63,7 +63,7 @@ describe("Payment Numeric Flow Validation", () => {
   afterEach(async () => {
     const { users } = await import("@/shared/db/schema");
     if (testUserId) {
-      await db.delete(users).where(eq(users.id, testUserId));
+      await seedDb.delete(users).where(eq(users.id, testUserId));
     }
     resetTestOnChainVerifier();
   });
@@ -100,7 +100,7 @@ describe("Payment Numeric Flow Validation", () => {
       expect(intent.amountRaw).toBe(expectedAmountRaw.toString());
 
       // Step 2: Verify DB record has correct amount_usd_cents and amount_raw
-      const attemptBefore = await db.query.paymentAttempts.findFirst({
+      const attemptBefore = await seedDb.query.paymentAttempts.findFirst({
         where: eq(paymentAttempts.id, intent.attemptId),
       });
 
@@ -109,7 +109,7 @@ describe("Payment Numeric Flow Validation", () => {
       expect(attemptBefore?.amountRaw).toBe(expectedAmountRaw);
 
       // Step 3: Get initial balance
-      const accountBefore = await db.query.billingAccounts.findFirst({
+      const accountBefore = await seedDb.query.billingAccounts.findFirst({
         where: eq(billingAccounts.ownerUserId, testUserId),
       });
       if (!accountBefore) {
@@ -131,7 +131,7 @@ describe("Payment Numeric Flow Validation", () => {
       expect(result.status).toBe("CREDITED");
 
       // Step 6: Verify ledger entry has correct credits
-      const ledgerEntry = await db.query.creditLedger.findFirst({
+      const ledgerEntry = await seedDb.query.creditLedger.findFirst({
         where: eq(creditLedger.reference, `${CHAIN_ID}:0x1dollar`),
       });
 
@@ -144,7 +144,7 @@ describe("Payment Numeric Flow Validation", () => {
       );
 
       // Step 7: Verify billing account balance updated
-      const accountAfter = await db.query.billingAccounts.findFirst({
+      const accountAfter = await seedDb.query.billingAccounts.findFirst({
         where: eq(billingAccounts.ownerUserId, testUserId),
       });
       if (!accountAfter) {
@@ -197,7 +197,7 @@ describe("Payment Numeric Flow Validation", () => {
       expect(intent.amountRaw).toBe(expectedAmountRaw.toString());
 
       // Step 2: Verify DB record has correct amount_usd_cents and amount_raw
-      const attemptBefore = await db.query.paymentAttempts.findFirst({
+      const attemptBefore = await seedDb.query.paymentAttempts.findFirst({
         where: eq(paymentAttempts.id, intent.attemptId),
       });
 
@@ -206,7 +206,7 @@ describe("Payment Numeric Flow Validation", () => {
       expect(attemptBefore?.amountRaw).toBe(expectedAmountRaw);
 
       // Step 3: Get initial balance
-      const accountBefore = await db.query.billingAccounts.findFirst({
+      const accountBefore = await seedDb.query.billingAccounts.findFirst({
         where: eq(billingAccounts.ownerUserId, testUserId),
       });
       if (!accountBefore) {
@@ -228,7 +228,7 @@ describe("Payment Numeric Flow Validation", () => {
       expect(result.status).toBe("CREDITED");
 
       // Step 6: Verify ledger entry has correct credits
-      const ledgerEntry = await db.query.creditLedger.findFirst({
+      const ledgerEntry = await seedDb.query.creditLedger.findFirst({
         where: eq(creditLedger.reference, `${CHAIN_ID}:0x50dollars`),
       });
 
@@ -241,7 +241,7 @@ describe("Payment Numeric Flow Validation", () => {
       );
 
       // Step 7: Verify billing account balance updated
-      const accountAfter = await db.query.billingAccounts.findFirst({
+      const accountAfter = await seedDb.query.billingAccounts.findFirst({
         where: eq(billingAccounts.ownerUserId, testUserId),
       });
       if (!accountAfter) {

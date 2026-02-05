@@ -196,8 +196,8 @@ vi.mock("@/app/_lib/auth/session", () => ({
 
 // Import after mock
 import { TEST_MODEL_ID } from "@tests/_fakes";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { fetchStackTest } from "@tests/_fixtures/http/rate-limit-helpers";
-import { getDb } from "@/adapters/server/db/client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as completionPOST } from "@/app/api/v1/ai/completion/route";
 import type { SessionUser } from "@/shared/auth";
@@ -219,7 +219,7 @@ describe("LLM Metrics Instrumentation", () => {
     };
     vi.mocked(getSessionUser).mockResolvedValue(mockSessionUser);
 
-    const db = getDb();
+    const db = getSeedDb();
     await db.delete(users).where(eq(users.id, mockSessionUser.id));
 
     await db.insert(users).values({

@@ -25,8 +25,8 @@ vi.mock("@/app/_lib/auth/session", () => ({
 
 import type { UserId } from "@cogni/ids";
 import { TEST_MODEL_ID } from "@tests/_fakes";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { UserDrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
-import { getDb } from "@/adapters/server/db/client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as completionPOST } from "@/app/api/v1/ai/completion/route";
 import type { SessionUser } from "@/shared/auth";
@@ -47,7 +47,7 @@ describe("Billing Idempotency (IDEMPOTENT_CHARGES)", () => {
       );
     }
 
-    const db = getDb();
+    const db = getSeedDb();
 
     // Setup: Create test user, billing account, virtual key
     const mockSessionUser: SessionUser = {

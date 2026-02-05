@@ -7,15 +7,14 @@
  * Scope: Query and poll schedule_runs and execution_requests tables. Does not modify data.
  * Invariants:
  *   - Polling respects timeout to avoid infinite waits
- *   - Uses getDb() for connection (same as app code)
+ *   - Uses getSeedDb() (BYPASSRLS) for queries on RLS-protected tables
  * Side-effects: IO (database reads)
  * Links: tests/stack/scheduling/*.stack.test.ts, db/schema.scheduling.ts
  * @public
  */
 
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { eq, like } from "drizzle-orm";
-
-import { getDb } from "@/adapters/server/db/client";
 import { executionRequests, scheduleRuns } from "@/shared/db/schema";
 
 /** Default poll interval for waiting */
@@ -36,7 +35,7 @@ export async function waitForScheduleRunCreated(
   scheduleId: string,
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<typeof scheduleRuns.$inferSelect> {
-  const db = getDb();
+  const db = getSeedDb();
   const startTime = Date.now();
 
   while (Date.now() - startTime < timeoutMs) {
@@ -67,7 +66,7 @@ export async function waitForScheduleRunCreated(
 export async function getScheduleRuns(
   scheduleId: string
 ): Promise<Array<typeof scheduleRuns.$inferSelect>> {
-  const db = getDb();
+  const db = getSeedDb();
   return db
     .select()
     .from(scheduleRuns)
@@ -83,7 +82,7 @@ export async function getScheduleRuns(
 export async function getExecutionRequest(
   idempotencyKey: string
 ): Promise<typeof executionRequests.$inferSelect | null> {
-  const db = getDb();
+  const db = getSeedDb();
   const rows = await db
     .select()
     .from(executionRequests)
@@ -103,7 +102,7 @@ export async function getExecutionRequest(
 export async function getExecutionRequestsByPrefix(
   prefix: string
 ): Promise<Array<typeof executionRequests.$inferSelect>> {
-  const db = getDb();
+  const db = getSeedDb();
   return db
     .select()
     .from(executionRequests)
@@ -121,7 +120,7 @@ export async function waitForScheduleRunCompleted(
   scheduleId: string,
   timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<typeof scheduleRuns.$inferSelect> {
-  const db = getDb();
+  const db = getSeedDb();
   const startTime = Date.now();
   const terminalStatuses = ["success", "error", "skipped"];
 

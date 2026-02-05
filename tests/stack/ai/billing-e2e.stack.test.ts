@@ -23,7 +23,7 @@ vi.mock("@/app/_lib/auth/session", () => ({
 }));
 
 import { TEST_MODEL_ID } from "@tests/_fakes";
-import { getDb } from "@/adapters/server/db/client";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as completionPOST } from "@/app/api/v1/ai/completion/route";
 import { GET as summaryGET } from "@/app/api/v1/payments/credits/summary/route";
@@ -53,7 +53,7 @@ describe("Billing E2E Stack Test", () => {
 
     vi.mocked(getSessionUser).mockResolvedValue(mockSessionUser);
 
-    const db = getDb();
+    const db = getSeedDb();
 
     // Clean up previous run if exists (cascades to billing accounts, ledger, usage)
     await db.delete(users).where(eq(users.id, mockSessionUser.id));

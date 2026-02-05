@@ -54,7 +54,7 @@ pnpm test:int
 
 ## Standards
 
-- Test code uses `getSeedDb()` for INSERT/DELETE (seeding), `getDb()` for adapter construction and RLS assertions
+- Test code uses `getSeedDb()` for INSERT/DELETE (seeding) and SELECT assertions (BYPASSRLS)
 - Requires `DATABASE_SERVICE_URL` in env (set by testcontainers global setup)
 
 ## Dependencies

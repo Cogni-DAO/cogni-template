@@ -22,7 +22,7 @@ vi.mock("@/app/_lib/auth/session", () => ({
 }));
 
 import { TEST_MODEL_ID } from "@tests/_fakes";
-import { getDb } from "@/adapters/server/db/client";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST } from "@/app/api/v1/ai/completion/route";
 import type { SessionUser } from "@/shared/auth/session";
@@ -45,7 +45,7 @@ describe("Auth Flow Stack Test", () => {
     };
 
     // Seed user in DB to satisfy FK constraint
-    const db = getDb();
+    const db = getSeedDb();
     await db.insert(users).values({
       id: mockSessionUser.id,
       name: "Stack Test User",

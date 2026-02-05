@@ -18,7 +18,7 @@ import { randomUUID } from "node:crypto";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
 import { NextRequest } from "next/server";
 import { describe, it, vi } from "vitest";
-import { getDb } from "@/adapters/server/db/client";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as chatPOST } from "@/app/api/v1/ai/chat/route";
 import { serverEnv } from "@/shared/env/server";
@@ -74,7 +74,7 @@ describe("ZDR Passthrough", () => {
     }
 
     // Arrange - Seed authenticated user with credits
-    const db = getDb();
+    const db = getSeedDb();
     const { user } = await seedAuthenticatedUser(
       db,
       { id: randomUUID() },

@@ -18,6 +18,7 @@
 
 import { randomUUID } from "node:crypto";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import {
   isFinishMessageEvent,
   isTextDeltaEvent,
@@ -26,8 +27,6 @@ import {
 import { desc, eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-import { getDb } from "@/adapters/server/db/client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as chatPOST } from "@/app/api/v1/ai/chat/route";
 import { GET as modelsGET } from "@/app/api/v1/ai/models/route";
@@ -47,7 +46,7 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
   describe("success path", () => {
     it("fires exactly one charge_receipt and one ai_invocation_summaries on stream completion", async () => {
       // Arrange - Seed authenticated user with credits
-      const db = getDb();
+      const db = getSeedDb();
       const testId = randomUUID().slice(0, 8);
       const { user, billingAccount } = await seedAuthenticatedUser(
         db,
@@ -145,7 +144,7 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
 
     it("does not create duplicate records on multiple stream iterations", async () => {
       // This test verifies that side effects don't fire per-chunk
-      const db = getDb();
+      const db = getSeedDb();
       const { user, billingAccount } = await seedAuthenticatedUser(
         db,
         { id: randomUUID() },
@@ -237,7 +236,7 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
   describe("abort path", () => {
     it("fires telemetry but NOT billing on abort", async () => {
       // Arrange
-      const db = getDb();
+      const db = getSeedDb();
       const { user, billingAccount } = await seedAuthenticatedUser(
         db,
         { id: randomUUID() },

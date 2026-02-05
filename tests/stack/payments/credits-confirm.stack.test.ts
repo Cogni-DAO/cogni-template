@@ -15,17 +15,16 @@
 import { randomUUID } from "node:crypto";
 
 import { makeTestCtx } from "@tests/_fakes";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { and, eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
-
-import { getDb } from "@/adapters/server/db/client";
 import { confirmCreditsPaymentFacade } from "@/app/_facades/payments/credits.server";
 import { billingAccounts, creditLedger, users } from "@/shared/db/schema";
 
 describe("Credits confirm stack (idempotent on clientPaymentId)", () => {
   it("applies credits once per clientPaymentId and returns consistent balance", async () => {
     const ctx = makeTestCtx();
-    const db = getDb();
+    const db = getSeedDb();
     const sessionUser = {
       id: randomUUID(), // Valid UUID v4 for testing
       walletAddress: `0x${"1".repeat(40)}`,

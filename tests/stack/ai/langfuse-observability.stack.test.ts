@@ -21,14 +21,13 @@
 import { randomUUID } from "node:crypto";
 
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import {
   isFinishMessageEvent,
   readDataStreamEvents,
 } from "@tests/helpers/data-stream";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { getDb } from "@/adapters/server/db/client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as chatPOST } from "@/app/api/v1/ai/chat/route";
 import { GET as modelsGET } from "@/app/api/v1/ai/models/route";
@@ -170,7 +169,7 @@ describe("Langfuse Observability Stack Tests", () => {
   describe("LANGFUSE_NON_NULL_IO invariant", () => {
     it("creates trace with non-null scrubbed input", async () => {
       // Arrange
-      const db = getDb();
+      const db = getSeedDb();
       const { user } = await seedAuthenticatedUser(
         db,
         { id: randomUUID() },
@@ -237,7 +236,7 @@ describe("Langfuse Observability Stack Tests", () => {
 
     it("updates trace with non-null scrubbed output on success", async () => {
       // Arrange
-      const db = getDb();
+      const db = getSeedDb();
       const { user } = await seedAuthenticatedUser(
         db,
         { id: randomUUID() },
@@ -303,7 +302,7 @@ describe("Langfuse Observability Stack Tests", () => {
   describe("LANGFUSE_OTEL_TRACE_CORRELATION invariant", () => {
     it("uses valid 32-hex traceId for Langfuse trace", async () => {
       // Arrange
-      const db = getDb();
+      const db = getSeedDb();
       const { user } = await seedAuthenticatedUser(
         db,
         { id: randomUUID() },
@@ -364,7 +363,7 @@ describe("Langfuse Observability Stack Tests", () => {
   describe("LANGFUSE_SESSION_LIMIT invariant", () => {
     it("truncates sessionId to 200 chars", async () => {
       // Arrange
-      const db = getDb();
+      const db = getSeedDb();
       const { user } = await seedAuthenticatedUser(
         db,
         { id: randomUUID() },
@@ -428,7 +427,7 @@ describe("Langfuse Observability Stack Tests", () => {
   describe("LANGFUSE_TERMINAL_ONCE_GUARD invariant", () => {
     it("calls updateTraceOutput exactly once on success", async () => {
       // Arrange
-      const db = getDb();
+      const db = getSeedDb();
       const { user } = await seedAuthenticatedUser(
         db,
         { id: randomUUID() },
@@ -487,7 +486,7 @@ describe("Langfuse Observability Stack Tests", () => {
   describe("trace metadata", () => {
     it("includes graphId in tags", async () => {
       // Arrange
-      const db = getDb();
+      const db = getSeedDb();
       const { user } = await seedAuthenticatedUser(
         db,
         { id: randomUUID() },
@@ -546,7 +545,7 @@ describe("Langfuse Observability Stack Tests", () => {
 
     it("includes userId in metadata (not as tag)", async () => {
       // Arrange
-      const db = getDb();
+      const db = getSeedDb();
       const { user } = await seedAuthenticatedUser(
         db,
         { id: randomUUID() },
@@ -608,7 +607,7 @@ describe("Langfuse Observability Stack Tests", () => {
 
     it("includes billingAccountId in metadata", async () => {
       // Arrange
-      const db = getDb();
+      const db = getSeedDb();
       const { user, billingAccount } = await seedAuthenticatedUser(
         db,
         { id: randomUUID() },
@@ -667,7 +666,7 @@ describe("Langfuse Observability Stack Tests", () => {
   describe("LANGFUSE_SCRUB_BEFORE_SEND invariant", () => {
     it("scrubs sensitive content from input", async () => {
       // Arrange
-      const db = getDb();
+      const db = getSeedDb();
       const { user } = await seedAuthenticatedUser(
         db,
         { id: randomUUID() },
@@ -747,7 +746,7 @@ describe("Langfuse Observability Stack Tests", () => {
   describe.skip("GENERATION_UNDER_EXISTING_TRACE contract", () => {
     it("records generation with tokens under graph-execution trace (same traceId)", async () => {
       // Arrange
-      const db = getDb();
+      const db = getSeedDb();
       const { user } = await seedAuthenticatedUser(
         db,
         { id: randomUUID() },
@@ -820,7 +819,7 @@ describe("Langfuse Observability Stack Tests", () => {
 
     it("generation traceId matches trace output traceId", async () => {
       // Arrange
-      const db = getDb();
+      const db = getSeedDb();
       const { user } = await seedAuthenticatedUser(
         db,
         { id: randomUUID() },

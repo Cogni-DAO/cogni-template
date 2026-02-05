@@ -15,6 +15,7 @@
  * @public
  */
 
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import {
   getExecutionRequest,
   getScheduleRuns,
@@ -26,8 +27,6 @@ import { triggerSchedule } from "@tests/_fixtures/temporal/client";
 import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { getDb } from "@/adapters/server/db/client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { DELETE } from "@/app/api/v1/schedules/[scheduleId]/route";
 import { POST } from "@/app/api/v1/schedules/route";
@@ -60,13 +59,13 @@ describe("[scheduling] scheduler-worker execution", () => {
       );
     }
 
-    const db = getDb();
+    const db = getSeedDb();
     testActor = await seedTestActor(db);
     vi.mocked(getSessionUser).mockResolvedValue(testActor.user);
   });
 
   afterEach(async () => {
-    const db = getDb();
+    const db = getSeedDb();
 
     // Cleanup: Delete schedule via API (cleans up Temporal + DB)
     if (createdScheduleId) {

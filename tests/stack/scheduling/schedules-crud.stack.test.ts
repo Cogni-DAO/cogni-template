@@ -14,6 +14,7 @@
  * @public
  */
 
+import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import {
   createSchedulePayload,
   createScheduleUpdatePayload,
@@ -23,7 +24,6 @@ import { seedTestActor, type TestActor } from "@tests/_fixtures/stack/seed";
 import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { getDb } from "@/adapters/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { DELETE, PATCH } from "@/app/api/v1/schedules/[scheduleId]/route";
 import { GET, POST } from "@/app/api/v1/schedules/route";
@@ -46,7 +46,7 @@ describe("[scheduling] schedules CRUD", () => {
 
   beforeEach(async () => {
     // Seed user + billing account directly (no accountService indirection)
-    const db = getDb();
+    const db = getSeedDb();
     testActor = await seedTestActor(db);
     vi.mocked(getSessionUser).mockResolvedValue(testActor.user);
   });
@@ -54,7 +54,7 @@ describe("[scheduling] schedules CRUD", () => {
   afterEach(async () => {
     // Cleanup: Delete schedules via API first (cleans up Temporal + DB)
     // Then delete user (cascades remaining DB records via FK)
-    const db = getDb();
+    const db = getSeedDb();
 
     // Find all schedules for this user and delete via API
     const userSchedules = await db.query.schedules.findMany({
@@ -121,7 +121,7 @@ describe("[scheduling] schedules CRUD", () => {
       const body = await response.json();
 
       // Verify grant exists in DB
-      const db = getDb();
+      const db = getSeedDb();
       const scheduleRow = await db.query.schedules.findFirst({
         where: eq(schedules.id, body.id),
       });
