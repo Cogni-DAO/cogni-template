@@ -227,12 +227,19 @@ jobs:
     env:
       NODE_ENV: test
       APP_ENV: test
-      # Database config for test connection to containers (not app config, which connects postgres:5432)
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      # Database provisioning (provision.sh creates roles + databases)
+      # Root credentials for superuser connection
+      POSTGRES_ROOT_USER: postgres
+      POSTGRES_ROOT_PASSWORD: postgres
+      # App role (RLS enforced) - matches DATABASE_URL user
+      APP_DB_USER: user
+      APP_DB_PASSWORD: password
+      # Service role (BYPASSRLS) - matches DATABASE_SERVICE_URL user
+      APP_DB_SERVICE_USER: user_service
+      APP_DB_SERVICE_PASSWORD: service_password
+      # Database name
+      APP_DB_NAME: cogni_template_test
       POSTGRES_DB: cogni_template_test
-      DB_HOST: postgres
-      DB_PORT: 55432
       # Image naming base (APP_IMAGE/MIGRATOR_IMAGE derived in step below)
       IMAGE_NAME: cogni-template-ci
       IMAGE_TAG: ${{ github.sha }}
@@ -249,11 +256,8 @@ jobs:
       TEMPORAL_ADDRESS: localhost:7233
       TEMPORAL_NAMESPACE: cogni-test
       TEMPORAL_TASK_QUEUE: scheduler-tasks
-      # Service role DSN for host-side vitest (provision.sh creates user_service role)
-      # NOTE: DATABASE_URL is set on the vitest step only, not here — job-level
-      # DATABASE_URL would leak into Docker containers (db-migrate) which need
-      # postgres:5432, not localhost:55432.
-      APP_DB_SERVICE_PASSWORD: service_password
+      # Host-side DSNs for vitest (containers use postgres:5432 internally)
+      # NOTE: DATABASE_URL set per-step to avoid leaking into Docker containers
       DATABASE_SERVICE_URL: postgresql://user_service:service_password@localhost:55432/cogni_template_test
       # git-sync HTTPS clone (same path as prod — no file:// shortcut)
       COGNI_REPO_URL: https://github.com/${{ github.repository }}.git
