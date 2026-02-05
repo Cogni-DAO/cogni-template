@@ -2,7 +2,7 @@ work_item_id:: wi.docs-migration
 work_item_type:: project
 title:: Documentation Migration to Typed Structure
 state:: Active
-summary:: Migrate legacy docs/\*.md files to typed directories with Logseq metadata headers
+summary:: Migrate legacy docs/\*.md files to typed directories with Obsidian YAML frontmatter
 outcome:: All docs in typed directories (spec/, guides/, decisions/), redirect stubs at old paths, all references updated
 assignees:: derekg1729
 created:: 2026-02-05
@@ -12,7 +12,52 @@ updated:: 2026-02-05
 
 ## Goal
 
-Migrate legacy documentation files into structured, validated system with Logseq-native `key:: value` metadata. Result: ripgrep-discoverable, agent-readable docs with trust levels and consistent organization.
+Migrate legacy documentation files into structured, validated system with Obsidian-style YAML frontmatter. Result: ripgrep-discoverable, agent-readable docs with trust levels and consistent organization.
+
+## Pre-Migration Tasks
+
+### Template Design (Obsidian YAML v0)
+
+- [ ] Define v0 template spec: `docs/_templates/spec.md`
+- [ ] Define v0 template spec: `docs/_templates/guide.md`
+- [ ] Define v0 template spec: `docs/_templates/decision.md`
+- [ ] Define v0 template spec: `work/_templates/project.md`
+- [ ] Define v0 template spec: `work/_templates/issue.md`
+- [ ] Update `docs/README.md` schema section to match new format
+
+### Validator Updates
+
+- [ ] Add `yaml` or `js-yaml` dev dependency for proper YAML parsing
+- [ ] Rewrite `scripts/validate-docs-metadata.mjs` with new rules:
+  - dir→type match (`docs/spec/**` ⇒ `type: spec`, etc.)
+  - required keys: `id`, `type`, `status`, `trust`, `created`
+  - `verified` optional when `status: draft`; otherwise required
+  - enums for type/status/trust; ADR may have optional `decision` enum
+  - date format YYYY-MM-DD for created/verified
+  - global uniqueness of `id` across typed docs
+- [ ] Convert 9 already-migrated specs from Logseq `key::` to YAML frontmatter
+
+### Frontmatter Schema (v0)
+
+Potential example format:
+
+```yaml
+---
+id: kebab-case-unique-id
+type: spec
+title: Document Title
+status: active
+trust: draft
+summary: One-line description
+read_when: When to read this doc
+owner: derekg1729
+created: 2026-02-05
+verified: 2026-02-05
+tags: [optional]
+---
+```
+
+**Schema keys should match existing header keys. Don't lose data.**
 
 ## Migration Checklist
 
@@ -134,6 +179,8 @@ Migrate legacy documentation files into structured, validated system with Logseq
 
 ## Notes
 
-- All migrated docs use `trust:: draft` (upgrade later after review)
+- **PIVOT**: Switched from Logseq `key::` to Obsidian YAML frontmatter
+- 9 docs already moved need conversion from Logseq → YAML format
+- All migrated docs use `trust: draft` (upgrade later after review)
 - Reference spec: [DOCS_ORGANIZATION_PLAN.md](../../docs/DOCS_ORGANIZATION_PLAN.md)
 - Blank destinations need content review before classification
