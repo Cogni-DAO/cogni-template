@@ -174,14 +174,14 @@ jobs:
           mkdir -p ~/.ssh && chmod 700 ~/.ssh
           echo "${{ secrets.SSH_DEPLOY_KEY }}" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H "$VM_HOST" >> ~/.ssh/known_hosts
+          ssh-keyscan -T 10 -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
           # Test SSH connection with full error capture and keepalive
           echo "Testing SSH connection to $VM_HOST..."
           SSH_DEBUG=${SSH_DEBUG:-0}
           SSH_VERBOSE=""; if [ "$SSH_DEBUG" = "1" ]; then SSH_VERBOSE="-vvv"; fi
           set +e
-          OUT=$(ssh $SSH_VERBOSE -i ~/.ssh/deploy_key -o StrictHostKeyChecking=yes -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 root@"$VM_HOST" "echo SSH test successful" 2>&1)
+          OUT=$(ssh $SSH_VERBOSE -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=~/.ssh/known_hosts -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=6 root@"$VM_HOST" "echo SSH test successful" 2>&1)
           RC=$?
           set -e
           echo "$OUT"
