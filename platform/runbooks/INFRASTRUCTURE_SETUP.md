@@ -385,10 +385,16 @@ sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
 | `EVM_RPC_URL`             | Ethereum RPC URL               | From Alchemy/Infura                                     |
 | `SOURCECRED_GITHUB_TOKEN` | GitHub PAT for SourceCred      | GitHub PAT with repo read                               |
 
-> **DSN secrets must match component secrets.** `DATABASE_URL` and `DATABASE_SERVICE_URL` are
-> authoritative for runtime. Component secrets (`APP_DB_USER`, `APP_DB_PASSWORD`, etc.) are used
-> by `provision.sh` to create database roles. The deploy workflow validates consistency between
-> these two sources — deploy fails if usernames don't match. See `platform/ci/scripts/validate-dsn-secrets.sh`.
+> **Two Config Surfaces (P0):**
+>
+> | Surface          | Secrets                                | Consumed By                               |
+> | ---------------- | -------------------------------------- | ----------------------------------------- |
+> | **Runtime**      | `DATABASE_URL`, `DATABASE_SERVICE_URL` | App, migrate, scheduler-worker containers |
+> | **Provisioning** | `POSTGRES_ROOT_*`, `APP_DB_*`          | `db-provision` container only             |
+>
+> DSNs are authoritative for runtime. Component secrets are for provisioning only and must never
+> reach runtime containers. Deploy validates DSN invariants (distinct users, no superusers).
+> See `platform/ci/scripts/validate-dsns.sh` and `docs/DATABASE_URL_ALIGNMENT_SPEC.md`.
 
 ### Repository Secrets
 

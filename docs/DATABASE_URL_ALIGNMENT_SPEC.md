@@ -113,8 +113,8 @@ Provisioner and CI scripts must not assume `postgres:5432` or any specific host/
 
 - [x] Create `validate-dsns.sh` (distinct users, no superusers, non-empty, masks outputs)
 - [x] Call validation script from `deploy-production.yml` and `staging-preview.yml`
-- [ ] Validate runtime env does NOT include `APP_DB_*` / `POSTGRES_ROOT_*` (fail if present)
-- [ ] Update INFRASTRUCTURE_SETUP.md: document two config surfaces (runtime DSNs + provisioning inputs)
+- [x] Validate runtime env does NOT include `APP_DB_*` / `POSTGRES_ROOT_*` (enforced by `assertEnvInvariants()` + docker-compose verified)
+- [x] Update INFRASTRUCTURE_SETUP.md: document two config surfaces (runtime DSNs + provisioning inputs)
 
 **P0 Outcome:** Runtime is DSN-only; provisioning still uses component vars; drift is prevented by CI.
 
