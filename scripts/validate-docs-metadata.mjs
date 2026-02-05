@@ -24,7 +24,7 @@ const DOC_TRUST = ["canonical", "reviewed", "draft", "external"];
 const ADR_DECISION = ["proposed", "accepted", "deprecated", "superseded"];
 
 // === WORK ENUMS ===
-const PROJECT_STATE = ["Active", "Paused", "Done", "Dropped"];
+const INITIATIVE_STATE = ["Active", "Paused", "Done", "Dropped"];
 const ISSUE_STATE = ["Backlog", "Todo", "In Progress", "Done", "Cancelled"];
 const PRIORITY = ["Urgent", "High", "Medium", "Low", "None"];
 
@@ -42,11 +42,12 @@ const DOC_REQUIRED = [
   "owner",
   "created",
 ];
-const PROJECT_REQUIRED = [
+const INITIATIVE_REQUIRED = [
   "work_item_id",
   "work_item_type",
   "title",
   "state",
+  "priority",
   "summary",
   "outcome",
   "assignees",
@@ -62,7 +63,7 @@ const ISSUE_REQUIRED = [
   "summary",
   "outcome",
   "assignees",
-  "project",
+  "initiative",
   "created",
   "updated",
 ];
@@ -171,25 +172,30 @@ function validateDoc(file, props, allIds) {
   return errors;
 }
 
-function validateProject(file, props, allIds) {
+function validateInitiative(file, props, allIds) {
   const errors = [];
 
-  for (const key of PROJECT_REQUIRED) {
+  for (const key of INITIATIVE_REQUIRED) {
     if (props[key] === undefined || props[key] === null || props[key] === "") {
       errors.push(`missing required key: ${key}`);
     }
   }
 
-  if (props.work_item_type !== "project") {
-    errors.push(`work_item_type must be "project"`);
+  if (props.work_item_type !== "initiative") {
+    errors.push(`work_item_type must be "initiative"`);
   }
-  if (props.state && !PROJECT_STATE.includes(props.state)) {
+  if (props.state && !INITIATIVE_STATE.includes(props.state)) {
     errors.push(
-      `invalid state: ${props.state} (expected: ${PROJECT_STATE.join("|")})`
+      `invalid state: ${props.state} (expected: ${INITIATIVE_STATE.join("|")})`
     );
   }
-  if (props.work_item_id && !String(props.work_item_id).startsWith("wi.")) {
-    errors.push(`work_item_id must start with "wi."`);
+  if (props.priority && !PRIORITY.includes(props.priority)) {
+    errors.push(
+      `invalid priority: ${props.priority} (expected: ${PRIORITY.join("|")})`
+    );
+  }
+  if (props.work_item_id && !String(props.work_item_id).startsWith("ini.")) {
+    errors.push(`work_item_id must start with "ini."`);
   }
 
   const created = String(props.created || "");
@@ -214,7 +220,7 @@ function validateProject(file, props, allIds) {
   return errors;
 }
 
-function validateIssue(file, props, allIds, projectIds) {
+function validateIssue(file, props, allIds, initiativeIds) {
   const errors = [];
 
   for (const key of ISSUE_REQUIRED) {
@@ -239,11 +245,11 @@ function validateIssue(file, props, allIds, projectIds) {
   if (props.work_item_id && !String(props.work_item_id).startsWith("wi.")) {
     errors.push(`work_item_id must start with "wi."`);
   }
-  if (props.project && !String(props.project).startsWith("wi.")) {
-    errors.push(`project must reference "wi.*"`);
+  if (props.initiative && !String(props.initiative).startsWith("ini.")) {
+    errors.push(`initiative must reference "ini.*"`);
   }
-  if (props.project && !projectIds.has(String(props.project))) {
-    errors.push(`project "${props.project}" not found`);
+  if (props.initiative && !initiativeIds.has(String(props.initiative))) {
+    errors.push(`initiative "${props.initiative}" not found`);
   }
 
   const created = String(props.created || "");
@@ -272,14 +278,14 @@ function validateIssue(file, props, allIds, projectIds) {
 async function main() {
   let hasErrors = false;
   const allIds = new Map();
-  const projectIds = new Set();
+  const initiativeIds = new Set();
 
-  const projectFiles = await fg(["work/projects/**/*.md"]);
-  for (const f of projectFiles) {
+  const initiativeFiles = await fg(["work/initiatives/**/*.md"]);
+  for (const f of initiativeFiles) {
     try {
       const content = readFileSync(f, "utf8");
       const props = extractFrontmatter(content);
-      if (props.work_item_id) projectIds.add(String(props.work_item_id));
+      if (props.work_item_id) initiativeIds.add(String(props.work_item_id));
     } catch {
       // Ignore parse errors in phase 1
     }
@@ -308,13 +314,13 @@ async function main() {
     }
   }
 
-  for (const f of projectFiles) {
+  for (const f of initiativeFiles) {
     try {
       const content = readFileSync(f, "utf8");
       const props = extractFrontmatter(content);
       const errors = [
         ...checkForbidden(content),
-        ...validateProject(f, props, allIds),
+        ...validateInitiative(f, props, allIds),
       ];
       if (errors.length) {
         hasErrors = true;
@@ -333,7 +339,7 @@ async function main() {
       const props = extractFrontmatter(content);
       const errors = [
         ...checkForbidden(content),
-        ...validateIssue(f, props, allIds, projectIds),
+        ...validateIssue(f, props, allIds, initiativeIds),
       ];
       if (errors.length) {
         hasErrors = true;
@@ -347,7 +353,7 @@ async function main() {
 
   if (hasErrors) process.exit(1);
 
-  const total = docFiles.length + projectFiles.length + issueFiles.length;
+  const total = docFiles.length + initiativeFiles.length + issueFiles.length;
   console.log(
     `docs/work metadata OK (${total} files, ${allIds.size} unique ids)`
   );
