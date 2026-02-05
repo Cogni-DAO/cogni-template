@@ -1,47 +1,57 @@
 ---
-work_item_id: wi.docs-migration
-work_item_type: project
-title: Documentation Migration to Typed Structure
-state: Active
-summary: Migrate legacy docs/*.md files to typed directories with Obsidian YAML frontmatter
-outcome: All docs in typed directories (spec/, guides/, decisions/), redirect stubs at old paths, all references updated
+work_item_id: wi.docs-migration-tracker
+work_item_type: issue
+title: Docs Migration Tracker
+state: In Progress
+priority: High
+summary: Track migration of 97 legacy docs to typed structure with YAML frontmatter
+outcome: All docs classified, migrated to typed directories, references updated
+spec_refs: docs/spec/spec-project-lifecycle.md, docs/spec/docs-work-system.md
 assignees: derekg1729
+initiative: ini.docs-system-infrastructure
 created: 2026-02-05
-updated: 2026-02-05
+updated: 2026-02-06
+labels: [docs, migration]
+pr:
+external_refs:
 ---
 
-# Documentation Migration to Typed Structure
+# Docs Migration Tracker
 
-## Goal
+## Execution Checklist
 
-Migrate legacy documentation files into structured, validated system with Obsidian-style YAML frontmatter. Result: ripgrep-discoverable, agent-readable docs with trust levels and consistent organization.
+### Pre-Migration Tasks
 
-## Pre-Migration Tasks
+**Template Design (Obsidian YAML v0):**
 
-### Template Design (Obsidian YAML v0)
-
-- [ ] Define v0 template spec: `docs/_templates/spec.md`
-- [ ] Define v0 template spec: `docs/_templates/guide.md`
-- [ ] Define v0 template spec: `docs/_templates/decision.md`
-- [ ] Define v0 template spec: `work/_templates/project.md`
-- [ ] Define v0 template spec: `work/_templates/issue.md`
+- [x] Define v0 template: `docs/_templates/spec.md`
+- [x] Define v0 template: `docs/_templates/guide.md`
+- [x] Define v0 template: `docs/_templates/decision.md`
+- [x] Define v0 template: `work/_templates/project.md`
+- [x] Define v0 template: `work/_templates/issue.md`
 - [ ] Update `docs/README.md` schema section to match new format
 
-### Validator Updates
+**Validator Updates:**
 
 - [ ] Add `yaml` or `js-yaml` dev dependency for proper YAML parsing
 - [ ] Rewrite `scripts/validate-docs-metadata.mjs` with new rules:
   - dir→type match (`docs/spec/**` ⇒ `type: spec`, etc.)
-  - required keys: `id`, `type`, `status`, `trust`, `created`
+  - required keys: `id`, `type`, `status`, `trust`, `created`, `spec_state`
   - `verified` optional when `status: draft`; otherwise required
-  - enums for type/status/trust; ADR may have optional `decision` enum
+  - enums for type/status/trust/spec_state
   - date format YYYY-MM-DD for created/verified
   - global uniqueness of `id` across typed docs
+  - Open Questions must be empty when `spec_state: active`
 - [ ] Convert 9 already-migrated specs from Logseq `key::` to YAML frontmatter
 
-### Frontmatter Schema (v0)
+### Post-Migration Tasks
 
-Potential example format:
+- [ ] Create redirect stubs at all original locations
+- [ ] Update SPEC_INDEX.md with migrated specs
+- [ ] Update root AGENTS.md pointers
+- [ ] Verify pnpm check:docs:metadata passes
+
+## Frontmatter Schema (v0)
 
 ```yaml
 ---
@@ -49,17 +59,17 @@ id: kebab-case-unique-id
 type: spec
 title: Document Title
 status: active
+spec_state: proposed
 trust: draft
 summary: One-line description
 read_when: When to read this doc
+implements: wi.work-item-id
 owner: derekg1729
 created: 2026-02-05
 verified: 2026-02-05
 tags: [optional]
 ---
 ```
-
-**Schema keys should match existing header keys. Don't lose data.**
 
 ## Migration Checklist
 
@@ -172,17 +182,25 @@ tags: [optional]
 - **Destination assigned**: 32
 - **Needs classification**: 65
 
-## Post-Migration Tasks
+## PR Checklist
 
-- [ ] Create redirect stubs at all original locations
-- [ ] Update SPEC_INDEX.md with migrated specs
-- [ ] Update root AGENTS.md pointers
-- [ ] Verify pnpm check:docs:metadata passes
+- [ ] **Work Item:** wi.docs-migration-tracker
+- [ ] **Spec:** docs/spec/spec-project-lifecycle.md#core-invariants
+- [ ] **Invariants Validated:** SPEC_STATE_LIFECYCLE, INV-SPEC-SCOPE-001
+
+## Validation
+
+**Command:**
+
+```bash
+node scripts/validate-docs-metadata.mjs
+```
+
+**Expected:** All migrated docs pass validation.
 
 ## Notes
 
 - **PIVOT**: Switched from Logseq `key::` to Obsidian YAML frontmatter
 - 9 docs already moved need conversion from Logseq → YAML format
 - All migrated docs use `trust: draft` (upgrade later after review)
-- Reference spec: [DOCS_ORGANIZATION_PLAN.md](../../docs/DOCS_ORGANIZATION_PLAN.md)
 - Blank destinations need content review before classification

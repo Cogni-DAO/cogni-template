@@ -1,12 +1,16 @@
-work_item_id:: wi.work-system-guide
-work_item_type:: project
-title:: Work Management System Guide
-state:: Active
-summary:: How to track projects and issues in this repository.
-outcome:: Developers can create and manage work items consistently.
-assignees:: derekg1729
-created:: 2026-02-05
-updated:: 2026-02-05
+---
+id: work-system-guide
+type: guide
+title: Work Management System Guide
+status: active
+trust: draft
+summary: How to track initiatives and issues in this repository.
+read_when: Creating work items, understanding the initiative/issue lifecycle.
+owner: derekg1729
+created: 2026-02-05
+verified: 2026-02-06
+tags: [work, meta]
+---
 
 # Work Management System Guide
 
@@ -14,81 +18,87 @@ updated:: 2026-02-05
 
 ## Structure
 
-| Directory     | Purpose                       |
-| ------------- | ----------------------------- |
-| `projects/`   | Multi-issue effort containers |
-| `issues/`     | Atomic work items             |
-| `_templates/` | Templates for work items      |
+| Directory      | Purpose                                     |
+| -------------- | ------------------------------------------- |
+| `initiatives/` | Roadmap + phased plans (may exist pre-code) |
+| `issues/`      | PR-sized execution + validation             |
+| `_templates/`  | Templates for work items                    |
 
 ## Work Item Types
 
-### project
+### initiative (`ini.*`)
 
-Container for related issues. Defines goal and tracks child issues.
+Roadmap and phased plan for a multi-PR effort. **May exist before any code.**
 
-### issue
+Contains: Goal, crawl/walk/run roadmap, constraints, dependencies, work item list.
 
-Atomic unit of work. Every issue belongs to one project. PR outcomes stored as fields on issue.
+### issue (`wi.*`)
 
-## Metadata Format
+PR-sized unit of work. Links to initiative and specs.
 
-```
-work_item_id:: wi.rls-001
-work_item_type:: issue
-title:: Implement RLS policies
-state:: In Progress
-priority:: High
-summary:: Add row-level security to tenant tables.
-outcome:: All queries enforce tenant isolation.
-project:: wi.database-security
-assignees:: derekg1729
-created:: 2026-02-01
-updated:: 2026-02-05
+Contains: Execution checklist, PR checklist, validation commands.
+
+## Metadata Format (YAML)
+
+```yaml
+---
+work_item_id: ini.sandbox-runtime
+work_item_type: initiative
+title: Sandboxed Agent Runtime
+state: Active
+priority: High
+summary: Isolated execution environment for untrusted agent code
+outcome: Agents run in gVisor containers with resource limits
+assignees: derekg1729
+created: 2026-02-05
+updated: 2026-02-06
+labels: [security, ai]
+---
 ```
 
 ## Field Reference
 
-### Project
+### Initiative
 
-| Field              | Req | Description                   |
-| ------------------ | --- | ----------------------------- |
-| `work_item_id::`   | Yes | `wi.{name}` immutable         |
-| `work_item_type::` | Yes | `project`                     |
-| `title::`          | Yes | Human readable                |
-| `state::`          | Yes | Active, Paused, Done, Dropped |
-| `summary::`        | Yes | What is this about?           |
-| `outcome::`        | Yes | What does success look like?  |
-| `assignees::`      | Yes | CSV of handles                |
-| `created::`        | Yes | YYYY-MM-DD                    |
-| `updated::`        | Yes | YYYY-MM-DD                    |
+| Field            | Req | Description                   |
+| ---------------- | --- | ----------------------------- |
+| `work_item_id`   | Yes | `ini.{name}` immutable        |
+| `work_item_type` | Yes | `initiative`                  |
+| `title`          | Yes | Human readable                |
+| `state`          | Yes | Active, Paused, Done, Dropped |
+| `summary`        | Yes | What is this about?           |
+| `outcome`        | Yes | What does success look like?  |
+| `assignees`      | Yes | CSV of handles                |
+| `created`        | Yes | YYYY-MM-DD                    |
+| `updated`        | Yes | YYYY-MM-DD                    |
 
 ### Issue
 
-| Field              | Req | Description                                 |
-| ------------------ | --- | ------------------------------------------- |
-| `work_item_id::`   | Yes | `wi.{name}` immutable                       |
-| `work_item_type::` | Yes | `issue`                                     |
-| `title::`          | Yes | Human readable                              |
-| `state::`          | Yes | Backlog, Todo, In Progress, Done, Cancelled |
-| `priority::`       | Yes | Urgent, High, Medium, Low, None             |
-| `summary::`        | Yes | What needs to be done?                      |
-| `outcome::`        | Yes | What is the deliverable?                    |
-| `project::`        | Yes | `wi.{project-id}` parent                    |
-| `assignees::`      | Yes | CSV of handles                              |
-| `created::`        | Yes | YYYY-MM-DD                                  |
-| `updated::`        | Yes | YYYY-MM-DD                                  |
-| `pr::`             | No  | PR number/URL if applicable                 |
-| `labels::`         | No  | CSV labels                                  |
-| `external_refs::`  | No  | CSV external links                          |
+| Field            | Req | Description                                 |
+| ---------------- | --- | ------------------------------------------- |
+| `work_item_id`   | Yes | `wi.{name}` immutable                       |
+| `work_item_type` | Yes | `issue`                                     |
+| `title`          | Yes | Human readable                              |
+| `state`          | Yes | Backlog, Todo, In Progress, Done, Cancelled |
+| `priority`       | Yes | Urgent, High, Medium, Low, None             |
+| `summary`        | Yes | What needs to be done?                      |
+| `outcome`        | Yes | What is the deliverable?                    |
+| `initiative`     | No  | `ini.{name}` parent (optional)              |
+| `spec_refs`      | No  | Links to relevant specs                     |
+| `assignees`      | Yes | CSV of handles                              |
+| `created`        | Yes | YYYY-MM-DD                                  |
+| `updated`        | Yes | YYYY-MM-DD                                  |
+| `pr`             | No  | PR number/URL if applicable                 |
+| `labels`         | No  | CSV labels                                  |
 
 ## Hard Rules
 
 1. **WORK_ITEM_ID_IMMUTABLE** — Never changes once assigned
-2. **ISSUE_HAS_PROJECT** — Every issue references `project:: wi.*`
-3. **FIELD_SET_SEPARATION** — Use `work_item_*`/`state` here, not `id`/`type`/`status`
-4. **ORIENTATION_REQUIRED** — Every item needs `summary::` + `outcome::`
+2. **SPECS_ARE_AS_BUILT** — Specs describe what IS, not what WILL BE; roadmaps live in initiatives
+3. **ISSUES_ARE_PR_SIZED** — If an issue spans multiple PRs, break it up
+4. **PR_LINKS_ISSUE** — Every PR references exactly one `wi.*`
 
 ## Related
 
 - [Documentation System](../docs/README.md)
-- [Organization Plan](../docs/DOCS_ORGANIZATION_PLAN.md)
+- [Spec + Initiative Lifecycle](../docs/spec/spec-project-lifecycle.md)
