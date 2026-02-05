@@ -160,7 +160,7 @@
 | `tests/unit/app/activity.facade.billing-display.spec.ts`      | Use `TEST_SESSION_USER_1..3` fixtures                                                                                                                             | [x]  |
 | `tests/contract/app/ai.activity.facade.test.ts`               | Use `TEST_SESSION_USER_1` fixture                                                                                                                                 | [x]  |
 | `tests/contract/app/ai.completion.facade.test.ts`             | Use `TEST_SESSION_USER_1` fixture                                                                                                                                 | [x]  |
-| `tests/integration/db/rls-adapter-wiring.int.test.ts`         | Unskip `getOrCreateBillingAccountForUser` gate test                                                                                                               | [ ]  |
+| `tests/integration/db/rls-adapter-wiring.int.test.ts`         | Unskip `getOrCreateBillingAccountForUser` gate test                                                                                                               | [x]  |
 | `docs/DATABASE_RLS_SPEC.md`                                   | Update tracker to reflect actual implementation                                                                                                                   | [x]  |
 
 **Files intentionally NOT changed** (no `callerUserId` threading needed with construction-time binding):
