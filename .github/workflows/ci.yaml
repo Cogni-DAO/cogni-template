@@ -249,10 +249,10 @@ jobs:
       TEMPORAL_ADDRESS: localhost:7233
       TEMPORAL_NAMESPACE: cogni-test
       TEMPORAL_TASK_QUEUE: scheduler-tasks
-      # Host-side DSNs for vitest preflight (dotenv doesn't interpolate ${VAR} syntax)
-      # App role (RLS-enforced)
-      DATABASE_URL: postgresql://user:password@localhost:55432/cogni_template_test
-      # Service role (BYPASSRLS) — provision.sh creates user_service role
+      # Service role DSN for host-side vitest (provision.sh creates user_service role)
+      # NOTE: DATABASE_URL is set on the vitest step only, not here — job-level
+      # DATABASE_URL would leak into Docker containers (db-migrate) which need
+      # postgres:5432, not localhost:55432.
       APP_DB_SERVICE_PASSWORD: service_password
       DATABASE_SERVICE_URL: postgresql://user_service:service_password@localhost:55432/cogni_template_test
       # git-sync HTTPS clone (same path as prod — no file:// shortcut)
@@ -372,6 +372,9 @@ jobs:
         env:
           # Host-side vitest needs repo checkout; compose uses /repo/current default
           COGNI_REPO_PATH: ${{ github.workspace }}
+          # Host-side DSN for vitest preflight (must NOT be job-level — would leak
+          # into Docker containers like db-migrate which need postgres:5432)
+          DATABASE_URL: postgresql://user:password@localhost:55432/cogni_template_test
         # Note: wait-for-probes.ts globalSetup polls /livez then /readyz before tests run
 
       - name: CI Telemetry
