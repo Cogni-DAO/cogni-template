@@ -42,13 +42,15 @@ This document describes the 6 deployment modes (from app-only to full production
 
 **Base Configuration:** `.env.local`
 
-- Database pieces: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `DB_HOST=localhost`, `DB_PORT=55432`, `POSTGRES_DB=cogni_template_dev`
+- Database DSNs: `DATABASE_URL`, `DATABASE_SERVICE_URL` (explicit, distinct users per DATABASE_RLS_SPEC.md)
 - App settings: `APP_ENV=production`, `LITELLM_MASTER_KEY`, etc.
+- Provisioning vars (for `provision.sh` only): `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_SERVICE_PASSWORD`, `APP_DB_NAME`
 
 **Test Overrides:** `.env.test`
 
 - `APP_ENV=test` (enables fake adapters)
-- `POSTGRES_DB=cogni_template_stack_test` (separate test database)
+- `DATABASE_URL`, `DATABASE_SERVICE_URL` pointing to test database
+- `POSTGRES_DB=cogni_template_stack_test` (for tooling scripts only)
 
 **Loading Pattern:** `dotenv -e .env.test -e .env.local`
 

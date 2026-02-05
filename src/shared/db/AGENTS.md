@@ -5,12 +5,17 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-01-19
+- **Last reviewed:** 2026-02-05
 - **Status:** stable
 
 ## Purpose
 
-Database schema definitions and URL construction utilities. Provides framework-agnostic database connection helpers and Drizzle schema definitions.
+Database schema definitions (barrel) and URL construction utility (direct import only).
+
+- **Barrel (`@/shared/db`)**: Schema tables for runtime adapters
+- **Direct (`@/shared/db/db-url`)**: `buildDatabaseUrl` for tooling only (drizzle.config.ts, test scripts)
+
+Per DATABASE_RLS_SPEC.md design decision 7: runtime app uses explicit DSNs, no URL construction.
 
 ## Pointers
 
@@ -38,27 +43,31 @@ Database schema definitions and URL construction utilities. Provides framework-a
 
 ## Public Surface
 
-**Exports:**
+**Exports (barrel `@/shared/db`):**
 
-- `db-url.ts`: buildDatabaseUrl, DbEnvInput (pure functions and types)
-- `schema.ts`: Drizzle schema definitions (re-exports all schema modules)
-- `schema.scheduling.ts`: Scheduling tables (execution_grants, schedules, schedule_runs)
-- `index.ts`: re-exports all public APIs
+- Schema tables from `@cogni/db-schema` (users, billingAccounts, schedules, etc.)
 
-**Files considered API:** db-url.ts, schema.ts, index.ts
+**Direct imports (not in barrel):**
+
+- `db-url.ts`: `buildDatabaseUrl`, `DbEnvInput` — tooling only
+
+**Files considered API:** index.ts (barrel), db-url.ts (tooling)
 **Routes/CLI:** none
 **Env/Config keys:** none
 
 ## Responsibilities
 
-- This directory **does**: provide database URL construction, schema definitions, framework-agnostic database utilities.
-- This directory **does not**: handle connections, migrations, or runtime database operations.
+- This directory **does**: provide schema definitions (barrel), URL construction (direct import for tooling)
+- This directory **does not**: handle connections, migrations, or runtime database operations
 
 ## Usage
 
 ```typescript
-import { buildDatabaseUrl } from "@/shared/db";
-import { schema } from "@/shared/db";
+// Runtime adapters — schema from barrel
+import { users, billingAccounts } from "@/shared/db";
+
+// Tooling scripts only — direct import (NOT in barrel)
+import { buildDatabaseUrl } from "@/shared/db/db-url";
 ```
 
 ## Standards
@@ -76,10 +85,11 @@ import { schema } from "@/shared/db";
 
 - Update this file when **Exports** change
 - Bump **Last reviewed** date
-- Update imports in server.ts and drizzle.config.ts if buildDatabaseUrl signature changes
+- Update imports in drizzle.config.ts and test tooling if buildDatabaseUrl signature changes
+- Note: server.ts no longer imports buildDatabaseUrl (explicit DSNs only per DATABASE_RLS_SPEC.md)
 - Ensure pnpm lint && pnpm typecheck pass
 
 ## Notes
 
-- buildDatabaseUrl moved from src/shared/env for clean separation of concerns
-- Safe for import by both application runtime and build-time tooling
+- `buildDatabaseUrl` excluded from barrel to prevent runtime DSN construction
+- Tooling scripts (drizzle.config.ts, reset-db.ts, drop-test-db.ts) import directly from `db-url.ts`

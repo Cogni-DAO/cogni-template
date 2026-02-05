@@ -62,33 +62,28 @@ This service is gated behind the `bootstrap` profile and runs only when explicit
 - Credits are stored as whole units (Stage 6.5 invariant: 1 credit = $0.001 USD, 1 USDC = 1,000 credits). Keep all arithmetic integer-only; no fractional credits.
 - Optional: make `credit_ledger.virtual_key_id` nullable if you need ledger rows that are not tied to a specific virtual key (e.g., admin adjustments). Not required for the MVP if every entry is keyed.
 
-## Database URL Construction
+## Database URL Configuration
 
-All environments construct PostgreSQL URLs from individual pieces using the `buildDatabaseUrl()` helper:
+Per [DATABASE_RLS_SPEC.md](DATABASE_RLS_SPEC.md) design decision 7, the runtime app requires **explicit DSN environment variables** — no component-piece fallback.
 
-```typescript
-// src/shared/env/db-url.ts
-export function buildDatabaseUrl(env: DbEnvInput): string {
-  // Uses application database credentials (not root)
-  const user = env.POSTGRES_USER; // Maps to APP_DB_USER in containers
-  const password = env.POSTGRES_PASSWORD; // Maps to APP_DB_PASSWORD in containers
-  const db = env.POSTGRES_DB; // Maps to APP_DB_NAME in containers
-  const host = env.DB_HOST; // No default - must be explicit
-  const port =
-    typeof env.DB_PORT === "number"
-      ? env.DB_PORT
-      : Number(env.DB_PORT ?? "5432");
+**Required Environment Variables:**
 
-  return `postgresql://${user}:${password}@${host}:${port}/${db}`;
-}
-```
+- `DATABASE_URL` — app_user role (RLS enforced), used by Next.js request paths
+- `DATABASE_SERVICE_URL` — app_service role (BYPASSRLS), used by auth, workers, bootstrap
+
+**Startup Invariants (enforced by `assertEnvInvariants`):**
+
+- Both DSNs must use distinct PostgreSQL users
+- Neither DSN may use superuser names (`postgres`, `root`, `admin`)
+- Both DSNs must be present
 
 **Environment Examples:**
 
-- **Host development:** `postgresql://postgres:postgres@localhost:55432/cogni_template_dev`
-- **Host testing:** `postgresql://postgres:postgres@localhost:5432/cogni_template_stack_test`
-- **Container (internal):** `postgresql://cogni_app_preview:password@postgres:5432/cogni_template_preview`
-- **Host tests → container:** `postgresql://postgres:postgres@localhost:55432/cogni_template_stack_test`
+- **Local development:** `postgresql://app_user:password@localhost:55432/cogni_template_dev`
+- **Local testing:** `postgresql://app_user:password@localhost:55432/cogni_template_stack_test`
+- **Production:** `postgresql://app_user:<secret>@postgres:5432/cogni_template_production?sslmode=require`
+
+**Tooling-Only:** The `buildDatabaseUrl()` helper in `src/shared/db/db-url.ts` is used only by CLI tooling (`drizzle.config.ts`, `drop-test-db.ts`, `reset-db.ts`). It is **not** used by the runtime app.
 
 ## Database Security Architecture
 
@@ -106,7 +101,7 @@ See [Database RLS Spec](DATABASE_RLS_SPEC.md) for the dual-client architecture a
 - Creates application user (`APP_DB_USER`) with database-specific permissions
 - Application connects via `DATABASE_URL` using app user credentials
 
-**Environment Variable Mapping**:
+**Provisioning Variable Mapping** (used by `provision.sh`, not by runtime app):
 
 ```bash
 # Container postgres service
@@ -114,11 +109,12 @@ POSTGRES_USER=${POSTGRES_ROOT_USER}      # Container's POSTGRES_USER
 POSTGRES_PASSWORD=${POSTGRES_ROOT_PASSWORD}
 POSTGRES_DB=postgres                      # Default database for user creation
 
-# Application service
-POSTGRES_USER=${APP_DB_USER}             # App's POSTGRES_USER
-POSTGRES_PASSWORD=${APP_DB_PASSWORD}
-POSTGRES_DB=${APP_DB_NAME}
+# Application service (explicit DSNs, not component pieces)
+DATABASE_URL=${DATABASE_URL}             # app_user role, RLS enforced
+DATABASE_SERVICE_URL=${DATABASE_SERVICE_URL}  # app_service role, BYPASSRLS
 ```
+
+> **Note:** The runtime app no longer uses `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `DB_HOST`, or `DB_PORT`. These are provisioning-only variables consumed by `provision.sh`.
 
 ## 2. Migration Strategy
 

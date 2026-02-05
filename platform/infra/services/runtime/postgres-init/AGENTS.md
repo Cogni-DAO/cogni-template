@@ -32,7 +32,7 @@ Scripts for initializing and provisioning PostgreSQL databases in Docker environ
 - **Exports:** provision.sh
 - **Routes (if any):** none
 - **CLI (if any):** Executed via `db-provision` service
-- **Env/Config keys:** `DATABASE_URL`, `DB_HOST`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `APP_DB_NAME`, `APP_DB_USER`, `APP_DB_PASSWORD`, `LITELLM_DB_NAME`
+- **Env/Config keys:** `DB_HOST`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `APP_DB_NAME`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_SERVICE_PASSWORD`, `LITELLM_DB_NAME` (note: these are provisioning vars, not runtime app vars)
 - **Files considered API:** `provision.sh`
 
 ## Ports (optional)

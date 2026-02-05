@@ -189,9 +189,14 @@ gh secret set APP_DB_USER --env $ENV --body "cogni_app_${ENV}"
 gh secret set APP_DB_PASSWORD --env $ENV --body "$(openssl rand -hex 32)"
 gh secret set APP_DB_NAME --env $ENV --body "cogni_template_${ENV}"
 
-# After setting above, construct DATABASE_URL:
-# postgresql://cogni_app_${ENV}:<APP_DB_PASSWORD>@postgres:5432/cogni_template_${ENV}
+# Construct DATABASE_URL (app_user role, RLS enforced):
+# postgresql://app_user:<APP_DB_PASSWORD>@postgres:5432/cogni_template_${ENV}
 gh secret set DATABASE_URL --env $ENV --body "<constructed-url>"
+
+# Construct DATABASE_SERVICE_URL (app_service role, BYPASSRLS):
+# postgresql://app_service:<APP_DB_SERVICE_PASSWORD>@postgres:5432/cogni_template_${ENV}
+gh secret set APP_DB_SERVICE_PASSWORD --env $ENV --body "$(openssl rand -hex 32)"
+gh secret set DATABASE_SERVICE_URL --env $ENV --body "<constructed-service-url>"
 
 # Service secrets
 gh secret set AUTH_SECRET --env $ENV --body "$(openssl rand -hex 32)"

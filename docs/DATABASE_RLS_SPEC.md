@@ -335,20 +335,33 @@ At the adapter layer, singletons are also split:
 
 ---
 
-### 7. - [ ] **Dev parity: enforce real DB role separation**
+### 7. [x] **Dev parity: enforce real DB role separation**
 
-      Local dev MUST provision and use two distinct DB roles:
-      - DATABASE_URL  -> app_user (RLS enforced)
-      - DATABASE_SERVICE_URL -> app_service (BYPASSRLS)
+Local dev MUST provision and use two distinct DB roles:
 
-      Requirements:
-      1) docker-compose brings up Postgres, then runs provisioning (idempotent) that creates roles/grants/policies BEFORE Next.js starts.
-      2) App consumes TWO explicit DSN secrets only (no ${APP_DB_USER}_service concatenation; no fallback; no DSN construction in runtime code).
-      3) `.env.local.example` shows two different DSNs with different users (and uses the provisioned roles).
-      4) Startup invariants hard-fail if:
-         - DATABASE_URL.user == DATABASE_SERVICE_URL.user
-         - either DSN user is postgres/root/superuser
-         - either DSN is missing
+- `DATABASE_URL` → `app_user` (RLS enforced)
+- `DATABASE_SERVICE_URL` → `app_service` (BYPASSRLS)
+
+**Requirements (all implemented):**
+
+1. **Provisioning before app start**: `docker-compose` runs `db-provision` (via `--profile bootstrap`) which creates roles/grants/policies. The `pnpm docker:stack:setup` command runs this before the main stack.
+
+2. **No DSN construction in runtime**: `src/shared/env/server.ts` requires both `DATABASE_URL` and `DATABASE_SERVICE_URL` as explicit env vars. The `buildDatabaseUrl` fallback path was removed — that function is now tooling-only (drizzle.config.ts, test scripts). `docker-compose.yml` passes DSNs through (`${DATABASE_URL}`, `${DATABASE_SERVICE_URL}`) instead of constructing them from parts.
+
+3. **Example files show distinct users**: `.env.local.example` and `.env.test.example` now show literal DSNs with `app_user` and `app_service` (not shell variable interpolation of the same credentials).
+
+4. **Startup invariants hard-fail**: `src/shared/env/invariants.ts` implements `assertEnvInvariants()` which rejects:
+   - Same user in both DSNs (`DATABASE_URL.user == DATABASE_SERVICE_URL.user`)
+   - Superuser names (`postgres`, `root`, `superuser`, `admin`)
+   - Missing DSNs (also enforced by Zod schema)
+
+**Files changed:**
+
+- `src/shared/env/server.ts` — `DATABASE_URL` required, no component-piece fallback
+- `src/shared/env/invariants.ts` — role separation checks
+- `platform/infra/services/runtime/docker-compose.yml` — pass-through DSNs only
+- `.env.local.example`, `.env.test.example` — distinct users in example DSNs
+- `tests/_fixtures/env/base-env.ts` — test fixtures with distinct users
 
 ## Adapter Wiring Tracker
 

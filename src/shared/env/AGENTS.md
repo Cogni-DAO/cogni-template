@@ -66,20 +66,18 @@ Unified serverEnv() provides all vars:
 - APP_ENV (test|production)
 - SERVICE_NAME (default: "app") - for observability service label
 - DEPLOY_ENVIRONMENT - deployment env label for metrics and analytics filtering
-- POSTGRES_USER
-- POSTGRES_PASSWORD
-- POSTGRES_DB
-- DB_HOST
-- DB_PORT (default: 5432)
+- DATABASE_URL (required, app_user role with RLS enforced)
+- DATABASE_SERVICE_URL (required, app_service role with BYPASSRLS)
 - LITELLM_BASE_URL (url, auto-detects: localhost:4000 for dev, litellm:4000 for production)
 - LITELLM_MASTER_KEY
 - PORT (default 3000)
 - PINO_LOG_LEVEL (trace|debug|info|warn|error, default info)
 
-Constructed:
+Per DATABASE_RLS_SPEC.md design decision 7:
 
-- DATABASE_URL (built from POSTGRES\_\* and DB\_\* components)
-- DATABASE_SERVICE_URL (required, service-role connection for BYPASSRLS operations)
+- Both DATABASE_URL and DATABASE_SERVICE_URL are required explicit DSNs
+- No component-piece fallback (POSTGRES_USER, DB_HOST, etc. removed from runtime schema)
+- Startup invariants reject same-user or superuser DSNs
 
 Temporal (required infrastructure):
 
