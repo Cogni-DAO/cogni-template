@@ -54,8 +54,8 @@ export async function setup() {
     [
       `DB_HOST=localhost`,
       `DB_PORT=5432`,
-      `POSTGRES_USER=${superuser}`,
-      `POSTGRES_PASSWORD=${superpass}`,
+      `POSTGRES_ROOT_USER=${superuser}`,
+      `POSTGRES_ROOT_PASSWORD=${superpass}`,
       `APP_DB_NAME=${APP_DB_NAME}`,
       `APP_DB_USER=${APP_DB_USER}`,
       `APP_DB_PASSWORD=${APP_DB_PASSWORD}`,
