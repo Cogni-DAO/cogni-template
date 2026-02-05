@@ -113,6 +113,12 @@ jobs:
           echo "✅ Resolved scheduler-worker digest: ${SCHEDULER_WORKER_IMAGE}"
           echo "SCHEDULER_WORKER_IMAGE=${SCHEDULER_WORKER_IMAGE}" >> $GITHUB_ENV
 
+      - name: Validate DSN secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_SERVICE_URL: ${{ secrets.DATABASE_SERVICE_URL }}
+        run: platform/ci/scripts/validate-dsns.sh
+
       - name: Deploy to Cherry Servers
         env:
           DEPLOY_ENVIRONMENT: production

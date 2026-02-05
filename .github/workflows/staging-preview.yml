@@ -192,6 +192,12 @@ jobs:
           fi
           echo "✅ SSH connection successful"
 
+      - name: Validate DSN secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_SERVICE_URL: ${{ secrets.DATABASE_SERVICE_URL }}
+        run: platform/ci/scripts/validate-dsns.sh
+
       - name: Deploy to preview
         run: platform/ci/scripts/deploy.sh
 
