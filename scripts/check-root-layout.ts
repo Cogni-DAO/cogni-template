@@ -138,6 +138,7 @@ const ALLOWED_ROOT_ENTRIES = new Set<string>([
   "vitest.integration.config.mts",
   "vitest.stack.config.mts",
   "vitest.workspace.ts",
+  "work",
 ]);
 
 const IGNORED_ENTRIES = new Set([
