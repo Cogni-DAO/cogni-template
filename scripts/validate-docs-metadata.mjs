@@ -5,7 +5,7 @@
 /**
  * Module: `@scripts/validate-docs-metadata`
  * Purpose: Validates Obsidian-style YAML frontmatter in /docs and /work directories.
- * Scope: Enforces field requirements, enums, date format, field set separation; does NOT validate content.
+ * Scope: Enforces field requirements, enums, date format, field set separation, and required H2 headings; does NOT validate prose content or cross-references.
  * Invariants: /docs uses id/type/status/trust; /work uses work_item_id/work_item_type/state; no wikilinks.
  * Side-effects: IO
  * Notes: Uses `yaml` package for proper YAML parsing. Exits with error code if validation fails.
@@ -30,6 +30,27 @@ const PRIORITY = [0, 1, 2, 3];
 const ESTIMATE = [0, 1, 2, 3, 4, 5];
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+// === REQUIRED H2 HEADINGS (per doc type) ===
+// Spec headings gated on spec_state being present (exempts legacy specs and indexes)
+const SPEC_REQUIRED_HEADINGS = [
+  "Context",
+  "Goal",
+  "Non-Goals",
+  "Core Invariants",
+  "Design",
+  "Acceptance Checks",
+];
+const ADR_REQUIRED_HEADINGS = ["Decision", "Rationale", "Consequences"];
+const INITIATIVE_REQUIRED_HEADINGS = [
+  "Goal",
+  "Roadmap",
+  "Constraints",
+  "Dependencies",
+  "As-Built Specs",
+  "Design Notes",
+];
+const ISSUE_REQUIRED_HEADINGS = ["Execution Checklist", "Validation"];
 
 // === REQUIRED KEYS ===
 const DOC_REQUIRED = [
@@ -110,8 +131,24 @@ function checkFieldSetSeparation(props, isWork) {
   return errors;
 }
 
+// === HEADING VALIDATION ===
+function extractH2Headings(content) {
+  return [...content.matchAll(/^##\s+(.+?)\s*$/gm)].map((m) => m[1].trim());
+}
+
+function checkRequiredHeadings(content, requiredHeadings) {
+  const actual = extractH2Headings(content);
+  const errors = [];
+  for (const req of requiredHeadings) {
+    if (!actual.includes(req)) {
+      errors.push(`missing required heading: ## ${req}`);
+    }
+  }
+  return errors;
+}
+
 // === VALIDATORS ===
-function validateDoc(file, props, allIds) {
+function validateDoc(file, props, content, allIds) {
   const errors = [];
 
   for (const key of DOC_REQUIRED) {
@@ -172,10 +209,19 @@ function validateDoc(file, props, allIds) {
   }
 
   errors.push(...checkFieldSetSeparation(props, false));
+
+  // Heading checks (spec gated on spec_state; ADR always)
+  if (props.type === "spec" && props.spec_state) {
+    errors.push(...checkRequiredHeadings(content, SPEC_REQUIRED_HEADINGS));
+  }
+  if (props.type === "adr") {
+    errors.push(...checkRequiredHeadings(content, ADR_REQUIRED_HEADINGS));
+  }
+
   return errors;
 }
 
-function validateInitiative(file, props, allIds) {
+function validateInitiative(file, props, content, allIds) {
   const errors = [];
 
   for (const key of INITIATIVE_REQUIRED) {
@@ -225,10 +271,12 @@ function validateInitiative(file, props, allIds) {
   }
 
   errors.push(...checkFieldSetSeparation(props, true));
+  errors.push(...checkRequiredHeadings(content, INITIATIVE_REQUIRED_HEADINGS));
+
   return errors;
 }
 
-function validateIssue(file, props, allIds, initiativeIds) {
+function validateIssue(file, props, content, allIds, initiativeIds) {
   const errors = [];
 
   for (const key of ISSUE_REQUIRED) {
@@ -284,6 +332,8 @@ function validateIssue(file, props, allIds, initiativeIds) {
   }
 
   errors.push(...checkFieldSetSeparation(props, true));
+  errors.push(...checkRequiredHeadings(content, ISSUE_REQUIRED_HEADINGS));
+
   return errors;
 }
 
@@ -315,7 +365,7 @@ async function main() {
       const props = extractFrontmatter(content);
       const errors = [
         ...checkForbidden(content),
-        ...validateDoc(f, props, allIds),
+        ...validateDoc(f, props, content, allIds),
       ];
       if (errors.length) {
         hasErrors = true;
@@ -333,7 +383,7 @@ async function main() {
       const props = extractFrontmatter(content);
       const errors = [
         ...checkForbidden(content),
-        ...validateInitiative(f, props, allIds),
+        ...validateInitiative(f, props, content, allIds),
       ];
       if (errors.length) {
         hasErrors = true;
@@ -352,7 +402,7 @@ async function main() {
       const props = extractFrontmatter(content);
       const errors = [
         ...checkForbidden(content),
-        ...validateIssue(f, props, allIds, initiativeIds),
+        ...validateIssue(f, props, content, allIds, initiativeIds),
       ];
       if (errors.length) {
         hasErrors = true;
