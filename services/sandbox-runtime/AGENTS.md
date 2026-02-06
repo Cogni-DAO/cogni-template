@@ -5,17 +5,18 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-02-03
+- **Last reviewed:** 2026-02-07
 - **Status:** draft
 
 ## Purpose
 
-Docker image definition for network-isolated sandbox containers. Provides minimal runtime environment for executing arbitrary commands without network access.
+Docker image definition for network-isolated sandbox containers. Provides minimal runtime with socat bridge for LLM access via unix socket proxy.
 
 ## Pointers
 
 - [Sandbox Spec](../../docs/SANDBOXED_AGENTS.md)
 - [Sandbox Adapter](../../src/adapters/server/sandbox/)
+- [Proxy Config](../../platform/infra/services/sandbox-proxy/)
 
 ## Boundaries
 
@@ -31,34 +32,43 @@ Docker image definition for network-isolated sandbox containers. Provides minima
 
 - **Exports:** Docker image `cogni-sandbox-runtime:latest`
 - **Routes:** none
-- **CLI:** `docker build -t cogni-sandbox-runtime:latest services/sandbox-runtime`
-- **Env/Config keys:** none
-- **Files considered API:** Dockerfile
+- **CLI:** `pnpm sandbox:docker:build`
+- **Env/Config keys (runtime):** `LLM_PROXY_SOCKET` (default `/llm-sock/llm.sock`), `LLM_PROXY_PORT` (default `8080`), `OPENAI_API_BASE`, `RUN_ID`
+- **Files considered API:** Dockerfile, entrypoint.sh
 
 ## Responsibilities
 
-- This directory **does**: Define minimal container image; install git, jq, curl; create non-root sandboxer user; set bash entrypoint
-- This directory **does not**: Implement application logic; manage container lifecycle; handle networking
+- This directory **does**: Define minimal container image; install socat, git, jq, curl; create non-root sandboxer user; start socat bridge when LLM proxy socket is present; fail fast if OPENAI_API_BASE set but socket missing
+- This directory **does not**: Implement application logic; manage container lifecycle; handle networking; contain secrets
 
 ## Usage
 
 ```bash
 # Build image
-docker build -t cogni-sandbox-runtime:latest services/sandbox-runtime
+pnpm sandbox:docker:build
 
-# Run isolated command
+# Run isolated command (no LLM proxy)
 docker run --rm --network=none \
   -v /tmp/workspace:/workspace:rw \
   cogni-sandbox-runtime:latest \
   'echo hello from sandbox'
+
+# Run with LLM proxy (mounts socket volume)
+docker run --rm --network=none --read-only \
+  --tmpfs /run:rw,noexec,nosuid,size=8m \
+  --mount type=volume,src=llm-socket-XXX,target=/llm-sock \
+  -e OPENAI_API_BASE=http://localhost:8080 \
+  cogni-sandbox-runtime:latest \
+  'curl -sf http://localhost:8080/health'
 ```
 
 ## Standards
 
 - Base image: node:20-slim
 - Non-root execution: user `sandboxer` (uid 1001)
-- Entrypoint: `/bin/bash -lc` (runs command string)
-- Minimal tooling: git, jq, curl only
+- Entrypoint: `entrypoint.sh` starts socat bridge, then execs command via `bash -lc`
+- Minimal tooling: socat, git, jq, curl
+- Socket mount at `/llm-sock` (NOT `/run/llm` — tmpfs at `/run` masks nested mounts)
 
 ## Dependencies
 
@@ -67,12 +77,13 @@ docker run --rm --network=none \
 
 ## Change Protocol
 
-- Update this file when **Dockerfile** or **base image** changes
+- Update this file when **Dockerfile**, **entrypoint.sh**, or **base image** changes
 - Bump **Last reviewed** date
-- Rebuild and test image after changes
+- Rebuild image and run stack tests after changes
 
 ## Notes
 
 - Image is built manually or via CI before running sandbox tests
 - Container runs with `--network=none` enforced by adapter
 - All capabilities dropped by adapter at runtime
+- `entrypoint.sh` is the socat bridge orchestrator; it detects the socket and starts socat automatically

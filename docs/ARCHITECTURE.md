@@ -529,7 +529,7 @@ Agentic graphs (P1), Loki/Grafana, Akash/IaC planned. See [GRAPH_EXECUTION.md](G
 - [AI Setup Spec](AI_SETUP_SPEC.md) - AI correlation IDs, telemetry invariants, P0/P1 checklists
 - [LangGraph Server](LANGGRAPH_SERVER.md) - External LangGraph Server runtime, adapter implementation
 - [LangGraph AI Guide](LANGGRAPH_AI.md) - Graph patterns and anti-patterns
-- [Clawdbot Adapter](CLAWDBOT_ADAPTER_SPEC.md) - Clawdbot (Moltbot) external runtime, DAO billing, sandbox containment
+- [OpenClaw Sandbox Integration](OPENCLAW_SANDBOX_SPEC.md) - OpenClaw sandbox runtime, Docker volume socket bridge, billing attribution
 - [Tool Use Spec](TOOL_USE_SPEC.md) - Tool execution invariants, first tool checklist
 - [Authorization (RBAC/ReBAC)](RBAC_SPEC.md) - Actor/subject model, OpenFGA, dual-check for agent delegation
 - [Tenant Connections](TENANT_CONNECTIONS_SPEC.md) - Connection broker, credential faucet, grant intersection

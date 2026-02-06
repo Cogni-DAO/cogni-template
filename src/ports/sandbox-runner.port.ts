@@ -33,11 +33,26 @@ export interface SandboxNetworkMode {
   /**
    * Network mode for container execution.
    * - 'none' (default): Complete network isolation (P0 baseline)
-   * - 'internal': Attach to named internal network (P0.5+)
+   * - 'internal': Attach to named internal network (P0.5a spike only)
    */
   readonly mode: "none" | "internal";
   /** Required when mode='internal'. Must be a Docker network with internal:true */
   readonly networkName?: string;
+}
+
+/**
+ * LLM proxy configuration for sandbox containers.
+ * Per SANDBOXED_AGENTS.md P0.5: Enables LLM access via unix socket bridge.
+ */
+export interface SandboxLlmProxyConfig {
+  /** Enable LLM proxy for this run */
+  readonly enabled: true;
+  /** Billing account ID for cost attribution. Injected as x-litellm-end-user-id. */
+  readonly billingAccountId: string;
+  /** Run attempt number for billing attribution (goes in metadata, not end-user-id) */
+  readonly attempt: number;
+  /** Additional environment variables to set in container */
+  readonly env?: Readonly<Record<string, string>>;
 }
 
 /**
@@ -67,9 +82,15 @@ export interface SandboxRunSpec {
   readonly mounts?: readonly SandboxMount[];
   /**
    * Network mode for container. Defaults to { mode: 'none' } for complete isolation.
-   * Use { mode: 'internal', networkName: 'sandbox-internal' } for LiteLLM access.
+   * Note: P0.5 uses network=none + llmProxy for LLM access, not internal network.
    */
   readonly networkMode?: SandboxNetworkMode;
+  /**
+   * LLM proxy configuration. When enabled, starts a host-side proxy and mounts
+   * the socket into the container. Sets OPENAI_API_BASE=http://localhost:8080.
+   * Per SANDBOXED_AGENTS.md P0.5: Enables LLM access while maintaining network=none.
+   */
+  readonly llmProxy?: SandboxLlmProxyConfig;
 }
 
 /**

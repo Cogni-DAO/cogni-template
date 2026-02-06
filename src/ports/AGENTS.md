@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-05
+- **Last reviewed:** 2026-02-07
 - **Status:** stable
 
 ## Purpose
@@ -67,6 +67,8 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
   - ExecutionGrantWorkerPort (worker-only grant validation)
   - ExecutionRequestPort (idempotency layer for execution requests)
   - ScheduleRunRepository (run ledger: createRun, markRunStarted, markRunCompleted)
+  - SandboxRunnerPort (runOnce; one-shot container execution with optional LLM proxy)
+  - SandboxRunSpec, SandboxRunResult, SandboxLlmProxyConfig (sandbox execution types)
   - Grant errors (GrantNotFoundError, GrantExpiredError, GrantRevokedError, GrantScopeMismatchError)
   - Schedule errors (ScheduleNotFoundError, ScheduleAccessDeniedError, InvalidCronExpressionError, InvalidTimezoneError)
 - **Routes:** none

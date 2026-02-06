@@ -11,4 +11,12 @@
  * @internal
  */
 
-export { SandboxRunnerAdapter } from "./sandbox-runner.adapter";
+export {
+  type LlmProxyConfig,
+  type LlmProxyHandle,
+  LlmProxyManager,
+} from "./llm-proxy-manager";
+export {
+  SandboxRunnerAdapter,
+  type SandboxRunnerAdapterOptions,
+} from "./sandbox-runner.adapter";

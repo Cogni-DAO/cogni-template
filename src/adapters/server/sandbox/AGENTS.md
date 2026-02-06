@@ -5,18 +5,19 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-02-03
+- **Last reviewed:** 2026-02-07
 - **Status:** draft
 
 ## Purpose
 
-Docker-based sandbox adapter for network-isolated command execution. Implements `SandboxRunnerPort` using dockerode for container lifecycle management.
+Docker-based sandbox adapter for network-isolated command execution with LLM proxy support. Implements `SandboxRunnerPort` using dockerode; delegates proxy lifecycle to `LlmProxyManager`.
 
 ## Pointers
 
 - [Sandbox Spec](../../../../docs/SANDBOXED_AGENTS.md)
 - [Sandbox Runtime](../../../../services/sandbox-runtime/)
 - [Port Definition](../../../ports/sandbox-runner.port.ts)
+- [Proxy Config Template](../../../../platform/infra/services/sandbox-proxy/nginx.conf.template)
 
 ## Boundaries
 
@@ -30,22 +31,22 @@ Docker-based sandbox adapter for network-isolated command execution. Implements 
 
 ## Public Surface
 
-- **Exports:** `SandboxRunnerAdapter`
+- **Exports:** `SandboxRunnerAdapter`, `SandboxRunnerAdapterOptions`, `LlmProxyManager`, `LlmProxyConfig`, `LlmProxyHandle`
 - **Routes:** none
 - **CLI:** none
-- **Env/Config keys:** none (image name configurable via constructor)
+- **Env/Config keys:** none (image name, litellmMasterKey configurable via constructor)
 - **Files considered API:** index.ts barrel export
 
 ## Ports
 
 - **Uses ports:** none
 - **Implements ports:** `SandboxRunnerPort`
-- **Contracts:** tests/integration/sandbox/
+- **Contracts:** tests/integration/sandbox/, tests/stack/sandbox/
 
 ## Responsibilities
 
-- This directory **does**: Create ephemeral Docker containers; enforce network=none isolation; mount workspace directories; collect stdout/stderr; handle timeouts and OOM; cleanup containers
-- This directory **does not**: Manage long-lived containers; handle LLM orchestration; pass credentials to containers; implement business logic
+- This directory **does**: Create ephemeral Docker containers; enforce network=none isolation; manage LLM proxy containers (nginx:alpine on sandbox-internal network); share socket via Docker volume at `/llm-sock`; inject billing identity and metadata headers; collect stdout/stderr; handle timeouts and OOM; cleanup containers and volumes
+- This directory **does not**: Manage long-lived containers; handle billing reconciliation; implement graph execution; pass credentials to sandbox containers
 
 ## Usage
 
@@ -54,13 +55,16 @@ import { SandboxRunnerAdapter } from "@/adapters/server/sandbox";
 
 const runner = new SandboxRunnerAdapter({
   imageName: "cogni-sandbox-runtime:latest",
+  litellmMasterKey: process.env.LITELLM_MASTER_KEY,
 });
 const result = await runner.runOnce({
   runId: "task-123",
   workspacePath: "/tmp/workspace",
-  command: "echo hello",
+  argv: ["echo hello"],
   limits: { maxRuntimeSec: 30, maxMemoryMb: 256 },
+  llmProxy: { enabled: true, billingAccountId: "acct-1", attempt: 0 },
 });
+await runner.dispose(); // stop all proxy containers
 ```
 
 ## Standards
@@ -69,20 +73,24 @@ const result = await runner.runOnce({
 - Network isolation via `NetworkMode: 'none'`
 - All capabilities dropped (`CapDrop: ['ALL']`)
 - Non-root user execution (`sandboxer`)
-- Manual container cleanup in finally block (no AutoRemove)
+- Socket sharing via Docker volumes (not bind mounts) to avoid macOS osxfs issues and tmpfs masking
+- All dockerode exec streams have bounded timeouts (never await unbounded `stream.on('end')`)
+- Proxy containers labeled `cogni.role=llm-proxy` for sweep-based cleanup
 
 ## Dependencies
 
 - **Internal:** ports/, shared/observability/
-- **External:** dockerode
+- **External:** dockerode, nginx:alpine image
 
 ## Change Protocol
 
 - Update this file when **Exports** or **Port implementations** change
 - Bump **Last reviewed** date
-- Ensure integration tests pass
+- Ensure integration and stack tests pass
 
 ## Notes
 
 - Requires `cogni-sandbox-runtime:latest` image built from services/sandbox-runtime/
-- Log demuxing handles Docker's 8-byte header frames for stdout/stderr separation
+- Requires `nginx:alpine` image for proxy containers
+- Requires `sandbox-internal` Docker network for proxy ↔ LiteLLM connectivity
+- `LlmProxyManager.cleanupSweep()` removes orphaned proxy containers by label filter

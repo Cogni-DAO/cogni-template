@@ -1,0 +1,80 @@
+# Sandbox LLM Proxy - Nginx Config Template
+# Per SANDBOXED_AGENTS.md P0.5: Proxy injects auth + billing + observability headers
+#
+# Template variables (substituted at runtime via LlmProxyManager.generateConfig):
+#   ${SOCKET_PATH}          - Unix socket path (e.g., /llm-sock/llm.sock)
+#   ${LITELLM_MASTER_KEY}   - LiteLLM API key (injected as Authorization header)
+#   ${BILLING_ACCOUNT_ID}   - User billing account ID (matches in-proc `user: billingAccountId`)
+#   ${LITELLM_METADATA_JSON} - JSON blob for LiteLLM metadata (run correlation + Langfuse)
+#   ${RUN_ID}               - Sandbox run ID (for audit log only, not sent as end_user)
+#   ${ATTEMPT}              - Run attempt number (for audit log only)
+#   ${LITELLM_HOST}         - LiteLLM host (default: litellm:4000)
+#   ${ACCESS_LOG_PATH}      - Path to write access logs
+
+worker_processes 1;
+error_log stderr warn;
+pid /tmp/nginx-${RUN_ID}.pid;
+
+events {
+    worker_connections 64;
+}
+
+http {
+    # Minimal logging - no request body/prompts
+    log_format audit '$time_iso8601 runId=${RUN_ID} attempt=${ATTEMPT} '
+                     'status=$status bytes=$body_bytes_sent '
+                     'model=$http_x_model litellm_call_id=$upstream_http_x_litellm_call_id '
+                     'upstream_time=$upstream_response_time';
+
+    access_log ${ACCESS_LOG_PATH} audit;
+
+    # Upstream: LiteLLM on host
+    upstream litellm {
+        server ${LITELLM_HOST};
+        keepalive 4;
+    }
+
+    server {
+        # Listen on unix socket only (no TCP)
+        listen unix:${SOCKET_PATH};
+
+        # OpenAI-compatible API routes
+        location /v1/ {
+            # Inject authorization (per SECRETS_HOST_ONLY - key stays in proxy, not sandbox)
+            proxy_set_header Authorization "Bearer ${LITELLM_MASTER_KEY}";
+
+            # Inject billing + observability (per HOST_INJECTS_BILLING_HEADERS)
+            # end-user-id = billingAccountId (matches in-proc LiteLlmAdapter `user` field)
+            # metadata = run correlation + Langfuse fields (matches in-proc metadata blob)
+            # All three overwrite any client-sent values (sandbox cannot spoof identity)
+            proxy_set_header x-litellm-end-user-id "${BILLING_ACCOUNT_ID}";
+            proxy_set_header x-litellm-metadata '${LITELLM_METADATA_JSON}';
+
+            # Forward to LiteLLM
+            proxy_pass http://litellm;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header Connection "";
+
+            # Streaming support (SSE for chat completions)
+            proxy_buffering off;
+            proxy_cache off;
+            proxy_read_timeout 300s;
+
+            # Pass through content type
+            proxy_set_header Content-Type $content_type;
+        }
+
+        # Health check endpoint
+        location /health {
+            return 200 '{"status":"ok","runId":"${RUN_ID}"}';
+            add_header Content-Type application/json;
+        }
+
+        # Deny all other paths
+        location / {
+            return 404 '{"error":"not_found"}';
+            add_header Content-Type application/json;
+        }
+    }
+}

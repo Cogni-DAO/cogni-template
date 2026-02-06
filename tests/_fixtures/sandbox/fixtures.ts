@@ -1,0 +1,206 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@tests/_fixtures/sandbox/fixtures`
+ * Purpose: Shared test fixtures for sandbox container tests (P0.5, P0.5a).
+ * Scope: Provides runner helpers, context setup/teardown, and common assertions. Does not contain test logic or assertions.
+ * Invariants: All sandbox tests use same image, same limits defaults.
+ * Side-effects: IO (Docker containers, filesystem)
+ * Links: docs/SANDBOXED_AGENTS.md
+ * @internal
+ */
+
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+
+import type Docker from "dockerode";
+
+import {
+  LlmProxyManager,
+  type SandboxRunnerAdapter,
+} from "@/adapters/server/sandbox";
+import type { SandboxRunResult } from "@/ports";
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Constants
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const SANDBOX_IMAGE = "cogni-sandbox-runtime:latest";
+export const SANDBOX_INTERNAL_NETWORK = "sandbox-internal";
+
+/** Default limits for sandbox tests - tight timeouts to fail fast.
+ *  Full proxy+sandbox flow completes in <1s; 3s is generous headroom. */
+export const DEFAULT_LIMITS = {
+  maxRuntimeSec: 3,
+  maxMemoryMb: 128,
+} as const;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Context Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SandboxTestContext {
+  runner: SandboxRunnerAdapter;
+  workspace: string;
+  docker: Docker;
+}
+
+export interface SandboxTestContextWithProxy extends SandboxTestContext {
+  litellmMasterKey: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Setup Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Generate unique run ID for container naming */
+export function uniqueRunId(prefix = "test"): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** Verify sandbox image exists, throw descriptive error if not */
+export async function assertSandboxImageExists(docker: Docker): Promise<void> {
+  try {
+    await docker.getImage(SANDBOX_IMAGE).inspect();
+  } catch {
+    throw new Error(
+      `Sandbox image ${SANDBOX_IMAGE} not found. Run: pnpm sandbox:docker:build`
+    );
+  }
+}
+
+/** Verify sandbox-internal network exists (for P0.5a tests) */
+export async function assertInternalNetworkExists(
+  docker: Docker
+): Promise<void> {
+  try {
+    await docker.getNetwork(SANDBOX_INTERNAL_NETWORK).inspect();
+  } catch {
+    throw new Error(
+      `Network ${SANDBOX_INTERNAL_NETWORK} not found. Start dev stack: pnpm dev:infra`
+    );
+  }
+}
+
+/** Ensure nginx:alpine image is available (pulled if missing).
+ *  Call in beforeAll so the pull happens within hookTimeout, not testTimeout. */
+export async function ensureProxyImage(docker: Docker): Promise<void> {
+  const image = "nginx:alpine";
+  try {
+    await docker.getImage(image).inspect();
+  } catch {
+    await new Promise<void>((resolve, reject) => {
+      docker.pull(image, (err: Error | null, stream: NodeJS.ReadableStream) => {
+        if (err) return reject(err);
+        docker.modem.followProgress(stream, (pullErr: Error | null) =>
+          pullErr ? reject(pullErr) : resolve()
+        );
+      });
+    });
+  }
+}
+
+/** Verify LiteLLM is reachable (for P0.5 proxy tests) */
+export async function assertLitellmReachable(): Promise<void> {
+  try {
+    const response = await fetch("http://localhost:4000/health/liveliness");
+    if (!response.ok) {
+      throw new Error(`LiteLLM health check failed: ${response.status}`);
+    }
+  } catch (err) {
+    throw new Error(
+      `LiteLLM not reachable at localhost:4000. Start dev stack: pnpm dev:infra. Error: ${err}`
+    );
+  }
+}
+
+/** Create temporary workspace directory */
+export async function createWorkspace(prefix: string): Promise<string> {
+  return fs.mkdtemp(path.join(os.tmpdir(), `${prefix}-`));
+}
+
+/** Clean up workspace directory */
+export async function cleanupWorkspace(workspace: string): Promise<void> {
+  await fs.rm(workspace, { recursive: true, force: true });
+}
+
+/** Remove orphaned proxy containers/volumes via label filter (cogni.role=llm-proxy) */
+export async function cleanupOrphanedProxies(docker: Docker): Promise<number> {
+  return LlmProxyManager.cleanupSweep(docker);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Runner Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface RunOptions {
+  maxRuntimeSec?: number;
+  maxMemoryMb?: number;
+}
+
+/** Test billing account ID for sandbox tests */
+export const TEST_BILLING_ACCOUNT_ID = "test-billing-account";
+
+/** Run command in sandbox with network=none and llmProxy enabled */
+export async function runWithProxy(
+  ctx: SandboxTestContextWithProxy,
+  command: string,
+  options?: RunOptions
+): Promise<SandboxRunResult> {
+  return ctx.runner.runOnce({
+    runId: uniqueRunId(),
+    workspacePath: ctx.workspace,
+    argv: [command],
+    limits: {
+      maxRuntimeSec: options?.maxRuntimeSec ?? DEFAULT_LIMITS.maxRuntimeSec,
+      maxMemoryMb: options?.maxMemoryMb ?? DEFAULT_LIMITS.maxMemoryMb,
+    },
+    networkMode: { mode: "none" },
+    llmProxy: {
+      enabled: true,
+      billingAccountId: TEST_BILLING_ACCOUNT_ID,
+      attempt: 0,
+    },
+  });
+}
+
+/** Run command in sandbox with network=none, NO proxy (pure isolation) */
+export async function runIsolated(
+  ctx: SandboxTestContext,
+  command: string,
+  options?: RunOptions
+): Promise<SandboxRunResult> {
+  return ctx.runner.runOnce({
+    runId: uniqueRunId(),
+    workspacePath: ctx.workspace,
+    argv: [command],
+    limits: {
+      maxRuntimeSec: options?.maxRuntimeSec ?? DEFAULT_LIMITS.maxRuntimeSec,
+      maxMemoryMb: options?.maxMemoryMb ?? DEFAULT_LIMITS.maxMemoryMb,
+    },
+    networkMode: { mode: "none" },
+  });
+}
+
+/** Run command in sandbox with internal network (P0.5a) */
+export async function runOnInternalNetwork(
+  ctx: SandboxTestContext,
+  command: string,
+  options?: RunOptions
+): Promise<SandboxRunResult> {
+  return ctx.runner.runOnce({
+    runId: uniqueRunId(),
+    workspacePath: ctx.workspace,
+    argv: [command],
+    limits: {
+      maxRuntimeSec: options?.maxRuntimeSec ?? DEFAULT_LIMITS.maxRuntimeSec,
+      maxMemoryMb: options?.maxMemoryMb ?? DEFAULT_LIMITS.maxMemoryMb,
+    },
+    networkMode: {
+      mode: "internal",
+      networkName: SANDBOX_INTERNAL_NETWORK,
+    },
+  });
+}
