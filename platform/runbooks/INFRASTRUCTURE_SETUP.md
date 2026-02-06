@@ -118,6 +118,8 @@ echo "Preview VM IP: $PREVIEW_IP"
 
 ### Production Environment
 
+> **Before switching:** Verify the previous workspace applied cleanly and you're not carrying stale state: `tofu workspace show`
+
 ```bash
 # Set private key for health check (must match public_key_path in tfvars)
 export TF_VAR_ssh_private_key="$(cat ~/.ssh/cogni_template_production_deploy)"
@@ -412,3 +414,4 @@ sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
 
 - [ ] **Golden image via Packer**: Bake Docker+Compose into a snapshot image instead of boot-time installs. Eliminates nondeterministic failures from upstream repo/CDN issues. Cloud-init becomes config-only.
 - [ ] **Flaky LiteLLM Fix**: first deployment of the app on new infra tends to fail, for unhealthy litellm. re-deploy fixes. TODO: root cause and fix flakiness
+- [ ] **Workspace-environment guard**: Add a `precondition` in `main.tf` that validates `terraform.workspace == var.environment` to prevent applying the wrong tfvars in the wrong workspace (e.g., preview resources landing in production state).
