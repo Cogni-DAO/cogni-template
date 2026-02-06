@@ -4,12 +4,13 @@
 /**
  * Module: `@adapters/server/sandbox/sandbox-runner`
  * Purpose: Docker-based sandbox runner for network-isolated command execution.
- * Scope: Implements SandboxRunnerPort using dockerode for container lifecycle management. Does not handle persistent containers or LLM loop integration.
+ * Scope: Implements SandboxRunnerPort using dockerode for container lifecycle management. Does not manage proxy container lifecycle (delegated to LlmProxyManager).
  * Invariants:
- *   - Per SANDBOXED_AGENTS.md P0: One-shot containers, ephemeral per command
+ *   - Per SANDBOXED_AGENTS.md P0.5: One-shot containers, ephemeral per command
  *   - Per NETWORK_DEFAULT_DENY: Containers run with NetworkMode: 'none' by default
- *   - Per SECRETS_HOST_ONLY: No credentials passed to container
- * Side-effects: IO (creates/removes Docker containers)
+ *   - Per SECRETS_HOST_ONLY: No credentials passed to container; LLM auth via host proxy
+ *   - Per LLM_VIA_SOCKET_ONLY: LLM access via unix socket bridge to host proxy
+ * Side-effects: IO (creates/removes Docker containers, spawns proxy processes)
  * Links: docs/SANDBOXED_AGENTS.md, src/ports/sandbox-runner.port.ts
  * @internal
  */
@@ -26,6 +27,8 @@ import type {
 } from "@/ports";
 import { makeLogger } from "@/shared/observability";
 
+import { type LlmProxyHandle, LlmProxyManager } from "./llm-proxy-manager";
+
 /**
  * Default Docker image for sandbox containers.
  * Built from services/sandbox-runtime/Dockerfile
@@ -38,26 +41,51 @@ const DEFAULT_MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 /** Default process limit per container */
 const DEFAULT_PIDS_LIMIT = 256;
 
+/** Socket directory inside container for LLM proxy */
+const CONTAINER_LLM_SOCKET_DIR = "/run/llm";
+/** Socket filename inside container */
+const CONTAINER_LLM_SOCKET_NAME = "llm.sock";
+/** Full socket path inside container */
+const CONTAINER_LLM_SOCKET_PATH = `${CONTAINER_LLM_SOCKET_DIR}/${CONTAINER_LLM_SOCKET_NAME}`;
+
+/** Options for SandboxRunnerAdapter */
+export interface SandboxRunnerAdapterOptions {
+  /** Docker image name (default: cogni-sandbox-runtime:latest) */
+  imageName?: string;
+  /** LiteLLM master key for proxy authentication. Required if using llmProxy. */
+  litellmMasterKey?: string;
+  /** LiteLLM host:port (default: localhost:4000) */
+  litellmHost?: string;
+}
+
 /**
  * Docker-based sandbox runner adapter.
  *
- * Per SANDBOXED_AGENTS.md P0: Containers are one-shot and ephemeral.
+ * Per SANDBOXED_AGENTS.md P0.5: Containers are one-shot and ephemeral.
  * Each runOnce call:
- * 1. Creates a new container with network=none (or internal network)
- * 2. Mounts the workspace directory
- * 3. Runs the command
- * 4. Collects stdout/stderr (with truncation)
- * 5. Removes the container
+ * 1. Optionally starts LLM proxy (if llmProxy enabled)
+ * 2. Creates a new container with network=none
+ * 3. Mounts the workspace directory (and proxy socket if enabled)
+ * 4. Runs the command
+ * 5. Collects stdout/stderr (with truncation)
+ * 6. Removes the container
+ * 7. Stops the proxy and collects audit logs
  */
 export class SandboxRunnerAdapter implements SandboxRunnerPort {
   private readonly docker: Docker;
   private readonly log: Logger;
   private readonly imageName: string;
+  private readonly litellmMasterKey: string | undefined;
+  private readonly litellmHost: string;
+  private readonly proxyManager: LlmProxyManager;
 
-  constructor(options?: { imageName?: string }) {
+  constructor(options?: SandboxRunnerAdapterOptions) {
     this.docker = new Docker();
     this.log = makeLogger({ component: "SandboxRunnerAdapter" });
     this.imageName = options?.imageName ?? DEFAULT_SANDBOX_IMAGE;
+    this.litellmMasterKey = options?.litellmMasterKey;
+    this.litellmHost = options?.litellmHost ?? "litellm:4000"; // Docker DNS
+    this.proxyManager = new LlmProxyManager();
   }
 
   async runOnce(spec: SandboxRunSpec): Promise<SandboxRunResult> {
@@ -68,6 +96,7 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
       limits,
       mounts = [],
       networkMode,
+      llmProxy,
     } = spec;
     const containerName = `sandbox-${runId}-${Date.now()}`;
 
@@ -87,6 +116,23 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
 
     const maxOutputBytes = limits.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
 
+    // Start LLM proxy if enabled
+    let proxyHandle: LlmProxyHandle | undefined;
+    if (llmProxy?.enabled) {
+      if (!this.litellmMasterKey) {
+        throw new Error(
+          "litellmMasterKey required in adapter options when llmProxy is enabled"
+        );
+      }
+      this.log.debug({ runId }, "Starting LLM proxy for sandbox");
+      proxyHandle = await this.proxyManager.start({
+        runId,
+        attempt: llmProxy.attempt,
+        litellmMasterKey: this.litellmMasterKey,
+        litellmHost: this.litellmHost,
+      });
+    }
+
     this.log.debug(
       {
         runId,
@@ -95,15 +141,37 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
         workspacePath,
         mountCount: mounts.length,
         networkMode: dockerNetworkMode,
+        llmProxyEnabled: !!proxyHandle,
       },
       "Starting sandbox container"
     );
 
-    // Build bind mounts: workspace (always rw) + additional mounts
+    // Build bind mounts: workspace (always rw) + additional mounts + optional proxy socket
     const binds = [
       `${workspacePath}:/workspace:rw`,
       ...mounts.map((m) => `${m.hostPath}:${m.containerPath}:${m.mode}`),
     ];
+
+    // Add proxy socket directory mount if enabled
+    // Mount the directory (not the socket file) to avoid mount race conditions
+    if (proxyHandle) {
+      binds.push(`${proxyHandle.socketDir}:${CONTAINER_LLM_SOCKET_DIR}:rw`);
+    }
+
+    // Build environment variables
+    const envVars: string[] = [];
+    if (proxyHandle) {
+      // Per SANDBOXED_AGENTS.md: Agent uses OPENAI_API_BASE to hit the proxy
+      envVars.push("OPENAI_API_BASE=http://localhost:8080");
+      envVars.push(`RUN_ID=${runId}`);
+      envVars.push(`LLM_PROXY_SOCKET=${CONTAINER_LLM_SOCKET_PATH}`);
+    }
+    // Add any custom env vars from llmProxy config
+    if (llmProxy?.env) {
+      for (const [key, value] of Object.entries(llmProxy.env)) {
+        envVars.push(`${key}=${value}`);
+      }
+    }
 
     let container: Docker.Container | undefined;
 
@@ -112,18 +180,18 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
       container = await this.docker.createContainer({
         Image: this.imageName,
         name: containerName,
-        // Override entrypoint to allow full argv control
-        // The image has ENTRYPOINT ["/bin/bash", "-lc"] for single-command usage,
-        // but argv[] requires direct control over the command execution
-        Entrypoint: argv as string[],
-        Cmd: [],
+        // The entrypoint.sh handles socat bridge startup, then runs command via bash
+        // We pass the command as a single string argument to be run via bash -lc
+        Cmd: argv.length > 0 ? [argv.join(" ")] : [],
+        // Environment variables (OPENAI_API_BASE, RUN_ID, etc.)
+        Env: envVars.length > 0 ? envVars : undefined,
         HostConfig: {
           // Network mode: 'none' for isolation, or internal network name
           NetworkMode: dockerNetworkMode,
           // Memory limit
           Memory: limits.maxMemoryMb * 1024 * 1024,
           MemorySwap: limits.maxMemoryMb * 1024 * 1024, // No swap
-          // Mount workspace + additional mounts
+          // Mount workspace + additional mounts + proxy socket
           Binds: binds,
           // Manual removal - AutoRemove races with log collection
           AutoRemove: false,
@@ -131,6 +199,7 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
           ReadonlyRootfs: true,
           Tmpfs: {
             "/tmp": "rw,noexec,nosuid,size=64m",
+            // /run needs to be writable but not executable (socket is mounted ro separately)
             "/run": "rw,noexec,nosuid,size=8m",
           },
           // Drop all capabilities
@@ -228,6 +297,20 @@ export class SandboxRunnerAdapter implements SandboxRunnerPort {
           await container.remove({ force: true });
         } catch {
           // Container may already be removed or never started
+        }
+      }
+      // Stop LLM proxy container (audit log persists in socketDir until explicit cleanup)
+      if (proxyHandle) {
+        try {
+          const logPath = await this.proxyManager.stop(runId);
+          if (logPath) {
+            this.log.debug(
+              { runId, logPath },
+              "LLM proxy stopped, audit log at"
+            );
+          }
+        } catch (err) {
+          this.log.warn({ runId, error: err }, "Failed to stop LLM proxy");
         }
       }
     }

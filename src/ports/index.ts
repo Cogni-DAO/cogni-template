@@ -147,7 +147,9 @@ export {
 } from "./payment-attempt.port";
 export type {
   SandboxErrorCode,
+  SandboxLlmProxyConfig,
   SandboxMount,
+  SandboxNetworkMode,
   SandboxRunnerPort,
   SandboxRunResult,
   SandboxRunSpec,
