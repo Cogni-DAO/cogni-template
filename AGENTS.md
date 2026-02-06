@@ -44,6 +44,13 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 ## Pointers
 
+### Documentation & Work
+
+- [Documentation System Guide](docs/README.md) — How to navigate and create docs
+- [Work Management Guide](work/README.md) — Projects, issues, and reviews
+- [Docs Organization Plan](docs/DOCS_ORGANIZATION_PLAN.md) — Full system design
+- [Spec Index](docs/reference/SPEC_INDEX.md) — Index of all specifications
+
 ### Core Architecture
 
 - [Technical Roadmap](ROADMAP.md)

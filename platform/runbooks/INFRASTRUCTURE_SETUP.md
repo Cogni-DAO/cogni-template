@@ -193,9 +193,10 @@ gh secret set APP_DB_NAME --env $ENV --body "cogni_template_${ENV}"
 
 # Database connection strings (authoritative for runtime)
 # These MUST match the component secrets above - deploy validates this
-# Format: postgresql://<APP_DB_USER>:<APP_DB_PASSWORD>@postgres:5432/<APP_DB_NAME>
-gh secret set DATABASE_URL --env $ENV --body "postgresql://app_user:<APP_DB_PASSWORD>@postgres:5432/cogni_template_${ENV}"
-gh secret set DATABASE_SERVICE_URL --env $ENV --body "postgresql://app_service:<APP_DB_SERVICE_PASSWORD>@postgres:5432/cogni_template_${ENV}"
+# Format: postgresql://<APP_DB_USER>:<APP_DB_PASSWORD>@postgres:5432/<APP_DB_NAME>?sslmode=disable
+# Note: ?sslmode=disable required for Docker-internal connections (postgres:5432 is not localhost)
+gh secret set DATABASE_URL --env $ENV --body "postgresql://app_user:<APP_DB_PASSWORD>@postgres:5432/cogni_template_${ENV}?sslmode=disable"
+gh secret set DATABASE_SERVICE_URL --env $ENV --body "postgresql://app_service:<APP_DB_SERVICE_PASSWORD>@postgres:5432/cogni_template_${ENV}?sslmode=disable"
 
 # Service secrets
 gh secret set AUTH_SECRET --env $ENV --body "$(openssl rand -hex 32)"
@@ -364,26 +365,26 @@ sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
 
 ### Per-Environment Secrets
 
-| Secret                    | Description                    | How to Generate                                         |
-| ------------------------- | ------------------------------ | ------------------------------------------------------- |
-| `VM_HOST`                 | VM IP address                  | From `tofu output`                                      |
-| `DOMAIN`                  | Environment domain             | `preview.cognidao.org` or `cognidao.org`                |
-| `SSH_DEPLOY_KEY`          | Private SSH key                | `cat ~/.ssh/cogni_template_*_deploy`                    |
-| `POSTGRES_ROOT_USER`      | DB root user                   | `postgres`                                              |
-| `POSTGRES_ROOT_PASSWORD`  | DB root password               | `openssl rand -hex 32`                                  |
-| `APP_DB_USER`             | App DB user (RLS enforced)     | `app_user`                                              |
-| `APP_DB_PASSWORD`         | App DB password                | `openssl rand -hex 32`                                  |
-| `APP_DB_SERVICE_USER`     | Service DB user (BYPASSRLS)    | `app_service`                                           |
-| `APP_DB_SERVICE_PASSWORD` | Service DB password            | `openssl rand -hex 32`                                  |
-| `APP_DB_NAME`             | App database name              | `cogni_template_preview` or `cogni_template_production` |
-| `DATABASE_URL`            | App connection string (RLS)    | `postgresql://app_user:<pass>@postgres:5432/<db>`       |
-| `DATABASE_SERVICE_URL`    | Service connection (BYPASSRLS) | `postgresql://app_service:<pass>@postgres:5432/<db>`    |
-| `AUTH_SECRET`             | NextAuth secret                | `openssl rand -hex 32`                                  |
-| `LITELLM_MASTER_KEY`      | LiteLLM API key                | `sk-$(openssl rand -hex 24)`                            |
-| `METRICS_TOKEN`           | Metrics auth token             | `openssl rand -base64 32`                               |
-| `OPENROUTER_API_KEY`      | OpenRouter API key             | From openrouter.ai                                      |
-| `EVM_RPC_URL`             | Ethereum RPC URL               | From Alchemy/Infura                                     |
-| `SOURCECRED_GITHUB_TOKEN` | GitHub PAT for SourceCred      | GitHub PAT with repo read                               |
+| Secret                    | Description                    | How to Generate                                                      |
+| ------------------------- | ------------------------------ | -------------------------------------------------------------------- |
+| `VM_HOST`                 | VM IP address                  | From `tofu output`                                                   |
+| `DOMAIN`                  | Environment domain             | `preview.cognidao.org` or `cognidao.org`                             |
+| `SSH_DEPLOY_KEY`          | Private SSH key                | `cat ~/.ssh/cogni_template_*_deploy`                                 |
+| `POSTGRES_ROOT_USER`      | DB root user                   | `postgres`                                                           |
+| `POSTGRES_ROOT_PASSWORD`  | DB root password               | `openssl rand -hex 32`                                               |
+| `APP_DB_USER`             | App DB user (RLS enforced)     | `app_user`                                                           |
+| `APP_DB_PASSWORD`         | App DB password                | `openssl rand -hex 32`                                               |
+| `APP_DB_SERVICE_USER`     | Service DB user (BYPASSRLS)    | `app_service`                                                        |
+| `APP_DB_SERVICE_PASSWORD` | Service DB password            | `openssl rand -hex 32`                                               |
+| `APP_DB_NAME`             | App database name              | `cogni_template_preview` or `cogni_template_production`              |
+| `DATABASE_URL`            | App connection string (RLS)    | `postgresql://app_user:<pass>@postgres:5432/<db>?sslmode=disable`    |
+| `DATABASE_SERVICE_URL`    | Service connection (BYPASSRLS) | `postgresql://app_service:<pass>@postgres:5432/<db>?sslmode=disable` |
+| `AUTH_SECRET`             | NextAuth secret                | `openssl rand -hex 32`                                               |
+| `LITELLM_MASTER_KEY`      | LiteLLM API key                | `sk-$(openssl rand -hex 24)`                                         |
+| `METRICS_TOKEN`           | Metrics auth token             | `openssl rand -base64 32`                                            |
+| `OPENROUTER_API_KEY`      | OpenRouter API key             | From openrouter.ai                                                   |
+| `EVM_RPC_URL`             | Ethereum RPC URL               | From Alchemy/Infura                                                  |
+| `SOURCECRED_GITHUB_TOKEN` | GitHub PAT for SourceCred      | GitHub PAT with repo read                                            |
 
 > **Two Config Surfaces (P0):**
 >
