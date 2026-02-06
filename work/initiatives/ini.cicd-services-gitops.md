@@ -78,12 +78,26 @@ Terraform/OpenTofu can manage role creation as an alternative to CD-time provisi
 - [ ] Turbo or pnpm deploy evaluation for graph-scoped builds
 - [ ] Container test isolation proof for parallel execution
 
+### Service Spawning & CI Wiring
+
+**Goal:** Reduce the 10-step manual checklist for creating a new service to a single scaffolding command, and automate CI/CD wiring for new services.
+
+| Deliverable                                                                                                       | Status      | Est | Work Item            |
+| ----------------------------------------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
+| `pnpm create:service <name>` scaffold CLI (generates workspace, tsconfig, tsup, Dockerfile, health, config, main) | Not Started | 3   | (create at P1 start) |
+| Auto-add dependency-cruiser rules for new services                                                                | Not Started | 1   | (create at P1 start) |
+| Auto-wire service into `docker-compose.dev.yml`                                                                   | Not Started | 1   | (create at P1 start) |
+| CI matrix: auto-discover `services/*/Dockerfile` for build+push                                                   | Not Started | 2   | (create at P2 start) |
+| Service health smoke test in CI (build image → start → curl /livez → teardown)                                    | Not Started | 2   | (create at P2 start) |
+| GitOps deploy manifests: auto-generate K8s Deployment from service Dockerfile + env schema                        | Not Started | 3   | (create at P2 start) |
+
 ## As-Built Specs
 
 - [build-architecture.md](../../docs/spec/build-architecture.md) — build order, Docker layering, TypeScript configs
 - [check-full.md](../../docs/spec/check-full.md) — CI-parity gate design
 - [database-url-alignment.md](../../docs/spec/database-url-alignment.md) — DSN source of truth, per-container env contract
+- [services-architecture.md](../../docs/spec/services-architecture.md) — service structure contracts, invariants, import boundaries
 
 ## Design Notes
 
-Content aggregated from original `docs/BUILD_ARCHITECTURE.md` (Known Issues + Future Improvements), `docs/CHECK_FULL.md` (Future Enhancements), and `docs/DATABASE_URL_ALIGNMENT_SPEC.md` (P1/P2 roadmap) during docs migration. The full `CICD_SERVICES_ROADMAP.md` roadmap doc will be merged into this initiative when migrated.
+Content aggregated from original `docs/BUILD_ARCHITECTURE.md` (Known Issues + Future Improvements), `docs/CHECK_FULL.md` (Future Enhancements), `docs/DATABASE_URL_ALIGNMENT_SPEC.md` (P1/P2 roadmap), and `docs/SERVICES_ARCHITECTURE.md` (service spawning roadmap) during docs migration. The full `CICD_SERVICES_ROADMAP.md` roadmap doc will be merged into this initiative when migrated.
