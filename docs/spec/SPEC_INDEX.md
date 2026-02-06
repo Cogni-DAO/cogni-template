@@ -44,8 +44,10 @@ This is a master index of all specs, updated as specs are migrated.
 | git-sync-repo-mount-spec         | Git-Sync Repo Mount                | draft    | deployment | [git-sync-repo-mount.md](./git-sync-repo-mount.md)                 |
 | gov-data-collectors-spec         | Governance Data Collectors         | draft    | data       | [gov-data-collectors.md](./gov-data-collectors.md)                 |
 | model-selection-spec             | Model Selection                    | draft    | ai-graphs  | [model-selection.md](./model-selection.md)                         |
+| n8n-adapter-spec                 | n8n Workflow Execution Adapter     | draft    | ai-graphs  | [n8n-adapter.md](./n8n-adapter.md)                                 |
 | node-operator-contract-spec      | Node vs Operator Contract          | draft    | meta       | [node-operator-contract.md](./node-operator-contract.md)           |
 | packages-architecture-spec       | Packages Architecture              | draft    | infra      | [packages-architecture.md](./packages-architecture.md)             |
+| prompt-registry-spec             | Prompt Registry                    | draft    | ai-graphs  | [prompt-registry.md](./prompt-registry.md)                         |
 | public-analytics-spec            | Public Analytics Page              | draft    | data       | [public-analytics.md](./public-analytics.md)                       |
 | runtime-policy-spec              | Route Runtime Policy               | draft    | deployment | [runtime-policy.md](./runtime-policy.md)                           |
 | temporal-patterns-spec           | Temporal Patterns                  | draft    | ai-graphs  | [temporal-patterns.md](./temporal-patterns.md)                     |
@@ -84,7 +86,6 @@ This is a master index of all specs, updated as specs are migrated.
 Legacy specs in `/docs/*.md` to be migrated to `/docs/spec/`:
 
 - DATABASE_RLS_SPEC.md
-- PROMPT_REGISTRY_SPEC.md
 - TOOL_USE_SPEC.md
 - TENANT_CONNECTIONS_SPEC.md
 - UNIFIED_GRAPH_LAUNCH_SPEC.md

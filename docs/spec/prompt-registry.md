@@ -1,7 +1,35 @@
-# Prompt Registry Design
+---
+id: prompt-registry-spec
+type: spec
+title: Prompt Registry
+status: draft
+spec_state: draft
+trust: draft
+summary: PromptRegistryPort with Langfuse adapter, prefetch injection into graph context, label-based rollout, and in-repo fallback.
+read_when: You are implementing or modifying prompt management, adding new prompts, or changing the prompt injection architecture.
+implements: ini.prompt-registry
+owner: derekg1729
+created: 2026-02-07
+verified: 2026-02-07
+tags: [ai-graphs]
+---
 
-> [!CRITICAL]
-> Prompts are fetched through a `PromptRegistryPort` at the **adapter layer** (`LangGraphInProcProvider`) and injected into graphs as resolved strings. Graphs export a pure-data `PROMPT_REFS` manifest; they never import from `src/` or call Langfuse directly. No "latest" label in production.
+# Prompt Registry
+
+## Context
+
+Prompts are fetched through a `PromptRegistryPort` at the **adapter layer** (`LangGraphInProcProvider`) and injected into graphs as resolved strings. Graphs export a pure-data `PROMPT_REFS` manifest; they never import from `src/` or call Langfuse directly. No "latest" label in production.
+
+## Goal
+
+Provide a port-based prompt resolution system where graphs declare prompt dependencies via manifests, the adapter layer prefetches and injects resolved content, and Langfuse serves as the primary prompt store with in-repo fallback — enabling label-based rollout, version pinning, and full trace correlation.
+
+## Non-Goals
+
+1. Building a custom prompt editor UI — use Langfuse's native UI
+2. Graphs importing from `src/` or calling ports directly
+3. Passing prompts through `GraphRunRequest` from feature layer
+4. Prompt content containing secrets or PII
 
 ## Core Invariants
 
@@ -19,11 +47,24 @@
 
 7. **GRAPH_OWNS_PROMPT_IDENTITY**: Graphs own which prompts they need (via `PROMPT_REFS` manifest) and how they use them. The provider resolves content; graphs consume it. This refines `GRAPH_OWNS_MESSAGES`: graphs own prompt identity (name + key), not necessarily content.
 
----
+## Schema
 
-## Injection Architecture
+**New columns on `ai_invocation_summaries`:**
 
-### Who calls what (layer compliance)
+- `prompt_name` (text, nullable) — Langfuse prompt name or in-repo constant name
+- `prompt_version` (text, nullable) — Langfuse version number or git SHA
+- `prompt_label` (text, nullable) — Label used for fetch (e.g. "production", "staging")
+- `prompt_source` (text, nullable) — "langfuse" or "in-repo"; indicates which adapter resolved the prompt
+
+**Why all four columns?** You need label + source to debug rollout behavior, cache effects, and fallback usage. These must match exactly what is attached to Langfuse traces.
+
+**No new tables.** Prompt content lives in Langfuse; correlation lives in existing telemetry.
+
+## Design
+
+### Injection Architecture
+
+#### Who calls what (layer compliance)
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
@@ -71,7 +112,7 @@
 └──────────────────────────────────────────────────────────────────┘
 ```
 
-### BASELINE_SYSTEM_PROMPT (special case)
+#### BASELINE_SYSTEM_PROMPT (special case)
 
 `BASELINE_SYSTEM_PROMPT` lives in `src/core/ai/system-prompt.server.ts`. Core **cannot** import ports. Resolution:
 
@@ -79,115 +120,7 @@
 - `src/features/ai/services/message-preparation.ts` (feature layer, **can** import ports) resolves the environment label and calls `PromptRegistryPort.getPrompt({name: "baseline-system", label})` with an explicit label before applying the system prompt.
 - If fetch fails, falls back to the core constant.
 
----
-
-## Implementation Checklist
-
-### P0: MVP — PromptRegistryPort + Adapter Prefetch
-
-- [ ] Create `PromptRegistryPort` interface in `src/ports/prompt-registry.port.ts`
-- [ ] Create `LangfusePromptRegistryAdapter` in `src/adapters/server/ai/langfuse-prompt-registry.adapter.ts`
-- [ ] Create `InRepoPromptAdapter` in `src/adapters/server/ai/in-repo-prompt.adapter.ts`
-- [ ] Create `FakePromptRegistryAdapter` in `src/adapters/test/ai/fake-prompt-registry.adapter.ts`
-- [ ] Add `promptRegistry` to `Container` and wire in `bootstrap/container.ts`
-- [ ] Add `LANGFUSE_PROMPT_CACHE_TTL_SECONDS` env var (default 300); update `.env.local.example` and `src/shared/env/AGENTS.md`
-- [ ] Export `PROMPT_REFS` manifest from each graph's `prompts.ts` (poet first)
-- [ ] Extend `CogniExecContext` with `promptLookup: (key: string) => string`
-- [ ] In `LangGraphInProcProvider.runGraph()`: read `PROMPT_REFS`, prefetch via port, inject into ALS context
-- [ ] In poet graph: read system prompt via `promptLookup("system")` instead of importing constant
-- [ ] In `message-preparation.ts`: resolve `baseline-system` prompt via port, fallback to core constant
-- [ ] Attach `{promptName, promptVersion, promptLabel, promptSource}` to Langfuse traces and `ai_invocation_summaries`
-- [ ] Add `prompt_name`, `prompt_version`, `prompt_label`, `prompt_source` columns to `ai_invocation_summaries` (Drizzle migration)
-
-#### Chores
-
-- [ ] Observability instrumentation [observability.md](../.agent/workflows/observability.md)
-- [ ] Documentation updates [document.md](../.agent/workflows/document.md)
-
-### P1: Rollout Mechanism + Compile Validation
-
-- [ ] Implement prompt compile check: validate template variables before LLM call
-- [ ] CI step: export Langfuse prompts to `prompts/snapshots/` for review/audit
-- [ ] Define label rollout flow: `staging` → `canary` → `production`; rollback = label flip
-- [ ] Migrate remaining movable prompts (see classification below)
-- [ ] Add eval smoke tests for critical prompts (format/schema adherence)
-
-### P2: Governance Prompts (Future — Do NOT Build Yet)
-
-- [ ] Evaluate governance prompt needs when RBAC flows are implemented
-- [ ] Define code-locked safety prompt schema for structured validation
-- [ ] **Do NOT build preemptively**
-
----
-
-## Prompt Classification
-
-### Code-Locked (stay in repo, never fetched remotely)
-
-| Prompt                    | File                                                    | Reason                                                   |
-| ------------------------- | ------------------------------------------------------- | -------------------------------------------------------- |
-| `BRAIN_SYSTEM_PROMPT`     | `packages/langgraph-graphs/src/graphs/brain/prompts.ts` | Citation/no-hallucination contract — must ship with code |
-| `TOOL_USE_INSTRUCTION`    | `src/features/ai/prompts/chat.prompt.ts`                | Tool schema coupling — must match tool definitions       |
-| `TOOL_ERROR_RECOVERY`     | `src/features/ai/prompts/chat.prompt.ts`                | Error handling contract — behavior must be deterministic |
-| Future governance prompts | TBD                                                     | Safety/compliance — require code review for changes      |
-
-**Rule:** If a prompt enforces a safety invariant, references tool schemas by name, or defines error-handling behavior, it stays in code. Code-locked prompts have `codeLocked: true` in their `PROMPT_REFS` entry; the provider skips them during prefetch.
-
-### Movable to Langfuse (iteration, versioning, rollback)
-
-| Prompt                      | File                                                       | Why movable                                             |
-| --------------------------- | ---------------------------------------------------------- | ------------------------------------------------------- |
-| `BASELINE_SYSTEM_PROMPT`    | `src/core/ai/system-prompt.server.ts`                      | Identity/voice — changes frequently, no safety contract |
-| `POET_SYSTEM_PROMPT`        | `packages/langgraph-graphs/src/graphs/poet/prompts.ts`     | Identity/voice — duplicate of baseline, pure UX         |
-| `PONDERER_SYSTEM_PROMPT`    | `packages/langgraph-graphs/src/graphs/ponderer/prompts.ts` | Personality prompt — pure UX                            |
-| `CHAT_GRAPH_SYSTEM_PROMPT`  | `src/features/ai/prompts/chat.prompt.ts`                   | Generic assistant prompt — no schema coupling           |
-| `SUPERVISOR_SYSTEM_PROMPT`  | `packages/langgraph-graphs/src/graphs/research/prompts.ts` | Research orchestration — benefits from rapid iteration  |
-| `RESEARCHER_SYSTEM_PROMPT`  | `packages/langgraph-graphs/src/graphs/research/prompts.ts` | Research execution — benefits from A/B testing          |
-| `COMPRESSION_SYSTEM_PROMPT` | `packages/langgraph-graphs/src/graphs/research/prompts.ts` | URL curation — pure UX                                  |
-| `FINAL_REPORT_PROMPT`       | `packages/langgraph-graphs/src/graphs/research/prompts.ts` | Report formatting — changes frequently                  |
-| `RESEARCH_BRIEF_PROMPT`     | `packages/langgraph-graphs/src/graphs/research/prompts.ts` | Brief generation — benefits from rapid iteration        |
-
-**Rule:** If a prompt defines personality, formatting, or orchestration strategy without safety implications, it moves to Langfuse.
-
----
-
-## File Pointers (P0 Scope)
-
-| File                                                          | Change                                                                                       |
-| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `src/ports/prompt-registry.port.ts`                           | New: `PromptRegistryPort` interface + `PromptRef`, `CompiledPrompt` types                    |
-| `src/adapters/server/ai/langfuse-prompt-registry.adapter.ts`  | New: Langfuse prompt fetch with cache + label pinning                                        |
-| `src/adapters/server/ai/in-repo-prompt.adapter.ts`            | New: Fallback adapter loading from repo constants                                            |
-| `src/adapters/test/ai/fake-prompt-registry.adapter.ts`        | New: Test adapter with deterministic responses                                               |
-| `src/bootstrap/container.ts`                                  | Wire `promptRegistry: PromptRegistryPort`                                                    |
-| `src/shared/env/server.ts`                                    | Add `LANGFUSE_PROMPT_CACHE_TTL_SECONDS`                                                      |
-| `src/ports/ai-telemetry.port.ts`                              | Add `promptName`, `promptVersion`, `promptLabel`, `promptSource` to `RecordInvocationParams` |
-| `src/adapters/server/ai-telemetry/langfuse.adapter.ts`        | Attach prompt metadata to traces                                                             |
-| `src/adapters/server/ai/langgraph/inproc.provider.ts`         | Read `PROMPT_REFS`, prefetch via port, inject into ALS                                       |
-| `packages/langgraph-graphs/src/runtime/cogni/exec-context.ts` | Add `promptLookup: (key: string) => string` to `CogniExecContext`                            |
-| `packages/langgraph-graphs/src/graphs/poet/prompts.ts`        | Add `PROMPT_REFS` manifest; keep constant as fallback                                        |
-| `src/features/ai/services/message-preparation.ts`             | Resolve `baseline-system` prompt via port                                                    |
-| `src/shared/db/schema.ai.ts`                                  | Add `prompt_name`, `prompt_version`, `prompt_label`, `prompt_source` columns                 |
-| `src/adapters/server/db/migrations/`                          | New migration for `ai_invocation_summaries` columns                                          |
-
----
-
-## Schema
-
-**New columns on `ai_invocation_summaries`:**
-
-- `prompt_name` (text, nullable) — Langfuse prompt name or in-repo constant name
-- `prompt_version` (text, nullable) — Langfuse version number or git SHA
-- `prompt_label` (text, nullable) — Label used for fetch (e.g. "production", "staging")
-- `prompt_source` (text, nullable) — "langfuse" or "in-repo"; indicates which adapter resolved the prompt
-
-**Why all four columns?** You need label + source to debug rollout behavior, cache effects, and fallback usage. These must match exactly what is attached to Langfuse traces.
-
-**No new tables.** Prompt content lives in Langfuse; correlation lives in existing telemetry.
-
----
-
-## Design Decisions
+### Key Decisions
 
 ### 1. Port Interface
 
@@ -294,9 +227,36 @@ Callers (`LangGraphInProcProvider`, `message-preparation.ts`) resolve the label 
 - Acceptable tradeoff: prompt changes are not latency-sensitive
 - For emergency rollback: set TTL to 0 via env var override + restart
 
----
+### Prompt Classification
 
-## Rejected Alternatives
+#### Code-Locked (stay in repo, never fetched remotely)
+
+| Prompt                    | File                                                    | Reason                                                   |
+| ------------------------- | ------------------------------------------------------- | -------------------------------------------------------- |
+| `BRAIN_SYSTEM_PROMPT`     | `packages/langgraph-graphs/src/graphs/brain/prompts.ts` | Citation/no-hallucination contract — must ship with code |
+| `TOOL_USE_INSTRUCTION`    | `src/features/ai/prompts/chat.prompt.ts`                | Tool schema coupling — must match tool definitions       |
+| `TOOL_ERROR_RECOVERY`     | `src/features/ai/prompts/chat.prompt.ts`                | Error handling contract — behavior must be deterministic |
+| Future governance prompts | TBD                                                     | Safety/compliance — require code review for changes      |
+
+**Rule:** If a prompt enforces a safety invariant, references tool schemas by name, or defines error-handling behavior, it stays in code. Code-locked prompts have `codeLocked: true` in their `PROMPT_REFS` entry; the provider skips them during prefetch.
+
+#### Movable to Langfuse (iteration, versioning, rollback)
+
+| Prompt                      | File                                                       | Why movable                                             |
+| --------------------------- | ---------------------------------------------------------- | ------------------------------------------------------- |
+| `BASELINE_SYSTEM_PROMPT`    | `src/core/ai/system-prompt.server.ts`                      | Identity/voice — changes frequently, no safety contract |
+| `POET_SYSTEM_PROMPT`        | `packages/langgraph-graphs/src/graphs/poet/prompts.ts`     | Identity/voice — duplicate of baseline, pure UX         |
+| `PONDERER_SYSTEM_PROMPT`    | `packages/langgraph-graphs/src/graphs/ponderer/prompts.ts` | Personality prompt — pure UX                            |
+| `CHAT_GRAPH_SYSTEM_PROMPT`  | `src/features/ai/prompts/chat.prompt.ts`                   | Generic assistant prompt — no schema coupling           |
+| `SUPERVISOR_SYSTEM_PROMPT`  | `packages/langgraph-graphs/src/graphs/research/prompts.ts` | Research orchestration — benefits from rapid iteration  |
+| `RESEARCHER_SYSTEM_PROMPT`  | `packages/langgraph-graphs/src/graphs/research/prompts.ts` | Research execution — benefits from A/B testing          |
+| `COMPRESSION_SYSTEM_PROMPT` | `packages/langgraph-graphs/src/graphs/research/prompts.ts` | URL curation — pure UX                                  |
+| `FINAL_REPORT_PROMPT`       | `packages/langgraph-graphs/src/graphs/research/prompts.ts` | Report formatting — changes frequently                  |
+| `RESEARCH_BRIEF_PROMPT`     | `packages/langgraph-graphs/src/graphs/research/prompts.ts` | Brief generation — benefits from rapid iteration        |
+
+**Rule:** If a prompt defines personality, formatting, or orchestration strategy without safety implications, it moves to Langfuse.
+
+### Rejected Alternatives
 
 1. **Feature layer passes prompts via `GraphRunRequest`**: Pollutes port types with prompt awareness, creates broad callsite churn, and forces features to know which prompts each graph needs.
 
@@ -306,9 +266,7 @@ Callers (`LangGraphInProcProvider`, `message-preparation.ts`) resolve the label 
 
 4. **Graphs import from `src/`**: Violates `PACKAGES_NO_SRC_IMPORTS`. Non-negotiable.
 
----
-
-## Guardrails
+### Guardrails
 
 1. **No secrets in prompt content.** Template variables are injected at runtime from secure context. Prompt text in Langfuse contains `{date}`, `{userQuestion}` — never API keys or PII.
 
@@ -318,7 +276,42 @@ Callers (`LangGraphInProcProvider`, `message-preparation.ts`) resolve the label 
 
 4. **Provider reads manifest, not hardcoded lists.** `LangGraphInProcProvider` reads `PROMPT_REFS` from the catalog entry. No hand-maintained prompt lists in `src/`.
 
----
+### File Pointers
 
-**Last Updated**: 2026-02-03
-**Status**: Draft
+| File                                                          | Purpose                                                                                      |
+| ------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `src/ports/prompt-registry.port.ts`                           | New: `PromptRegistryPort` interface + `PromptRef`, `CompiledPrompt` types                    |
+| `src/adapters/server/ai/langfuse-prompt-registry.adapter.ts`  | New: Langfuse prompt fetch with cache + label pinning                                        |
+| `src/adapters/server/ai/in-repo-prompt.adapter.ts`            | New: Fallback adapter loading from repo constants                                            |
+| `src/adapters/test/ai/fake-prompt-registry.adapter.ts`        | New: Test adapter with deterministic responses                                               |
+| `src/bootstrap/container.ts`                                  | Wire `promptRegistry: PromptRegistryPort`                                                    |
+| `src/shared/env/server.ts`                                    | Add `LANGFUSE_PROMPT_CACHE_TTL_SECONDS`                                                      |
+| `src/ports/ai-telemetry.port.ts`                              | Add `promptName`, `promptVersion`, `promptLabel`, `promptSource` to `RecordInvocationParams` |
+| `src/adapters/server/ai-telemetry/langfuse.adapter.ts`        | Attach prompt metadata to traces                                                             |
+| `src/adapters/server/ai/langgraph/inproc.provider.ts`         | Read `PROMPT_REFS`, prefetch via port, inject into ALS                                       |
+| `packages/langgraph-graphs/src/runtime/cogni/exec-context.ts` | Add `promptLookup: (key: string) => string` to `CogniExecContext`                            |
+| `packages/langgraph-graphs/src/graphs/poet/prompts.ts`        | Add `PROMPT_REFS` manifest; keep constant as fallback                                        |
+| `src/features/ai/services/message-preparation.ts`             | Resolve `baseline-system` prompt via port                                                    |
+| `src/shared/db/schema.ai.ts`                                  | Add `prompt_name`, `prompt_version`, `prompt_label`, `prompt_source` columns                 |
+| `src/adapters/server/db/migrations/`                          | New migration for `ai_invocation_summaries` columns                                          |
+
+## Acceptance Checks
+
+**Manual (not yet implemented):**
+
+1. `PromptRegistryPort.getPrompt({name, label})` returns compiled prompt from Langfuse
+2. Fallback to in-repo constant when Langfuse unreachable
+3. `promptLookup("system")` in poet graph returns resolved content
+4. `ai_invocation_summaries` rows contain `prompt_name`, `prompt_version`, `prompt_label`, `prompt_source`
+5. `latest` label rejected in non-local environments
+
+## Open Questions
+
+- [ ] Should prompt cache be shared across requests (process-level) or per-request?
+- [ ] Should `PROMPT_REFS` support conditional refs (e.g. different prompts per model)?
+
+## Related
+
+- [Initiative: ini.prompt-registry](../../work/initiatives/ini.prompt-registry.md)
+- [ai-setup.md](./ai-setup.md) — Langfuse integration
+- [ai-evals.md](./ai-evals.md) — eval harness that may use prompt variants

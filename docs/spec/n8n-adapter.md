@@ -1,9 +1,37 @@
-# n8n Workflow Execution Adapter Design
+---
+id: n8n-adapter-spec
+type: spec
+title: n8n Workflow Execution Adapter
+status: draft
+spec_state: draft
+trust: draft
+summary: Webhook-based adapter integrating n8n workflow execution into Cogni's GraphExecutorPort with LiteLLM billing reconciliation.
+read_when: You are implementing or modifying the n8n workflow execution adapter.
+implements: ini.n8n-integration
+owner: derekg1729
+created: 2026-02-07
+verified: 2026-02-07
+tags: [ai-graphs, billing]
+---
 
-> [!CRITICAL]
-> This adapter triggers n8n workflows via webhook/REST API and streams results back through `GraphExecutorPort`. n8n is an **external executor**—follows invariants 41-47 with async reconciliation via LiteLLM `end_user` correlation. `usageUnitId = spend_logs.request_id` per LLM call.
+# n8n Workflow Execution Adapter
 
-**Purpose:** When a developer chooses to implement their agent/workflow in n8n, this adapter standardizes it into Cogni's auth + billing pipeline. Developer's choice of environment, Cogni's unified metering.
+## Context
+
+This adapter triggers n8n workflows via webhook/REST API and streams results back through `GraphExecutorPort`. n8n is an **external executor** — follows invariants 41-47 with async reconciliation via LiteLLM `end_user` correlation. `usageUnitId = spend_logs.request_id` per LLM call.
+
+When a developer chooses to implement their agent/workflow in n8n, this adapter standardizes it into Cogni's auth + billing pipeline. Developer's choice of environment, Cogni's unified metering.
+
+## Goal
+
+Provide a `GraphExecutorPort` implementation that invokes n8n workflows via webhook, correlates billing through LiteLLM `end_user`, and reconciles usage via spend logs — enabling n8n-authored agents to participate in Cogni's unified auth and billing pipeline.
+
+## Non-Goals
+
+1. **Do NOT build n8n workflow editor integration** — use n8n's native UI
+2. **Do NOT implement n8n-internal billing** — route through LiteLLM gateway
+3. **Do NOT build custom n8n nodes** in P0 — use standard nodes + webhook patterns
+4. **Do NOT use custom headers for correlation** — use `user` parameter for `end_user`
 
 ## Core Invariants
 
@@ -17,11 +45,9 @@
 
 5. **GRAPH_ID_AS_WORKFLOW_REFERENCE**: `graphId` format: `n8n:<workflow_id>` or `n8n:<workflow_name>`. Adapter resolves to webhook URL from catalog.
 
----
+### External Executor Billing Checklist
 
-## External Executor Billing Checklist
-
-Per [EXTERNAL_EXECUTOR_BILLING.md](EXTERNAL_EXECUTOR_BILLING.md) §New Executor Integration:
+Per [external-executor-billing.md](./external-executor-billing.md) §New Executor Integration:
 
 | Question                                     | n8n Answer                                                               |
 | -------------------------------------------- | ------------------------------------------------------------------------ |
@@ -30,57 +56,7 @@ Per [EXTERNAL_EXECUTOR_BILLING.md](EXTERNAL_EXECUTOR_BILLING.md) §New Executor 
 | **Provider call ID for usageUnitId?**        | `spend_logs.request_id` (unique per LLM call)                            |
 | **Idempotent flow through commitUsageFact?** | `source_reference = ${runId}/${attempt}/${request_id}`                   |
 
-**Note:** n8n follows invariants 41-47 (external executor billing). Stream events are UX-only; authoritative billing via reconciliation.
-
----
-
-## Implementation Checklist
-
-### P0: MVP Critical - Webhook Execution
-
-- [ ] Create `N8nWorkflowExecutor` implementing `GraphExecutorPort` in `src/adapters/server/ai/n8n/`
-- [ ] Implement webhook trigger: POST to n8n production URL with `GraphRunRequest` payload
-- [ ] Include `user: ${runId}/${attempt}` in payload for n8n to forward to LiteLLM
-- [ ] Support sync response mode (wait for completion)
-- [ ] Map n8n webhook response to `GraphFinal`
-- [ ] Emit synthetic `UsageReportEvent` as UX hint (not authoritative)
-- [ ] Trigger reconciliation after stream completes (invariant 44)
-
-#### Chores
-
-- [ ] Observability instrumentation [observability.md](../.agent/workflows/observability.md)
-- [ ] Documentation updates [document.md](../.agent/workflows/document.md)
-
-### P1: LiteLLM Gateway Reconciliation
-
-- [ ] Document n8n workflow configuration: set `user` param when calling LiteLLM
-- [ ] Reuse `reconcileRun()` from `external-reconciler.ts`
-- [ ] Query `/spend/logs?end_user=${runId}/${attempt}`
-- [ ] `commitUsageFact()` per spend log entry with `usageUnitId = request_id`
-
-### P2: Streaming Support (Optional/Future)
-
-- [ ] Evaluate n8n SSE/WebSocket support for real-time streaming
-- [ ] If supported: implement streaming webhook consumer
-- [ ] **Do NOT build this preemptively** — webhook polling is MVP-sufficient
-
----
-
-## File Pointers (P0 Scope)
-
-| File                                           | Change                                                      |
-| ---------------------------------------------- | ----------------------------------------------------------- |
-| `src/adapters/server/ai/n8n/executor.ts`       | New: `N8nWorkflowExecutor` implementing `GraphExecutorPort` |
-| `src/adapters/server/ai/n8n/catalog.ts`        | New: `N8N_WORKFLOW_CATALOG` type and static config          |
-| `src/adapters/server/ai/n8n/webhook-client.ts` | New: HTTP client for n8n webhook invocation                 |
-| `src/adapters/server/ai/n8n/index.ts`          | New: Barrel export                                          |
-| `src/adapters/server/index.ts`                 | Export N8nWorkflowExecutor                                  |
-| `src/bootstrap/graph-executor.factory.ts`      | Wire N8nWorkflowExecutor into aggregator                    |
-| `packages/ai-core/src/usage/usage.ts`          | Add `n8n` to `ExecutorType` union                           |
-
----
-
-## Schema (Billing)
+## Schema
 
 **Source System:** `'litellm'` (via reconciliation)
 
@@ -100,11 +76,11 @@ Per [EXTERNAL_EXECUTOR_BILLING.md](EXTERNAL_EXECUTOR_BILLING.md) §New Executor 
 
 **Idempotency key:** `${runId}/${attempt}/${request_id}`
 
-**Note:** Multiple `UsageFact` per run is expected—each LLM call in the workflow creates a separate spend log entry.
+**Note:** Multiple `UsageFact` per run is expected — each LLM call in the workflow creates a separate spend log entry.
 
----
+## Design
 
-## Design Decisions
+### Key Decisions
 
 ### 1. Execution Pattern
 
@@ -115,8 +91,6 @@ Per [EXTERNAL_EXECUTOR_BILLING.md](EXTERNAL_EXECUTOR_BILLING.md) §New Executor 
 | **Callback** | Custom webhook callback            | POST with callback URL, wait for callback |
 
 **MVP:** Sync mode only. Async/callback for P1 if needed.
-
----
 
 ### 2. Webhook Invocation Flow
 
@@ -155,8 +129,6 @@ Per [EXTERNAL_EXECUTOR_BILLING.md](EXTERNAL_EXECUTOR_BILLING.md) §New Executor 
 ```
 
 **Why reconciliation?** n8n doesn't expose real-time token/cost data. Per invariant 45, stream events from external executors are UX hints only. Authoritative billing flows through LiteLLM spend logs reconciliation.
-
----
 
 ### 3. Webhook Payload Contract
 
@@ -209,8 +181,6 @@ interface N8nWebhookResponse {
 }
 ```
 
----
-
 ### 4. n8n Workflow Configuration
 
 **CRITICAL:** n8n workflows must be configured to forward `user` to LiteLLM:
@@ -228,8 +198,6 @@ OpenAI/AI Node
 ```
 
 **Anti-pattern:** Do NOT use custom headers (`x-cogni-*`). LiteLLM does not support header-based filtering. Use `user` parameter for `end_user` correlation.
-
----
 
 ### 5. Catalog Configuration
 
@@ -253,8 +221,6 @@ export type N8nWorkflowCatalog = Record<string, N8nWorkflowEntry>;
 2. Catalog file or DB for workflow registry
 3. Runtime discovery endpoint (P2)
 
----
-
 ### 6. Error Mapping
 
 | n8n Error                       | `AiExecutionErrorCode` |
@@ -265,50 +231,41 @@ export type N8nWorkflowCatalog = Record<string, N8nWorkflowEntry>;
 | `error.code: 'WORKFLOW_FAILED'` | `internal`             |
 | `error.code: 'TIMEOUT'`         | `timeout`              |
 
----
+### 7. When to Use n8n Adapter
 
-## Constraints
-
-### P0 Limitations
-
-1. **No real-time streaming** — n8n webhooks are request/response, not SSE
-2. **Billing is reconciled** — per invariant 45, stream events are UX hints only
-3. **Tool execution in n8n** — tools run inside n8n, not through our ToolRunner
-4. **Workflow must forward `user`** — billing correlation requires proper n8n configuration
-
-### When to Use n8n Adapter
-
-Use this adapter when the developer **chooses to implement their agent/workflow in n8n**. The adapter's purpose is to standardize n8n execution into Cogni's auth + billing pipeline—not to prescribe when n8n is "appropriate."
+Use this adapter when the developer **chooses to implement their agent/workflow in n8n**. The adapter's purpose is to standardize n8n execution into Cogni's auth + billing pipeline — not to prescribe when n8n is "appropriate."
 
 **Developer's choice, Cogni's pipeline.**
 
----
+### File Pointers
 
-## Non-Goals
+| File                                           | Purpose                                                     |
+| ---------------------------------------------- | ----------------------------------------------------------- |
+| `src/adapters/server/ai/n8n/executor.ts`       | New: `N8nWorkflowExecutor` implementing `GraphExecutorPort` |
+| `src/adapters/server/ai/n8n/catalog.ts`        | New: `N8N_WORKFLOW_CATALOG` type and static config          |
+| `src/adapters/server/ai/n8n/webhook-client.ts` | New: HTTP client for n8n webhook invocation                 |
+| `src/adapters/server/ai/n8n/index.ts`          | New: Barrel export                                          |
+| `src/adapters/server/index.ts`                 | Export N8nWorkflowExecutor                                  |
+| `src/bootstrap/graph-executor.factory.ts`      | Wire N8nWorkflowExecutor into aggregator                    |
+| `packages/ai-core/src/usage/usage.ts`          | Add `n8n` to `ExecutorType` union                           |
 
-1. **Do NOT build n8n workflow editor integration** — use n8n's native UI
-2. **Do NOT implement n8n-internal billing** — route through LiteLLM gateway
-3. **Do NOT build custom n8n nodes** in P0 — use standard nodes + webhook patterns
-4. **Do NOT use custom headers for correlation** — use `user` parameter for `end_user`
+## Acceptance Checks
 
----
+**Manual (not yet implemented):**
 
-## Sources
+1. `N8nWorkflowExecutor` invokes n8n webhook and returns `GraphFinal`
+2. `user` field is forwarded through n8n to LiteLLM for billing correlation
+3. Reconciliation queries `/spend/logs?end_user=${runId}/${attempt}` and commits usage facts
+4. Error mapping produces correct `AiExecutionErrorCode` for each n8n error class
 
+## Open Questions
+
+- [ ] Should async/callback mode be P1 or P2?
+- [ ] Should catalog be config-file-based or DB-backed?
+
+## Related
+
+- [external-executor-billing.md](./external-executor-billing.md) — Invariants 41-47, reconciliation pattern
+- [Initiative: ini.n8n-integration](../../work/initiatives/ini.n8n-integration.md)
 - [n8n Webhook Node Documentation](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.webhook/)
 - [n8n Respond to Webhook](https://docs.n8n.io/integrations/builtin/core-nodes/n8n-nodes-base.respondtowebhook/)
-- [n8n Workflow Manager API Template](https://n8n.io/workflows/4166-n8n-workflow-manager-api/)
-- [n8n Community: API Workflow Execution](https://community.n8n.io/t/how-to-use-an-api-to-execute-a-workflow/29656)
-
----
-
-## Related Docs
-
-- [EXTERNAL_EXECUTOR_BILLING.md](EXTERNAL_EXECUTOR_BILLING.md) — Invariants 41-47, reconciliation pattern
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — GraphExecutorPort, billing architecture
-- [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) — Same reconciliation pattern for LangGraph Server
-
----
-
-**Last Updated**: 2026-01-29
-**Status**: Draft

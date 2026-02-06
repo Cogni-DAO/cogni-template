@@ -67,13 +67,13 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 ### AI & Evals
 
 - [AI Setup Spec](docs/AI_SETUP_SPEC.md)
-- [Prompt Registry Spec](docs/PROMPT_REGISTRY_SPEC.md)
+- [Prompt Registry Spec](docs/spec/prompt-registry.md)
 - [Tools Authoring](docs/TOOLS_AUTHORING.md)
 - [Graph Execution](docs/GRAPH_EXECUTION.md)
 - [LangGraph Server](docs/LANGGRAPH_SERVER.md)
 - [LangGraph Patterns](docs/LANGGRAPH_AI.md)
 - [Claude SDK Adapter](docs/CLAUDE_SDK_ADAPTER_SPEC.md)
-- [n8n Adapter](docs/N8N_ADAPTER_SPEC.md)
+- [n8n Adapter](docs/spec/n8n-adapter.md)
 - [Clawdbot Adapter](docs/CLAWDBOT_ADAPTER_SPEC.md)
 - [AI Evals](docs/AI_EVALS.md)
 
