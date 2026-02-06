@@ -1,13 +1,43 @@
-# Agent Registry Design
+---
+id: agent-registry
+type: spec
+title: Agent Registry
+status: draft
+spec_state: draft
+trust: draft
+summary: Canonical agent registration schema, offchain-first identity port, content hashing, and optional ERC-8004 on-chain publication
+read_when: Building agent registration, identity resolution, or on-chain publication features
+implements:
+owner: derekg1729
+created: 2026-02-04
+verified:
+tags: [ai-graphs, identity, blockchain]
+---
+
+# Agent Registry
+
+## Context
+
+Cogni agents need a registration layer beyond the discovery catalog — one that supports integrity hashing, signed descriptors, and optional on-chain publication via ERC-8004. The existing `AgentCatalogPort` handles discovery; this spec defines the persistence and publication layer above it.
 
 > [!CRITICAL]
 > Cogni works fully without chain. On-chain publication (ERC-8004) is an export, never a prerequisite. AgentDescriptor is the canonical schema; adapters map to external specs.
+
+## Goal
+
+Provide a canonical `AgentRegistrationDocument` schema and `AgentIdentityPort` that enables offchain agent registration with content-hash integrity, optional on-chain publication via ERC-8004, and adapter-based extensibility — all without ever gating agent operation on blockchain availability.
+
+## Non-Goals
+
+- Building trust signals or reputation systems (deferred to P2+)
+- Cross-chain indexing or federation discovery
+- Storing credentials or secrets in registration records
 
 ## Core Invariants
 
 1. **OFFCHAIN_FIRST**: All agent identity, discovery, and resolution works without any blockchain dependency. On-chain registries are optional publication targets.
 
-2. **NO_SECRETS_ON_CHAIN**: Descriptors contain endpoints, capabilities, and metadata only. Never credentials, API keys, or connection secrets. Runtime auth uses `connectionId` via broker (see [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md)).
+2. **NO_SECRETS_ON_CHAIN**: Descriptors contain endpoints, capabilities, and metadata only. Never credentials, API keys, or connection secrets. Runtime auth uses `connectionId` via broker (see [tenant-connections.md](./tenant-connections.md)).
 
 3. **STABLE_CANONICAL_SCHEMA**: `AgentDescriptor` is the Cogni-owned canonical schema, versioned internally. Adapters map to/from evolving external specs (ERC-8004, A2A, MCP). Core code never imports external schema types directly.
 
@@ -15,59 +45,7 @@
 
 5. **SINGLE_IDENTITY_PORT**: All registration/resolution/publication flows go through `AgentIdentityPort`. No adapter-specific imports in features or app layers.
 
-6. **AGENT_ID_STABLE**: `agentId` format remains `${providerId}:${graphName}` per existing [AGENT_DISCOVERY.md](AGENT_DISCOVERY.md) invariant. The registry adds a `registrationId` (content-hash-based) as a separate, portable identifier.
-
----
-
-## Implementation Checklist
-
-### P0: Canonical Schema + Offchain Registry
-
-- [ ] Extend `AgentDescriptor` in `src/ports/agent-catalog.port.ts` with optional registry fields (`version`, `endpoints`, `registrationHash`)
-- [ ] Create `AgentRegistrationDocument` type: full descriptor + `services[]` + `active` flag (aligns with ERC-8004 registration file shape)
-- [ ] Create `AgentIdentityPort` in `src/ports/agent-identity.port.ts`: `register(doc)`, `resolve(agentId)`, `publish(agentId, target)`
-- [ ] Implement `OffchainAgentRegistryAdapter` in `src/adapters/server/agent-registry/offchain.adapter.ts`: DB-backed, stores signed descriptors
-- [ ] Create `agent_registrations` table in `@cogni/db-schema`: `id`, `agent_id`, `registration_hash`, `descriptor_json`, `signed_by`, `created_at`, `updated_at`
-- [ ] Implement content-hash function: `computeRegistrationHash(doc: AgentRegistrationDocument) → string`
-- [ ] Wire adapter into bootstrap composition root
-- [ ] Publish hook stub: `AgentIdentityPort.publish()` returns `{ published: false, reason: 'no_target_configured' }` when no on-chain adapter present
-
-#### Chores
-
-- [ ] Observability instrumentation [observability.md](../.agent/workflows/observability.md)
-- [ ] Documentation updates [document.md](../.agent/workflows/document.md)
-
-### P1: ERC-8004 Identity Adapter
-
-- [ ] Create `Erc8004IdentityRegistryAdapter` in `src/adapters/server/agent-registry/erc8004.adapter.ts`
-- [ ] Map `AgentRegistrationDocument` → ERC-8004 registration file JSON (`type`, `name`, `description`, `image`, `services[]`, `active`, `registrations[]`)
-- [ ] Implement `register()`: mint NFT via `IAgentIdentityRegistry.register(agentURI, metadata[])`
-- [ ] Implement `publish()`: update `agentURI` via `setAgentURI(agentId, newURI)`
-- [ ] Feature flag: `AGENT_REGISTRY_ERC8004_ENABLED` (default: false)
-- [ ] Host registration file JSON at stable URI (IPFS or signed HTTP)
-
-### P2: Trust Signals + Indexer (Future)
-
-- [ ] Evaluate after P1 adoption and ERC-8004 mainnet stability
-- [ ] Create `AgentTrustSignalsPort`: `submitFeedback()`, `queryReputation()`, `requestValidation()`
-- [ ] Create `Erc8004ReputationAdapter` wrapping `IReputationRegistry`
-- [ ] Create `IndexerAdapter` for cross-chain agent discovery (subgraph/ETL)
-- [ ] **Do NOT build preemptively**
-
----
-
-## File Pointers (P0 Scope)
-
-| File                                                     | Change                                                                            |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `src/ports/agent-catalog.port.ts`                        | Extend `AgentDescriptor` with optional `version`, `endpoints`, `registrationHash` |
-| `src/ports/agent-identity.port.ts`                       | New port: `register`, `resolve`, `publish`                                        |
-| `src/adapters/server/agent-registry/offchain.adapter.ts` | DB-backed registry with signed descriptors                                        |
-| `packages/db-schema/src/agent-registry.ts`               | `agent_registrations` table                                                       |
-| `src/bootstrap/agent-registry.factory.ts`                | Composition root wiring                                                           |
-| `src/contracts/agent-registry.v1.contract.ts`            | Zod schemas for registry API                                                      |
-
----
+6. **AGENT_ID_STABLE**: `agentId` format remains `${providerId}:${graphName}` per existing [agent-discovery.md](./agent-discovery.md) invariant. The registry adds a `registrationId` (content-hash-based) as a separate, portable identifier.
 
 ## Schema
 
@@ -93,11 +71,9 @@
 
 **Why:** Registration is metadata + endpoints only. Credentials flow through the connection broker at invocation time.
 
-**RLS:** `agent_registrations` is tenant-scoped via `billing_account_id` (added as FK). Follows dual DB client pattern per [DATABASE_RLS_SPEC.md](DATABASE_RLS_SPEC.md).
+**RLS:** `agent_registrations` is tenant-scoped via `billing_account_id` (added as FK). Follows dual DB client pattern per [database-rls.md](./database-rls.md).
 
----
-
-## `AgentRegistrationDocument` Shape
+### `AgentRegistrationDocument` Shape
 
 ```typescript
 /** Cogni canonical schema — adapters map to/from external specs */
@@ -147,13 +123,13 @@ interface AgentChainRegistration {
 | `active`          | `active`          | Direct                                                              |
 | `registrations[]` | `registrations[]` | Same shape                                                          |
 
----
+## Design
 
-## Design Decisions
+### Key Decisions
 
-### 1. Extending AgentDescriptor vs. New Type
+### 1. AgentDescriptor vs AgentRegistrationDocument
 
-`AgentDescriptor` (from [AGENT_DISCOVERY.md](AGENT_DISCOVERY.md)) remains the discovery type — minimal, used by UI. `AgentRegistrationDocument` is the full registration type — used for persistence and publication. Relationship:
+`AgentDescriptor` (from [agent-discovery.md](./agent-discovery.md)) remains the discovery type — minimal, used by UI. `AgentRegistrationDocument` is the full registration type — used for persistence and publication.
 
 | Type                          | Purpose                   | Where used                      |
 | ----------------------------- | ------------------------- | ------------------------------- |
@@ -161,8 +137,6 @@ interface AgentChainRegistration {
 | **AgentRegistrationDocument** | Persistence + publication | `AgentIdentityPort.register()`  |
 
 **Rule:** `AgentRegistrationDocument` can always produce an `AgentDescriptor` (projection). Never the reverse.
-
----
 
 ### 2. Publication Flow
 
@@ -199,8 +173,6 @@ interface AgentChainRegistration {
 
 **Why offchain-first?** ERC-8004 is still draft. Chain availability must never gate agent operation. Registration hash enables integrity verification without chain dependency.
 
----
-
 ### 3. Content Hashing Strategy
 
 Deterministic serialization via JSON Canonicalization Scheme (RFC 8785):
@@ -211,8 +183,6 @@ Deterministic serialization via JSON Canonicalization Scheme (RFC 8785):
 
 **Never** hash non-deterministic representations (pretty-printed JSON, objects with insertion-order keys).
 
----
-
 ### 4. Adapter Selection
 
 **Feature flags:**
@@ -222,18 +192,38 @@ Deterministic serialization via JSON Canonicalization Scheme (RFC 8785):
 
 **Composition root** wires adapters based on flags. `AgentIdentityPort.publish()` delegates to enabled adapters. If no on-chain adapter, publish is a no-op that returns `{ published: false }`.
 
----
+### File Pointers
 
-## Relationship to Existing Specs
+| File                                                     | Purpose                                                                           |
+| -------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `src/ports/agent-catalog.port.ts`                        | Extend `AgentDescriptor` with optional `version`, `endpoints`, `registrationHash` |
+| `src/ports/agent-identity.port.ts`                       | New port: `register`, `resolve`, `publish`                                        |
+| `src/adapters/server/agent-registry/offchain.adapter.ts` | DB-backed registry with signed descriptors                                        |
+| `packages/db-schema/src/agent-registry.ts`               | `agent_registrations` table                                                       |
+| `src/bootstrap/agent-registry.factory.ts`                | Composition root wiring                                                           |
+| `src/contracts/agent-registry.v1.contract.ts`            | Zod schemas for registry API                                                      |
 
-| Spec                                                     | Relationship                                                                                    |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| [AGENT_DISCOVERY.md](AGENT_DISCOVERY.md)                 | `AgentDescriptor` is a projection of `AgentRegistrationDocument`. Discovery pipeline unchanged. |
-| [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md) | Descriptors never contain credentials. Runtime auth via `connectionId` + broker.                |
-| [NODE_FORMATION_SPEC.md](NODE_FORMATION_SPEC.md)         | P3 federation enrollment may reference agent registrations for DAO-published agents.            |
-| [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md)                     | Tool capabilities advertised in `services[].skills` align with tool catalog.                    |
+## Acceptance Checks
 
----
+**Automated:**
 
-**Last Updated**: 2026-02-04
-**Status**: Draft
+- (none yet — spec_state: draft, code not implemented)
+
+**Manual:**
+
+1. `AgentRegistrationDocument` type compiles and produces valid `AgentDescriptor` projection
+2. `computeRegistrationHash()` is deterministic across serialization round-trips
+3. `AgentIdentityPort.publish()` returns `{ published: false }` when no on-chain adapter configured
+
+## Open Questions
+
+- [ ] Should `AgentRegistrationDocument` include a `capabilities` field or defer to service-level metadata?
+
+## Related
+
+- [agent-discovery.md](./agent-discovery.md) — `AgentDescriptor` is a projection of `AgentRegistrationDocument`; discovery pipeline unchanged
+- [tenant-connections.md](./tenant-connections.md) — descriptors never contain credentials; runtime auth via `connectionId` + broker
+- [database-rls.md](./database-rls.md) — dual DB client pattern for tenant-scoped tables
+- [node-formation.md](./node-formation.md) — P3 federation enrollment may reference agent registrations for DAO-published agents
+- [tool-use.md](./tool-use.md) — tool capabilities advertised in `services[].skills` align with tool catalog
+- [ini.agent-registry.md](../../work/initiatives/ini.agent-registry.md) — implementation roadmap (P0–P2 checklists)

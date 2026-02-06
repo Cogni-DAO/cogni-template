@@ -72,6 +72,50 @@ Evolve the agent discovery pipeline from the current single in-proc LangGraph ca
 | Add `providerRef` to `AgentDescriptor` for adapter-specific data | Not Started | 1   | (create at P2 start) |
 | Decouple `agentId` from `graphId` for multi-assistant-per-graph  | Not Started | 2   | (create at P2 start) |
 
+### Identity & Registration Track
+
+> Source: `docs/AGENT_REGISTRY_SPEC.md` — Spec: [agent-registry.md](../../docs/spec/agent-registry.md)
+
+#### P0: Canonical Schema + Offchain Registry
+
+**Goal:** `AgentRegistrationDocument` schema, `AgentIdentityPort`, DB-backed offchain registry with content hashing.
+
+| Deliverable                                                                                                                                                 | Status      | Est | Work Item |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Extend `AgentDescriptor` in `src/ports/agent-catalog.port.ts` with optional registry fields (`version`, `endpoints`, `registrationHash`)                    | Not Started | 1   | —         |
+| Create `AgentRegistrationDocument` type: full descriptor + `services[]` + `active` flag (aligns with ERC-8004 registration file shape)                      | Not Started | 1   | —         |
+| Create `AgentIdentityPort` in `src/ports/agent-identity.port.ts`: `register(doc)`, `resolve(agentId)`, `publish(agentId, target)`                           | Not Started | 1   | —         |
+| Implement `OffchainAgentRegistryAdapter` in `src/adapters/server/agent-registry/offchain.adapter.ts`: DB-backed, stores signed descriptors                  | Not Started | 2   | —         |
+| Create `agent_registrations` table in `@cogni/db-schema`: `id`, `agent_id`, `registration_hash`, `descriptor_json`, `signed_by`, `created_at`, `updated_at` | Not Started | 1   | —         |
+| Implement content-hash function: `computeRegistrationHash(doc: AgentRegistrationDocument) → string`                                                         | Not Started | 1   | —         |
+| Wire adapter into bootstrap composition root                                                                                                                | Not Started | 1   | —         |
+| Publish hook stub: `AgentIdentityPort.publish()` returns `{ published: false, reason: 'no_target_configured' }` when no on-chain adapter                    | Not Started | 1   | —         |
+| Observability instrumentation                                                                                                                               | Not Started | 1   | —         |
+| Documentation updates                                                                                                                                       | Not Started | 1   | —         |
+
+#### P1: ERC-8004 Identity Adapter
+
+**Goal:** On-chain publication via ERC-8004 identity registry, feature-flagged.
+
+| Deliverable                                                                                                                                           | Status      | Est | Work Item |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Create `Erc8004IdentityRegistryAdapter` in `src/adapters/server/agent-registry/erc8004.adapter.ts`                                                    | Not Started | 2   | —         |
+| Map `AgentRegistrationDocument` → ERC-8004 registration file JSON (`type`, `name`, `description`, `image`, `services[]`, `active`, `registrations[]`) | Not Started | 1   | —         |
+| Implement `register()`: mint NFT via `IAgentIdentityRegistry.register(agentURI, metadata[])`                                                          | Not Started | 2   | —         |
+| Implement `publish()`: update `agentURI` via `setAgentURI(agentId, newURI)`                                                                           | Not Started | 1   | —         |
+| Feature flag: `AGENT_REGISTRY_ERC8004_ENABLED` (default: false)                                                                                       | Not Started | 1   | —         |
+| Host registration file JSON at stable URI (IPFS or signed HTTP)                                                                                       | Not Started | 2   | —         |
+
+#### P2: Trust Signals + Indexer (Future)
+
+**Goal:** Reputation layer and cross-chain discovery. Do NOT build preemptively — evaluate after P1 adoption and ERC-8004 mainnet stability.
+
+| Deliverable                                                                                    | Status      | Est | Work Item |
+| ---------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Create `AgentTrustSignalsPort`: `submitFeedback()`, `queryReputation()`, `requestValidation()` | Not Started | 2   | —         |
+| Create `Erc8004ReputationAdapter` wrapping `IReputationRegistry`                               | Not Started | 2   | —         |
+| Create `IndexerAdapter` for cross-chain agent discovery (subgraph/ETL)                         | Not Started | 3   | —         |
+
 ## Constraints
 
 - Discovery providers must NOT require execution infrastructure (no `CompletionStreamFn`, no tool runners)
@@ -88,10 +132,11 @@ Evolve the agent discovery pipeline from the current single in-proc LangGraph ca
 ## As-Built Specs
 
 - [agent-discovery.md](../../docs/spec/agent-discovery.md) — discovery pipeline invariants, provider types, AgentDescriptor shape
+- [agent-registry.md](../../docs/spec/agent-registry.md) — registration schema, identity port, content hashing, ERC-8004 mapping (draft)
 
 ## Design Notes
 
-Content extracted from original `docs/AGENT_DISCOVERY.md` (Phase 1-3 checklists + LangGraph Server Alignment Roadmap) during docs migration. The full `AGENT_REGISTRY_SPEC.md` roadmap doc will be merged into this initiative when migrated.
+Discovery track content extracted from original `docs/AGENT_DISCOVERY.md` (Phase 1-3 checklists + LangGraph Server Alignment Roadmap) during docs migration. Identity & Registration track content extracted from `docs/AGENT_REGISTRY_SPEC.md` (P0-P2 implementation checklists).
 
 **P0 simplifications (current):**
 

@@ -111,7 +111,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | AGENTS_CONTEXT.md                    | -                              | -                                  | -   | agents-context.md        | procedural | [x]  | [ ]  |
 | AGENT_DEVELOPMENT_GUIDE.md           | -                              | -                                  | -   | agent-development.md     | procedural | [x]  | [ ]  |
 | AGENT_DISCOVERY.md                   | agent-discovery.md             | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
-| AGENT_REGISTRY_SPEC.md               | agent-registry.md              | ini.agent-registry.md              | -   | -                        | roadmap    | [ ]  | [ ]  |
+| AGENT_REGISTRY_SPEC.md               | agent-registry.md              | ini.agent-registry.md              | -   | -                        | roadmap    | [x]  | [ ]  |
 | AI_EVALS.md                          | ai-evals.md                    | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | AI_GOVERNANCE_DATA.md                | ai-governance-data.md          | ini.governance-agents.md           | -   | -                        | AB+road    | [ ]  | [ ]  |
 | AI_SETUP_SPEC.md                     | ai-setup.md                    | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
@@ -121,14 +121,14 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | AUTHENTICATION.md                    | authentication.md              | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | BILLING_EVOLUTION.md                 | billing-evolution.md           | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | BUILD_ARCHITECTURE.md                | build-architecture.md          | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
-| CACHING.md                           | -                              | ini.caching.md                     | -   | -                        | roadmap    | [ ]  | [ ]  |
+| CACHING.md                           | -                              | ini.performance-efficiency.md      | -   | -                        | roadmap    | [x]  | [ ]  |
 | CHAIN_ACTION_FLOW_UI_SPEC.md         | chain-action-flow-ui.md        | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | CHAIN_CONFIG.md                      | chain-config.md                | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
-| CHAIN_DEPLOYMENT_TECH_DEBT.md        | -                              | ini.chain-deployment-refactor.md   | -   | -                        | roadmap    | [ ]  | [ ]  |
+| CHAIN_DEPLOYMENT_TECH_DEBT.md        | -                              | ini.chain-deployment-refactor.md   | -   | -                        | roadmap    | [x]  | [ ]  |
 | CHECK_FULL.md                        | check-full.md                  | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | CI-CD.md                             | ci-cd.md                       | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
-| CICD_SERVICES_ROADMAP.md             | -                              | ini.cicd-services-gitops.md        | -   | -                        | roadmap    | [ ]  | [ ]  |
-| CLAUDE_SDK_ADAPTER_SPEC.md           | claude-sdk-adapter.md          | ini.claude-sdk-adapter.md          | -   | -                        | roadmap    | [ ]  | [ ]  |
+| CICD_SERVICES_ROADMAP.md             | -                              | ini.cicd-services-gitops.md        | -   | -                        | roadmap    | [x]  | [ ]  |
+| CLAUDE_SDK_ADAPTER_SPEC.md           | claude-sdk-adapter.md          | ini.claude-sdk-adapter.md          | -   | -                        | roadmap    | [x]  | [ ]  |
 | CLAWDBOT_ADAPTER_SPEC.md             | clawdbot-adapter.md            | ini.clawdbot-executor.md           | -   | -                        | roadmap    | [ ]  | [ ]  |
 | COGNI_BRAIN_SPEC.md                  | cogni-brain.md                 | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
 | CREDITS_PAGE_UI_CONSOLIDATION.md     | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |

@@ -50,6 +50,57 @@ Harden the repo-spec governance pipeline so that production deployments are cryp
 | Attested builds: build pipelines compute a hash of repo-spec and record `(git_commit, repo_spec_hash)` in a build attestation; production only runs images with approved `(commit, hash)` pairs                         | Not Started | 3   | (create at P2 start) |
 | Policy at the edge: production policy enforces "only run images whose repo-spec hash and signature match the DAO-approved spec for this environment," making Web2 runtime strictly bound to Web3-governed configuration | Not Started | 3   | (create at P2 start) |
 
+### Deployment Verification Track
+
+> Source: `docs/CHAIN_DEPLOYMENT_TECH_DEBT.md`
+
+#### Tier 1: TxEvidence Unification (Small)
+
+**Goal:** All receipt data flows as a single typed `TxEvidence` object. Block-aware reads by default.
+
+| Deliverable                                                         | Status      | Est | Work Item |
+| ------------------------------------------------------------------- | ----------- | --- | --------- |
+| Define `TxEvidence` type in contracts layer                         | Not Started | 1   | —         |
+| Update `FormationState` to use `signalEvidence: TxEvidence \| null` | Not Started | 1   | —         |
+| Update `SIGNAL_TX_CONFIRMED` action to accept `TxEvidence`          | Not Started | 1   | —         |
+| Update `SetupVerifyInput` contract to use `signalEvidence` object   | Not Started | 1   | —         |
+| Update `verifyFormation()` API client to pass evidence object       | Not Started | 1   | —         |
+| Update verify route to destructure from evidence object             | Not Started | 1   | —         |
+| Remove individual `signalBlockNumber` field propagation             | Not Started | 1   | —         |
+| Add arch test: "TxEvidence is single source of receipt data"        | Not Started | 1   | —         |
+
+**File Pointers (Tier 1):**
+
+| File                                                   | Change                                                        |
+| ------------------------------------------------------ | ------------------------------------------------------------- |
+| `src/contracts/setup.verify.v1.contract.ts`            | Define `TxEvidence` schema, use in input                      |
+| `src/features/setup/daoFormation/formation.reducer.ts` | Replace `signalBlockNumber` with `signalEvidence: TxEvidence` |
+| `src/features/setup/daoFormation/api.ts`               | Accept `TxEvidence` param instead of `signalBlockNumber`      |
+| `src/features/setup/hooks/useDAOFormation.ts`          | Build `TxEvidence` from receipt, pass to reducer/API          |
+| `src/app/api/setup/verify/route.ts`                    | Destructure from `signalEvidence`, use in verification        |
+
+#### Tier 2: Unified Verification Helper (Medium)
+
+**Goal:** Single `verifyDeployment()` helper replaces bespoke per-chain verification.
+
+| Deliverable                                                    | Status      | Est | Work Item |
+| -------------------------------------------------------------- | ----------- | --- | --------- |
+| Create `verifyDeployment(client, evidence, checks)` helper     | Not Started | 2   | —         |
+| Extract DAO verification to use helper (currently only logs)   | Not Started | 1   | —         |
+| Extract Signal verification to use helper                      | Not Started | 1   | —         |
+| Add `getBytecode` check to DAO verification (parity w/ Signal) | Not Started | 1   | —         |
+| Consolidate error handling patterns                            | Not Started | 1   | —         |
+
+#### Tier 3: Generic Plugin State Machine (Large — Future)
+
+**Goal:** Plugin-based verification. **Prerequisite: 3+ distinct verification types exist. Do NOT build preemptively.**
+
+| Deliverable                                | Status      | Est | Work Item |
+| ------------------------------------------ | ----------- | --- | --------- |
+| Define `EffectChecker<T>` plugin interface | Not Started | 2   | —         |
+| Create `verifyTxEffects` state machine     | Not Started | 2   | —         |
+| Migrate DAO + Signal to plugins            | Not Started | 2   | —         |
+
 ## Constraints
 
 - Must not break existing startup validation (Zod + chain alignment)
@@ -68,4 +119,68 @@ Harden the repo-spec governance pipeline so that production deployments are cryp
 
 ## Design Notes
 
-Content extracted from original `docs/CHAIN_CONFIG.md` "Long-Term Hardening" section during docs migration. The `CHAIN_DEPLOYMENT_TECH_DEBT.md` roadmap doc will be merged into this initiative when migrated.
+Signed repo-spec track extracted from original `docs/CHAIN_CONFIG.md` "Long-Term Hardening" section during docs migration. Deployment verification track extracted from `docs/CHAIN_DEPLOYMENT_TECH_DEBT.md`.
+
+### Deployment Verification Design (from CHAIN_DEPLOYMENT_TECH_DEBT.md)
+
+**Invariants (to enforce once implemented):**
+
+1. **Single Evidence Object**: Receipt data (blockNumber, blockHash, contractAddress, status, logs) flows as one typed object, never as individual fields.
+2. **Block-Aware by Default**: All on-chain reads (getBytecode, readContract) use at-or-after `evidence.blockNumber`, with fallback for non-archive providers.
+3. **Progressive Abstraction**: Do NOT introduce a generalized plugin framework until 3+ distinct verification types exist.
+
+**TxEvidence Type:**
+
+```typescript
+// Internal type (matches viem)
+interface TxEvidence {
+  txHash: HexAddress;
+  blockNumber: bigint;
+  blockHash: HexAddress;
+  status: "success" | "reverted";
+  contractAddress?: HexAddress; // Present for deployments
+}
+
+// JSON boundary (API contract) - use string for bigint
+interface TxEvidenceJson {
+  txHash: string;
+  blockNumber: string; // Serialized bigint
+  blockHash: string;
+  status: "success" | "reverted";
+  contractAddress?: string;
+}
+```
+
+**Why single object?** Eliminates N-field propagation. Using `bigint` matches viem types and avoids repeated coercion bugs.
+
+**Data Flow (Tier 1):**
+
+```
+CLIENT: Build TxEvidence from receipt
+  1. useWaitForTransactionReceipt() returns receipt
+  2. Build TxEvidence { txHash, blockNumber, blockHash, status, ... }
+  3. Dispatch SIGNAL_TX_CONFIRMED with evidence
+  4. Call verifyFormation({ ..., signalEvidence })
+       │
+       ▼
+SERVER: Use at-or-after evidence.blockNumber for reads
+  - Try: getBytecode({ address, blockNumber: evidence.blockNumber })
+  - Fallback: If provider error, validate via blockHash or PENDING
+  - readContract({ ..., blockNumber: evidence.blockNumber })
+  - Prefer specific block over "latest" for deployment verification
+```
+
+**Why block-aware by default?** Eliminates cross-RPC race conditions where client's RPC has indexed a block but server's RPC hasn't. Fallback for non-archive providers: verify block exists via `getBlock(evidence.blockHash)` and retry at "latest" or return `PENDING` with `retryAfterMs`.
+
+**TxEvidence vs Full Receipt:**
+
+| Field             | Included       | Reason                             |
+| ----------------- | -------------- | ---------------------------------- |
+| `txHash`          | Yes            | Identifies transaction             |
+| `blockNumber`     | Yes            | Required for block-aware reads     |
+| `blockHash`       | Yes            | Allows block-specific verification |
+| `status`          | Yes            | Fast-fail on reverted tx           |
+| `contractAddress` | Yes (optional) | Present for deployments            |
+| `logs`            | No (Tier 2)    | Only needed for event extraction   |
+
+**Error handling (future Tier 2):** Helper returns `Result<T, VerificationError>` with typed error variants: `NOT_FOUND`, `MISMATCH`, `RPC_ERROR`. Current inline try/catch with `string[]` errors.

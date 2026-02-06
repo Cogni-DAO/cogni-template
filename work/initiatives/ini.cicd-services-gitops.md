@@ -66,11 +66,109 @@ Improve the build pipeline, local testing tooling, and database provisioning acr
 
 Terraform/OpenTofu can manage role creation as an alternative to CD-time provisioning. This is the preferred long-term approach for production, but CD-time provisioner remains valid if convergent (idempotent).
 
+### Services Deployment & GitOps Track
+
+> Source: `docs/CICD_SERVICES_ROADMAP.md`
+
+#### P0: Bridge MVP (Current Tooling) — Partially Complete
+
+**Goal:** Get scheduler-worker into production using existing SSH+Compose. Minimal changes. **Scope guard:** Only scheduler-worker. No generalized service loops. **Exemption:** Temporarily violates `NO_COUPLED_PIPELINES` — service build runs in app pipeline as bridge.
+
+| Deliverable                                                               | Status      | Est | Work Item |
+| ------------------------------------------------------------------------- | ----------- | --- | --------- |
+| `build-service.sh` script (scheduler-worker only)                         | Done        | 1   | —         |
+| Extend `build-prod.yml` to build scheduler-worker after app               | Done        | 1   | —         |
+| Extend `push.sh` to push service image, capture digest                    | Done        | 1   | —         |
+| Pass `SCHEDULER_WORKER_IMAGE` as full digest ref through workflow outputs | Done        | 1   | —         |
+| Wire scheduler-worker into `deploy.sh` (env var substitution)             | Done        | 1   | —         |
+| Add `/version` endpoint (`{ sha, service, buildTs, imageDigest }`)        | Done        | 1   | —         |
+| Validate `/livez` + `/readyz` in staging-preview E2E                      | Not Started | 1   | —         |
+| Add smoke test exercising real service behavior                           | Not Started | 1   | —         |
+| VM disk sizing: Preview VM at 20GB insufficient for full stack            | Not Started | 1   | —         |
+| Deploy cleanup: `docker image prune -f` in deploy.sh                      | Not Started | 1   | —         |
+| Deploy resilience: failed deploys must not take down running site         | Not Started | 1   | —         |
+| Document service tagging in CI-CD.md                                      | Not Started | 1   | —         |
+| Add scheduler-worker to SERVICES_ARCHITECTURE.md status table             | Not Started | 1   | —         |
+
+**Service Contract (all services — Done):**
+
+| Requirement                                             | Status |
+| ------------------------------------------------------- | ------ |
+| Health: `/livez` (liveness), `/readyz` (readiness)      | Done   |
+| Version: `/version` returns `{ sha, service, buildTs }` | Done   |
+| Logging: pino JSON to stdout                            | Done   |
+| Env: Zod-validated config with `HEALTH_PORT`            | Done   |
+| Shutdown: SIGTERM → ready=false → drain → exit          | Done   |
+
+#### P1: GitOps Foundation
+
+**Goal:** Decouple deploy from app repo. Manifest-driven promotion.
+
+| Deliverable                                                                    | Status      | Est | Work Item |
+| ------------------------------------------------------------------------------ | ----------- | --- | --------- |
+| Extend digest-driven deploy to app+migrator                                    | Not Started | 1   | —         |
+| Create `cogni-deployments` repo (or `deployments/` monorepo dir)               | Not Started | 2   | —         |
+| Write Kustomize base for scheduler-worker (`base/scheduler-worker/`)           | Not Started | 1   | —         |
+| Create overlays: `overlays/staging/`, `overlays/production/`                   | Not Started | 1   | —         |
+| OpenTofu: Provision k3s cluster (single node MVP)                              | Not Started | 2   | —         |
+| Install Argo CD on k3s                                                         | Not Started | 1   | —         |
+| Argo app-of-apps or ApplicationSet pattern for multi-service management        | Not Started | 2   | —         |
+| Promotion flow: PR to change image digest in overlay → Argo syncs              | Not Started | 1   | —         |
+| Kustomize images use `@sha256:` digests                                        | Not Started | 1   | —         |
+| Secrets strategy: SOPS/age for encrypted secrets in repo (single-node k3s MVP) | Not Started | 2   | —         |
+| Storage plan: PVCs for stateful deps (postgres data), backup strategy          | Not Started | 2   | —         |
+| ArgoCD manages apps only; infra via OpenTofu + bootstrap manifests             | Not Started | 1   | —         |
+| Retire SSH deploy for services (keep for app until P2)                         | Not Started | 1   | —         |
+
+#### P2: Supply Chain + Progressive Delivery
+
+**Goal:** Signed images + optional canary deployment.
+
+| Deliverable                                          | Status      | Est | Work Item |
+| ---------------------------------------------------- | ----------- | --- | --------- |
+| Enable cosign keyless signing in CI                  | Not Started | 2   | —         |
+| Argo CD: Require signature verification before sync  | Not Started | 2   | —         |
+| Optional: Argo Rollouts for canary/blue-green        | Not Started | 2   | —         |
+| Migrate Next.js app to k3s (retire Compose entirely) | Not Started | 3   | —         |
+
+#### P3: CI Portability (Dagger)
+
+**Goal:** Pipelines-as-code. Avoids GitHub Actions vendor lock-in. **Scope:** Dagger = CI (build/test/push). ArgoCD = CD (state reconciliation). Do NOT use Dagger for push-based deploy.
+
+| Deliverable                                                                                    | Status      | Est | Work Item |
+| ---------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Spike: Audit all `.github/workflows/*.yml` and `platform/ci/scripts/*.sh` for Dagger migration | Not Started | 2   | —         |
+| Refactor build logic (app, migrator, services) into Dagger                                     | Not Started | 3   | —         |
+| Refactor test/lint/typecheck into Dagger                                                       | Not Started | 2   | —         |
+| Dagger step: Auto-PR image digest to deployments repo                                          | Not Started | 1   | —         |
+| Simplify GitHub Actions to thin wrappers (`dagger call build`, `dagger call test`)             | Not Started | 1   | —         |
+| Validate: Same pipeline runs locally and in CI                                                 | Not Started | 1   | —         |
+
+#### P4: CI Acceleration (NX)
+
+**Goal:** Optimize CI task selection/caching. Only after CD is stable. **Why deferred:** NX solves CI time/cost, not deployment correctness. GitOps must be stable first.
+
+| Deliverable                                                                   | Status      | Est | Work Item |
+| ----------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Spike: Evaluate NX vs Turborepo (NX preferred for structure + affected graph) | Not Started | 2   | —         |
+| Add NX targets for build/test/lint per package/service                        | Not Started | 2   | —         |
+| Implement affected-only task execution (`nx affected:build`)                  | Not Started | 2   | —         |
+| Add remote cache (NX Cloud or self-hosted)                                    | Not Started | 1   | —         |
+| Keep image builds explicit initially; integrate with Dagger later             | Not Started | 1   | —         |
+
 ## Constraints
 
 - Build changes must not break CI — same canonical commands used in local dev, CI, and Docker
 - DSN migration is phased: runtime is already DSN-only (P0 done), provisioning transitions in P1, secrets cleaned in P2
 - `check:full` changes must maintain CI-parity — it runs the exact same test suite as CI
+- **SERVICE_AS_PRODUCT**: Each service owns Dockerfile + health endpoints + env schema + deploy manifest
+- **IMAGE_IMMUTABILITY**: Tags are `{env}-{sha}-{service}` or content-addressed fingerprints; never `:latest`
+- **MANIFEST_DRIVEN_DEPLOY**: Environment promotion = manifest change (GitOps), not rebuild
+- **NO_COUPLED_PIPELINES**: Service deploys independent of Next.js app pipeline (after P0 bridge)
+- **ROLLBACK_BY_REVERT**: Deployments repo revert restores previous digest (GitOps rollback)
+- No per-service explicit workflow jobs — use reusable workflow + path filters
+- No SSH deploy past P1 — GitOps replaces imperative deploy
+- No vendor lock-in — Kustomize portable across k8s distributions
 
 ## Dependencies
 
@@ -100,4 +198,58 @@ Terraform/OpenTofu can manage role creation as an alternative to CD-time provisi
 
 ## Design Notes
 
-Content aggregated from original `docs/BUILD_ARCHITECTURE.md` (Known Issues + Future Improvements), `docs/CHECK_FULL.md` (Future Enhancements), `docs/DATABASE_URL_ALIGNMENT_SPEC.md` (P1/P2 roadmap), and `docs/SERVICES_ARCHITECTURE.md` (service spawning roadmap) during docs migration. The full `CICD_SERVICES_ROADMAP.md` roadmap doc will be merged into this initiative when migrated.
+Content aggregated from original `docs/BUILD_ARCHITECTURE.md` (Known Issues + Future Improvements), `docs/CHECK_FULL.md` (Future Enhancements), `docs/DATABASE_URL_ALIGNMENT_SPEC.md` (P1/P2 roadmap), `docs/SERVICES_ARCHITECTURE.md` (service spawning roadmap), and `docs/CICD_SERVICES_ROADMAP.md` (P0–P4 services deployment & GitOps track) during docs migration.
+
+### Tagging Strategy (from CICD_SERVICES_ROADMAP.md)
+
+| Image Type | Tag Format              | Example                         |
+| ---------- | ----------------------- | ------------------------------- |
+| App        | `{env}-{sha}`           | `prod-abc1234`                  |
+| Migrator   | `{env}-{sha}-migrate`   | `prod-abc1234-migrate`          |
+| Service    | `{env}-{sha}-{service}` | `prod-abc1234-scheduler-worker` |
+
+Future (P1+): Content fingerprinting like migrator (`{service}-{fingerprint}`).
+
+### Target Architecture (P1+, from CICD_SERVICES_ROADMAP.md)
+
+```
+cogni-template (app repo)
+  • Build + test + push OCI images to GHCR
+  • CI outputs: image tags/digests
+  • NO deploy logic
+       │
+       ▼ (image pushed)
+cogni-deployments (GitOps repo)
+  • Kustomize bases + overlays per env
+  • Argo Applications/ApplicationSets
+  • Promotion = PR changing image tag in overlay
+       │
+       ▼ (Argo syncs)
+k3s Cluster (OpenTofu-provisioned)
+  • Argo CD watches deployments repo
+  • Applies manifests on change
+  • Rollback = revert PR
+```
+
+### Recommended Stack (from CICD_SERVICES_ROADMAP.md)
+
+| Concern   | Tool           | Notes                                 |
+| --------- | -------------- | ------------------------------------- |
+| IaC       | OpenTofu       | OSS Terraform fork                    |
+| Runtime   | k3s            | Lightweight k8s for single-node start |
+| CI        | Dagger (P3)    | Pipelines-as-code, runner-agnostic    |
+| CD        | Argo CD        | GitOps, state reconciliation          |
+| Manifests | Kustomize      | Overlay model, minimal patches        |
+| Signing   | cosign keyless | OIDC-based, no key management         |
+
+### File Pointers (P0 Scope, from CICD_SERVICES_ROADMAP.md)
+
+| File                                      | Change                                                                     |
+| ----------------------------------------- | -------------------------------------------------------------------------- |
+| `platform/ci/scripts/build-service.sh`    | Build scheduler-worker Dockerfile                                          |
+| `platform/ci/scripts/push.sh`             | Push service image, capture digest via inspect                             |
+| `platform/ci/scripts/deploy.sh`           | Accept SCHEDULER_WORKER_IMAGE env var, wire into compose                   |
+| `.github/workflows/build-prod.yml`        | Add scheduler-worker build+push, output digest ref                         |
+| `.github/workflows/deploy-production.yml` | Accept SCHEDULER_WORKER_IMAGE digest input                                 |
+| `services/scheduler-worker/src/health.ts` | `/version` endpoint                                                        |
+| `docker-compose.yml`                      | scheduler-worker service with `$SCHEDULER_WORKER_IMAGE`, stop_grace_period |

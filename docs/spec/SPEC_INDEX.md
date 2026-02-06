@@ -24,6 +24,7 @@ This is a master index of all specs, updated as specs are migrated.
 | -------------------------------- | ---------------------------------- | -------- | ---------- | ------------------------------------------------------------------ |
 | activity-metrics-spec            | Activity Metrics Design            | draft    | billing    | [activity-metrics.md](./activity-metrics.md)                       |
 | agent-discovery-spec             | Agent Discovery Architecture       | draft    | ai-graphs  | [agent-discovery.md](./agent-discovery.md)                         |
+| agent-registry                   | Agent Registry                     | draft    | ai-graphs  | [agent-registry.md](./agent-registry.md)                           |
 | ai-evals-spec                    | AI Architecture and Evals          | draft    | ai-graphs  | [ai-evals.md](./ai-evals.md)                                       |
 | ai-setup-spec                    | AI Setup Specification             | active   | ai-graphs  | [ai-setup.md](./ai-setup.md)                                       |
 | authentication-spec              | Authentication                     | draft    | auth       | [authentication.md](./authentication.md)                           |
@@ -32,6 +33,7 @@ This is a master index of all specs, updated as specs are migrated.
 | chain-action-flow-ui-spec        | Chain Action Flow UI               | draft    | web3       | [chain-action-flow-ui.md](./chain-action-flow-ui.md)               |
 | chain-config-spec                | Chain Configuration                | draft    | web3       | [chain-config.md](./chain-config.md)                               |
 | check-full-spec                  | check:full CI-Parity Gate          | draft    | deployment | [check-full.md](./check-full.md)                                   |
+| claude-sdk-adapter               | Claude Agent SDK Adapter           | draft    | ai-graphs  | [claude-sdk-adapter.md](./claude-sdk-adapter.md)                   |
 | dao-enforcement-spec             | DAO Enforcement — Financial Rails  | draft    | web3       | [dao-enforcement.md](./dao-enforcement.md)                         |
 | database-rls-spec                | Database Row-Level Security        | draft    | infra      | [database-rls.md](./database-rls.md)                               |
 | database-url-alignment-spec      | Database URL Alignment             | draft    | infra      | [database-url-alignment.md](./database-url-alignment.md)           |
@@ -81,7 +83,6 @@ Legacy specs in `/docs/*.md` to be migrated to `/docs/spec/`:
 
 - DATABASE_RLS_SPEC.md
 - PROMPT_REGISTRY_SPEC.md
-- AGENT_REGISTRY_SPEC.md
 - TOOL_USE_SPEC.md
 - TENANT_CONNECTIONS_SPEC.md
 - UNIFIED_GRAPH_LAUNCH_SPEC.md
