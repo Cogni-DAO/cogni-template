@@ -1,31 +1,55 @@
+---
+id: activity-metrics-spec
+type: spec
+title: Activity Metrics Design
+status: active
+spec_state: draft
+trust: draft
+summary: Dual-source activity dashboard joining LiteLLM telemetry with local charge receipts for billing audit.
+read_when: Working on activity/usage dashboards, billing metering, or the LiteLLM spend integration.
+owner: derekg1729
+created: 2026-02-06
+verified: 2026-02-06
+tags: [billing]
+---
+
 # Activity Metrics Design
 
-> [!CRITICAL]
-> LiteLLM is the canonical source for usage telemetry (model, tokens, timestamps).
-> Our DB stores only charge receipts for billing audit.
-> User-visible spend = `charged_credits` (our billing with markup), NOT LiteLLM's `spend`.
+## Context
 
----
+LiteLLM is the canonical source for usage telemetry (model, tokens, timestamps).
+Our DB stores only charge receipts for billing audit.
+User-visible spend = `charged_credits` (our billing with markup), NOT LiteLLM's `spend`.
+
+## Goal
+
+Provide a user-facing activity dashboard that joins LiteLLM telemetry with local charge receipts, displaying what we actually billed the user — not raw provider costs.
+
+## Non-Goals
+
+- Shadow metering or local token/model/provider recomputation
+- Fallback telemetry when LiteLLM is unavailable (fail loudly instead)
+- Sub-day time bucketing (hourly view deferred)
 
 ## Core Invariants
 
-1. **Preflight-only gating**: Estimate cost vs available credits _before_ calling LiteLLM. Once a call starts, never block or revoke it due to post-call cost.
+1. **PREFLIGHT_ONLY_GATING**: Estimate cost vs available credits _before_ calling LiteLLM. Once a call starts, never block or revoke it due to post-call cost.
 
-2. **LiteLLM is canonical (no shadow metering)**: LiteLLM is the sole source of usage telemetry. No local token/model/provider recomputation.
+2. **LITELLM_CANONICAL_TELEMETRY**: LiteLLM is the sole source of usage telemetry. No local token/model/provider recomputation.
 
-3. **Minimal charge_receipt**: Audit-focused table with only: `request_id`, `billing_account_id`, `litellm_call_id`, `charged_credits`, `response_cost_usd`, `provenance`, `created_at`. No model/tokens/usage JSONB.
+3. **MINIMAL_CHARGE_RECEIPT**: Audit-focused table with only: `request_id`, `billing_account_id`, `litellm_call_id`, `charged_credits`, `response_cost_usd`, `provenance`, `created_at`. No model/tokens/usage JSONB.
 
-4. **Activity reads from LiteLLM (hard dependency)**: Dashboard uses `/spend/logs` as the ONLY source for telemetry. If LiteLLM is unavailable, return 503 and show explicit error state.
+4. **ACTIVITY_READS_LITELLM**: Dashboard uses `/spend/logs` as the ONLY source for telemetry. If LiteLLM is unavailable, return 503 and show explicit error state.
 
-5. **User-visible spend = our billing**: Dashboard displays `charged_credits` (our billed amount with markup), not raw provider costs from LiteLLM.
+5. **USER_VISIBLE_SPEND_IS_BILLING**: Dashboard displays `charged_credits` (our billed amount with markup), not raw provider costs from LiteLLM.
 
-6. **Idempotent receipts with ledger pairing**: Every charge_receipt row is keyed by `(source_system, source_reference)`. Multiple receipts per `request_id` allowed for multi-LLM-call graphs. See [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md).
+6. **IDEMPOTENT_RECEIPTS_WITH_LEDGER_PAIRING**: Every charge_receipt row is keyed by `(source_system, source_reference)`. Multiple receipts per `request_id` allowed for multi-LLM-call graphs. See [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md).
 
-7. **No fallback**: If LiteLLM is down, fail loudly (503), don't show partial data.
+7. **NO_FALLBACK**: If LiteLLM is down, fail loudly (503), don't show partial data.
 
----
+## Design
 
-## Data Flow
+### Data Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -45,24 +69,7 @@
 | Credit entitlements             | credit_ledger table | Authoritative         |
 | Charge receipts                 | charge_receipts     | Immutable audit trail |
 
----
-
-## Key Files
-
-| File                                                                   | Purpose                                     |
-| ---------------------------------------------------------------------- | ------------------------------------------- |
-| `src/adapters/server/ai/litellm.activity-usage.adapter.ts`             | Read-only adapter for LiteLLM `/spend/logs` |
-| `src/shared/schemas/litellm.spend-logs.schema.ts`                      | Zod schemas for LiteLLM response validation |
-| `src/ports/usage.port.ts`                                              | ActivityUsagePort interface                 |
-| `src/features/ai/services/activity.ts`                                 | Activity service (aggregation logic)        |
-| `src/app/_facades/ai/activity.server.ts`                               | Facade: joins LiteLLM telemetry + receipts  |
-| `src/contracts/ai.activity.v1.contract.ts`                             | API contract schemas                        |
-| `src/adapters/server/accounts/drizzle.adapter.ts`                      | `listChargeReceipts()` for spend join       |
-| `tests/unit/adapters/server/ai/litellm.activity-usage.adapter.spec.ts` | Unit tests for adapter                      |
-
----
-
-## LiteLLM `/spend/logs` API Behavior
+### LiteLLM `/spend/logs` API Behavior
 
 **Critical quirk:** Response format changes based on query params.
 
@@ -88,9 +95,7 @@ url.searchParams.set("end_date", "2025-01-08");
 url.searchParams.set("group_by", "day");
 ```
 
----
-
-## Activity Dashboard Join
+### Activity Dashboard Join
 
 The facade joins two data sources:
 
@@ -121,9 +126,7 @@ const rows = logs.map((log) => ({
 }));
 ```
 
----
-
-## Gating Model (Preflight-Only)
+### Gating Model (Preflight-Only)
 
 ```
 PREFLIGHT (blocking)
@@ -149,9 +152,7 @@ POST-CALL (never blocking)
 - InsufficientCreditsError is FORBIDDEN in this phase
 ```
 
----
-
-## Cost Derivation Rules
+### Cost Derivation Rules
 
 Priority order:
 
@@ -161,9 +162,7 @@ Priority order:
 
 **Never** derive cost from token counts × model pricing tables.
 
----
-
-## Error Handling
+### Error Handling
 
 | Scenario                    | Behavior                                         |
 | --------------------------- | ------------------------------------------------ |
@@ -174,26 +173,29 @@ Priority order:
 
 UI shows explicit "Usage unavailable" state. No fallback to local receipts for telemetry.
 
----
-
-## Known Issues
+### Known Issues (Resolved)
 
 - [x] **Spend shows provider cost, not user cost.** FIXED: Join receipts by `litellm_call_id`, display `response_cost_usd`.
 - [x] **LiteLLM request ID mismatch.** FIXED: Extract `json.id` from response body (gen-... format).
 - [x] **Chart tokens/requests show zeros.** FIXED: Aggregate from individual logs, not LiteLLM buckets.
 - [x] **Total Spend from receipts.** FIXED: Sum `response_cost_usd` from charge receipts.
 - [x] **Old rows show "$—".** Pre-fix rows have UUID in `litellm_call_id`, won't join. Acceptable for MVP.
-
-## TODO
-
-- [ ] **Hourly bucketing.** Currently only day-level aggregation. Need sub-day buckets for "Last Hour" view.
-- [ ] **FakeUsageAdapter for stack tests.** Need test double for ActivityUsagePort to avoid LiteLLM dependency in CI.
-- [ ] **Stack tests for Activity.** Integration tests for activity endpoint with real data flow.
 - [x] **Table rename.** `llm_usage` → `charge_receipts` (done).
 
----
+### File Pointers
 
-## Non-Negotiables
+| File                                                                   | Purpose                                     |
+| ---------------------------------------------------------------------- | ------------------------------------------- |
+| `src/adapters/server/ai/litellm.activity-usage.adapter.ts`             | Read-only adapter for LiteLLM `/spend/logs` |
+| `src/shared/schemas/litellm.spend-logs.schema.ts`                      | Zod schemas for LiteLLM response validation |
+| `src/ports/usage.port.ts`                                              | ActivityUsagePort interface                 |
+| `src/features/ai/services/activity.ts`                                 | Activity service (aggregation logic)        |
+| `src/app/_facades/ai/activity.server.ts`                               | Facade: joins LiteLLM telemetry + receipts  |
+| `src/contracts/ai.activity.v1.contract.ts`                             | API contract schemas                        |
+| `src/adapters/server/accounts/drizzle.adapter.ts`                      | `listChargeReceipts()` for spend join       |
+| `tests/unit/adapters/server/ai/litellm.activity-usage.adapter.spec.ts` | Unit tests for adapter                      |
+
+## Acceptance Checks
 
 1. **Preflight-only gating** — Never block a response after the LLM call starts
 2. **LiteLLM is canonical for telemetry** — No shadow metering, no local token storage
@@ -201,3 +203,20 @@ UI shows explicit "Usage unavailable" state. No fallback to local receipts for t
 4. **Server controls identity** — `billingAccountId` is server-derived, never client-provided
 5. **Idempotent receipts** — `request_id` as PK with 1:1 ledger mapping
 6. **No fallback** — If LiteLLM is down, fail loudly (503)
+
+**Verification:**
+
+```sql
+SELECT charged_credits, response_cost_usd FROM charge_receipts;
+```
+
+Cost source: LiteLLM `usage.cost` (stream) or `x-litellm-response-cost` header (non-stream).
+
+## Open Questions
+
+_(none — planned work tracked in ini.observability-hardening.md: hourly bucketing, FakeUsageAdapter for stack tests, stack test coverage for activity endpoint)_
+
+## Related
+
+- [Billing Evolution](./billing-evolution.md)
+- [Graph Execution](../GRAPH_EXECUTION.md)

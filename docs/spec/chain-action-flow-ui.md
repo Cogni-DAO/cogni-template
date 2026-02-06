@@ -1,24 +1,43 @@
+---
+id: chain-action-flow-ui-spec
+type: spec
+title: Chain Action Flow UI Design
+status: active
+spec_state: draft
+trust: draft
+summary: Reusable step visualization components for multi-step on-chain operations (DAO formation, payments, etc.).
+read_when: Building or modifying multi-step on-chain transaction UIs.
+owner: derekg1729
+created: 2026-02-06
+verified: 2026-02-06
+tags: [web3]
+---
+
 # Chain Action Flow UI Design
 
-> [!CRITICAL]
-> Reusable step visualization component for multi-step on-chain operations. Applies to DAO formation, payments, and future chain-interactive flows.
+## Context
 
-> [!NOTE]
-> **MVP (P0)**: Fully reuses minimalistic Payments frontend components. See [NODE_FORMATION_SPEC.md](NODE_FORMATION_SPEC.md) for P0 scope.
+Multi-step on-chain operations (DAO formation, payments, future chain-interactive flows) need a reusable step visualization component. MVP (P0) fully reuses minimalistic Payments frontend components. See [NODE_FORMATION_SPEC.md](../NODE_FORMATION_SPEC.md) for P0 scope.
 
----
+## Goal
+
+Provide domain-agnostic, composable step visualization components that any on-chain flow can use — accepting a `Step[]` array and rendering pending/active/complete/error states.
+
+## Non-Goals
+
+- Domain-specific step logic inside the component (parent controls state)
+- Custom animations beyond spinner/checkmark/error icons
+- Server-side step orchestration (this is purely presentational)
 
 ## Core Invariants
 
-1. **Generic Step Model**: Component accepts any `Step[]` array with `label`, `status`, optional `txHash`. Domain-agnostic.
+1. **GENERIC_STEP_MODEL**: Component accepts any `Step[]` array with `label`, `status`, optional `txHash`. Domain-agnostic.
 
-2. **Three Visual States**: Each step renders as `pending` (empty circle), `active` (spinner), or `complete` (checkmark).
+2. **THREE_VISUAL_STATES**: Each step renders as `pending` (empty circle), `active` (spinner), or `complete` (checkmark). Plus `error` (X icon).
 
-3. **Composable**: Works standalone or inside Dialog/Card. Parent controls state; component is purely presentational.
+3. **COMPOSABLE_PRESENTATIONAL**: Works standalone or inside Dialog/Card. Parent controls state; component is purely presentational.
 
----
-
-## Component API
+## Schema
 
 ### `ChainActionSteps`
 
@@ -70,9 +89,9 @@ interface ChainActionDialogProps {
 }
 ```
 
----
+## Design
 
-## Visual Design
+### Visual Design
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -101,11 +120,9 @@ interface ChainActionDialogProps {
 - `complete`: Checkmark (success color)
 - `error`: X icon (destructive color)
 
----
+### Usage Examples
 
-## Usage Examples
-
-### DAO Formation
+#### DAO Formation
 
 ```typescript
 const formationSteps: Step[] = [
@@ -122,7 +139,7 @@ const formationSteps: Step[] = [
 ];
 ```
 
-### Payment Flow
+#### Payment Flow
 
 ```typescript
 const paymentSteps: Step[] = [
@@ -138,9 +155,7 @@ const paymentSteps: Step[] = [
 ];
 ```
 
----
-
-## File Pointers (vNext)
+### File Pointers
 
 | File                                                     | Purpose                          |
 | -------------------------------------------------------- | -------------------------------- |
@@ -149,9 +164,15 @@ const paymentSteps: Step[] = [
 | `src/components/kit/overlays/ChainActionDialog.tsx`      | Composed dialog component        |
 | `src/components/index.ts`                                | Barrel exports                   |
 
----
+## Acceptance Checks
 
-## Migration Path
+**Manual:**
+
+1. Render `ChainActionSteps` with a mix of pending/active/complete/error steps — verify correct icons
+2. Verify `ChainActionDialog` composes summary + steps + action buttons
+3. Verify parent can control step state without component re-mounting
+
+## Rollout / Migration
 
 1. Build `ChainActionSteps` as standalone component
 2. Create `ChainActionDialog` composing existing Dialog + new Steps
@@ -159,7 +180,10 @@ const paymentSteps: Step[] = [
 4. Migrate DAO formation dialog to use `ChainActionDialog`
 5. Delete redundant dialog implementations
 
----
+## Open Questions
 
-**Last Updated**: 2025-12-13
-**Status**: Draft (vNext)
+_(none)_
+
+## Related
+
+- [Node Formation](../NODE_FORMATION_SPEC.md)

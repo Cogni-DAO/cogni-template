@@ -1,75 +1,32 @@
-# Services Architecture
-
-> Deployable workers and servers with their own process lifecycle, distinct from pure library packages.
-
-## Overview
-
-The `services/` directory contains **standalone deployable services**—Node.js processes with their own entry points, environment configuration, health endpoints, and Docker images. Services import from `packages/` but never from `src/` (the Next.js app).
-
-**Key distinction from packages:**
-
-| Aspect          | `packages/`                    | `services/`                   |
-| --------------- | ------------------------------ | ----------------------------- |
-| Process         | Library (no lifecycle)         | Standalone process            |
-| Entry point     | `dist/index.js` (exports only) | `src/main.ts` (runs)          |
-| Environment     | None (injected by consumer)    | Owns Zod-validated env config |
-| Health checks   | None                           | `/livez`, `/readyz` endpoints |
-| Docker image    | None                           | Multi-stage Dockerfile        |
-| Signal handling | None                           | SIGTERM graceful shutdown     |
-| Deployment      | npm package                    | K8s Deployment (replicas)     |
-
-> **Note:** K8s `Job`/`CronJob` is reserved for finite batch tasks, not queue workers. Workers deploy as `Deployment` with horizontal scaling.
-
-**Worker vs HTTP services:**
-
-| Service Type | HTTP Server Needed | Health Endpoint   |
-| ------------ | ------------------ | ----------------- |
-| HTTP API     | Yes (Fastify, etc) | Same server       |
-| Queue Worker | **No**             | Minimal node:http |
-
-Worker services (like `scheduler-worker`) do **not** require a product HTTP server—only a minimal health endpoint for orchestrator probes. Use `node:http` directly; do not add Fastify/Express unless serving product traffic.
-
-## When to Create a Service
-
-Create a service when the code:
-
-1. **Runs independently** — Worker loop, HTTP server, or scheduled job
-2. **Owns its lifecycle** — Startup, shutdown, health, readiness
-3. **Has deployment concerns** — Docker, K8s manifests, env vars
-4. **Cannot be a library** — Needs process isolation from the Next.js app
-
-**Do NOT create a service for:** Shared logic, type definitions, utility functions, or anything that should be a library in `packages/`.
-
+---
+id: create-service-guide
+type: guide
+title: Create a New Service
+status: draft
+trust: draft
+summary: Step-by-step checklist for creating a new deployable service in services/, from workspace setup through Docker, health endpoints, and repo integration.
+read_when: Creating a new service in the services/ directory.
+owner: derekg1729
+created: 2026-02-06
+verified: 2026-02-06
+tags: [deployment, infra]
 ---
 
-## Service Structure
+# Create a New Service
 
-```
-services/<name>/
-├── src/
-│   ├── main.ts              # Entry point (signal handling, startup)
-│   ├── config.ts            # Zod env schema
-│   ├── health.ts            # /livez, /readyz handlers
-│   ├── worker.ts            # Main worker logic (or server.ts for HTTP)
-│   ├── observability/       # Logging infrastructure
-│   │   ├── logger.ts        # makeLogger() factory (pino)
-│   │   └── redact.ts        # Redaction paths
-│   └── ...                  # Service-specific modules
-├── tests/
-│   └── ...                  # Service-specific tests
-├── Dockerfile               # Multi-stage build (Model B)
-├── package.json             # name: @cogni/<name>-service
-├── tsconfig.json            # Standalone (NOT added to root references)
-├── tsup.config.ts           # Transpile-only (bundle: false)
-├── vitest.config.ts         # Test config
-└── AGENTS.md                # Service documentation
-```
+## When to Use This
 
----
+You are adding a new independently deployable service to the `services/` directory. This covers workers (Temporal, queue consumers) and HTTP services (APIs, webhooks).
 
-## MVP Service Checklist
+**Do NOT use this guide for:** Shared libraries (use `packages/`), feature code in the Next.js app (`src/features/`), or one-off scripts (`scripts/`).
 
-When creating a new service, complete these items in order:
+## Preconditions
+
+- [ ] Code meets the "When to Create a Service" criteria in [Services Architecture Spec](../spec/services-architecture.md)
+- [ ] Service name chosen (`<name>` throughout this guide)
+- [ ] Package dependencies identified (which `@cogni/*` packages are needed)
+
+## Steps
 
 ### 1. Workspace Setup
 
@@ -92,7 +49,7 @@ When creating a new service, complete these items in order:
 
 ### 2. TypeScript Configuration
 
-- [ ] Create `tsconfig.json` (standalone, does NOT extend root or use composite mode—services are isolated)
+- [ ] Create `tsconfig.json` (standalone, does NOT extend root or use composite mode — services are isolated)
 - [ ] Create `tsup.config.ts` for **transpile-only** (Model B):
 
   ```typescript
@@ -120,11 +77,11 @@ When creating a new service, complete these items in order:
 **ESM relative import rule:** All relative imports in service source files **must include `.js` extensions**:
 
 ```typescript
-// ✅ Correct - ESM requires .js extension
+// Correct — ESM requires .js extension
 import { loadConfig } from "./config.js";
 import { startHealthServer } from "./health.js";
 
-// ❌ Wrong - will fail at runtime with ERR_MODULE_NOT_FOUND
+// Wrong — will fail at runtime with ERR_MODULE_NOT_FOUND
 import { loadConfig } from "./config";
 ```
 
@@ -205,11 +162,11 @@ This is a Node.js ESM requirement when using `bundle: false`. TypeScript resolve
 
 **Health check ownership (where to define probes):**
 
-| Environment    | Where to Define        | Notes                                              |
-| -------------- | ---------------------- | -------------------------------------------------- |
-| Kubernetes     | K8s manifests          | `livenessProbe`, `readinessProbe` in pod spec      |
-| Docker Compose | `healthcheck:` in YAML | Only if needed for `depends_on: condition:`        |
-| Dockerfile     | **Do NOT define**      | No `HEALTHCHECK` instruction—defer to orchestrator |
+| Environment    | Where to Define        | Notes                                                |
+| -------------- | ---------------------- | ---------------------------------------------------- |
+| Kubernetes     | K8s manifests          | `livenessProbe`, `readinessProbe` in pod spec        |
+| Docker Compose | `healthcheck:` in YAML | Only if needed for `depends_on: condition:`          |
+| Dockerfile     | **Do NOT define**      | No `HEALTHCHECK` instruction — defer to orchestrator |
 
 > **Dockerfile HEALTHCHECK is forbidden:** It bakes probe logic into the image, preventing orchestrator-specific tuning. Probes belong in deployment manifests (K8s) or compose files, not the image.
 
@@ -219,7 +176,7 @@ This is a Node.js ESM requirement when using `bundle: false`. TypeScript resolve
 - In-flight jobs drain to completion (with timeout)
 - Only after drain completes does the process exit
 
-Workers must stop claiming new jobs immediately on SIGTERM regardless of orchestrator—do not rely on external routing semantics.
+Workers must stop claiming new jobs immediately on SIGTERM regardless of orchestrator — do not rely on external routing semantics.
 
 ### 5. Entry Point with Signal Handling
 
@@ -278,7 +235,7 @@ Workers must stop claiming new jobs immediately on SIGTERM regardless of orchest
   });
   ```
 
-**Shutdown invariants:**
+**Shutdown sequence:**
 
 1. Set `ready = false` immediately (canonical drain signal; in K8s also stops routing; in Compose only helps if process gates work intake)
 2. Stop pulling new jobs/requests
@@ -290,10 +247,10 @@ Workers must stop claiming new jobs immediately on SIGTERM regardless of orchest
 
 **Packaging models:** Choose exactly one per service:
 
-| Model                          | Description                            | When to Use                           | Runtime Copies            |
-| ------------------------------ | -------------------------------------- | ------------------------------------- | ------------------------- |
-| **B: Runtime node_modules** ⭐ | tsup transpile-only + node_modules     | Default for all services              | `dist/` + `node_modules/` |
-| **A: Bundled**                 | tsup bundles all deps into single file | Only if you need single-file artifact | Only `dist/`              |
+| Model                                 | Description                            | When to Use                           | Runtime Copies            |
+| ------------------------------------- | -------------------------------------- | ------------------------------------- | ------------------------- |
+| **B: Runtime node_modules** (default) | tsup transpile-only + node_modules     | Default for all services              | `dist/` + `node_modules/` |
+| **A: Bundled**                        | tsup bundles all deps into single file | Only if you need single-file artifact | Only `dist/`              |
 
 > **Default to Model B.** ESM bundling with pino and other libs that use dynamic requires causes runtime errors (`Dynamic require of "os" is not supported`). Model B (transpile-only) avoids these issues. Model A is only for advanced cases requiring single-file output (must use CJS format if bundling).
 
@@ -366,7 +323,7 @@ Workers must stop claiming new jobs immediately on SIGTERM regardless of orchest
   CMD ["node", "dist/main.js"]
   ```
 
-**Dockerfile invariants:**
+**Dockerfile rules:**
 
 - **Pin pnpm version** to match root `package.json` `packageManager` field (not `pnpm@latest`)
 - **Include build tools** in builder stage: `python3`, `make`, `g++` (required for native modules from shared lockfile)
@@ -446,21 +403,11 @@ volumes:
     # Add healthcheck once health endpoints exist
   ```
 - [ ] Add to production `docker-compose.yml` (when ready for deployment)
-- [ ] Add to CI/CD pipeline (see [CI/CD Services Roadmap](CICD_SERVICES_ROADMAP.md)):
+- [ ] Add to CI/CD pipeline (see [CI/CD Services Roadmap](../../work/initiatives/ini.cicd-services-gitops.md)):
   - Build: `pnpm --filter @cogni/<name>-service build`
   - Test: `pnpm --filter @cogni/<name>-service test`
   - Docker build and push to GHCR with immutable SHA tags
   - Wire into deploy workflow (P0 stopgap: extend existing scripts; P1+: GitOps)
-
-**Invariants:**
-
-| Invariant                  | Description                                                              |
-| -------------------------- | ------------------------------------------------------------------------ |
-| TEST_DISCOVERY             | Services included in workspace test discovery + per-service test command |
-| IMAGE_PER_SERVICE          | Each service has its own Dockerfile producing an OCI image               |
-| CI_BUILDS_AND_PUSHES       | CI pushes immutable SHA-tagged images to registry                        |
-| PROD_COMPOSE_LISTS_SERVICE | Production runtime includes the service definition                       |
-| READINESS_GATES_LOCALLY    | Workers stop claiming jobs on SIGTERM regardless of orchestrator         |
 
 ### 10. Documentation
 
@@ -470,100 +417,45 @@ volumes:
   - Health endpoints
   - Deployment notes
 - [ ] Update `docs/ENVIRONMENTS.md` with service env vars
-- [ ] Update this table in "Existing Services" section below
+- [ ] Update the Existing Services table in [Services Architecture Spec](../spec/services-architecture.md)
 
----
+## Verification
 
-## Internal Boundaries (Clean Architecture) — Optional
+Run these commands to verify the new service is correctly set up:
 
-For complex services, use hexagonal/clean architecture folders within the service:
+```bash
+# Build succeeds
+pnpm --filter @cogni/<name>-service build
 
-```
-services/<name>/src/
-├── core/           # Pure business logic (no I/O, no framework)
-├── ports/          # Interfaces for external dependencies
-├── adapters/       # Implementations of ports (DB, HTTP, etc.)
-├── main.ts         # Composition root (wires adapters to ports)
-├── config.ts       # Environment config
-└── health.ts       # Health endpoints
-```
+# Types check
+pnpm --filter @cogni/<name>-service typecheck
 
-**Folder rules (enforced by dependency-cruiser when folders exist):**
+# Tests pass
+pnpm --filter @cogni/<name>-service test
 
-| From        | Can Import                     | Cannot Import          |
-| ----------- | ------------------------------ | ---------------------- |
-| `core/`     | `core/`, `ports/`              | `adapters/`, `main.ts` |
-| `ports/`    | `ports/`, `core/`              | `adapters/`, `main.ts` |
-| `adapters/` | `adapters/`, `ports/`, `core/` | `main.ts`              |
-| `main.ts`   | Everything                     | —                      |
+# Docker build succeeds
+docker build -f services/<name>/Dockerfile -t <name>-local .
 
-> **Activation:** These rules are **opt-in**. Dependency-cruiser only enforces them when the `core/` or `ports/` folders exist in a service.
-
-**When to use:**
-
-- Service has complex business logic worth isolating
-- Multiple adapter implementations (e.g., real DB vs in-memory for tests)
-- Team wants strong decoupling guarantees
-
-**When to skip:**
-
-- Simple workers with minimal logic (current `scheduler-worker`)
-- Startup/MVP phase where structure is evolving
-
----
-
-## Contracts
-
-**Only needed for HTTP services.** Services exposing HTTP APIs should have a `src/contracts/` folder following the same pattern as `src/contracts/*.contract.ts` in the app.
-
-Worker services (like `scheduler-worker`) don't need contracts—job payloads live in the domain's core package (e.g., `@cogni/scheduler-core`).
-
----
-
-## Import Boundaries
-
-**Strict isolation rules:**
-
-| From               | Can Import                  | Cannot Import          |
-| ------------------ | --------------------------- | ---------------------- |
-| `services/<name>/` | `packages/*` via `@cogni/*` | `src/`, other services |
-| `src/`             | `packages/*` via `@cogni/*` | `services/`            |
-| `packages/`        | Other `packages/*`          | `src/`, `services/`    |
-
-**Enforced by dependency-cruiser:**
-
-```javascript
-// services/ cannot import from src/
-{
-  name: "no-services-to-src",
-  severity: "error",
-  from: { path: "^services/" },
-  to: { path: "^src/" }
-}
-
-// src/ cannot import from services/
-{
-  name: "no-src-to-services",
-  severity: "error",
-  from: { path: "^src/" },
-  to: { path: "^services/" }
-}
+# Import boundaries enforced
+pnpm check
 ```
 
----
+## Troubleshooting
 
-## Existing Services
+### Problem: `Dynamic require of "os" is not supported`
 
-| Service            | Purpose                        | Status   | CI/CD                                                                              |
-| ------------------ | ------------------------------ | -------- | ---------------------------------------------------------------------------------- |
-| `scheduler-worker` | Temporal worker for scheduling | MVP (v0) | P0 stopgap (see [roadmap](CICD_SERVICES_ROADMAP.md#p0-bridge-mvp-current-tooling)) |
+**Solution:** You're using Model A (bundled) with ESM format. Switch to Model B (transpile-only, `bundle: false`) or use CJS format for bundled builds.
 
----
+### Problem: `ERR_MODULE_NOT_FOUND` at runtime
 
-## Related Docs
+**Solution:** Relative imports are missing `.js` extensions. All `import ... from "./foo"` must be `import ... from "./foo.js"` in ESM services.
 
-- [Packages Architecture](PACKAGES_ARCHITECTURE.md) — Pure libraries, package vs service distinction
-- [Architecture](ARCHITECTURE.md) — Hexagonal layers and boundaries
-- [Deployment Architecture](../platform/runbooks/DEPLOYMENT_ARCHITECTURE.md) — Infrastructure and deployment
-- [CI/CD Services Roadmap](CICD_SERVICES_ROADMAP.md) — Service build/deploy integration (P0→P4 phases)
-- [Scheduler Spec](SCHEDULER_SPEC.md) — Scheduler design and Temporal migration
+### Problem: Health endpoint not responding in Docker
+
+**Solution:** Ensure the health server binds to `0.0.0.0` (not `127.0.0.1`), and the `HEALTH_PORT` is exposed in Docker Compose or K8s manifests.
+
+## Related
+
+- [Services Architecture Spec](../spec/services-architecture.md) — invariants, import boundaries, structure contracts
+- [Packages Architecture Spec](../spec/packages-architecture.md) — packages vs services distinction
+- [CI/CD & Services GitOps Initiative](../../work/initiatives/ini.cicd-services-gitops.md) — service build/deploy roadmap

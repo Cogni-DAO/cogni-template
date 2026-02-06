@@ -1,7 +1,38 @@
+---
+id: external-executor-billing-spec
+type: spec
+title: External Executor Billing Design
+status: active
+spec_state: draft
+trust: draft
+summary: Async reconciliation billing for external executors via provider billing APIs, correlated by end_user = runId/attempt.
+read_when: Working with external executor billing, LiteLLM spend logs, reconciliation, or adding a new executor type.
+owner: derekg1729
+created: 2026-02-06
+verified: 2026-02-06
+tags: [billing, ai-graphs]
+---
+
 # External Executor Billing Design
+
+## Context
 
 > [!CRITICAL]
 > External executors use **async reconciliation** via provider billing APIs. Correlation key is `end_user = ${runId}/${attempt}` (server-set, never client-supplied). Reconcilers call `commitUsageFact()` per LLM call with `usageUnitId = provider_call_id`.
+
+External executors (LangGraph Server, future n8n/Flowise) run LLM calls outside the main app process, so billing cannot be captured in real-time. Instead, the system queries provider billing APIs after execution completes and reconciles usage into the credit ledger.
+
+The `end_user` correlation mechanism has been validated: `initChatModel({ configurableFields: ["model", "user"] })` propagates `configurable.user` to the OpenAI `user` field, which LiteLLM stores as `end_user` in spend_logs.
+
+## Goal
+
+Provide reliable, idempotent billing for LLM calls made by external executors, using provider billing APIs as the authoritative source and server-controlled correlation keys to prevent billing spoofing.
+
+## Non-Goals
+
+- Real-time billing capture for external executors (that's for in-process adapters only)
+- Client-side usage tracking (stream events are UX-only, never authoritative)
+- Direct charge_receipts DB writes (always through `commitUsageFact()`)
 
 ## Core Invariants
 
@@ -11,7 +42,7 @@
 
 3. **SERVER_SETS_USER_NEVER_CLIENT**: Provider passes `configurable.user` server-side. Client-supplied `user` in configurable is ignored/overwritten. This prevents billing spoofing.
 
-4. **RECONCILE_AFTER_STREAM_COMPLETES**: Reconciliation triggers after stream ends (success or error). No grace window for MVP—LiteLLM writes are synchronous with response.
+4. **RECONCILE_AFTER_STREAM_COMPLETES**: Reconciliation triggers after stream ends (success or error). No grace window for MVP — LiteLLM writes are synchronous with response.
 
 5. **STREAM_EVENTS_ARE_UX_ONLY**: `usage_report` events from external executors are telemetry hints. Authoritative billing flows through reconciliation only.
 
@@ -19,9 +50,9 @@
 
 7. **IDEMPOTENCY_VIA_SOURCE_REFERENCE**: `source_reference = ${runId}/${attempt}/${provider_call_id}`. Replayed reconciliation is no-op.
 
----
+## Design
 
-## Reconciliation Flow
+### Reconciliation Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -46,11 +77,9 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
----
+### Provider-Specific Details
 
-## Provider-Specific Details
-
-### LangGraph Server (LiteLLM) — MVP
+#### LangGraph Server (LiteLLM) — MVP
 
 | Aspect            | Value                                    |
 | ----------------- | ---------------------------------------- |
@@ -62,7 +91,7 @@
 
 **Validated:** `initChatModel({ configurableFields: ["model", "user"] })` propagates `configurable.user` to OpenAI `user` field → LiteLLM `end_user`.
 
-### Claude SDK — P2
+#### Claude SDK — P2
 
 | Aspect         | Value                        |
 | -------------- | ---------------------------- |
@@ -71,46 +100,13 @@
 | ExecutorType   | `claude_sdk`                 |
 | SourceSystem   | `anthropic_sdk`              |
 
-**Decision pending:** If SDK runs in-process, use real-time capture (no reconciliation). If external, same pattern with Anthropic usage API.
+Decision pending: If SDK runs in-process, use real-time capture (no reconciliation). If external, same pattern with Anthropic usage API.
 
-### n8n / Flowise — Future
+#### n8n / Flowise — Future
 
-**Invariant:** Must route LLM calls through our LiteLLM instance. Same `end_user` correlation pattern applies.
+Must route LLM calls through our LiteLLM instance. Same `end_user` correlation pattern applies.
 
----
-
-## Implementation Checklist
-
-### P0: LangGraph Server Reconciliation
-
-- [x] `initChatModel` includes `"user"` in `configurableFields`
-- [x] Provider sets `configurable.user = ${runId}/${attempt}` server-side
-- [x] Validated: `end_user` populated in LiteLLM spend_logs
-- [ ] Add `getSpendLogsByEndUser(endUser)` to LiteLLM adapter
-- [ ] Create `reconcileRun()` in `external-reconciler.ts`
-- [ ] Wire reconciler call after stream completes in provider
-- [ ] Stack test: chat → charge_receipts created via reconciliation
-
-### P1: Hardening
-
-- [ ] Alert on reconciliation failures
-- [ ] Retry logic for transient LiteLLM API errors
-- [ ] Metrics: `external_billing.reconcile_latency_ms`
-
----
-
-## File Pointers
-
-| File                                                       | Change                                    |
-| ---------------------------------------------------------- | ----------------------------------------- |
-| `packages/langgraph-graphs/src/graphs/*/server.ts`         | `configurableFields: ["model", "user"]`   |
-| `src/adapters/server/ai/langgraph/dev/provider.ts`         | `configurable.user = ${runId}/${attempt}` |
-| `src/adapters/server/ai/litellm.activity-usage.adapter.ts` | Add `getSpendLogsByEndUser()`             |
-| `src/features/ai/services/external-reconciler.ts`          | New: `reconcileRun()` function            |
-
----
-
-## Anti-Patterns
+### Anti-Patterns
 
 | Anti-Pattern                    | Why Forbidden                              |
 | ------------------------------- | ------------------------------------------ |
@@ -120,9 +116,7 @@
 | Skip `attempt` in correlation   | Retries create duplicates                  |
 | Direct charge_receipts mutation | Violates ONE_LEDGER_WRITER                 |
 
----
-
-## New Executor Integration Checklist
+### New Executor Integration Checklist
 
 Any new executor must answer:
 
@@ -131,18 +125,42 @@ Any new executor must answer:
 3. **Provider call ID for usageUnitId?** (unique per LLM call)
 4. **Idempotent flow through commitUsageFact?** (source_reference format)
 
----
+### Implementation Status
 
-## Related Docs
+Correlation mechanism validated (P0 partial):
 
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — ONE_LEDGER_WRITER, UsageFact, invariants 41-47
-- [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) — LangGraph Server adapter (uses this pattern)
-- [CLAUDE_SDK_ADAPTER_SPEC.md](CLAUDE_SDK_ADAPTER_SPEC.md) — In-process adapter (does NOT use reconciliation)
-- [N8N_ADAPTER_SPEC.md](N8N_ADAPTER_SPEC.md) — External adapter (uses this pattern)
-- [CLAWDBOT_ADAPTER_SPEC.md](CLAWDBOT_ADAPTER_SPEC.md) — External runtime adapter (uses this pattern)
-- [BILLING_EVOLUTION.md](BILLING_EVOLUTION.md) — Charge receipt schema
+- `initChatModel` includes `"user"` in `configurableFields`
+- Provider sets `configurable.user = ${runId}/${attempt}` server-side
+- `end_user` confirmed populated in LiteLLM spend_logs
 
----
+Remaining P0: `getSpendLogsByEndUser()` adapter method, `reconcileRun()` service, wiring after stream completes, stack test.
 
-**Last Updated**: 2026-01-29
-**Status**: Validated (end_user correlation proven in spend_logs)
+### File Pointers
+
+| File                                                       | Role                                      |
+| ---------------------------------------------------------- | ----------------------------------------- |
+| `packages/langgraph-graphs/src/graphs/*/server.ts`         | `configurableFields: ["model", "user"]`   |
+| `src/adapters/server/ai/langgraph/dev/provider.ts`         | `configurable.user = ${runId}/${attempt}` |
+| `src/adapters/server/ai/litellm.activity-usage.adapter.ts` | LiteLLM spend logs adapter                |
+| `src/features/ai/services/external-reconciler.ts`          | Reconciler service (WIP)                  |
+
+## Acceptance Checks
+
+**Automated:**
+
+- Stack test: chat via external executor → charge_receipts created via reconciliation
+- Idempotency test: replayed reconciliation produces no duplicate ledger entries
+
+**Manual:**
+
+1. Verify `end_user` populated in LiteLLM spend_logs after a LangGraph Server run
+2. Verify stream `usage_report` events do not create charge_receipts (UX-only)
+
+## Open Questions
+
+_(none — P1 hardening (alerts, retry, metrics) and future provider integrations tracked in ini.payments-enhancements.md)_
+
+## Related
+
+- [Billing Evolution](./billing-evolution.md) — Charge receipt schema
+- [AI Architecture and Evals](./ai-evals.md) — Executor types

@@ -1,14 +1,53 @@
+---
+id: packages-architecture-spec
+type: spec
+title: Packages Architecture
+status: active
+spec_state: draft
+trust: draft
+summary: Internal @cogni/* packages — pure TypeScript libraries with strict isolation boundaries, composite builds, and ESM-only exports.
+read_when: Creating a new package, debugging package builds, or working with @cogni/* imports.
+owner: derekg1729
+created: 2026-02-06
+verified: 2026-02-06
+tags: [infra, meta]
+---
+
 # Packages Architecture
 
-> Internal packages for shared, pure libraries with strict isolation boundaries.
+## Context
 
-## Overview
+The `packages/` directory contains **Node-owned** internal packages — pure TypeScript libraries with no `src/` or `services/` imports. Each package declares its target environment (isomorphic or node-only) via tsconfig/tsup. These enable future repo splits and clean dependency boundaries.
 
-The `packages/` directory contains **Node-owned** internal packages—pure TypeScript libraries with no `src/` or `services/` imports. Each package declares its target environment (isomorphic or node-only) via tsconfig/tsup. These enable future repo splits and clean dependency boundaries.
+## Goal
 
-## When to Create a Package
+Provide a shared-library layer (`@cogni/*` workspace packages) with strict isolation from the app (`src/`) and services (`services/`), built via TypeScript project references and consumed via `dist/` exports.
 
-**TL;DR:** Make a package only when the code is small, reusable, and doesn’t depend on the app.
+## Non-Goals
+
+- Deployable services with process lifecycle (those belong in `services/`)
+- UI components or feature-specific code (those belong in `src/features/`)
+- Published npm packages (all packages are `private: true` workspace-only)
+
+## Core Invariants
+
+1. **NO_SRC_IMPORTS**: Packages must never import `@/` (src aliases) or any `src/**` filesystem paths. Enforced by dependency-cruiser.
+
+2. **NO_SERVICE_IMPORTS**: Packages must never import from `services/`. Dependency direction is `services → packages`, never reverse.
+
+3. **WORKSPACE_IMPORTS_ONLY**: `src/` must never import `packages/**` filesystem paths — use `@cogni/<name>` workspace imports only.
+
+4. **ESM_ONLY**: Packages are ESM-only, require Node >= 20 in dev/CI and any future services.
+
+5. **COMPOSITE_BUILD**: All packages use TypeScript composite mode with `tsc -b` for incremental builds. Services do NOT get added to root `tsconfig.json` references.
+
+6. **DIST_EXPORTS**: Package `exports` field points to `dist/` for runtime resolution. App resolves `@cogni/*` via `package.json` exports, not tsconfig path aliases.
+
+7. **PURE_LIBRARY**: A package has no process lifecycle — no ports, no worker loops, no Docker images, no env vars, no health checks. If it needs any of these, it's a service.
+
+## Design
+
+### When to Create a Package
 
 Create a package when code is:
 
@@ -18,18 +57,14 @@ Create a package when code is:
 
 **Do NOT create a package for:** UI components, feature services, adapters, or anything importing from `src/`.
 
-## Packages vs Services
+### Packages vs Services — Smell Test
 
-> Packages are pure libraries. Deployables belong in `services/`.
-
-### Smell Test: Not a Package If It...
+Not a package if it:
 
 - Listens on a port
 - Runs a worker loop
 - Has its own Docker image
 - Owns environment variables or health checks
-
-### Directory Rule
 
 | Directory   | Contains                             | May Import From       |
 | ----------- | ------------------------------------ | --------------------- |
@@ -38,7 +73,7 @@ Create a package when code is:
 
 **Dependency rule:** `services → packages` allowed; `packages → services` forbidden.
 
-## Package Structure
+### Package Structure
 
 ```
 packages/<name>/
@@ -50,9 +85,7 @@ packages/<name>/
 └── tsup.config.ts         # Build config (platform: browser|node|neutral)
 ```
 
-## Critical CI/CD Setup Checklist
-
-When adding a new package:
+### CI/CD Setup Checklist for New Packages
 
 1. **pnpm-workspace.yaml** — Already includes `packages/*` (no change needed)
 
@@ -136,7 +169,7 @@ When adding a new package:
    - Package-local tests (`packages/<name>/tests/**`) must only import that package — no `src/` imports (enforced by dependency-cruiser)
    - Cross-package integration tests live in `tests/packages/**` and may import multiple `@cogni/*` packages
 
-## Canonical CI Flow
+### Canonical CI Flow
 
 **TypeScript project references (`tsc -b`) is the default way packages are built and type-checked in CI.**
 
@@ -153,9 +186,7 @@ TypeScript project references build packages incrementally using `.tsbuildinfo` 
 
 **Future optimization:** When package/service count grows significantly, consider Turborepo for remote caching and task graph orchestration across multiple jobs. Not required for current scale.
 
-## Import Boundaries & Invariants
-
-**Strict isolation rules:**
+### Import Boundaries
 
 | From                        | Can Import Package?      | Can Import `src/`? | Notes                                       |
 | --------------------------- | ------------------------ | ------------------ | ------------------------------------------- |
@@ -163,14 +194,7 @@ TypeScript project references build packages incrementally using `.tsbuildinfo` 
 | `packages/<name>/src/`      | Yes, other packages      | **NO**             | Never import `@/` aliases or `src/**` paths |
 | `packages/<other>/src/`     | Yes, via workspace       | **NO**             | Package-to-package via `@cogni/<other>`     |
 
-**Invariants:**
-
-- Packages **must never** import `@/` (src aliases) or any `src/**` filesystem paths
-- `src/` **must never** import `packages/**` filesystem paths (use `@cogni/<name>` workspace imports only)
-- Packages are ESM-only, require Node >= 20 in dev/CI and any future services
-- Enforced by dependency-cruiser in CI
-
-## Existing Packages
+### Existing Packages
 
 | Package                  | Target     | Purpose                                                |
 | ------------------------ | ---------- | ------------------------------------------------------ |
@@ -183,7 +207,36 @@ TypeScript project references build packages incrementally using `.tsbuildinfo` 
 | `@cogni/db-schema`       | node       | Drizzle schema with subpath exports per domain slice   |
 | `@cogni/db-client`       | node       | Drizzle client factory + scheduling adapters           |
 
-## Related Docs
+### File Pointers
 
-- [Architecture](ARCHITECTURE.md) — Hexagonal layers and boundaries
-- [Node Formation Spec](NODE_FORMATION_SPEC.md) — Uses `@cogni/aragon-osx`
+| File                        | Purpose                                   |
+| --------------------------- | ----------------------------------------- |
+| `packages/*/package.json`   | Workspace package declarations            |
+| `packages/*/tsconfig.json`  | Composite TypeScript config per package   |
+| `packages/*/tsup.config.ts` | Build config per package                  |
+| `tsconfig.json` (root)      | Project references for all packages       |
+| `.dependency-cruiser.cjs`   | Import boundary enforcement rules         |
+| `biome/base.json`           | noDefaultExport overrides for tsup/vitest |
+
+## Acceptance Checks
+
+**Automated:**
+
+- `pnpm check` — dependency-cruiser enforces import boundary rules; biome/tsc catch violations
+- `pnpm exec tsc -b` — incremental package build succeeds
+
+**Manual:**
+
+1. Verify new packages have composite tsconfig, dist/ exports, and workspace dependency in root
+2. Verify no `@/` or `src/**` imports in any `packages/` source
+
+## Open Questions
+
+_(none)_
+
+## Related
+
+- [Architecture](./architecture.md) — Hexagonal layers and boundaries
+- [Node Formation Spec](../NODE_FORMATION_SPEC.md) — Uses `@cogni/aragon-osx`
+- [Services Architecture](./services-architecture.md) — Deployable service contracts
+- [Node vs Operator Contract](./node-operator-contract.md) — Import boundary context

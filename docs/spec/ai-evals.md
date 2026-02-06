@@ -1,9 +1,51 @@
+---
+id: ai-evals-spec
+type: spec
+title: AI Architecture and Evals
+status: active
+spec_state: draft
+trust: draft
+summary: AI stack architecture (LangGraph + OTel + Langfuse), feature-centric graph conventions, and eval regression gate policy.
+read_when: Working on AI graphs, prompts, evals, or observability for LLM workflows.
+owner: derekg1729
+created: 2026-02-06
+verified: 2026-02-06
+tags: [ai-graphs]
+---
+
 # AI Architecture & Evals
 
-> [!CRITICAL]
-> AI behavior must be reproducible and testable. LLM-facing changes require eval regression gates.
+## Context
 
-## Stack
+AI behavior must be reproducible and testable. LLM-facing changes require eval regression gates. This spec defines the AI stack, graph location conventions, eval harness structure, and CI gate policy.
+
+## Goal
+
+Ensure all AI orchestration follows feature-centric conventions, prompt changes are version-tracked, and every LLM-facing PR passes eval regression gates before merge.
+
+## Non-Goals
+
+- Runtime prompt A/B testing infrastructure (Langfuse handles externally)
+- Custom eval frameworks beyond golden-output comparison
+- Non-LLM AI workloads (classical ML pipelines)
+
+## Core Invariants
+
+1. **FEATURE_CENTRIC_GRAPHS**: Graphs live in `src/features/<feature>/ai/`, NOT in a shared package. Packages are only for cross-repo contracts after proven reuse.
+
+2. **GRAPH_BOUNDARY_ISOLATION**: Graphs must not contain HTTP handlers, database access, direct adapter/IO imports, or business logic unrelated to AI orchestration.
+
+3. **PROMPT_VERSION_TRACKING**: Prompts stored as text files or template modules, not inline strings. Changes tracked in git with semantic commit messages. `prompt_hash` computed per call for drift detection.
+
+4. **EVAL_REGRESSION_GATE**: All golden tests must pass (within tolerance) for LLM-facing PRs. New prompts require at least 3 golden cases.
+
+5. **GOLDEN_UPDATE_DISCIPLINE**: Never silently update goldens to make CI pass. Intentional prompt improvement → update golden + commit message explaining why. Model upgrade → re-baseline all goldens + document in changelog.
+
+6. **OTEL_CANONICAL_TRACING**: All AI operations emit OpenTelemetry spans. Langfuse consumes OTel traces as sink.
+
+## Design
+
+### Stack
 
 | Layer             | Technology    | Purpose                                |
 | ----------------- | ------------- | -------------------------------------- |
@@ -11,11 +53,7 @@
 | **Observability** | OpenTelemetry | Canonical tracing/metrics              |
 | **AI Platform**   | Langfuse      | Prompt versioning, eval UI, trace sink |
 
----
-
-## Graph Location (Feature-Centric)
-
-Graphs live in feature slices, NOT in a shared package. Packages are only for cross-repo contracts after proven reuse.
+### Graph Location (Feature-Centric)
 
 **Location:** `src/features/<feature>/ai/`
 
@@ -34,7 +72,7 @@ Graphs live in feature slices, NOT in a shared package. Packages are only for cr
 - Direct adapter/IO imports
 - Business logic unrelated to AI orchestration
 
-### Structure
+#### Structure
 
 ```
 src/features/<feature>/ai/
@@ -55,15 +93,13 @@ src/features/<feature>/ai/
 - Langfuse syncs prompt versions for A/B testing
 - `prompt_hash` computed per call for drift detection
 
----
-
-## evals/ Charter
+### evals/ Charter
 
 Location: `evals/` (root level, not a package)
 
 **Purpose:** Test AI behavior for regressions before merge.
 
-### Structure
+#### Structure
 
 ```
 evals/
@@ -86,7 +122,7 @@ evals/
   README.md
 ```
 
-### Golden Output Format
+#### Golden Output Format
 
 ```json
 {
@@ -105,11 +141,9 @@ evals/
 }
 ```
 
----
+### Observability
 
-## Observability
-
-### OpenTelemetry (Canonical)
+#### OpenTelemetry (Canonical)
 
 All AI operations emit OTel spans:
 
@@ -127,7 +161,7 @@ All AI operations emit OTel spans:
 }
 ```
 
-### Langfuse Integration
+#### Langfuse Integration
 
 Langfuse consumes OTel traces as sink:
 
@@ -144,11 +178,7 @@ LangGraph → OTel SDK → OTel Collector → Langfuse
                                      → Grafana (dashboards)
 ```
 
----
-
-## CI Gate Policy
-
-### Required for LLM-Facing PRs
+### CI Gate Policy
 
 | Gate                    | Requirement                                              |
 | ----------------------- | -------------------------------------------------------- |
@@ -156,7 +186,7 @@ LangGraph → OTel SDK → OTel Collector → Langfuse
 | **New prompt coverage** | New prompts require at least 3 golden cases              |
 | **Cost delta**          | Token usage increase < 20% vs baseline (warn, not block) |
 
-### CI Integration
+#### CI Integration
 
 ```yaml
 # In CI workflow
@@ -170,15 +200,7 @@ LangGraph → OTel SDK → OTel Collector → Langfuse
   run: pnpm eval:check --fail-on-regression
 ```
 
-### When to Update Goldens
-
-1. Intentional prompt improvement → update golden + commit message explaining why
-2. Model upgrade → re-baseline all goldens + document in changelog
-3. Never silently update goldens to make CI pass
-
----
-
-## Ownership
+### Ownership
 
 | Component              | Owner                                   |
 | ---------------------- | --------------------------------------- |
@@ -186,14 +208,31 @@ LangGraph → OTel SDK → OTel Collector → Langfuse
 | `evals/`               | Whoever owns the AI code being tested   |
 | Langfuse instance      | Operator (shared) or Node (self-hosted) |
 
----
+### File Pointers
 
-## Related Docs
+| File                                 | Purpose                            |
+| ------------------------------------ | ---------------------------------- |
+| `src/features/<feature>/ai/graphs/`  | LangGraph workflow definitions     |
+| `src/features/<feature>/ai/prompts/` | Prompt templates (version-tracked) |
+| `src/features/<feature>/ai/tools/`   | Tool contracts (feature-scoped)    |
+| `evals/`                             | Eval harness, datasets, goldens    |
 
-- [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — P0/P1/P2 checklists, ID map, invariants
-- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — How to create a graph in a feature
+## Acceptance Checks
 
----
+**Automated:**
 
-**Last Updated**: 2025-12-19
-**Status**: Design Approved (Feature-Centric Pivot)
+- `pnpm eval:run` — runs all golden tests
+- `pnpm eval:check --fail-on-regression` — CI gate for eval regressions
+
+**Manual:**
+
+1. Verify new prompts have at least 3 golden cases
+2. Confirm golden updates include explanatory commit messages
+
+## Open Questions
+
+_(none)_
+
+## Related
+
+- [AI Setup](./ai-setup.md) — P0/P1/P2 checklists, ID map, invariants

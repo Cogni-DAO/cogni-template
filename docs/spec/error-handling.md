@@ -1,8 +1,49 @@
+---
+id: error-handling-spec
+type: spec
+title: Error Handling Architecture
+status: active
+spec_state: draft
+trust: draft
+summary: Layered error translation pattern — domain errors, port errors, feature errors, AI execution errors — with clean boundaries and type safety.
+read_when: Adding error types, translating errors across boundaries, or working with AI execution error codes.
+owner: derekg1729
+created: 2026-02-06
+verified: 2026-02-06
+tags: [meta]
+---
+
 # Error Handling Architecture
 
-This codebase uses a **layered error translation pattern** that maintains clean boundaries while preserving type safety and structured error information across all layers.
+## Context
 
-## Error Types by Layer
+This codebase uses a **layered error translation pattern** that maintains clean boundaries while preserving type safety and structured error information across all layers. Errors flow from adapters through features to app routes, getting translated at each boundary into the consuming layer's error algebra.
+
+## Goal
+
+Provide structured, type-safe error handling where each architectural layer has its own error types, errors are translated at boundaries (not leaked), and consumers receive stable error contracts that don't break when internals change.
+
+## Non-Goals
+
+- Global error middleware (each route handles its own errors via feature error contracts)
+- Error recovery/retry logic at the architecture level (handled per-feature)
+- Client-side error handling patterns (this is backend only)
+
+## Core Invariants
+
+1. **LAYER_ERROR_ISOLATION**: Each layer defines and uses its own error types. Domain errors stay in core, port errors stay between adapters and features, feature errors stay between features and app routes.
+
+2. **ERROR_TRANSLATION_AT_BOUNDARY**: Errors are caught and translated at each layer boundary. Adapters throw port errors; features catch port errors and return feature errors; app routes match feature error kinds to HTTP status codes.
+
+3. **NO_RAW_THROW_PAST_FEATURE**: Feature services never let raw port/adapter errors leak to the app layer. They catch, translate, and return `{ ok: false, error: FeatureError }`.
+
+4. **ERROR_NORMALIZATION_ONCE** (AI errors): `normalizeErrorToExecutionCode()` is the single source of truth for mapping any error to an `AiExecutionErrorCode`. Metrics and consumers receive pre-normalized codes, never introspect error objects.
+
+5. **NO_RAW_THROW_PAST_COMPLETION** (AI errors): `completion.ts` catches all errors, normalizes, and returns structured `{ ok: false, error: AiExecutionErrorCode }` to all consumers.
+
+## Design
+
+### Error Types by Layer
 
 **Domain Errors (`core/*/errors.ts`)**
 
@@ -16,7 +57,7 @@ This codebase uses a **layered error translation pattern** that maintains clean 
 - Errors defined at the port boundary: `InsufficientCreditsPortError`, `AccountNotFoundPortError`
 - Structured data emitted by adapters and consumed by features
 - **Used by**: Adapters (thrown), feature services (caught and translated)
-- **Not thrown by**: Core domain (core does not talk directly to infra in this architecture)
+- **Not thrown by**: Core domain (core does not talk directly to infra)
 
 **Feature Errors (`features/*/errors.ts`)**
 
@@ -25,7 +66,7 @@ This codebase uses a **layered error translation pattern** that maintains clean 
 - **Used by**: Feature services (returned), app layer (for HTTP mapping)
 - **Never used by**: Adapters, ports
 
-## Error Flow Pattern
+### Error Flow Pattern
 
 ```txt
 Adapter → Port Error → Feature Service → Feature Error → App Route → HTTP Response
@@ -37,7 +78,7 @@ Adapter → Port Error → Feature Service → Feature Error → App Route → H
 2. **Feature**: catches port error → returns `{ ok: false, error: { kind: "INSUFFICIENT_CREDITS", accountId, required: cost, available: balance } }`
 3. **App Route**: matches `error.kind === "INSUFFICIENT_CREDITS"` → returns `NextResponse.json({ error: "Insufficient credits" }, { status: 402 })`
 
-## Implementation Guidelines
+### Implementation Guidelines
 
 **Adapters (`src/adapters/**/\*.adapter.ts`)\*\*
 
@@ -109,15 +150,7 @@ try {
 }
 ```
 
-## Benefits
-
-- **Type Safety**: Structured errors with rich context at every layer
-- **Boundary Respect**: Each layer only imports error types from allowed dependencies
-- **Maintainability**: Error details and domain internals can change without breaking app routes
-- **Debugging**: Full error context preserved from adapter to HTTP response
-- **Testing**: Easy to mock and assert specific error conditions at each layer
-
-## AI Execution Errors
+### AI Execution Errors
 
 AI/LLM errors follow a specialized pattern with **single-point normalization** to stable error codes.
 
@@ -136,12 +169,6 @@ AI/LLM errors follow a specialized pattern with **single-point normalization** t
 5. Returns `{ ok: false, error: AiExecutionErrorCode }` to all consumers
 6. Metrics, logs, and responses consume the pre-normalized code
 
-**Invariants:**
-
-- **ERROR_NORMALIZATION_ONCE:** `normalizeErrorToExecutionCode()` is the single source of truth
-- **NO_RAW_THROW_PAST_COMPLETION:** `completion.ts` catches all errors, normalizes, returns structured result
-- **METRICS_NO_HEURISTICS:** Metrics receive pre-normalized codes, never introspect error objects
-
 **Normalization Priority:** AbortError → AiExecutionError.code → LlmError (status 429/408 → kind fallback) → "internal"
 
 **Structured Boundary Logging:** Adapters emit `adapter.litellm.http_error` / `adapter.litellm.sse_error` with `{statusCode, kind, requestId, traceId, model}`. Raw provider messages stay in Langfuse only.
@@ -155,11 +182,42 @@ AI/LLM errors follow a specialized pattern with **single-point normalization** t
 | Adapters | `@/ports` — re-exports from `@cogni/ai-core` (arch constraint: adapters use ports) |
 | Metrics  | Receives `AiExecutionErrorCode` directly (no error introspection)                  |
 
----
-
-## Notes
+### Design Notes
 
 - Core should not depend on port errors — core domain logic remains infrastructure-agnostic
 - Ports + port errors are used exclusively between adapters and features
 - Feature error algebras provide stable contracts that isolate app routes from domain changes
 - AI errors use `AiExecutionErrorCode` as the stable contract across the system
+
+### File Pointers
+
+| File                                       | Role                                         |
+| ------------------------------------------ | -------------------------------------------- |
+| `src/core/*/errors.ts`                     | Domain error types                           |
+| `src/ports/*.port.ts`                      | Port error types + type guards               |
+| `src/features/*/errors.ts`                 | Feature error algebras (kind discriminators) |
+| `packages/ai-core/src/errors/`             | AI error types + normalization function      |
+| `src/app/_facades/ai/completion.server.ts` | AI error boundary (normalizes all errors)    |
+
+## Acceptance Checks
+
+**Automated:**
+
+- Unit tests verify port error → feature error translation in feature services
+- Unit tests verify `normalizeErrorToExecutionCode()` maps all known error types
+- Depcruiser rules enforce import boundaries (adapters import from ports, not core)
+
+**Manual:**
+
+1. Verify an `InsufficientCreditsPortError` in an adapter results in HTTP 402 at the route level
+2. Verify an unknown error type from an adapter results in HTTP 500 (generic fallback)
+
+## Open Questions
+
+_(none)_
+
+## Related
+
+- [Architecture](./architecture.md) — Hexagonal layer definitions
+- [AI Architecture and Evals](./ai-evals.md) — AI execution patterns
+- [Observability](./observability.md) — Structured logging for error boundaries
