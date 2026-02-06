@@ -1,8 +1,31 @@
-# Coding agents & AGENTS.md
+---
+id: agents-context-guide
+type: guide
+title: Coding Agents & AGENTS.md
+status: draft
+trust: draft
+summary: How to configure each coding agent (Codex, Gemini CLI, Antigravity, Claude Code, Cursor) to use AGENTS.md as single source of truth.
+read_when: Setting up a new coding agent or IDE to work with this repo's AGENTS.md hierarchy.
+owner: derekg1729
+created: 2026-02-06
+verified: 2026-02-06
+tags: [agents, dev, onboarding]
+---
 
-Goal: keep one canonical set of rules (`AGENTS.md` per directory) and wire every agent to it without blowing the context window.
+# Coding Agents & AGENTS.md
 
-Reality:
+## When to Use This
+
+You are configuring a coding agent or IDE to work with this repo. The goal is to keep one canonical set of rules (`AGENTS.md` per directory) and wire every agent to it without blowing the context window.
+
+## Preconditions
+
+- [ ] Repository cloned
+- [ ] At least one coding agent/IDE installed (Codex, Gemini CLI, Antigravity, Claude Code, or Cursor)
+
+## Steps
+
+### Agent Compatibility Overview
 
 - **Codex**: native AGENTS.md hierarchy (gold standard), dynamically loading subdirs.
 - **Gemini CLI + Antigravity**: default to `GEMINI.md`, configurable to use `AGENTS.md`, but only bulk loads ALL files at boot.
@@ -48,10 +71,33 @@ Reality:
 - Commands: `.cursor/commands/*.md` → `/command-name`.
 - Keep any Cursor-specific rules minimal and point back to AGENTS.md instead of duplicating policy.
 
-## How we should use them
+### Usage Policy
 
 - **Single source of truth**: `AGENTS.md` in each directory; no duplicated rules elsewhere.
 - **Bridges only**:
   - Gemini: `contextFileName = "AGENTS.md"` + tuned `discoveryMaxDirs`.
   - Antigravity: `.agent/GEMINI.md` + workflows that explicitly reference AGENTS.md.
   - Claude / Cursor: CLAUDE.md and command files that _reference_ AGENTS.md, not copy it.
+
+## Verification
+
+Confirm your agent loads context correctly:
+
+1. Start the agent in the repo root
+2. Ask it to summarize the project mission — it should reference AGENTS.md content
+3. Navigate to a subdirectory and verify subdir-specific context loads
+
+## Troubleshooting
+
+### Problem: Agent doesn't pick up AGENTS.md
+
+**Solution:** Check the bridge configuration for your agent. Claude Code needs `CLAUDE.md` with `@./AGENTS.md`; Gemini CLI needs `"contextFileName": "AGENTS.md"` in settings.
+
+### Problem: Agent loads too many files and blows context window
+
+**Solution:** For Gemini CLI, tune `"discoveryMaxDirs"` in `.gemini/settings.json`. For others, keep subdir AGENTS.md files focused and concise.
+
+## Related
+
+- [AGENTS.md](../../AGENTS.md) — root agent instructions
+- [Subdir AGENTS.md Policy](../templates/agents_subdir_template.md) — template for subdirectory AGENTS.md files

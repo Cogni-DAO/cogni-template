@@ -1,16 +1,41 @@
+---
+id: testing-guide
+type: guide
+title: Testing Strategy
+status: draft
+trust: draft
+summary: How to write tests with environment-based adapter swapping (APP_ENV=test pattern) and CI integration.
+read_when: Adding a new adapter that needs fake/test implementation, or understanding the test adapter pattern.
+owner: derekg1729
+created: 2026-02-06
+verified: 2026-02-06
+tags: [testing, dev]
+---
+
 # Testing Strategy
 
-**For developer setup and daily testing workflows, see [SETUP.md](SETUP.md).**
+**For developer setup and daily testing workflows, see [Developer Setup](./developer-setup.md).**
 
-**For stack testing modes and commands, see [ENVIRONMENTS.md](ENVIRONMENTS.md).**
+**For stack testing modes and commands, see [Environments Spec](../spec/environments.md).**
 
-**Stack Testing Commands:**
+## When to Use This
+
+You are implementing an adapter that calls external services (APIs, databases, etc.) and need to provide a fake implementation for deterministic testing.
+
+## Preconditions
+
+- [ ] Adapter follows the port/adapter pattern (implements a port interface)
+- [ ] DI container wiring exists in `src/bootstrap/container.ts`
+
+## Steps
+
+### Stack Testing Commands
 
 - `pnpm dev:stack:test` + `pnpm test:stack:dev` - Host app with fake adapters
 - `pnpm docker:test:stack` + `pnpm test:stack:docker` - Containerized app with fake adapters
 - `pnpm docker:stack` + `pnpm e2e` - Production deployment for black box e2e testing
 
-## Environment-Based Test Adapters
+### Environment-Based Test Adapters
 
 When implementing adapters that hit external dependencies (APIs, services, etc.), you must provide both real and fake implementations to enable testing without external calls.
 
@@ -71,3 +96,27 @@ The `test-api` workflow job:
 - Runs `pnpm test:int` against fake responses
 
 This ensures CI never makes external API calls while still testing the full HTTP request/response flow.
+
+## Verification
+
+```bash
+pnpm test           # Run unit/integration tests
+pnpm test:ci        # Run tests with coverage statistics
+pnpm check          # Full lint + type + format validation
+```
+
+## Troubleshooting
+
+### Problem: Tests pass locally but fail in CI
+
+**Solution:** Ensure your adapter is wired in `src/bootstrap/container.ts` with the `serverEnv.isTestMode` check. CI sets `APP_ENV=test` which triggers fake adapter selection.
+
+### Problem: Fake adapter not being used
+
+**Solution:** Verify `APP_ENV=test` is set in your test environment. Check that `src/bootstrap/container.ts` selects the fake implementation when `serverEnv.isTestMode` is true.
+
+## Related
+
+- [Developer Setup](./developer-setup.md) — first-time setup and daily dev workflow
+- [Environments Spec](../spec/environments.md) — deployment modes and stack configurations
+- [Feature Development Guide](./feature-development.md) — end-to-end feature workflow including testing
