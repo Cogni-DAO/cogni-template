@@ -30,26 +30,27 @@ Build the tooling infrastructure that enforces our docs + work system:
 
 **Goal:** Standardize identifiers, headings, and enforceability before integrating external tools.
 
-| Deliverable                                                    | Status  | Notes                               |
-| -------------------------------------------------------------- | ------- | ----------------------------------- |
-| Templates finalized (spec, guide, decision, initiative, issue) | Done    | YAML frontmatter                    |
-| CI check: required frontmatter properties                      | Partial | `validate-docs-metadata.mjs` exists |
-| CI check: `spec_state` validation                              | Todo    | Extend validator                    |
-| CI check: stable headings for specs                            | Todo    | Extend validator                    |
-| CI check: IDs unique                                           | Done    | Existing validator                  |
-| CI check: type matches directory                               | Todo    | Extend validator                    |
+| Deliverable                                                    | Status      | Est | Work Item                                                           |
+| -------------------------------------------------------------- | ----------- | --- | ------------------------------------------------------------------- |
+| Templates finalized (spec, guide, decision, initiative, issue) | Done        | 1   | [wi.docs-migration-tracker](../issues/wi.docs-migration-tracker.md) |
+| Classify all 97 legacy docs                                    | Done        | 2   | [wi.docs-migration-tracker](../issues/wi.docs-migration-tracker.md) |
+| Migrate legacy docs to typed directories                       | Not Started | 4   | [wi.docs-migration-tracker](../issues/wi.docs-migration-tracker.md) |
+| CI check: required frontmatter props                           | Done        | 1   | [wi.docs-migration-tracker](../issues/wi.docs-migration-tracker.md) |
+| CI check: IDs unique + type↔dir match                         | Done        | 1   | [wi.docs-migration-tracker](../issues/wi.docs-migration-tracker.md) |
+| CI check: `spec_state` validation                              | Not Started | 1   | —                                                                   |
+| CI check: stable headings for specs                            | Not Started | 1   | —                                                                   |
 
 ### Walk (P1) — MkDocs + Repo Separation
 
 **Goal:** Published docs navigation; optionally separate docs into own repo.
 
-| Deliverable                              | Status | Notes                                     |
-| ---------------------------------------- | ------ | ----------------------------------------- |
-| MkDocs pipeline                          | Future | CI builds docs site on `/docs/**` changes |
-| `mkdocs.yml` at repo root                | Future | Published to internal URL                 |
-| (Optional) Create `cogni-knowledge` repo | Future | Migrate `/docs` content                   |
-| (Optional) Mount as git submodule        | Future | `/docs` → submodule                       |
-| Submodule update workflow                | Future | See pinning policy below                  |
+| Deliverable                               | Status      | Est | Work Item            |
+| ----------------------------------------- | ----------- | --- | -------------------- |
+| MkDocs pipeline (CI builds on `/docs/**`) | Not Started | 3   | (create at P1 start) |
+| `mkdocs.yml` at repo root                 | Not Started | 1   | (create at P1 start) |
+| Link checking (`lychee`)                  | Not Started | 1   | (create at P1 start) |
+| (Optional) Create `cogni-knowledge` repo  | Not Started | 2   | (create at P1 start) |
+| (Optional) Mount as git submodule         | Not Started | 2   | (create at P1 start) |
 
 **Submodule Pinning Policy (if adopted):**
 
@@ -63,13 +64,13 @@ Build the tooling infrastructure that enforces our docs + work system:
 
 **Goal:** PRs automatically link to work; `/work` becomes export-only.
 
-| Deliverable                             | Status | Notes                         |
-| --------------------------------------- | ------ | ----------------------------- |
-| Enable Plane GitHub integration         | Future | For `cogni-template` repo     |
-| PR reference format standardized        | Future | `PLANE-123` triggers backlink |
-| CI gate: PR body Spec + Work validation | Future | GitHub Action                 |
-| `/work` becomes export-only             | Future | CI rejects direct edits       |
-| Generate `/work` from Plane export      | Future | Script or GitHub Action       |
+| Deliverable                             | Status      | Est | Work Item            |
+| --------------------------------------- | ----------- | --- | -------------------- |
+| Enable Plane GitHub integration         | Not Started | 2   | (create at P2 start) |
+| PR reference format standardized        | Not Started | 1   | (create at P2 start) |
+| CI gate: PR body Spec + Work validation | Not Started | 2   | (create at P2 start) |
+| `/work` becomes export-only             | Not Started | 1   | (create at P2 start) |
+| Generate `/work` from Plane export      | Not Started | 2   | (create at P2 start) |
 
 **Plane GitHub Integration:**
 
@@ -80,10 +81,10 @@ Build the tooling infrastructure that enforces our docs + work system:
 
 **Goal:** Agents use Plane directly instead of markdown parsing.
 
-| Deliverable                  | Status | Notes                                 |
-| ---------------------------- | ------ | ------------------------------------- |
-| Plane MCP server integration | Future | Official Plane MCP                    |
-| Agent CRUD operations        | Future | list, get, create, update, transition |
+| Deliverable                  | Status      | Est | Work Item            |
+| ---------------------------- | ----------- | --- | -------------------- |
+| Plane MCP server integration | Not Started | 3   | (create at P3 start) |
+| Agent CRUD operations        | Not Started | 3   | (create at P3 start) |
 
 **Plane MCP Operations:**
 
@@ -172,10 +173,10 @@ Use Dolt as branchable, decentralized Postgres-compatible store for knowledge/ta
 
 ## Dependencies
 
-- [ ] `js-yaml` for proper YAML parsing in validator
-- [ ] GitHub Action for PR body validation
-- [ ] Plane workspace setup
-- [ ] MkDocs configuration
+- [x] `yaml` package for YAML parsing in validator
+- [ ] GitHub Action for PR body validation (P2)
+- [ ] Plane workspace setup (P2)
+- [ ] MkDocs configuration (P1)
 
 ## Explicitly Deferred Items
 
@@ -184,23 +185,6 @@ Use Dolt as branchable, decentralized Postgres-compatible store for knowledge/ta
 | Deprecation/redirect policy for moved specs       | P1          | Needs submodule mechanics first |
 | Spec versioning scheme (v0, v1, breaking changes) | P1          | Low urgency                     |
 | Multi-repo doc search aggregation                 | P2          | Backstage TechDocs handles this |
-| Link checking (`lychee`)                          | P1          | Nice-to-have                    |
-
-## Work Items
-
-### P0
-
-- [x] [wi.docs-migration-tracker](../issues/wi.docs-migration-tracker.md) — migration checklist + validator tasks
-
-### P1
-
-- [ ] wi.mkdocs-setup (create when entering P1)
-- [ ] wi.validator-spec-state (create when entering P1)
-
-### P2
-
-- [ ] wi.plane-github-integration (create when entering P2)
-- [ ] wi.pr-linkage-ci (create when entering P2)
 
 ## As-Built Specs
 

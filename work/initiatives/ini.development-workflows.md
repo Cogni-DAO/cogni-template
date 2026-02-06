@@ -30,23 +30,36 @@ These workflows should **persist and adapt** as the underlying infrastructure ch
 
 ### Crawl (P0) — Document Core Workflows
 
-- [x] Define spec lifecycle states (draft/proposed/active/deprecated)
-- [x] Define initiative vs issue vs spec responsibilities
-- [x] Document PR body format conventions
-- [ ] Document agent operating model
-- [ ] Document trust handling rules
+**Goal:** Define and document the core workflows before enforcing them.
+
+| Deliverable                                 | Status      | Est | Work Item                  |
+| ------------------------------------------- | ----------- | --- | -------------------------- |
+| Define spec lifecycle states                | Done        | 1   | —                          |
+| Define initiative vs issue vs spec roles    | Done        | 1   | —                          |
+| Document PR body format conventions         | Done        | 1   | —                          |
+| Document agent operating model in AGENTS.md | Not Started | 2   | wi.document-agent-workflow |
+| Document trust handling rules in AGENTS.md  | Not Started | 1   | wi.document-trust-handling |
 
 ### Walk (P1) — Enforce via CI + Templates
 
-- [ ] Templates enforce required sections
-- [ ] CI warns on missing PR linkage
-- [ ] Agent prompts reference workflow docs
+**Goal:** Templates and CI enforce the documented conventions.
+
+| Deliverable                                | Status      | Est | Work Item            |
+| ------------------------------------------ | ----------- | --- | -------------------- |
+| Templates enforce required sections        | Not Started | 2   | (create at P1 start) |
+| CI warns on missing PR linkage             | Not Started | 2   | (create at P1 start) |
+| Agent prompts reference workflow docs      | Not Started | 1   | (create at P1 start) |
+| GitHub PR template with Work + Spec fields | Not Started | 1   | wi.pr-template       |
 
 ### Run (P2) — Full Enforcement
 
-- [ ] CI blocks PRs missing Work + Spec links
-- [ ] Agents query Plane directly (via MCP)
-- [ ] Trust levels enforced in agent prompts
+**Goal:** CI blocks non-compliant PRs; agents use Plane directly.
+
+| Deliverable                             | Status      | Est | Work Item            |
+| --------------------------------------- | ----------- | --- | -------------------- |
+| CI blocks PRs missing Work + Spec links | Not Started | 2   | (create at P2 start) |
+| Agents query Plane directly (via MCP)   | Not Started | 3   | (create at P2 start) |
+| Trust levels enforced in agent prompts  | Not Started | 1   | (create at P2 start) |
 
 ## Core Invariants
 
@@ -197,17 +210,6 @@ Every `type: spec` document must include these **exact** H2 headings (greppable,
 
 - Depends on [ini.docs-system-infrastructure](./ini.docs-system-infrastructure.md) for CI enforcement
 - Templates must match workflow requirements
-
-## Work Items
-
-### P0
-
-- [ ] wi.document-agent-workflow — add agent operating model to root AGENTS.md
-- [ ] wi.document-trust-handling — add trust handling to root AGENTS.md
-
-### P1
-
-- [ ] wi.pr-template — GitHub PR template with Work + Spec fields
 
 ## As-Built Specs
 
