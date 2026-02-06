@@ -84,6 +84,24 @@ export async function assertInternalNetworkExists(
   }
 }
 
+/** Ensure nginx:alpine image is available (pulled if missing).
+ *  Call in beforeAll so the pull happens within hookTimeout, not testTimeout. */
+export async function ensureProxyImage(docker: Docker): Promise<void> {
+  const image = "nginx:alpine";
+  try {
+    await docker.getImage(image).inspect();
+  } catch {
+    await new Promise<void>((resolve, reject) => {
+      docker.pull(image, (err: Error | null, stream: NodeJS.ReadableStream) => {
+        if (err) return reject(err);
+        docker.modem.followProgress(stream, (pullErr: Error | null) =>
+          pullErr ? reject(pullErr) : resolve()
+        );
+      });
+    });
+  }
+}
+
 /** Verify LiteLLM is reachable (for P0.5 proxy tests) */
 export async function assertLitellmReachable(): Promise<void> {
   try {

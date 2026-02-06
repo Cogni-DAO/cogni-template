@@ -31,6 +31,7 @@ import {
   cleanupOrphanedProxies,
   cleanupWorkspace,
   createWorkspace,
+  ensureProxyImage,
   runIsolated,
   runWithProxy,
   SANDBOX_IMAGE,
@@ -55,6 +56,7 @@ describe("Sandbox LLM Proxy Infrastructure (P0.5)", () => {
     }
 
     await assertSandboxImageExists(docker);
+    await ensureProxyImage(docker);
     await assertLitellmReachable();
 
     ctx = {
