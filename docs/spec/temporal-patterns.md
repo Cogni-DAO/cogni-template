@@ -1,7 +1,33 @@
+---
+id: temporal-patterns-spec
+type: spec
+title: Temporal Patterns
+status: active
+spec_state: draft
+trust: draft
+summary: Temporal workflow/activity patterns — determinism rules, schedule configuration, anti-patterns, and infrastructure layout for governance and scheduler namespaces.
+read_when: Writing Temporal workflows or activities, configuring schedules, or debugging replay issues.
+owner: derekg1729
+created: 2026-02-06
+verified: 2026-02-06
+tags: [ai-graphs, infra]
+---
+
 # Temporal Patterns
 
-> [!CRITICAL]
-> All I/O, LLM calls, and external API calls run in **Activities only**. Workflow code is deterministic replay-safe logic. Violating this breaks Temporal's durable execution guarantees.
+## Context
+
+Cogni uses Temporal for durable workflow execution — governance signal collection, incident routing, agent orchestration, and user-scheduled graph runs. Temporal's replay-based execution model requires strict determinism in Workflow code, with all I/O isolated to Activities. This spec codifies the patterns and anti-patterns for safe Temporal usage.
+
+## Goal
+
+Ensure all Temporal workflows are replay-safe, all I/O runs in Activities only, and schedules use consistent configuration patterns — so that deploys, restarts, and retries never break durable execution guarantees.
+
+## Non-Goals
+
+- Temporal infrastructure provisioning (covered by deployment/infra specs)
+- Specific governance agent logic (covered by AI governance data spec)
+- Scheduler CRUD API design (covered by scheduler spec)
 
 ## Core Invariants
 
@@ -19,11 +45,13 @@
 
 7. **CATCHUP_WINDOW_ZERO**: P0 does not backfill missed runs. Set `catchupWindow: 0` to skip missed slots.
 
----
+8. **CRUD_AUTHORITY**: Schedule lifecycle (create/update/pause/delete) is owned by CRUD endpoints, not workers. Workers only execute workflows fired by Temporal.
 
-## Workflow Boundaries
+## Design
 
-### What Goes in Workflows (Deterministic)
+### Workflow Boundaries
+
+**What Goes in Workflows (Deterministic):**
 
 - Conditionals and loops over workflow state
 - Calling Activities and child Workflows
@@ -31,7 +59,7 @@
 - State machine transitions
 - Parsing Activity results (deterministic transforms)
 
-### What Goes in Activities (I/O)
+**What Goes in Activities (I/O):**
 
 - Database reads and writes
 - HTTP/API calls
@@ -40,11 +68,9 @@
 - External service calls (MCP, webhooks)
 - Metrics emission
 
----
+### Common Patterns
 
-## Common Patterns
-
-### 1. Scheduled Collection Workflow
+#### 1. Scheduled Collection Workflow
 
 ```typescript
 // Workflow: deterministic orchestration only
@@ -70,7 +96,7 @@ export async function CollectSourceStreamWorkflow(
 }
 ```
 
-### 2. Incident-Gated Agent Workflow
+#### 2. Incident-Gated Agent Workflow
 
 ```typescript
 // Triggered by incident lifecycle event, not timer
@@ -101,7 +127,7 @@ export async function GovernanceAgentWorkflow(
 }
 ```
 
-### 3. Router with Fast-Path Kick
+#### 3. Router with Fast-Path Kick
 
 ```typescript
 // IncidentRouterWorkflow: can be started by schedule OR webhook fast-path
@@ -131,11 +157,9 @@ export async function IncidentRouterWorkflow(scope: string): Promise<void> {
 }
 ```
 
----
+### Schedule Configuration
 
-## Schedule Configuration
-
-### Standard Schedule Setup
+#### Standard Schedule Setup
 
 ```typescript
 await temporalClient.schedule.create({
@@ -158,9 +182,7 @@ await temporalClient.schedule.create({
 });
 ```
 
-### CRUD Authority
-
-Schedule lifecycle (create/update/pause/delete) is owned by CRUD endpoints, not workers:
+#### CRUD Authority
 
 | Operation    | Authority           | Worker Role   |
 | ------------ | ------------------- | ------------- |
@@ -170,9 +192,7 @@ Schedule lifecycle (create/update/pause/delete) is owned by CRUD endpoints, not 
 | Execute      | Temporal fires      | Runs workflow |
 | Reconcile    | Admin CLI only      | None          |
 
----
-
-## Anti-Patterns
+### Anti-Patterns
 
 | Anti-Pattern                | Why Forbidden                                            |
 | --------------------------- | -------------------------------------------------------- |
@@ -184,25 +204,23 @@ Schedule lifecycle (create/update/pause/delete) is owned by CRUD endpoints, not 
 | Always-on reconciliation    | Creates authority split; use admin CLI                   |
 | Wall clock for scheduledFor | Use `TemporalScheduledStartTime` search attribute        |
 
----
+### Infrastructure
 
-## Infrastructure
-
-### Namespaces
+#### Namespaces
 
 | Namespace          | Purpose                                                   |
 | ------------------ | --------------------------------------------------------- |
 | `cogni-governance` | Governance workflows (signal collection, routing, agents) |
 | `cogni-scheduler`  | User-created scheduled graph executions                   |
 
-### Task Queues
+#### Task Queues
 
 | Queue              | Workers             | Workflows                 |
 | ------------------ | ------------------- | ------------------------- |
 | `governance-tasks` | `governance-worker` | Collection, Router, Agent |
 | `scheduler-tasks`  | `scheduler-worker`  | ScheduledGraphRun         |
 
-### Search Attributes
+#### Search Attributes
 
 | Attribute                    | Type     | Purpose                              |
 | ---------------------------- | -------- | ------------------------------------ |
@@ -210,15 +228,31 @@ Schedule lifecycle (create/update/pause/delete) is owned by CRUD endpoints, not 
 | `scope`                      | Keyword  | Filter workflows by governance scope |
 | `incidentKey`                | Keyword  | Correlate workflows to incidents     |
 
----
+### File Pointers
 
-## Related Documents
+| File                         | Purpose                                            |
+| ---------------------------- | -------------------------------------------------- |
+| `services/scheduler-worker/` | Scheduler worker service (Temporal worker)         |
+| `packages/scheduler-core/`   | Scheduling types, port interfaces, payload schemas |
 
-- [SCHEDULER_SPEC.md](SCHEDULER_SPEC.md) — Scheduled graph execution (user-created)
-- [AI_GOVERNANCE_DATA.md](AI_GOVERNANCE_DATA.md) — Governance signal collection and agent workflows
-- [SERVICES_ARCHITECTURE.md](SERVICES_ARCHITECTURE.md) — Worker service structure
+## Acceptance Checks
 
----
+**Manual:**
 
-**Last Updated**: 2026-01-21
-**Status**: Draft
+1. Verify all Workflow code contains no I/O — only Activity calls, conditionals, and deterministic transforms
+2. Verify all Activities are idempotent (check for idempotency keys on side effects)
+3. Verify schedules use `overlap: SKIP` and `catchupWindow: 0`
+
+**Automated:**
+
+- `pnpm test` — unit tests for workflow/activity separation patterns
+
+## Open Questions
+
+_(none)_
+
+## Related
+
+- [Scheduler Spec](./scheduler.md) — Scheduled graph execution (user-created)
+- [AI Governance Data](../AI_GOVERNANCE_DATA.md) — Governance signal collection and agent workflows
+- [Services Architecture](./services-architecture.md) — Worker service structure

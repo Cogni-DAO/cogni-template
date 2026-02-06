@@ -144,7 +144,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | EXTERNAL_EXECUTOR_BILLING.md         | external-executor-billing.md   | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | FEATURE_DEVELOPMENT_GUIDE.md         | -                              | -                                  | -   | feature-development.md   | procedural | [ ]  | [ ]  |
 | GIT_SYNC_REPO_MOUNT.md               | git-sync-repo-mount.md         | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
-| GOV_DATA_COLLECTORS.md               | gov-data-collectors.md         | -                                  | -   | -                        | as-built   | [ ]  | [ ]  |
+| GOV_DATA_COLLECTORS.md               | gov-data-collectors.md         | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | GRAPH_EXECUTION.md                   | graph-execution.md             | ini.graph-execution.md             | -   | -                        | AB+road    | [ ]  | [ ]  |
 | HANDOFF_TAILWIND_SPACING_BUG.md      | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
 | HANDOFF_WALLET_BUTTON_STABILITY.md   | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
@@ -155,17 +155,17 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | LANGGRAPH_SERVER.md                  | langgraph-server.md            | ini.langgraph-server-production.md | -   | langgraph-server-dev.md  | AB+road    | [ ]  | [ ]  |
 | LINTING_RULES.md                     | -                              | -                                  | -   | linting-migration.md     | snapshot   | [ ]  | [ ]  |
 | METRICS_OBSERVABILITY.md             | -                              | ini.public-analytics.md            | -   | -                        | roadmap    | [ ]  | [ ]  |
-| MODEL_SELECTION.md                   | model-selection.md             | -                                  | -   | -                        | as-built   | [ ]  | [ ]  |
+| MODEL_SELECTION.md                   | model-selection.md             | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | MVP_DELIVERABLES.md                  | -                              | -                                  | -   | -                        | snapshot   | [ ]  | [ ]  |
 | N8N_ADAPTER_SPEC.md                  | n8n-adapter.md                 | ini.n8n-integration.md             | -   | -                        | roadmap    | [ ]  | [ ]  |
 | NEW_PACKAGES.md                      | -                              | -                                  | -   | new-packages.md          | procedural | [ ]  | [ ]  |
 | NODE_CI_CD_CONTRACT.md               | node-ci-cd-contract.md         | ini.ci-cd-reusable.md              | -   | -                        | AB+road    | [ ]  | [ ]  |
 | NODE_FORMATION_SPEC.md               | node-formation.md              | ini.node-formation-ui.md           | -   | node-formation-guide.md  | AB+road    | [ ]  | [ ]  |
-| NODE_VS_OPERATOR_CONTRACT.md         | node-operator-contract.md      | -                                  | -   | -                        | as-built   | [ ]  | [ ]  |
+| NODE_VS_OPERATOR_CONTRACT.md         | node-operator-contract.md      | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | OBSERVABILITY.md                     | observability.md               | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
 | OBSERVABILITY_REQUIRED_SPEC.md       | observability-requirements.md  | ini.observability-hardening.md     | -   | -                        | AB+road    | [ ]  | [ ]  |
 | ONCHAIN_READERS.md                   | onchain-readers.md             | ini.onchain-indexer.md             | -   | -                        | AB+road    | [ ]  | [ ]  |
-| PACKAGES_ARCHITECTURE.md             | packages-architecture.md       | -                                  | -   | -                        | as-built   | [ ]  | [ ]  |
+| PACKAGES_ARCHITECTURE.md             | packages-architecture.md       | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | PAYMENTS_DESIGN.md                   | payments-design.md             | ini.payments-enhancements.md       | -   | payments-setup.md        | AB+road    | [ ]  | [ ]  |
 | PAYMENTS_FRONTEND_DESIGN.md          | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
 | PAYMENTS_TEST_DESIGN.md              | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
@@ -173,25 +173,25 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | PROPOSAL_LAUNCHER.md                 | proposal-launcher.md           | ini.proposal-launcher.md           | -   | -                        | roadmap    | [ ]  | [ ]  |
 | RBAC_SPEC.md                         | rbac.md                        | ini.rbac-hardening.md              | -   | -                        | migrated   | [x]  | [ ]  |
 | REPO_STATE.md                        | -                              | -                                  | -   | -                        | snapshot   | [ ]  | [ ]  |
-| RUNTIME_POLICY.md                    | runtime-policy.md              | -                                  | -   | -                        | as-built   | [ ]  | [ ]  |
+| RUNTIME_POLICY.md                    | runtime-policy.md              | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | SANDBOXED_AGENTS.md                  | sandboxed-agents.md            | ini.sandboxed-agents.md            | -   | -                        | AB+road    | [ ]  | [ ]  |
 | SCHEDULER_SPEC.md                    | scheduler.md                   | ini.scheduler-evolution.md         | -   | -                        | migrated   | [x]  | [ ]  |
-| SECURITY_AUTH_SPEC.md                | security-auth.md               | -                                  | -   | -                        | as-built   | [ ]  | [ ]  |
-| SERVICES_ARCHITECTURE.md             | services-architecture.md       | -                                  | -   | services-overview.md     | as-built   | [ ]  | [ ]  |
+| SECURITY_AUTH_SPEC.md                | security-auth.md               | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
+| SERVICES_ARCHITECTURE.md             | services-architecture.md       | ini.cicd-services-gitops.md        | -   | create-service.md        | as-built   | [x]  | [ ]  |
 | SERVICES_MIGRATION.md                | -                              | ini.services-migration.md          | -   | -                        | roadmap    | [ ]  | [ ]  |
 | SETUP.md                             | -                              | -                                  | -   | developer-setup.md       | procedural | [ ]  | [ ]  |
 | SOURCECRED.md                        | sourcecred.md                  | -                                  | -   | sourcecred-operations.md | AB+road    | [ ]  | [ ]  |
-| SOURCECRED_CONFIG_RATIONALE.md       | sourcecred-config-rationale.md | -                                  | -   | -                        | as-built   | [ ]  | [ ]  |
+| SOURCECRED_CONFIG_RATIONALE.md       | sourcecred-config-rationale.md | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | STYLE.md                             | style.md                       | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
 | SYSTEM_TENANT_DESIGN.md              | system-tenant.md               | -                                  | -   | -                        | AB+road    | [ ]  | [ ]  |
-| TEMPORAL_PATTERNS.md                 | temporal-patterns.md           | -                                  | -   | -                        | as-built   | [ ]  | [ ]  |
+| TEMPORAL_PATTERNS.md                 | temporal-patterns.md           | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | TENANT_CONNECTIONS_SPEC.md           | tenant-connections.md          | ini.tenant-connections.md          | -   | -                        | AB+road    | [ ]  | [ ]  |
 | TESTING.md                           | -                              | -                                  | -   | testing.md               | procedural | [ ]  | [ ]  |
 | TOOLS_AUTHORING.md                   | -                              | -                                  | -   | tools-authoring.md       | procedural | [ ]  | [ ]  |
 | TOOL_USE_SPEC.md                     | tool-use.md                    | ini.tool-use-evolution.md          | -   | -                        | AB+road    | [ ]  | [ ]  |
 | UI_CLEANUP_CHECKLIST.md              | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
 | UI_CLEANUP_PLAN.md                   | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
-| UI_IMPLEMENTATION_GUIDE.md           | ui-implementation.md           | -                                  | -   | -                        | as-built   | [ ]  | [ ]  |
+| UI_IMPLEMENTATION_GUIDE.md           | ui-implementation.md           | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | UNIFIED_GRAPH_LAUNCH_SPEC.md         | unified-graph-launch.md        | -                                  | -   | -                        | AB+road    | [ ]  | [ ]  |
 | USAGE_HISTORY.md                     | usage-history.md               | -                                  | -   | -                        | AB+road    | [ ]  | [ ]  |
 | VERCEL_AI_STREAMING.md               | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
