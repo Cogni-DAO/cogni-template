@@ -44,12 +44,27 @@ Improve observability infrastructure across three axes: (1) finer-grained activi
 
 ### Run (P2+) — Advanced Observability
 
-**Goal:** Full observability pipeline with alerting and dashboards.
+**Goal:** Full observability pipeline with alerting, dashboards, traces, and log filtering.
 
-| Deliverable                                                     | Status      | Est | Work Item            |
-| --------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Reconciliation monitoring dashboards (from payments initiative) | Not Started | 2   | (create at P2 start) |
-| Alert on LiteLLM `/spend/logs` degradation or unavailability    | Not Started | 1   | (create at P2 start) |
+| Deliverable                                                         | Status      | Est | Source                           | Work Item            |
+| ------------------------------------------------------------------- | ----------- | --- | -------------------------------- | -------------------- |
+| Reconciliation monitoring dashboards (from payments initiative)     | Not Started | 2   | ACTIVITY_METRICS.md              | (create at P2 start) |
+| Alert on LiteLLM `/spend/logs` degradation or unavailability        | Not Started | 1   | ACTIVITY_METRICS.md              | (create at P2 start) |
+| Log filtering: drop probe logs (`/livez`, `/readyz`, `/metrics`)    | Not Started | 1   | ALLOY_LOKI_SETUP.md § Filtering  | (create at P2 start) |
+| Structured metadata extraction (Loki 2.9+, high-cardinality fields) | Not Started | 1   | ALLOY_LOKI_SETUP.md § Metadata   | (create at P2 start) |
+| OTLP trace collection via Alloy (ports 4317/4318) → Tempo           | Not Started | 2   | ALLOY_LOKI_SETUP.md § Traces     | (create at P2 start) |
+| Grafana dashboard provisioning in docker-compose                    | Not Started | 2   | ALLOY_LOKI_SETUP.md § Dashboards | (create at P2 start) |
+| Loki ruler alert configuration (error rate, payment failures)       | Not Started | 1   | ALLOY_LOKI_SETUP.md § Alerts     | (create at P2 start) |
+
+**Filtering detail:** Drop LogQL patterns: `{service="app"} |= "GET /livez"`, `{service="app"} |= "GET /readyz"`, `{service="app"} |= "GET /metrics"`.
+
+**Metadata detail:** Extract high-cardinality fields as structured metadata (Loki 2.9+), queryable without indexing overhead.
+
+**Traces detail:** Add OTLP receiver in Alloy (ports 4317/4318), forward to Tempo or other trace backend, correlate logs with traces via traceId.
+
+**Dashboards detail:** Grafana provisioning in docker-compose, pre-built dashboards for app logs, panels for error rate, P95 latency, etc.
+
+**Alerts detail:** Loki ruler configuration, alert on error rate spike, alert on critical events (payment failures, etc.).
 
 ## Constraints
 
@@ -70,3 +85,5 @@ Improve observability infrastructure across three axes: (1) finer-grained activi
 ## Design Notes
 
 Content extracted from original `docs/ACTIVITY_METRICS.md` TODO section during docs migration. The `METRICS_OBSERVABILITY.md` and `OBSERVABILITY_REQUIRED_SPEC.md` docs will contribute additional content when migrated.
+
+P2+ log filtering, structured metadata, traces, dashboards, and alerts content extracted from `docs/ALLOY_LOKI_SETUP.md` during guide migration.

@@ -1,3 +1,16 @@
+---
+id: cross-spec-alignment-review
+type: research
+title: Cross-Spec Alignment Review
+status: draft
+trust: draft
+summary: Review of ToolErrorCode drift, MetricsQueryPort naming, and AI_GOVERNANCE_DATA spec alignment with existing code.
+read_when: Working on tool types, metrics ports, or governance data implementation.
+owner: derekg1729
+created: 2026-01-21
+tags: [ai-graphs, data]
+---
+
 # Cross-Spec Alignment Review
 
 > **Date**: 2026-01-21

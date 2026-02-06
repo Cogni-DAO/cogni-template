@@ -1,3 +1,16 @@
+---
+id: architecture-enforcement-gaps
+type: research
+title: Architecture Enforcement Status
+status: draft
+trust: draft
+summary: Assessment of hexagonal architecture boundary enforcement coverage — what's enforced, known gaps, and next steps.
+read_when: Evaluating architecture enforcement coverage or adding dependency-cruiser rules.
+owner: derekg1729
+created: 2025-11-27
+tags: [meta, architecture]
+---
+
 # Architecture Enforcement Status
 
 **Last Updated:** 2025-11-27

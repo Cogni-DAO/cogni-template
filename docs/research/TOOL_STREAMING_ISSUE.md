@@ -1,3 +1,16 @@
+---
+id: tool-streaming-issue
+type: research
+title: Tool Streaming Issue Investigation
+status: draft
+trust: draft
+summary: Investigation of tool event streaming architecture mismatch between UI history, core messages, and LangGraph provider protocols.
+read_when: Implementing tool streaming, debugging message format issues, or working on LangGraph dev-server.
+owner: derekg1729
+created: 2025-01-14
+tags: [ai-graphs]
+---
+
 # Tool Streaming Issue — Deferred to P1
 
 **Status**: Deferred

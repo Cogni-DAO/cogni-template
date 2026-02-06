@@ -1,3 +1,16 @@
+---
+id: design-review-scheduler-execution-tools
+type: research
+title: "Design Review: Scheduler, Graph Execution, and Tool Use Specs"
+status: draft
+trust: draft
+summary: Critical analysis of SCHEDULER_SPEC, GRAPH_EXECUTION, and TOOL_USE_SPEC for overengineering, OSS alternatives, missing foundations, and roadmap alignment.
+read_when: Working on scheduler, graph execution, or tool use implementations, or evaluating Temporal.io adoption.
+owner: derekg1729
+created: 2026-01-19
+tags: [ai-graphs, architecture]
+---
+
 # Design Review: Scheduler, Graph Execution, and Tool Use Specs
 
 > **Date**: 2026-01-19

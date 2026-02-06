@@ -1,3 +1,16 @@
+---
+id: linting-rules-inventory
+type: research
+title: Linting & Formatting Rules Inventory
+status: draft
+trust: draft
+summary: Comprehensive inventory of all ESLint and Prettier rules with Biome migration analysis, feasibility assessment, and phased migration plan.
+read_when: Planning linting toolchain changes, evaluating Biome migration, or understanding current ESLint rule coverage.
+owner: derekg1729
+created: 2025-11-25
+tags: [meta, tooling]
+---
+
 # Linting & Formatting Rules Inventory
 
 > **Purpose**: Comprehensive inventory of all ESLint and Prettier rules in cogni-template with analysis of Biome migration feasibility.

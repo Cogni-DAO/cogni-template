@@ -1,14 +1,34 @@
+---
+id: tools-authoring-guide
+type: guide
+title: Tools Authoring Guide
+status: draft
+trust: draft
+summary: Step-by-step checklist for adding a new AI tool (contract, capability, adapter, bindings) to the agent system.
+read_when: Adding a new tool for AI agents to invoke via toolRunner.exec().
+owner: derekg1729
+created: 2026-02-06
+verified: 2026-02-06
+tags: [ai, tools, dev]
+---
+
 # Tools Authoring Guide
 
 > **Scope:** How to add a new tool for AI agents. Authoring only—MCP and authenticated tools are NOT YET SUPPORTED.
 
-## Goal
+## When to Use This
 
-Add tools that AI agents can invoke. Tools are defined in `@cogni/ai-tools`, bound to real I/O in bootstrap, and executed via `toolRunner.exec()`.
+You are adding a new tool that AI agents can invoke. Tools are defined in `@cogni/ai-tools`, bound to real I/O in bootstrap, and executed via `toolRunner.exec()`.
 
----
+## Preconditions
 
-## Hard Rules
+- [ ] Tool purpose and I/O requirements identified
+- [ ] `packages/ai-tools` builds cleanly (`pnpm packages:build`)
+- [ ] Familiar with the `core__get_current_time` or `core__metrics_query` tool as a reference
+
+## Steps
+
+### Hard Rules
 
 | #   | Rule                                                                                                      | Ref                    |
 | --- | --------------------------------------------------------------------------------------------------------- | ---------------------- |
@@ -45,7 +65,7 @@ src/bootstrap/
 
 ---
 
-## Checklist: Add a Tool
+### Checklist: Add a Tool
 
 > ⚠️ **Footgun:** Until enabled-tool gating is implemented, adding ANY tool to the catalog requires a binding in `tool-bindings.ts` or bootstrap fails. Track boilerplate-reduction work in issues, not this doc.
 
@@ -160,31 +180,40 @@ it("executes via adapter", async () => {
 });
 ```
 
----
+### NOT YET SUPPORTED
 
-## NOT YET SUPPORTED
+- **Authenticated tools (connectionId):** see [TENANT_CONNECTIONS_SPEC.md](../TENANT_CONNECTIONS_SPEC.md)
+- **MCP integration:** see [TOOL_USE_SPEC.md](../TOOL_USE_SPEC.md) (ToolSourcePort, P2)
+- **Approval gates:** see [TOOL_USE_SPEC.md](../TOOL_USE_SPEC.md) (effects + policy, P1)
 
-- **Authenticated tools (connectionId):** see [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md)
-- **MCP integration:** see [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) (ToolSourcePort, P2)
-- **Approval gates:** see [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) (effects + policy, P1)
-
----
-
-## Examples
+### Examples
 
 | Tool                     | Type | Capability          | Location                    |
 | ------------------------ | ---- | ------------------- | --------------------------- |
 | `core__get_current_time` | Pure | None                | `tools/get-current-time.ts` |
 | `core__metrics_query`    | I/O  | `MetricsCapability` | `tools/metrics-query.ts`    |
 
----
+## Verification
+
+```bash
+pnpm packages:build     # Build ai-tools package
+pnpm check              # Full lint + type + format validation
+pnpm test               # Run tests including tool integration tests
+```
+
+## Troubleshooting
+
+### Problem: Bootstrap fails with missing binding error
+
+**Solution:** Every tool in `TOOL_CATALOG` requires a corresponding binding in `tool-bindings.ts`. Add the binding even if it's for a pure tool (no I/O).
+
+### Problem: Stub reachable at runtime
+
+**Solution:** The NO_REACHABLE_STUBS invariant means the bootstrap factory must replace all stubs. Check that `createMyCapability` returns a real adapter when config is present, and that `tool-source.factory.ts` properly wires it.
 
 ## Related
 
-- [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — 37 invariants, full implementation checklist
-- [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md) — Authenticated tools design
-- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Graph patterns, tool execution flow
-
----
-
-**Last Updated:** 2026-02-03
+- [TOOL_USE_SPEC.md](../TOOL_USE_SPEC.md) — 37 invariants, full implementation checklist
+- [TENANT_CONNECTIONS_SPEC.md](../TENANT_CONNECTIONS_SPEC.md) — Authenticated tools design
+- [LANGGRAPH_AI.md](../LANGGRAPH_AI.md) — Graph patterns, tool execution flow
+- [Agent Development Guide](./agent-development.md) — Adding new agent graphs

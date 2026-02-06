@@ -108,16 +108,16 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | ACCOUNTS_API_KEY_ENDPOINTS.md        | accounts-api-endpoints.md      | ini.accounts-api-keys.md           | -   | -                        | AB+road    | [ ]  | [ ]  |
 | ACCOUNTS_DESIGN.md                   | accounts-design.md             | ini.accounts-api-keys.md           | -   | -                        | AB+road    | [ ]  | [ ]  |
 | ACTIVITY_METRICS.md                  | activity-metrics.md            | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
-| AGENTS_CONTEXT.md                    | -                              | -                                  | -   | agents-context.md        | procedural | [ ]  | [ ]  |
-| AGENT_DEVELOPMENT_GUIDE.md           | -                              | -                                  | -   | agent-development.md     | procedural | [ ]  | [ ]  |
+| AGENTS_CONTEXT.md                    | -                              | -                                  | -   | agents-context.md        | procedural | [x]  | [ ]  |
+| AGENT_DEVELOPMENT_GUIDE.md           | -                              | -                                  | -   | agent-development.md     | procedural | [x]  | [ ]  |
 | AGENT_DISCOVERY.md                   | agent-discovery.md             | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | AGENT_REGISTRY_SPEC.md               | agent-registry.md              | ini.agent-registry.md              | -   | -                        | roadmap    | [ ]  | [ ]  |
 | AI_EVALS.md                          | ai-evals.md                    | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | AI_GOVERNANCE_DATA.md                | ai-governance-data.md          | ini.governance-agents.md           | -   | -                        | AB+road    | [ ]  | [ ]  |
 | AI_SETUP_SPEC.md                     | ai-setup.md                    | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
-| ALLOY_LOKI_SETUP.md                  | -                              | -                                  | -   | alloy-loki-setup.md      | procedural | [ ]  | [ ]  |
+| ALLOY_LOKI_SETUP.md                  | -                              | -                                  | -   | alloy-loki-setup.md      | procedural | [x]  | [ ]  |
 | ARCHITECTURE.md                      | architecture.md                | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
-| ARCHITECTURE_ENFORCEMENT_GAPS.md     | -                              | -                                  | -   | -                        | snapshot   | [ ]  | [ ]  |
+| ARCHITECTURE_ENFORCEMENT_GAPS.md     | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
 | AUTHENTICATION.md                    | authentication.md              | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | BILLING_EVOLUTION.md                 | billing-evolution.md           | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | BUILD_ARCHITECTURE.md                | build-architecture.md          | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
@@ -131,34 +131,34 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | CLAUDE_SDK_ADAPTER_SPEC.md           | claude-sdk-adapter.md          | ini.claude-sdk-adapter.md          | -   | -                        | roadmap    | [ ]  | [ ]  |
 | CLAWDBOT_ADAPTER_SPEC.md             | clawdbot-adapter.md            | ini.clawdbot-executor.md           | -   | -                        | roadmap    | [ ]  | [ ]  |
 | COGNI_BRAIN_SPEC.md                  | cogni-brain.md                 | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
-| CREDITS_PAGE_UI_CONSOLIDATION.md     | -                              | -                                  | -   | -                        | snapshot   | [ ]  | [ ]  |
+| CREDITS_PAGE_UI_CONSOLIDATION.md     | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
 | CRED_LICENSING_POLICY_SPEC.md        | cred-licensing-policy.md       | ini.cred-licensing.md              | -   | -                        | roadmap    | [ ]  | [ ]  |
 | DAO_ENFORCEMENT.md                   | dao-enforcement.md             | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | DATABASES.md                         | databases.md                   | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
 | DATABASE_RLS_SPEC.md                 | database-rls.md                | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | DATABASE_URL_ALIGNMENT_SPEC.md       | database-url-alignment.md      | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
-| DOCS_ORGANIZATION_PLAN.md            | -                              | -                                  | -   | -                        | snapshot   | [ ]  | [ ]  |
+| DOCS_ORGANIZATION_PLAN.md            | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
 | ENVIRONMENTS.md                      | environments.md                | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | ERROR_HANDLING_ARCHITECTURE.md       | error-handling.md              | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | ERROR_HANDLING_IMPROVEMENT_DESIGN.md | -                              | ini.error-handling-improvements.md | -   | -                        | roadmap    | [ ]  | [ ]  |
 | EXTERNAL_EXECUTOR_BILLING.md         | external-executor-billing.md   | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
-| FEATURE_DEVELOPMENT_GUIDE.md         | -                              | -                                  | -   | feature-development.md   | procedural | [ ]  | [ ]  |
+| FEATURE_DEVELOPMENT_GUIDE.md         | -                              | -                                  | -   | feature-development.md   | procedural | [x]  | [ ]  |
 | GIT_SYNC_REPO_MOUNT.md               | git-sync-repo-mount.md         | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | GOV_DATA_COLLECTORS.md               | gov-data-collectors.md         | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | GRAPH_EXECUTION.md                   | graph-execution.md             | ini.graph-execution.md             | -   | -                        | AB+road    | [ ]  | [ ]  |
-| HANDOFF_TAILWIND_SPACING_BUG.md      | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
-| HANDOFF_WALLET_BUTTON_STABILITY.md   | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
+| HANDOFF_TAILWIND_SPACING_BUG.md      | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
+| HANDOFF_WALLET_BUTTON_STABILITY.md   | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | HUMAN_IN_THE_LOOP.md                 | human-in-the-loop.md           | ini.hil-graphs.md                  | -   | -                        | AB+road    | [ ]  | [ ]  |
-| INTEGRATION_WALLETS_CREDITS.md       | -                              | -                                  | -   | wallet-auth-setup.md     | procedural | [ ]  | [ ]  |
-| ISOLATE_LITELLM_DATABASE.md          | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
+| INTEGRATION_WALLETS_CREDITS.md       | -                              | ini.accounts-api-keys.md           | -   | wallet-auth-setup.md     | procedural | [x]  | [ ]  |
+| ISOLATE_LITELLM_DATABASE.md          | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | LANGGRAPH_AI.md                      | langgraph-patterns.md          | -                                  | -   | langgraph-guide.md       | AB+road    | [ ]  | [ ]  |
 | LANGGRAPH_SERVER.md                  | langgraph-server.md            | ini.langgraph-server-production.md | -   | langgraph-server-dev.md  | AB+road    | [ ]  | [ ]  |
-| LINTING_RULES.md                     | -                              | -                                  | -   | linting-migration.md     | snapshot   | [ ]  | [ ]  |
+| LINTING_RULES.md                     | -                              | -                                  | -   | linting-migration.md     | snapshot   | [x]  | [ ]  |
 | METRICS_OBSERVABILITY.md             | -                              | ini.public-analytics.md            | -   | -                        | roadmap    | [ ]  | [ ]  |
 | MODEL_SELECTION.md                   | model-selection.md             | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
-| MVP_DELIVERABLES.md                  | -                              | -                                  | -   | -                        | snapshot   | [ ]  | [ ]  |
+| MVP_DELIVERABLES.md                  | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
 | N8N_ADAPTER_SPEC.md                  | n8n-adapter.md                 | ini.n8n-integration.md             | -   | -                        | roadmap    | [ ]  | [ ]  |
-| NEW_PACKAGES.md                      | -                              | -                                  | -   | new-packages.md          | procedural | [ ]  | [ ]  |
+| NEW_PACKAGES.md                      | -                              | -                                  | -   | new-packages.md          | procedural | [x]  | [ ]  |
 | NODE_CI_CD_CONTRACT.md               | node-ci-cd-contract.md         | ini.ci-cd-reusable.md              | -   | -                        | AB+road    | [ ]  | [ ]  |
 | NODE_FORMATION_SPEC.md               | node-formation.md              | ini.node-formation-ui.md           | -   | node-formation-guide.md  | AB+road    | [ ]  | [ ]  |
 | NODE_VS_OPERATOR_CONTRACT.md         | node-operator-contract.md      | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
@@ -167,44 +167,44 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | ONCHAIN_READERS.md                   | onchain-readers.md             | ini.onchain-indexer.md             | -   | -                        | AB+road    | [ ]  | [ ]  |
 | PACKAGES_ARCHITECTURE.md             | packages-architecture.md       | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | PAYMENTS_DESIGN.md                   | payments-design.md             | ini.payments-enhancements.md       | -   | payments-setup.md        | AB+road    | [ ]  | [ ]  |
-| PAYMENTS_FRONTEND_DESIGN.md          | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
-| PAYMENTS_TEST_DESIGN.md              | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
+| PAYMENTS_FRONTEND_DESIGN.md          | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
+| PAYMENTS_TEST_DESIGN.md              | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | PROMPT_REGISTRY_SPEC.md              | prompt-registry.md             | ini.prompt-registry.md             | -   | -                        | roadmap    | [ ]  | [ ]  |
 | PROPOSAL_LAUNCHER.md                 | proposal-launcher.md           | ini.proposal-launcher.md           | -   | -                        | roadmap    | [ ]  | [ ]  |
 | RBAC_SPEC.md                         | rbac.md                        | ini.rbac-hardening.md              | -   | -                        | migrated   | [x]  | [ ]  |
-| REPO_STATE.md                        | -                              | -                                  | -   | -                        | snapshot   | [ ]  | [ ]  |
+| REPO_STATE.md                        | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
 | RUNTIME_POLICY.md                    | runtime-policy.md              | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | SANDBOXED_AGENTS.md                  | sandboxed-agents.md            | ini.sandboxed-agents.md            | -   | -                        | AB+road    | [ ]  | [ ]  |
 | SCHEDULER_SPEC.md                    | scheduler.md                   | ini.scheduler-evolution.md         | -   | -                        | migrated   | [x]  | [ ]  |
 | SECURITY_AUTH_SPEC.md                | security-auth.md               | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | SERVICES_ARCHITECTURE.md             | services-architecture.md       | ini.cicd-services-gitops.md        | -   | create-service.md        | as-built   | [x]  | [ ]  |
 | SERVICES_MIGRATION.md                | -                              | ini.services-migration.md          | -   | -                        | roadmap    | [ ]  | [ ]  |
-| SETUP.md                             | -                              | -                                  | -   | developer-setup.md       | procedural | [ ]  | [ ]  |
+| SETUP.md                             | -                              | -                                  | -   | developer-setup.md       | procedural | [x]  | [ ]  |
 | SOURCECRED.md                        | sourcecred.md                  | -                                  | -   | sourcecred-operations.md | AB+road    | [ ]  | [ ]  |
 | SOURCECRED_CONFIG_RATIONALE.md       | sourcecred-config-rationale.md | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | STYLE.md                             | style.md                       | -                                  | -   | -                        | migrated   | [x]  | [ ]  |
 | SYSTEM_TENANT_DESIGN.md              | system-tenant.md               | -                                  | -   | -                        | AB+road    | [ ]  | [ ]  |
 | TEMPORAL_PATTERNS.md                 | temporal-patterns.md           | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | TENANT_CONNECTIONS_SPEC.md           | tenant-connections.md          | ini.tenant-connections.md          | -   | -                        | AB+road    | [ ]  | [ ]  |
-| TESTING.md                           | -                              | -                                  | -   | testing.md               | procedural | [ ]  | [ ]  |
-| TOOLS_AUTHORING.md                   | -                              | -                                  | -   | tools-authoring.md       | procedural | [ ]  | [ ]  |
+| TESTING.md                           | -                              | -                                  | -   | testing.md               | procedural | [x]  | [ ]  |
+| TOOLS_AUTHORING.md                   | -                              | -                                  | -   | tools-authoring.md       | procedural | [x]  | [ ]  |
 | TOOL_USE_SPEC.md                     | tool-use.md                    | ini.tool-use-evolution.md          | -   | -                        | AB+road    | [ ]  | [ ]  |
-| UI_CLEANUP_CHECKLIST.md              | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
-| UI_CLEANUP_PLAN.md                   | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
+| UI_CLEANUP_CHECKLIST.md              | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
+| UI_CLEANUP_PLAN.md                   | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | UI_IMPLEMENTATION_GUIDE.md           | ui-implementation.md           | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | UNIFIED_GRAPH_LAUNCH_SPEC.md         | unified-graph-launch.md        | -                                  | -   | -                        | AB+road    | [ ]  | [ ]  |
 | USAGE_HISTORY.md                     | usage-history.md               | -                                  | -   | -                        | AB+road    | [ ]  | [ ]  |
-| VERCEL_AI_STREAMING.md               | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
-| archive/COMPLETION_REFACTOR_PLAN.md  | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
-| archive/DEPAY_PAYMENTS.md            | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
-| archive/FIX_AI_STREAMING_PIPELINE.md | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
-| archive/PAYMENTS_WIDGET_DECISION.md  | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
-| archive/triggerdev_analysis.md       | -                              | -                                  | -   | -                        | obsolete   | [ ]  | [ ]  |
-| dev/TOOL_STREAMING_ISSUE.md          | -                              | -                                  | -   | -                        | snapshot   | [ ]  | [ ]  |
+| VERCEL_AI_STREAMING.md               | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
+| archive/COMPLETION_REFACTOR_PLAN.md  | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
+| archive/DEPAY_PAYMENTS.md            | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
+| archive/FIX_AI_STREAMING_PIPELINE.md | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
+| archive/PAYMENTS_WIDGET_DECISION.md  | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
+| archive/triggerdev_analysis.md       | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
+| dev/TOOL_STREAMING_ISSUE.md          | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
 | features/HEALTH_PROBES.md            | health-probes.md               | -                                  | -   | -                        | AB+road    | [ ]  | [ ]  |
-| introspection/2026-01-19-\*.md       | -                              | -                                  | -   | -                        | snapshot   | [ ]  | [ ]  |
-| introspection/2026-01-21-\*.md       | -                              | -                                  | -   | -                        | snapshot   | [ ]  | [ ]  |
-| postmortems/2026-01-25-\*.md         | -                              | -                                  | -   | -                        | snapshot   | [ ]  | [ ]  |
+| introspection/2026-01-19-\*.md       | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
+| introspection/2026-01-21-\*.md       | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
+| postmortems/2026-01-25-\*.md         | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
 
 ## Summary
 

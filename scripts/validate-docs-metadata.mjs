@@ -18,7 +18,7 @@ import fg from "fast-glob";
 import { parse as parseYaml } from "yaml";
 
 // === DOCS ENUMS ===
-const DOC_TYPES = ["spec", "adr", "guide"];
+const DOC_TYPES = ["spec", "adr", "guide", "research", "postmortem"];
 const DOC_STATUS = ["active", "deprecated", "superseded", "draft"];
 const DOC_TRUST = ["canonical", "reviewed", "draft", "external"];
 const ADR_DECISION = ["proposed", "accepted", "deprecated", "superseded"];
@@ -190,7 +190,13 @@ function validateDoc(file, props, content, allIds) {
   // Type must match directory
   const dirMatch = file.match(/docs\/([^/]+)\//);
   const dirType = dirMatch?.[1];
-  const dirTypeMap = { spec: "spec", guides: "guide", decisions: "adr" };
+  const dirTypeMap = {
+    spec: "spec",
+    guides: "guide",
+    decisions: "adr",
+    research: "research",
+    postmortems: "postmortem",
+  };
   const expectedType = dirTypeMap[dirType];
   if (expectedType && props.type && expectedType !== props.type) {
     errors.push(
@@ -358,6 +364,9 @@ async function main() {
     "docs/spec/**/*.md",
     "docs/decisions/adr/**/*.md",
     "docs/guides/**/*.md",
+    "docs/research/**/*.md",
+    "docs/postmortems/**/*.md",
+    "!docs/research/archive/**/*.md",
   ]);
   for (const f of docFiles) {
     try {
