@@ -7,7 +7,7 @@ Per [SANDBOXED_AGENTS.md](../../../../docs/SANDBOXED_AGENTS.md) P0.5: Nginx prox
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │ SANDBOX (network=none)                                              │
-│  Agent → localhost:8080 → socat → /run/llm-proxy.sock              │
+│  Agent → localhost:8080 → socat → /llm-sock/llm.sock               │
 └──────────────────────────────┼──────────────────────────────────────┘
                                │ unix socket (mounted from host)
                                ▼

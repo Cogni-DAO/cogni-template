@@ -47,7 +47,9 @@ export interface SandboxNetworkMode {
 export interface SandboxLlmProxyConfig {
   /** Enable LLM proxy for this run */
   readonly enabled: true;
-  /** Run attempt number for billing attribution */
+  /** Billing account ID for cost attribution. Injected as x-litellm-end-user-id. */
+  readonly billingAccountId: string;
+  /** Run attempt number for billing attribution (goes in metadata, not end-user-id) */
   readonly attempt: number;
   /** Additional environment variables to set in container */
   readonly env?: Readonly<Record<string, string>>;

@@ -1,13 +1,15 @@
 # Sandbox LLM Proxy - Nginx Config Template
-# Per SANDBOXED_AGENTS.md P0.5: Proxy injects auth headers, forwards to LiteLLM
+# Per SANDBOXED_AGENTS.md P0.5: Proxy injects auth + billing + observability headers
 #
-# Template variables (substituted at runtime via envsubst):
-#   ${SOCKET_PATH}        - Unix socket path (e.g., /tmp/llm-proxy-abc123.sock)
-#   ${LITELLM_MASTER_KEY} - LiteLLM API key (injected as Authorization header)
-#   ${RUN_ID}             - Sandbox run ID for billing attribution
-#   ${ATTEMPT}            - Run attempt number for billing attribution
-#   ${LITELLM_HOST}       - LiteLLM host (default: localhost:4000)
-#   ${ACCESS_LOG_PATH}    - Path to write access logs
+# Template variables (substituted at runtime via LlmProxyManager.generateConfig):
+#   ${SOCKET_PATH}          - Unix socket path (e.g., /llm-sock/llm.sock)
+#   ${LITELLM_MASTER_KEY}   - LiteLLM API key (injected as Authorization header)
+#   ${BILLING_ACCOUNT_ID}   - User billing account ID (matches in-proc `user: billingAccountId`)
+#   ${LITELLM_METADATA_JSON} - JSON blob for LiteLLM metadata (run correlation + Langfuse)
+#   ${RUN_ID}               - Sandbox run ID (for audit log only, not sent as end_user)
+#   ${ATTEMPT}              - Run attempt number (for audit log only)
+#   ${LITELLM_HOST}         - LiteLLM host (default: litellm:4000)
+#   ${ACCESS_LOG_PATH}      - Path to write access logs
 
 worker_processes 1;
 error_log stderr warn;
@@ -21,7 +23,8 @@ http {
     # Minimal logging - no request body/prompts
     log_format audit '$time_iso8601 runId=${RUN_ID} attempt=${ATTEMPT} '
                      'status=$status bytes=$body_bytes_sent '
-                     'model=$http_x_model upstream_time=$upstream_response_time';
+                     'model=$http_x_model litellm_call_id=$upstream_http_x_litellm_call_id '
+                     'upstream_time=$upstream_response_time';
 
     access_log ${ACCESS_LOG_PATH} audit;
 
@@ -40,9 +43,12 @@ http {
             # Inject authorization (per SECRETS_HOST_ONLY - key stays in proxy, not sandbox)
             proxy_set_header Authorization "Bearer ${LITELLM_MASTER_KEY}";
 
-            # Inject billing attribution (per HOST_INJECTS_BILLING_HEADER)
-            # This overwrites any client-sent x-litellm-end-user-id
-            proxy_set_header x-litellm-end-user-id "${RUN_ID}/${ATTEMPT}";
+            # Inject billing + observability (per HOST_INJECTS_BILLING_HEADERS)
+            # end-user-id = billingAccountId (matches in-proc LiteLlmAdapter `user` field)
+            # metadata = run correlation + Langfuse fields (matches in-proc metadata blob)
+            # All three overwrite any client-sent values (sandbox cannot spoof identity)
+            proxy_set_header x-litellm-end-user-id "${BILLING_ACCOUNT_ID}";
+            proxy_set_header x-litellm-metadata '${LITELLM_METADATA_JSON}';
 
             # Forward to LiteLLM
             proxy_pass http://litellm;

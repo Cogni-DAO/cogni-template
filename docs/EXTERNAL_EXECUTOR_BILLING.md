@@ -1,15 +1,15 @@
 # External Executor Billing Design
 
 > [!CRITICAL]
-> External executors use **async reconciliation** via provider billing APIs. Correlation key is `end_user = ${runId}/${attempt}` (server-set, never client-supplied). Reconcilers call `commitUsageFact()` per LLM call with `usageUnitId = provider_call_id`.
+> External executors use **async reconciliation** via provider billing APIs. Identity key is `end_user = billingAccountId` (matching in-proc `LiteLlmAdapter`). Run correlation via `metadata.run_id`. Reconcilers call `commitUsageFact()` per LLM call with `usageUnitId = provider_call_id`.
 
 ## Core Invariants
 
-1. **END_USER_CORRELATION**: LLM calls set `user = ${runId}/${attempt}` server-side via `configurable.user`. LiteLLM stores this as `end_user`. Reconciler queries `GET /spend/logs?end_user=...`.
+1. **END_USER_IS_BILLING_ACCOUNT**: All executors (in-proc, sandbox, external) set `end_user = billingAccountId`. This matches the in-proc `LiteLlmAdapter` (`user: billingAccountId`) and the activity dashboard query (`/spend/logs?end_user=billingAccountId`). Run correlation uses `metadata.run_id`, NOT `end_user`.
 
 2. **USAGE_UNIT_IS_PROVIDER_CALL_ID**: Each LLM call has a unique `usageUnitId = spend_logs.request_id`. Multiple charge_receipts per run is expected for multi-step graphs.
 
-3. **SERVER_SETS_USER_NEVER_CLIENT**: Provider passes `configurable.user` server-side. Client-supplied `user` in configurable is ignored/overwritten. This prevents billing spoofing.
+3. **SERVER_SETS_IDENTITY_NEVER_CLIENT**: Identity headers/fields are server-set. In-proc: `user` body field. Sandbox: proxy overwrites `x-litellm-end-user-id` + `x-litellm-metadata`. External: `configurable.user`. Client values stripped/ignored.
 
 4. **RECONCILE_AFTER_STREAM_COMPLETES**: Reconciliation triggers after stream ends (success or error). No grace window for MVP—LiteLLM writes are synchronous with response.
 
@@ -19,6 +19,8 @@
 
 7. **IDEMPOTENCY_VIA_SOURCE_REFERENCE**: `source_reference = ${runId}/${attempt}/${provider_call_id}`. Replayed reconciliation is no-op.
 
+8. **METADATA_PARITY**: All executors must produce equivalent LiteLLM metadata. Required fields: `run_id`, `attempt`, `cogni_billing_account_id`, `request_id`. Langfuse fields: `existing_trace_id`, `session_id`, `trace_user_id`. In-proc sets via request body `metadata`; sandbox sets via `x-litellm-metadata` header; external sets via `configurable`.
+
 ---
 
 ## Reconciliation Flow
@@ -27,22 +29,24 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │ EXECUTION PHASE                                                 │
 ├─────────────────────────────────────────────────────────────────┤
-│ Provider sets: configurable.user = `${runId}/${attempt}`        │
-│ initChatModel has: configurableFields: ["model", "user"]        │
-│ LLM call → LiteLLM stores: end_user = `${runId}/${attempt}`     │
+│ All executors set: end_user = billingAccountId                  │
+│ All executors set: metadata.run_id = runId                      │
+│ LLM call → LiteLLM stores: end_user + metadata in spend_logs   │
 └─────────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │ RECONCILIATION PHASE (after stream completes)                   │
 ├─────────────────────────────────────────────────────────────────┤
-│ 1. Query: GET /spend/logs?end_user=${runId}/${attempt}          │
-│ 2. For each entry:                                              │
+│ 1. Query: GET /spend/logs?end_user=${billingAccountId}          │
+│    (optionally scoped by start_date/end_date to run window)     │
+│ 2. Filter returned logs: entry.metadata.run_id === runId        │
+│ 3. For each matching entry:                                     │
 │    - usageUnitId = entry.request_id                             │
 │    - costUsd = entry.spend                                      │
 │    - tokens = entry.prompt_tokens + entry.completion_tokens     │
-│ 3. commitUsageFact() per entry                                  │
-│ 4. Log metric: external_billing.reconcile_success               │
+│ 4. commitUsageFact() per entry                                  │
+│ 5. Log metric: external_billing.reconcile_success               │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -52,15 +56,29 @@
 
 ### LangGraph Server (LiteLLM) — MVP
 
-| Aspect            | Value                                    |
-| ----------------- | ---------------------------------------- |
-| Billing source    | LiteLLM `/spend/logs` API                |
-| Correlation field | `end_user` (set via `configurable.user`) |
-| Call ID field     | `spend_logs.request_id`                  |
-| ExecutorType      | `langgraph_server`                       |
-| SourceSystem      | `litellm`                                |
+| Aspect          | Value                                                          |
+| --------------- | -------------------------------------------------------------- |
+| Billing source  | LiteLLM `/spend/logs` API                                      |
+| Identity field  | `end_user = billingAccountId` (set via `configurable.user`)    |
+| Run correlation | `metadata.run_id` (set via `configurable` or LiteLLM metadata) |
+| Call ID field   | `spend_logs.request_id`                                        |
+| ExecutorType    | `langgraph_server`                                             |
+| SourceSystem    | `litellm`                                                      |
 
 **Validated:** `initChatModel({ configurableFields: ["model", "user"] })` propagates `configurable.user` to OpenAI `user` field → LiteLLM `end_user`.
+
+### Sandbox (LiteLLM via nginx proxy) — P0.75
+
+| Aspect          | Value                                                                            |
+| --------------- | -------------------------------------------------------------------------------- |
+| Billing source  | LiteLLM `/spend/logs` API                                                        |
+| Identity field  | `end_user = billingAccountId` (set via `x-litellm-end-user-id`)                  |
+| Run correlation | `metadata.run_id` (set via `x-litellm-metadata` header)                          |
+| Call ID field   | `spend_logs.request_id` (logged in proxy via `$upstream_http_x_litellm_call_id`) |
+| ExecutorType    | `sandbox`                                                                        |
+| SourceSystem    | `litellm`                                                                        |
+
+**Mechanism:** Proxy injects `x-litellm-end-user-id` and `x-litellm-metadata` headers. Both overwrite any client-sent values. Sandbox cannot spoof identity. See [SANDBOXED_AGENTS.md](SANDBOXED_AGENTS.md) invariant #10.
 
 ### Claude SDK — P2
 
@@ -84,10 +102,11 @@
 ### P0: LangGraph Server Reconciliation
 
 - [x] `initChatModel` includes `"user"` in `configurableFields`
-- [x] Provider sets `configurable.user = ${runId}/${attempt}` server-side
 - [x] Validated: `end_user` populated in LiteLLM spend_logs
+- [ ] Change `configurable.user` from `${runId}/${attempt}` to `billingAccountId` (align with in-proc)
+- [ ] Pass `run_id` and `attempt` via LiteLLM metadata instead of `end_user`
 - [ ] Add `getSpendLogsByEndUser(endUser)` to LiteLLM adapter
-- [ ] Create `reconcileRun()` in `external-reconciler.ts`
+- [ ] Create `reconcileRun()` in `external-reconciler.ts` (query by billingAccountId, filter by metadata.run_id)
 - [ ] Wire reconciler call after stream completes in provider
 - [ ] Stack test: chat → charge_receipts created via reconciliation
 
@@ -112,13 +131,15 @@
 
 ## Anti-Patterns
 
-| Anti-Pattern                    | Why Forbidden                              |
-| ------------------------------- | ------------------------------------------ |
-| Trust client-supplied `user`    | Billing spoofing                           |
-| Query by `metadata.runId`       | LiteLLM doesn't support metadata filtering |
-| Stream events as billing source | Unreliable, may drop                       |
-| Skip `attempt` in correlation   | Retries create duplicates                  |
-| Direct charge_receipts mutation | Violates ONE_LEDGER_WRITER                 |
+| Anti-Pattern                            | Why Forbidden                                                     |
+| --------------------------------------- | ----------------------------------------------------------------- |
+| Trust client-supplied `user`            | Billing spoofing                                                  |
+| `end_user = runId/attempt`              | Breaks activity dashboard; use billingAccountId + metadata.run_id |
+| Filter by metadata at LiteLLM API level | Not supported; fetch by end_user, filter in-memory                |
+| Stream events as billing source         | Unreliable, may drop                                              |
+| Skip `attempt` in correlation           | Retries create duplicates                                         |
+| Direct charge_receipts mutation         | Violates ONE_LEDGER_WRITER                                        |
+| Different `end_user` per executor type  | All executors must use billingAccountId for dashboard parity      |
 
 ---
 
@@ -144,5 +165,5 @@ Any new executor must answer:
 
 ---
 
-**Last Updated**: 2026-01-29
-**Status**: Validated (end_user correlation proven in spend_logs)
+**Last Updated**: 2026-02-06
+**Status**: Validated (end_user correlation proven in spend_logs). Updated: end_user = billingAccountId (not runId), run correlation via metadata.
