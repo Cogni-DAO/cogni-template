@@ -91,108 +91,6 @@ When `subject` is absent (direct user or service action):
 
 ---
 
-## Implementation Checklist
-
-### P0: RBAC Spine
-
-**AuthorizationPort (`src/ports/`):**
-
-- [ ] Create `AuthorizationPort` interface:
-  ```typescript
-  interface AuthorizationPort {
-    check(params: AuthzCheckParams): Promise<AuthzDecision>;
-  }
-  interface AuthzCheckParams {
-    actor: string; // "user:{wallet}" | "agent:{id}" | "service:{name}"
-    subject?: string; // "user:{wallet}" — only for OBO execution
-    action: AuthzAction; // "tool.execute" | "connection.use" | "graph.invoke"
-    resource: string; // "tool:{id}" | "connection:{id}" | "graph:{id}"
-    context: AuthzContext; // { tenantId, graphId?, runId? }
-  }
-  type AuthzDecision = "allow" | "deny";
-  ```
-- [ ] Implement dual-check logic: if `subject` present, verify BOTH permission AND delegation
-- [ ] Add to `src/ports/index.ts` exports
-- [ ] Create `FakeAuthorizationAdapter` for tests
-
-**OpenFGA Adapter (`src/adapters/server/authz/`):**
-
-- [ ] Create `OpenFgaAuthorizationAdapter` implementing `AuthorizationPort`
-- [ ] Implement `checkWithSubject()` for dual OpenFGA queries
-- [ ] Configure OpenFGA store per environment (single store per env)
-- [ ] Add `OPENFGA_API_URL`, `OPENFGA_STORE_ID` to env validation
-- [ ] Add retry + timeout handling (500ms default, 3 retries)
-
-**Context Identity Fields (`@cogni/ai-core/tooling/types.ts`):**
-
-- [ ] Add `actorId: string` to `ToolInvocationContext`
-- [ ] Add `subjectId?: string` to `ToolInvocationContext` (OBO only)
-- [ ] Add `tenantId: string` to `ToolInvocationContext`
-- [ ] Add `graphId?: string` to `ToolInvocationContext`
-- [ ] Update `GraphRunConfig` to include actor + optional subject
-
-**Subject Binding (per OBO_SUBJECT_MUST_BE_BOUND):**
-
-- [ ] `subjectId` set ONLY at session/grant issuance (server-side)
-- [ ] `ToolInvocationContext.subjectId` is readonly, not from request body
-- [ ] Arch test: grep for `subjectId` assignment outside trusted boundaries
-
-**Enforcement Points:**
-
-- [ ] Wire `AuthorizationPort` into `toolRunner.exec()` (check before execution)
-- [ ] Wire `AuthorizationPort` into `ConnectionBroker.resolveForTool()` (check before token)
-- [ ] Pass actor + subject through entire call chain
-
-**Architectural Tests (`tests/arch/`):**
-
-- [ ] `authz-required-at-tool-exec.test.ts` — no tool.exec without authz
-- [ ] `authz-required-at-broker.test.ts` — no broker.resolve without authz
-- [ ] `subject-binding-trusted.test.ts` — subjectId only from server
-
-**Composition Root (`src/bootstrap/`):**
-
-- [ ] Add `AuthorizationPort` to container
-- [ ] Wire `OpenFgaAuthorizationAdapter` in prod/staging
-- [ ] Wire `FakeAuthorizationAdapter` in test
-
-#### Chores
-
-- [ ] Observability [observability.md](../.agent/workflows/observability.md)
-- [ ] Documentation [document.md](../.agent/workflows/document.md)
-
-### P1: Graph Invoke + Audit Events
-
-- [ ] Add `graph.invoke` check at `GraphExecutorPort.runGraph()` entry
-- [ ] Emit `authz.check` audit events with actor + subject
-- [ ] Add caching layer (LRU, 5s TTL, keyed by actor:subject:action:resource)
-- [ ] Add batch check API for tool catalog filtering
-
-### P2: Delegation Management (Do NOT Build Yet)
-
-- [ ] UI for managing agent delegations
-- [ ] Delegation scopes (limit what agents can do on behalf of user)
-- [ ] Time-bounded delegations
-- [ ] Condition: need agent management UI first
-
----
-
-## File Pointers (P0 Scope)
-
-| File                                           | Change                                          |
-| ---------------------------------------------- | ----------------------------------------------- |
-| `src/ports/authorization.port.ts`              | New: `AuthorizationPort` with actor+subject     |
-| `src/ports/index.ts`                           | Add authorization port export                   |
-| `src/adapters/server/authz/openfga.adapter.ts` | New: OpenFGA impl with dual-check               |
-| `src/adapters/test/authz/fake.adapter.ts`      | New: Test fake                                  |
-| `src/bootstrap/container.ts`                   | Wire authorization port                         |
-| `@cogni/ai-core/tooling/types.ts`              | Add actorId, subjectId?, tenantId, graphId      |
-| `@cogni/ai-core/tooling/tool-runner.ts`        | Inject AuthorizationPort, pass actor+subject    |
-| `src/shared/env/server.ts`                     | Add OPENFGA_API_URL, OPENFGA_STORE_ID           |
-| `tests/arch/authz-enforcement.test.ts`         | New: grep tests for bypass patterns             |
-| `tests/arch/subject-binding.test.ts`           | New: verify subjectId only from trusted sources |
-
----
-
 ## Schema: OpenFGA Authorization Model
 
 ```dsl
@@ -421,14 +319,10 @@ Subject included in cache key because delegation status can change independently
 
 ---
 
-## Related Documents
+## Related
 
-- [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool execution pipeline, DENY_BY_DEFAULT
-- [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md) — Connection auth, GRANT_INTERSECTION
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Graph executor, billing idempotency
-- [SECURITY_AUTH_SPEC.md](SECURITY_AUTH_SPEC.md) — Authentication (SIWE, API keys)
-
----
-
-**Last Updated**: 2026-02-02
-**Status**: Draft (Rev 3 - Added #6 AUTHZ_FAIL_CLOSED_WITH_DISTINCTION; added Layered Authorization Model section clarifying ToolPolicy vs OpenFGA; documented Global Delegation P0 limitation; added authz_unavailable error code)
+- [RBAC Hardening Initiative](../../work/initiatives/ini.rbac-hardening.md) — Roadmap, implementation checklists, P1/P2 plans
+- [Tool Use Spec](tool-use.md) — Tool execution pipeline, DENY_BY_DEFAULT
+- [Tenant Connections Spec](tenant-connections.md) — Connection auth, GRANT_INTERSECTION
+- [Graph Execution](../GRAPH_EXECUTION.md) — Graph executor, billing idempotency
+- [Security Auth Spec](security-auth.md) — Authentication (SIWE, API keys)

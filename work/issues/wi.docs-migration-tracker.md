@@ -202,7 +202,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | PAYMENTS_TEST_DESIGN.md              | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
 | PROMPT_REGISTRY_SPEC.md              | prompt-registry.md             | ini.prompt-registry.md             | -   | -                       | AB+road    | [x]  | [ ]  |
 | PROPOSAL_LAUNCHER.md                 | -                              | ini.web3-gov-mvp.md                | -   | -                       | roadmap    | [x]  | [ ]  |
-| RBAC_SPEC.md                         | rbac.md                        | ini.rbac-hardening.md              | -   | -                       | migrated   | [x]  | [ ]  |
+| RBAC_SPEC.md                         | rbac.md                        | ini.rbac-hardening.md              | -   | -                       | AB+road    | [x]  | [ ]  |
 | REPO_STATE.md                        | -                              | -                                  | -   | -                       | snapshot   | [x]  | [ ]  |
 | RUNTIME_POLICY.md                    | runtime-policy.md              | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | SANDBOX_SCALING.md                   | -                              | -                                  | -   | -                       | TBD        | [ ]  | [ ]  |
