@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-02-03
+- **Last reviewed:** 2026-02-07
 - **Status:** draft
 
 ## Purpose
@@ -72,6 +72,6 @@ pnpm test tests/integration/sandbox
 
 ## Notes
 
-- `fixtures/sandbox-fixture.ts` provides shared test setup
+- `tests/_fixtures/sandbox/fixtures.ts` provides shared test setup
 - Access fixture via `fixture.runner`, not destructuring (beforeAll timing)
 - Repo mount tests use `GITHUB_WORKSPACE ?? process.cwd()` for CI compatibility

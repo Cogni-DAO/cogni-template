@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-19
+- **Last reviewed:** 2026-02-07
 - **Status:** draft
 
 ## Purpose
@@ -40,7 +40,7 @@ Build-time scripts for migrations, seeds, type generation, development utilities
 - **Routes (if any):** none
 - **CLI (if any):** Migration, seed, database drop, and validation commands
 - **Env/Config keys:** Database connection, development flags
-- **Files considered API:** validate-agents-md.mjs (validation script), db/drop-test-db.ts (test database utility)
+- **Files considered API:** validate-agents-md.mjs (validation script), db/drop-test-db.ts (test database utility), diag-openclaw-sandbox.mjs (OpenClaw-in-sandbox diagnostic)
 
 ## Ports (optional)
 
@@ -50,7 +50,7 @@ Build-time scripts for migrations, seeds, type generation, development utilities
 
 ## Responsibilities
 
-- This directory **does**: Run migrations, seed data, generate types, development automation, validate AGENTS.md files, manage test databases
+- This directory **does**: Run migrations, seed data, generate types, development automation, validate AGENTS.md files, manage test databases, run sandbox diagnostic scripts
 - This directory **does not**: Contain runtime code, business logic, UI components
 
 ## Usage

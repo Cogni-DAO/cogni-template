@@ -4,6 +4,8 @@
 
 **For stack testing modes and commands, see [ENVIRONMENTS.md](ENVIRONMENTS.md).**
 
+**For system integration test design (mock-LLM, adapter overrides), see [SYSTEM_TEST_ARCHITECTURE.md](SYSTEM_TEST_ARCHITECTURE.md).**
+
 **Stack Testing Commands:**
 
 - `pnpm dev:stack:test` + `pnpm test:stack:dev` - Host app with fake adapters

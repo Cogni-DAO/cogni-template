@@ -304,20 +304,25 @@ module.exports = {
     },
 
     // adapters/server: must use @/adapters/server (index.ts), not internal files
-    // Exception: src/auth.ts is a bootstrap file that can import adapter internals
+    // Exceptions (composition-root files that wire providers directly):
+    //   auth.ts: bootstrap file that imports adapter internals
+    //   container.ts: wires both trust boundaries (appDb + serviceDb)
+    //   graph-executor.factory.ts: lazy-imports sandbox provider (avoids Turbopack bundling dockerode native addon)
+    //   agent-discovery.ts: imports sandbox catalog provider (no native deps in import chain)
     {
       name: "no-internal-adapter-imports",
       severity: "error",
       from: {
-        path: "^src/(?!adapters/server/)(?!auth\\.ts$)(?!bootstrap/container\\.ts$)",
+        path: "^src/(?!adapters/server/)(?!auth\\.ts$)(?!bootstrap/container\\.ts$)(?!bootstrap/graph-executor\\.factory\\.ts$)(?!bootstrap/agent-discovery\\.ts$)",
       },
       to: {
         path: "^src/adapters/server/(?!index\\.ts$).*\\.ts$",
       },
       comment:
         "Import from @/adapters/server (index.ts), not internal adapter files. " +
-        "container.ts exempt: composition root wires both trust boundaries " +
-        "(appDb + serviceDb), and getServiceDb is excluded from the barrel by design.",
+        "Exempt: auth.ts (bootstrap), container.ts (trust boundaries), " +
+        "graph-executor.factory.ts + agent-discovery.ts (sandbox subpath imports " +
+        "to avoid Turbopack bundling dockerode native addon chain).",
     },
 
     // adapters/test: must use @/adapters/test (index.ts), not internal files

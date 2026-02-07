@@ -350,15 +350,15 @@ jobs:
           cache-from: type=gha,scope=scheduler-worker
           cache-to: type=gha,mode=max,scope=scheduler-worker
 
-      - name: Pull or build sandbox runtime image
-        run: |
-          SANDBOX_GHCR="ghcr.io/cogni-dao/cogni-template:sandbox-runtime-latest"
-          if docker pull "$SANDBOX_GHCR" 2>/dev/null; then
-            docker tag "$SANDBOX_GHCR" cogni-sandbox-runtime:latest
-          else
-            echo "GHCR pull failed, building locally"
-            pnpm sandbox:docker:build
-          fi
+      - name: Build sandbox runtime image
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: services/sandbox-runtime
+          file: services/sandbox-runtime/Dockerfile
+          tags: cogni-sandbox-runtime:latest
+          load: true
+          cache-from: type=gha,scope=sandbox-runtime
+          cache-to: type=gha,mode=max,scope=sandbox-runtime
 
       - name: Start app + DB + Temporal stack
         run: |
