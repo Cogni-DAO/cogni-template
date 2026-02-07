@@ -169,6 +169,7 @@ describe("POST /api/v1/ai/chat - Paid Model Zero Credits", () => {
               },
             ],
             model: "paid-model", // Not "free-model"
+            graphName: "langgraph:poet",
           }),
         });
 

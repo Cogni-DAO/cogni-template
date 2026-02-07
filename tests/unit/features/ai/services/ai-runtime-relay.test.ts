@@ -137,6 +137,7 @@ describe("RunEventRelay race conditions", () => {
       {
         messages: [createUserMessage("Test")],
         model: TEST_MODEL_ID,
+        graphName: "langgraph:poet",
         caller: {
           billingAccountId: "billing-123",
           virtualKeyId: "vk-123",
@@ -195,6 +196,7 @@ describe("RunEventRelay race conditions", () => {
       {
         messages: [createUserMessage("Test")],
         model: TEST_MODEL_ID,
+        graphName: "langgraph:poet",
         caller: {
           billingAccountId: "billing-123",
           virtualKeyId: "vk-123",
@@ -242,6 +244,7 @@ describe("RunEventRelay race conditions", () => {
       {
         messages: [createUserMessage("Test")],
         model: TEST_MODEL_ID,
+        graphName: "langgraph:poet",
         caller: {
           billingAccountId: "billing-123",
           virtualKeyId: "vk-123",
@@ -317,6 +320,7 @@ describe("RunEventRelay race conditions", () => {
       {
         messages: [createUserMessage("Test")],
         model: TEST_MODEL_ID,
+        graphName: "langgraph:poet",
         caller: {
           billingAccountId: "billing-123",
           virtualKeyId: "vk-123",
@@ -353,6 +357,7 @@ describe("RunEventRelay race conditions", () => {
       {
         messages: [createUserMessage("Test")],
         model: TEST_MODEL_ID,
+        graphName: "langgraph:poet",
         caller: {
           billingAccountId: "billing-123",
           virtualKeyId: "vk-123",

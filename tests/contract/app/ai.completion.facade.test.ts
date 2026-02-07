@@ -114,6 +114,7 @@ describe("app/_facades/ai/completion.server", () => {
         ],
         model: TEST_MODEL_ID,
         sessionUser,
+        graphName: "langgraph:poet",
       };
 
       const fakeClock = new FakeClock("2025-01-01T12:00:00.000Z");
@@ -183,6 +184,7 @@ describe("app/_facades/ai/completion.server", () => {
         messages: [{ role: "user" as const, content: "Hello" }],
         model: TEST_MODEL_ID,
         sessionUser,
+        graphName: "langgraph:poet",
       };
 
       const fakeClock = new FakeClock();
@@ -236,6 +238,7 @@ describe("app/_facades/ai/completion.server", () => {
         messages: [{ role: "user" as const, content: "Hello" }],
         model: TEST_MODEL_ID,
         sessionUser,
+        graphName: "langgraph:poet",
       };
 
       const fakeClock = new FakeClock();
@@ -279,6 +282,7 @@ describe("app/_facades/ai/completion.server", () => {
         ],
         model: TEST_MODEL_ID,
         sessionUser,
+        graphName: "langgraph:poet",
       };
 
       const fixedTime = "2025-01-01T15:30:00.000Z";

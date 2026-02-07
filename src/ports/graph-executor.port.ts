@@ -16,7 +16,7 @@
  * @public
  */
 
-import type { AiExecutionErrorCode } from "@cogni/ai-core";
+import type { AiExecutionErrorCode, GraphId } from "@cogni/ai-core";
 import type { Message } from "@/core";
 import type { AiEvent } from "@/types/ai-events";
 import type { LlmCaller } from "./llm.port";
@@ -45,7 +45,7 @@ export interface GraphRunRequest {
    * Required - executor fails fast if not provided.
    * Per GRAPH_ID_NAMESPACED: format is ${providerId}:${graphName}
    */
-  readonly graphId: string;
+  readonly graphId: GraphId;
   /**
    * Per-run tool allowlist from GraphRunConfig.
    * Tools not in this list receive policy_denied error.

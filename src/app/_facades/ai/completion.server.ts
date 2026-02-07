@@ -48,8 +48,8 @@ interface CompletionInput {
   messages: MessageDto[];
   model: string;
   sessionUser: SessionUser;
-  /** Graph name to execute (default: "poet") */
-  graphName?: string;
+  /** Graph name or fully-qualified graphId to execute (required) */
+  graphName: string;
   /**
    * Conversation state key for multi-turn conversations.
    * If absent, server generates one.
@@ -222,7 +222,7 @@ export async function completionStream(
         model: input.model,
         caller,
         ...(input.abortSignal ? { abortSignal: input.abortSignal } : {}),
-        ...(input.graphName ? { graphName: input.graphName } : {}),
+        graphName: input.graphName,
         ...(input.stateKey ? { stateKey: input.stateKey } : {}),
       },
       enrichedCtx

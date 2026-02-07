@@ -35,6 +35,8 @@ export const aiCompletionOperation = {
     messages: z.array(MessageDtoSchema),
     /** Model ID (REQUIRED) - client resolves to defaultModelId if needed */
     model: z.string(),
+    /** Graph name or fully-qualified graphId to execute (required) */
+    graphName: z.string(),
   }),
   output: z.object({
     message: MessageDtoSchema.omit({ timestamp: true }).extend({

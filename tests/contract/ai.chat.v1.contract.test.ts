@@ -80,6 +80,7 @@ describe("ai.chat.v1 contract validation", () => {
           },
         ],
         model: "gpt-4",
+        graphName: "chat",
       };
 
       const result = AssistantUiInputSchema.safeParse(payload);
@@ -93,6 +94,7 @@ describe("ai.chat.v1 contract validation", () => {
           { role: "user", content: [{ type: "text", text: "Hi" }] },
         ],
         model: "gpt-4",
+        graphName: "chat",
       };
 
       const result = AssistantUiInputSchema.safeParse(payload);
