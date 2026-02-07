@@ -50,6 +50,7 @@ This is a master index of all specs, updated as specs are migrated.
 | langgraph-server-spec            | LangGraph Server Integration       | draft    | ai-graphs  | [langgraph-server.md](./langgraph-server.md)                       |
 | model-selection-spec             | Model Selection                    | draft    | ai-graphs  | [model-selection.md](./model-selection.md)                         |
 | n8n-adapter-spec                 | n8n Workflow Execution Adapter     | draft    | ai-graphs  | [n8n-adapter.md](./n8n-adapter.md)                                 |
+| node-formation-spec              | Node Formation Design              | draft    | web3       | [node-formation.md](./node-formation.md)                           |
 | spec.node-ci-cd-contract         | Node CI/CD Contract                | draft    | deployment | [node-ci-cd-contract.md](./node-ci-cd-contract.md)                 |
 | node-operator-contract-spec      | Node vs Operator Contract          | draft    | meta       | [node-operator-contract.md](./node-operator-contract.md)           |
 | spec.onchain-readers             | On-Chain Treasury & Ownership      | draft    | web3       | [onchain-readers.md](./onchain-readers.md)                         |

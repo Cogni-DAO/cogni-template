@@ -184,7 +184,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | N8N_ADAPTER_SPEC.md                  | n8n-adapter.md                 | ini.n8n-integration.md             | -   | -                       | AB+road    | [x]  | [ ]  |
 | NEW_PACKAGES.md                      | -                              | -                                  | -   | new-packages.md         | procedural | [x]  | [ ]  |
 | NODE_CI_CD_CONTRACT.md               | node-ci-cd-contract.md         | ini.ci-cd-reusable.md              | -   | -                       | AB+road    | [x]  | [ ]  |
-| NODE_FORMATION_SPEC.md               | node-formation.md              | ini.node-formation-ui.md           | -   | node-formation-guide.md | AB+road    | [ ]  | [ ]  |
+| NODE_FORMATION_SPEC.md               | node-formation.md              | ini.node-formation-ui.md           | -   | node-formation-guide.md | AB+road    | [x]  | [x]  |
 | NODE_VS_OPERATOR_CONTRACT.md         | node-operator-contract.md      | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | OBSERVABILITY.md                     | observability.md               | -                                  | -   | -                       | migrated   | [x]  | [ ]  |
 | OBSERVABILITY_REQUIRED_SPEC.md       | observability-requirements.md  | ini.observability-hardening.md     | -   | -                       | AB+road    | [x]  | [ ]  |
