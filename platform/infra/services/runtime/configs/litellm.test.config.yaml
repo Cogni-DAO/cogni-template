@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+# LiteLLM Test Config
+# Purpose: Routes all model requests to mock-openai-api for deterministic system integration tests.
+# Scope: Used when LITELLM_CONFIG=litellm.test.config.yaml (test stacks only). No real provider keys needed.
+# Links: docs/SYSTEM_TEST_ARCHITECTURE.md
+#
+# Model names must match TEST_MODEL_ID and friends in tests/_fakes/ai/test-constants.ts.
+# All entries route to the same mock-openai-api backend.
+
+model_list:
+  # Primary test model — matches TEST_MODEL_ID ("test-model")
+  - model_name: test-model
+    litellm_params:
+      model: openai/mock-gpt-markdown
+      api_base: http://mock-llm:3000
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Test Model"
+      is_free: false
+      provider_key: "mock"
+      metadata:
+        cogni:
+          default_preferred: true
+
+  # Free test model — matches TEST_MODEL_FREE ("test-free-model")
+  - model_name: test-free-model
+    litellm_params:
+      model: openai/mock-gpt-markdown
+      api_base: http://mock-llm:3000
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Free Test Model"
+      is_free: true
+      provider_key: "mock"
+      metadata:
+        cogni:
+          default_free: true
+
+  # Paid test model — matches TEST_MODEL_PAID ("test-paid-model")
+  - model_name: test-paid-model
+    litellm_params:
+      model: openai/mock-gpt-markdown
+      api_base: http://mock-llm:3000
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Paid Test Model"
+      is_free: false
+      provider_key: "mock"
+
+general_settings:
+  master_key: "os.environ/LITELLM_MASTER_KEY"

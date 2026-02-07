@@ -38,10 +38,11 @@ export default defineConfig({
     include: ["tests/stack/**/*.stack.test.ts"],
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
-    // Global setup: preflight binaries → wait for probes → preflight DB roles → reset DB (order matters)
+    // Global setup: preflight binaries → wait for probes → mock-llm → preflight DB roles → reset DB (order matters)
     globalSetup: [
       "./tests/stack/setup/preflight-binaries.ts",
       "./tests/stack/setup/wait-for-probes.ts",
+      "./tests/stack/setup/preflight-mock-llm.ts",
       "./tests/stack/setup/preflight-db-roles.ts",
       "./tests/stack/setup/reset-db.ts",
     ],
