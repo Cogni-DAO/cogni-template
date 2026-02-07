@@ -135,7 +135,7 @@ export class SandboxGraphProvider implements GraphProvider {
     });
 
     const stream = (async function* (): AsyncIterable<AiEvent> {
-      const { runId, ingressRequestId, messages, model, caller } = req;
+      const { runId, ingressRequestId, messages, model, caller, graphId } = req;
       const attempt = 0; // P0_ATTEMPT_FREEZE
 
       // Create isolated workspace with messages file
@@ -238,6 +238,7 @@ export class SandboxGraphProvider implements GraphProvider {
           executorType: "sandbox",
           billingAccountId: caller.billingAccountId,
           virtualKeyId: caller.virtualKeyId,
+          graphId,
           model,
           usageUnitId: litellmCallId, // Required, no fallback
         };

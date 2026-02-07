@@ -257,7 +257,7 @@ export class LangGraphInProcProvider implements GraphProvider {
   private createCompletionFn(
     req: GraphRunRequest
   ): CompletionFn<LlmToolDefinition> {
-    const { caller, runId, ingressRequestId } = req;
+    const { caller, runId, ingressRequestId, graphId } = req;
     const attempt = 0; // P0_ATTEMPT_FREEZE
 
     return (params: {
@@ -270,7 +270,7 @@ export class LangGraphInProcProvider implements GraphProvider {
         messages: params.messages as GraphRunRequest["messages"],
         model: params.model,
         caller,
-        runContext: { runId, attempt, ingressRequestId },
+        runContext: { runId, attempt, ingressRequestId, graphId },
         ...(params.abortSignal && { abortSignal: params.abortSignal }),
         ...(params.tools?.length && { tools: [...params.tools] }),
       });

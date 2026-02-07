@@ -18,6 +18,7 @@
 
 import { z } from "zod";
 import { SOURCE_SYSTEMS, type SourceSystem } from "../billing/source-system";
+import type { GraphId } from "../graph/graph-id";
 
 /**
  * Executor type for multi-runtime billing.
@@ -61,6 +62,9 @@ export interface UsageFact {
   readonly billingAccountId: string;
   readonly virtualKeyId: string;
 
+  // Graph identifier for per-agent analytics (required)
+  readonly graphId: GraphId;
+
   // Provider details
   readonly provider?: string;
   readonly model?: string;
@@ -93,6 +97,14 @@ export const UsageFactStrictSchema = z
     billingAccountId: z.string().min(1, "billingAccountId required"),
     virtualKeyId: z.string().min(1, "virtualKeyId required"),
 
+    // Graph identifier for per-agent analytics (required, must be namespaced)
+    graphId: z
+      .string()
+      .refine(
+        (val) => val.includes(":"),
+        "graphId must be namespaced (providerId:graphName)"
+      ),
+
     // Optional provider details
     provider: z.string().optional(),
     model: z.string().optional(),
@@ -123,6 +135,8 @@ export const UsageFactHintsSchema = z
     executorType: z.enum(["langgraph_server", "claude_sdk"]), // External types
     billingAccountId: z.string().min(1),
     virtualKeyId: z.string().min(1),
+
+    graphId: z.string(), // Required for all executors
 
     provider: z.string().optional(),
     model: z.string().optional(),

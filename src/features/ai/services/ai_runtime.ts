@@ -17,7 +17,11 @@
  * @public
  */
 
-import { UsageFactHintsSchema, UsageFactStrictSchema } from "@cogni/ai-core";
+import {
+  type GraphId,
+  UsageFactHintsSchema,
+  UsageFactStrictSchema,
+} from "@cogni/ai-core";
 import type { Logger } from "pino";
 import type { Message } from "@/core";
 import type { AccountService, GraphExecutorPort, LlmCaller } from "@/ports";
@@ -41,8 +45,8 @@ export interface AiRuntimeInput {
   readonly caller: LlmCaller;
   /** Abort signal for cancellation */
   readonly abortSignal?: AbortSignal;
-  /** Graph name to execute (default: uses adapter fallback) */
-  readonly graphName?: string;
+  /** Graph name or fully-qualified graphId to execute (required) */
+  readonly graphName: string;
   /**
    * Thread key for multi-turn conversation state.
    * Passed to GraphExecutorPort; adapter decides semantics.
@@ -103,12 +107,10 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
     const runContext: RunContext = { runId, attempt, ingressRequestId };
 
     // Per GRAPH_ID_NAMESPACED: graphIds are ${providerId}:${graphName}
-    // P0: LangGraph is sole provider, so we namespace here. Default graph is 'poet'.
     // Already-namespaced IDs pass through; raw names get "langgraph:" prefix.
-    // TODO: Remove default - if no graphName passed, fail fast instead of defaulting
-    const resolvedGraphId = graphName?.includes(":")
-      ? graphName
-      : `langgraph:${graphName ?? "poet"}`;
+    const resolvedGraphId: GraphId = graphName.includes(":")
+      ? (graphName as GraphId)
+      : `langgraph:${graphName}`;
 
     log.debug(
       { runId, ingressRequestId, model, graphName: resolvedGraphId },

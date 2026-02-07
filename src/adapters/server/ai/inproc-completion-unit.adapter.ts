@@ -15,8 +15,8 @@
  * @public
  */
 
+import type { GraphId } from "@cogni/ai-core";
 import type { Logger } from "pino";
-
 import {
   type AccountService,
   type AiTelemetryPort,
@@ -91,6 +91,7 @@ export interface CompletionUnitParams {
     runId: string;
     attempt: number;
     ingressRequestId: string;
+    graphId: GraphId;
   };
   abortSignal?: AbortSignal;
   tools?: readonly import("@/ports").LlmToolDefinition[];
@@ -153,7 +154,7 @@ export class InProcCompletionUnitAdapter {
       tools,
       toolChoice,
     } = params;
-    const { runId, attempt, ingressRequestId } = runContext;
+    const { runId, attempt, ingressRequestId, graphId } = runContext;
 
     // Per GENERATION_UNDER_EXISTING_TRACE: use caller.traceId for Langfuse correlation
     const ctx = this.createRequestContext(ingressRequestId, caller.traceId);
@@ -220,6 +221,7 @@ export class InProcCompletionUnitAdapter {
       runId,
       attempt,
       caller,
+      graphId,
     });
 
     // Final promise with toolCalls
@@ -239,9 +241,10 @@ export class InProcCompletionUnitAdapter {
       runId: string;
       attempt: number;
       caller: GraphRunRequest["caller"];
+      graphId: GraphId;
     }
   ): AsyncIterable<AiEvent> {
-    const { runId, attempt, caller } = runContext;
+    const { runId, attempt, caller, graphId } = runContext;
     const completionResult = await getCompletionPromise();
     const { stream, final } = completionResult;
 
@@ -289,6 +292,7 @@ export class InProcCompletionUnitAdapter {
         executorType: "inproc",
         billingAccountId: caller.billingAccountId,
         virtualKeyId: caller.virtualKeyId,
+        graphId, // For per-agent analytics
         inputTokens: result.usage.promptTokens,
         outputTokens: result.usage.completionTokens,
         usageUnitId: result.litellmCallId, // Required, no fallback
