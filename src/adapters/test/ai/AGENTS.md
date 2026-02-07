@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2025-11-17
+- **Last reviewed:** 2026-02-07
 - **Status:** stable
 
 ## Purpose
@@ -14,8 +14,8 @@ Test double implementations of AI service ports for deterministic testing.
 
 ## Pointers
 
-- [LlmService port](../../../ports/llm.port.ts)
-- [Real LiteLLM adapter](../../server/ai/litellm.adapter.ts)
+- [Real adapters](../../server/ai/)
+- [System Test Architecture](../../../../docs/SYSTEM_TEST_ARCHITECTURE.md)
 
 ## Boundaries
 
@@ -29,26 +29,18 @@ Test double implementations of AI service ports for deterministic testing.
 
 ## Public Surface
 
-- **Exports:** FakeLlmAdapter implementation
+- **Exports:** FakeWebSearchAdapter implementation
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** none
-- **Files considered API:** fake-llm.adapter.ts
-
-## Ports (optional)
-
-- **Uses ports:** none
-- **Implements ports:** LlmService
-- **Contracts (required if implementing):** LlmService contract tests in tests/contract/
+- **Files considered API:** fake-web-search.adapter.ts
 
 ## Responsibilities
 
-- This directory **does**: Provide predictable LLM responses for test environments
+- This directory **does**: Provide predictable web search responses for test environments
 - This directory **does not**: Make external API calls or vary behavior
 
 ## Usage
-
-Minimal local commands:
 
 ```bash
 pnpm test tests/unit/
@@ -59,7 +51,6 @@ pnpm test tests/integration/
 
 - Deterministic responses for test repeatability
 - No external dependencies or network calls
-- Fixed "[FAKE_COMPLETION]" response content
 
 ## Dependencies
 
@@ -74,5 +65,5 @@ pnpm test tests/integration/
 
 ## Notes
 
-- Used when APP_ENV=test for integration tests
-- Always returns predictable responses for CI stability
+- LLM adapter (FakeLlmAdapter) was removed — test stacks use real LiteLLM with mock-openai-api backend
+- See docs/SYSTEM_TEST_ARCHITECTURE.md for details

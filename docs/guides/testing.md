@@ -8,7 +8,7 @@ summary: How to write tests with environment-based adapter swapping (APP_ENV=tes
 read_when: Adding a new adapter that needs fake/test implementation, or understanding the test adapter pattern.
 owner: derekg1729
 created: 2026-02-06
-verified: 2026-02-06
+verified: 2026-02-07
 tags: [testing, dev]
 ---
 
@@ -33,13 +33,15 @@ You are implementing an adapter that calls external services (APIs, databases, e
 
 ### Stack Testing Commands
 
-- `pnpm dev:stack:test` + `pnpm test:stack:dev` - Host app with fake adapters
-- `pnpm docker:test:stack` + `pnpm test:stack:docker` - Containerized app with fake adapters
+- `pnpm dev:stack:test` + `pnpm test:stack:dev` - Host app with test adapters
+- `pnpm docker:test:stack` + `pnpm test:stack:docker` - Containerized app with test adapters
 - `pnpm docker:stack` + `pnpm e2e` - Production deployment for black box e2e testing
 
 ### Environment-Based Test Adapters
 
 When implementing adapters that hit external dependencies (APIs, services, etc.), you must provide both real and fake implementations to enable testing without external calls.
+
+**Exception: LLM** — The LLM adapter (`LiteLlmAdapter`) is always wired. In test stacks, LiteLLM uses `litellm.test.config.yaml` which routes all models to `mock-openai-api` — a lightweight, deterministic, OpenAI-compatible mock with no model weights. See [SYSTEM_TEST_ARCHITECTURE.md](../SYSTEM_TEST_ARCHITECTURE.md).
 
 ### APP_ENV=test Pattern
 
@@ -47,7 +49,7 @@ When implementing adapters that hit external dependencies (APIs, services, etc.)
 
 **Setup:**
 
-- `APP_ENV=test` triggers fake adapter usage in the DI container
+- `APP_ENV=test` triggers fake adapter usage in the DI container (for EVM, metrics, etc.)
 - `NODE_ENV=test` controls Node.js runtime behavior
 - CI sets both `NODE_ENV=test` and `APP_ENV=test`
 - Production deployments reject `APP_ENV=test` (hard guard in env validation)
@@ -70,34 +72,27 @@ When implementing adapters that hit external dependencies (APIs, services, etc.)
    - Uses `serverEnv.isTestMode` to choose implementation
 
    ```typescript
-   const llmService = serverEnv.isTestMode
-     ? new FakeLlmAdapter()
-     : new LiteLlmAdapter();
+   const evmOnchainClient = env.isTestMode
+     ? getTestEvmOnchainClient()
+     : new ViemEvmOnchainClient();
    ```
 
-4. **API Tests** (`tests/api/*/`)
-   - Must assert fake behavior in CI
-   - Verify deterministic responses from fake adapters
-   ```typescript
-   expect(responseData.message).toHaveProperty("content", "[FAKE_COMPLETION]");
-   ```
+### Example: EVM Onchain Client
 
-### Example: LLM Service
-
-**Real:** `src/adapters/server/ai/litellm.adapter.ts` → calls LiteLLM/OpenRouter  
-**Fake:** `src/adapters/test/ai/fake-llm.adapter.ts` → returns `"[FAKE_COMPLETION]"`  
-**Test:** `tests/api/v1/ai/completion.spec.ts` → asserts fake content
+**Real:** `src/adapters/server/onchain/viem-evm-onchain-client.adapter.ts` → calls EVM RPC
+**Fake:** `src/adapters/test/onchain/fake-evm-onchain-client.adapter.ts` → returns deterministic values
+**Test:** Stack tests configure fakes via `getTestEvmOnchainClient()` singleton
 
 ### CI Integration
 
-The `test-api` workflow job:
+The `stack-test` workflow job:
 
-- Sets `APP_ENV=test` (triggers fake adapters)
-- Does NOT provide external API keys (forces fake usage)
-- Starts app stack with Docker
-- Runs `pnpm test:int` against fake responses
+- Sets `APP_ENV=test` (triggers fake adapters for EVM, metrics, etc.)
+- Sets `LITELLM_CONFIG=litellm.test.config.yaml` (routes LLM to mock-openai-api)
+- Starts app stack with Docker (including `mock-llm` container)
+- Runs `pnpm test:stack:docker` against deterministic responses
 
-This ensures CI never makes external API calls while still testing the full HTTP request/response flow.
+This ensures CI never makes external API calls while still testing the full HTTP request/response flow through real LiteLLM.
 
 ## Verification
 
@@ -111,7 +106,7 @@ pnpm check          # Full lint + type + format validation
 
 ### Problem: Tests pass locally but fail in CI
 
-**Solution:** Ensure your adapter is wired in `src/bootstrap/container.ts` with the `serverEnv.isTestMode` check. CI sets `APP_ENV=test` which triggers fake adapter selection.
+**Solution:** Ensure your adapter is wired in `src/bootstrap/container.ts` with the `serverEnv.isTestMode` check. CI sets `APP_ENV=test` which triggers fake adapter selection. For LLM, ensure `LITELLM_CONFIG=litellm.test.config.yaml` is set.
 
 ### Problem: Fake adapter not being used
 

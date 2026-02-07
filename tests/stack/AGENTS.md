@@ -87,5 +87,5 @@ pnpm test:stack:dev  # or pnpm test:stack:docker
 - Stack tests are slower than integration tests
 - Requires external infrastructure (Docker Compose with postgres + temporal)
 - Tests run sequentially to avoid database conflicts
-- Uses APP_ENV=test in CI to get FakeLlmAdapter responses
+- Uses APP_ENV=test in CI with mock-openai-api backend (real LiteLLM, deterministic mock responses)
 - Temporal namespace (cogni-test) auto-created by docker-compose via DEFAULT_NAMESPACE env var

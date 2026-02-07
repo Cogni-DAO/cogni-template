@@ -206,12 +206,6 @@ import { metricsRegistry } from "@/shared/observability";
 
 describe("LLM Metrics Instrumentation", () => {
   it("increments ai_llm_call_duration_ms and ai_llm_tokens_total on successful completion", async () => {
-    // Skip if not in test mode (FakeLlmAdapter required)
-    if (process.env.APP_ENV !== "test") {
-      console.log("Skipping LLM metrics test - requires APP_ENV=test");
-      return;
-    }
-
     // 1. Setup authenticated user with credits
     const mockSessionUser: SessionUser = {
       id: randomUUID(),

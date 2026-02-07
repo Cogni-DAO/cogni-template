@@ -54,9 +54,7 @@ describe("[scheduling] scheduler-worker execution", () => {
   beforeEach(async () => {
     // Ensure test mode
     if (process.env.APP_ENV !== "test") {
-      throw new Error(
-        "This test must run in APP_ENV=test to use FakeLlmAdapter"
-      );
+      throw new Error("This test must run in APP_ENV=test (mock-LLM backend)");
     }
 
     const db = getSeedDb();

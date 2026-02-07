@@ -7,7 +7,7 @@
  * Scope: Executes completion route, then replays with exact persisted values to verify idempotency. Does not test usage_report event path (P0 refactor pending).
  * Invariants:
  *   - IDEMPOTENT_CHARGES: DB unique on (source_system, source_reference) prevents duplicate charges
- * Side-effects: IO (database writes, LLM calls via FakeLlmAdapter in test mode)
+ * Side-effects: IO (database writes, LLM calls via mock-openai-api in test mode)
  * Notes: Requires dev stack with DB running (pnpm dev:stack:test). Discovers values from actual execution.
  * Links: GRAPH_EXECUTION.md, billing.ts, schema.billing.ts
  * @public
@@ -40,11 +40,9 @@ import {
 
 describe("Billing Idempotency (IDEMPOTENT_CHARGES)", () => {
   it("replay with same (source_system, source_reference) → still 1 row", async () => {
-    // Ensure test mode for FakeLlmAdapter
+    // Ensure test mode (mock-LLM backend via litellm.test.config.yaml)
     if (process.env.APP_ENV !== "test") {
-      throw new Error(
-        "This test must run in APP_ENV=test to use FakeLlmAdapter"
-      );
+      throw new Error("This test must run in APP_ENV=test (mock-LLM backend)");
     }
 
     const db = getSeedDb();

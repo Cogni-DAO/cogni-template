@@ -10,7 +10,7 @@
 
 ## Purpose
 
-Stack tests for sandbox P0.5 and P0.5a. Proves socket bridge, proxy forwarding, network isolation, secrets safety, and billing header injection using real Docker containers against a live dev stack (LiteLLM, sandbox-internal network).
+Stack tests for sandbox P0.5 and P0.5a. Proves socket bridge, proxy forwarding, network isolation, secrets safety, billing header injection, and full LLM round-trip (via mock-openai-api) using real Docker containers against a live dev stack.
 
 ## Pointers
 
@@ -38,8 +38,8 @@ Stack tests for sandbox P0.5 and P0.5a. Proves socket bridge, proxy forwarding, 
 
 ## Responsibilities
 
-- This directory **does**: Test proxy health endpoint via socket bridge; test LiteLLM forwarding; test network isolation (no proxy → no connectivity); test secrets isolation (no LITELLM_MASTER_KEY in container env); test OPENAI_API_BASE injection; test spoofed header handling
-- This directory **does not**: Test actual LLM completions (requires internet); test billing reconciliation; test graph execution
+- This directory **does**: Test proxy health endpoint via socket bridge; test LiteLLM forwarding; test network isolation (no proxy → no connectivity); test secrets isolation (no LITELLM_MASTER_KEY in container env); test OPENAI_API_BASE injection; test spoofed header handling; test full LLM round-trip via mock-openai-api (response content, litellmCallId header chain)
+- This directory **does not**: Test billing DB writes or reconciliation; test graph execution pipeline
 
 ## Usage
 

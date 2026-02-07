@@ -39,7 +39,7 @@ Deterministic test doubles for unit tests with no I/O dependencies.
   - FakeClock (controllable time for deterministic tests)
   - FakeRng (controllable randomness)
   - FakeTelemetry (no-op telemetry)
-  - FakeLlmAdapter (deterministic LLM responses)
+  - FakeLlmService (deterministic LLM responses for unit tests)
   - MockAccountService (account/credits test doubles)
   - Test identity fixtures (TEST_USER_ID_1–5, TEST_SESSION_USER_1–5, TEST_WALLET_1–5, testUser(), newTestUserId(), newTestSessionUser())
   - Payment builders (createPaymentAttempt, createIntentAttempt, createPendingAttempt, createCreditedAttempt, createRejectedAttempt, createFailedAttempt, createExpiredIntent, createTimedOutPending)

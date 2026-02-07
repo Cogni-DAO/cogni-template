@@ -9,7 +9,7 @@
  *   - EXECUTION_IDEMPOTENCY_PERSISTED: Same Idempotency-Key → same result
  *   - INTERNAL_API_SHARED_SECRET: Requires Bearer SCHEDULER_API_TOKEN
  *   - GRANT_VALIDATED_TWICE: Grant re-validated at execution time
- * Side-effects: IO (database writes, graph execution via FakeLlmAdapter in test mode)
+ * Side-effects: IO (database writes, graph execution via mock-openai-api in test mode)
  * Notes: Requires dev stack with DB running (pnpm dev:stack:test).
  * Links: docs/SCHEDULER_SPEC.md, graphs.run.internal.v1.contract
  * @public
@@ -37,9 +37,7 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
   beforeEach(async () => {
     // Ensure test mode
     if (process.env.APP_ENV !== "test") {
-      throw new Error(
-        "This test must run in APP_ENV=test to use FakeLlmAdapter"
-      );
+      throw new Error("This test must run in APP_ENV=test (mock-LLM backend)");
     }
 
     const db = getSeedDb();

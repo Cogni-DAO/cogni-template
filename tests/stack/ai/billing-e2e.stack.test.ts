@@ -3,9 +3,9 @@
 
 /**
  * Module: `@tests/stack/ai/billing-e2e.stack.test`
- * Purpose: Stack test verifying billing flow from completion to ledger using fake LLM adapter.
- * Scope: Tests completion route, charge_receipts insertion, credit_ledger debit, summary endpoint. Does not test LiteLLM integration.
- * Invariants: Uses APP_ENV=test (fake adapter); seeds test data; validates atomic billing transaction
+ * Purpose: Stack test verifying billing flow from completion to ledger via mock-openai-api backend.
+ * Scope: Tests completion route, charge_receipts insertion, credit_ledger debit, summary endpoint. Does not test LiteLLM proxy internals.
+ * Invariants: Uses APP_ENV=test (mock-LLM backend); seeds test data; validates atomic billing transaction
  * Side-effects: IO (database writes, HTTP requests)
  * Notes: Verifies billingStatus='billed', cost tracking, balance consistency with deterministic fake costs
  * Links: None
@@ -39,11 +39,9 @@ import {
 describe("Billing E2E Stack Test", () => {
   it("should verify full billing flow: completion -> debit -> ledger -> summary", async () => {
     // 1. Setup
-    // Ensure we are in test mode to use FakeLlmAdapter
+    // Ensure we are in test mode (mock-LLM backend via litellm.test.config.yaml)
     if (process.env.APP_ENV !== "test") {
-      throw new Error(
-        "This test must run in APP_ENV=test to use FakeLlmAdapter"
-      );
+      throw new Error("This test must run in APP_ENV=test (mock-LLM backend)");
     }
 
     const mockSessionUser: SessionUser = {
