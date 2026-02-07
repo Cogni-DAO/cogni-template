@@ -58,6 +58,7 @@ This is a master index of all specs, updated as specs are migrated.
 | node-operator-contract-spec      | Node vs Operator Contract          | draft    | meta       | [node-operator-contract.md](./node-operator-contract.md)           |
 | spec.onchain-readers             | On-Chain Treasury & Ownership      | draft    | web3       | [onchain-readers.md](./onchain-readers.md)                         |
 | openclaw-sandbox-controls-spec   | OpenClaw Sandbox Controls Design   | draft    | ai-graphs  | [openclaw-sandbox-controls.md](./openclaw-sandbox-controls.md)     |
+| openclaw-sandbox-spec            | OpenClaw Sandbox Integration       | draft    | ai-graphs  | [openclaw-sandbox-spec.md](./openclaw-sandbox-spec.md)             |
 | packages-architecture-spec       | Packages Architecture              | draft    | infra      | [packages-architecture.md](./packages-architecture.md)             |
 | payments-design-spec             | Payments: USDC with Backend Verify | draft    | billing    | [payments-design.md](./payments-design.md)                         |
 | prompt-registry-spec             | Prompt Registry                    | draft    | ai-graphs  | [prompt-registry.md](./prompt-registry.md)                         |

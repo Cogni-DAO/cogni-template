@@ -192,7 +192,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | NODE_FORMATION_SPEC.md               | node-formation.md              | ini.node-formation-ui.md           | -   | node-formation-guide.md | AB+road    | [x]  | [x]  |
 | NODE_VS_OPERATOR_CONTRACT.md         | node-operator-contract.md      | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | OPENCLAW_SANDBOX_CONTROLS.md         | openclaw-sandbox-controls.md   | ini.sandboxed-agents.md            | -   | -                       | AB+road    | [x]  | [x]  |
-| OPENCLAW_SANDBOX_SPEC.md             | -                              | -                                  | -   | -                       | TBD        | [ ]  | [ ]  |
+| OPENCLAW_SANDBOX_SPEC.md             | openclaw-sandbox-spec.md       | ini.sandboxed-agents.md            | -   | -                       | AB+road    | [x]  | [x]  |
 | OBSERVABILITY.md                     | observability.md               | -                                  | -   | -                       | migrated   | [x]  | [ ]  |
 | OBSERVABILITY_REQUIRED_SPEC.md       | observability-requirements.md  | ini.observability-hardening.md     | -   | -                       | AB+road    | [x]  | [ ]  |
 | ONCHAIN_READERS.md                   | onchain-readers.md             | ini.onchain-indexer.md             | -   | -                       | AB+road    | [x]  | [ ]  |
