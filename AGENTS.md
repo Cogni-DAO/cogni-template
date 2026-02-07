@@ -60,8 +60,8 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [Chain Deployment Tech Debt](docs/CHAIN_DEPLOYMENT_TECH_DEBT.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Authorization (RBAC/ReBAC)](docs/RBAC_SPEC.md)
-- [Tenant Connections](docs/TENANT_CONNECTIONS_SPEC.md)
-- [Tool Use Spec](docs/TOOL_USE_SPEC.md)
+- [Tenant Connections](docs/spec/tenant-connections.md)
+- [Tool Use Spec](docs/spec/tool-use.md)
 - [Services Migration (initiative)](work/initiatives/ini.cicd-services-gitops.md)
 
 ### AI & Evals

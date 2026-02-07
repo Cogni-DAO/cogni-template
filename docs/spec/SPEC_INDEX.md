@@ -50,15 +50,19 @@ This is a master index of all specs, updated as specs are migrated.
 | n8n-adapter-spec                 | n8n Workflow Execution Adapter     | draft    | ai-graphs  | [n8n-adapter.md](./n8n-adapter.md)                                 |
 | spec.node-ci-cd-contract         | Node CI/CD Contract                | draft    | deployment | [node-ci-cd-contract.md](./node-ci-cd-contract.md)                 |
 | node-operator-contract-spec      | Node vs Operator Contract          | draft    | meta       | [node-operator-contract.md](./node-operator-contract.md)           |
+| spec.onchain-readers             | On-Chain Treasury & Ownership      | draft    | web3       | [onchain-readers.md](./onchain-readers.md)                         |
 | packages-architecture-spec       | Packages Architecture              | draft    | infra      | [packages-architecture.md](./packages-architecture.md)             |
 | prompt-registry-spec             | Prompt Registry                    | draft    | ai-graphs  | [prompt-registry.md](./prompt-registry.md)                         |
 | public-analytics-spec            | Public Analytics Page              | draft    | data       | [public-analytics.md](./public-analytics.md)                       |
 | runtime-policy-spec              | Route Runtime Policy               | draft    | deployment | [runtime-policy.md](./runtime-policy.md)                           |
+| spec.tenant-connections          | Tenant Connections Design          | draft    | auth       | [tenant-connections.md](./tenant-connections.md)                   |
 | temporal-patterns-spec           | Temporal Patterns                  | draft    | ai-graphs  | [temporal-patterns.md](./temporal-patterns.md)                     |
 | security-auth-spec               | Security & Authentication          | draft    | auth       | [security-auth.md](./security-auth.md)                             |
 | services-architecture-spec       | Services Architecture              | draft    | deployment | [services-architecture.md](./services-architecture.md)             |
 | spec.sourcecred                  | SourceCred Implementation          | draft    | community  | [sourcecred.md](./sourcecred.md)                                   |
 | sourcecred-config-rationale-spec | SourceCred Configuration Rationale | draft    | community  | [sourcecred-config-rationale.md](./sourcecred-config-rationale.md) |
+| spec.tool-use                    | Tool Use Specification             | draft    | ai-graphs  | [tool-use.md](./tool-use.md)                                       |
+| spec.unified-graph-launch        | Unified Graph Launch Design        | draft    | ai-graphs  | [unified-graph-launch.md](./unified-graph-launch.md)               |
 | ui-implementation-spec           | UI Implementation                  | draft    | meta       | [ui-implementation.md](./ui-implementation.md)                     |
 | spec.usage-history               | Usage History Design               | draft    | data       | [usage-history.md](./usage-history.md)                             |
 | scheduler-spec                   | Scheduler Specification            | active   | ai-graphs  | [scheduler.md](./scheduler.md)                                     |
@@ -94,9 +98,6 @@ This is a master index of all specs, updated as specs are migrated.
 Legacy specs in `/docs/*.md` to be migrated to `/docs/spec/`:
 
 - DATABASE_RLS_SPEC.md
-- TOOL_USE_SPEC.md
-- TENANT_CONNECTIONS_SPEC.md
-- UNIFIED_GRAPH_LAUNCH_SPEC.md
 
 ## Adding a Spec
 
