@@ -187,6 +187,7 @@ describe("security/ai/validation", () => {
         aiCompletionOperation.input.parse({
           messages: [],
           model: TEST_MODEL_ID,
+          graphName: "langgraph:poet",
         })
       ).not.toThrow();
 
