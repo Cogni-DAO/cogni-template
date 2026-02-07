@@ -161,7 +161,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | CREDITS_PAGE_UI_CONSOLIDATION.md     | -                              | -                                  | -   | -                       | snapshot   | [x]  | [ ]  |
 | CRED_LICENSING_POLICY_SPEC.md        | cred-licensing-policy.md       | ini.cred-licensing.md              | -   | -                       | roadmap    | [x]  | [ ]  |
 | DAO_ENFORCEMENT.md                   | dao-enforcement.md             | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
-| DATABASE_OPS_SPEC.md                 | -                              | ini.database-ops.md                | -   | -                       | roadmap    | [x]  | [ ]  |
+| DATABASE_OPS_SPEC.md                 | -                              | ini.database-ops.md                | -   | -                       | roadmap    | [x]  | [x]  |
 | DATABASES.md                         | databases.md                   | -                                  | -   | -                       | migrated   | [x]  | [ ]  |
 | DATABASE_RLS_SPEC.md                 | database-rls.md                | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | DATABASE_URL_ALIGNMENT_SPEC.md       | database-url-alignment.md      | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
@@ -174,7 +174,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | GIT_SYNC_REPO_MOUNT.md               | git-sync-repo-mount.md         | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | GOV_DATA_COLLECTORS.md               | gov-data-collectors.md         | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | GRAPH_EXECUTION.md                   | graph-execution.md             | ini.graph-execution.md             | -   | -                       | AB+road    | [x]  | [x]  |
-| GRAPH_EXECUTOR_AUDIT.md              | -                              | ini.graph-execution.md             | -   | -                       | AB+road    | [x]  | [ ]  |
+| GRAPH_EXECUTOR_AUDIT.md              | -                              | ini.graph-execution.md             | -   | -                       | AB+road    | [x]  | [x]  |
 | HANDOFF_TAILWIND_SPACING_BUG.md      | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
 | HANDOFF_WALLET_BUTTON_STABILITY.md   | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
 | HUMAN_IN_THE_LOOP.md                 | human-in-the-loop.md           | ini.hil-graphs.md                  | -   | -                       | AB+road    | [x]  | [ ]  |
@@ -215,7 +215,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | SOURCECRED.md                        | sourcecred.md                  | ini.sourcecred-onchain.md          | -   | -                       | AB+road    | [x]  | [ ]  |
 | SOURCECRED_CONFIG_RATIONALE.md       | sourcecred-config-rationale.md | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | STYLE.md                             | style.md                       | -                                  | -   | -                       | migrated   | [x]  | [ ]  |
-| SUPABASE_EVALUATION.md               | supabase-evaluation.md         | ini.database-ops.md                | -   | -                       | AB+road    | [x]  | [x]  |
+| SUPABASE_EVALUATION.md               | research/supabase-evaluation   | ini.database-ops.md                | -   | -                       | AB+road    | [x]  | [x]  |
 | SYSTEM_TEST_ARCHITECTURE.md          | system-test-architecture.md    | ini.system-test-architecture.md    | -   | -                       | AB+road    | [x]  | [x]  |
 | SYSTEM_TENANT_DESIGN.md              | system-tenant.md               | ini.system-tenant-governance.md    | -   | -                       | AB+road    | [x]  | [ ]  |
 | TEMPORAL_PATTERNS.md                 | temporal-patterns.md           | -                                  | -   | -                       | as-built   | [x]  | [ ]  |

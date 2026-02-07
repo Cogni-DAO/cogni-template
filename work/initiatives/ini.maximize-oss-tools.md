@@ -34,6 +34,7 @@ Adopt proven OSS tools for infrastructure gaps rather than building bespoke solu
 | **MinIO** / Supabase Storage       | File uploads, signed URLs                                       | Need file uploads / signed URLs                | P1       | Not Started | —                                               |
 | **Supabase Realtime** / NATS       | Live dashboards, notifications                                  | Need live dashboards / notifications           | P1       | Not Started | —                                               |
 | **gVisor** / Kata Containers       | Docker hardening                                                | Docker hardening proven insufficient           | P1       | Not Started | [ini.sandboxed-agents](ini.sandboxed-agents.md) |
+| **pgAdmin** / Drizzle Studio       | Database admin UI, data browser                                 | Need visual DB inspection beyond CLI           | P2       | Not Started | —                                               |
 
 ## Explicitly Not Adopting
 
@@ -57,5 +58,5 @@ Adopt proven OSS tools for infrastructure gaps rather than building bespoke solu
 
 ## Design Notes
 
-- Derived from [Supabase Evaluation](../../docs/spec/supabase-evaluation.md) — full codebase vs. Supabase capability audit
+- Derived from [Supabase Evaluation](../../docs/research/supabase-evaluation.md) — full codebase vs. Supabase capability audit
 - WAL-G and pgBouncer plans detailed in [ini.database-ops](ini.database-ops.md)
