@@ -210,7 +210,7 @@ Already tracked in DATABASE_URL_ALIGNMENT_SPEC.md P1-P2:
 ## Design Notes
 
 - Derived from [Supabase Evaluation](../../docs/spec/supabase-evaluation.md) full codebase vs. Supabase capability audit
-- [CODE_GATES.md](../../docs/CODE_GATES.md) — WAL-G identified as P0 prerequisite
+- [Maximize OSS Tools](ini.maximize-oss-tools.md) — WAL-G identified as P0 prerequisite
 - [Database RLS Spec](../../docs/spec/database-rls.md) — P1 credential rotation item
 - [Database URL Alignment](../../docs/spec/database-url-alignment.md) — P3 DSN-only end state
 - [Databases Spec](../../docs/spec/databases.md) — Migration architecture, two-image strategy

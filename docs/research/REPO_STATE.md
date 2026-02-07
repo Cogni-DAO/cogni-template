@@ -19,7 +19,7 @@ tags: [meta]
 **Related Documentation:**
 
 - [Architecture](./ARCHITECTURE.md) - Directory structure and file locations
-- [Code Gates](./CODE_GATES.md) - P0 prerequisites (WAL-G, OpenFGA/OPA) before new feature work
+- [Maximize OSS Tools](../../work/initiatives/ini.maximize-oss-tools.md) - P0 prerequisites (WAL-G, OpenFGA/OPA) before new feature work
 - [Accounts Design](./ACCOUNTS_DESIGN.md) - Identity & billing model
 - [Security & Auth Spec](./SECURITY_AUTH_SPEC.md) - SIWE authentication architecture
 - [Payments Design](./PAYMENTS_DESIGN.md) - Native USDC payment architecture
