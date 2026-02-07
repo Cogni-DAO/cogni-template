@@ -1,7 +1,36 @@
+---
+id: spec.tool-use
+type: spec
+title: Tool Use Specification
+status: draft
+spec_state: draft
+trust: draft
+summary: Canonical tool semantics, policy enforcement, wire adapters, capability injection, and execution pipeline invariants
+read_when: Adding tools, modifying tool execution pipeline, implementing wire adapters, or changing policy enforcement
+implements: []
+owner: cogni-dev
+created: 2026-02-02
+verified: null
+tags:
+  - ai-graphs
+  - tooling
+---
+
 # Tool Use Specification
 
-> [!CRITICAL]
-> Tools execute via `toolRunner.exec()` only. Route maps AiEvents to `assistant-stream` format via `controller.addToolCallPart()`.
+## Context
+
+Tools execute via `toolRunner.exec()` only. Route maps AiEvents to `assistant-stream` format via `controller.addToolCallPart()`. The tool system uses canonical semantic types (`ToolSpec`, `ToolInvocationRecord`) independent of wire formats, with policy enforcement at both catalog construction and runtime execution.
+
+## Goal
+
+Define the tool execution invariants, semantic types, wire format adapters, policy enforcement rules, capability injection patterns, and execution pipeline that govern all tool usage across all executors (InProc, LangGraph dev, server).
+
+## Non-Goals
+
+- MCP gateway integration (future — see [ini.tool-use-evolution](../../work/initiatives/ini.tool-use-evolution.md) P2)
+- Graph-as-Tool subagents (future — see initiative P3)
+- Multi-tool parallel execution (future — see initiative PX)
 
 ## Core Invariants
 
@@ -15,7 +44,7 @@
 
 5. **TOOLCALLID_STABLE**: Same ID across start→result. Model-provided or UUID at boundary.
 
-6. **LANGGRAPH_OWNS_GRAPHS**: Agentic loops via `@cogni/langgraph-graphs`. No `@langchain/*` imports in `src/**`. See [LANGGRAPH_AI.md](LANGGRAPH_AI.md).
+6. **LANGGRAPH_OWNS_GRAPHS**: Agentic loops via `@cogni/langgraph-graphs`. No `@langchain/*` imports in `src/**`. See [langgraph-patterns.md](./langgraph-patterns.md).
 
 7. **STREAM_VIA_ASSISTANT_STREAM**: Use `assistant-stream` package only. No custom SSE.
 
@@ -65,9 +94,9 @@
 
 25. **TOOL_SAME_PATH_ALL_EXECUTORS**: Same policy/redaction/audit path for dev, server, and InProc. No executor-specific bypass paths (e.g., no dev.ts that skips policy). `toLangChainTool` wrapper enforces `configurable.toolIds` allowlist for all executors.
 
-26. **CONNECTION_ID_ONLY**: Tools requiring external auth receive `connectionId` (opaque reference), never raw credentials. Connection Broker resolves tokens at invocation time. No secrets in `configurable`, `ToolPolicyContext`, or ALS context. Applies to all authenticated tools regardless of source (`@cogni/ai-tools` or MCP). See [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md).
+26. **CONNECTION_ID_ONLY**: Tools requiring external auth receive `connectionId` (opaque reference), never raw credentials. Connection Broker resolves tokens at invocation time. No secrets in `configurable`, `ToolPolicyContext`, or ALS context. Applies to all authenticated tools regardless of source (`@cogni/ai-tools` or MCP). See [tenant-connections.md](./tenant-connections.md).
 
-26a. **CONNECTION_ID_VIA_CONTEXT**: `connectionId` is passed exclusively via `ToolInvocationContext.connectionId`, never in tool input args. Tools declaring `requiresConnection: true` must receive `ctx.connectionId`; missing = `validation_error`. Tool input schemas must NOT define `connectionId` properties; `toToolSpec()` rejects schemas containing `connectionId` at tool-spec derivation/registration time (not execution time). See [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md#CONNECTION_IN_CONTEXT_NOT_ARGS).
+26a. **CONNECTION_ID_VIA_CONTEXT**: `connectionId` is passed exclusively via `ToolInvocationContext.connectionId`, never in tool input args. Tools declaring `requiresConnection: true` must receive `ctx.connectionId`; missing = `validation_error`. Tool input schemas must NOT define `connectionId` properties; `toToolSpec()` rejects schemas containing `connectionId` at tool-spec derivation/registration time (not execution time). See [tenant-connections.md](./tenant-connections.md).
 
 27. **TOOL_SOURCE_RETURNS_BOUND_TOOL**: `ToolSourcePort.getBoundTool(toolId)` returns a `BoundToolRuntime` object that owns validation, execution, and redaction logic. `toolRunner` orchestrates the pipeline (policy → validate → exec → validate output → redact → emit events) but never imports Zod or performs schema operations directly. This keeps `@cogni/ai-core` semantic-only while `@cogni/ai-tools` owns schema logic.
 
@@ -89,273 +118,21 @@
 
 ---
 
-## Future Invariants (P1+ — Not Yet Enforced)
+### Future Invariants (P1+ — Not Yet Enforced)
 
 The following invariants are planned for P1+ and documented here for architectural visibility. They are NOT currently enforced by tests or runtime code.
 
-F1. **AUTHZ_CHECK_BEFORE_TOOL_EXEC** _(P1)_: `toolRunner.exec()` must call `AuthorizationPort.check(actor, subject?, 'tool.execute', tool:{toolId}, ctx)` BEFORE tool execution. When subject is present (agent acting on behalf of user), both permission AND delegation are verified. No bypass paths. See [RBAC_SPEC.md](RBAC_SPEC.md).
+F1. **AUTHZ_CHECK_BEFORE_TOOL_EXEC** _(P1)_: `toolRunner.exec()` must call `AuthorizationPort.check(actor, subject?, 'tool.execute', tool:{toolId}, ctx)` BEFORE tool execution. When subject is present (agent acting on behalf of user), both permission AND delegation are verified. No bypass paths. See [rbac.md](./rbac.md).
 
 F2. **CONTEXT_HAS_IDENTITY** _(P1)_: Every `ToolInvocationContext` must include `{ actorId, tenantId }` and optionally `{ subjectId, graphId }`. No anonymous tool execution. `subjectId` is set ONLY by server (not from request params) per OBO_SUBJECT_MUST_BE_BOUND. These fields are references only — no secrets.
 
 F3. **CAPABILITY_OWNS_SECRETS** _(P1)_: Capabilities are injectable interfaces. Secrets/env access only inside runtime composition roots, never in tool files or ai-tools package.
 
----
+## Design
 
-## Implementation Checklist
+### Key Decisions
 
-### P0: Canonical Tool Semantics + OpenAI Wire Adapter
-
-Per invariants **TOOL_SEMANTICS_CANONICAL**, **WIRE_FORMATS_ARE_ADAPTERS**, **OPENAI_WIRE_V1_SUPPORTED**, **JSON_SCHEMA7_PARAMETERS**, **NO_MANUAL_SCHEMA_DUPLICATION**, **GOLDEN_FIXTURES_ENFORCE_WIRE_FORMAT**:
-
-**Semantic types (`@cogni/ai-core/tooling/`):**
-
-- [x] Create `ToolSpec { name, description, inputSchema: JSONSchema7, redaction, schemaHash? }` — tool definition (no Zod runtime, schemaHash optional for P0)
-- [x] Create `ToolInvocationRecord { toolCallId, name, args, result, error, startedAtMs, endedAtMs, raw? }` — execution record
-- [x] `raw` field preserves provider-native payload (Anthropic content blocks, attachments)
-- [x] All internal tool logic uses these types; wire formats are adapter concerns
-
-**Schema compilation (`@cogni/ai-tools`):**
-
-- [x] Add `zod-to-json-schema` dependency
-- [x] Create `toToolSpec(contract)` in `@cogni/ai-tools/schema.ts` — compiles contract → `ToolSpec` with JSONSchema7
-- [ ] P0 schema subset validation (rejects oneOf/anyOf/allOf/not/if-then-else/patternProperties) — deferred post-P0
-- [x] ~~Remove manual JSON Schema in `chat.runner.ts`~~ — runners deleted; `LangGraphInProcProvider` uses `toToolSpec()` via package
-
-**OpenAI wire adapter (`src/adapters/server/ai/`):**
-
-> Note: P0 uses LangGraph's `createReactAgent` which handles tool call assembly internally. Explicit encoder/decoder is P1 for non-LangGraph paths.
-
-- [ ] `OpenAIToolEncoder(ToolSpec)` → `tools[]` for LLM request (P1: non-LangGraph paths)
-- [ ] `OpenAIToolDecoder(stream)` → `ToolInvocationRecord` + tool AiEvents (P1)
-- [ ] Replace simplified `JsonSchemaObject` with proper `JSONSchema7` import (P1)
-
-**Golden fixtures (`tests/contracts/`):**
-
-- [ ] `openai-tool-wire-format.test.ts` — tool definition serialization (P1)
-- [ ] `tool-call-delta-assembly.test.ts` — stream delta accumulation (P1)
-- [x] Tool replay test — `tests/stack/ai/chat-tool-replay.stack.test.ts`
-
-### P0: First Tool End-to-End ✅
-
-**Port layer:**
-
-- [x] Add tool types to `llm.port.ts`: `LlmToolDefinition`, `LlmToolCall`, `LlmToolCallDelta`, `LlmToolChoice`
-- [x] Tools passed via `GraphRunRequest.toolIds` → `configurable.toolIds`
-
-**Package layer:**
-
-- [x] Create `get_current_time` tool in `@cogni/ai-tools/tools/get-current-time.ts`
-- [x] Create `@cogni/ai-tools` package with ToolContract, BoundTool types
-- [x] Create `toLangChainTool()` converter in `@cogni/langgraph-graphs/runtime/`
-- [x] Agentic loop via `createReactAgent` in `@cogni/langgraph-graphs` (LLM→tool→LLM works)
-
-**Provider layer:**
-
-- [x] `LangGraphInProcProvider` wires tools from runtime-bound `ToolSourcePort` to graph
-- [x] `createToolRunner()` with policy enforcement at runtime
-
-**Contract layer:**
-
-- [x] Extend `AssistantUiInputSchema` to accept tool-call/tool-result message parts
-- [x] Add JSONValue schema for JSON-serializable validation (finite numbers, no cyclic refs)
-- [x] Add cross-field constraints: role-based content type, exactly 1 tool-result per tool message
-- [x] Add size limits: toolCallId max 128, args max 8KB, result max 32KB
-- [x] Extend `toMessageDtos()` in route to convert tool messages to downstream format
-- [x] Add `validateToolCallIdConsistency()` for orphan tool-result detection
-- [x] Add regression tests (`tests/contract/ai.chat.v1.contract.test.ts`)
-
-**Route layer:**
-
-- [x] Route tool handling using `controller.addToolCallPart()` (lines 274-294)
-
-**UI layer (optional for MVP):**
-
-- [ ] Create `ToolFallback.tsx` for generic tool display
-
-#### Chores
-
-- [ ] Observability [observability.md](../.agent/workflows/observability.md)
-- [ ] Documentation [document.md](../.agent/workflows/document.md)
-
-### P0: Tool Policy Enforcement
-
-Per invariants **EFFECT_TYPED**, **POLICY_IS_DATA**, **DENY_BY_DEFAULT**, **TOOL_ID_NAMESPACED**:
-
-- [x] Add `ToolEffect` type to `@cogni/ai-core/tooling/types.ts`
-- [x] Add `effect: ToolEffect` field to `ToolContract` in `@cogni/ai-tools`
-- [x] Add `effect: ToolEffect` field to `ToolSpec` in `@cogni/ai-core`
-- [x] Update existing tools with effect declarations (`get_current_time` → `read_only`)
-- [x] Create `ToolPolicy` interface in `@cogni/ai-core/tooling/runtime/tool-policy.ts`
-- [x] Create `ToolCatalog` interface in `src/shared/ai/tool-catalog.ts`
-- [x] Move `tool-runner.ts` to `@cogni/ai-core/tooling/tool-runner.ts`
-- [x] Update `toolRunner.exec()` to accept and enforce `ToolPolicy`
-- [x] Add `policy_denied` to `ToolErrorCode` union
-- [x] Add namespace prefix to tool names (`core__get_current_time`)
-- [x] Add test: deny-by-default (unknown tool name must fail)
-- [x] Add test: policy filter (tool in contracts but not in policy must not execute)
-- [x] Add test: require_approval treated as deny in P0 (tool-runner.test.ts)
-- [x] Add test: catalog filtering uses policy.decide() (tool-catalog.test.ts)
-
-### P0: Tool Source Port + Connection Authorization
-
-Per invariants **TOOL_SOURCE_RETURNS_BOUND_TOOL**, **NO_SECRETS_IN_CONTEXT**, **AUTH_VIA_CAPABILITY_INTERFACE**, **GRANT_INTERSECTION_REQUIRED**, **ARCH_SINGLE_EXECUTION_PATH**:
-
-**ToolSourcePort abstraction (`@cogni/ai-core/tooling/`):**
-
-- [x] Create `ToolSourcePort` interface with `getBoundTool(toolId)` and `listToolSpecs()`
-- [x] Create `BoundToolRuntime` interface: `{ id, spec, effect, validateInput(), exec(), validateOutput(), redact() }`
-- [x] Create `ToolInvocationContext` type with base fields: `{ runId, toolCallId, connectionId? }`
-- [ ] Add identity fields to `ToolInvocationContext` — see P0: RBAC Wiring below
-- [x] Refactor `createToolRunner()` to accept `ToolSourcePort` instead of raw `boundTools`
-- [x] toolRunner calls `boundTool.validateInput()` (Zod stays in ai-tools, not ai-core)
-- [x] toolRunner calls `boundTool.exec(validatedArgs, ctx, capabilities)`
-- [x] toolRunner calls `boundTool.validateOutput()` then `boundTool.redact()`
-
-**StaticToolSource (`@cogni/ai-core/tooling/sources/`):**
-
-- [x] Create `StaticToolSource` implementing `ToolSourcePort`
-- [x] Wraps `TOOL_CONTRACTS` from `@cogni/ai-tools`; runtime binds with capabilities
-- [x] Export from ai-core barrel
-
-**Connection authorization (`@cogni/ai-core/tooling/`):**
-
-- [ ] Add `allowedConnectionIds?: string[]` to `GraphRunConfig`
-- [ ] Add `executionGrant?: { allowedConnectionIds: string[] }` to toolRunner config
-- [ ] Implement `computeEffectiveConnections(grant, request)` → intersection
-- [ ] Validate `connectionId ∈ effectiveConnectionIds` BEFORE broker resolve
-- [ ] Return `policy_denied` if connectionId not in intersection or intersection empty
-
-**Capability-based auth (`@cogni/ai-tools/capabilities/`):**
-
-- [x] Create `AuthCapability` interface: invocation-scoped, no connectionId param (per #29a)
-- [ ] Create `ConnectionClientFactory` interface: `for(connectionId): AuthenticatedClient`
-- [ ] Tools declare capability dependencies in contract: `capabilities: ['auth']`
-- [ ] Composition root binds capabilities to broker-backed implementations
-- [ ] toolRunner injects resolved capabilities into `boundTool.exec()`
-
-**Architectural tests (`tests/arch/`):**
-
-- [ ] `tool-single-execution-path.test.ts` — grep for direct `tool.func()` calls outside toolRunner
-- [ ] `no-secrets-in-context.test.ts` — static check for secret-shaped fields in context types
-- [ ] `connection-grant-intersection.test.ts` — unit test for intersection enforcement
-
-**Wiring:**
-
-- [ ] Update `LangGraphInProcProvider` to use `ToolSourcePort`
-- [ ] Update `src/bootstrap/ai/tool-bindings.ts` with `StaticToolSource`
-- [ ] Update LangChain wrappers to use new toolRunner signature
-
-**RBAC wiring (per AUTHZ_CHECK_BEFORE_TOOL_EXEC, CONTEXT_HAS_IDENTITY):**
-
-- [ ] Add `actorId: string` to `ToolInvocationContext`
-- [ ] Add `subjectId?: string` to `ToolInvocationContext` (OBO only, server-bound)
-- [ ] Add `tenantId: string` to `ToolInvocationContext`
-- [ ] Inject `AuthorizationPort` into `createToolRunner()` config
-- [ ] Call `authz.check(actor, subject?, 'tool.execute', tool:{id}, ctx)` before step 4 in pipeline
-- [ ] Add `authz_denied` and `authz_unavailable` to `ToolErrorCode` union (per RBAC_SPEC.md#6)
-- [ ] Arch test: `authz-at-tool-exec.test.ts` — grep for tool.exec without authz check
-- [ ] See [RBAC_SPEC.md](RBAC_SPEC.md) for full AuthorizationPort interface
-
-### P0.x: Tool Authoring Foundation (Next)
-
-**P0.1 Enabled-tool gating:**
-
-- [ ] ToolSource binding validates only enabled tool IDs for env/tenant; disabled tools require no bindings
-- [ ] `listToolSpecs()` returns only enabled tools
-- [ ] Acceptance: adding a disabled tool does not break bootstrap
-
-**P0.2 ToolModule manifest + registry:**
-
-- [ ] Define `ToolModule` interface in `@cogni/ai-tools/modules/types.ts`: `{ id, contract, bind(deps), requiredDeps }`
-- [ ] Bootstrap auto-binds modules from registry (no manual catalog/bindings edits)
-- [ ] Acceptance: adding a pure tool = 1 file; I/O tool = tool module + adapter + env factory
-
-**P0.3 Connection broker + grant intersection:**
-
-- [ ] `toolRunner.exec()` enforces allowlist/policy + grant intersection BEFORE resolving credentials
-- [ ] Credentials resolved via `ConnectionBrokerPort` using `ctx.connectionId` (no secrets in inputs)
-- [ ] Acceptance: auth-required tools cannot execute without connectionId + grants; no secrets in context
-
-### P1: Tool Ecosystem + ToolCatalog
-
-- [ ] `GraphLlmCaller` type enforcement (graphRunId requires graph_name + graph_version)
-- [ ] Include tools in `promptHash` computation (canonical tool schema)
-- [ ] `ToolFallback.tsx` for unregistered tool names
-- [ ] Tool telemetry in `ai_invocation_summaries` (tool_calls count, latency)
-- [ ] ToolCatalog becomes first-class (UI rendering, agent discovery)
-- [ ] Tenant/role-based ToolPolicy via config (use Casbin if complex)
-- [ ] Human-in-the-loop approval for `state_change`/`external_side_effect` tools
-
-### P2: MCP + Dynamic Tool Sources
-
-Per invariant **MCP_UNTRUSTED_BY_DEFAULT**:
-
-- [ ] Create `ToolProvider` interface: `StaticToolProvider` + `McpToolProvider`
-- [ ] MCP tool discovery via `tools/list` (read-only; no auto-enable)
-- [ ] Handle `tools/list_changed`: refresh catalog, keep policy unchanged
-- [ ] MCP tool ID format: `mcp:<serverId>:<toolName>`
-- [ ] Add test: MCP drift (newly discovered tool not enabled until policy changes)
-- [ ] Consider OPA/Cedar if centralized policy infrastructure needed
-
-### P3: Graph-as-Tool (Subagents)
-
-- [ ] Create `GraphTool` contract: implementation calls `GraphExecutorPort.runGraph()`
-- [ ] Enforce `allowedGraphs` allowlist
-- [ ] Enforce `maxDepth = 1` (no recursive subgraphs in P3)
-- [ ] Enforce strict budgets (time/tokens/USD)
-- [ ] Enforce bounded output (summary-first)
-- [ ] LangGraph interrupts for human-in-the-loop approval
-
-### PX: Advanced (Do NOT Build Yet)
-
-- [ ] Multi-tool parallel execution
-- [ ] Tool result streaming (partial results)
-
----
-
-## File Pointers (P0)
-
-| File                                                  | Change                                                                               |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `src/contracts/ai.chat.v1.contract.ts`                | Extended: tool-call/tool-result parts, JSONValue, cross-field validation             |
-| `src/app/api/v1/ai/chat/route.ts`                     | Extended: `toMessageDtos()` handles tool messages, `validateToolCallIdConsistency()` |
-| `tests/contract/ai.chat.v1.contract.test.ts`          | New: regression tests for tool message validation                                    |
-| `@cogni/ai-core/tooling/types.ts`                     | New: `ToolSpec`, `ToolInvocationRecord` — canonical semantic types                   |
-| `@cogni/ai-tools/schema.ts`                           | New: `toToolSpec(contract)` — compiles Zod contract → ToolSpec                       |
-| `src/adapters/server/ai/openai-tool-encoder.ts`       | New: `OpenAIToolEncoder(ToolSpec)` → `tools[]`                                       |
-| `src/adapters/server/ai/openai-tool-decoder.ts`       | New: `OpenAIToolDecoder(stream)` → `ToolInvocationRecord` + AiEvents                 |
-| `src/adapters/server/ai/litellm.adapter.ts`           | Use encoder/decoder; parse `delta.tool_calls` in SSE stream                          |
-| `src/adapters/server/ai/langgraph/inproc.provider.ts` | Uses tool contracts from catalog; schemas compiled via `@cogni/ai-tools`             |
-| `@cogni/ai-tools/tools/get-current-time.ts`           | Contract + implementation with capability injection                                  |
-| `@cogni/ai-tools/capabilities/*.ts`                   | Capability interfaces (e.g., Clock) for tool IO                                      |
-| `@cogni/langgraph-graphs/runtime/langchain-tools.ts`  | `toLangChainTool()` wrapper for LangGraph execution                                  |
-| `src/bootstrap/ai/tools.bindings.ts`                  | Bind capabilities → adapters for Next.js runtime                                     |
-| `src/app/api/v1/ai/chat/route.ts`                     | Uncomment `addToolCallPart()` handling (lines 275-285)                               |
-| `src/features/ai/components/tools/ToolFallback.tsx`   | New: generic tool result UI component (optional for MVP)                             |
-| `tests/contracts/openai-tool-wire-format.test.ts`     | New: golden fixture tests for OpenAI wire format conformance                         |
-| `tests/contracts/tool-invocation-record.test.ts`      | New: semantic record lifecycle tests                                                 |
-| `src/shared/ai/tool-policy.ts`                        | New: `ToolPolicy` interface for deny-by-default enforcement                          |
-| `src/shared/ai/tool-catalog.ts`                       | New: `ToolCatalog` interface for explicit tool visibility                            |
-| `tests/unit/ai/tool-policy.test.ts`                   | New: deny-by-default + policy filter tests                                           |
-
-**P0: Tool Source Port + Connection Auth (new files):**
-
-| File                                                  | Change                                                                   |
-| ----------------------------------------------------- | ------------------------------------------------------------------------ |
-| `@cogni/ai-core/tooling/ports/tool-source.port.ts`    | New: `ToolSourcePort` interface with `getBoundTool()`, `listToolSpecs()` |
-| `@cogni/ai-core/tooling/types.ts`                     | Add: `BoundToolRuntime`, `ToolInvocationContext`, `ToolCapabilities`     |
-| `@cogni/ai-core/tooling/sources/static.source.ts`     | New: `StaticToolSource` wrapping TOOL_CONTRACTS; runtime binds caps      |
-| `@cogni/ai-tools/capabilities/auth.ts`                | New: `AuthCapability` interface for broker-backed auth                   |
-| `@cogni/ai-tools/capabilities/index.ts`               | New: capability barrel exports                                           |
-| `tests/arch/tool-single-execution-path.test.ts`       | New: grep for direct tool.func() calls outside toolRunner                |
-| `tests/arch/no-secrets-in-context.test.ts`            | New: static check for secret-shaped fields in context types              |
-| `tests/unit/ai/connection-grant-intersection.test.ts` | New: grant intersection logic + deny-fast behavior                       |
-
----
-
-## Design Decisions
-
-### 1. Tool Architecture
+#### 1. Tool Architecture
 
 | Layer            | Location                                        | Owns                                                                        |
 | ---------------- | ----------------------------------------------- | --------------------------------------------------------------------------- |
@@ -384,9 +161,9 @@ Per invariant **MCP_UNTRUSTED_BY_DEFAULT**:
 
 **Note:** Per **TOOL_SEMANTICS_CANONICAL** and **WIRE_FORMATS_ARE_ADAPTERS**, the canonical types are semantic (not wire-format-specific). OpenAI function-calling is P0 via `OpenAIToolEncoder`/`OpenAIToolDecoder`. Future Anthropic adapter would add `AnthropicToolEncoder`/`AnthropicToolDecoder` mapping `tool_use`/`tool_result` content blocks to the same `ToolInvocationRecord`, preserving rich attachments in `raw`.
 
-### 2. Tool Policy Architecture (P0)
+#### 2. Tool Policy Architecture (P0)
 
-Per invariants **EFFECT_TYPED**, **CATALOG_IS_EXPLICIT**, **POLICY_IS_DATA**, **DENY_BY_DEFAULT**:
+Per invariants EFFECT_TYPED, CATALOG_IS_EXPLICIT, POLICY_IS_DATA, DENY_BY_DEFAULT:
 
 ```typescript
 // @cogni/ai-core/tooling/types.ts
@@ -470,9 +247,9 @@ interface ToolCatalog {
 
 **No tool registry service in P0.** Graphs import their tools directly. Tool bindings live in composition roots (`src/bootstrap/ai/tool-bindings.ts`), not adapter-scoped files.
 
-### 2b. ToolSourcePort + BoundToolRuntime Architecture
+#### 2b. ToolSourcePort + BoundToolRuntime Architecture
 
-Per invariants **TOOL_SOURCE_RETURNS_BOUND_TOOL**, **NO_SECRETS_IN_CONTEXT**, **AUTH_VIA_CAPABILITY_INTERFACE**:
+Per invariants TOOL_SOURCE_RETURNS_BOUND_TOOL, NO_SECRETS_IN_CONTEXT, AUTH_VIA_CAPABILITY_INTERFACE:
 
 ```typescript
 // @cogni/ai-core/tooling/ports/tool-source.port.ts
@@ -588,15 +365,15 @@ toolRunner.exec(toolId, rawArgs, ctx)
 - Grant intersection checked at step 4, BEFORE broker resolve (step 6)
 - P1: OpenFGA authz check at step 3 (currently skipped)
 
-### 3. assistant-stream Tool API
+#### 3. assistant-stream Tool API
 
 Route uses `assistant-stream` controller API. See `finalizeToolCall()` in `route.ts` for the correct pattern.
 
-**Critical:** `setResponse()` alone does NOT finalize the substream. Must call `close()` after. See Known Issues.
+**Critical:** `setResponse()` alone does NOT finalize the substream. Must call `close()` after. See Open Questions.
 
 **Never** invent custom SSE events. Use official helper only.
 
-### 4. Agentic Loop (chat.graph.ts)
+#### 4. Agentic Loop (chat.graph.ts)
 
 **Critical:** Graph calls `completion.executeStream()`, never `llmService` directly. This keeps billing/telemetry/promptHash centralized.
 
@@ -629,7 +406,7 @@ Route uses `assistant-stream` controller API. See `finalizeToolCall()` in `route
 
 **Finalization:** Emit exactly one `done` event and resolve `final` exactly once—regardless of how many tool loops occurred. No side effects attached to stream iteration.
 
-### 5. OpenAI Tool Call SSE Format
+#### 5. OpenAI Tool Call SSE Format
 
 LiteLLM streams tool calls as incremental deltas:
 
@@ -644,7 +421,7 @@ LiteLLM streams tool calls as incremental deltas:
 
 Accumulate by `index`, parse complete JSON when done.
 
-### 6. Tool UI Location
+#### 6. Tool UI Location
 
 Tool components in `features/ai/components/tools/`. Kit cannot import features.
 
@@ -657,7 +434,7 @@ export const GenerateTitleToolUI = makeAssistantToolUI({
 });
 ```
 
-### 7. Completion Contract for Tool Calls
+#### 7. Completion Contract for Tool Calls
 
 The `LlmCompletionResult` contract for tool calls:
 
@@ -666,7 +443,7 @@ The `LlmCompletionResult` contract for tool calls:
 - Graph must NOT attempt to parse or execute tools until `final` resolves
 - Adapter resets assembly state between `completionStream()` calls (per **ADAPTER_ASSEMBLES_TOOLCALLS**)
 
-### 8. Tool Argument Parse Errors
+#### 8. Tool Argument Parse Errors
 
 When `toolCall.function.arguments` is invalid JSON:
 
@@ -682,39 +459,60 @@ When `toolCall.function.arguments` is invalid JSON:
 3. Graph continues: feed error result back to LLM as tool message for self-correction (do NOT halt)
 4. LLM may retry with corrected arguments or respond with explanation
 
----
+### Existing Infrastructure
 
-## Existing Infrastructure (✓ Built)
+| Component                | Location                                        | Status                                       |
+| ------------------------ | ----------------------------------------------- | -------------------------------------------- |
+| AiEvent types            | `@cogni/ai-core`                                | Complete                                     |
+| ToolContract, BoundTool  | `@cogni/ai-tools`                               | Complete                                     |
+| get_current_time tool    | `@cogni/ai-tools/tools/`                        | Complete                                     |
+| tool-runner.ts           | `@cogni/ai-core/tooling/tool-runner.ts`         | Complete pipeline (canonical location)       |
+| tool-policy.ts           | `@cogni/ai-core/tooling/runtime/tool-policy.ts` | ToolPolicy, createToolAllowlistPolicy        |
+| Route tool handling      | `app/api/v1/ai/chat/route.ts`                   | Active (lines 274-294)                       |
+| ai_runtime.ts            | `features/ai/services/ai_runtime.ts`            | Uses GraphExecutorPort (no tool routing yet) |
+| LlmCaller/GraphLlmCaller | `ports/llm.port.ts`                             | Types defined                                |
 
-| Component                | Location                                        | Status                                         |
-| ------------------------ | ----------------------------------------------- | ---------------------------------------------- |
-| AiEvent types            | `@cogni/ai-core`                                | ✓ Complete                                     |
-| ToolContract, BoundTool  | `@cogni/ai-tools`                               | ✓ Complete                                     |
-| get_current_time tool    | `@cogni/ai-tools/tools/`                        | ✓ Complete                                     |
-| tool-runner.ts           | `@cogni/ai-core/tooling/tool-runner.ts`         | ✓ Complete pipeline (canonical location)       |
-| tool-policy.ts           | `@cogni/ai-core/tooling/runtime/tool-policy.ts` | ✓ ToolPolicy, createToolAllowlistPolicy        |
-| Route tool handling      | `app/api/v1/ai/chat/route.ts`                   | ✓ Active (lines 274-294)                       |
-| ai_runtime.ts            | `features/ai/services/ai_runtime.ts`            | ✓ Uses GraphExecutorPort (no tool routing yet) |
-| LlmCaller/GraphLlmCaller | `ports/llm.port.ts`                             | ✓ Types defined                                |
+### File Pointers
 
----
+| File                                                 | Purpose                                                   |
+| ---------------------------------------------------- | --------------------------------------------------------- |
+| `@cogni/ai-core/tooling/types.ts`                    | Canonical semantic types (ToolSpec, ToolInvocationRecord) |
+| `@cogni/ai-core/tooling/tool-runner.ts`              | Canonical execution pipeline                              |
+| `@cogni/ai-core/tooling/runtime/tool-policy.ts`      | ToolPolicy, createToolAllowlistPolicy                     |
+| `@cogni/ai-core/tooling/ports/tool-source.port.ts`   | ToolSourcePort interface                                  |
+| `@cogni/ai-core/tooling/sources/static.source.ts`    | StaticToolSource implementation                           |
+| `@cogni/ai-tools/tools/*.ts`                         | Tool contracts + implementations                          |
+| `@cogni/ai-tools/schema.ts`                          | toToolSpec() — Zod → ToolSpec compiler                    |
+| `@cogni/ai-tools/capabilities/*.ts`                  | Capability interfaces (Clock, Auth)                       |
+| `@cogni/langgraph-graphs/runtime/langchain-tools.ts` | toLangChainTool() wrapper                                 |
+| `src/bootstrap/ai/tools.bindings.ts`                 | Capability → adapter binding for Next.js                  |
+| `src/shared/ai/tool-catalog.ts`                      | ToolCatalog interface                                     |
+| `src/app/api/v1/ai/chat/route.ts`                    | Route tool handling (addToolCallPart)                     |
 
-## Known Issues
+## Acceptance Checks
+
+**Automated:**
+
+- `tests/unit/ai/tool-runner.test.ts` — deny-by-default, policy filter, require_approval
+- `tests/unit/ai/tool-catalog.test.ts` — catalog filtering via policy.decide()
+- `tests/contract/ai.chat.v1.contract.test.ts` — tool message validation
+- `tests/stack/ai/chat-tool-replay.stack.test.ts` — tool replay end-to-end
+
+**Manual:**
+
+1. Verify all tool execution flows through `toolRunner.exec()` (grep for bypass patterns)
+2. Verify no `@langchain/*` imports in `src/**`
+
+## Open Questions
 
 - [ ] **assistant-stream API footgun**: `setResponse()` does not finalize tool-call substream; `close()` must be called after. Current workaround: `finalizeToolCall()` helper in `route.ts`. Upstream fix pending.
-- [ ] **assistant-stream chunk ordering**: Async merger does not guarantee ToolCallResult precedes FinishMessage. Chunks exist but may arrive out of order. Upstream fix needed. see `tests/stack/ai/chat-tool-replay.stack.test.ts`
+- [ ] **assistant-stream chunk ordering**: Async merger does not guarantee ToolCallResult precedes FinishMessage. Chunks exist but may arrive out of order. Upstream fix needed. See `tests/stack/ai/chat-tool-replay.stack.test.ts`.
 
----
+## Related
 
-## Related Documents
-
-- [TOOLS_AUTHORING.md](TOOLS_AUTHORING.md) — Practical guide: how to add a new tool
-- [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — Correlation IDs, telemetry invariants
-- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Architecture, anti-patterns
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — GraphExecutorPort, billing, pump+fanout
-- [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md) — Authenticated tool connections
-
----
-
-**Last Updated**: 2026-02-02
-**Status**: Draft (Rev 9 - #29a per-invocation construction requirement; canonical naming: effectiveConnectionIds, grant.allowedConnectionIds ∩ request.connectionIds)
+- [tools-authoring.md](../guides/tools-authoring.md) — Practical guide: how to add a new tool
+- [ai-setup.md](./ai-setup.md) — Correlation IDs, telemetry invariants
+- [langgraph-patterns.md](./langgraph-patterns.md) — Architecture, anti-patterns
+- [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md) — GraphExecutorPort, billing, pump+fanout
+- [tenant-connections.md](./tenant-connections.md) — Authenticated tool connections
+- [Initiative: Tool Use Evolution](../../work/initiatives/ini.tool-use-evolution.md)
