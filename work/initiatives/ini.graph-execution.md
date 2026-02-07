@@ -346,7 +346,7 @@ Per-node model/tool overrides via flat configurable keys: `<nodeKey>__model`, `<
 
 ## Design Notes
 
-- Audit report: docs/GRAPH_EXECUTOR_AUDIT.md (point-in-time, 2026-02-07)
+- Audit report: (deleted, content preserved in this initiative — point-in-time, 2026-02-07)
 - GraphProvider is an internal adapter interface, NOT a port — acceptable for current executor count (3)
 - ⚠️ BYPASS RISK: No architectural enforcement prevents facades from importing adapters directly (only convention + arch_probes)
 - Dev provider emits hints-only UsageFact (no usageUnitId); full reconciliation deferred to P1

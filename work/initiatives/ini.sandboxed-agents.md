@@ -645,7 +645,7 @@ Prove sandbox container can reach LiteLLM via internal Docker network while rema
 - [x] Proxy injects billing headers: `x-litellm-end-user-id: ${billingAccountId}` + `x-litellm-spend-logs-metadata` (run correlation + Langfuse)
 - [x] Nginx audit log captures `$upstream_http_x_litellm_call_id` for per-call tracing
 - [x] Provider emits `usage_report` AiEvent so `RunEventRelay` commits charge_receipt
-- [ ] Capture `x-litellm-call-id` from proxy response inline for `usageUnitId` (per GRAPH_EXECUTOR_AUDIT.md P0 item #2)
+- [ ] Capture `x-litellm-call-id` from proxy response inline for `usageUnitId` (per ini.graph-execution Crawl P0)
 - [ ] Set `executorType: "sandbox"` in UsageFact (per `UsageFactStrictSchema`)
 - [ ] Verify `charge_receipts` table has entry with `source_reference = ${runId}/0/${litellmCallId}`
 
