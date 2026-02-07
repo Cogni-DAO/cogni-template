@@ -86,6 +86,7 @@ This is a master index of all specs, updated as specs are migrated.
 | docs-work-system-spec            | Docs + Work System Spec            | draft    | infra      | [docs-work-system.md](./docs-work-system.md)                       |
 | architecture-spec                | Cogni-Template Architecture        | active   | meta       | [architecture.md](./architecture.md)                               |
 | style-spec                       | Style Specification                | active   | meta       | [style.md](./style.md)                                             |
+| supabase-evaluation-spec         | Supabase Evaluation                | draft    | infra      | [supabase-evaluation.md](./supabase-evaluation.md)                 |
 | spec.system-tenant               | System Tenant & Governance         | draft    | auth       | [system-tenant.md](./system-tenant.md)                             |
 | development-lifecycle            | Development Lifecycle              | proposed | workflows  | [development-lifecycle.md](./development-lifecycle.md)             |
 

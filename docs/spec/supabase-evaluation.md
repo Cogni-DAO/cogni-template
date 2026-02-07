@@ -1,13 +1,54 @@
+---
+id: supabase-evaluation-spec
+type: spec
+title: Supabase Evaluation — Engineering Due Diligence
+status: draft
+spec_state: draft
+trust: draft
+summary: Full codebase inventory vs. Supabase capability map. Decision record for adopting only Supabase OSS building blocks (WAL-G, pgBouncer) — not the full platform.
+read_when: Considering Supabase adoption, evaluating database ops primitives, or assessing architecture overlap with managed platforms.
+implements:
+owner: derekg1729
+created: 2026-02-06
+verified: 2026-02-07
+tags: [evaluation, database, infrastructure, supabase]
+---
+
 # Supabase Evaluation: Engineering Due Diligence
 
 > **Date:** 2026-02-06
-> **Branch:** fix/infra-setup-atomic-secrets
 > **Scope:** Full codebase inventory vs. Supabase capability map
 > **Status:** Decision-ready analysis (no recommendation until all facts stated)
 
 ---
 
-## Part 1: Current Architecture Inventory
+## Context
+
+This document evaluates whether to adopt Supabase (hosted or self-hosted) for our infrastructure. It inventories the current architecture, discovers invariants, maps Supabase capabilities against our implementations, and produces a decision-ready analysis.
+
+## Goal
+
+Document the engineering due diligence for Supabase adoption, establishing which primitives to adopt (WAL-G, pgBouncer) and which to keep custom (auth, RLS, API, observability, sandbox).
+
+## Non-Goals
+
+- Implementing any Supabase adoption (see [Database Ops Initiative](../../work/initiatives/ini.database-ops.md))
+- Replacing SIWE auth, RLS policies, or API routes
+- Self-hosting the full Supabase platform
+
+## Core Invariants
+
+1. **SUPABASE_OSS_ONLY**: Adopt only Supabase OSS building blocks (WAL-G, pgBouncer) — not the full Supabase self-hosted platform. The application, RLS model, provisioner, and DSN contract remain unchanged.
+
+2. **SIWE_AUTH_NON_NEGOTIABLE**: Never replace SIWE auth with Supabase Auth. Wallet-first identity is a core differentiator.
+
+3. **RLS_NO_REWRITE**: Keep our SET LOCAL `app.current_user_id` RLS pattern. Do not rewrite to Supabase's `auth.uid()` pattern.
+
+4. **CONTRACTS_OVER_POSTGREST**: Keep Zod contract API routes. Do not adopt PostgREST — it cannot replicate billing hooks, observability, and contract validation.
+
+## Design
+
+### Current Architecture Inventory
 
 ### 1.1 Top-Level Architecture Map
 
@@ -70,7 +111,7 @@
 
 ---
 
-## Part 2: Invariant Discovery
+### Invariant Discovery
 
 ### 2.1 Identity & Actor Invariants
 
@@ -95,7 +136,7 @@
 
 | Invariant              | Status                                 | Where enforced                                                                                                            | Evidence                                                                                                                                                                                         |
 | ---------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **SECRETS_ISOLATION**  | Yes (design), partial (implementation) | Sandbox: SECRETS_HOST_ONLY invariant in docs/SANDBOXED_AGENTS.md. App: Zod validation in src/shared/env/server.ts.        | Secrets from GitHub Secrets → CI → SSH → VM .env → docker-compose env. Never baked into images. Sandbox containers get no secrets. P0.5 unix socket proxy will inject auth headers on host side. |
+| **SECRETS_ISOLATION**  | Yes (design), partial (implementation) | Sandbox: SECRETS_HOST_ONLY invariant in docs/spec/sandboxed-agents.md. App: Zod validation in src/shared/env/server.ts.   | Secrets from GitHub Secrets → CI → SSH → VM .env → docker-compose env. Never baked into images. Sandbox containers get no secrets. P0.5 unix socket proxy will inject auth headers on host side. |
 | **ENV_SEPARATION**     | Yes                                    | 6 deployment modes in docs/ENVIRONMENTS.md; APP_ENV=production\|test controls adapter wiring                              | Separate .env.local / .env.test. GitHub Environments for preview/production. Separate VMs per environment.                                                                                       |
 | **NETWORK_BOUNDARIES** | Yes                                    | docker-compose.yml defines cogni-edge (external) and internal (isolated) networks. sandbox-internal (dev, internal: true) | Postgres not exposed in production. Temporal bound to 127.0.0.1. Sandbox network=none by default.                                                                                                |
 
@@ -109,15 +150,15 @@
 
 ### 2.5 Agent/Sandbox Invariants
 
-| Invariant          | Status                           | Where enforced                                             | Evidence                                                                                                                                                   |
-| ------------------ | -------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **SANDBOX_GATING** | Yes (design + P0 implementation) | src/ports/sandbox-runner.port.ts; docs/SANDBOXED_AGENTS.md | SandboxRunnerPort.runOnce() enforces network=none, resource limits, capability drop (CapDrop: ["ALL"]), no-new-privileges, PidsLimit(256), ReadonlyRootfs. |
-| **WRITE_PATHS**    | Designed, not fully enforced     | docs/SANDBOXED_AGENTS.md WRITE_PATH_IS_BRANCH invariant    | P0.5+: push to branch only. PR creation requires explicit request. Currently P0.5 in progress.                                                             |
-| **TOOL_POLICY**    | Designed, not implemented        | docs/RBAC_SPEC.md ToolPolicy layer; docs/TOOL_USE_SPEC.md  | DENY_BY_DEFAULT designed. OpenFGA check before tool execution designed. P0 checklist items all unchecked in RBAC_SPEC.md.                                  |
+| Invariant          | Status                           | Where enforced                                                  | Evidence                                                                                                                                                   |
+| ------------------ | -------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **SANDBOX_GATING** | Yes (design + P0 implementation) | src/ports/sandbox-runner.port.ts; docs/spec/sandboxed-agents.md | SandboxRunnerPort.runOnce() enforces network=none, resource limits, capability drop (CapDrop: ["ALL"]), no-new-privileges, PidsLimit(256), ReadonlyRootfs. |
+| **WRITE_PATHS**    | Designed, not fully enforced     | docs/spec/sandboxed-agents.md WRITE_PATH_IS_BRANCH invariant    | P0.5+: push to branch only. PR creation requires explicit request. Currently P0.5 in progress.                                                             |
+| **TOOL_POLICY**    | Designed, not implemented        | docs/RBAC_SPEC.md ToolPolicy layer; docs/TOOL_USE_SPEC.md       | DENY_BY_DEFAULT designed. OpenFGA check before tool execution designed. P0 checklist items all unchecked in RBAC_SPEC.md.                                  |
 
 ---
 
-## Part 3: Supabase Capability Map
+### Supabase Capability Map
 
 ### 3.1 What Supabase Provides (Verified)
 
@@ -182,7 +223,7 @@
 
 ---
 
-## Part 4: Duplication + Gaps Analysis
+### Duplication + Gaps Analysis
 
 ### Table 2: Supabase Overlap Map
 
@@ -231,7 +272,7 @@
 
 ---
 
-## Part 5: Integration Options
+### Integration Options
 
 ### Option A: Minimal Change — Supabase for Primitives Only
 
@@ -317,7 +358,7 @@
 
 ---
 
-## Part 6: Risk Register
+### Risk Register
 
 ### Table 3: Risk Register
 
@@ -337,7 +378,7 @@
 
 ---
 
-## Part 7: Decision-Ready Summary
+## Key Decisions
 
 ### Table 1: Current Primitives Inventory
 
@@ -375,26 +416,9 @@ Almost nothing cleanly. Our implementations are tightly integrated with domain-s
 | Hexagonal architecture with Zod contracts                         | Architectural pattern, not infrastructure  |
 | Observability stack (Pino + Alloy + Loki + Langfuse + Prometheus) | Supabase logging is far less comprehensive |
 
-### What We Should Stop Building Immediately (Commodity Duplication)
+### What We Should Stop Building / Recommended Phased Plan
 
-| Item                           | Stop building     | Adopt instead                                           |
-| ------------------------------ | ----------------- | ------------------------------------------------------- |
-| Backup solution from scratch   | Yes               | WAL-G sidecar (already specced) or Supabase hosted PITR |
-| Connection pooler from scratch | Yes               | pgBouncer (already specced) or Supavisor                |
-| Custom admin/data browser UI   | Yes (don't start) | pgAdmin, Supabase Studio, or Drizzle Studio             |
-
-### Recommended Phased Plan
-
-| Phase     | Action                                                        | Touches app code?              | Timeline signal                           |
-| --------- | ------------------------------------------------------------- | ------------------------------ | ----------------------------------------- |
-| **P0**    | Add WAL-G backup sidecar (per DATABASE_OPS_SPEC)              | No                             | Before any production data matters        |
-| **P1**    | Credential convergence in provision.sh                        | No                             | Next deploy cycle                         |
-| **P2**    | Add pgBouncer between app and Postgres                        | DSN host change only           | When connection count > 20                |
-| **Eval**  | If file storage needed → adopt Supabase Storage (self-hosted) | New adapter                    | When feature requires uploads             |
-| **Eval**  | If ops burden too high → migrate Postgres to Supabase hosted  | DSN change + verify RLS compat | When team wants managed DB                |
-| **Never** | Replace SIWE auth with Supabase Auth                          | N/A                            | Wallet identity is non-negotiable         |
-| **Never** | Replace API routes with PostgREST                             | N/A                            | Contracts + billing hooks + observability |
-| **Never** | Adopt Supabase Realtime for AI streaming                      | N/A                            | assistant-stream works well               |
+> Phased plan and "stop building" tables are tracked in the [Database Ops Initiative](../../work/initiatives/ini.database-ops.md).
 
 ### Bottom Line
 
@@ -438,4 +462,22 @@ This evaluation confirms that assessment is correct. The overlap between Supabas
 | AI telemetry port           | src/ports/ai-telemetry.port.ts                              | RecordInvocationParams with correlation IDs              |
 | Usage port (LiteLLM API)    | src/ports/usage.port.ts                                     | ActivityUsagePort with spend logs/charts                 |
 | RBAC design (not built)     | docs/RBAC_SPEC.md                                           | OpenFGA, dual-check, actor/subject model                 |
-| Sandbox spec                | docs/SANDBOXED_AGENTS.md                                    | P0 complete, P0.5a complete, P0.5 in progress            |
+| Sandbox spec                | docs/spec/sandboxed-agents.md                               | P0 complete, P0.5a complete, P0.5 complete               |
+
+## Acceptance Checks
+
+**Manual:**
+
+1. Confirm DATABASE_OPS_SPEC.md aligns with this evaluation's recommendations
+2. Confirm no Supabase Auth, PostgREST, or Realtime dependencies exist in the codebase
+
+## Open Questions
+
+_(None — decision is finalized: adopt only Supabase OSS building blocks)_
+
+## Related
+
+- [Database Ops Initiative](../../work/initiatives/ini.database-ops.md) — implementation roadmap (WAL-G, credential convergence, pgBouncer)
+- [Databases Spec](./databases.md) — migration architecture, two-image strategy
+- [Database RLS](./database-rls.md) — RLS policies, P1 credential rotation
+- [Database URL Alignment](./database-url-alignment.md) — DSN-only end state

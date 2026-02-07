@@ -182,9 +182,34 @@ Already tracked in DATABASE_URL_ALIGNMENT_SPEC.md P1-P2:
 
 - (none yet — specs created when code merges)
 
+### Roadmap — Supabase Evaluation Decisions Track
+
+> Source: docs/SUPABASE_EVALUATION.md (roadmap content extracted during docs migration)
+
+#### What We Should Stop Building (Commodity Duplication)
+
+| Item                           | Stop building     | Adopt instead                                           |
+| ------------------------------ | ----------------- | ------------------------------------------------------- |
+| Backup solution from scratch   | Yes               | WAL-G sidecar (already specced) or Supabase hosted PITR |
+| Connection pooler from scratch | Yes               | pgBouncer (already specced) or Supavisor                |
+| Custom admin/data browser UI   | Yes (don't start) | pgAdmin, Supabase Studio, or Drizzle Studio             |
+
+#### Recommended Phased Plan
+
+| Phase     | Action                                                        | Touches app code?              | Timeline signal                           |
+| --------- | ------------------------------------------------------------- | ------------------------------ | ----------------------------------------- |
+| **P0**    | Add WAL-G backup sidecar (per DATABASE_OPS_SPEC)              | No                             | Before any production data matters        |
+| **P1**    | Credential convergence in provision.sh                        | No                             | Next deploy cycle                         |
+| **P2**    | Add pgBouncer between app and Postgres                        | DSN host change only           | When connection count > 20                |
+| **Eval**  | If file storage needed → adopt Supabase Storage (self-hosted) | New adapter                    | When feature requires uploads             |
+| **Eval**  | If ops burden too high → migrate Postgres to Supabase hosted  | DSN change + verify RLS compat | When team wants managed DB                |
+| **Never** | Replace SIWE auth with Supabase Auth                          | N/A                            | Wallet identity is non-negotiable         |
+| **Never** | Replace API routes with PostgREST                             | N/A                            | Contracts + billing hooks + observability |
+| **Never** | Adopt Supabase Realtime for AI streaming                      | N/A                            | assistant-stream works well               |
+
 ## Design Notes
 
-- Derived from [SUPABASE_EVALUATION.md](../../docs/SUPABASE_EVALUATION.md) full codebase vs. Supabase capability audit
+- Derived from [Supabase Evaluation](../../docs/spec/supabase-evaluation.md) full codebase vs. Supabase capability audit
 - [CODE_GATES.md](../../docs/CODE_GATES.md) — WAL-G identified as P0 prerequisite
 - [Database RLS Spec](../../docs/spec/database-rls.md) — P1 credential rotation item
 - [Database URL Alignment](../../docs/spec/database-url-alignment.md) — P3 DSN-only end state
