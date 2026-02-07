@@ -206,7 +206,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | REPO_STATE.md                        | -                              | -                                  | -   | -                       | snapshot   | [x]  | [ ]  |
 | RUNTIME_POLICY.md                    | runtime-policy.md              | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | SANDBOX_SCALING.md                   | sandbox-scaling.md             | ini.sandboxed-agents.md            | -   | -                       | AB+road    | [x]  | [x]  |
-| SANDBOXED_AGENTS.md                  | sandboxed-agents.md            | ini.sandboxed-agents.md            | -   | -                       | AB+road    | [ ]  | [ ]  |
+| SANDBOXED_AGENTS.md                  | sandboxed-agents.md            | ini.sandboxed-agents.md            | -   | -                       | AB+road    | [x]  | [x]  |
 | SCHEDULER_SPEC.md                    | scheduler.md                   | ini.scheduler-evolution.md         | -   | -                       | migrated   | [x]  | [ ]  |
 | SECURITY_AUTH_SPEC.md                | security-auth.md               | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | SERVICES_ARCHITECTURE.md             | services-architecture.md       | ini.cicd-services-gitops.md        | -   | create-service.md       | as-built   | [x]  | [ ]  |
