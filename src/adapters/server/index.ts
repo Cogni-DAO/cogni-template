@@ -94,13 +94,11 @@ export {
   RipgrepAdapter,
   type RipgrepAdapterConfig,
 } from "./repo";
-// Sandbox execution infrastructure
-export {
-  SandboxAgentCatalogProvider,
-  SandboxGraphProvider,
-  SandboxRunnerAdapter,
-  type SandboxRunnerAdapterOptions,
-} from "./sandbox";
+// NOTE: Sandbox adapters (SandboxRunnerAdapter, SandboxGraphProvider) are NOT
+// re-exported here. They pull in dockerode → ssh2 → cpu-features (native addon)
+// which breaks Turbopack bundling. Import directly from subpath when needed:
+//   import { SandboxAgentCatalogProvider } from "@/adapters/server/sandbox/sandbox-agent-catalog.provider"
+//   const { SandboxGraphProvider, ... } = await import("@/adapters/server/sandbox")
 // Temporal adapters - schedule control
 export {
   TemporalScheduleControlAdapter,
