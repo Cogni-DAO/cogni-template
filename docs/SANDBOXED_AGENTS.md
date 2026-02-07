@@ -327,16 +327,16 @@ PER-RUN RESOURCES:
   - `runGraph(req)`: create tmp workspace (symlink-safe) → write messages.json → call `SandboxRunnerAdapter.runOnce()` → parse stdout → emit AiEvents → return `GraphFinal`
   - Passes `caller.userId` → proxy → `x-litellm-customer-id` header
   - Socket dir mounted `:ro` in sandbox (proxy has `:rw`)
-- [ ] Create `sandbox-agent-catalog.provider.ts` implementing `AgentCatalogProvider`:
+- [x] Create `sandbox-agent-catalog.provider.ts` implementing `AgentCatalogProvider`:
   - `listAgents()`: returns `[{ agentId: "sandbox:agent", graphId: "sandbox:agent", name: "Sandbox Agent", description: "LLM agent in isolated container" }]`
-  - Gated by `SANDBOX_ENABLED` env flag (don't show in UI unless enabled)
+  - Gated by `LITELLM_MASTER_KEY` presence (not separate `SANDBOX_ENABLED` flag)
 
 #### Bootstrap (`src/bootstrap/`)
 
-- [ ] Register `SandboxGraphProvider` in `graph-executor.factory.ts` providers array
-- [ ] Register `SandboxAgentCatalogProvider` in `agent-discovery.ts` providers array
-- [ ] Add `SANDBOX_ENABLED` env flag (default false), gate both registrations
-- [ ] Wire `SandboxRunnerAdapter` + `litellmMasterKey` into provider constructor
+- [x] Register `SandboxGraphProvider` in `graph-executor.factory.ts` providers array
+- [x] Register `SandboxAgentCatalogProvider` in `agent-discovery.ts` providers array
+- [x] Gate both registrations on `LITELLM_MASTER_KEY` presence
+- [x] Wire `SandboxRunnerAdapter` + `litellmMasterKey` into provider constructor
 
 #### Agent Runtime (`services/sandbox-runtime/`)
 
@@ -640,10 +640,11 @@ HOST: repoPort.pushBranchFromPatches()
 
 ## Related Documents
 
+- [OPENCLAW_SANDBOX_CONTROLS.md](OPENCLAW_SANDBOX_CONTROLS.md) — Git relay, dynamic catalog, dashboard, OpenClaw controls
 - [SANDBOX_SCALING.md](SANDBOX_SCALING.md) — Proxy selection, shared proxy, signed tokens, threat model
+- [OPENCLAW_SANDBOX_SPEC.md](OPENCLAW_SANDBOX_SPEC.md) — OpenClaw container image, config, I/O protocol
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — GraphExecutorPort, billing
 - [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool execution, DENY_BY_DEFAULT
-- [CLAWDBOT_ADAPTER_SPEC.md](CLAWDBOT_ADAPTER_SPEC.md) — Clawdbot runtime (P1+ agent option)
 - [RBAC_SPEC.md](RBAC_SPEC.md) — ExecutionGrant, allowSandbox gate
 - [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md) — ConnectionBroker (P1.5)
 

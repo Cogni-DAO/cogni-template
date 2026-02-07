@@ -901,10 +901,10 @@ OpenClaw receives the prompt via CLI `--message` flag. For very long prompts (e.
 - [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — GraphExecutorPort, AggregatingGraphExecutor
 - [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool execution, DENY_BY_DEFAULT
 - [RBAC_SPEC.md](RBAC_SPEC.md) — ExecutionGrant, allowSandbox gate
+- [OPENCLAW_SANDBOX_CONTROLS.md](OPENCLAW_SANDBOX_CONTROLS.md) — Dynamic catalog, git relay, dashboard (next phase)
 - OpenClaw repo: `/Users/derek/dev/openclaw/` — source of truth for OpenClaw internals
-- OpenClaw docs: `/Users/derek/dev/openclaw/docs/gateway/local-models.md` — custom provider config reference
 
 ---
 
 **Last Updated**: 2026-02-07
-**Status**: Draft — P0.5 proxy complete; P0 (get OpenClaw running) in progress
+**Status**: P0 (get OpenClaw running) validated; P0.75 wiring → [OPENCLAW_SANDBOX_CONTROLS.md](OPENCLAW_SANDBOX_CONTROLS.md)
