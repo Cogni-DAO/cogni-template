@@ -174,7 +174,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | GIT_SYNC_REPO_MOUNT.md               | git-sync-repo-mount.md         | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | GOV_DATA_COLLECTORS.md               | gov-data-collectors.md         | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | GRAPH_EXECUTION.md                   | graph-execution.md             | ini.graph-execution.md             | -   | -                       | AB+road    | [ ]  | [ ]  |
-| GRAPH_EXECUTOR_AUDIT.md              | -                              | -                                  | -   | -                       | TBD        | [ ]  | [ ]  |
+| GRAPH_EXECUTOR_AUDIT.md              | -                              | ini.graph-execution.md             | -   | -                       | AB+road    | [x]  | [ ]  |
 | HANDOFF_TAILWIND_SPACING_BUG.md      | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
 | HANDOFF_WALLET_BUTTON_STABILITY.md   | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
 | HUMAN_IN_THE_LOOP.md                 | human-in-the-loop.md           | ini.hil-graphs.md                  | -   | -                       | AB+road    | [x]  | [ ]  |
