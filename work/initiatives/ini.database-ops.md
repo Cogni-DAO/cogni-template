@@ -1,0 +1,191 @@
+---
+work_item_id: ini.database-ops
+work_item_type: initiative
+title: Database Operations — Backups, Pooling & Credential Management
+state: Active
+priority: 1
+estimate: 4
+summary: WAL-G continuous backups, credential convergence, connection pooling, DSN-only provisioning
+outcome: Postgres with automated backups (RPO ~5m, RTO <1h), convergent credentials, optional pooler, enterprise readiness controls
+assignees: derekg1729
+created: 2026-02-07
+updated: 2026-02-07
+labels: [infra, database, enterprise-readiness]
+---
+
+# Database Operations — Backups, Pooling & Credential Management
+
+> Source: docs/DATABASE_OPS_SPEC.md (roadmap content extracted during docs migration)
+
+## Goal
+
+Adopt Supabase OSS building blocks (WAL-G, optionally Supavisor/pgBouncer) — not the full Supabase platform — to close critical infrastructure gaps: no backups, stale credentials, no connection pooling. The application, RLS model, provisioner, and DSN contract remain unchanged.
+
+> [!CRITICAL]
+> **No backup exists today.** A single `docker volume rm` or disk failure results in total data loss. This is the highest-priority gap in the current infrastructure.
+
+## Roadmap
+
+### Crawl (P0) — Backups (data loss mitigation)
+
+**Goal:** WAL-G continuous archiving to S3-compatible storage (Cloudflare R2, Backblaze B2, or MinIO).
+
+| Deliverable                                        | Status      | Est | Work Item |
+| -------------------------------------------------- | ----------- | --- | --------- |
+| WAL-G sidecar/cron container in docker-compose     | Not Started | 2   | —         |
+| `postgresql.conf` overrides (archive_mode, etc.)   | Not Started | 1   | —         |
+| Backup secrets provisioning per environment        | Not Started | 1   | —         |
+| Nightly `pg_basebackup` + continuous WAL archiving | Not Started | 2   | —         |
+| Restore runbook in `platform/runbooks/`            | Not Started | 1   | —         |
+| Monthly restore test cadence with evidence         | Not Started | 1   | —         |
+
+**Recovery Targets:**
+
+| Target                  | Value      | Rationale                                                               |
+| ----------------------- | ---------- | ----------------------------------------------------------------------- |
+| **RPO** (max data loss) | ~5 minutes | Continuous WAL archiving; loss window = unarchived WAL since last flush |
+| **RTO** (max downtime)  | < 1 hour   | Base backup restore + WAL replay to a fresh container                   |
+
+These are initial targets for a single-VM deployment. Adjust when moving to managed Postgres or multi-region.
+
+**Retention Policy:**
+
+| Artifact                | Retention         | Storage                                               |
+| ----------------------- | ----------------- | ----------------------------------------------------- |
+| Full base backups       | 7 daily, 4 weekly | S3-compatible (R2/B2)                                 |
+| WAL archive segments    | 30 days           | Same bucket, `/wal/` prefix                           |
+| Oldest restorable point | 30 days           | Determined by oldest retained base backup + WAL chain |
+
+WAL-G's `delete retain` handles garbage collection of expired backups.
+
+**Compose Changes:**
+
+- Add `wal-g` sidecar or cron container with access to `postgres_data` volume
+- Add backup-specific env vars: `WALG_S3_PREFIX`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+- Nightly `pg_basebackup` + continuous WAL archiving
+- Add `postgresql.conf` overrides: `archive_mode = on`, `archive_command` pointing to WAL-G
+
+**New Secrets (per environment):**
+
+| Secret                         | Description                |
+| ------------------------------ | -------------------------- |
+| `BACKUP_S3_ENDPOINT`           | S3-compatible endpoint URL |
+| `BACKUP_S3_BUCKET`             | Bucket name                |
+| `BACKUP_AWS_ACCESS_KEY_ID`     | Storage credentials        |
+| `BACKUP_AWS_SECRET_ACCESS_KEY` | Storage credentials        |
+
+**Restore Runbook & Testing:**
+
+A restore runbook must be written in `platform/runbooks/` covering:
+
+1. Pull latest base backup from S3
+2. Restore to throwaway container with WAL replay to target timestamp
+3. Verify row counts / schema version / spot-check application data
+4. Document restore time and any issues
+
+**Restore test cadence:** Monthly. Each test produces evidence artifacts:
+
+| Artifact                                                                                     | Purpose                      |
+| -------------------------------------------------------------------------------------------- | ---------------------------- |
+| Restore log (stdout capture)                                                                 | Proof that restore completed |
+| Timestamp of backup used                                                                     | Proves RPO claim             |
+| Wall-clock restore duration                                                                  | Proves RTO claim             |
+| Schema version check (`SELECT * FROM drizzle.__drizzle_migrations ORDER BY id DESC LIMIT 1`) | Data integrity verification  |
+
+Evidence is stored in the S3 bucket under `/restore-tests/YYYY-MM-DD/`.
+
+**Scope boundary:** No app code changes. No DSN changes. No provisioner changes.
+
+### Walk (P1) — Credential Convergence
+
+**Goal:** Eliminate "stale volume keeps old password" class of bugs. Provision becomes convergent: create-or-update, not create-or-skip.
+
+| Deliverable                                    | Status      | Est | Work Item            |
+| ---------------------------------------------- | ----------- | --- | -------------------- |
+| `provision.sh` gains `ALTER ROLE ... PASSWORD` | Not Started | 2   | (create at P1 start) |
+| Credential rotation evidence in deploy logs    | Not Started | 1   | (create at P1 start) |
+
+Already tracked in DATABASE_RLS_SPEC.md P1:
+
+> Credential rotation support: `provision.sh` should `ALTER ROLE ... PASSWORD` for existing roles, not skip them
+
+**Scope boundary:** `provision.sh` only. No app code changes.
+
+### Run (P2) — Connection Pooler
+
+**Goal:** Add pgBouncer between app and Postgres. Hard trust boundary.
+
+| Deliverable                                           | Status      | Est | Work Item            |
+| ----------------------------------------------------- | ----------- | --- | -------------------- |
+| pgBouncer service in docker-compose on `internal` net | Not Started | 2   | (create at P2 start) |
+| DSN host repoint: `postgres:5432` → `pgbouncer:6432`  | Not Started | 1   | (create at P2 start) |
+| Network segmentation (db-only network for postgres)   | Not Started | 1   | (create at P2 start) |
+
+**Trust-boundary requirements:**
+
+- App/migrate/scheduler-worker containers must not have network access to `postgres:5432` — only to `pgbouncer:6432`. Enforce via Docker network segmentation (pooler on `internal`, postgres on a `db-only` network).
+- pgBouncer auth config (`userlist.txt` or `auth_query`) must not log or expose passwords. Use `auth_type = scram-sha-256`.
+- pgBouncer admin console (`pgbouncer` virtual database) must be disabled or bound to localhost only.
+
+**Why defer:** Current connection count is low (single app + scheduler-worker). Pooling becomes valuable at higher concurrency or if Postgres moves to managed/external hosting.
+
+**Scope boundary:** DSN host changes + network topology. No app code changes. No RLS changes.
+
+### P3 — DSN-Only Provisioning
+
+**Goal:** 3 DSNs become the only database secrets.
+
+| Deliverable                                  | Status      | Est | Work Item            |
+| -------------------------------------------- | ----------- | --- | -------------------- |
+| Provisioner parses DSNs with real URL parser | Not Started | 2   | (create at P3 start) |
+| `APP_DB_*` component secrets deleted         | Not Started | 1   | (create at P3 start) |
+
+Already tracked in DATABASE_URL_ALIGNMENT_SPEC.md P1-P2:
+
+- Provisioner parses `DATABASE_ROOT_URL`, `DATABASE_URL`, `DATABASE_SERVICE_URL` with a real URL parser
+- `APP_DB_*` component secrets deleted
+- 3 DSNs become the only database secrets
+
+**Scope boundary:** provision.sh rewrite + secret cleanup. No app code changes.
+
+## Constraints
+
+- Postgres remains our database — no platform migration
+- Only adopt Supabase OSS building blocks, NOT the full self-hosted platform
+- RLS dual-role architecture (`app_user` + `app_service`) stays unchanged
+- Each phase has explicit scope boundaries — no app code changes in P0-P2
+
+## Enterprise Readiness Alignment
+
+| Control                                                                           | Phase                       | Evidence                                                                                   |
+| --------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------ |
+| **Availability** — data recoverable after failure                                 | P0 (backups)                | Monthly restore test artifacts (logs, timestamps, schema check)                            |
+| **Access control integrity** — credentials converge to intended state             | P1 (credential convergence) | Provision logs show `ALTER ROLE` on every deploy, not just first run                       |
+| **Access control boundary** — app cannot bypass pooler to reach Postgres directly | P2 (pooler)                 | Network segmentation in compose; no direct `postgres:5432` route from app                  |
+| **Auditability** — high-risk DB ops are recorded                                  | P0+                         | Backup/restore operations logged to S3 with timestamps; deploy events already emit to Loki |
+
+**Observability scope for DB ops:** Record backup runs, restore tests, and credential rotation events as structured log entries (Pino → Loki). Per-request/per-job actor context is already handled by the RLS `SET LOCAL` pattern. We do not add per-query audit logging — that's `pg_audit` territory (tracked in DATABASE_RLS_SPEC.md P1).
+
+## What We Explicitly Do NOT Do
+
+- **Self-host full Supabase stack.** We don't need their auth, storage, realtime, or API gateway. We already have Postgres + RLS + explicit DSNs + provisioner.
+- **Move to managed Postgres (RDS, Supabase hosted, Neon).** Not ruled out long-term, but not required to solve the current gaps. If we do, P0-P2 still apply (backups become provider-managed, pooler becomes provider PgBouncer).
+- **Change the RLS model.** The dual-role architecture (`app_user` + `app_service`) is correct and stays.
+
+## Dependencies
+
+- [x] Postgres deployment (existing)
+- [x] RLS model (existing — DATABASE_RLS_SPEC.md)
+- [ ] S3-compatible storage account (R2/B2/MinIO)
+
+## As-Built Specs
+
+- (none yet — specs created when code merges)
+
+## Design Notes
+
+- Derived from [SUPABASE_EVALUATION.md](../../docs/SUPABASE_EVALUATION.md) full codebase vs. Supabase capability audit
+- [CODE_GATES.md](../../docs/CODE_GATES.md) — WAL-G identified as P0 prerequisite
+- [Database RLS Spec](../../docs/spec/database-rls.md) — P1 credential rotation item
+- [Database URL Alignment](../../docs/spec/database-url-alignment.md) — P3 DSN-only end state
+- [Databases Spec](../../docs/spec/databases.md) — Migration architecture, two-image strategy

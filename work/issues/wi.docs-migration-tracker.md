@@ -156,12 +156,12 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | CICD_SERVICES_ROADMAP.md             | -                              | ini.cicd-services-gitops.md        | -   | -                       | roadmap    | [x]  | [ ]  |
 | CLAUDE_SDK_ADAPTER_SPEC.md           | claude-sdk-adapter.md          | ini.claude-sdk-adapter.md          | -   | -                       | roadmap    | [x]  | [ ]  |
 | CLAWDBOT_ADAPTER_SPEC.md             | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
-| CODE_GATES.md                        | -                              | -                                  | -   | -                       | TBD        | [ ]  | [ ]  |
+| CODE_GATES.md                        | -                              | -                                  | -   | -                       | snapshot   | [x]  | [ ]  |
 | COGNI_BRAIN_SPEC.md                  | cogni-brain.md                 | -                                  | -   | -                       | migrated   | [x]  | [ ]  |
 | CREDITS_PAGE_UI_CONSOLIDATION.md     | -                              | -                                  | -   | -                       | snapshot   | [x]  | [ ]  |
 | CRED_LICENSING_POLICY_SPEC.md        | cred-licensing-policy.md       | ini.cred-licensing.md              | -   | -                       | roadmap    | [x]  | [ ]  |
 | DAO_ENFORCEMENT.md                   | dao-enforcement.md             | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
-| DATABASE_OPS_SPEC.md                 | -                              | -                                  | -   | -                       | TBD        | [ ]  | [ ]  |
+| DATABASE_OPS_SPEC.md                 | -                              | ini.database-ops.md                | -   | -                       | roadmap    | [x]  | [ ]  |
 | DATABASES.md                         | databases.md                   | -                                  | -   | -                       | migrated   | [x]  | [ ]  |
 | DATABASE_RLS_SPEC.md                 | database-rls.md                | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | DATABASE_URL_ALIGNMENT_SPEC.md       | database-url-alignment.md      | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
