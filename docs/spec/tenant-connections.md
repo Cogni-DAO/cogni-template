@@ -1,7 +1,36 @@
+---
+id: spec.tenant-connections
+type: spec
+title: Tenant Connections Design
+status: draft
+spec_state: draft
+trust: draft
+summary: Encrypted credential brokering for tools — connectionId-only references, AEAD storage, grant intersection, capability injection
+read_when: Adding tool auth, implementing connection broker, or modifying grant scopes
+implements: []
+owner: cogni-dev
+created: 2026-02-02
+verified: null
+tags:
+  - auth
+  - ai-graphs
+---
+
 # Tenant Connections Design
 
-> [!CRITICAL]
-> Graphs carry `connectionId` only, never credentials. Connection Broker resolves tokens at tool invocation time.
+## Context
+
+Graphs need access to external services (GitHub, Bluesky, Google) but must never carry credentials in state, args, or context. A Connection Broker resolves tokens at tool invocation time using encrypted, tenant-scoped connections authorized via ExecutionGrant scopes.
+
+## Goal
+
+Define the credential brokering invariants, encrypted storage schema, grant intersection rules, and capability-based auth injection that keep secrets out of graph state while providing tools with authenticated access.
+
+## Non-Goals
+
+- Payment verification (separate EvmRpcOnChainVerifier flow)
+- MCP gateway integration (future — see [ini.tenant-connections](../../work/initiatives/ini.tenant-connections.md) P2)
+- OAuth flow implementation (future — see initiative P1)
 
 ## Core Invariants
 
@@ -19,17 +48,17 @@
 
 7. **REFRESH_WITH_TIMEOUT**: Background refresh preferred (jittered window before expiry). Synchronous refresh allowed with bounded timeout. On timeout/failure: typed error, metric emitted, tool invocation fails.
 
-8. **CONNECTION_IN_CONTEXT_NOT_ARGS**: Authenticated tool invocations specify `connectionId` via `ToolInvocationContext` (out-of-band), NOT in tool args. This keeps tool input schemas pure business args, reduces injection surface, and prevents schema pollution. `connectionId` is uuid-validated at toolRunner boundary. See also [TOOL_USE_SPEC.md#26a](TOOL_USE_SPEC.md) (CONNECTION_ID_VIA_CONTEXT) for schema rejection at derivation time.
+8. **CONNECTION_IN_CONTEXT_NOT_ARGS**: Authenticated tool invocations specify `connectionId` via `ToolInvocationContext` (out-of-band), NOT in tool args. This keeps tool input schemas pure business args, reduces injection surface, and prevents schema pollution. `connectionId` is uuid-validated at toolRunner boundary. See also [tool-use.md](./tool-use.md) (CONNECTION_ID_VIA_CONTEXT) for schema rejection at derivation time.
 
 9. **AUTH_VIA_CAPABILITY_NOT_CONTEXT**: Broker outputs (access tokens, API keys, headers) must NEVER be placed into `ToolInvocationContext`, `RunnableConfig`, or ALS context. Tools receive auth via injected capability interfaces. This prevents secret leakage into logs, traces, telemetry, and exception messages.
 
-9a. **AUTH_CAPABILITY_INVOCATION_SCOPED**: `AuthCapability` is constructed inside `toolRunner.exec()` per invocation, bound to `ctx.connectionId`. Methods take NO connectionId parameter. Never cache or reuse across invocations. See [TOOL_USE_SPEC.md#29a](TOOL_USE_SPEC.md).
+9a. **AUTH_CAPABILITY_INVOCATION_SCOPED**: `AuthCapability` is constructed inside `toolRunner.exec()` per invocation, bound to `ctx.connectionId`. Methods take NO connectionId parameter. Never cache or reuse across invocations. See [tool-use.md](./tool-use.md).
 
 10. **GRANT_INTERSECTION_BEFORE_RESOLVE**: `toolRunner.exec()` computes `effectiveConnectionIds = grant.allowedConnectionIds ∩ request.connectionIds`. Membership check (`connectionId ∈ effectiveConnectionIds`) happens BEFORE `broker.resolveForTool()`. Empty intersection or missing connectionId = `policy_denied`. This prevents confused-deputy attacks where malicious UI declares connections the grant doesn't authorize.
 
----
+## Schema
 
-## Schema: `connections`
+**Table:** `connections`
 
 | Column                  | Type        | Notes                                                          |
 | ----------------------- | ----------- | -------------------------------------------------------------- |
@@ -49,115 +78,19 @@
 
 **Forbidden:** Plaintext `access_token`/`refresh_token` columns.
 
----
+## Design
 
-## Implementation Checklist
+### Key Decisions
 
-### P0: Connection Model
-
-- [ ] Create `connections` table with AEAD encrypted storage
-- [ ] Create `ConnectionBrokerPort`: `resolveForTool({connectionId, toolId, subject}) → ToolCredential`
-- [ ] Implement `DrizzleConnectionBrokerAdapter` with decryption + AAD validation
-- [ ] Wire broker into `toolRunner.exec()` (injected, not called by tools)
-- [ ] Enforce grant intersection before resolve (deny fast)
-- [ ] First type: `app_password` (Bluesky) — no OAuth
-
-**Port contract:**
-
-- `subject: {billingAccountId, grantId, runId}` — broker verifies tenant match, logs audit
-- `ToolCredential: {provider, secret: string | {headers}, expiresAt?}` — broker validates `connection.provider` matches tool expectation
-
-### P0: Grant Intersection + Capability Auth
-
-Per invariants **CONNECTION_IN_CONTEXT_NOT_ARGS**, **AUTH_VIA_CAPABILITY_NOT_CONTEXT**, **GRANT_INTERSECTION_BEFORE_RESOLVE**:
-
-**Context types (`@cogni/ai-core/tooling/`):**
-
-- [ ] Add `connectionId?: string` to `ToolInvocationContext` (out-of-band, not in args)
-- [ ] Add `executionGrant?: ExecutionGrantContext` to toolRunner config
-- [ ] `ExecutionGrantContext: { grantId: string, allowedConnectionIds: string[] }`
-- [ ] Validate: `ToolInvocationContext` has NO secret-shaped fields (test)
-
-**Grant intersection (`@cogni/ai-core/tooling/tool-runner.ts`):**
-
-- [ ] Implement `computeEffectiveConnectionIds(grant, request)`:
-  ```typescript
-  const effective = grant.allowedConnectionIds.filter((id) =>
-    request.connectionIds.includes(id)
-  );
-  ```
-- [ ] Check `connectionId ∈ effective` BEFORE any broker call
-- [ ] Return `{ ok: false, errorCode: 'policy_denied', safeMessage: 'Connection not authorized' }` on failure
-- [ ] Log audit event: `tool.connection.denied` with `{ toolId, connectionId, grantId }`
-
-**Capability interfaces (`@cogni/ai-tools/capabilities/`):**
-
-- [ ] Create `AuthCapability` interface (invocation-scoped, no connectionId param):
-  ```typescript
-  /** Pre-bound to ctx.connectionId — no param needed (per AUTH_CAPABILITY_INVOCATION_SCOPED) */
-  interface AuthCapability {
-    getAccessToken(): Promise<string>;
-    getAuthHeaders(): Promise<Record<string, string>>;
-  }
-  ```
-- [ ] Create `ConnectionClientFactory` interface for typed clients
-- [ ] Tool contracts declare: `capabilities: ['auth'] as const`
-- [ ] Composition root creates broker-backed `AuthCapability` implementation
-- [ ] toolRunner injects capabilities into `boundTool.exec(args, ctx, { auth })`
-
-**Tests:**
-
-- [ ] `connection-grant-intersection.test.ts` — unit test for intersection logic
-- [ ] `no-secrets-in-context.test.ts` — verify context types have no secret fields
-- [ ] `capability-injection.test.ts` — tools receive capabilities, not raw secrets
-
-#### Chores
-
-- [ ] Observability [observability.md](../.agent/workflows/observability.md)
-- [ ] Documentation [document.md](../.agent/workflows/document.md)
-
-### P1: OAuth Flow
-
-- [ ] OAuth callback endpoint (authorization code flow)
-- [ ] Background token refresh (before expiry)
-- [ ] First OAuth provider: GitHub or Google
-- [ ] UI: connection list, create, revoke
-
-### P2: MCP Gateway
-
-- [ ] MCP adapter uses same `connectionId` → broker path
-- [ ] Evaluate: `agentgateway`, `mcp-gateway-registry`
-- [ ] **Do NOT build preemptively**
-
----
-
-## File Pointers (P0)
-
-| File                                                  | Change                                                           |
-| ----------------------------------------------------- | ---------------------------------------------------------------- |
-| `src/shared/db/schema.connections.ts`                 | New table with audit columns                                     |
-| `src/ports/connection-broker.port.ts`                 | `resolveForTool({connectionId, toolId, subject})` port interface |
-| `src/adapters/server/connections/drizzle.adapter.ts`  | AEAD decryption, AAD + tenant validation                         |
-| `@cogni/ai-core/tooling/tool-runner.ts`               | Inject broker, enforce grant intersection, inject capabilities   |
-| `@cogni/ai-core/tooling/types.ts`                     | `ToolInvocationContext` with connectionId (no secrets)           |
-| `@cogni/ai-core/configurable/graph-run-config.ts`     | Add `allowedConnectionIds`, `executionGrant` fields              |
-| `@cogni/ai-tools/capabilities/auth.ts`                | `AuthCapability` interface for broker-backed auth                |
-| `tests/arch/no-secrets-in-context.test.ts`            | Static check for secret-shaped fields in context types           |
-| `tests/unit/ai/connection-grant-intersection.test.ts` | Grant intersection logic + deny-fast behavior                    |
-
----
-
-## Design Decisions
-
-### 1. Why Broker at Invocation?
+#### 1. Why Broker at Invocation?
 
 Resolving at request time risks token expiry mid-run. Resolving at invocation keeps tokens fresh and enables transparent refresh without graph awareness.
 
-### 2. Connection Scoping
+#### 2. Connection Scoping
 
 Connections are tenant-scoped, not tool-scoped. A GitHub connection serves any tool needing GitHub access. Request `connectionIds` declares intent; ExecutionGrant scopes authorize. Effective = intersection.
 
-### 3. Authorization Flow
+#### 3. Authorization Flow
 
 1. Request declares `connectionIds[]` (intent) in `GraphRunRequest`
 2. ExecutionGrant contains `connection:use:{id}` scopes (authorization)
@@ -196,9 +129,7 @@ boundTool.exec(args, ctx, { auth: capabilities.auth })
 Tool calls: await capabilities.auth.getAccessToken()  // bound to ctx.connectionId
 ```
 
----
-
-## Anti-Patterns
+### Anti-Patterns
 
 | Pattern                           | Problem                                            |
 | --------------------------------- | -------------------------------------------------- |
@@ -213,15 +144,37 @@ Tool calls: await capabilities.auth.getAccessToken()  // bound to ctx.connection
 | ctxWithCreds pattern              | Violates NO_SECRETS_IN_CONTEXT; use capabilities   |
 | Broker resolve before grant check | Leaks whether connection exists; check grant first |
 
----
+### File Pointers
 
-## Related Documents
+| File                                                 | Purpose                                                          |
+| ---------------------------------------------------- | ---------------------------------------------------------------- |
+| `src/shared/db/schema.connections.ts`                | Connections table with audit columns                             |
+| `src/ports/connection-broker.port.ts`                | `resolveForTool({connectionId, toolId, subject})` port interface |
+| `src/adapters/server/connections/drizzle.adapter.ts` | AEAD decryption, AAD + tenant validation                         |
+| `@cogni/ai-core/tooling/tool-runner.ts`              | Broker injection, grant intersection, capability injection       |
+| `@cogni/ai-core/tooling/types.ts`                    | `ToolInvocationContext` with connectionId (no secrets)           |
+| `@cogni/ai-tools/capabilities/auth.ts`               | `AuthCapability` interface for broker-backed auth                |
 
-- [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md#26) — CONNECTION_ID_ONLY invariant
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md#30) — No secrets in configurable
-- [SCHEDULER_SPEC.md](SCHEDULER_SPEC.md) — ExecutionGrant scopes
+## Acceptance Checks
 
----
+**Automated:**
 
-**Last Updated**: 2026-02-02
-**Status**: Draft (Rev 5 - #9a per-invocation construction; canonical naming: effectiveConnectionIds, grant.allowedConnectionIds ∩ request.connectionIds)
+- `connection-grant-intersection.test.ts` — grant intersection logic + deny-fast behavior
+- `no-secrets-in-context.test.ts` — verify context types have no secret fields
+- `capability-injection.test.ts` — tools receive capabilities, not raw secrets
+
+**Manual:**
+
+1. Verify `ToolInvocationContext` has no secret-shaped fields
+2. Verify broker resolve is never called before grant intersection check
+
+## Open Questions
+
+_(none)_
+
+## Related
+
+- [tool-use.md](./tool-use.md) — CONNECTION_ID_ONLY invariant, CONNECTION_ID_VIA_CONTEXT
+- [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md) — No secrets in configurable
+- [scheduler.md](./scheduler.md) — ExecutionGrant scopes
+- [Initiative: Tenant Connections](../../work/initiatives/ini.tenant-connections.md)

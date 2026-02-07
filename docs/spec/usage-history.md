@@ -1,7 +1,63 @@
+---
+id: spec.usage-history
+type: spec
+title: Usage History Design
+status: draft
+spec_state: draft
+trust: draft
+summary: Tenant-scoped run artifact persistence for user input and assistant output, parallel to billing, with RLS enforcement, soft delete, PII masking, and LangGraph checkpoint coordination.
+read_when: Implementing message history, run artifact persistence, or user data deletion
+implements: []
+owner: cogni-dev
+created: 2025-12-22
+verified: null
+tags:
+  - ai-graphs
+  - data
+  - tenant-isolation
+  - compliance
+---
+
 # Usage History Design
 
-> [!CRITICAL]
-> Usage history persists message artifacts from AI runs (user input, assistant output). It is a parallel AiEvent stream consumer to billing—neither blocks the other. **For `langgraph_server` executor, LangGraph Server owns canonical thread state; `run_artifacts` is optional cache only.**
+## Context
+
+AI runs need to persist message artifacts (user input, assistant output) for:
+
+- Activity display in UI (conversation history)
+- Billing correlation (match usage to artifacts)
+- Debugging and support (what did the user ask, what did the model respond)
+
+Without artifact persistence:
+
+- Users cannot see their conversation history
+- Billing records lack context (usage without the actual messages)
+- Debugging requires log archaeology (no structured message retrieval)
+
+This spec defines `run_artifacts` as a tenant-scoped cache for message transcripts, parallel to billing, with soft delete, PII masking, and coordination with LangGraph checkpoints for GDPR-compliant deletion.
+
+## Goal
+
+Enable message artifact persistence with:
+
+- Tenant-scoped storage (`account_id` NOT NULL, RLS enforced)
+- Parallel to billing (HistoryWriterSubscriber alongside BillingSubscriber, neither blocks the other)
+- Idempotent writes (`UNIQUE(account_id, run_id, artifact_key)`)
+- User artifact persisted at run start (survives graph crash)
+- Assistant final artifact persisted on success (no delta storage in P0)
+- Soft delete with retention policies (default 90 days, hard delete via scheduled job)
+- PII masking before storage (regex-based, applied before hash computation)
+- LangGraph checkpoint coordination for GDPR deletion (P1 requirement)
+
+## Non-Goals
+
+- **Not in scope (P0):** Streaming delta persistence (full message replay)
+- **Not in scope (P0):** Thread-level queries/indexes
+- **Not in scope (P0):** Content blob storage (large messages go to blob storage)
+- **Not in scope (P0):** Tool call/result persistence (P1 for non-LangGraph executors)
+- **Not in scope (P0):** Message threading/branching, edit/regenerate lineage
+- **Not in scope (P0):** GDPR-compliant deletion (requires LangGraph checkpoint deletion, P1)
+- **Not canonical:** LangGraph Server owns thread state for `langgraph_server` executor; `run_artifacts` is cache only
 
 ## Core Invariants
 
@@ -38,126 +94,6 @@
 16. **EXECUTOR_TYPE_REQUIRED**: `UsageFact.executorType` is required (`langgraph_server` | `claude_sdk` | `inproc`). History/billing logic must be executor-agnostic. P0: Store in `run_artifacts.metadata.executorType`; defer column migration until indexing need.
 
 17. **P0_NO_GDPR_DELETE**: P0 does NOT provide compliant user data deletion. Deleting `run_artifacts` without LangGraph checkpoints is insufficient for `langgraph_server` runs. Full deletion (artifacts + checkpoints by tenant-scoped thread_id) is a P1 requirement.
-
----
-
-## Implementation Checklist
-
-### P0: Minimal Message Persistence
-
-Persist user input and assistant final output per run. No tool call/result storage yet.
-
-#### Core Persistence
-
-- [ ] Create `RunHistoryPort` interface in `src/ports/run-history.port.ts`
-- [ ] Create `run_artifacts` table with tenant scope (see Schema below)
-- [ ] Create `DrizzleRunHistoryAdapter` in `src/adapters/server/ai/`
-- [ ] Wire `HistoryWriterSubscriber` into `RunEventRelay` fanout (parallel to billing)
-- [ ] Persist user artifact at run start in `AiRuntimeService.runGraph()`
-- [ ] Add `AssistantFinalEvent` to AiEvent union in `@/types/ai-events.ts`
-- [ ] Executors emit `assistant_final` event (LangGraph: from state; direct LLM: assembled from deltas)
-- [ ] Persist assistant artifact on `assistant_final` event in `HistoryWriterSubscriber`
-- [ ] Add idempotency test: replay `assistant_final` twice → 1 assistant artifact row
-- [ ] Add ordering test: `getArtifacts()` returns deterministic order (created_at ASC, id ASC)
-
-#### Tenant Isolation (P0 blocker)
-
-- [ ] Add `account_id` NOT NULL column to `run_artifacts` schema
-- [ ] Add RLS policy with `FORCE ROW LEVEL SECURITY` (see Schema)
-- [ ] Add indexes `(account_id, run_id)` and `(account_id, thread_id)`
-- [ ] Pass `accountId` via relay context (RELAY_PROVIDES_CONTEXT)
-- [ ] Update `getArtifacts()` to require `accountId` parameter
-- [ ] Add stack test: query without `SET LOCAL app.current_account_id` → access denied
-- [ ] Add stack test: cannot read artifacts with mismatched `account_id`
-
-#### Retention & Soft Delete
-
-- [ ] Add `deleted_at` and `retention_expires_at` columns to schema
-- [ ] Add retention index on `retention_expires_at`
-- [ ] Filter deleted/expired rows in all read queries by default
-- [ ] Add `softDelete(accountId, runId)` to port interface
-- [ ] Document default retention window in config (e.g., `ARTIFACT_RETENTION_DAYS=90`)
-
-#### Masking (REDACT_BEFORE_PERSIST)
-
-- [ ] Create `src/features/ai/services/masking.ts` with regex-based PII masking
-- [ ] Implement patterns: email, phone, credit card, API keys (sk-\*, Bearer, key patterns)
-- [ ] Apply masking in HistoryWriterSubscriber BEFORE `content_hash` computation
-- [ ] Apply same masking BEFORE any content logging/tracing
-
-#### Thread ID Scoping (TENANT_SCOPED_THREAD_ID)
-
-- [ ] Enforce `thread_id = ${accountId}:${stateKey}` format in `AiRuntimeService`
-- [ ] Add contract test: LangGraph runs require tenant-scoped thread_id
-
-#### Chores
-
-- [ ] Observability instrumentation [observability.md](../.agent/workflows/observability.md)
-- [ ] Documentation updates [document.md](../.agent/workflows/document.md)
-
-### P1: Tool Call Artifacts (Optional)
-
-Enable for `inproc`/`claude_sdk` executors if tool-calling requires audit/replay. **Not needed for `langgraph_server`—LangGraph Server already persists tool calls in checkpoints.**
-
-- [ ] Add `tool_call` artifact type: `{toolName, argsRedacted, resultSummary}`
-- [ ] Persist tool artifacts via HistoryWriterSubscriber on `tool_call_result` events
-- [ ] Stack test: graph with tool calls → tool artifacts persisted
-- [ ] Gate persistence: only for non-langgraph_server executors (or make optional via config)
-
-### P1: Enhanced Retention & Masking
-
-- [ ] Scheduled job to hard-delete rows where `retention_expires_at < now() - grace_period`
-- [ ] Evaluate pg_partman for partition-based retention at scale
-- [ ] Evaluate Presidio integration for stronger PII detection
-- [ ] Add per-workspace retention policy override
-
-### P1: LangGraph Checkpoint Deletion (Compliance Blocker)
-
-**Per P0_NO_GDPR_DELETE:** Deleting artifacts without checkpoints is NOT compliant user data deletion—checkpoints hold real conversation state including PII.
-
-- [ ] Implement deletion API for LangGraph PostgresSaver checkpoint tables
-- [ ] Delete by tenant-scoped thread_id prefix (`${accountId}:%`) for full account deletion
-- [ ] Delete by specific thread_id for conversation deletion
-- [ ] Coordinate artifact + checkpoint deletion for GDPR/user-initiated delete requests
-- [ ] Stack test: delete user data → both artifacts AND checkpoints removed
-
-### P1+: Run Lineage (Future)
-
-Add `graph_runs` table for retry/resume semantics if needed.
-
-- [ ] Evaluate need after P0
-- [ ] Add `graph_runs` table: `{run_id PK, parent_run_id?, status, executor_type, graph_name?, timestamps}`
-- [ ] Attempt = computed from lineage chain depth
-- [ ] **Do NOT build preemptively**
-
-### P2: Thread Linking (Future)
-
-Thread = LangGraph thread_id scope (multi-run accumulation). For non-LangGraph, thread groups related runs.
-
-- [ ] Evaluate need after P1
-- [ ] Index on `thread_id` for thread-level queries
-- [ ] Add `previous_run_id` column if explicit chaining needed
-- [ ] **Do NOT build preemptively**
-
----
-
-## File Pointers (P0 Scope)
-
-| File                                              | Change                                                      |
-| ------------------------------------------------- | ----------------------------------------------------------- |
-| `src/ports/graph-executor.port.ts`                | Add `threadId?: string` to `GraphRunRequest`                |
-| `src/ports/run-history.port.ts`                   | New: `RunHistoryPort` interface with tenant scope           |
-| `src/ports/index.ts`                              | Re-export `RunHistoryPort`                                  |
-| `src/shared/db/schema.history.ts`                 | New: `run_artifacts` table with RLS + retention columns     |
-| `src/adapters/server/ai/run-history.adapter.ts`   | New: `DrizzleRunHistoryAdapter` with RLS context setting    |
-| `src/features/ai/services/ai_runtime.ts`          | Persist user artifact; enforce tenant-scoped thread_id      |
-| `src/features/ai/services/history-writer.ts`      | New: HistoryWriterSubscriber with masking before persist    |
-| `src/features/ai/services/masking.ts`             | New: regex-based PII masking utility                        |
-| `src/bootstrap/container.ts`                      | Wire RunHistoryPort                                         |
-| `src/types/ai-events.ts`                          | Add `AssistantFinalEvent` to AiEvent union                  |
-| `tests/stack/ai/history-idempotency.test.ts`      | New: replay assistant_final twice → 1 row                   |
-| `tests/stack/ai/history-tenant-isolation.test.ts` | New: cross-tenant access denied; missing RLS setting denied |
-| `tests/ports/run-history.port.spec.ts`            | New: port contract test with accountId requirement          |
 
 ---
 
@@ -223,9 +159,11 @@ Thread = LangGraph thread_id scope (multi-run accumulation). For non-LangGraph, 
 
 ---
 
-## Design Decisions
+## Design
 
-### 1. Run vs Thread vs Conversation Terminology
+### Key Decisions
+
+#### 1. Run vs Thread vs Conversation Terminology
 
 | Term             | Meaning                                         | When to use      |
 | ---------------- | ----------------------------------------------- | ---------------- |
@@ -237,7 +175,7 @@ Thread = LangGraph thread_id scope (multi-run accumulation). For non-LangGraph, 
 
 ---
 
-### 2. Stream Consumer Architecture
+#### 2. Stream Consumer Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -275,7 +213,7 @@ export interface AssistantFinalEvent {
 
 ---
 
-### 3. Idempotency Key Strategy
+#### 3. Idempotency Key Strategy
 
 | artifact_key    | Uniqueness scope         |
 | --------------- | ------------------------ |
@@ -287,7 +225,7 @@ export interface AssistantFinalEvent {
 
 ---
 
-### 4. ONE_HISTORY_WRITER Enforcement
+#### 4. ONE_HISTORY_WRITER Enforcement
 
 Only `history-writer.ts` may call `runHistoryPort.persistArtifact()`.
 
@@ -309,7 +247,7 @@ Only `history-writer.ts` may call `runHistoryPort.persistArtifact()`.
 
 ---
 
-### 5. What We're NOT Building in P0
+#### 5. What We're NOT Building in P0
 
 **Explicitly deferred:**
 
@@ -325,7 +263,7 @@ Only `history-writer.ts` may call `runHistoryPort.persistArtifact()`.
 
 ---
 
-## Port Interface
+### Port Interface
 
 ```typescript
 // src/ports/run-history.port.ts
@@ -359,7 +297,7 @@ export interface RunHistoryPort {
 
 ---
 
-## Integration Points
+### Integration Points
 
 **GraphRunRequest change:** Add `threadId?: string` to `src/ports/graph-executor.port.ts`:
 
@@ -373,16 +311,56 @@ export interface GraphRunRequest {
 
 ---
 
-## Related Documents
+## Acceptance Checks
 
-- [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) — External runtime, checkpoint ownership
-- [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) — Owner vs Actor tenancy rules (canonical source for `account_id` semantics)
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Run-centric billing, RunEventRelay, pump+fanout
-- [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — AiEvent types, stream architecture
-- [ARCHITECTURE.md](ARCHITECTURE.md) — Hexagonal layers, port patterns
-- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Graph patterns, thread_id tenant-scoping
+**Automated:**
 
----
+- `pnpm test src/adapters/server/ai/run-history.adapter.test.ts` — DrizzleRunHistoryAdapter with RLS
+- `pnpm test tests/stack/ai/history-idempotency.test.ts` — Replay assistant_final twice → 1 row
+- `pnpm test tests/stack/ai/history-tenant-isolation.test.ts` — Cross-tenant access denied, missing RLS denied
+- `pnpm test tests/ports/run-history.port.spec.ts` — Port contract with accountId requirement
+- `pnpm test src/features/ai/services/masking.test.ts` — PII masking patterns (email, phone, API keys)
 
-**Last Updated**: 2025-12-22
-**Status**: Draft (P0 Design - Executor-Agnostic)
+**Manual (until automated):**
+
+1. Verify user artifact persisted at run start (query `run_artifacts WHERE role='user'`)
+2. Verify assistant artifact persisted on success (query `run_artifacts WHERE role='assistant'`)
+3. Verify soft delete filters deleted/expired rows (set `deleted_at`, query should exclude)
+4. Verify tenant-scoped thread_id format (`${accountId}:${stateKey}`)
+5. Verify LangGraph checkpoint isolation (no cross-tenant checkpoint access)
+
+## Open Questions
+
+- [ ] What should the default retention window be? (90 days proposed)
+- [ ] Should tool call artifacts be persisted in P0 or deferred to P1?
+- [ ] Should we use Presidio for stronger PII detection in P1, or stick with regex?
+- [ ] What's the hard-delete grace period after retention_expires_at? (7 days?)
+
+## Rollout / Migration
+
+1. Add `run_artifacts` table with RLS policies via migration
+2. Create `RunHistoryPort` + `DrizzleRunHistoryAdapter`
+3. Wire `HistoryWriterSubscriber` into `RunEventRelay` fanout (parallel to billing)
+4. Update executors to emit `assistant_final` event (breaking change for direct LLM executors)
+5. Add `threadId` to `GraphRunRequest` (optional field, backward compatible)
+6. Add masking utility and apply before persistence
+7. Add retention config (`ARTIFACT_RETENTION_DAYS=90`)
+
+**Breaking changes:**
+
+- Executors must emit `assistant_final` event (LangGraph: extract from state; direct LLM: assemble from deltas)
+- All `getArtifacts()` calls must provide `accountId` parameter (tenant scope required)
+
+**Data migration:**
+
+- None (new table, no existing data to migrate)
+
+## Related
+
+- [LangGraph Server](../LANGGRAPH_SERVER.md) — External runtime, checkpoint ownership (pending migration)
+- [Accounts Design](../ACCOUNTS_DESIGN.md) — Owner vs Actor tenancy rules (pending migration)
+- [Graph Execution](../GRAPH_EXECUTION.md) — Run-centric billing, RunEventRelay, pump+fanout (pending migration)
+- [AI Setup](./ai-setup.md) — AiEvent types, stream architecture
+- [Architecture](./architecture.md) — Hexagonal layers, port patterns
+- [LangGraph Patterns](../LANGGRAPH_AI.md) — Graph patterns, thread_id tenant-scoping (pending migration)
+- [Usage History Initiative](../../work/initiatives/ini.usage-history-persistence.md) — Implementation roadmap

@@ -1,7 +1,37 @@
+---
+id: spec.unified-graph-launch
+type: spec
+title: Unified Graph Launch Design
+status: draft
+spec_state: draft
+trust: draft
+summary: All graph execution flows through GraphRunWorkflow in Temporal — triggers decide when, workflows decide how
+read_when: Adding new graph trigger types, modifying execution paths, or implementing idempotency
+implements: []
+owner: cogni-dev
+created: 2026-02-03
+verified: null
+tags:
+  - ai-graphs
+  - scheduler
+---
+
 # Unified Graph Launch Design
 
-> [!CRITICAL]
-> All graph execution flows through `GraphRunWorkflow` in Temporal. Triggers only decide **when** to start (immediate vs scheduled), not **how** runs execute. No inline execution in HTTP handlers.
+## Context
+
+Graph execution currently has two paths: API handlers call `GraphExecutorPort` inline, while scheduled runs go through Temporal workflows via internal API. This dual-path creates inconsistency in billing, observability, and durability guarantees. Unifying all execution through a single Temporal workflow eliminates these gaps.
+
+## Goal
+
+Define the invariants, schema, and architecture for routing all graph execution (API immediate, scheduled, webhook) through a single `GraphRunWorkflow` in Temporal, ensuring idempotent run starts, auditable trigger provenance, and consistent billing.
+
+## Non-Goals
+
+- Event bus / rule engine — not building generic event routing
+- Auto-execution of actions — human review stays for governance
+- WorkItemPort — MCP-only for Plane integration
+- Incident router integration — governance uses same workflow but separate trigger logic
 
 ## Core Invariants
 
@@ -16,50 +46,6 @@
 5. **RUN_CONTEXT_REQUIRED**: Every run has explicit context: `tenantId`, `executionGrantRef`, `runKind`, `initiator`, and `correlationIds`.
 
 6. **AUDITABLE_TRIGGER_PROVENANCE**: Each run stores trigger provenance (`triggerSource`, `triggerRef`, `requestedBy`).
-
----
-
-## Implementation Checklist
-
-### P0: MVP Critical — Unified Workflow Path
-
-- [ ] Add `trigger_*` columns to existing `schedule_runs` table (or create `graph_runs` if P1 persistence lands first)
-- [ ] Create `GraphRunWorkflow` in `services/scheduler-worker/` that calls `executeGraphActivity`
-- [ ] Refactor `POST /api/v1/ai/chat` to start `GraphRunWorkflow` instead of inline execution
-- [ ] Add `Idempotency-Key` header support to chat endpoint
-- [ ] Ensure `executeGraphActivity` reuses existing internal API path (`/api/internal/graphs/{graphId}/runs`)
-
-#### Chores
-
-- [ ] Observability instrumentation [observability.md](../../.agent/workflows/observability.md)
-- [ ] Documentation updates [document.md](../../.agent/workflows/document.md)
-
-### P1: Run Persistence + Trigger Metadata
-
-- [ ] Add `graph_runs` table (per GRAPH_EXECUTION.md P1 checklist)
-- [ ] Add trigger provenance fields: `run_kind`, `trigger_source`, `trigger_ref`, `requested_by`
-- [ ] Migrate `schedule_runs` correlation to use `graph_runs.id`
-- [ ] Add attempt semantics (unfreeze `attempt` from 0)
-
-### P2: Webhook Triggers (Conditional)
-
-- [ ] **Evaluate**: Is there a high-value webhook trigger (CI failure, deploy failure)?
-- [ ] If yes: Implement single webhook handler using same workflow path
-- [ ] **Do NOT build generic webhook/event system preemptively**
-
----
-
-## File Pointers (P0 Scope)
-
-| File                                                                 | Change                                                   |
-| -------------------------------------------------------------------- | -------------------------------------------------------- |
-| `services/scheduler-worker/src/workflows/graph-run.workflow.ts`      | New: `GraphRunWorkflow` (unified execution path)         |
-| `services/scheduler-worker/src/activities/execute-graph.activity.ts` | Extend: Support both scheduled and immediate runs        |
-| `src/app/api/v1/ai/chat/route.ts`                                    | Refactor: Start workflow instead of inline execution     |
-| `src/features/ai/services/ai_runtime.ts`                             | Refactor: Return workflow handle, not inline stream      |
-| `packages/db-schema/src/scheduling.ts`                               | Add: `run_kind`, `trigger_source` columns (or new table) |
-
----
 
 ## Schema
 
@@ -81,11 +67,11 @@ Fold trigger fields into the run persistence table per GRAPH_EXECUTION.md P1.
 - `run_requests` as separate table (adds indirection without value if `graph_runs` exists)
 - Duplicating execution logic between scheduled and immediate paths
 
----
+## Design
 
-## Design Decisions
+### Key Decisions
 
-### 1. Execution Path Unification
+#### 1. Execution Path Unification
 
 | Trigger Type        | Current Path                                               | Unified Path                                           |
 | ------------------- | ---------------------------------------------------------- | ------------------------------------------------------ |
@@ -95,9 +81,7 @@ Fold trigger fields into the run persistence table per GRAPH_EXECUTION.md P1.
 
 **Rule:** All paths converge at `GraphRunWorkflow`. HTTP handlers become workflow starters, not executors.
 
----
-
-### 2. Workflow Architecture
+#### 2. Workflow Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -140,9 +124,7 @@ Fold trigger fields into the run persistence table per GRAPH_EXECUTION.md P1.
 
 **Why this approach?** Reuses existing internal API and billing infrastructure. No changes to `GraphExecutorPort` or billing paths.
 
----
-
-### 3. Idempotency Key Strategy
+#### 3. Idempotency Key Strategy
 
 | Trigger                    | Idempotency Key                                        |
 | -------------------------- | ------------------------------------------------------ |
@@ -155,9 +137,7 @@ Fold trigger fields into the run persistence table per GRAPH_EXECUTION.md P1.
 
 **Never** use `Date.now()` or random values for scheduled/webhook keys.
 
----
-
-### 4. Streaming Strategy
+#### 4. Streaming Strategy
 
 **Challenge:** Current API returns SSE stream directly. Temporal workflows are async.
 
@@ -175,9 +155,28 @@ Fold trigger fields into the run persistence table per GRAPH_EXECUTION.md P1.
 
 **Decision:** Start with polling + final result. Add streaming in P1 if latency matters.
 
----
+### Risks and Mitigations
 
-## Acceptance Tests (Non-Negotiable)
+| Risk                                                            | Mitigation                                        |
+| --------------------------------------------------------------- | ------------------------------------------------- |
+| Accidental bypass (someone calls executor directly "for speed") | Grep test + code review + dep-cruiser rule        |
+| Streaming latency regression                                    | P0 accepts polling; streaming in P1               |
+| Bad idempotency key derivation                                  | Strict key format validation; reject invalid keys |
+| Workflow non-determinism                                        | Existing TEMPORAL_PATTERNS.md invariants apply    |
+
+### File Pointers
+
+| File                                                                 | Purpose                                      |
+| -------------------------------------------------------------------- | -------------------------------------------- |
+| `services/scheduler-worker/src/workflows/graph-run.workflow.ts`      | GraphRunWorkflow (unified execution path)    |
+| `services/scheduler-worker/src/activities/execute-graph.activity.ts` | executeGraphActivity (scheduled + immediate) |
+| `src/app/api/v1/ai/chat/route.ts`                                    | API trigger (starts workflow)                |
+| `src/features/ai/services/ai_runtime.ts`                             | AI runtime (returns workflow handle)         |
+| `packages/db-schema/src/scheduling.ts`                               | Schema: trigger columns or new table         |
+
+## Acceptance Checks
+
+**Automated:**
 
 1. **API run is async and durable**
    - Request returns quickly with `{ runId, workflowId }`
@@ -195,35 +194,13 @@ Fold trigger fields into the run persistence table per GRAPH_EXECUTION.md P1.
    - Lint/grep test: API handler must not import `GraphExecutorPort`
    - Only workflow activities call execution layer
 
----
+## Open Questions
 
-## Risks and Mitigations
+_(none)_
 
-| Risk                                                            | Mitigation                                        |
-| --------------------------------------------------------------- | ------------------------------------------------- |
-| Accidental bypass (someone calls executor directly "for speed") | Grep test + code review + dep-cruiser rule        |
-| Streaming latency regression                                    | P0 accepts polling; streaming in P1               |
-| Bad idempotency key derivation                                  | Strict key format validation; reject invalid keys |
-| Workflow non-determinism                                        | Existing TEMPORAL_PATTERNS.md invariants apply    |
-
----
-
-## Explicit Non-Scope
-
-- **Event bus / rule engine** — Not building generic event routing
-- **Auto-execution of actions** — Human review stays for governance
-- **WorkItemPort** — MCP-only for Plane integration
-- **Incident router integration** — Governance uses same workflow but separate trigger logic
-
----
-
-## Related Documents
+## Related
 
 - [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md) — Execution invariants, billing, P1 run persistence
-- [SCHEDULER_SPEC.md](../SCHEDULER_SPEC.md) — Temporal architecture, internal API
-- [TEMPORAL_PATTERNS.md](../TEMPORAL_PATTERNS.md) — Workflow determinism, activity idempotency
-
----
-
-**Last Updated**: 2026-02-03
-**Status**: Draft
+- [scheduler.md](./scheduler.md) — Temporal architecture, internal API
+- [temporal-patterns.md](./temporal-patterns.md) — Workflow determinism, activity idempotency
+- [Initiative: Unified Graph Launch](../../work/initiatives/ini.unified-graph-launch.md)

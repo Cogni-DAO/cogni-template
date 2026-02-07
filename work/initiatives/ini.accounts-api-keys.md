@@ -165,6 +165,52 @@ Files: update `src/app/api/v1/ai/completion/route.ts`, `tests/stack/api/ai/compl
 - **[POST-MVP]** Comprehensive e2e test suite
 - File: `tests/e2e/wallet-siwe-chat-flow.e2e.test.ts`
 
+### P3 — Operator API & User API Keys
+
+**Goal:** Operator-facing admin API for account/key management, and user-facing API keys via LiteLLM `/key/generate`.
+
+> Source: ACCOUNTS_API_KEY_ENDPOINTS.md § Future: Operator HTTP API
+
+| Deliverable                                                          | Status      | Est | Work Item            |
+| -------------------------------------------------------------------- | ----------- | --- | -------------------- |
+| `VirtualKeyManagementPort` — real per-key LiteLLM virtual keys       | Not Started | 3   | (create at P3 start) |
+| `/key/generate` integration with show-once semantics                 | Not Started | 2   | (create at P3 start) |
+| `GET /api/admin/billing-accounts` — list accounts and key summaries  | Not Started | 2   | (create at P3 start) |
+| `GET /api/admin/billing-accounts/:id` — inspect account + ledger     | Not Started | 1   | (create at P3 start) |
+| `GET /api/admin/billing-accounts/:id/virtual-keys` — list keys       | Not Started | 1   | (create at P3 start) |
+| `POST /api/admin/billing-accounts/:id/virtual-keys` — create key     | Not Started | 2   | (create at P3 start) |
+| `POST /api/admin/billing-accounts/:id/credits/topup` — manual credit | Not Started | 1   | (create at P3 start) |
+| Self-serve endpoints (`/me/balance`, `/me/usage`) with dual-auth     | Not Started | 2   | (create at P3 start) |
+
+**App API Keys schema (target):**
+
+> Source: ACCOUNTS_DESIGN.md § Roadmap + Tables
+
+- `app_api_keys(id, billing_account_id, key_hash, last4, label, active, created_at, revoked_at)` — hash-only, show-once plaintext at creation
+- `litellm_key_refs(id, billing_account_id, app_api_key_id UNIQUE, litellm_key_ref, label, active, created_at, revoked_at)` — 1:1 mapping from app key → LiteLLM virtual key
+- Add `app_api_key_id` FK to `credit_ledger` and `charge_receipts` for per-key spend attribution
+- Endpoints: `POST /api/v1/keys` (create + show-once), `GET /api/v1/keys` (list, no plaintext), `DELETE /api/v1/keys/:id` (revoke + revoke mapped LiteLLM key)
+- Auth: `/api/v1/*` accepts session OR `Authorization: Bearer <app_api_key>`
+
+**LiteLLM reference endpoints:**
+
+- [Virtual Keys](https://docs.litellm.ai/docs/proxy/virtual_keys)
+- [Key Management API](https://litellm-api.up.railway.app/)
+- [Spend Tracking](https://docs.litellm.ai/docs/proxy/logging)
+
+### P4 — Multi-Tenant & OAuth
+
+**Goal:** Support multiple identity providers, organization billing, and on-chain payment reconciliation.
+
+> Source: ACCOUNTS_DESIGN.md § Future: Multi-Tenant & OAuth
+
+| Deliverable                                          | Status      | Est | Work Item            |
+| ---------------------------------------------------- | ----------- | --- | -------------------- |
+| Multiple wallets per user (Auth.js `accounts` table) | Not Started | 2   | (create at P4 start) |
+| OAuth providers (GitHub, Google)                     | Not Started | 3   | (create at P4 start) |
+| Organization/team billing accounts                   | Not Started | 3   | (create at P4 start) |
+| On-chain payment reconciliation (Ponder indexer)     | Not Started | 3   | (create at P4 start) |
+
 ## Constraints
 
 - **API key never leaves the server** — browser authenticates with HttpOnly session cookie only
@@ -178,8 +224,9 @@ Files: update `src/app/api/v1/ai/completion/route.ts`, `tests/stack/api/ai/compl
 
 ## As-Built Specs
 
+- [accounts-api-endpoints.md](../../docs/spec/accounts-api-endpoints.md) — MVP master-key-mode billing identity and LiteLLM endpoint usage
 - [security-auth.md](../../docs/spec/security-auth.md) — authentication architecture
-- [accounts-design.md](../../docs/ACCOUNTS_DESIGN.md) — accounts and credits system (pending migration)
+- [accounts-design.md](../../docs/spec/accounts-design.md) — accounts and credits system
 - [billing-evolution.md](../../docs/spec/billing-evolution.md) — billing stages
 
 ## Design Notes

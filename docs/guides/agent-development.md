@@ -14,7 +14,7 @@ tags: [ai, agents, dev]
 
 # Agent Development Guide
 
-> Quick reference for adding new agent graphs. For architecture details, see [LANGGRAPH_AI.md](../LANGGRAPH_AI.md).
+> Quick reference for adding new agent graphs. For architecture details, see [LangGraph Patterns spec](../spec/langgraph-patterns.md).
 
 ## When to Use This
 
@@ -104,5 +104,5 @@ Verify your graph appears in the LangGraph Studio UI and responds to test messag
 ## Related
 
 - [Tools Authoring Guide](./tools-authoring.md) — Adding new tools for agents
-- [LANGGRAPH_AI.md](../LANGGRAPH_AI.md) — Architecture patterns
+- [LangGraph Patterns Spec](../spec/langgraph-patterns.md) — Architecture patterns
 - [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md) — Execution invariants

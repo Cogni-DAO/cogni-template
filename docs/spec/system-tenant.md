@@ -1,7 +1,52 @@
+---
+id: spec.system-tenant
+type: spec
+title: System Tenant & Governance Execution Design
+status: draft
+spec_state: draft
+trust: draft
+summary: System tenant (`cogni_system`) executes governance AI loops as a first-class tenant with server-resolved context, explicit tool allowlists, budget caps, and defense-in-depth policy enforcement.
+read_when: Implementing governance loops, tool policy enforcement, or system-initiated AI execution
+implements: []
+owner: cogni-dev
+created: 2026-01-20
+verified: null
+tags:
+  - system-tenant
+  - governance
+  - tool-policy
+  - security
+---
+
 # System Tenant & Governance Execution Design
 
-> [!CRITICAL]
-> System tenant runs graphs through the **same execution envelope** as customers. Tenant/actor context is **resolved server-side from auth** — never from client payloads. Explicit tool allowlists and spend caps apply to all tenants including system.
+## Context
+
+Cogni needs to execute governance AI loops (e.g., automated code review, policy enforcement, DAO proposal analysis) under a system-controlled billing account. Without a system tenant, governance automation would either:
+
+- Execute under arbitrary customer tenants (privilege confusion)
+- Bypass billing/policy systems entirely (audit gap)
+- Require special-case execution paths (maintenance burden)
+
+This spec defines `cogni_system` as a **first-class tenant** using the same `GraphExecutorPort` execution envelope as customers, with explicit tool allowlists (not wildcards), per-tool budgets, and defense-in-depth policy enforcement.
+
+## Goal
+
+Enable system-initiated AI execution with:
+
+- System tenant (`cogni_system`) as a first-class billing account with `is_system_tenant=true`
+- Server-side tenant/actor context resolution from auth (never from client payloads)
+- Explicit tool allowlists (no `*` wildcards) to prevent privilege escalation
+- Budget caps and rate limits (high but not unlimited) to prevent runaway loops
+- Side-effect tool idempotency to prevent duplicate actions on retries
+- Defense-in-depth policy enforcement via `PolicyResolverPort` (authoritative allowlist) + `configurable.toolIds` (runtime restriction)
+
+## Non-Goals
+
+- **Not in scope:** Multi-org tenants or team-based billing (P1 consideration)
+- **Not in scope:** DAO wallet as tenant owner (P1: add `tenant_settings` table for DAO address storage)
+- **Not in scope:** Building governance graphs preemptively (P2: create when infrastructure is stable)
+- **Not in scope:** Unlimited budgets or wildcard tool allowlists for system tenant
 
 ## Core Invariants
 
@@ -28,32 +73,6 @@
 11. **SIDE_EFFECT_TOOL_IDEMPOTENCY**: Side-effect tools (broadcast posts, git actions, payments) MUST be idempotent. Adapters require `idempotencyKey = ${tenantId}/${runId}/${toolCallId}` and dedupe at adapter boundary. Retries return cached result, not re-execute.
 
 12. **SYSTEM_TENANT_STARTUP_CHECK**: Application startup MUST verify `cogni_system` billing account exists. Fail fast with clear error if missing — do not fail at runtime when governance loop attempts to run.
-
----
-
-## What Already Exists
-
-The codebase already has the primitives needed:
-
-| Primitive                | Location                                        | Status                                                        |
-| ------------------------ | ----------------------------------------------- | ------------------------------------------------------------- |
-| `caller: LlmCaller`      | `GraphRunRequest`                               | ✅ Has `billingAccountId`, `virtualKeyId`                     |
-| `ToolPolicy`             | `@cogni/ai-core/tooling/runtime/tool-policy.ts` | ✅ Has `allowedTools`, `requireApprovalForEffects`, `budgets` |
-| `ToolEffect`             | `@cogni/ai-core/tooling/types.ts`               | ✅ Has `read_only`, `state_change`, `external_side_effect`    |
-| `ToolPolicyContext`      | `@cogni/ai-core/tooling/runtime/tool-policy.ts` | ✅ Has `runId`, notes P1 expansion                            |
-| `configurable.toolIds`   | GRAPH_EXECUTION.md #26, TOOL_USE_SPEC.md #23    | ✅ Runtime allowlist enforced by `toLangChainTool`            |
-| `ExecutionGrant`         | `src/types/scheduling.ts`                       | ✅ Has `billingAccountId`, `scopes`, `userId`                 |
-| `RUNID_SERVER_AUTHORITY` | GRAPH_EXECUTION.md #29                          | ✅ Client runId ignored                                       |
-
-**What's missing:**
-
-| Gap                               | Fix                                              |
-| --------------------------------- | ------------------------------------------------ |
-| No `is_system_tenant` flag        | Add column to `billing_accounts`                 |
-| No `cogni_system` record          | Add idempotent seed + startup healthcheck        |
-| No `PolicyResolverPort`           | Add port for authoritative policy resolution     |
-| No required `tenantId` in context | Make required + test escape hatch                |
-| No side-effect tool idempotency   | Add idempotency key + dedupe at adapter boundary |
 
 ---
 
@@ -154,77 +173,35 @@ export interface PolicyResolverPort {
 
 ---
 
-## Implementation Checklist
+## Design
 
-### P0: MVP — System Tenant Foundation
+### As-Built State
 
-**Schema & Bootstrap:**
+The codebase already has the primitives needed:
 
-- [ ] Add `is_system_tenant` boolean column to `billing_accounts` (default false)
-- [ ] Add migration that creates column AND inserts `cogni_system` (idempotent)
-- [ ] Add startup healthcheck: fail if `cogni_system` missing
-- [ ] Add to `pnpm dev:stack:test:setup`
+| Primitive                | Location                                        | Status                                                        |
+| ------------------------ | ----------------------------------------------- | ------------------------------------------------------------- |
+| `caller: LlmCaller`      | `GraphRunRequest`                               | ✅ Has `billingAccountId`, `virtualKeyId`                     |
+| `ToolPolicy`             | `@cogni/ai-core/tooling/runtime/tool-policy.ts` | ✅ Has `allowedTools`, `requireApprovalForEffects`, `budgets` |
+| `ToolEffect`             | `@cogni/ai-core/tooling/types.ts`               | ✅ Has `read_only`, `state_change`, `external_side_effect`    |
+| `ToolPolicyContext`      | `@cogni/ai-core/tooling/runtime/tool-policy.ts` | ✅ Has `runId`, notes P1 expansion                            |
+| `configurable.toolIds`   | GRAPH_EXECUTION.md #26, TOOL_USE_SPEC.md #23    | ✅ Runtime allowlist enforced by `toLangChainTool`            |
+| `ExecutionGrant`         | `src/types/scheduling.ts`                       | ✅ Has `billingAccountId`, `scopes`, `userId`                 |
+| `RUNID_SERVER_AUTHORITY` | GRAPH_EXECUTION.md #29                          | ✅ Client runId ignored                                       |
 
-**PolicyResolverPort (single source of truth):**
+**What's missing:**
 
-- [ ] Create `PolicyResolverPort` interface in `src/ports/`
-- [ ] Implement `DrizzlePolicyResolverAdapter` — loads tenant, selects policy based on `is_system_tenant`
-- [ ] System tenant policy: explicit allowlist (enumerate governance tools), high budget caps
-- [ ] Customer tenant policy: default allowlist, standard budget, `requireApprovalForEffects: ['external_side_effect']`
-- [ ] Update tool-runner to call `PolicyResolverPort.resolvePolicy()` — do NOT trust passed `toolIds`
+| Gap                               | Fix                                              |
+| --------------------------------- | ------------------------------------------------ |
+| No `is_system_tenant` flag        | Add column to `billing_accounts`                 |
+| No `cogni_system` record          | Add idempotent seed + startup healthcheck        |
+| No `PolicyResolverPort`           | Add port for authoritative policy resolution     |
+| No required `tenantId` in context | Make required + test escape hatch                |
+| No side-effect tool idempotency   | Add idempotency key + dedupe at adapter boundary |
 
-**ToolPolicyContext (required tenantId):**
+### Key Decisions
 
-- [ ] Make `tenantId`, `actorType`, `actorId`, `toolCallId` required fields
-- [ ] Add `createTestPolicyContext()` escape hatch for unit tests
-- [ ] Update tool-runner to deny/throw if `tenantId` missing (defense in depth)
-- [ ] Update providers to populate full context from `caller`
-
-**Side-effect tool idempotency:**
-
-- [ ] Add `tool_execution_results` table: `(idempotency_key PK, result jsonb, created_at)`
-- [ ] Idempotency key format: `${tenantId}/${runId}/${toolCallId}`
-- [ ] Side-effect tool adapters check table before execute, store result after success
-- [ ] On key match: return cached result, do not re-execute
-
-#### Chores
-
-- [ ] Add `tenant_id`, `actor_type` to traces/logs
-- [ ] Documentation: update ACCOUNTS_DESIGN.md (done)
-
-### P1: Enhanced Policy & Monitoring
-
-- [ ] Add `privileged_action` to ToolEffect enum (for payments, deployments)
-- [ ] Add spend alerting for system tenant (high watermark alerts)
-- [ ] Add kill switch for system tenant runs (manual + automatic on spend spike)
-- [ ] Add tenant membership table for proper RLS (not owner_user_id based)
-
-### P2: Governance Loops Live
-
-- [ ] Create governance graphs under system tenant
-- [ ] **Do NOT build preemptively**
-
----
-
-## File Pointers (P0 Scope)
-
-| File                                                          | Change                                             |
-| ------------------------------------------------------------- | -------------------------------------------------- |
-| `src/shared/db/schema.billing.ts`                             | Add `is_system_tenant` column                      |
-| `src/adapters/server/db/migrations/XXXX_add_system_tenant.ts` | Migration + idempotent seed                        |
-| `src/bootstrap/healthchecks.ts`                               | New: startup check for `cogni_system`              |
-| `src/ports/policy-resolver.port.ts`                           | New: `PolicyResolverPort` interface                |
-| `src/adapters/server/policy/drizzle-policy-resolver.ts`       | New: policy resolution implementation              |
-| `packages/ai-core/src/tooling/runtime/tool-policy.ts`         | Required `tenantId` + test escape hatch            |
-| `packages/ai-core/src/tooling/tool-runner.ts`                 | Call PolicyResolverPort, deny if no tenantId       |
-| `src/shared/db/schema.tool-execution.ts`                      | New: `tool_execution_results` for idempotency      |
-| `src/adapters/server/ai/tool-idempotency.adapter.ts`          | New: idempotency check/store for side-effect tools |
-
----
-
-## Design Decisions
-
-### 1. Why `is_system_tenant` boolean (not `account_type` enum)?
+#### 1. Why `is_system_tenant` boolean (not `account_type` enum)?
 
 | Approach                         | Pros                          | Cons                                      | Verdict        |
 | -------------------------------- | ----------------------------- | ----------------------------------------- | -------------- |
@@ -236,7 +213,7 @@ export interface PolicyResolverPort {
 
 **Guardrail:** `is_system_tenant` is ONLY used to select default policy. Never `if (isSystemTenant) { allow }`.
 
-### 2. Why PolicyResolverPort (defense in depth)?
+#### 2. Why PolicyResolverPort (defense in depth)?
 
 Per GRAPH_EXECUTION.md #26, `configurable.toolIds` is the existing enforcement via `toLangChainTool`. Adding `PolicyResolverPort` provides defense in depth:
 
@@ -246,7 +223,7 @@ Per GRAPH_EXECUTION.md #26, `configurable.toolIds` is the existing enforcement v
 
 **Rule:** `configurable.toolIds` can restrict (subset), but cannot expand beyond what `PolicyResolverPort.resolvePolicy(tenantId)` returns. First gate is existing behavior; second gate is new.
 
-### 3. Why required tenantId (not optional)?
+#### 3. Why required tenantId (not optional)?
 
 Optional `tenantId` means production code could accidentally execute without tenant context:
 
@@ -256,7 +233,7 @@ Optional `tenantId` means production code could accidentally execute without ten
 
 **Rule:** `tenantId` is required. Tests use explicit `createTestPolicyContext()` that documents the bypass.
 
-### 4. Why side-effect tool idempotency?
+#### 4. Why side-effect tool idempotency?
 
 Without idempotency:
 
@@ -266,7 +243,7 @@ Without idempotency:
 
 **Rule:** Side-effect tools use `idempotencyKey = ${tenantId}/${runId}/${toolCallId}`. Adapter checks before execute, stores after success. Mirrors billing idempotency pattern.
 
-### 5. Policy Resolution Flow (Defense in Depth)
+### Policy Resolution Flow (Defense in Depth)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -324,14 +301,46 @@ Without idempotency:
 
 ---
 
-## Related Documents
+## Acceptance Checks
 
-- [ACCOUNTS_DESIGN.md](ACCOUNTS_DESIGN.md) — Billing accounts, owner vs actor
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — GraphExecutorPort, billing flow, invariants 26/29/30
-- [SCHEDULER_SPEC.md](SCHEDULER_SPEC.md) — ExecutionGrant for scheduled runs
-- [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool contracts, ToolEffect
+**Automated:**
 
----
+- `pnpm test packages/ai-core/src/tooling/runtime/tool-policy.test.ts` — ToolPolicyContext validation
+- `pnpm test src/adapters/server/policy/drizzle-policy-resolver.test.ts` — PolicyResolverPort implementation
+- `pnpm test src/adapters/server/ai/tool-idempotency.test.ts` — Side-effect idempotency adapter
 
-**Last Updated**: 2026-01-20
-**Status**: Draft — P0 fixes applied per security review
+**Manual (until automated):**
+
+1. Verify `cogni_system` billing account exists: `SELECT * FROM billing_accounts WHERE id = 'cogni_system';`
+2. Verify startup healthcheck fails if system tenant missing (delete record, restart app, should fail fast)
+3. Verify tool execution denied if `tenantId` missing from context
+4. Verify PolicyResolverPort returns authoritative max allowlist for system/customer tenants
+5. Verify side-effect tools dedupe on retry (check `tool_execution_results` table)
+
+## Open Questions
+
+- [ ] Should `privileged_action` ToolEffect level be added in P0 or deferred to P1?
+- [ ] What should the initial system tenant tool allowlist include? (enumerate governance tools)
+- [ ] Should tenant membership table (P1) use separate junction table or extend `billing_accounts`?
+
+## Rollout / Migration
+
+1. Run migration to add `is_system_tenant` column + seed `cogni_system` record
+2. Add startup healthcheck to `src/bootstrap/healthchecks.ts`
+3. Implement `PolicyResolverPort` + `DrizzlePolicyResolverAdapter`
+4. Update tool-runner to require `tenantId` in `ToolPolicyContext` (breaking change — update all callers)
+5. Add `tool_execution_results` table + idempotency adapter
+6. Update side-effect tools to use idempotency key
+
+**Breaking changes:**
+
+- `ToolPolicyContext.tenantId` becomes required (existing tests must use `createTestPolicyContext()`)
+- Tool-runner denies execution if `tenantId` missing (no silent fallback)
+
+## Related
+
+- [Accounts Design](../ACCOUNTS_DESIGN.md) — Billing accounts, owner vs actor (pending migration)
+- [Graph Execution](../GRAPH_EXECUTION.md) — GraphExecutorPort, billing flow, invariants 26/29/30 (pending migration)
+- [Scheduler](./scheduler.md) — ExecutionGrant for scheduled runs
+- [Tool Use](../TOOL_USE_SPEC.md) — Tool contracts, ToolEffect (pending migration)
+- [System Tenant Initiative](../../work/initiatives/ini.system-tenant-governance.md) — Implementation roadmap

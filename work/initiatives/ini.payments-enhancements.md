@@ -49,6 +49,23 @@ Harden and extend the billing pipeline across three axes: (1) improve pre-call c
 | Pre-call max-cost estimation and 402 without calling LLM                                                                                                                       | Not Started | 2   | (create at P1 start) |
 | Reconciliation scripts and monitoring dashboards                                                                                                                               | Not Started | 2   | (create at P1 start) |
 
+#### USDC Payment Hardening (from PAYMENTS_DESIGN.md)
+
+> Source: docs/PAYMENTS_DESIGN.md
+
+| Deliverable                                                                                                                  | Status      | Est | Work Item            |
+| ---------------------------------------------------------------------------------------------------------------------------- | ----------- | --- | -------------------- |
+| Frontend tests: 3-state projection renders correctly from backend states                                                     | Not Started | 1   | (create at P1 start) |
+| Frontend tests: polling updates status in real-time                                                                          | Not Started | 1   | (create at P1 start) |
+| Frontend tests: error messages display correctly                                                                             | Not Started | 1   | (create at P1 start) |
+| Smoke test: run EvmRpcOnChainVerifierAdapter against known-good tx on Sepolia/Base testnet                                   | Not Started | 1   | (create at P1 start) |
+| Clear stuck PENDING attempts after max verification TTL                                                                      | Not Started | 1   | (create at P1 start) |
+| Monitoring and alerting for verification failures                                                                            | Not Started | 1   | (create at P1 start) |
+| Audit log queries for dispute resolution                                                                                     | Not Started | 1   | (create at P1 start) |
+| Rate limiting on RPC calls to prevent cost spikes                                                                            | Not Started | 1   | (create at P1 start) |
+| Fallback RPC endpoints for reliability                                                                                       | Not Started | 1   | (create at P1 start) |
+| Deferred frontend tests: transaction replacement edge cases, multiple transfer logs UI handling, address case sensitivity UX | Not Started | 2   | (create at P1 start) |
+
 ### Run (P2+) — Credit Holds & On-Chain Verification
 
 **Goal:** Soft reservations, on-chain settlement, multi-provider support.
@@ -80,9 +97,12 @@ Harden and extend the billing pipeline across three axes: (1) improve pre-call c
 - [external-executor-billing.md](../../docs/spec/external-executor-billing.md) — async reconciliation design, end_user correlation
 - [dao-enforcement.md](../../docs/spec/dao-enforcement.md) — DAO financial rails, widget payment invariants
 - [activity-metrics.md](../../docs/spec/activity-metrics.md) — activity dashboard join, preflight gating model
+- [payments-design.md](../../docs/spec/payments-design.md) — USDC payment system, state machine, OnChainVerifier port, persistence
 
 ## Design Notes
 
 Content aggregated from original `docs/BILLING_EVOLUTION.md` (Known Issues + Future Work), `docs/EXTERNAL_EXECUTOR_BILLING.md` (P0 remaining + P1 hardening), and `docs/DAO_ENFORCEMENT.md` (Section 5: future DAO hardening) during docs migration.
 
 **Known issue from BILLING_EVOLUTION (resolved):** Activity reporting previously showed zeros — fixed by joining `charged_credits` from `charge_receipts` with LiteLLM telemetry by `litellm_call_id`.
+
+**From PAYMENTS_DESIGN.md:** Phase 4 operational hardening (stuck PENDING cleanup, verification monitoring, audit log queries, RPC rate limiting, fallback endpoints) plus remaining frontend and smoke tests added to Walk (P1).

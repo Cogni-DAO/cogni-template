@@ -22,6 +22,8 @@ This is a master index of all specs, updated as specs are migrated.
 
 | ID                               | Title                              | State    | Domain     | Location                                                           |
 | -------------------------------- | ---------------------------------- | -------- | ---------- | ------------------------------------------------------------------ |
+| spec.accounts-api-endpoints      | Accounts & LiteLLM Virtual Keys    | draft    | billing    | [accounts-api-endpoints.md](./accounts-api-endpoints.md)           |
+| spec.accounts-design             | Accounts & Credits System Design   | draft    | billing    | [accounts-design.md](./accounts-design.md)                         |
 | activity-metrics-spec            | Activity Metrics Design            | draft    | billing    | [activity-metrics.md](./activity-metrics.md)                       |
 | agent-discovery-spec             | Agent Discovery Architecture       | draft    | ai-graphs  | [agent-discovery.md](./agent-discovery.md)                         |
 | agent-registry                   | Agent Registry                     | draft    | ai-graphs  | [agent-registry.md](./agent-registry.md)                           |
@@ -43,27 +45,42 @@ This is a master index of all specs, updated as specs are migrated.
 | external-executor-billing-spec   | External Executor Billing          | draft    | billing    | [external-executor-billing.md](./external-executor-billing.md)     |
 | git-sync-repo-mount-spec         | Git-Sync Repo Mount                | draft    | deployment | [git-sync-repo-mount.md](./git-sync-repo-mount.md)                 |
 | gov-data-collectors-spec         | Governance Data Collectors         | draft    | data       | [gov-data-collectors.md](./gov-data-collectors.md)                 |
+| spec.health-probes               | Health Probe Separation            | draft    | deployment | [health-probes.md](./health-probes.md)                             |
+| human-in-the-loop-spec           | Human-in-the-Loop (HIL) Design     | draft    | ai-graphs  | [human-in-the-loop.md](./human-in-the-loop.md)                     |
+| langgraph-patterns-spec          | LangGraph Patterns                 | draft    | ai-graphs  | [langgraph-patterns.md](./langgraph-patterns.md)                   |
+| langgraph-server-spec            | LangGraph Server Integration       | draft    | ai-graphs  | [langgraph-server.md](./langgraph-server.md)                       |
 | model-selection-spec             | Model Selection                    | draft    | ai-graphs  | [model-selection.md](./model-selection.md)                         |
 | n8n-adapter-spec                 | n8n Workflow Execution Adapter     | draft    | ai-graphs  | [n8n-adapter.md](./n8n-adapter.md)                                 |
+| node-formation-spec              | Node Formation Design              | draft    | web3       | [node-formation.md](./node-formation.md)                           |
+| spec.node-ci-cd-contract         | Node CI/CD Contract                | draft    | deployment | [node-ci-cd-contract.md](./node-ci-cd-contract.md)                 |
 | node-operator-contract-spec      | Node vs Operator Contract          | draft    | meta       | [node-operator-contract.md](./node-operator-contract.md)           |
+| spec.onchain-readers             | On-Chain Treasury & Ownership      | draft    | web3       | [onchain-readers.md](./onchain-readers.md)                         |
 | packages-architecture-spec       | Packages Architecture              | draft    | infra      | [packages-architecture.md](./packages-architecture.md)             |
+| payments-design-spec             | Payments: USDC with Backend Verify | draft    | billing    | [payments-design.md](./payments-design.md)                         |
 | prompt-registry-spec             | Prompt Registry                    | draft    | ai-graphs  | [prompt-registry.md](./prompt-registry.md)                         |
 | public-analytics-spec            | Public Analytics Page              | draft    | data       | [public-analytics.md](./public-analytics.md)                       |
 | runtime-policy-spec              | Route Runtime Policy               | draft    | deployment | [runtime-policy.md](./runtime-policy.md)                           |
+| spec.tenant-connections          | Tenant Connections Design          | draft    | auth       | [tenant-connections.md](./tenant-connections.md)                   |
 | temporal-patterns-spec           | Temporal Patterns                  | draft    | ai-graphs  | [temporal-patterns.md](./temporal-patterns.md)                     |
 | security-auth-spec               | Security & Authentication          | draft    | auth       | [security-auth.md](./security-auth.md)                             |
 | services-architecture-spec       | Services Architecture              | draft    | deployment | [services-architecture.md](./services-architecture.md)             |
+| spec.sourcecred                  | SourceCred Implementation          | draft    | community  | [sourcecred.md](./sourcecred.md)                                   |
 | sourcecred-config-rationale-spec | SourceCred Configuration Rationale | draft    | community  | [sourcecred-config-rationale.md](./sourcecred-config-rationale.md) |
+| spec.tool-use                    | Tool Use Specification             | draft    | ai-graphs  | [tool-use.md](./tool-use.md)                                       |
+| spec.unified-graph-launch        | Unified Graph Launch Design        | draft    | ai-graphs  | [unified-graph-launch.md](./unified-graph-launch.md)               |
 | ui-implementation-spec           | UI Implementation                  | draft    | meta       | [ui-implementation.md](./ui-implementation.md)                     |
+| spec.usage-history               | Usage History Design               | draft    | data       | [usage-history.md](./usage-history.md)                             |
 | scheduler-spec                   | Scheduler Specification            | active   | ai-graphs  | [scheduler.md](./scheduler.md)                                     |
 | cogni-brain-spec                 | Cogni Brain Specification          | proposed | ai-graphs  | [cogni-brain.md](./cogni-brain.md)                                 |
 | rbac-spec                        | RBAC Specification                 | active   | auth       | [rbac.md](./rbac.md)                                               |
 | observability-spec               | Observability Specification        | active   | data       | [observability.md](./observability.md)                             |
+| spec.observability-requirements  | Required Observability Design      | draft    | data       | [observability-requirements.md](./observability-requirements.md)   |
 | ci-cd-spec                       | CI/CD Specification                | active   | deployment | [ci-cd.md](./ci-cd.md)                                             |
 | databases-spec                   | Databases Specification            | active   | infra      | [databases.md](./databases.md)                                     |
 | docs-work-system-spec            | Docs + Work System Spec            | draft    | infra      | [docs-work-system.md](./docs-work-system.md)                       |
 | architecture-spec                | Cogni-Template Architecture        | active   | meta       | [architecture.md](./architecture.md)                               |
 | style-spec                       | Style Specification                | active   | meta       | [style.md](./style.md)                                             |
+| spec.system-tenant               | System Tenant & Governance         | draft    | auth       | [system-tenant.md](./system-tenant.md)                             |
 | development-lifecycle            | Development Lifecycle              | proposed | workflows  | [development-lifecycle.md](./development-lifecycle.md)             |
 
 ### Domains
@@ -86,10 +103,6 @@ This is a master index of all specs, updated as specs are migrated.
 Legacy specs in `/docs/*.md` to be migrated to `/docs/spec/`:
 
 - DATABASE_RLS_SPEC.md
-- TOOL_USE_SPEC.md
-- TENANT_CONNECTIONS_SPEC.md
-- UNIFIED_GRAPH_LAUNCH_SPEC.md
-- OBSERVABILITY_REQUIRED_SPEC.md
 
 ## Adding a Spec
 

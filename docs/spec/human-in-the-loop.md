@@ -1,7 +1,37 @@
+---
+id: human-in-the-loop-spec
+type: spec
+title: Human-in-the-Loop (HIL) Design
+status: draft
+spec_state: draft
+trust: draft
+summary: Provider-agnostic pause/resume contract for graph execution — interrupt envelope, execution state routing, atomic lock, discriminated union outcomes.
+read_when: Working on HIL flows, interrupt/resume, execution state, or graph provider contracts.
+implements:
+owner: derekg1729
+created: 2026-02-07
+verified:
+tags: [ai-graphs, langgraph]
+---
+
 # Human-in-the-Loop (HIL) Design
 
-> [!CRITICAL]
-> HIL = pause/resume contract. Graph execution halts mid-flow; resume uses same `stateKey`. Providers map to native mechanism (LangGraph interrupt, Claude session resume, etc.). Never poll or block HTTP requests.
+## Context
+
+HIL enables graph execution to pause mid-flow for human decisions, then resume from persisted state. The design is provider-agnostic — each provider implements pause/resume via its native mechanism (LangGraph interrupt, Claude session resume, etc.). HTTP never blocks waiting for human input.
+
+> HIL = pause/resume contract. Graph execution halts mid-flow; resume uses same `stateKey`. Providers map to native mechanism. Never poll or block HTTP requests.
+
+## Goal
+
+Define a provider-agnostic pause/resume contract where graph execution can yield control to a human, persist state via the provider's native mechanism, and resume from a separate HTTP request using only a public `stateKey` handle.
+
+## Non-Goals
+
+- UI-specific payload schemas in ai-core (graphs own their types)
+- Time-travel/forking via checkpoint selection
+- WebSocket push for interrupt notifications
+- Branded types (`StateKey`, `InterruptKind`) — use plain strings initially
 
 ## Core Invariants
 
@@ -37,94 +67,9 @@
 
 12. **PROVIDER_REF_NEVER_PUBLIC**: `provider_ref` (threadId, sessionId) is stored in `execution_state_handles` but NEVER returned in API responses, logged, or exposed to UI. It's internal routing data only.
 
----
-
-## Implementation Checklist
-
-### P0: MVP Critical — First HIL Graph
-
-**Port contract changes:**
-
-- [ ] Add `InterruptEnvelope` to `@cogni/ai-core`: `{ kind: string; data: unknown }`
-- [ ] Refactor `GraphFinal` → discriminated union `GraphRunOutcome` (see Design Decisions §6)
-- [ ] Update `GraphRunRequest` with optional `resumeValue?: unknown` and `resumeId?: string`
-
-**Routing table (P0 — required for unified provider contract):**
-
-- [ ] Create `execution_state_handles` table (see Schema)
-- [ ] Create `ExecutionStatePort` interface with `upsert`, `getByStateKey`, `markCompleted`
-- [ ] Create `DrizzleExecutionStateAdapter` with tenant-scoped queries
-
-**Graph implementation:**
-
-- [ ] Create first HIL graph in `packages/langgraph-graphs/src/graphs/content-review/`
-- [ ] Define graph-specific interrupt payload type in graph package (NOT ai-core)
-- [ ] Configure PostgresSaver checkpointer for InProc provider
-- [ ] Update `LangGraphInProcProvider` to handle interrupt + resume flow
-- [ ] Provider stores `provider_ref` (threadId) via `ExecutionStatePort` on interrupt
-- [ ] LangGraph Server adapter: pass `multitask_strategy: 'reject'` to align with lock policy
-
-**API layer:**
-
-- [ ] Extend `/api/v1/ai/chat` route to handle resume (detect via `stateKey` + `resumeValue`)
-- [ ] Validate `resumeValue` is JSON, max 64KB (RESUME_VALUE_JSON_ONLY)
-- [ ] Validate `interrupt.data` is JSON, max 256KB (ENVELOPE_DATA_JSON_ONLY)
-- [ ] Implement atomic lock claim (see Schema SQL pattern)
-- [ ] Implement lock release in `finally` block (completion/error/interrupt)
-- [ ] Implement idempotency: if `resumeId == last_resume_id` → return `cached_outcome`
-- [ ] Return 409 if lock claim fails (concurrent resume in-flight)
-- [ ] Return only `stateKey` in `needs_input` response (no provider internals)
-
-**Testing:**
-
-- [ ] Integration test: start → interrupt → resume(revise) → interrupt → resume(approve) → final
-- [ ] Test: duplicate resumeId returns cached outcome (idempotency)
-- [ ] Test: concurrent resume with different resumeId returns 409 (atomic lock)
-- [ ] Test: stale lock (>30s) allows new resume to claim (lock expiry)
-
-#### Chores
-
-- [ ] Observability instrumentation [observability.md](../.agent/workflows/observability.md)
-- [ ] Documentation updates [document.md](../.agent/workflows/document.md)
-
-### P1: HIL Polish
-
-- [ ] Add timeout handling for stale interrupted runs (expire via `expires_at`)
-- [ ] Support multi-step revise loops (N iterations before auto-reject)
-- [ ] Add UI components per interrupt `kind` (graph packages may provide)
-
-### P2: Multi-Provider Resume (Future)
-
-- [ ] Claude Agent SDK resume via `options.resume=sessionId`
-- [ ] Validate provider-agnostic contract works across 2+ providers
-- [ ] **Do NOT build preemptively**
-
----
-
-## File Pointers (P0 Scope)
-
-| File                                                             | Change                                                          |
-| ---------------------------------------------------------------- | --------------------------------------------------------------- |
-| `packages/ai-core/src/context/interrupt.ts`                      | New: `InterruptEnvelope` (minimal: `{ kind, data }`)            |
-| `packages/ai-core/src/index.ts`                                  | Export `InterruptEnvelope`                                      |
-| `src/ports/graph-executor.port.ts`                               | Refactor `GraphFinal` → `GraphRunOutcome` discriminated union   |
-| `src/ports/execution-state.port.ts`                              | New: `ExecutionStatePort` interface                             |
-| `src/shared/db/schema.execution-state.ts`                        | New: `execution_state_handles` table                            |
-| `src/adapters/server/ai/execution-state.adapter.ts`              | New: `DrizzleExecutionStateAdapter`                             |
-| `packages/langgraph-graphs/src/graphs/content-review/graph.ts`   | New: first HIL graph with `interrupt()`                         |
-| `packages/langgraph-graphs/src/graphs/content-review/types.ts`   | New: graph-specific interrupt payload (NOT in ai-core)          |
-| `packages/langgraph-graphs/src/graphs/content-review/prompts.ts` | System prompts for content generation                           |
-| `packages/langgraph-graphs/src/catalog.ts`                       | Add content-review entry                                        |
-| `src/adapters/server/ai/langgraph/inproc.provider.ts`            | Add checkpointer; handle interrupt/resume; store via port       |
-| `src/adapters/server/ai/langgraph/checkpointer.ts`               | New: PostgresSaver factory                                      |
-| `src/app/api/v1/ai/chat/route.ts`                                | Handle resume; validate JSON+size; idempotency; return stateKey |
-| `tests/stack/ai/hil-flow.stack.test.ts`                          | New: full HIL cycle + idempotency + concurrency tests           |
-
----
-
 ## Schema
 
-**P0 table: `execution_state_handles`**
+### execution_state_handles Table
 
 This is our routing index — not shared provider state. Required for unified provider contract.
 
@@ -189,17 +134,17 @@ WHERE account_id = $accountId
 
 **Security:** `provider_ref` is NEVER returned in API responses, NEVER logged, NEVER exposed to UI. It's internal routing data only per PROVIDER_REF_NEVER_PUBLIC.
 
-**Checkpointer tables (auto-created by PostgresSaver):**
+### Checkpointer Tables (auto-created by PostgresSaver)
 
 - `checkpoints` — serialized graph state
 - `checkpoint_writes` — pending writes
 - `checkpoint_migrations` — schema version
 
----
+## Design
 
-## Design Decisions
+### Key Decisions
 
-### 1. Pause/Resume Approaches
+#### 1. Pause/Resume Approaches
 
 | Approach                  | Pros                            | Cons                             | Verdict            |
 | ------------------------- | ------------------------------- | -------------------------------- | ------------------ |
@@ -208,17 +153,9 @@ WHERE account_id = $accountId
 | WebSocket wait            | Real-time                       | Complex, no checkpointing        | Reject             |
 | Queue + worker            | Durable                         | Overkill for P0                  | P2 if scale needed |
 
-**Rule:** Each provider implements pause/resume via its native mechanism:
+**Rule:** Each provider implements pause/resume via its native mechanism. Graph pauses at boundary; state saved to provider's persistence; HTTP returns immediately with interrupt status + `stateKey`.
 
-- **LangGraph:** `interrupt()` + PostgresSaver checkpointer
-- **Claude Agent SDK:** Session persistence + `options.resume`
-- **Future:** Provider-specific equivalent
-
-Graph pauses at boundary; state saved to provider's persistence; HTTP returns immediately with interrupt status + `stateKey`.
-
----
-
-### 2. HIL Data Flow
+#### 2. HIL Data Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -262,9 +199,7 @@ Graph pauses at boundary; state saved to provider's persistence; HTTP returns im
 
 **Why resumeId?** Prevents duplicate actions on double-click/retry. Same `resumeId` returns cached outcome without re-executing.
 
----
-
-### 3. Interrupt Envelope (Minimal)
+#### 3. Interrupt Envelope (Minimal)
 
 **ai-core defines only the envelope — graph packages own typed payloads:**
 
@@ -336,9 +271,7 @@ function InterruptRenderer({ interrupt }: { interrupt: InterruptEnvelope }) {
 - Each graph owns its payload contract
 - UI remains graph-agnostic (switch on kind)
 
----
-
-### 4. Graph Structure (First HIL Graph)
+#### 4. Graph Structure (First HIL Graph)
 
 ```typescript
 // packages/langgraph-graphs/src/graphs/content-review/graph.ts
@@ -376,19 +309,14 @@ export const contentReviewGraph = workflow.compile();
 - Revise loops back to auto_check (prevents infinite loops via max iteration check)
 - Finalize only runs after explicit approval
 
----
-
-### 5. LangGraph Interrupt Mechanics
+#### 5. LangGraph Interrupt Mechanics
 
 ```typescript
 // In human_review node
-import type { ContentReviewInterrupt } from "./types";
-
 async function humanReviewNode(
   state: ContentReviewState,
   config: RunnableConfig
 ) {
-  // Graph-defined payload (NOT ai-core type)
   const payload: ContentReviewInterrupt = {
     reason: "Content ready for review",
     draft: { id: "draft-1", content: state.draftContent },
@@ -406,10 +334,9 @@ async function humanReviewNode(
   };
 
   // This halts execution and saves state to checkpointer
-  // LangGraph returns payload; adapter wraps as InterruptEnvelope
   const resumeValue = interrupt(payload);
 
-  // Execution resumes here with resumeValue (via Command.resume)
+  // Execution resumes here with resumeValue
   return { humanDecision: resumeValue };
 }
 ```
@@ -430,58 +357,26 @@ if (interruptPayload) {
 **Resume call:**
 
 ```typescript
-// Provider calls graph.invoke with Command.resume
 await graph.invoke(new Command({ resume: resumeValue }), {
   configurable: { thread_id: threadId },
 });
 ```
 
-**LangGraph Server alignment:**
+**LangGraph Server alignment:** When using LangGraph Server, pass `multitask_strategy: 'reject'` to ensure both layers (Cogni DB lock + LangGraph Server) reject concurrent runs on the same thread.
 
-When using LangGraph Server (vs inproc), the server has its own concurrency model via `multitask_strategy`. Our `ONE_ACTIVE_RUN_PER_STATEKEY` lock is the 'reject' strategy implemented at the Cogni layer. To ensure server behavior matches:
+#### 6. Provider Resume Contract (Discriminated Union)
 
-```typescript
-// When creating runs on LangGraph Server
-await client.runs.create(threadId, assistantId, {
-  multitask_strategy: "reject", // Aligns with our atomic lock policy
-  // ... other options
-});
-```
-
-This ensures both layers (Cogni DB lock + LangGraph Server) reject concurrent runs on the same thread.
-
----
-
-### 6. Provider Resume Contract (Discriminated Union)
-
-All providers implement resume via `GraphExecutorPort.runGraph()`.
-Result is a discriminated union — no optional fields that could become inconsistent.
+All providers implement resume via `GraphExecutorPort.runGraph()`. Result is a discriminated union — no optional fields that could become inconsistent.
 
 ```typescript
 // src/ports/graph-executor.port.ts changes
 
 export interface GraphRunRequest {
   // ... existing fields ...
-
-  /**
-   * Resume value for HIL flow.
-   * Must be JSON-serializable, max 64KB (per RESUME_VALUE_JSON_ONLY).
-   * Graph-defined; provider passes through to native resume mechanism.
-   */
   readonly resumeValue?: unknown;
-
-  /**
-   * Idempotency key for resume (per ONE_ACTIVE_RUN_PER_STATEKEY).
-   * Required when resumeValue is present.
-   * Duplicate resumeId returns cached outcome; concurrent different resumeId → 409.
-   */
   readonly resumeId?: string;
 }
 
-/**
- * Discriminated union for graph outcomes.
- * Each variant has exactly its required fields — no optional field ambiguity.
- */
 export type GraphRunOutcome =
   | GraphOutcomeCompleted
   | GraphOutcomeNeedsInput
@@ -498,9 +393,7 @@ export interface GraphOutcomeCompleted {
 export interface GraphOutcomeNeedsInput {
   readonly status: "needs_input";
   readonly runId: string;
-  /** Only public handle — NO providerRef */
   readonly stateKey: string;
-  /** Minimal envelope; graph owns typed payload */
   readonly interrupt: InterruptEnvelope;
 }
 
@@ -517,16 +410,13 @@ export interface GraphOutcomeError {
 - `status` as literal type enables exhaustive switch/match
 - Each variant has exactly its fields — no `interruptPayload` on completed
 - TypeScript compiler catches missing case handling
-- No invalid partial states (e.g., completed with interrupt payload)
 
 **Rule:** Providers translate `resumeValue` to native mechanism:
 
 - LangGraph: `Command({ resume: resumeValue })`
 - Claude Agent SDK: `options.resume = sessionId` with value in messages
 
----
-
-### 7. Checkpointer Configuration
+#### 7. Checkpointer Configuration
 
 ```typescript
 // src/adapters/server/ai/langgraph/checkpointer.ts
@@ -546,40 +436,35 @@ export async function getCheckpointer(): Promise<PostgresSaver> {
 }
 ```
 
-**Schema (auto-created by PostgresSaver):**
+**Why reuse DATABASE_URL?** P0 simplicity. May split to dedicated LangGraph DB if isolation needed.
 
-- `checkpoints` — serialized graph state
-- `checkpoint_writes` — pending writes
-- `checkpoint_migrations` — schema version
+### File Pointers
 
-**Why reuse DATABASE_URL?** P0 simplicity. P1 may split to dedicated LangGraph DB if isolation needed.
+| File                                        | Purpose                                         |
+| ------------------------------------------- | ----------------------------------------------- |
+| `packages/ai-core/src/context/interrupt.ts` | `InterruptEnvelope` type (planned)              |
+| `src/ports/graph-executor.port.ts`          | `GraphRunOutcome` discriminated union (planned) |
+| `src/ports/execution-state.port.ts`         | `ExecutionStatePort` interface (planned)        |
+| `src/shared/db/schema.execution-state.ts`   | `execution_state_handles` table (planned)       |
 
----
+## Acceptance Checks
 
-## What We're NOT Building in P0
+**Automated (planned):**
 
-**Explicitly deferred:**
+- Integration test: start → interrupt → resume(revise) → interrupt → resume(approve) → final
+- Test: duplicate resumeId returns cached outcome (idempotency)
+- Test: concurrent resume with different resumeId returns 409 (atomic lock)
+- Test: stale lock (>30s) allows new resume to claim (lock expiry)
 
-- UI-specific payload schemas in ai-core (graphs own their types)
-- Claude Agent SDK provider (validate LangGraph first)
-- Time-travel/forking via checkpoint selection
-- Interrupt timeout auto-cleanup job (table has `expires_at`; cleanup job is P1)
-- WebSocket push for interrupt notifications
-- Branded types (`StateKey`, `InterruptKind`) — use plain strings for P0
+## Open Questions
 
-**Why:** P0 validates pause/resume contract works with one provider (LangGraph) using the unified routing table. Multi-provider validation in P1+.
+(none)
 
----
+## Related
 
-## Related Documents
-
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — GraphExecutorPort, billing, pump+fanout
-- [LANGGRAPH_SERVER.md](LANGGRAPH_SERVER.md) — Thread ID derivation, stateKey semantics
-- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Graph patterns, compiled exports
-- [TOOL_USE_SPEC.md](TOOL_USE_SPEC.md) — Tool execution (may be used in HIL graphs)
-- [USAGE_HISTORY.md](USAGE_HISTORY.md) — Artifact persistence (parallel to HIL state)
-
----
-
-**Last Updated**: 2026-01-20
-**Status**: Draft — Ready for Implementation Review
+- [Graph Execution](../../docs/GRAPH_EXECUTION.md) — GraphExecutorPort, billing, pump+fanout
+- [LangGraph Server](./langgraph-server.md) — Thread ID derivation, stateKey semantics
+- [LangGraph Patterns](./langgraph-patterns.md) — Graph patterns, compiled exports
+- [Tool Use](./tool-use.md) — Tool execution (may be used in HIL graphs)
+- [Usage History](./usage-history.md) — Artifact persistence (parallel to HIL state)
+- [HIL Graphs Initiative](../../work/initiatives/ini.hil-graphs.md)

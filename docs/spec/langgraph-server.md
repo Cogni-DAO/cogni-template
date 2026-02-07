@@ -1,31 +1,32 @@
+---
+id: langgraph-server-spec
+type: spec
+title: LangGraph Server Integration
+status: draft
+spec_state: draft
+trust: draft
+summary: Architecture and invariants for LangGraph Server integration — dev adapter, production adapter, billing, and thread management.
+read_when: Working with LangGraph Server execution path, adapter contracts, or billing integration.
+implements:
+owner: derekg1729
+created: 2026-02-07
+verified:
+tags: [ai-graphs, langgraph, infrastructure]
+---
+
 # LangGraph Server Integration
 
-> [!CRITICAL]
-> LangGraph graphs execute in an external LangGraph Server process. Next.js never imports graph modules. `LangGraphServerAdapter` implements `GraphExecutorPort`, translating server streams to `AiEvent` and emitting `UsageFact` for billing. **LangGraph Server routes ALL LLM calls through LiteLLM proxy for unified billing/spend attribution.**
+## Context
 
----
+LangGraph graphs execute in an external LangGraph Server process. Next.js never imports graph modules. `LangGraphServerAdapter` implements `GraphExecutorPort`, translating server streams to `AiEvent` and emitting `UsageFact` for billing. LangGraph Server routes all LLM calls through LiteLLM proxy for unified billing/spend attribution.
 
-## Phased Implementation
+## Goal
 
-This document covers two execution backends for LangGraph graphs:
+Define the adapter contracts, invariants, and infrastructure requirements for running LangGraph graphs via external server processes (dev, container, hosted) while maintaining unified billing and telemetry through `GraphExecutorPort`.
 
-| Phase   | Backend              | Purpose                            | Persistence      | Billing                 |
-| ------- | -------------------- | ---------------------------------- | ---------------- | ----------------------- |
-| **MVP** | `langgraph dev`      | Local development, graph iteration | In-memory        | Best-effort (no parity) |
-| **P1**  | `langgraph build/up` | Production-like, Docker            | Postgres + Redis | Full parity required    |
+## Design
 
-**MVP Scope:** Connect to `langgraph dev` server for development workflows. In-memory checkpointer. Same graphIds as InProc. Internal/experimental only—not customer-billable.
-
-**P1 Scope:** Full production server with Docker, Postgres checkpointer, Redis, LiteLLM billing parity.
-
----
-
-## MVP: LangGraph Dev Adapter
-
-> [!NOTE]
-> MVP enables local development with `langgraph dev`. For production deployment, see P1 sections below.
-
-### MVP Architecture
+### Dev Adapter Architecture
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -49,20 +50,20 @@ This document covers two execution backends for LangGraph graphs:
 
 **Key invariant:** `providerId = "langgraph"` for both InProc and Dev. GraphIds stay stable (`langgraph:poet`, `langgraph:ponderer`). Backend swaps via env, not graphId.
 
-### MVP Ports
+### Ports
 
 | Port | Purpose                                        |
 | ---- | ---------------------------------------------- |
 | 2024 | `langgraph dev` (in-memory, local development) |
 | 8123 | `langgraph up` / Docker (P1, production-like)  |
 
-### MVP Environment Variables
+### Dev Environment Variables
 
 | Variable            | Purpose                           | Default             |
 | ------------------- | --------------------------------- | ------------------- |
 | `LANGGRAPH_DEV_URL` | Enables dev server execution path | unset (uses InProc) |
 
-### MVP Invariants
+### Dev Adapter Invariants
 
 1. **STABLE_GRAPH_IDS**: GraphIds are `langgraph:{graphName}` regardless of backend (InProc or Dev)
 2. **MUTUAL_EXCLUSION**: Register exactly one `langgraph` provider per aggregator (InProc XOR Dev)
@@ -71,7 +72,7 @@ This document covers two execution backends for LangGraph graphs:
 5. **CATALOG_MANUAL_SYNC_P0**: `LANGGRAPH_CATALOG` and `langgraph.json` manually synced in MVP
 6. **DUAL_RUN_IDS**: Our `runId` (billing/trace) is distinct from LangGraph `run_id` (reconnection/resume). Capture LangGraph `run_id` from the `metadata` stream event if `joinStream`/`lastEventId` reconnection is needed.
 
-### MVP File Pointers
+### Dev Adapter File Pointers
 
 | File                                                             | Purpose                                           |
 | ---------------------------------------------------------------- | ------------------------------------------------- |
@@ -85,51 +86,7 @@ This document covers two execution backends for LangGraph graphs:
 | `src/bootstrap/graph-executor.factory.ts`                        | Env-based provider selection                      |
 | `src/bootstrap/agent-discovery.ts`                               | Env-based provider selection                      |
 
-### MVP Implementation Checklist
-
-- [x] Add `@langchain/langgraph-sdk` to root `package.json`
-- [x] Add `@langchain/langgraph-cli` devDep to `packages/langgraph-graphs/package.json`
-- [x] Create `packages/langgraph-graphs/langgraph.json` with graph registration
-- [x] Add `langgraph:dev` script to root `package.json`
-- [x] Create `src/adapters/server/ai/langgraph/dev/client.ts` SDK client factory
-- [x] Create `src/adapters/server/ai/langgraph/dev/thread.ts` UUIDv5 derivation
-- [x] Create `src/adapters/server/ai/langgraph/dev/stream-translator.ts` SDK → AiEvent
-- [x] Create `src/adapters/server/ai/langgraph/dev/provider.ts` `LangGraphDevProvider`
-- [x] Create `src/adapters/server/ai/langgraph/dev/agent-catalog.provider.ts` discovery
-- [x] Update `src/bootstrap/graph-executor.factory.ts` env-based selection
-- [x] Update `src/bootstrap/agent-discovery.ts` env-based selection
-- [x] Add `LANGGRAPH_DEV_URL` to `.env.local.example`
-- [x] Smoke test: `pnpm langgraph:dev` + chat request streams correctly
-
-### MVP Known Limitations
-
-| Limitation                | Impact                                      | Resolution                             |
-| ------------------------- | ------------------------------------------- | -------------------------------------- |
-| No `usageUnitId`          | Billing uses fallback path                  | P1: LiteLLM header capture             |
-| No `costUsd`              | Cannot bill accurately                      | P1: LiteLLM header capture             |
-| In-memory only            | No persistence across restarts              | P1: Postgres checkpointer              |
-| Manual catalog sync       | Must update both catalog and langgraph.json | P1: Build-time generation              |
-| Late tool_call visibility | Tool may execute before chunk arrives       | Buffered; 64KB args / 100 pending caps |
-
-### MVP Catalog Alignment
-
-**P0 (Manual):** When adding a graph, update both:
-
-1. `packages/langgraph-graphs/src/catalog.ts` (`LANGGRAPH_CATALOG`)
-2. `packages/langgraph-graphs/langgraph.json`
-
-Keys must match (e.g., `"poet"` in both places).
-
-**P1 (Automated):** Build-time generation from `LANGGRAPH_CATALOG` → `langgraph.json`.
-
----
-
-## P1: LangGraph Server (Production)
-
-> [!NOTE]
-> P1 adds Docker deployment, Postgres persistence, and billing parity. Requires MVP completion first.
-
-## Architecture Boundaries
+### Architecture Boundaries
 
 One canonical way to run LangGraph graphs (dev, container, hosted) such that:
 
@@ -209,7 +166,7 @@ One canonical way to run LangGraph graphs (dev, container, hosted) such that:
 
 16. **MODEL_ALLOWLIST_LITELLM_CANONICAL**: LiteLLM `/model/info` is the canonical model allowlist. Next.js caches via SWR; langgraph-server validates against same source. No split-brain.
 
-17. **BILLING_VIA_END_USER_RECONCILIATION**: Billing uses async reconciliation via `end_user` correlation. Provider sets `configurable.user = ${runId}/${attempt}` server-side; reconciler queries `GET /spend/logs?end_user=...` and calls `commitUsageFact()` per entry. See [EXTERNAL_EXECUTOR_BILLING.md](EXTERNAL_EXECUTOR_BILLING.md).
+17. **BILLING_VIA_END_USER_RECONCILIATION**: Billing uses async reconciliation via `end_user` correlation. Provider sets `configurable.user = ${runId}/${attempt}` server-side; reconciler queries `GET /spend/logs?end_user=...` and calls `commitUsageFact()` per entry. See [External Executor Billing spec](./external-executor-billing.md).
 
 18. **CONFIGURABLE_USER_SERVER_SET**: `initChatModel` must include `"user"` in `configurableFields`. Provider overwrites any client-supplied value with `${runId}/${attempt}`. Never trust client configurable for billing.
 
@@ -223,8 +180,6 @@ One canonical way to run LangGraph graphs (dev, container, hosted) such that:
 | 2    | Provider    | `configurable.user = ${runId}/${attempt}`            |
 | 3    | LiteLLM     | Stores as `end_user` in spend_logs                   |
 | 4    | Reconciler  | `GET /spend/logs?end_user=...` → `commitUsageFact()` |
-
-**P0 status:** `end_user` correlation validated. Reconciler implementation in progress.
 
 ### Type Translation
 
@@ -241,9 +196,9 @@ One canonical way to run LangGraph graphs (dev, container, hosted) such that:
 
 22. **SINGLE_SOURCE_OF_TRUTH**: `AiEvent`, `UsageFact`, `ExecutorType`, `RunContext` are defined ONLY in `packages/ai-core/`. `src/types/` files re-export for convenience. Enforced by grep test.
 
-### P0 Explicit Non-Goals
+### Current Scope Boundaries
 
-23. **P0_NO_GDPR_DELETE**: P0 does NOT provide compliant user data deletion. LangGraph checkpoint deletion is a P1 requirement. Document this explicitly.
+23. **NO_GDPR_DELETE_YET**: Current implementation does not provide compliant user data deletion. LangGraph checkpoint deletion tracked in [ini.langgraph-server-production](../../work/initiatives/ini.langgraph-server-production.md).
 
 24. **DEV_TOOL_EVENT_STREAMING**: Dev adapter emits `tool_call_start`/`tool_call_result` events with chunk buffering. Accumulates `tool_call_chunks` by `(messageId, index)` until parseable. Buffer caps: 64KB args, 100 pending results.
 
@@ -362,36 +317,7 @@ interface LangGraphRunRequest {
 const threadId = `${request.accountId}:${request.stateKey ?? request.runId}`;
 ```
 
----
-
-## Environment + Scripts
-
-### A) Local dev (fast iteration)
-
-**Command:** `pnpm langgraph:dev`
-
-**Behavior:** Runs LangGraph server in dev mode for local graph iteration. Dev mode may be in-memory for checkpoints; do not rely on that behavior in production tests.
-
-### B) Container build + run (production-like)
-
-**Commands:**
-
-- `pnpm langgraph:build` (build image or dist)
-- `pnpm langgraph:up` (bring up langgraph-server + redis via compose)
-
-**Requirement:** `docker compose up` must start:
-
-- `langgraph-server` container
-- `redis` (required for persistent checkpointer/state in container mode)
-
-### C) Hosted LangGraph (LangSmith / managed)
-
-**Requirement:** Set `LANGGRAPH_SERVER_URL=<hosted endpoint>` in Next.js runtime.
-**Optional:** `LANGGRAPH_SERVER_API_KEY` (if hosted requires it) passed into SDK `Client(...)`.
-
----
-
-## Config Surface (Environment Variables)
+### Config Surface (Environment Variables)
 
 ### Next.js runtime
 
@@ -447,160 +373,13 @@ langgraph-server:
 
 **Networking:** Uses docker DNS names `litellm` and `postgres` directly.
 
-**Not in MVP:** per-user virtual keys, mTLS/JWT service auth, tool-call streaming.
-
----
-
-## P1 Implementation Checklist
-
-### P1: LangGraph Server (Docker + Postgres)
-
-Deploy LangGraph Server in Docker; wire to LiteLLM; implement full adapter with billing parity.
-
-**Prerequisites:** MVP (langgraph dev) must be complete first.
-
-**Dependency order:** Shared Contracts → Package Scaffold → Container → Postgres → LiteLLM → Graph → Adapter → Tests
-
-#### Step 1: Shared Contracts Extraction (CRITICAL)
-
-Extract cross-process types to `packages/ai-core/` so `packages/langgraph-server/` can import them.
-
-**Extraction order** (reverse dependency): `SourceSystem` → `UsageFact`/`ExecutorType` → `AiEvent` → `RunContext`
-
-- [ ] Create `packages/ai-core/` with pnpm workspace config
-- [ ] Move `SOURCE_SYSTEMS` + `SourceSystem` → `packages/ai-core/src/billing/source-system.ts`
-- [ ] Move `UsageFact`, `ExecutorType` → `packages/ai-core/src/usage/usage.ts`
-- [ ] Move `AiEvent` types → `packages/ai-core/src/events/ai-events.ts`
-- [ ] Move `RunContext` → `packages/ai-core/src/context/run-context.ts`
-- [ ] Create `packages/ai-core/src/index.ts` barrel export
-- [ ] Update `src/types/` files to re-export from `@cogni/ai-core` (shim pattern)
-- [ ] Add dependency-cruiser rule: `packages/**` cannot import from `src/**`
-- [ ] Add grep test: AiEvent/UsageFact defined only in `packages/ai-core/`
-
-**Files to migrate:**
-
-| From                                                       | To                                              |
-| ---------------------------------------------------------- | ----------------------------------------------- |
-| `src/types/ai-events.ts`                                   | `packages/ai-core/src/events/ai-events.ts`      |
-| `src/types/usage.ts`                                       | `packages/ai-core/src/usage/usage.ts`           |
-| `src/types/run-context.ts`                                 | `packages/ai-core/src/context/run-context.ts`   |
-| `src/types/billing.ts` (`SOURCE_SYSTEMS` + `SourceSystem`) | `packages/ai-core/src/billing/source-system.ts` |
-
-#### Step 2: Package Scaffold
-
-- [ ] Create `packages/langgraph-server/` with minimal health endpoint
-- [ ] Create `packages/langgraph-graphs/` with feature-sliced structure
-- [ ] Configure both packages to depend on `@cogni/ai-core`
-- [ ] Add dependency-cruiser rule: no `src/**` → `packages/langgraph-graphs/**` imports
-
-#### Step 3: Container Scaffold
-
-- [ ] Create `platform/infra/services/runtime/langgraph-server/Dockerfile`
-- [ ] Add langgraph-server to `docker-compose.dev.yml` with networks/healthcheck
-- [ ] Verify container builds and starts with health endpoint
-
-#### Step 4: Postgres Provisioning
-
-- [ ] Add langgraph schema/DB to existing Postgres (reuse instance)
-- [ ] Add `LANGGRAPH_DATABASE_URL` env var to langgraph-server
-- [ ] Configure LangGraph.js with Postgres checkpointer
-
-#### Step 5: LiteLLM Wiring
-
-- [ ] Add env vars: `LITELLM_BASE_URL`, `LITELLM_API_KEY`
-- [ ] Configure LangGraph.js LLM client to use LiteLLM as base_url
-- [ ] Verify langgraph-server can make test completion through litellm
-
-#### Step 6: Spend Attribution Headers
-
-- [ ] Define canonical metadata payload: `{ accountId, runId, threadId, requestId, traceId, executorType }`
-- [ ] Attach metadata to LiteLLM calls via `x-litellm-spend-logs-metadata` header
-- [ ] Verify litellm spend logs contain metadata for test runs
-
-#### Step 7: Minimal Graph + Endpoint
-
-- [ ] Create chat graph in `packages/langgraph-graphs/graphs/chat/`
-- [ ] Expose run endpoint accepting: `{ accountId, runId, stateKey?, model, messages[], requestId, traceId }`
-- [ ] Derive `thread_id` server-side as `${accountId}:${stateKey || runId}`
-- [ ] Return SSE stream with text deltas + final message + done
-
-#### Step 8: LangGraphServerAdapter
-
-- [ ] Create `src/adapters/server/ai/langgraph-server.adapter.ts`
-- [ ] Implement `GraphExecutorPort` interface
-- [ ] Build request payload with server-derived identity context
-- [ ] Translate server stream → AiEvents (text_delta, assistant_final, done)
-- [ ] Emit `usage_report` with `executorType: 'langgraph_server'`
-
-#### Step 9: Model Allowlist
-
-- [ ] Define model allowlist in Next.js (maps to LiteLLM aliases)
-- [ ] Select model server-side (not from client)
-- [ ] Pass selectedModel to langgraph-server in request
-
-#### Step 10: Billing + Stack Tests
-
-- [ ] Add `'langgraph_server'` to `SOURCE_SYSTEMS` enum
-- [ ] Stack test: docker compose up → chat request → HTTP 200 + done
-- [ ] Stack test: langgraph_server path creates charge_receipt row
-- [ ] Verify traceId/requestId flow: Next.js → langgraph-server → LiteLLM
-
-#### Chores
-
-- [ ] Observability instrumentation [observability.md](../.agent/workflows/observability.md)
-- [ ] Documentation updates [document.md](../.agent/workflows/document.md)
-
-### P1: Checkpoint Deletion (Compliance)
-
-- [ ] Implement deletion for LangGraph checkpoint tables by tenant-scoped thread_id prefix
-- [ ] Coordinate artifact + checkpoint deletion for user data requests
-- [ ] Add stack test: delete user data → checkpoints removed
-
-### P2: Claude Agents SDK Adapter
-
-- [ ] Create `ClaudeSdkAdapter` implementing `GraphExecutorPort`
-- [ ] Translate Claude SDK events → AiEvents
-- [ ] Emit `usage_report` with `executorType: 'claude_sdk'`
-- [ ] **Do NOT build preemptively**
-
----
-
-## File Pointers (P0 Scope)
-
-| File                                                   | Change                                                                               |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `packages/ai-core/`                                    | New: Shared cross-process types (AiEvent, UsageFact, etc.)                           |
-| `packages/ai-core/src/events/ai-events.ts`             | Move from `src/types/ai-events.ts`                                                   |
-| `packages/ai-core/src/usage/usage.ts`                  | Move from `src/types/usage.ts`                                                       |
-| `packages/ai-core/src/context/run-context.ts`          | Move from `src/types/run-context.ts`                                                 |
-| `packages/ai-core/src/billing/source-system.ts`        | Extract SourceSystem from `src/types/billing.ts`                                     |
-| `packages/langgraph-server/`                           | New: LangGraph Server service code (Node.js/LangGraph.js)                            |
-| `packages/langgraph-graphs/`                           | New: Feature-sliced graph definitions                                                |
-| `packages/langgraph-graphs/graphs/chat/`               | New: Chat graph definition                                                           |
-| `platform/infra/services/runtime/langgraph-server/`    | New: Dockerfile + compose config                                                     |
-| `platform/infra/services/runtime/docker-compose.*.yml` | Add langgraph-server service with networks/healthcheck                               |
-| `src/adapters/server/ai/langgraph-server.adapter.ts`   | New: `LangGraphServerAdapter` implementing GraphExecutorPort                         |
-| `src/types/ai-events.ts`                               | Convert to re-export shim from `@cogni/ai-core`                                      |
-| `src/types/usage.ts`                                   | Convert to re-export shim from `@cogni/ai-core`                                      |
-| `src/types/billing.ts`                                 | Add `'langgraph_server'` to `SOURCE_SYSTEMS`                                         |
-| `src/bootstrap/graph-executor.factory.ts`              | Add LangGraphServerAdapter selection logic                                           |
-| `src/features/ai/services/ai_runtime.ts`               | Add thread_id derivation (tenant-scoped)                                             |
-| `.dependency-cruiser.cjs`                              | Add rules: no `packages/**` → `src/**`, no `src/**` → `packages/langgraph-graphs/**` |
-
----
-
-## Schema
+### Schema
 
 **Already implemented:**
 
-- `UsageFact.executorType` required field (see `src/types/usage.ts`)
+- `UsageFact.executorType` required field (see `packages/ai-core/src/usage/usage.ts`)
 - `ExecutorType = "langgraph_server" | "claude_sdk" | "inproc"`
-
-**P0 changes:**
-
-- Move `SOURCE_SYSTEMS` + `SourceSystem` to `packages/ai-core/` (Step 1)
-- Note: `langgraph_server` uses `source: "litellm"` (LLM calls route through LiteLLM); `executorType: "langgraph_server"` distinguishes the executor
-- Postgres: create `langgraph_dev` database (reuse existing Postgres instance)
+- `langgraph_server` uses `source: "litellm"` (LLM calls route through LiteLLM); `executorType: "langgraph_server"` distinguishes the executor
 
 ---
 
@@ -665,9 +444,9 @@ packages/langgraph-server/                           ← Service that imports gr
 
 ---
 
-## "Works in all scenarios" Validation Checklist
+## Acceptance Checks
 
-When this spec is implemented, you can validate quickly:
+**Manual:**
 
 1. `pnpm langgraph:dev` starts and `/assistants/.../schemas` resolves
 2. Next.js with `LANGGRAPH_SERVER_URL` set can stream a response
@@ -691,15 +470,22 @@ When this spec is implemented, you can validate quickly:
 
 ---
 
-## Related Docs
+## Non-Goals
 
-- [LANGGRAPH_AI.md](LANGGRAPH_AI.md) — Graph patterns (both InProc and Server)
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — Billing idempotency, pump+fanout
-- [USAGE_HISTORY.md](USAGE_HISTORY.md) — Artifact caching (executor-agnostic)
-- [AI_SETUP_SPEC.md](AI_SETUP_SPEC.md) — Correlation IDs, telemetry
-- [LANGGRAPH_TESTING.md](LANGGRAPH_TESTING.md) — Testing strategy for server executor
+- Graph patterns and package structure — see [LangGraph Patterns spec](./langgraph-patterns.md)
+- Executor-agnostic billing and tracking — see [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md)
+- Step-by-step setup instructions — see [LangGraph Server Setup guide](../guides/langgraph-server.md)
 
----
+## Open Questions
 
-**Last Updated**: 2026-01-14
-**Status**: MVP In Progress — langgraph dev adapter; P1 for Docker + billing parity
+_(none)_
+
+## Related
+
+- [LangGraph Patterns spec](./langgraph-patterns.md) — Package structure, InProc execution, anti-patterns
+- [LangGraph Server Setup guide](../guides/langgraph-server.md) — Dev, container, and hosted setup steps
+- [GRAPH_EXECUTION.md](../GRAPH_EXECUTION.md) — Billing idempotency, pump+fanout
+- [Usage History spec](./usage-history.md) — Artifact caching (executor-agnostic)
+- [AI Setup spec](./ai-setup.md) — Correlation IDs, telemetry
+- [External Executor Billing spec](./external-executor-billing.md) — Reconciliation pattern
+- [Initiative: LangGraph Server Production](../../work/initiatives/ini.langgraph-server-production.md) — Roadmap for production deployment + billing parity

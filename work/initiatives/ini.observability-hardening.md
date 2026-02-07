@@ -222,6 +222,53 @@ Reused:
 | Add env vars to preview/prod configs                | Not Started | 1   | —         |
 | Deploy and verify metrics display correctly         | Not Started | 1   | —         |
 
+### Required Observability Track (Silent Death Detection)
+
+> Source: OBSERVABILITY_REQUIRED_SPEC.md — Spec: [observability-requirements.md](../../docs/spec/observability-requirements.md)
+
+**Context:** 2026-02-04 preview app died silently (SIGKILL/OOM). No alert fired. scheduler-worker detected it 30 min later via `HeadersTimeoutError`. Application logs cannot attribute SIGKILL — infrastructure-layer signals are required.
+
+#### P0: Silent Death Detection
+
+**Goal:** Heartbeat liveness, process metrics for pre-crash visibility, container restart/exit detection, resource limits, deploy-to-healthy gate.
+
+| Deliverable                                                                 | Status      | Est | Work Item |
+| --------------------------------------------------------------------------- | ----------- | --- | --------- |
+| `collectDefaultMetrics()` in Prometheus registry (RSS, heap, GC, evloop)    | Not Started | 1   | —         |
+| `app_heartbeat_timestamp_seconds` gauge (30s interval)                      | Not Started | 1   | —         |
+| `mem_limit`/`cpus` on app service in both compose files                     | Not Started | 1   | —         |
+| Container restart/exit-code detection (Alloy `discovery.docker` or sidecar) | Not Started | 1   | —         |
+| Fix Dockerfile HEALTHCHECK timeout: 2s → 5s                                 | Not Started | 1   | —         |
+| Alloy health check in both compose files                                    | Not Started | 1   | —         |
+| DB connectivity check (`SELECT 1`, 2s timeout) in `/readyz`                 | Not Started | 1   | —         |
+| Grafana alert: heartbeat absent >90s → P1 critical                          | Not Started | 1   | —         |
+| Grafana alert: log-silence 5m → P2 warning                                  | Not Started | 1   | —         |
+| Grafana alert: deploy-incomplete (started without complete/failed in 5m)    | Not Started | 1   | —         |
+| Update OBSERVABILITY.md with new metrics, limits, alerts                    | Not Started | 1   | —         |
+
+#### P1: Container-Layer Metrics + Dashboard
+
+**Goal:** cAdvisor or cgroup-exporter for OOM attribution and cgroup memory tracking; post-deploy canary probe.
+
+| Deliverable                                                          | Status      | Est | Work Item |
+| -------------------------------------------------------------------- | ----------- | --- | --------- |
+| Validate cAdvisor feasibility on Akash/Spheron runtime               | Not Started | 1   | —         |
+| cAdvisor or cgroup-exporter sidecar (memory, OOM kills, CPU)         | Not Started | 2   | —         |
+| Alloy `prometheus.scrape` target for cAdvisor (10s interval)         | Not Started | 1   | —         |
+| Grafana dashboard: app memory, request rate, error rate, latency p95 | Not Started | 2   | —         |
+| Post-rollout canary probe in `deploy.sh` (poll `/readyz` 3 min)      | Not Started | 1   | —         |
+| Grafana alert: cgroup memory >85% of limit → P2 warning              | Not Started | 1   | —         |
+
+#### P2: Full Trace Pipeline
+
+**Goal:** OTel OTLP → Tempo, distributed tracing, client-side log shipping. Do NOT build preemptively.
+
+| Deliverable                                            | Status      | Est | Work Item |
+| ------------------------------------------------------ | ----------- | --- | --------- |
+| OTel OTLP exporter → Grafana Tempo                     | Not Started | 2   | —         |
+| Distributed tracing: app → scheduler-worker → DB spans | Not Started | 2   | —         |
+| Client-side log shipping (browser errors to Loki)      | Not Started | 1   | —         |
+
 ## Constraints
 
 - LiteLLM is canonical for usage telemetry — no shadow metering, no local token storage
@@ -237,6 +284,7 @@ Reused:
 
 - [activity-metrics.md](../../docs/spec/activity-metrics.md) — activity dashboard design, LiteLLM dependency, gating model
 - [observability.md](../../docs/spec/observability.md) — structured logging, tracing
+- [observability-requirements.md](../../docs/spec/observability-requirements.md) — silent death detection invariants, alert strategy, health check layering
 
 ## Design Notes
 
