@@ -37,11 +37,7 @@ describe("Sandbox Lifecycle", () => {
         const result = await fixture.runner.runOnce({
           runId: uniqueRunId("test-stdout-stderr"),
           workspacePath: workspace,
-          argv: [
-            "bash",
-            "-lc",
-            'echo "stdout-content" && echo "stderr-content" >&2',
-          ],
+          argv: ['echo "stdout-content" && echo "stderr-content" >&2'],
           limits: { maxRuntimeSec: 10, maxMemoryMb: 128 },
         });
 
@@ -64,7 +60,7 @@ describe("Sandbox Lifecycle", () => {
         const result = await fixture.runner.runOnce({
           runId: uniqueRunId("test-exit-zero"),
           workspacePath: workspace,
-          argv: ["bash", "-lc", "exit 0"],
+          argv: ["exit 0"],
           limits: { maxRuntimeSec: 10, maxMemoryMb: 128 },
         });
 
@@ -84,7 +80,7 @@ describe("Sandbox Lifecycle", () => {
         const result = await fixture.runner.runOnce({
           runId: uniqueRunId("test-exit-code"),
           workspacePath: workspace,
-          argv: ["bash", "-lc", "exit 42"],
+          argv: ["exit 42"],
           limits: { maxRuntimeSec: 10, maxMemoryMb: 128 },
         });
 
@@ -106,7 +102,7 @@ describe("Sandbox Lifecycle", () => {
         const result = await fixture.runner.runOnce({
           runId: uniqueRunId("test-timeout"),
           workspacePath: workspace,
-          argv: ["bash", "-lc", "sleep 60"],
+          argv: ["sleep 60"],
           limits: { maxRuntimeSec: 2, maxMemoryMb: 128 },
         });
 

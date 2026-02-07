@@ -67,7 +67,8 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [LangGraph Patterns](docs/LANGGRAPH_AI.md)
 - [Claude SDK Adapter](docs/CLAUDE_SDK_ADAPTER_SPEC.md)
 - [n8n Adapter](docs/N8N_ADAPTER_SPEC.md)
-- [Clawdbot Adapter](docs/CLAWDBOT_ADAPTER_SPEC.md)
+- [OpenClaw Sandbox Integration](docs/OPENCLAW_SANDBOX_SPEC.md)
+- [OpenClaw Sandbox Controls](docs/OPENCLAW_SANDBOX_CONTROLS.md)
 - [AI Evals](docs/AI_EVALS.md)
 
 ### Development

@@ -281,12 +281,13 @@ AgentCatalogProvider[].listAgents() (fanout)
 
 ---
 
-## MVP Invariants (LangGraph InProc)
+## MVP Invariants (trusted graph execution)
 
-These invariants govern the in-process LangGraph execution path:
+These invariants govern trusted graph execution (no reconciliation needed) like in-proc LangGraph and sandboxed agents:
 
 - **GRAPH_FINALIZATION_ONCE**: Exactly one `done` per runId; completion-units never emit `done`.
 - **USAGE_UNIT_GRANULARITY_ADAPTER_DEFINED**: Adapters emit 1..N `usage_report` events per run. InProc emits per-completion-unit (`usageUnitId=litellmCallId`). External adapters (LangGraph Server, Claude SDK, n8n) emit one aggregate (`usageUnitId=provider_run_id` or `message.id`). `USAGE_REPORT_AT_MOST_ONCE_PER_USAGE_UNIT` prevents duplicates; billing handles any valid 1..N sequence.
+- **USAGE_UNIT_IS_LITELLM_CALL_ID**: For trusted executors (inproc, sandbox), `usageUnitId` is captured from LiteLLM's `x-litellm-call-id` response header. This value equals `spend_logs.request_id` in LiteLLM's reconciliation API, enabling idempotent billing and forensic correlation. Manually verified 2026-02-07 against dev stack (`charge_receipts.litellm_call_id` matched `GET /spend/logs?request_id=`). Automated test: `tests/stack/ai/litellm-call-id-mapping.stack.test.ts` (skipped; requires system test infra, see `docs/SYSTEM_TEST_ARCHITECTURE.md`).
 - **BILLING_SEAM_IS_EXECUTE_COMPLETION_UNIT**: No direct provider/LiteLLM SDK calls from langgraph graphs; all billable calls go through `executeCompletionUnit`.
 - **REQUEST_ID_FLOW_REQUIRED**: `CompletionResult` must carry `requestId` (or define deterministic mapping) to satisfy `GraphFinal.requestId` + tracing.
 - **MODEL_CONSISTENCY**: Model string must be the same through request→LiteLLM→`UsageFact.model`; never infer later.

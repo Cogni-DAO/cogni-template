@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-02
+- **Last reviewed:** 2026-02-07
 - **Status:** stable
 
 ## Purpose
@@ -36,7 +36,7 @@ AI service adapters including LiteLLM completion/streaming, usage telemetry, age
 
 ## Public Surface
 
-- **Exports:** LiteLlmAdapter (LlmService), LiteLlmActivityUsageAdapter (ActivityUsagePort), LiteLlmUsageServiceAdapter (UsageService), InProcCompletionUnitAdapter (completion unit execution), AgentCatalogProvider (discovery interface), AggregatingAgentCatalog (implements AgentCatalogPort), LangGraphInProcAgentCatalogProvider (discovery provider), AggregatingGraphExecutor (execution routing), GraphProvider (execution interface), LangGraphInProcProvider (implements GraphProvider), ObservabilityGraphExecutorDecorator (wraps GraphExecutorPort with Langfuse traces), TavilyWebSearchAdapter (WebSearchCapability with hard caps)
+- **Exports:** LiteLlmAdapter (LlmService), LiteLlmActivityUsageAdapter (ActivityUsagePort), LiteLlmUsageServiceAdapter (UsageService), InProcCompletionUnitAdapter (completion unit execution; requires graphId in CompletionUnitParams.runContext), AgentCatalogProvider (discovery interface), AggregatingAgentCatalog (implements AgentCatalogPort), LangGraphInProcAgentCatalogProvider (discovery provider), AggregatingGraphExecutor (execution routing), GraphProvider (execution interface), LangGraphInProcProvider (implements GraphProvider), ObservabilityGraphExecutorDecorator (wraps GraphExecutorPort with Langfuse traces), TavilyWebSearchAdapter (WebSearchCapability with hard caps)
 - **Routes (if any):** none
 - **CLI (if any):** none
 - **Env/Config keys:** LITELLM_BASE_URL, LITELLM_MASTER_KEY (model param required - no env fallback), TAVILY_API_KEY (for web search)
@@ -95,3 +95,5 @@ pnpm test tests/integration/ai/
 
 - Used in production for real LLM completions
 - Connects to LiteLLM proxy service for provider abstraction
+- InProcCompletionUnitAdapter fails the run if LiteLLM response lacks call ID (prevents silent under-billing)
+- All providers thread graphId through to UsageFact for per-agent analytics

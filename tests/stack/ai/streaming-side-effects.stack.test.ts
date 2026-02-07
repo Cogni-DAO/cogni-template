@@ -17,6 +17,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { createChatRequest } from "@tests/_fakes";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import {
@@ -83,18 +84,20 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          stateKey: randomUUID(),
+          ...createChatRequest({
+            model: defaultModelId,
+            stateKey: randomUUID(),
+            messages: [
+              {
+                id: randomUUID(),
+                role: "user",
+                createdAt: new Date().toISOString(),
+                content: [{ type: "text", text: "Say hello." }],
+              },
+            ],
+          }),
           clientRequestId: `side-effects-test-${testId}`,
-          model: defaultModelId,
           stream: true,
-          messages: [
-            {
-              id: randomUUID(),
-              role: "user",
-              createdAt: new Date().toISOString(),
-              content: [{ type: "text", text: "Say hello." }],
-            },
-          ],
         }),
       });
 
@@ -171,23 +174,25 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          stateKey: randomUUID(),
+          ...createChatRequest({
+            model: defaultModelId,
+            stateKey: randomUUID(),
+            messages: [
+              {
+                id: randomUUID(),
+                role: "user",
+                createdAt: new Date().toISOString(),
+                content: [
+                  {
+                    type: "text",
+                    text: "Write a paragraph with at least 50 words.",
+                  },
+                ],
+              },
+            ],
+          }),
           clientRequestId: randomUUID(),
-          model: defaultModelId,
           stream: true,
-          messages: [
-            {
-              id: randomUUID(),
-              role: "user",
-              createdAt: new Date().toISOString(),
-              content: [
-                {
-                  type: "text",
-                  text: "Write a paragraph with at least 50 words.",
-                },
-              ],
-            },
-          ],
         }),
       });
 
@@ -273,23 +278,25 @@ describe("STREAMING_SIDE_EFFECTS_ONCE invariant", () => {
         headers: { "content-type": "application/json" },
         signal: ac.signal,
         body: JSON.stringify({
-          stateKey: randomUUID(),
+          ...createChatRequest({
+            model: defaultModelId,
+            stateKey: randomUUID(),
+            messages: [
+              {
+                id: randomUUID(),
+                role: "user",
+                createdAt: new Date().toISOString(),
+                content: [
+                  {
+                    type: "text",
+                    text: "Write a very long detailed response with at least 100 words about the history of computing.",
+                  },
+                ],
+              },
+            ],
+          }),
           clientRequestId: randomUUID(),
-          model: defaultModelId,
           stream: true,
-          messages: [
-            {
-              id: randomUUID(),
-              role: "user",
-              createdAt: new Date().toISOString(),
-              content: [
-                {
-                  type: "text",
-                  text: "Write a very long detailed response with at least 100 words about the history of computing.",
-                },
-              ],
-            },
-          ],
         }),
       });
 

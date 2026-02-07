@@ -24,7 +24,7 @@ vi.mock("@/app/_lib/auth/session", () => ({
 }));
 
 import type { UserId } from "@cogni/ids";
-import { TEST_MODEL_ID } from "@tests/_fakes";
+import { createCompletionRequest } from "@tests/_fakes";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { UserDrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
 import { getSessionUser } from "@/app/_lib/auth/session";
@@ -90,10 +90,11 @@ describe("Billing Idempotency (IDEMPOTENT_CHARGES)", () => {
       "http://localhost:3000/api/v1/ai/completion",
       {
         method: "POST",
-        body: JSON.stringify({
-          messages: [{ role: "user", content: "Idempotency test" }],
-          model: TEST_MODEL_ID,
-        }),
+        body: JSON.stringify(
+          createCompletionRequest({
+            messages: [{ role: "user", content: "Idempotency test" }],
+          })
+        ),
       }
     );
 

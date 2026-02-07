@@ -10,7 +10,8 @@
  *   - Per UNIFIED_GRAPH_EXECUTOR: all graph execution flows through GraphExecutorPort
  *   - Per PROVIDER_AGGREGATION: AggregatingGraphExecutor routes to providers
  *   - Per LANGFUSE_INTEGRATION: ObservabilityGraphExecutorDecorator wraps for Langfuse traces
- * Side-effects: none
+ *   - LAZY_SANDBOX_IMPORT: Sandbox provider loaded via dynamic import() to avoid Turbopack bundling dockerode native addon chain
+ * Side-effects: global (module-scoped cached sandbox provider promise)
  * Links: container.ts, AggregatingGraphExecutor, GRAPH_EXECUTION.md, OBSERVABILITY.md
  * @public
  */
@@ -21,12 +22,18 @@ import {
   AggregatingGraphExecutor,
   type CompletionStreamFn,
   createLangGraphDevClient,
+  type GraphProvider,
   InProcCompletionUnitAdapter,
   LangGraphDevProvider,
   LangGraphInProcProvider,
   ObservabilityGraphExecutorDecorator,
 } from "@/adapters/server";
-import type { GraphExecutorPort } from "@/ports";
+import type {
+  AiExecutionErrorCode,
+  GraphExecutorPort,
+  GraphRunRequest,
+  GraphRunResult,
+} from "@/ports";
 import { serverEnv } from "@/shared/env";
 import {
   type AiAdapterDeps,
@@ -60,8 +67,16 @@ export function createGraphExecutor(
     ? createDevProvider(devUrl)
     : createInProcProvider(deps, completionStreamFn);
 
-  // Create aggregating executor with single langgraph provider
-  const aggregator = new AggregatingGraphExecutor([langGraphProvider]);
+  // Build providers array: langgraph always, sandbox when LITELLM_MASTER_KEY present
+  const env = serverEnv();
+  const providers: GraphProvider[] = [langGraphProvider];
+
+  if (env.LITELLM_MASTER_KEY) {
+    providers.push(new LazySandboxGraphProvider(env.LITELLM_MASTER_KEY));
+  }
+
+  // Create aggregating executor with all configured providers
+  const aggregator = new AggregatingGraphExecutor(providers);
 
   // Wrap with observability decorator for Langfuse traces
   // Per OBSERVABILITY.md#langfuse-integration: creates trace with I/O, handles terminal states
@@ -99,4 +114,81 @@ function createDevProvider(apiUrl: string): LangGraphDevProvider {
   const client = createLangGraphDevClient({ apiUrl });
   const availableGraphs = Object.keys(LANGGRAPH_CATALOG);
   return new LangGraphDevProvider(client, { availableGraphs });
+}
+
+// ---------------------------------------------------------------------------
+// Lazy sandbox provider — defers dockerode import to first runGraph() call
+// ---------------------------------------------------------------------------
+
+/** Module-scoped singleton: caches the dynamic import + provider construction */
+let _sandboxProvider: Promise<GraphProvider> | null = null;
+
+function loadSandboxProvider(litellmMasterKey: string): Promise<GraphProvider> {
+  if (!_sandboxProvider) {
+    _sandboxProvider = import("@/adapters/server/sandbox").then(
+      ({ SandboxRunnerAdapter, SandboxGraphProvider }) => {
+        const runner = new SandboxRunnerAdapter({ litellmMasterKey });
+        return new SandboxGraphProvider(runner) as GraphProvider;
+      }
+    );
+  }
+  return _sandboxProvider;
+}
+
+/**
+ * GraphProvider that lazy-loads SandboxGraphProvider on first use.
+ *
+ * Avoids top-level import of dockerode → ssh2 → cpu-features (native addon)
+ * which breaks Turbopack bundling when the barrel re-exports it.
+ *
+ * canHandle() is sync (prefix check only).
+ * runGraph() returns {stream, final} synchronously; the async generator
+ * inside awaits the cached import before delegating.
+ */
+class LazySandboxGraphProvider implements GraphProvider {
+  readonly providerId = "sandbox";
+  private readonly delegate: Promise<GraphProvider>;
+
+  constructor(litellmMasterKey: string) {
+    this.delegate = loadSandboxProvider(litellmMasterKey);
+  }
+
+  canHandle(graphId: string): boolean {
+    return graphId.startsWith(`${this.providerId}:`);
+  }
+
+  runGraph(req: GraphRunRequest): GraphRunResult {
+    const delegate = this.delegate;
+
+    // Shared promise: resolves to delegate's runGraph result once module loads
+    const innerResult = delegate.then((p) => p.runGraph(req));
+
+    const stream = (async function* () {
+      let inner: GraphRunResult;
+      try {
+        inner = await innerResult;
+      } catch {
+        yield {
+          type: "error" as const,
+          error: "internal" as AiExecutionErrorCode,
+        };
+        yield { type: "done" as const };
+        return;
+      }
+      yield* inner.stream;
+    })();
+
+    const final = innerResult.then(
+      (r) => r.final,
+      () =>
+        ({
+          ok: false,
+          runId: req.runId,
+          requestId: req.ingressRequestId,
+          error: "internal",
+        }) as const
+    );
+
+    return { stream, final };
+  }
 }

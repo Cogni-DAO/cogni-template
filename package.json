@@ -69,7 +69,7 @@
     "scheduler:build": "pnpm --filter @cogni/scheduler-worker-service build",
     "scheduler:dev": "dotenv -e .env.local -- pnpm --filter @cogni/scheduler-worker-service dev",
     "scheduler:docker:build": "docker build -f services/scheduler-worker/Dockerfile -t cogni-scheduler-worker-local .",
-    "sandbox:docker:build": "docker build -f services/sandbox-runtime/Dockerfile -t cogni-sandbox-runtime:latest .",
+    "sandbox:docker:build": "docker build -t cogni-sandbox-runtime:latest services/sandbox-runtime/",
     "packages:build": "pnpm -r --filter \"./packages/**\" build && tsc -b && pnpm packages:validate",
     "packages:validate": "tsx --tsconfig tsconfig.scripts.json scripts/validate-package-declarations.ts",
     "packages:clean": "rm -rf packages/*/dist packages/*/*.tsbuildinfo",

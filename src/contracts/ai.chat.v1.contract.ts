@@ -243,9 +243,8 @@ export const AssistantUiInputSchema = z.object({
   system: z.string().optional(),
   /** Tools (optional, ignored for now) */
   tools: z.record(z.string(), z.unknown()).optional(),
-  /** Graph name to execute (default: "poet") */
-  // TODO: Remove default - require explicit graphName, fail fast if missing
-  graphName: z.string().default("poet"),
+  /** Graph name or fully-qualified graphId to execute (required) */
+  graphName: z.string(),
   /**
    * Conversation state key for multi-turn conversations.
    * If absent, server generates one and returns it via X-State-Key header.

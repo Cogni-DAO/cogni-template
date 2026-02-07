@@ -160,7 +160,15 @@ export class LangGraphDevProvider implements GraphProvider {
     threadId: string,
     threadMetadata: { billingAccountId: string; stateKey: string }
   ): GraphRunResult {
-    const { runId, ingressRequestId, messages, caller, toolIds, model } = req;
+    const {
+      runId,
+      ingressRequestId,
+      messages,
+      caller,
+      toolIds,
+      model,
+      graphId,
+    } = req;
     const attempt = 0; // P0_ATTEMPT_FREEZE
 
     // P0 Contract: undefined => catalog default, [] => deny-all, [...] => exact
@@ -204,7 +212,7 @@ export class LangGraphDevProvider implements GraphProvider {
       threadId,
       threadMetadata,
       messages,
-      { runId, attempt, caller },
+      { runId, attempt, caller, graphId },
       state,
       runId,
       ingressRequestId,
@@ -229,7 +237,12 @@ export class LangGraphDevProvider implements GraphProvider {
     threadId: string,
     threadMetadata: { billingAccountId: string; stateKey: string },
     messages: GraphRunRequest["messages"],
-    ctx: { runId: string; attempt: number; caller: GraphRunRequest["caller"] },
+    ctx: {
+      runId: string;
+      attempt: number;
+      caller: GraphRunRequest["caller"];
+      graphId: GraphRunRequest["graphId"];
+    },
     state: {
       content: string;
       hasError: boolean;

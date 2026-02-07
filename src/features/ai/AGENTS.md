@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derek @core-dev
-- **Last reviewed:** 2026-01-12
+- **Last reviewed:** 2026-02-07
 - **Status:** stable
 
 ## Purpose
@@ -58,10 +58,10 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
     - `completion.ts` - Orchestrator with internal DRY helpers (execute, executeStream)
     - `message-preparation.ts` - Message filtering, validation, fallbackPromptHash
     - `preflight-credit-check.ts` - Upper-bound credit estimation
-    - `billing.ts` - Non-blocking charge receipt recording (commitUsageFact, recordBilling)
+    - `billing.ts` - Non-blocking charge receipt recording (commitUsageFact with Zod validation, recordBilling)
     - `telemetry.ts` - DB + Langfuse writes (ai_invocation_summaries)
     - `metrics.ts` - Prometheus metric recording
-    - `ai_runtime.ts` - AI runtime orchestration with RunEventRelay (pump+fanout pattern)
+    - `ai_runtime.ts` - AI runtime orchestration with RunEventRelay (pump+fanout pattern, per-executor UsageFact schema validation)
     - `run-id-factory.ts` - Run identity factory (P0: runId = reqId)
     - `llmPricingPolicy.ts` - Pricing markup calculation
 - **Env/Config keys:** `LITELLM_BASE_URL`, `DEFAULT_MODEL` (via serverEnv)
@@ -69,7 +69,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
 
 ## Ports
 
-- **Uses ports:** GraphExecutorPort (runGraph), AccountService (recordChargeReceipt), LlmService (completion, completionStream), AiTelemetryPort (recordInvocation), LangfusePort (createTrace, recordGeneration)
+- **Uses ports:** GraphExecutorPort (runGraph with GraphId), AccountService (recordChargeReceipt), LlmService (completion, completionStream), AiTelemetryPort (recordInvocation), LangfusePort (createTrace, recordGeneration)
 - **Implements ports:** none
 - **Contracts:** ai.completion.v1, ai.chat.v1, ai.models.v1, ai.activity.v1
 

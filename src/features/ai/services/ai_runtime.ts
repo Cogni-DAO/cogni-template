@@ -17,13 +17,18 @@
  * @public
  */
 
+import {
+  type GraphId,
+  UsageFactHintsSchema,
+  UsageFactStrictSchema,
+} from "@cogni/ai-core";
 import type { Logger } from "pino";
-
 import type { Message } from "@/core";
 import type { AccountService, GraphExecutorPort, LlmCaller } from "@/ports";
 import { EVENT_NAMES, type RequestContext } from "@/shared/observability";
 import type { AiRelayPumpErrorEvent } from "@/shared/observability/events/ai";
 import type { RunContext } from "@/types/run-context";
+import type { UsageFact } from "@/types/usage";
 import type { AiEvent, StreamFinalResult } from "../types";
 import { commitUsageFact } from "./billing";
 import { createRunIdentity } from "./run-id-factory";
@@ -40,8 +45,8 @@ export interface AiRuntimeInput {
   readonly caller: LlmCaller;
   /** Abort signal for cancellation */
   readonly abortSignal?: AbortSignal;
-  /** Graph name to execute (default: uses adapter fallback) */
-  readonly graphName?: string;
+  /** Graph name or fully-qualified graphId to execute (required) */
+  readonly graphName: string;
   /**
    * Thread key for multi-turn conversation state.
    * Passed to GraphExecutorPort; adapter decides semantics.
@@ -102,12 +107,10 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
     const runContext: RunContext = { runId, attempt, ingressRequestId };
 
     // Per GRAPH_ID_NAMESPACED: graphIds are ${providerId}:${graphName}
-    // P0: LangGraph is sole provider, so we namespace here. Default graph is 'poet'.
     // Already-namespaced IDs pass through; raw names get "langgraph:" prefix.
-    // TODO: Remove default - if no graphName passed, fail fast instead of defaulting
-    const resolvedGraphId = graphName?.includes(":")
-      ? graphName
-      : `langgraph:${graphName ?? "poet"}`;
+    const resolvedGraphId: GraphId = graphName.includes(":")
+      ? (graphName as GraphId)
+      : `langgraph:${graphName}`;
 
     log.debug(
       { runId, ingressRequestId, model, graphName: resolvedGraphId },
@@ -177,13 +180,12 @@ export function createAiRuntime(deps: AiRuntimeDeps) {
  * - RELAY_PROVIDES_CONTEXT: Subscribers receive RunContext from relay, not from events
  * - Billing subscriber calls commitUsageFact() for each usage_report event
  * - UI stream filters out usage_report events (internal to billing)
- * - callIndex tracked per-run for deterministic fallback usageUnitId
  */
 class RunEventRelay {
   private readonly uiQueue: AiEvent[] = [];
   private uiResolve: (() => void) | null = null;
   private pumpDone = false;
-  private callIndex = 0;
+  private isTerminated = false; // Protocol termination guard (done/error seen)
 
   constructor(
     private readonly upstream: AsyncIterable<AiEvent>,
@@ -231,11 +233,25 @@ class RunEventRelay {
   private async pump(): Promise<void> {
     try {
       for await (const event of this.upstream) {
+        // Termination guard: ignore events after done/error (protocol violation)
+        if (this.isTerminated) {
+          this.log.warn(
+            { event, runId: this.context.runId },
+            "Ignoring event after termination (protocol violation)"
+          );
+          continue;
+        }
+
         // Billing subscriber: process usage_report events
         if (event.type === "usage_report") {
           await this.handleBilling(event);
           // Don't forward usage_report to UI
           continue;
+        }
+
+        // Mark termination on done/error events
+        if (event.type === "done" || event.type === "error") {
+          this.isTerminated = true;
         }
 
         // UI subscriber: queue all other events
@@ -261,24 +277,79 @@ class RunEventRelay {
    * Handle billing for a usage_report event.
    * Per BILLING_INDEPENDENT_OF_CLIENT: errors are logged, never propagated.
    * Per RELAY_PROVIDES_CONTEXT: context passed to commitUsageFact (not from event).
+   * Validates UsageFact schema with per-executor policy (strict for inproc/sandbox, hints for external).
    */
   private async handleBilling(event: {
     type: "usage_report";
     fact: import("@/types/usage").UsageFact;
   }): Promise<void> {
+    const { runId, ingressRequestId } = this.context;
+    const fact = event.fact;
+
     try {
+      // Select schema based on executor type
+      const isBillingAuthoritative =
+        fact.executorType === "inproc" || fact.executorType === "sandbox";
+
+      const schema = isBillingAuthoritative
+        ? UsageFactStrictSchema
+        : UsageFactHintsSchema;
+
+      // Validate schema at ingestion boundary
+      const validationResult = schema.safeParse(fact);
+
+      if (!validationResult.success) {
+        const errors = validationResult.error.format();
+
+        if (isBillingAuthoritative) {
+          // HARD FAILURE for inproc/sandbox: billing incomplete = run failed
+          this.log.error(
+            {
+              runId,
+              ingressRequestId,
+              executorType: fact.executorType,
+              validationErrors: errors,
+              fact,
+            },
+            "CRITICAL: Invalid UsageFact from billing-authoritative executor - BILLING FAILED"
+          );
+          // Throw error to mark run as failed (caught by pump, triggers error event)
+          throw new Error(
+            `Billing failed: invalid UsageFact from ${fact.executorType} (missing usageUnitId or malformed fields)`
+          );
+        } else {
+          // Soft warning for external/telemetry: log but don't block
+          this.log.warn(
+            {
+              runId,
+              ingressRequestId,
+              executorType: fact.executorType,
+              validationErrors: errors,
+              fact,
+            },
+            "External executor emitted invalid UsageFact (telemetry hint only, not authoritative)"
+          );
+          return; // Skip billing for malformed hints
+        }
+      }
+
+      // Commit validated fact (cast to UsageFact for exactOptionalPropertyTypes compatibility)
       await commitUsageFact(
-        event.fact,
-        this.callIndex++,
+        validationResult.data as UsageFact,
         this.context,
         this.accountService,
         this.log
       );
     } catch (error) {
-      // BILLING_INDEPENDENT_OF_CLIENT: never propagate to UI
+      // Propagate validation errors up (for billing-authoritative executors)
+      if (error instanceof Error && error.message.includes("Billing failed")) {
+        throw error;
+      }
+
+      // Log other billing errors but don't propagate (non-blocking per invariant)
       this.log.error(
-        { err: error, runId: event.fact.runId, callIndex: this.callIndex - 1 },
-        "RunEventRelay: billing error swallowed"
+        { err: error, runId },
+        "RunEventRelay: billing commit error swallowed"
       );
     }
   }

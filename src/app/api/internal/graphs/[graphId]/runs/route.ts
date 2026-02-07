@@ -129,11 +129,15 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     const params = await routeParams.params;
-    const graphId = params.graphId;
-    if (!graphId) {
-      log.warn("Missing graphId in path");
+    const rawGraphId = params.graphId;
+    if (!rawGraphId || !rawGraphId.includes(":")) {
+      log.warn(
+        { graphId: rawGraphId },
+        "Missing or invalid graphId in path (expected providerId:graphName)"
+      );
       return NextResponse.json({ error: "Graph not found" }, { status: 404 });
     }
+    const graphId = rawGraphId as `${string}:${string}`;
 
     // --- 3. Idempotency-Key header (required) ---
     const idempotencyKey = request.headers.get("idempotency-key");

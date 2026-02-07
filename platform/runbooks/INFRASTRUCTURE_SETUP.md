@@ -118,6 +118,8 @@ echo "Preview VM IP: $PREVIEW_IP"
 
 ### Production Environment
 
+> **Before switching:** Verify the previous workspace applied cleanly and you're not carrying stale state: `tofu workspace show`
+
 ```bash
 # Set private key for health check (must match public_key_path in tfvars)
 export TF_VAR_ssh_private_key="$(cat ~/.ssh/cogni_template_production_deploy)"
@@ -182,20 +184,28 @@ Both `preview` and `production` environments need these secrets. Generate fresh 
 # Set environment (run this section twice: once for preview, once for production)
 ENV="preview"  # or "production"
 
-# Database credentials (generate unique per environment)
+# Database credentials — generate ALL values in one session, then set atomically.
+# DSNs are constructed from these values so usernames/passwords cannot diverge.
+POSTGRES_ROOT_PASS=$(openssl rand -hex 32)
+APP_USER="cogni_app_${ENV}"
+APP_PASS=$(openssl rand -hex 32)
+SVC_USER="cogni_app_${ENV}_service"
+SVC_PASS=$(openssl rand -hex 32)
+DB_NAME="cogni_template_${ENV}"
+
 gh secret set POSTGRES_ROOT_USER --env $ENV --body "postgres"
-gh secret set POSTGRES_ROOT_PASSWORD --env $ENV --body "$(openssl rand -hex 32)"
-gh secret set APP_DB_USER --env $ENV --body "app_user"
-gh secret set APP_DB_PASSWORD --env $ENV --body "$(openssl rand -hex 32)"
-gh secret set APP_DB_SERVICE_USER --env $ENV --body "app_service"
-gh secret set APP_DB_SERVICE_PASSWORD --env $ENV --body "$(openssl rand -hex 32)"
-gh secret set APP_DB_NAME --env $ENV --body "cogni_template_${ENV}"
+gh secret set POSTGRES_ROOT_PASSWORD --env $ENV --body "$POSTGRES_ROOT_PASS"
+gh secret set APP_DB_USER --env $ENV --body "$APP_USER"
+gh secret set APP_DB_PASSWORD --env $ENV --body "$APP_PASS"
+gh secret set APP_DB_SERVICE_USER --env $ENV --body "$SVC_USER"
+gh secret set APP_DB_SERVICE_PASSWORD --env $ENV --body "$SVC_PASS"
+gh secret set APP_DB_NAME --env $ENV --body "$DB_NAME"
 
 # Database connection strings (authoritative for runtime)
-# These MUST match the component secrets above - deploy validates this
-# Format: postgresql://<APP_DB_USER>:<APP_DB_PASSWORD>@postgres:5432/<APP_DB_NAME>
-gh secret set DATABASE_URL --env $ENV --body "postgresql://app_user:<APP_DB_PASSWORD>@postgres:5432/cogni_template_${ENV}"
-gh secret set DATABASE_SERVICE_URL --env $ENV --body "postgresql://app_service:<APP_DB_SERVICE_PASSWORD>@postgres:5432/cogni_template_${ENV}"
+# Constructed from the variables above — never hardcode usernames or passwords here.
+# ?sslmode=disable required for Docker-internal connections (postgres:5432 is not localhost)
+gh secret set DATABASE_URL --env $ENV --body "postgresql://${APP_USER}:${APP_PASS}@postgres:5432/${DB_NAME}?sslmode=disable"
+gh secret set DATABASE_SERVICE_URL --env $ENV --body "postgresql://${SVC_USER}:${SVC_PASS}@postgres:5432/${DB_NAME}?sslmode=disable"
 
 # Service secrets
 gh secret set AUTH_SECRET --env $ENV --body "$(openssl rand -hex 32)"
@@ -364,26 +374,26 @@ sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
 
 ### Per-Environment Secrets
 
-| Secret                    | Description                    | How to Generate                                         |
-| ------------------------- | ------------------------------ | ------------------------------------------------------- |
-| `VM_HOST`                 | VM IP address                  | From `tofu output`                                      |
-| `DOMAIN`                  | Environment domain             | `preview.cognidao.org` or `cognidao.org`                |
-| `SSH_DEPLOY_KEY`          | Private SSH key                | `cat ~/.ssh/cogni_template_*_deploy`                    |
-| `POSTGRES_ROOT_USER`      | DB root user                   | `postgres`                                              |
-| `POSTGRES_ROOT_PASSWORD`  | DB root password               | `openssl rand -hex 32`                                  |
-| `APP_DB_USER`             | App DB user (RLS enforced)     | `app_user`                                              |
-| `APP_DB_PASSWORD`         | App DB password                | `openssl rand -hex 32`                                  |
-| `APP_DB_SERVICE_USER`     | Service DB user (BYPASSRLS)    | `app_service`                                           |
-| `APP_DB_SERVICE_PASSWORD` | Service DB password            | `openssl rand -hex 32`                                  |
-| `APP_DB_NAME`             | App database name              | `cogni_template_preview` or `cogni_template_production` |
-| `DATABASE_URL`            | App connection string (RLS)    | `postgresql://app_user:<pass>@postgres:5432/<db>`       |
-| `DATABASE_SERVICE_URL`    | Service connection (BYPASSRLS) | `postgresql://app_service:<pass>@postgres:5432/<db>`    |
-| `AUTH_SECRET`             | NextAuth secret                | `openssl rand -hex 32`                                  |
-| `LITELLM_MASTER_KEY`      | LiteLLM API key                | `sk-$(openssl rand -hex 24)`                            |
-| `METRICS_TOKEN`           | Metrics auth token             | `openssl rand -base64 32`                               |
-| `OPENROUTER_API_KEY`      | OpenRouter API key             | From openrouter.ai                                      |
-| `EVM_RPC_URL`             | Ethereum RPC URL               | From Alchemy/Infura                                     |
-| `SOURCECRED_GITHUB_TOKEN` | GitHub PAT for SourceCred      | GitHub PAT with repo read                               |
+| Secret                    | Description                    | How to Generate                                                           |
+| ------------------------- | ------------------------------ | ------------------------------------------------------------------------- |
+| `VM_HOST`                 | VM IP address                  | From `tofu output`                                                        |
+| `DOMAIN`                  | Environment domain             | `preview.cognidao.org` or `cognidao.org`                                  |
+| `SSH_DEPLOY_KEY`          | Private SSH key                | `cat ~/.ssh/cogni_template_*_deploy`                                      |
+| `POSTGRES_ROOT_USER`      | DB root user                   | `postgres`                                                                |
+| `POSTGRES_ROOT_PASSWORD`  | DB root password               | `openssl rand -hex 32`                                                    |
+| `APP_DB_USER`             | App DB user (RLS enforced)     | `cogni_app_preview` or `cogni_app_production`                             |
+| `APP_DB_PASSWORD`         | App DB password                | `openssl rand -hex 32`                                                    |
+| `APP_DB_SERVICE_USER`     | Service DB user (BYPASSRLS)    | `cogni_app_preview_service` or `cogni_app_production_service`             |
+| `APP_DB_SERVICE_PASSWORD` | Service DB password            | `openssl rand -hex 32`                                                    |
+| `APP_DB_NAME`             | App database name              | `cogni_template_preview` or `cogni_template_production`                   |
+| `DATABASE_URL`            | App connection string (RLS)    | Derived: `postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@...` (see above) |
+| `DATABASE_SERVICE_URL`    | Service connection (BYPASSRLS) | Derived: `postgresql://${APP_DB_SERVICE_USER}:${...}@...` (see above)     |
+| `AUTH_SECRET`             | NextAuth secret                | `openssl rand -hex 32`                                                    |
+| `LITELLM_MASTER_KEY`      | LiteLLM API key                | `sk-$(openssl rand -hex 24)`                                              |
+| `METRICS_TOKEN`           | Metrics auth token             | `openssl rand -base64 32`                                                 |
+| `OPENROUTER_API_KEY`      | OpenRouter API key             | From openrouter.ai                                                        |
+| `EVM_RPC_URL`             | Ethereum RPC URL               | From Alchemy/Infura                                                       |
+| `SOURCECRED_GITHUB_TOKEN` | GitHub PAT for SourceCred      | GitHub PAT with repo read                                                 |
 
 > **Two Config Surfaces (P0):**
 >
@@ -412,3 +422,4 @@ sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
 
 - [ ] **Golden image via Packer**: Bake Docker+Compose into a snapshot image instead of boot-time installs. Eliminates nondeterministic failures from upstream repo/CDN issues. Cloud-init becomes config-only.
 - [ ] **Flaky LiteLLM Fix**: first deployment of the app on new infra tends to fail, for unhealthy litellm. re-deploy fixes. TODO: root cause and fix flakiness
+- [ ] **Workspace-environment guard**: Add a `precondition` in `main.tf` that validates `terraform.workspace == var.environment` to prevent applying the wrong tfvars in the wrong workspace (e.g., preview resources landing in production state).

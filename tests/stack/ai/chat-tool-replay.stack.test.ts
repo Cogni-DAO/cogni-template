@@ -16,6 +16,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { TEST_GRAPH_NAME } from "@tests/_fakes";
 import {
   DataStreamChunkType,
   isErrorEvent,
@@ -130,6 +131,7 @@ describe("Chat Tool Replay", () => {
       stateKey: TEST_THREAD_ID,
       clientRequestId: TEST_CLIENT_REQUEST_ID,
       model: TEST_MODEL,
+      graphName: TEST_GRAPH_NAME,
       stream: true,
       messages: [
         {
@@ -315,6 +317,7 @@ describe("Chat Tool Replay", () => {
       stateKey: TEST_THREAD_ID,
       clientRequestId: TEST_CLIENT_REQUEST_ID,
       model: TEST_MODEL,
+      graphName: TEST_GRAPH_NAME,
       stream: true,
       messages: [
         {
@@ -360,6 +363,7 @@ describe("Chat Tool Replay", () => {
       stateKey: TEST_THREAD_ID,
       clientRequestId: TEST_CLIENT_REQUEST_ID,
       model: TEST_MODEL,
+      graphName: TEST_GRAPH_NAME,
       stream: true,
       messages: [
         {

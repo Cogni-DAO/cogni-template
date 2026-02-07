@@ -13,6 +13,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { createChatRequest } from "@tests/_fakes";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import {
@@ -67,23 +68,25 @@ describe("Chat Streaming", () => {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        stateKey: randomUUID(),
+        ...createChatRequest({
+          model: defaultModelId,
+          stateKey: randomUUID(),
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [
+                {
+                  type: "text",
+                  text: "Say hello in exactly 15 words or more, using complete sentences.",
+                },
+              ],
+            },
+          ],
+        }),
         clientRequestId: randomUUID(),
-        model: defaultModelId,
         stream: true,
-        messages: [
-          {
-            id: randomUUID(),
-            role: "user",
-            createdAt: new Date().toISOString(),
-            content: [
-              {
-                type: "text",
-                text: "Say hello in exactly 15 words or more, using complete sentences.",
-              },
-            ],
-          },
-        ],
       }),
     });
 
@@ -174,18 +177,20 @@ describe("Chat Streaming", () => {
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        stateKey: randomUUID(),
+        ...createChatRequest({
+          model: defaultModelId,
+          stateKey: randomUUID(),
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [{ type: "text", text: "Hello" }],
+            },
+          ],
+        }),
         clientRequestId: randomUUID(),
-        model: defaultModelId,
         stream: true,
-        messages: [
-          {
-            id: randomUUID(),
-            role: "user",
-            createdAt: new Date().toISOString(),
-            content: [{ type: "text", text: "Hello" }],
-          },
-        ],
       }),
     });
 
@@ -258,23 +263,25 @@ describe("Chat Streaming", () => {
       },
       signal: ac.signal,
       body: JSON.stringify({
-        stateKey: randomUUID(),
+        ...createChatRequest({
+          model: defaultModelId,
+          stateKey: randomUUID(),
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [
+                {
+                  type: "text",
+                  text: "Write a very long detailed response with many sentences about the history of computers.",
+                },
+              ],
+            },
+          ],
+        }),
         clientRequestId: randomUUID(),
-        model: defaultModelId,
         stream: true,
-        messages: [
-          {
-            id: randomUUID(),
-            role: "user",
-            createdAt: new Date().toISOString(),
-            content: [
-              {
-                type: "text",
-                text: "Write a very long detailed response with many sentences about the history of computers.",
-              },
-            ],
-          },
-        ],
       }),
     });
 

@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-05
+- **Last reviewed:** 2026-02-07
 - **Status:** stable
 
 ## Purpose
@@ -43,7 +43,7 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
   - AgentCatalogPort (listAgents; discovery-only interface per AGENT_DISCOVERY.md)
   - AgentDescriptor (agentId, graphId, name, description; P0_AGENT_GRAPH_IDENTITY: agentId === graphId)
   - GraphExecutorPort (runGraph → stream + completion promise; execution-only per GRAPH_EXECUTION.md)
-  - GraphRunRequest, GraphRunResult, GraphFinal (graph execution types; GraphRunRequest includes toolIds for per-run tool allowlist)
+  - GraphRunRequest (includes toolIds for per-run tool allowlist; graphId typed as GraphId), GraphRunResult, GraphFinal
   - UsageService (getUsageStats, listUsageLogs; legacy aggregation interface)
   - ActivityUsagePort (getSpendLogs, getSpendChart; LiteLLM-only telemetry for Activity dashboard)
   - UsageLogEntry, UsageLogsByRangeParams (types for log fetching)
@@ -67,6 +67,9 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
   - ExecutionGrantWorkerPort (worker-only grant validation)
   - ExecutionRequestPort (idempotency layer for execution requests)
   - ScheduleRunRepository (run ledger: createRun, markRunStarted, markRunCompleted)
+  - SandboxRunnerPort (runOnce; one-shot container execution with optional LLM proxy)
+  - SandboxRunSpec, SandboxRunResult, SandboxLlmProxyConfig (sandbox execution types)
+  - SandboxProgramContract (stdout JSON envelope for sandbox agent output; matches OpenClaw --json format)
   - Grant errors (GrantNotFoundError, GrantExpiredError, GrantRevokedError, GrantScopeMismatchError)
   - Schedule errors (ScheduleNotFoundError, ScheduleAccessDeniedError, InvalidCronExpressionError, InvalidTimezoneError)
 - **Routes:** none

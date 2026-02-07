@@ -13,6 +13,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { createChatRequest } from "@tests/_fakes";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { NextRequest } from "next/server";
 import { describe, expect, it, vi } from "vitest";
@@ -82,17 +83,19 @@ describe("Chat Model Validation Stack Test", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        stateKey: randomUUID(),
+        ...createChatRequest({
+          model: "invalid-model-not-in-allowlist",
+          stateKey: randomUUID(),
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [{ type: "text", text: "Hello" }],
+            },
+          ],
+        }),
         clientRequestId: randomUUID(),
-        messages: [
-          {
-            id: randomUUID(),
-            role: "user",
-            createdAt: new Date().toISOString(),
-            content: [{ type: "text", text: "Hello" }],
-          },
-        ],
-        model: "invalid-model-not-in-allowlist",
       }),
     });
 
@@ -114,17 +117,19 @@ describe("Chat Model Validation Stack Test", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        stateKey: randomUUID(),
+        ...createChatRequest({
+          model: defaultModelId, // Use the defaultModelId from 409 response
+          stateKey: randomUUID(),
+          messages: [
+            {
+              id: randomUUID(),
+              role: "user",
+              createdAt: new Date().toISOString(),
+              content: [{ type: "text", text: "Hello" }],
+            },
+          ],
+        }),
         clientRequestId: randomUUID(),
-        messages: [
-          {
-            id: randomUUID(),
-            role: "user",
-            createdAt: new Date().toISOString(),
-            content: [{ type: "text", text: "Hello" }],
-          },
-        ],
-        model: defaultModelId, // Use the defaultModelId from 409 response
       }),
     });
 
