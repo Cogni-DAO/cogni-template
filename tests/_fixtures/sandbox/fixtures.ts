@@ -3,7 +3,7 @@
 
 /**
  * Module: `@tests/_fixtures/sandbox/fixtures`
- * Purpose: Shared test fixtures for sandbox container tests (P0.5, P0.5a).
+ * Purpose: Shared test fixtures for sandbox container tests (P0.5, P0.5a, full LLM round-trip).
  * Scope: Provides runner helpers, context setup/teardown, and common assertions. Does not contain test logic or assertions.
  * Invariants: All sandbox tests use same image, same limits defaults.
  * Side-effects: IO (Docker containers, filesystem)
@@ -11,17 +11,17 @@
  * @internal
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-
 import type Docker from "dockerode";
 
 import {
   LlmProxyManager,
   type SandboxRunnerAdapter,
 } from "@/adapters/server/sandbox";
-import type { SandboxRunResult } from "@/ports";
+import type { SandboxProgramContract, SandboxRunResult } from "@/ports";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -203,4 +203,94 @@ export async function runOnInternalNetwork(
       networkName: SANDBOX_INTERNAL_NETWORK,
     },
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LLM Round-Trip Helpers (full-stack: agent → proxy → LiteLLM → mock-openai-api)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Model names matching litellm.test.config.yaml.
+ * Keep in sync with tests/_fakes/ai/test-constants.ts.
+ */
+export const SANDBOX_TEST_MODELS = {
+  default: "test-model",
+  free: "test-free-model",
+  paid: "test-paid-model",
+} as const;
+
+/** Limits for LLM round-trip tests — more headroom than infra-only tests. */
+export const LLM_ROUNDTRIP_LIMITS = {
+  maxRuntimeSec: 8,
+  maxMemoryMb: 256,
+} as const;
+
+export interface AgentLlmOptions {
+  messages: Array<{ role: string; content: string }>;
+  model?: string;
+  maxRuntimeSec?: number;
+  maxMemoryMb?: number;
+}
+
+export interface AgentLlmResult {
+  result: SandboxRunResult;
+  envelope: SandboxProgramContract;
+}
+
+/**
+ * Run the sandbox agent script (run.mjs) with LLM proxy enabled.
+ *
+ * Writes messages.json to workspace, runs `node /agent/run.mjs` with
+ * COGNI_MODEL set to the requested model, and returns both the raw
+ * SandboxRunResult and the parsed SandboxProgramContract envelope.
+ *
+ * This exercises the full path:
+ *   run.mjs → socat → socket → nginx proxy → LiteLLM → mock-openai-api
+ */
+export async function runAgentWithLlm(
+  ctx: SandboxTestContextWithProxy,
+  options: AgentLlmOptions
+): Promise<AgentLlmResult> {
+  const cogniDir = path.join(ctx.workspace, ".cogni");
+  mkdirSync(cogniDir, { recursive: true });
+  writeFileSync(
+    path.join(cogniDir, "messages.json"),
+    JSON.stringify(options.messages)
+  );
+
+  const result = await ctx.runner.runOnce({
+    runId: uniqueRunId("agent-llm"),
+    workspacePath: ctx.workspace,
+    argv: ["node", "/agent/run.mjs"],
+    limits: {
+      maxRuntimeSec:
+        options.maxRuntimeSec ?? LLM_ROUNDTRIP_LIMITS.maxRuntimeSec,
+      maxMemoryMb: options.maxMemoryMb ?? LLM_ROUNDTRIP_LIMITS.maxMemoryMb,
+    },
+    networkMode: { mode: "none" },
+    llmProxy: {
+      enabled: true,
+      billingAccountId: TEST_BILLING_ACCOUNT_ID,
+      attempt: 0,
+      env: { COGNI_MODEL: options.model ?? SANDBOX_TEST_MODELS.default },
+    },
+  });
+
+  let envelope: SandboxProgramContract;
+  try {
+    envelope = JSON.parse(result.stdout.trim()) as SandboxProgramContract;
+  } catch {
+    envelope = {
+      payloads: [],
+      meta: {
+        durationMs: 0,
+        error: {
+          code: "parse_error",
+          message: `stdout not valid JSON: ${result.stdout.slice(0, 200)}`,
+        },
+      },
+    };
+  }
+
+  return { result, envelope };
 }
