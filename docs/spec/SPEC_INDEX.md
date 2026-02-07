@@ -87,6 +87,7 @@ This is a master index of all specs, updated as specs are migrated.
 | architecture-spec                | Cogni-Template Architecture        | active   | meta       | [architecture.md](./architecture.md)                               |
 | style-spec                       | Style Specification                | active   | meta       | [style.md](./style.md)                                             |
 | supabase-evaluation-spec         | Supabase Evaluation                | draft    | infra      | [supabase-evaluation.md](./supabase-evaluation.md)                 |
+| system-test-architecture-spec    | System Test Architecture           | draft    | deployment | [system-test-architecture.md](./system-test-architecture.md)       |
 | spec.system-tenant               | System Tenant & Governance         | draft    | auth       | [system-tenant.md](./system-tenant.md)                             |
 | development-lifecycle            | Development Lifecycle              | proposed | workflows  | [development-lifecycle.md](./development-lifecycle.md)             |
 

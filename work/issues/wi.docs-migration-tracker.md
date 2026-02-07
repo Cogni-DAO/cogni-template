@@ -216,7 +216,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | SOURCECRED_CONFIG_RATIONALE.md       | sourcecred-config-rationale.md | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | STYLE.md                             | style.md                       | -                                  | -   | -                       | migrated   | [x]  | [ ]  |
 | SUPABASE_EVALUATION.md               | supabase-evaluation.md         | ini.database-ops.md                | -   | -                       | AB+road    | [x]  | [x]  |
-| SYSTEM_TEST_ARCHITECTURE.md          | -                              | -                                  | -   | -                       | TBD        | [ ]  | [ ]  |
+| SYSTEM_TEST_ARCHITECTURE.md          | system-test-architecture.md    | ini.system-test-architecture.md    | -   | -                       | AB+road    | [x]  | [x]  |
 | SYSTEM_TENANT_DESIGN.md              | system-tenant.md               | ini.system-tenant-governance.md    | -   | -                       | AB+road    | [x]  | [ ]  |
 | TEMPORAL_PATTERNS.md                 | temporal-patterns.md           | -                                  | -   | -                       | as-built   | [x]  | [ ]  |
 | TENANT_CONNECTIONS_SPEC.md           | tenant-connections.md          | ini.tenant-connections.md          | -   | -                       | AB+road    | [x]  | [ ]  |
