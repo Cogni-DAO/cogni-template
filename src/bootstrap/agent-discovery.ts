@@ -46,10 +46,8 @@ export function createAgentCatalog(): {
     ? [new LangGraphDevAgentCatalogProvider()]
     : [new LangGraphInProcAgentCatalogProvider()];
 
-  // Add sandbox agents when LITELLM_MASTER_KEY is configured
-  if (env.LITELLM_MASTER_KEY) {
-    providers.push(new SandboxAgentCatalogProvider());
-  }
+  // Sandbox agents always registered — LITELLM_MASTER_KEY enforced by assertRuntimeSecrets()
+  providers.push(new SandboxAgentCatalogProvider());
 
   return new AggregatingAgentCatalog(providers);
 }

@@ -67,13 +67,12 @@ export function createGraphExecutor(
     ? createDevProvider(devUrl)
     : createInProcProvider(deps, completionStreamFn);
 
-  // Build providers array: langgraph always, sandbox when LITELLM_MASTER_KEY present
+  // Build providers array: langgraph + sandbox
   const env = serverEnv();
-  const providers: GraphProvider[] = [langGraphProvider];
-
-  if (env.LITELLM_MASTER_KEY) {
-    providers.push(new LazySandboxGraphProvider(env.LITELLM_MASTER_KEY));
-  }
+  const providers: GraphProvider[] = [
+    langGraphProvider,
+    new LazySandboxGraphProvider(env.LITELLM_MASTER_KEY!),
+  ];
 
   // Create aggregating executor with all configured providers
   const aggregator = new AggregatingGraphExecutor(providers);
