@@ -1,7 +1,7 @@
 # Graph Executor Architecture Audit Report
 
-**Date**: 2026-02-07
-**Branch**: feat/sandbox-0.75
+**Date**: 2026-02-07 (updated 2026-02-07)
+**Branch**: feat/billing-validation (was feat/sandbox-0.75)
 **Auditor**: Claude Opus 4.6
 
 ---
@@ -11,215 +11,62 @@
 The current graph execution system demonstrates **strong separation of concerns** at the high level, with adapters emitting usage facts and the features layer processing billing. However, **critical enforcement gaps** exist:
 
 1. ✅ **Single Ledger Writer**: Only `billing.ts` calls `accountService.recordChargeReceipt()`
-2. ❌ **No Schema Validation**: UsageFact schema not enforced at adapter boundary
-3. ❌ **Scattered Idempotency Logic**: Each adapter constructs keys independently
+2. ✅ **Schema Validation**: Zod schemas (strict/hints) enforce UsageFact at ingestion boundary
+3. ✅ **Idempotency Consolidated**: Fallback removed; usageUnitId required for billing-authoritative executors
 4. ❌ **No Contract Tests**: No shared compliance suite for executor implementations
-5. ⚠️ **Incomplete External Executors**: Dev and Sandbox providers have billing gaps
+5. ✅ **Sandbox Billing Complete**: Header capture, executorType "sandbox", graphId propagation
+6. ⚠️ **Dev Provider**: Still defers billing to P1 reconciliation (emits hints-only usage_report)
 
-**Recommendation**: Implement the proposed **Transport/Enforcement Split** with mechanical enforcement via dependency-cruiser rules and shared contract tests.
-
----
-
-## 🚨 P0 TODO Items (Critical Before Production)
-
-These three changes prevent the highest-risk billing failures when adding sandbox execution:
-
-### [ ] 1. Remove Fallback usageUnitId Generation in Adapters
-
-**File**: `src/adapters/server/ai/inproc-completion-unit.adapter.ts:114`
-
-**Change**: Remove any fallback/placeholder `usageUnitId` generation (e.g., `MISSING:...`). Always require real `usageUnitId` from LiteLLM.
-
-**Current Code** (Lines 113-121):
-
-```typescript
-const usageUnitId = litellmCallId ?? `MISSING:${runId}/0`;
-if (!litellmCallId) {
-  log.error(
-    { runId, model, isFree },
-    "BUG: LiteLLM response missing call ID - using fallback usageUnitId"
-  );
-}
-```
-
-**Required Change**: Fail fast if `litellmCallId` is missing (throw error). No silent fallback.
-
-**Why**: Fallback keys can collide across retries/reconnects, causing duplicate charge detection to fail. Better to fail loudly than silently under-bill or double-bill.
+**Recommendation**: Implement shared contract tests for executor implementations. Transport/Enforcement split deferred to P1.
 
 ---
 
-### [ ] 2. Enforce usageUnitId in Sandbox Provider
+## P0 TODO Items — Status
 
-**File**: `src/adapters/server/sandbox/sandbox-graph.provider.ts:215-224`
+### [x] 1. Remove Fallback usageUnitId Generation in Adapters
 
-**Change**: Always emit `usage_report` with `UsageFact.usageUnitId` set (stable per runId/attempt/call).
+**Commit**: `ce00dd10` — InProc adapter throws on missing `litellmCallId` instead of using `MISSING:${runId}/0` fallback. `callIndex` tracking removed from `commitUsageFact`. "sandbox" added to `ExecutorType` union.
 
-**Current Code** (Lines 215-224):
+### [x] 2. Enforce usageUnitId in Sandbox Provider
 
-```typescript
-const usageFact: UsageFact = {
-  runId,
-  attempt,
-  source: "litellm",
-  executorType: "inproc", // TODO: add "sandbox" to ExecutorType union
-  billingAccountId: caller.billingAccountId,
-  virtualKeyId: caller.virtualKeyId,
-  model,
-  // ❌ Missing: usageUnitId (required for idempotency)
-  // ❌ Missing: costUsd (deferred to P1, but breaks reconciliation)
-};
-```
+**Commit**: `b4bbb559` — Nginx passes `x-litellm-call-id` response header to sandbox agent. `run.mjs` captures and includes in output envelope meta. Sandbox provider reads `litellmCallId`, throws if missing. `executorType: "sandbox"` set.
 
-**Required Change**:
+### [x] 3. Validate UsageFact Schema in RunEventRelay
 
-1. Capture and propagate `x-litellm-call-id` from LiteLLM HTTP response headers (or proxy-provided metadata) into `usageUnitId`
-2. Set `executorType: "sandbox"` (add to union if needed)
-3. If `litellmCallId` unavailable, throw error (no silent fallback)
+**Commit**: `e17e50a6` — Per-executor Zod validation policy: `UsageFactStrictSchema` (hard fail) for inproc/sandbox, `UsageFactHintsSchema` (soft warning) for external. `isTerminated` guard ignores events after done/error. Billing-authoritative validation failures propagate as run errors.
 
-**Why**: Without stable `usageUnitId`, sandbox runs are not deduplicated. Retries/reconnects will double-charge users.
+### [x] 4. Add graphId to UsageFact and Fix Port Type Consistency
 
-**P0 Scope**: Capture inline from response headers only. Do NOT build audit log queries or reconciliation flows.
+**Commits**: `9a07f4a3`, `83f1aa75` — `graphId: GraphId` required on `UsageFact` with namespaced validation in strict schema. `GraphRunRequest.graphId` typed as `GraphId` (not `string`). `graphName` required across all contracts (chat, completion) and facade — `.default("poet")` removed. All executors propagate graphId. Internal route validates format at boundary.
 
 ---
 
-### [ ] 3. Validate UsageFact Schema in RunEventRelay
+## Remaining TODO Items
 
-**File**: `src/features/ai/services/ai_runtime.ts:265-277`
+### [ ] 5. Contract Tests for Executor Implementations
 
-**Change**: At `usage_report` ingestion, validate required `UsageFact` fields; fail fast on invalid. Also enforce **done exactly once** and ignore events after done.
+**Priority**: P0 (pre-production gate)
 
-**Current Code** (Lines 265-277):
+No shared contract test suite validates executor implementations against billing/streaming invariants. Each test below should be a standalone test file under `tests/contract/`.
 
-```typescript
-private async handleBilling(event: {
-  type: "usage_report";
-  fact: import("@/types/usage").UsageFact;
-}): Promise<void> {
-  try {
-    await commitUsageFact(
-      event.fact,
-      this.callIndex++,
-      this.context,
-      this.accountService,
-      this.log
-    );
-  } catch (error) {
-    // ...
-  }
-}
-```
+Required coverage:
 
-**Required Change**:
+- **UsageFact Zod schemas**: strict accepts valid inproc/sandbox facts, rejects missing `usageUnitId`, rejects non-namespaced `graphId`; hints accepts missing `usageUnitId`, rejects wrong `executorType`
+- **RunEventRelay validation**: billing-authoritative invalid fact → hard failure (error in stream); external invalid fact → soft warning (billing skipped); `isTerminated` guard → events after done ignored; valid fact → `commitUsageFact` called
+- **Executor graphId propagation**: `usage_report` events from inproc/sandbox contain correct `graphId`
+- **Event stream ordering**: content → usage_report → assistant_final → done (exactly one done)
 
-1. Add Zod schema validation before `commitUsageFact()`:
+### [ ] 6. Unify CompletionRunContext Shapes
 
-   ```typescript
-   const UsageFactSchema = z.object({
-     runId: z.string().min(1),
-     attempt: z.number().int().min(0),
-     source: z.string().min(1),
-     billingAccountId: z.string().min(1),
-     virtualKeyId: z.string().min(1),
-     usageUnitId: z.string().min(1), // REQUIRED (no undefined)
-     model: z.string().optional(),
-     costUsd: z.number().optional(),
-   });
+**Priority**: P1
 
-   const validated = UsageFactSchema.parse(event.fact);
-   ```
+`executeCompletionUnit` receives `{runId, attempt, ingressRequestId, graphId}` but `createCompletionUnitStream` receives `{runId, attempt, caller, graphId}` — inconsistent context envelope shapes throughout the call chain. Define a single `CompletionRunContext` type.
 
-2. In `RunEventRelay.pump()`, add termination guard:
+### [ ] 7. Remove Legacy `recordBilling()` Function
 
-   ```typescript
-   private sawDone = false;
+**Priority**: P1
 
-   for await (const event of this.upstream) {
-     if (this.sawDone) {
-       this.log.warn({ event }, "Ignoring event after done");
-       continue; // Ignore all events after done
-     }
-
-     if (event.type === "done") {
-       this.sawDone = true;
-     }
-
-     // ... rest of pump logic
-   }
-   ```
-
-**Why**:
-
-- **Schema validation**: Prevents malformed facts from reaching billing (would cause silent under-billing or DB errors)
-- **Done-once guard**: Prevents double-termination bugs (executor emits done twice → UI hangs or shows duplicate final message)
-
----
-
-**Why These 4 Are Enough**:
-
-These changes address the **highest-risk failures** when adding sandbox execution:
-
-1. **Billing deduplication** (usageUnitId stability)
-2. **Malformed facts** (schema validation at ingestion boundary)
-3. **Protocol violations** (double termination)
-
-Without these, sandbox execution will cause production incidents:
-
-- Users charged twice for retries (missing usageUnitId)
-- Billing reconciliation fails silently (missing required fields)
-- UI hangs or shows duplicate responses (done emitted twice)
-
-**Implementation Order**: 3 → 1 → 2 → 4 (validation first, then fix adapters, then add analytics field).
-
----
-
-### [ ] 4. Add graphId to UsageFact and Fix Port Type Consistency
-
-**Files**:
-
-- `packages/ai-core/src/usage/usage.ts:34`
-- `src/ports/graph-executor.port.ts:48`
-- All adapter implementations (inproc, sandbox, dev)
-
-**Change**: Add graph identifier to usage facts for per-agent analytics and fix type inconsistency.
-
-**Current State**:
-
-1. ❌ `UsageFact` has no `graphId` field (cannot track which agent was used)
-2. ❌ `GraphExecutorPort.graphId` typed as `string` instead of branded `GraphId`
-3. ✅ Branded type exists: `GraphId = \`${string}:${string}\``in`@cogni/ai-core`
-
-**Required Changes**:
-
-1. Add to `UsageFact` schema:
-
-   ```typescript
-   export interface UsageFact {
-     // ... existing fields
-     /** Graph identifier (e.g., "langgraph:poet", "sandbox:agent") */
-     readonly graphId?: GraphId;
-   }
-   ```
-
-2. Fix port type:
-
-   ```typescript
-   // src/ports/graph-executor.port.ts:48
-   - readonly graphId: string;
-   + readonly graphId: GraphId;
-   ```
-
-3. Propagate in adapters:
-   - `InProcCompletionUnitAdapter`: Add `graphId` param, include in UsageFact emission (line 273)
-   - `SandboxGraphProvider`: Include `req.graphId` in UsageFact (line 215)
-   - `LangGraphDevProvider`: (Future - when usage_report implemented)
-
-**Why**:
-
-- Enables per-agent cost analytics ("poet used 1M tokens this month")
-- Debugging ("which agent caused this spike?")
-- Fixes type inconsistency (UI uses `GraphId`, port uses `string`)
-
-**P0 Scope**: Add field, propagate from request. Analytics dashboards deferred to P1.
+`billing.ts:recordBilling()` is the pre-graph direct billing path. Marked TODO for removal once all execution flows through `commitUsageFact()`. Still has its own `MISSING:` fallback logic that contradicts the strict-fail policy.
 
 ---
 
@@ -270,7 +117,7 @@ export interface GraphExecutorPort {
 - `model`: string — Model identifier
 - `caller`: LlmCaller — Billing/telemetry context
 - `abortSignal?`: AbortSignal — Cancellation
-- `graphId`: string — Fully-qualified (e.g., "langgraph:poet")
+- `graphId`: GraphId — Fully-qualified, typed as `` `${string}:${string}` ``
 - `toolIds?`: readonly string[] — Tool allowlist
 - `stateKey?`: string — Multi-turn conversation state
 
@@ -302,25 +149,14 @@ export interface GraphExecutorPort {
 - `done` — Stream termination
 - `error` — Execution failure
 
-**UsageFact Schema** (`packages/ai-core/src/usage/usage.ts:10-30`):
+**UsageFact Schema** (`packages/ai-core/src/usage/usage.ts`):
 
-```typescript
-export interface UsageFact {
-  runId: string;
-  attempt: number;
-  source: string; // e.g., "litellm"
-  executorType: ExecutorType; // "inproc" | "external"
-  billingAccountId: string;
-  virtualKeyId: string;
-  inputTokens?: number;
-  outputTokens?: number;
-  usageUnitId?: string; // Stable ID for idempotency
-  model?: string;
-  costUsd?: number;
-}
-```
-
-**⚠️ CRITICAL GAP**: No runtime validation enforces this schema at adapter boundaries.
+- `runId`, `attempt`, `source`, `executorType`, `billingAccountId`, `virtualKeyId` — required
+- `graphId: GraphId` — required, namespaced validation in strict schema
+- `usageUnitId` — required for billing-authoritative (inproc/sandbox), optional for external
+- `ExecutorType`: `"inproc" | "sandbox" | "langgraph_server" | "claude_sdk"`
+- Two Zod schemas: `UsageFactStrictSchema` (hard fail), `UsageFactHintsSchema` (soft warning)
+- Validated at ingestion boundary in `RunEventRelay.handleBilling()`
 
 ---
 
@@ -337,11 +173,11 @@ export interface UsageFact {
 
 **Note**: `GraphProvider` is an internal adapter interface, **not a port**. Located at `src/adapters/server/ai/graph-provider.ts:31`.
 
-| Provider                    | Path                                                    | Line | Execution Model               | Billing Method                                                         |
-| --------------------------- | ------------------------------------------------------- | ---- | ----------------------------- | ---------------------------------------------------------------------- |
-| **LangGraphInProcProvider** | `src/adapters/server/ai/langgraph/inproc.provider.ts`   | 91   | In-process LangChain graphs   | Via InProcCompletionUnitAdapter → usage_report events                  |
-| **LangGraphDevProvider**    | `src/adapters/server/ai/langgraph/dev/provider.ts`      | 64   | External langgraph dev server | ⚠️ **NO usage_report** (relies on external reconciliation)             |
-| **SandboxGraphProvider**    | `src/adapters/server/sandbox/sandbox-graph.provider.ts` | 81   | Containerized agent execution | ⚠️ **Partial**: Emits usage_report without costUsd (P1 reconciliation) |
+| Provider                    | Path                                                    | Execution Model               | Billing Status                                                 |
+| --------------------------- | ------------------------------------------------------- | ----------------------------- | -------------------------------------------------------------- |
+| **LangGraphInProcProvider** | `src/adapters/server/ai/langgraph/inproc.provider.ts`   | In-process LangChain graphs   | ✅ Inline: litellmCallId required, strict validation           |
+| **LangGraphDevProvider**    | `src/adapters/server/ai/langgraph/dev/provider.ts`      | External langgraph dev server | ⚠️ Hints-only usage_report (no usageUnitId, reconciliation P1) |
+| **SandboxGraphProvider**    | `src/adapters/server/sandbox/sandbox-graph.provider.ts` | Containerized agent execution | ✅ Inline: nginx header capture, litellmCallId required        |
 
 ### Supporting Adapters
 
@@ -414,13 +250,9 @@ Facades call `createGraphExecutor()` → inject into `createAiRuntime()` → use
 
 **Pattern**: `${runId}/${attempt}/${usageUnitId}`
 
-**Locations**:
+**Single canonical implementation**: `billing.ts:computeIdempotencyKey()`
 
-1. `billing.ts:computeIdempotencyKey()` (Lines 166-172) — Canonical implementation
-2. `inproc-completion-unit.adapter.ts:114` — Fallback: `MISSING:${runId}/0`
-3. `billing.ts:207` — Fallback: `MISSING:${runId}/${callIndex}`
-
-**❌ VIOLATION**: Adapters construct fallback keys independently; no shared validation ensures format correctness.
+Fallback generation removed from adapters and `commitUsageFact`. Adapters must provide real `usageUnitId` or validation fails. Legacy `recordBilling()` still has fallback (TODO #7).
 
 ### Database Writes
 
@@ -434,126 +266,27 @@ Facades call `createGraphExecutor()` → inject into `createAiRuntime()` → use
 
 ---
 
-## 5) Key Breakages (Top 5)
+## 5) Key Breakages — Current Status
 
-### #1: No UsageFact Schema Validation at Adapter Boundary
+### #1: ~~No UsageFact Schema Validation at Adapter Boundary~~ — RESOLVED
 
-**Severity**: 🔴 **CRITICAL**
-**Impact**: Malformed facts can pass through, causing billing failures or silent under-billing.
+Zod schemas (`UsageFactStrictSchema`, `UsageFactHintsSchema`) enforce at ingestion boundary in `RunEventRelay.handleBilling()`. Per-executor policy: strict for inproc/sandbox (hard fail), hints for external (soft warning).
 
-**Evidence**:
+### #2: ~~Scattered Idempotency Key Construction~~ — RESOLVED
 
-- `InProcCompletionUnitAdapter` emits UsageFact at line 273-287
-- `SandboxGraphProvider` emits UsageFact at line 215-224
-- **NO** runtime validation (Zod schema check) before emission
-- **NO** contract tests enforce required fields
+Fallback `MISSING:` generation removed from adapters and `commitUsageFact`. `usageUnitId` required for billing-authoritative executors (enforced by strict Zod schema). Legacy `recordBilling()` still has its own fallback (marked for removal, TODO #7).
 
-**File References**:
+### #3: No Contract Tests for Executor Implementations — OPEN
 
-- `src/adapters/server/ai/inproc-completion-unit.adapter.ts:273-287`
-- `src/adapters/server/sandbox/sandbox-graph.provider.ts:215-224`
-- `packages/ai-core/src/usage/usage.ts:10-30` (schema definition only)
+**Severity**: 🟠 **HIGH** — See TODO #5 above.
 
-**Example Violation**:
+### #4: LangGraphDevProvider Usage Reporting — PARTIALLY RESOLVED
 
-```typescript
-// SandboxGraphProvider:215-224 — missing costUsd, usageUnitId
-const usageFact: UsageFact = {
-  runId,
-  attempt,
-  source: "litellm",
-  executorType: "inproc", // Should be "sandbox"?
-  billingAccountId: caller.billingAccountId,
-  virtualKeyId: caller.virtualKeyId,
-  model,
-  // ❌ Missing: usageUnitId (required for idempotency)
-  // ❌ Missing: costUsd (deferred to P1, but breaks reconciliation)
-};
-```
+Dev provider now emits `usage_report` with hints-only UsageFact (no `usageUnitId`, validated via `UsageFactHintsSchema`). Billing commit skipped for facts without `usageUnitId`. Full reconciliation deferred to P1.
 
----
+### #5: GraphProvider Not a Port — ACCEPTED (P0 design choice)
 
-### #2: Scattered Idempotency Key Construction
-
-**Severity**: 🟠 **HIGH**
-**Impact**: Inconsistent key formats risk duplicate charges or failed deduplication.
-
-**Evidence**:
-
-- Three separate implementations of fallback logic:
-  1. `billing.ts:114` — `MISSING:${runId}/0`
-  2. `billing.ts:207` — `MISSING:${runId}/${callIndex}`
-  3. `inproc-completion-unit.adapter.ts:114` — Same pattern, duplicated
-
-**File References**:
-
-- `src/features/ai/services/billing.ts:114` (recordBilling fallback)
-- `src/features/ai/services/billing.ts:207` (commitUsageFact fallback)
-- `src/adapters/server/ai/inproc-completion-unit.adapter.ts:114` (adapter fallback)
-
-**Violation**: No shared validator ensures `usageUnitId` format is stable across retries/reconnects.
-
----
-
-### #3: No Contract Tests for Executor Implementations
-
-**Severity**: 🟠 **HIGH**
-**Impact**: New executors can violate invariants (e.g., emit done twice, skip usage_report) without detection.
-
-**Evidence**:
-
-- `LangGraphInProcProvider` tested in isolation (implied)
-- `LangGraphDevProvider` tested in isolation (implied)
-- `SandboxGraphProvider` tested in isolation (implied)
-- **NO** shared contract test suite (`tests/contract/executors/*.test.ts`) validating:
-  - Event stream shape (ordering, termination)
-  - Cancellation semantics
-  - Idempotency (same runId/attempt yields same usageUnitId set)
-  - Usage facts presence and schema
-  - Billing side effects (only via events, not direct calls)
-
-**Missing File**: `tests/contract/graph-executors/executor-contract.test.ts`
-
----
-
-### #4: LangGraphDevProvider Missing Usage Reporting
-
-**Severity**: 🟠 **HIGH**
-**Impact**: External executor usage is **invisible** to run-centric billing; relies on external reconciliation that may not happen.
-
-**Evidence**:
-
-- `LangGraphDevProvider` streams events but **never emits usage_report**
-- Comments indicate reliance on "external billing via reconciliation" (EXTERNAL_BILLING_VIA_RECONCILIATION invariant)
-- No reconciliation service implemented in P0/P0.75
-
-**File References**:
-
-- `src/adapters/server/ai/langgraph/dev/provider.ts:220-326` (entire stream generation, no usage_report)
-- `src/adapters/server/ai/langgraph/dev/provider.ts:65` (comment references external billing)
-
-**P0 Violation**: Run-centric billing requires **all** executors to emit usage_report. External reconciliation is a P1 feature.
-
----
-
-### #5: GraphProvider Not a Port (Limits External Executors)
-
-**Severity**: 🟡 **MEDIUM**
-**Impact**: External teams cannot implement compliant executors without modifying `src/adapters/`.
-
-**Evidence**:
-
-- `GraphProvider` interface defined in `src/adapters/server/ai/graph-provider.ts` (adapter layer)
-- **NOT** exported from `src/ports/index.ts`
-- Factory (`graph-executor.factory.ts`) hardcodes provider list (no plugin system)
-
-**File References**:
-
-- `src/adapters/server/ai/graph-provider.ts:31` (interface definition)
-- `src/ports/index.ts` (no GraphProvider export)
-- `src/bootstrap/graph-executor.factory.ts:50-76` (hardcoded provider list)
-
-**Tradeoff**: P0 design choice (avoid premature abstraction). Acceptable for now, but blocks external executor plugins.
+Internal adapter interface by design. Acceptable for current executor count (3). Revisit if external plugins needed.
 
 ---
 
@@ -957,17 +690,20 @@ describe("SandboxGraphProvider", () => {
 
 ## Appendix B: Invariants Registry
 
-| ID                                    | Invariant                                 | Owner                  | File                                  | Line | Status                      |
-| ------------------------------------- | ----------------------------------------- | ---------------------- | ------------------------------------- | ---- | --------------------------- |
-| `ONE_LEDGER_WRITER`                   | Only billing.ts calls recordChargeReceipt | billing.ts             | `src/features/ai/services/billing.ts` | 9    | ✅ Implemented              |
-| `IDEMPOTENT_CHARGES`                  | source_reference prevents duplicates      | DB + billing.ts        | `billing.ts`                          | 12   | ⚠️ Partial (scattered keys) |
-| `ZERO_CREDIT_RECEIPTS`                | Always write receipt, even $0             | billing.ts             | `billing.ts`                          | 11   | ✅ Implemented              |
-| `GRAPH_LLM_VIA_COMPLETION`            | InProc graphs use completion unit         | inproc.provider.ts     | `inproc.provider.ts`                  | 10   | ✅ Implemented              |
-| `BILLING_INDEPENDENT_OF_CLIENT`       | Pump continues regardless of UI           | ai_runtime.ts          | `ai_runtime.ts`                       | 10   | ✅ Implemented              |
-| `GRAPH_FINALIZATION_ONCE`             | Exactly one done event per run            | graph-executor.port.ts | `graph-executor.port.ts`              | 10   | ⚠️ Not enforced             |
-| `P0_ATTEMPT_FREEZE`                   | attempt always 0 in P0                    | All adapters           | Multiple                              | —    | ✅ Hardcoded everywhere     |
-| `PROTOCOL_TERMINATION`                | UI stream ends on done/error              | ai_runtime.ts          | `ai_runtime.ts`                       | 12   | ✅ Implemented              |
-| `EXTERNAL_BILLING_VIA_RECONCILIATION` | Dev provider defers billing               | dev/provider.ts        | `dev/provider.ts`                     | 65   | ❌ Not implemented (P1)     |
+| ID                                    | Invariant                                 | Owner                  | File                                  | Status                                      |
+| ------------------------------------- | ----------------------------------------- | ---------------------- | ------------------------------------- | ------------------------------------------- |
+| `ONE_LEDGER_WRITER`                   | Only billing.ts calls recordChargeReceipt | billing.ts             | `src/features/ai/services/billing.ts` | ✅ Implemented                              |
+| `IDEMPOTENT_CHARGES`                  | source_reference prevents duplicates      | DB + billing.ts        | `billing.ts`                          | ✅ Enforced (strict schema, no fallback)    |
+| `ZERO_CREDIT_RECEIPTS`                | Always write receipt, even $0             | billing.ts             | `billing.ts`                          | ✅ Implemented                              |
+| `GRAPH_LLM_VIA_COMPLETION`            | InProc graphs use completion unit         | inproc.provider.ts     | `inproc.provider.ts`                  | ✅ Implemented                              |
+| `BILLING_INDEPENDENT_OF_CLIENT`       | Pump continues regardless of UI           | ai_runtime.ts          | `ai_runtime.ts`                       | ✅ Implemented                              |
+| `GRAPH_FINALIZATION_ONCE`             | Exactly one done event per run            | graph-executor.port.ts | `graph-executor.port.ts`              | ⚠️ isTerminated guard in relay, not in port |
+| `P0_ATTEMPT_FREEZE`                   | attempt always 0 in P0                    | All adapters           | Multiple                              | ✅ Hardcoded everywhere                     |
+| `PROTOCOL_TERMINATION`                | UI stream ends on done/error              | ai_runtime.ts          | `ai_runtime.ts`                       | ✅ Implemented                              |
+| `USAGE_FACT_VALIDATED`                | Zod schema at ingestion boundary          | RunEventRelay          | `ai_runtime.ts`                       | ✅ Strict for inproc/sandbox, hints for ext |
+| `GRAPHID_REQUIRED`                    | graphId on UsageFact, typed in port       | ai-core + port         | `usage.ts`, `graph-executor.port.ts`  | ✅ GraphId type, namespaced validation      |
+| `GRAPHNAME_REQUIRED`                  | graphName required at all boundaries      | contracts + facade     | `ai.chat.v1`, `ai.completion.v1`      | ✅ No defaults, fail fast                   |
+| `EXTERNAL_BILLING_VIA_RECONCILIATION` | Dev provider defers billing               | dev/provider.ts        | `dev/provider.ts`                     | ⚠️ Emits hints-only fact, reconciliation P1 |
 
 ---
 
