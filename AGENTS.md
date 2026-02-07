@@ -44,29 +44,36 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 ## Pointers
 
+### Documentation & Work
+
+- [Documentation System Guide](docs/README.md) — How to navigate and create docs
+- [Work Management Guide](work/README.md) — Projects, issues, and reviews
+- [Docs Organization Plan](docs/DOCS_ORGANIZATION_PLAN.md) — Full system design
+- [Spec Index](docs/reference/SPEC_INDEX.md) — Index of all specifications
+
 ### Core Architecture
 
 - [Technical Roadmap](ROADMAP.md)
 - [Node vs Operator Contract](docs/NODE_VS_OPERATOR_CONTRACT.md)
 - [MVP Deliverables](docs/MVP_DELIVERABLES.md)
-- [Node Formation Spec](docs/NODE_FORMATION_SPEC.md)
+- [Node Formation Spec](docs/spec/node-formation.md)
 - [Chain Deployment Tech Debt](docs/CHAIN_DEPLOYMENT_TECH_DEBT.md)
 - [Architecture](docs/ARCHITECTURE.md)
 - [Authorization (RBAC/ReBAC)](docs/RBAC_SPEC.md)
-- [Tenant Connections](docs/TENANT_CONNECTIONS_SPEC.md)
-- [Tool Use Spec](docs/TOOL_USE_SPEC.md)
-- [Services Migration Guide](docs/SERVICES_MIGRATION.md)
+- [Tenant Connections](docs/spec/tenant-connections.md)
+- [Tool Use Spec](docs/spec/tool-use.md)
+- [Services Migration (initiative)](work/initiatives/ini.cicd-services-gitops.md)
 
 ### AI & Evals
 
 - [AI Setup Spec](docs/AI_SETUP_SPEC.md)
-- [Prompt Registry Spec](docs/PROMPT_REGISTRY_SPEC.md)
+- [Prompt Registry Spec](docs/spec/prompt-registry.md)
 - [Tools Authoring](docs/TOOLS_AUTHORING.md)
 - [Graph Execution](docs/GRAPH_EXECUTION.md)
-- [LangGraph Server](docs/LANGGRAPH_SERVER.md)
-- [LangGraph Patterns](docs/LANGGRAPH_AI.md)
-- [Claude SDK Adapter](docs/CLAUDE_SDK_ADAPTER_SPEC.md)
-- [n8n Adapter](docs/N8N_ADAPTER_SPEC.md)
+- [LangGraph Server](docs/spec/langgraph-server.md)
+- [LangGraph Patterns](docs/spec/langgraph-patterns.md)
+- [Claude SDK Adapter](docs/spec/claude-sdk-adapter.md)
+- [n8n Adapter](docs/spec/n8n-adapter.md)
 - [OpenClaw Sandbox Integration](docs/OPENCLAW_SANDBOX_SPEC.md)
 - [OpenClaw Sandbox Controls](docs/OPENCLAW_SANDBOX_CONTROLS.md)
 - [AI Evals](docs/AI_EVALS.md)

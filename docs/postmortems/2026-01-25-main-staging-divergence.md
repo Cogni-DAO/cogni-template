@@ -1,3 +1,16 @@
+---
+id: postmortem-main-staging-divergence
+type: postmortem
+title: "Postmortem: Main-Staging Divergence (EVM RPC Feature Loss)"
+status: draft
+trust: draft
+summary: Root cause analysis of 44-day main-staging divergence caused by forbidden main-to-release merge, resulting in loss of EVM RPC validation code.
+read_when: Investigating merge conflicts between main and staging, or reviewing release branch policies.
+owner: derekg1729
+created: 2026-01-25
+tags: [deployment, incident]
+---
+
 # Postmortem: Main-Staging Divergence (EVM RPC Feature Loss)
 
 **Date**: 2026-01-25
