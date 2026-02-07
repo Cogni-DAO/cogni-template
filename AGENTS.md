@@ -71,7 +71,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 - [Tools Authoring](docs/TOOLS_AUTHORING.md)
 - [Graph Execution](docs/GRAPH_EXECUTION.md)
 - [LangGraph Server](docs/LANGGRAPH_SERVER.md)
-- [LangGraph Patterns](docs/LANGGRAPH_AI.md)
+- [LangGraph Patterns](docs/spec/langgraph-patterns.md)
 - [Claude SDK Adapter](docs/CLAUDE_SDK_ADAPTER_SPEC.md)
 - [n8n Adapter](docs/spec/n8n-adapter.md)
 - [Clawdbot Adapter](docs/CLAWDBOT_ADAPTER_SPEC.md)

@@ -175,7 +175,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | HUMAN_IN_THE_LOOP.md                 | human-in-the-loop.md           | ini.hil-graphs.md                  | -   | -                       | AB+road    | [ ]  | [ ]  |
 | INTEGRATION_WALLETS_CREDITS.md       | -                              | ini.accounts-api-keys.md           | -   | wallet-auth-setup.md    | procedural | [x]  | [ ]  |
 | ISOLATE_LITELLM_DATABASE.md          | -                              | -                                  | -   | -                       | obsolete   | [x]  | [ ]  |
-| LANGGRAPH_AI.md                      | langgraph-patterns.md          | -                                  | -   | langgraph-guide.md      | AB+road    | [ ]  | [ ]  |
+| LANGGRAPH_AI.md                      | langgraph-patterns.md          | (ini.langgraph-server-production)  | -   | -                       | AB+road    | [x]  | [x]  |
 | LANGGRAPH_SERVER.md                  | langgraph-server.md            | ini.langgraph-server-production.md | -   | langgraph-server-dev.md | AB+road    | [ ]  | [ ]  |
 | LINTING_RULES.md                     | -                              | -                                  | -   | linting-migration.md    | snapshot   | [x]  | [ ]  |
 | METRICS_OBSERVABILITY.md             | public-analytics.md            | ini.observability-hardening.md     | -   | -                       | AB+road    | [x]  | [ ]  |
