@@ -55,6 +55,7 @@ This is a master index of all specs, updated as specs are migrated.
 | services-architecture-spec       | Services Architecture              | draft    | deployment | [services-architecture.md](./services-architecture.md)             |
 | sourcecred-config-rationale-spec | SourceCred Configuration Rationale | draft    | community  | [sourcecred-config-rationale.md](./sourcecred-config-rationale.md) |
 | ui-implementation-spec           | UI Implementation                  | draft    | meta       | [ui-implementation.md](./ui-implementation.md)                     |
+| spec.usage-history               | Usage History Design               | draft    | data       | [usage-history.md](./usage-history.md)                             |
 | scheduler-spec                   | Scheduler Specification            | active   | ai-graphs  | [scheduler.md](./scheduler.md)                                     |
 | cogni-brain-spec                 | Cogni Brain Specification          | proposed | ai-graphs  | [cogni-brain.md](./cogni-brain.md)                                 |
 | rbac-spec                        | RBAC Specification                 | active   | auth       | [rbac.md](./rbac.md)                                               |

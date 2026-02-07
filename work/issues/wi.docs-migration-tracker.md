@@ -193,7 +193,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | UI_CLEANUP_PLAN.md                   | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | UI_IMPLEMENTATION_GUIDE.md           | ui-implementation.md           | -                                  | -   | -                        | as-built   | [x]  | [ ]  |
 | UNIFIED_GRAPH_LAUNCH_SPEC.md         | unified-graph-launch.md        | -                                  | -   | -                        | AB+road    | [ ]  | [ ]  |
-| USAGE_HISTORY.md                     | usage-history.md               | -                                  | -   | -                        | AB+road    | [ ]  | [ ]  |
+| USAGE_HISTORY.md                     | usage-history.md               | ini.usage-history-persistence.md   | -   | -                        | AB+road    | [x]  | [ ]  |
 | VERCEL_AI_STREAMING.md               | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | archive/COMPLETION_REFACTOR_PLAN.md  | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | archive/DEPAY_PAYMENTS.md            | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
