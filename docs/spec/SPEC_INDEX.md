@@ -43,6 +43,7 @@ This is a master index of all specs, updated as specs are migrated.
 | external-executor-billing-spec   | External Executor Billing          | draft    | billing    | [external-executor-billing.md](./external-executor-billing.md)     |
 | git-sync-repo-mount-spec         | Git-Sync Repo Mount                | draft    | deployment | [git-sync-repo-mount.md](./git-sync-repo-mount.md)                 |
 | gov-data-collectors-spec         | Governance Data Collectors         | draft    | data       | [gov-data-collectors.md](./gov-data-collectors.md)                 |
+| spec.health-probes               | Health Probe Separation            | draft    | deployment | [health-probes.md](./health-probes.md)                             |
 | model-selection-spec             | Model Selection                    | draft    | ai-graphs  | [model-selection.md](./model-selection.md)                         |
 | n8n-adapter-spec                 | n8n Workflow Execution Adapter     | draft    | ai-graphs  | [n8n-adapter.md](./n8n-adapter.md)                                 |
 | node-operator-contract-spec      | Node vs Operator Contract          | draft    | meta       | [node-operator-contract.md](./node-operator-contract.md)           |

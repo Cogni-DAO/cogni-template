@@ -1,7 +1,57 @@
+---
+id: spec.health-probes
+type: spec
+title: Liveness/Readiness Probe Separation Design
+status: draft
+spec_state: draft
+trust: draft
+summary: Separate liveness (`/livez`) from readiness (`/readyz`) probes for fast CI smoke tests without full env, while maintaining strict runtime validation for deploy gates.
+read_when: Implementing health probes, CI test gates, or deployment validation
+implements: []
+owner: cogni-dev
+created: 2025-12-10
+verified: null
+tags:
+  - deployment
+  - ci-cd
+  - health-checks
+---
+
 # Liveness/Readiness Probe Separation Design
 
-> [!CRITICAL]
-> Never let readiness requirements leak into liveness probes; avoid double-boot waste by checking both probes against the same running stack container.
+## Context
+
+Health checks serve two distinct purposes in CI/CD pipelines:
+
+1. **Fast-fail CI smoke tests** — detect if a Docker image boots at all (process alive)
+2. **Deployment readiness gates** — validate full runtime requirements before serving traffic
+
+Using a single `/health` endpoint that requires full env leads to:
+
+- **Double-boot waste** in stack tests (boot once for livez, boot again for readyz)
+- **Broken image publish** when /health requires env that CI doesn't have
+- **Slow CI feedback** when /health checks DB connectivity during image smoke test
+
+This spec defines `/livez` (liveness, <100ms, no deps) and `/readyz` (readiness, full env+secrets) as separate endpoints, enabling fast CI gates while preserving strict deployment validation.
+
+## Goal
+
+Enable separate health probe endpoints with:
+
+- `/livez` for fast CI smoke tests (<100ms, no env/DB/secrets, just confirms HTTP responds)
+- `/readyz` for deployment gates (full env validation, secrets check, DB connectivity with timeout budget)
+- No double-boot in stack tests (poll `/livez` first, then `/readyz` on same running container)
+- Livez implementation isolation (contract test verifies `/livez` works without AUTH_SECRET)
+- Docker HEALTHCHECK uses `/readyz` (orchestrators have full runtime context)
+- CI livez gate before push (prevents broken images reaching registry)
+
+## Non-Goals
+
+- **Not in scope (P0):** DB connectivity check in `/readyz` (future with explicit timeout budget)
+- **Not in scope (P0):** Prometheus metrics for probe response times (P1)
+- **Not in scope (P0):** Structured logging for readiness failures (P1)
+- **Not in scope:** Kubernetes-specific features like startup probes (P2, do NOT build preemptively)
+- **Not in scope:** Weakening `/readyz` checks with env toggles (use `/livez` instead)
 
 ## Core Invariants
 
@@ -17,102 +67,11 @@
 
 ---
 
-## Implementation Checklist
+## Design
 
-### P0: MVP Critical Path
+### Key Decisions
 
-- [ ] Create `/livez` endpoint (liveness probe)
-  - [ ] Contract: `src/contracts/meta.livez.read.v1.contract.ts`
-  - [ ] Route: `src/app/(infra)/livez/route.ts` (ISOLATED: no env/db imports)
-  - [ ] No env validation, no DB, no external deps
-  - [ ] Always returns 200 if process is alive
-  - [ ] Contract test: Must pass with missing AUTH_SECRET (verifies isolation)
-
-- [ ] Rename `/health` to `/readyz` (readiness probe)
-  - [ ] Contract: Rename `meta.health.read.v1.contract.ts` to `meta.readyz.read.v1.contract.ts`
-  - [ ] Route: Move `src/app/(infra)/health/route.ts` to `src/app/(infra)/readyz/route.ts`
-  - [ ] MVP scope: env validation + runtime secrets only (no DB check yet)
-  - [ ] Future: Add DB connectivity check with explicit timeout budget
-  - [ ] Any new deps MUST update budget + tests (prevent unbounded growth)
-
-- [ ] Update Docker HEALTHCHECK to use `/readyz`
-  - [ ] Modify `Dockerfile` HEALTHCHECK command
-  - [ ] Keep strict runtime validation (requires full env)
-
-- [ ] Update `test-image.sh` to fast livez gate (pre-push validation)
-  - [ ] Boot container with minimal env (NODE_ENV, APP_ENV, DATABASE_URL placeholder)
-  - [ ] Poll `/livez` for 10-20s (fail-fast if process not booting)
-  - [ ] Do NOT rely on Docker HEALTHCHECK (requires full env for /readyz)
-  - [ ] Exit 0 if livez responds 200, exit 1 if timeout
-  - [ ] Used in CI BEFORE pushing images to registry (prevents broken image publish)
-
-- [ ] Update CI workflows (livez gate before push)
-  - [ ] `staging-preview.yml`: Keep test-image.sh step (line 75-79), validates /livez
-  - [ ] `build-prod.yml`: Keep test-image.sh step (line 53-54), validates /livez
-  - [ ] Images only push to registry if livez gate passes
-
-- [ ] Update stack test validation (single boot, livez then readyz)
-  - [ ] Modify `check:full` to poll `/livez` FIRST (10-20s budget, fail-fast)
-  - [ ] Then poll `/readyz` after livez passes (longer budget, correctness gate)
-  - [ ] Both checks hit the SAME already-running stack container
-  - [ ] Docker HEALTHCHECK (/readyz) runs in background as extra signal
-
-- [ ] Update deploy validation to hard-gate on `/readyz`
-  - [ ] `platform/ci/scripts/deploy.sh`: Must poll `/readyz` and fail deploy if not ready
-  - [ ] `platform/infra/files/scripts/wait-for-health.sh`: Switch to `/readyz`
-
-#### Chores
-
-- [ ] Add probe type labels to observability (future: duration histograms)
-- [ ] Update all documentation references from `/health` to `/livez` or `/readyz`
-- [ ] Search codebase for any remaining /health hardcoded strings
-
-### P1: Enhanced Monitoring
-
-- [ ] Add Prometheus metrics for probe response times
-  - [ ] `app_livez_duration_seconds` histogram
-  - [ ] `app_readyz_duration_seconds` histogram
-  - [ ] `app_readyz_dependency_status` gauge (per dependency)
-
-- [ ] Add structured logging for readiness failures
-  - [ ] Log which dependency failed (DB, auth, env)
-  - [ ] Include failure reason in response body
-
-### P2: Kubernetes Readiness Gates (Future)
-
-- [ ] **Do NOT build this preemptively**
-- [ ] Evaluate when deploying to K8s
-- [ ] Add `/readyz` dependency breakdown endpoint (`/readyz?verbose=true`)
-- [ ] Add startup probe configuration (K8s 1.18+)
-
----
-
-## File Pointers (P0 Scope)
-
-| File                                                     | Change                                                             |
-| -------------------------------------------------------- | ------------------------------------------------------------------ |
-| `src/contracts/meta.livez.read.v1.contract.ts`           | **Create**: Liveness contract (status: alive, no deps)             |
-| `src/contracts/meta.readyz.read.v1.contract.ts`          | **Rename from**: `meta.health.read.v1.contract.ts` (strict checks) |
-| `src/app/(infra)/livez/route.ts`                         | **Create**: Fast liveness endpoint (ISOLATED, no env imports)      |
-| `src/app/(infra)/readyz/route.ts`                        | **Rename from**: `health/route.ts` (MVP: env+secrets only)         |
-| `src/contracts/http/router.v1.ts`                        | **Update**: Register `/livez` and `/readyz` routes                 |
-| `tests/contract/livez-isolation.contract.test.ts`        | **Create**: Verify /livez works without AUTH_SECRET                |
-| `Dockerfile`                                             | **Update**: HEALTHCHECK to use `/readyz` (line 87-88)              |
-| `platform/ci/scripts/test-image.sh`                      | **Update**: Poll /livez with minimal env (pre-push gate)           |
-| `.github/workflows/staging-preview.yml`                  | **Keep**: test-image.sh validates /livez before push (line 75-79)  |
-| `.github/workflows/build-prod.yml`                       | **Keep**: test-image.sh validates /livez before push (line 53-54)  |
-| `scripts/check-full.sh`                                  | **Update**: Poll /livez then /readyz on running stack (step 4)     |
-| `tests/stack/meta/meta-endpoints.stack.test.ts`          | **Update**: Test both `/livez` and `/readyz` endpoints             |
-| `platform/infra/files/scripts/wait-for-health.sh`        | **Update**: Use `/readyz` for deployment validation                |
-| `platform/ci/scripts/deploy.sh`                          | **Update**: Hard-gate on `/readyz` (fail deploy if not ready)      |
-| `platform/infra/services/runtime/docker-compose.yml`     | **Update**: Service healthcheck to use `/readyz`                   |
-| `platform/infra/services/runtime/docker-compose.dev.yml` | **Update**: Service healthcheck to use `/readyz`                   |
-
----
-
-## Design Decisions
-
-### 1. Probe Endpoint Semantics
+#### 1. Probe Endpoint Semantics
 
 | Endpoint  | Purpose                    | Validation Depth                      | Response Time | Dependencies |
 | --------- | -------------------------- | ------------------------------------- | ------------- | ------------ |
@@ -124,7 +83,7 @@
 
 ---
 
-### 2. CI Test Flow (Livez Gate Before Push)
+#### 2. CI Test Flow (Livez Gate Before Push)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -182,7 +141,7 @@
 
 ---
 
-### 3. Validation Depth by Endpoint
+#### 3. Validation Depth by Endpoint
 
 **`/livez` checks:**
 
@@ -211,7 +170,7 @@
 
 ---
 
-### 4. Stack Test Probe Sequence
+#### 4. Stack Test Probe Sequence
 
 **check:full.sh polling (after docker:test:stack up):**
 
@@ -224,5 +183,51 @@
 
 ---
 
-**Last Updated**: 2025-12-10
-**Status**: Design Approved
+## Acceptance Checks
+
+**Automated:**
+
+- `pnpm test tests/contract/livez-isolation.contract.test.ts` — Verify /livez works without AUTH_SECRET
+- `pnpm test tests/stack/meta/meta-endpoints.stack.test.ts` — Test both `/livez` and `/readyz` endpoints
+- CI workflow validation: test-image.sh polls /livez before push (staging-preview.yml, build-prod.yml)
+
+**Manual (until automated):**
+
+1. Verify `/livez` responds 200 with minimal env (NODE_ENV, APP_ENV, DATABASE_URL placeholder)
+2. Verify `/readyz` fails with missing AUTH_SECRET (strict runtime validation)
+3. Verify Docker HEALTHCHECK uses `/readyz` (check Dockerfile line 87-88)
+4. Verify `check:full` polls `/livez` FIRST, then `/readyz` (scripts/check-full.sh)
+5. Verify deploy scripts hard-gate on `/readyz` (deploy.sh, wait-for-health.sh)
+
+## Open Questions
+
+- [ ] Should DB connectivity check be added to `/readyz` in P0 or deferred to P1?
+- [ ] What's the appropriate timeout budget for DB check? (5s proposed)
+- [ ] Should LiteLLM connectivity check be added to `/readyz`? (3s timeout proposed)
+- [ ] Should we add `/readyz?verbose=true` for K8s readiness gates in P2?
+
+## Rollout / Migration
+
+1. Create `/livez` endpoint (contract, route, test for AUTH_SECRET isolation)
+2. Rename `/health` to `/readyz` (contract, route, maintain strict validation)
+3. Update Docker HEALTHCHECK to use `/readyz`
+4. Update `test-image.sh` to poll `/livez` with minimal env (pre-push gate)
+5. Update CI workflows to use livez gate before push (staging-preview.yml, build-prod.yml)
+6. Update `check:full` to poll `/livez` FIRST, then `/readyz` (single container boot)
+7. Update deploy scripts to hard-gate on `/readyz` (deploy.sh, wait-for-health.sh)
+8. Update all docker-compose files to use `/readyz` for healthcheck
+
+**Breaking changes:**
+
+- `/health` endpoint removed (replaced by `/livez` and `/readyz`)
+- All health check references must be updated to use explicit endpoint
+
+**Data migration:**
+
+- None (endpoint changes only)
+
+## Related
+
+- [CI/CD & Services GitOps Initiative](../../work/initiatives/ini.cicd-services-gitops.md) — Health probe separation track
+- [Check Full](./check-full.md) — CI-parity gate design
+- [Services Architecture](./services-architecture.md) — Service health endpoint contract

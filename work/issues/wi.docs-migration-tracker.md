@@ -201,7 +201,7 @@ Paths are relative to their type directory: Spec → `docs/spec/`, Ini → `work
 | archive/PAYMENTS_WIDGET_DECISION.md  | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | archive/triggerdev_analysis.md       | -                              | -                                  | -   | -                        | obsolete   | [x]  | [ ]  |
 | dev/TOOL_STREAMING_ISSUE.md          | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
-| features/HEALTH_PROBES.md            | health-probes.md               | -                                  | -   | -                        | AB+road    | [ ]  | [ ]  |
+| features/HEALTH_PROBES.md            | health-probes.md               | ini.cicd-services-gitops.md        | -   | -                        | AB+road    | [x]  | [ ]  |
 | introspection/2026-01-19-\*.md       | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
 | introspection/2026-01-21-\*.md       | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
 | postmortems/2026-01-25-\*.md         | -                              | -                                  | -   | -                        | snapshot   | [x]  | [ ]  |
