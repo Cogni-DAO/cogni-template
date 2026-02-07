@@ -122,6 +122,31 @@ export interface SandboxRunResult {
 }
 
 /**
+ * Stdout contract for sandbox programs (agents, tools).
+ *
+ * Every program that runs inside a sandbox container writes exactly one
+ * JSON object to stdout conforming to this shape. The host-side
+ * SandboxGraphProvider parses this envelope — it never inspects raw text.
+ *
+ * Matches OpenClaw `--json` output so the provider is agent-agnostic:
+ * swapping run.mjs for OpenClaw requires zero provider changes.
+ */
+export interface SandboxProgramContract {
+  /** Response payloads. Typically one entry with the LLM response text. */
+  readonly payloads: ReadonlyArray<{ readonly text: string }>;
+  /** Execution metadata. */
+  readonly meta: {
+    /** Wall-clock duration inside the container (ms). */
+    readonly durationMs: number;
+    /** Null on success; structured error on failure. */
+    readonly error: {
+      readonly code: string;
+      readonly message: string;
+    } | null;
+  };
+}
+
+/**
  * Port interface for sandbox command execution.
  *
  * Per SANDBOXED_AGENTS.md P0: Containers are ephemeral and one-shot.

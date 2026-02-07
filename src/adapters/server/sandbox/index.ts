@@ -16,6 +16,11 @@ export {
   type LlmProxyHandle,
   LlmProxyManager,
 } from "./llm-proxy-manager";
+export { SandboxAgentCatalogProvider } from "./sandbox-agent-catalog.provider";
+export {
+  SANDBOX_PROVIDER_ID,
+  SandboxGraphProvider,
+} from "./sandbox-graph.provider";
 export {
   SandboxRunnerAdapter,
   type SandboxRunnerAdapterOptions,

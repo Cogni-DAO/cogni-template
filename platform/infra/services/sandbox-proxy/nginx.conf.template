@@ -48,7 +48,7 @@ http {
             # metadata = run correlation + Langfuse fields (matches in-proc metadata blob)
             # All three overwrite any client-sent values (sandbox cannot spoof identity)
             proxy_set_header x-litellm-end-user-id "${BILLING_ACCOUNT_ID}";
-            proxy_set_header x-litellm-metadata '${LITELLM_METADATA_JSON}';
+            proxy_set_header x-litellm-spend-logs-metadata '${LITELLM_METADATA_JSON}';
 
             # Forward to LiteLLM
             proxy_pass http://litellm;

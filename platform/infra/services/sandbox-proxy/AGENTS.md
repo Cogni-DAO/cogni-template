@@ -38,7 +38,7 @@ Nginx config template for the per-run LLM proxy container. Injects authenticatio
 
 ## Responsibilities
 
-- This directory **does**: Define nginx listen-on-socket config; inject Authorization header (LITELLM_MASTER_KEY); inject x-litellm-end-user-id (billingAccountId); inject x-litellm-metadata (run correlation + Langfuse); overwrite client-sent identity headers; log audit trail (runId, status, model, litellm_call_id); serve /health endpoint
+- This directory **does**: Define nginx listen-on-socket config; inject Authorization header (LITELLM_MASTER_KEY); inject x-litellm-end-user-id (billingAccountId); inject x-litellm-spend-logs-metadata (run correlation + Langfuse); overwrite client-sent identity headers; log audit trail (runId, status, model, litellm_call_id); serve /health endpoint
 - This directory **does not**: Run as a standalone service; contain secrets at rest; implement application logic; count tokens
 
 ## Usage

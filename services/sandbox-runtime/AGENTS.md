@@ -33,12 +33,12 @@ Docker image definition for network-isolated sandbox containers. Provides minima
 - **Exports:** Docker image `cogni-sandbox-runtime:latest`
 - **Routes:** none
 - **CLI:** `pnpm sandbox:docker:build`
-- **Env/Config keys (runtime):** `LLM_PROXY_SOCKET` (default `/llm-sock/llm.sock`), `LLM_PROXY_PORT` (default `8080`), `OPENAI_API_BASE`, `RUN_ID`
-- **Files considered API:** Dockerfile, entrypoint.sh
+- **Env/Config keys (runtime):** `LLM_PROXY_SOCKET` (default `/llm-sock/llm.sock`), `LLM_PROXY_PORT` (default `8080`), `OPENAI_API_BASE`, `RUN_ID`, `COGNI_MODEL` (agent/run.mjs)
+- **Files considered API:** Dockerfile, entrypoint.sh, agent/run.mjs
 
 ## Responsibilities
 
-- This directory **does**: Define minimal container image; install socat, git, jq, curl; create non-root sandboxer user; start socat bridge when LLM proxy socket is present; fail fast if OPENAI_API_BASE set but socket missing
+- This directory **does**: Define minimal container image; install socat, git, jq, curl; create non-root sandboxer user; start socat bridge when LLM proxy socket is present; fail fast if OPENAI_API_BASE set but socket missing; include `agent/run.mjs` minimal LLM agent (reads messages.json, calls OPENAI_API_BASE, outputs SandboxProgramContract envelope)
 - This directory **does not**: Implement application logic; manage container lifecycle; handle networking; contain secrets
 
 ## Usage

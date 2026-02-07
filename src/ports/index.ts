@@ -150,6 +150,7 @@ export type {
   SandboxLlmProxyConfig,
   SandboxMount,
   SandboxNetworkMode,
+  SandboxProgramContract,
   SandboxRunnerPort,
   SandboxRunResult,
   SandboxRunSpec,

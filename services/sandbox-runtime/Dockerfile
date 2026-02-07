@@ -23,6 +23,9 @@ RUN addgroup --system --gid 1001 sandbox && \
 # Copy entrypoint script (runs socat bridge before main command)
 COPY --chmod=755 entrypoint.sh /usr/local/bin/sandbox-entrypoint.sh
 
+# Copy agent script (P0.75: minimal LLM agent)
+COPY --chown=sandboxer:sandbox agent/ /agent/
+
 USER sandboxer
 WORKDIR /workspace
 

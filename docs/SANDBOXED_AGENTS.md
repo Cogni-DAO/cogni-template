@@ -27,7 +27,7 @@
 
 10. **HOST_INJECTS_BILLING_HEADERS**: Proxy injects billing + observability headers matching in-proc `LiteLlmAdapter` behavior. Client-sent `x-litellm-*` headers stripped/overwritten. Required headers:
     - `x-litellm-end-user-id: ${billingAccountId}` — matches in-proc `user: billingAccountId` for dashboard parity
-    - `x-litellm-metadata: {"run_id":"...","attempt":0,"user_id":"...","graph_id":"sandbox:agent","existing_trace_id":"...","session_id":"...","trace_user_id":"..."}` — run correlation + Langfuse observability
+    - `x-litellm-spend-logs-metadata: {"run_id":"...","attempt":0,"user_id":"...","graph_id":"sandbox:agent","existing_trace_id":"...","session_id":"...","trace_user_id":"..."}` — run correlation + Langfuse observability
 
 11. **LITELLM_IS_BILLING_TRUTH**: Do not count tokens in proxy. LiteLLM `/spend/logs` is the authoritative billing source. Query by `end_user=billingAccountId`, filter by `metadata.run_id` for per-run reconciliation.
 
@@ -209,7 +209,7 @@ PER-RUN RESOURCES:
 │  - Listens on unix socket in shared Docker volume                   │
 │  - Injects: Authorization: Bearer ${LITELLM_MASTER_KEY}             │
 │  - Injects: x-litellm-end-user-id: ${billingAccountId}              │
-│  - Injects: x-litellm-metadata: {run_id, attempt, Langfuse fields} │
+│  - Injects: x-litellm-spend-logs-metadata: {run_id, attempt, Langfuse fields} │
 │  - Forwards to http://litellm:4000 (Docker DNS)                     │
 │  - Audit logs copied to host on stop (not visible to sandbox)        │
 └─────────────────────────────────────────────────────────────────────┘
@@ -222,7 +222,7 @@ PER-RUN RESOURCES:
 - [x] Create `platform/infra/services/sandbox-proxy/nginx.conf.template`:
   - Listen on unix socket in shared `/llm-sock/` directory
   - Inject `Authorization: Bearer ${LITELLM_MASTER_KEY}` (from template substitution)
-  - Inject `x-litellm-end-user-id: ${runId}/${attempt}` (overwrites client-sent)
+  - Inject `x-litellm-end-user-id: ${billingAccountId}` + `x-litellm-spend-logs-metadata` (overwrites client-sent)
   - Forward to `http://litellm:4000` (Docker DNS on sandbox-internal)
   - Access log: timestamp, runId, model, status (no request body/secrets)
 - [x] Update `services/sandbox-runtime/Dockerfile`:
@@ -263,7 +263,7 @@ PER-RUN RESOURCES:
 - [x] **OPENAI_API_BASE set**: Container env has `OPENAI_API_BASE=http://localhost:8080`
 - [x] **Header stripping**: Proxy accepts requests with spoofed headers (doesn't break)
 - [ ] **LLM completion succeeds**: `/v1/chat/completions` returns valid response (requires internet)
-- [ ] **Attribution injection**: LiteLLM receives `x-litellm-end-user-id: {runId}/{attempt}` (verify via spend logs)
+- [ ] **Attribution injection**: LiteLLM receives `x-litellm-end-user-id: ${billingAccountId}` + `x-litellm-spend-logs-metadata` with `run_id` (verify via spend logs)
 
 #### File Pointers (P0.5)
 
@@ -321,10 +321,12 @@ PER-RUN RESOURCES:
 
 #### Adapters (`src/adapters/server/sandbox/`)
 
-- [ ] Create `sandbox-graph.provider.ts` implementing `GraphProvider`:
+- [x] Create `sandbox-graph.provider.ts` implementing `GraphProvider`:
   - `providerId: "sandbox"`
   - `canHandle(graphId)`: matches `sandbox:*` prefix
-  - `runGraph(req)`: create tmp workspace → write messages.json → call `SandboxRunnerAdapter.runOnce()` → parse stdout → emit AiEvents → reconcile billing → return `GraphFinal`
+  - `runGraph(req)`: create tmp workspace (symlink-safe) → write messages.json → call `SandboxRunnerAdapter.runOnce()` → parse stdout → emit AiEvents → return `GraphFinal`
+  - Passes `caller.userId` → proxy → `x-litellm-customer-id` header
+  - Socket dir mounted `:ro` in sandbox (proxy has `:rw`)
 - [ ] Create `sandbox-agent-catalog.provider.ts` implementing `AgentCatalogProvider`:
   - `listAgents()`: returns `[{ agentId: "sandbox:agent", graphId: "sandbox:agent", name: "Sandbox Agent", description: "LLM agent in isolated container" }]`
   - Gated by `SANDBOX_ENABLED` env flag (don't show in UI unless enabled)
@@ -338,20 +340,22 @@ PER-RUN RESOURCES:
 
 #### Agent Runtime (`services/sandbox-runtime/`)
 
-- [ ] Create minimal agent script (`services/sandbox-runtime/agent/run.mjs`):
+- [x] Create minimal agent script (`services/sandbox-runtime/agent/run.mjs`):
   - Read `/workspace/.cogni/messages.json`
   - Call `${OPENAI_API_BASE}/v1/chat/completions` with messages + `COGNI_MODEL`
-  - Print assistant response content to stdout
-  - Exit 0 on success, non-zero on error (stderr has diagnostics)
-- [ ] Update `Dockerfile` to include agent script at `/agent/run.mjs`
-- [ ] Default `argv` in provider: `["node", "/agent/run.mjs"]`
+  - Output `SandboxProgramContract` JSON envelope to stdout (matches OpenClaw `--json`)
+  - Exit 0 on success, non-zero on error (envelope always present for structured parsing)
+- [x] Define `SandboxProgramContract` as port-level type in `sandbox-runner.port.ts`
+- [x] Update `Dockerfile` to include agent script at `/agent/run.mjs`
+- [x] Default `argv` in provider: `["node", "/agent/run.mjs"]`
 
-#### Billing Reconciliation
+#### Billing (Inline via Trusted Proxy)
 
-- [ ] After sandbox exits: query LiteLLM `GET /spend/logs?end_user=${runId}/0` via existing `LiteLlmAdapter`
-  - Extract `completion_tokens`, `prompt_tokens`, `cost` from response
-  - Emit `usage_report` AiEvent with `UsageFact` so `RunEventRelay` commits charge_receipt
-  - If no spend logs found (e.g., agent didn't call LLM): emit zero-cost usage_report, log warning
+- [x] Proxy injects billing headers: `x-litellm-end-user-id: ${billingAccountId}` + `x-litellm-spend-logs-metadata` (run correlation + Langfuse)
+- [x] Nginx audit log captures `$upstream_http_x_litellm_call_id` for per-call tracing
+- [x] Provider emits `usage_report` AiEvent so `RunEventRelay` commits charge_receipt
+- [ ] Capture `x-litellm-call-id` from proxy response inline for `usageUnitId` (per [GRAPH_EXECUTOR_AUDIT.md](GRAPH_EXECUTOR_AUDIT.md) P0 item #2)
+- [ ] Set `executorType: "sandbox"` in UsageFact (per `UsageFactStrictSchema`)
 - [ ] Verify `charge_receipts` table has entry with `source_reference = ${runId}/0/${litellmCallId}`
 
 #### Tests (Merge Gates)
@@ -359,21 +363,43 @@ PER-RUN RESOURCES:
 - [ ] **E2E chat flow**: `POST /api/v1/ai/chat` with `graphName: "sandbox:agent"` → SSE response with assistant text
 - [ ] **Agent catalog**: `GET /api/v1/ai/agents` includes `sandbox:agent` when `SANDBOX_ENABLED=true`
 - [ ] **Billing verified**: After sandbox run, `charge_receipts` table has entry matching `runId`
-- [ ] **LiteLLM spend match**: `x-litellm-end-user-id` header matches `${runId}/0` in LiteLLM logs
+- [ ] **LiteLLM spend match**: `x-litellm-end-user-id` in spend logs matches `billingAccountId`, `metadata.run_id` matches `runId`
 - [ ] **No secrets in response**: Sandbox stdout does not contain `LITELLM_MASTER_KEY`
 - [ ] **Graceful failure**: Agent error (bad model, timeout) returns structured error via `GraphFinal.error`
 
 #### File Pointers (P0.75)
 
-| File                                                            | Status  |
-| --------------------------------------------------------------- | ------- |
-| `src/adapters/server/sandbox/sandbox-graph.provider.ts`         | Pending |
-| `src/adapters/server/sandbox/sandbox-agent-catalog.provider.ts` | Pending |
-| `src/bootstrap/graph-executor.factory.ts`                       | Update  |
-| `src/bootstrap/agent-discovery.ts`                              | Update  |
-| `services/sandbox-runtime/agent/run.mjs`                        | Pending |
-| `services/sandbox-runtime/Dockerfile`                           | Update  |
-| `tests/stack/sandbox/sandbox-e2e.stack.test.ts`                 | Pending |
+| File                                                            | Status   |
+| --------------------------------------------------------------- | -------- |
+| `src/adapters/server/sandbox/sandbox-graph.provider.ts`         | Complete |
+| `src/adapters/server/sandbox/sandbox-agent-catalog.provider.ts` | Complete |
+| `src/bootstrap/graph-executor.factory.ts`                       | Complete |
+| `src/bootstrap/agent-discovery.ts`                              | Complete |
+| `src/ports/sandbox-runner.port.ts` (`SandboxProgramContract`)   | Complete |
+| `services/sandbox-runtime/agent/run.mjs`                        | Complete |
+| `services/sandbox-runtime/Dockerfile`                           | Complete |
+| `tests/stack/sandbox/sandbox-e2e.stack.test.ts`                 | Pending  |
+
+#### Validation (2026-02-07)
+
+E2E smoke test confirmed full pipeline operational:
+
+```
+curl POST /api/v1/ai/chat
+  { graphName: "sandbox:agent", model: "nemotron-nano-30b", messages: [...] }
+
+→ AggregatingGraphExecutor routes to SandboxGraphProvider
+→ Provider writes /workspace/.cogni/messages.json
+→ SandboxRunnerAdapter creates Docker container (network=none, LLM proxy enabled)
+→ entrypoint.sh starts socat bridge (localhost:8080 → /llm-sock/llm.sock)
+→ run.mjs reads messages, calls LiteLLM via proxy, outputs SandboxProgramContract envelope
+→ Provider parses envelope, emits text_delta + usage_report AiEvents
+→ SSE stream delivers response: "Hello, dear friend, welcome back!"
+→ GraphFinal: { ok: true, finishReason: "stop" }
+```
+
+Verified: agent catalog discovery (`GET /api/v1/ai/agents` lists `sandbox:agent`),
+free model passthrough (no credits required), billing headers injected by proxy.
 
 ---
 
@@ -510,14 +536,15 @@ PER-RUN RESOURCES:
 
 ### 3. LiteLLM as Billing Truth (No Proxy Token Counting)
 
-**Decision**: Do not count tokens in the proxy. Inject `x-litellm-end-user-id` header and use LiteLLM `/spend/logs` as authoritative billing source.
+**Decision**: Do not count tokens in the proxy. LiteLLM is the authoritative billing source. `end_user = billingAccountId` everywhere (matches in-proc `LiteLlmAdapter`). Run correlation via `metadata.run_id`.
 
 **Why**:
 
 - Streaming + retries make proxy-side token counting brittle
 - LiteLLM already tracks usage per `end_user`
-- Reconciliation via `GET /spend/logs?end_user=${runId}/${attempt}` is reliable
-- MVP should prove the loop first, optimize billing accuracy later
+- Sandbox bills inline: trusted proxy captures `x-litellm-call-id` per call → `usageUnitId`
+- External executors (P1) reconcile via `GET /spend/logs?end_user=${billingAccountId}`, filter by `metadata.run_id`
+- See [GRAPH_EXECUTOR_AUDIT.md](GRAPH_EXECUTOR_AUDIT.md) for inline vs reconciliation decision guide
 
 ### 4. Agent in Sandbox from P0.5 (Skip Host-Owned Loop)
 
@@ -623,4 +650,4 @@ HOST: repoPort.pushBranchFromPatches()
 ---
 
 **Last Updated**: 2026-02-07
-**Status**: P0 Complete, P0.5a Complete, P0.5 Complete, P0.75 Pending
+**Status**: P0 Complete, P0.5a Complete, P0.5 Complete, P0.75 Complete (E2E validated, automated tests pending)

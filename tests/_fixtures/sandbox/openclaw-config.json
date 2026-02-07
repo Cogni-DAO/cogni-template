@@ -1,0 +1,48 @@
+{
+  "models": {
+    "mode": "replace",
+    "providers": {
+      "cogni": {
+        "baseUrl": "http://localhost:8080/v1",
+        "api": "openai-completions",
+        "apiKey": "proxy-handles-auth",
+        "models": [
+          {
+            "id": "nemotron-nano-30b",
+            "name": "Nemotron Nano 30B",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 131072,
+            "maxTokens": 8192,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": { "primary": "cogni/nemotron-nano-30b" },
+      "workspace": "/workspace",
+      "sandbox": { "mode": "off" },
+      "skipBootstrap": true,
+      "timeoutSeconds": 60
+    },
+    "list": [{ "id": "main", "default": true, "workspace": "/workspace" }]
+  },
+  "tools": {
+    "elevated": { "enabled": false },
+    "deny": [
+      "group:web",
+      "browser",
+      "cron",
+      "gateway",
+      "nodes",
+      "sessions_send",
+      "sessions_spawn",
+      "message"
+    ]
+  },
+  "cron": { "enabled": false },
+  "gateway": { "mode": "local" }
+}

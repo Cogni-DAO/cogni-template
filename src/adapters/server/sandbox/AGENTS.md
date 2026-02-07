@@ -31,22 +31,22 @@ Docker-based sandbox adapter for network-isolated command execution with LLM pro
 
 ## Public Surface
 
-- **Exports:** `SandboxRunnerAdapter`, `SandboxRunnerAdapterOptions`, `LlmProxyManager`, `LlmProxyConfig`, `LlmProxyHandle`
+- **Exports:** `SandboxRunnerAdapter`, `SandboxRunnerAdapterOptions`, `LlmProxyManager`, `LlmProxyConfig`, `LlmProxyHandle`, `SandboxGraphProvider`, `SANDBOX_PROVIDER_ID`, `SandboxAgentCatalogProvider`
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none (image name, litellmMasterKey configurable via constructor)
-- **Files considered API:** index.ts barrel export
+- **Files considered API:** index.ts barrel export (not re-exported from parent server barrel — consumers use subpath imports to avoid Turbopack bundling dockerode native addon chain)
 
 ## Ports
 
-- **Uses ports:** none
-- **Implements ports:** `SandboxRunnerPort`
+- **Uses ports:** none (SandboxGraphProvider uses SandboxRunnerPort internally)
+- **Implements ports:** `SandboxRunnerPort` (adapter), `GraphProvider` (sandbox-graph.provider), `AgentCatalogProvider` (sandbox-agent-catalog.provider)
 - **Contracts:** tests/integration/sandbox/, tests/stack/sandbox/
 
 ## Responsibilities
 
-- This directory **does**: Create ephemeral Docker containers; enforce network=none isolation; manage LLM proxy containers (nginx:alpine on sandbox-internal network); share socket via Docker volume at `/llm-sock`; inject billing identity and metadata headers; collect stdout/stderr; handle timeouts and OOM; cleanup containers and volumes
-- This directory **does not**: Manage long-lived containers; handle billing reconciliation; implement graph execution; pass credentials to sandbox containers
+- This directory **does**: Create ephemeral Docker containers; enforce network=none isolation; manage LLM proxy containers (nginx:alpine on sandbox-internal network); share socket via Docker volume at `/llm-sock`; inject billing identity and metadata headers; collect stdout/stderr; handle timeouts and OOM; cleanup containers and volumes; route `sandbox:*` graphIds through the graph execution pipeline (SandboxGraphProvider); list sandbox agents in UI catalog (SandboxAgentCatalogProvider)
+- This directory **does not**: Manage long-lived containers; implement agent logic (agent runs inside container); pass credentials to sandbox containers
 
 ## Usage
 

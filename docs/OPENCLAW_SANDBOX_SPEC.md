@@ -37,7 +37,7 @@
 ┌───────────────────────────────────────────────────────────────────────┐
 │ SANDBOX CONTAINER: cogni-sandbox-openclaw (network=none)                │
 │ ────────────────────────────────────────                                │
-│  HOME=/home/sandboxer  OPENCLAW_CONFIG_DIR=/workspace/.openclaw         │
+│  HOME=/workspace  OPENCLAW_CONFIG_PATH=/workspace/.openclaw/openclaw.json│
 │                                                                         │
 │  node /app/dist/index.js agent --local --agent main                    │
 │       --message "$(cat /workspace/.cogni/prompt.txt)"                  │
@@ -59,7 +59,7 @@
 │ PROXY: nginx:alpine (sandbox-internal network)                          │
 │  Injects: Authorization: Bearer ${LITELLM_MASTER_KEY}                  │
 │  Injects: x-litellm-end-user-id: ${billingAccountId}                  │
-│  Injects: x-litellm-metadata: { run_id, attempt, graph_id, ... }     │
+│  Injects: x-litellm-spend-logs-metadata: { run_id, attempt, graph_id, ... }     │
 │  Forwards: http://litellm:4000                                         │
 │  Audit log: timestamp, runId, model, status (no prompts)               │
 └───────────────────────────────────────────────────────────────────────┘
@@ -92,7 +92,7 @@ socat (localhost:8080 → /llm-sock/llm.sock)
 nginx proxy (overwrites all auth/billing headers)
   │  Authorization: Bearer ${LITELLM_MASTER_KEY}
   │  x-litellm-end-user-id: ${billingAccountId}
-  │  x-litellm-metadata: {"run_id":"...","attempt":0,"graph_id":"sandbox:agent",...}
+  │  x-litellm-spend-logs-metadata: {"run_id":"...","attempt":0,"graph_id":"sandbox:agent",...}
   ▼
 LiteLLM (litellm:4000)
   │  Resolves model alias → OpenRouter upstream
@@ -115,7 +115,7 @@ Per the existing nginx template (unchanged from P0.5):
 
 - **Overwrites** `Authorization` header with `Bearer ${LITELLM_MASTER_KEY}`
 - **Overwrites** `x-litellm-end-user-id` with `${billingAccountId}`
-- **Overwrites** `x-litellm-metadata` with run correlation JSON
+- **Overwrites** `x-litellm-spend-logs-metadata` with run correlation JSON
 - **Forwards** to `http://litellm:4000` (Docker DNS)
 - **Streams** SSE responses back (`proxy_buffering off`, `proxy_read_timeout 300s`)
 - **Logs** each request (timestamp, model, status, latency — no prompts)
@@ -182,12 +182,13 @@ Reuses the existing `sandbox-entrypoint.sh` pattern from P0.5 (starts socat, the
 
 ### ReadonlyRootfs Compatibility
 
-The `SandboxRunnerAdapter` sets `ReadonlyRootfs: true` with tmpfs at `/tmp` (64m) and `/run` (8m). OpenClaw may need writable paths beyond these:
+The `SandboxRunnerAdapter` sets `ReadonlyRootfs: true` with tmpfs at `/tmp` (64m) and `/run` (8m). OpenClaw needs writable paths controlled via env:
 
-- **`/workspace/.openclaw/`** — config, sessions, agent state → on workspace bind mount (rw), OK
-- **`/home/sandboxer/`** — OpenClaw may write cache files to `$HOME` → writable if `useradd -m` created it, but on readonly rootfs this would fail
+- **`/workspace/.openclaw/`** — config file (`OPENCLAW_CONFIG_PATH`) → on workspace bind mount (rw), OK
+- **`/workspace/.openclaw-state/`** — sessions, transcripts, caches (`OPENCLAW_STATE_DIR`) → on workspace bind mount (rw), OK
+- **`/workspace/`** — `HOME=/workspace` ensures any `$HOME` writes go to writable mount, not readonly rootfs
 
-> **Open Question (OQ-8)**: Does OpenClaw write anything to `$HOME` outside of `$OPENCLAW_CONFIG_DIR`? If yes, we may need to add `HOME=/workspace` or an additional tmpfs at `/home/sandboxer`. Needs testing.
+**Resolved (OQ-8)**: OpenClaw's `resolveStateDir()` defaults to `$HOME/.openclaw` if `OPENCLAW_STATE_DIR` is not set. Setting `OPENCLAW_STATE_DIR=/workspace/.openclaw-state` and `HOME=/workspace` prevents all writes to readonly paths. Verified in `src/config/paths.ts:49-74`.
 
 ---
 
@@ -330,8 +331,10 @@ The `SandboxGraphProvider` calls `runOnce()` with:
 ```typescript
 // Environment via llmProxy.env (injected by SandboxRunnerAdapter as container Env)
 const env = {
-  HOME: "/home/sandboxer",
-  OPENCLAW_CONFIG_DIR: "/workspace/.openclaw",
+  HOME: "/workspace",
+  OPENCLAW_CONFIG_PATH: "/workspace/.openclaw/openclaw.json",
+  OPENCLAW_STATE_DIR: "/workspace/.openclaw-state",
+  OPENCLAW_LOAD_SHELL_ENV: "0",
 };
 
 // Command via argv (adapter joins with space, entrypoint runs via bash -lc)
@@ -350,8 +353,10 @@ const argv = [
 **Effective command inside container:**
 
 ```bash
-HOME=/home/sandboxer \
-OPENCLAW_CONFIG_DIR=/workspace/.openclaw \
+HOME=/workspace \
+OPENCLAW_CONFIG_PATH=/workspace/.openclaw/openclaw.json \
+OPENCLAW_STATE_DIR=/workspace/.openclaw-state \
+OPENCLAW_LOAD_SHELL_ENV=0 \
 node /app/dist/index.js agent \
   --local --agent main \
   --session-id "${RUN_ID}" \
@@ -517,7 +522,7 @@ Unchanged from [SANDBOXED_AGENTS.md](SANDBOXED_AGENTS.md) P0.5 design and [EXTER
 
 1. Every LLM call from OpenClaw transits our nginx proxy
 2. Proxy injects `x-litellm-end-user-id: ${billingAccountId}`
-3. Proxy injects `x-litellm-metadata: { "run_id": "${runId}", ... }`
+3. Proxy injects `x-litellm-spend-logs-metadata: { "run_id": "${runId}", ... }`
 4. LiteLLM records spend per `end_user` with `metadata.run_id`
 5. After sandbox exits, `reconcileRun()` queries `GET /spend/logs?end_user=${billingAccountId}` and filters by `metadata.run_id`
 6. Emits `usage_report` AiEvent → `RunEventRelay` commits `charge_receipt`
@@ -527,7 +532,7 @@ Unchanged from [SANDBOXED_AGENTS.md](SANDBOXED_AGENTS.md) P0.5 design and [EXTER
 ### Observability
 
 - **Proxy audit log**: Every LLM request logged with timestamp, model, status, latency
-- **LiteLLM → Langfuse**: All calls traced via `x-litellm-metadata` (contains `existing_trace_id`, `session_id`)
+- **LiteLLM → Langfuse**: All calls traced via `x-litellm-spend-logs-metadata` (contains `existing_trace_id`, `session_id`)
 - **OpenClaw stdout**: Agent's final response and metadata (parsed by `SandboxGraphProvider`)
 - **OpenClaw stderr**: Diagnostic output if agent fails (captured by `SandboxRunnerAdapter`)
 
@@ -581,25 +586,198 @@ For DAO agents with persistent workspace (ONE_WORKSPACE_PER_DAO pattern), mount 
 ### Prerequisites
 
 - [x] P0.5 proxy plumbing works (socket bridge, nginx proxy, billing headers)
-- [ ] `openclaw:local` Docker image built and available locally
+- [x] `openclaw:local` Docker image built and available locally (v2026.2.4, 4GB)
 
-### P0.75: OpenClaw in Sandbox (Core)
+---
+
+### P0: Get OpenClaw Running in Sandbox (ASAP)
+
+**Goal**: Prove OpenClaw runs in `network=none` sandbox, calls LLM via socket proxy, and billing headers reach LiteLLM. No graph provider wiring, no agent catalog, no reconciliation — just the container lifecycle working end-to-end.
+
+**Principles**: Use `openclaw:local` as-is (no slimming). Fix only what's broken. Follow repo invariants.
 
 #### Container Image
 
-- [ ] Create `services/sandbox-openclaw/Dockerfile` (multi-stage from `openclaw:local`)
-- [ ] Verify minimal file set needed from OpenClaw build
-- [ ] Add `pnpm sandbox:openclaw:build` script
-- [ ] Validate image works: `docker run --rm cogni-sandbox-openclaw node /app/dist/index.js --version`
+Thin layer over `openclaw:local` — add socat + our entrypoint, nothing else:
+
+```dockerfile
+FROM openclaw:local
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends socat \
+  && rm -rf /var/lib/apt/lists/*
+COPY entrypoint.sh /usr/local/bin/sandbox-entrypoint.sh
+RUN chmod 755 /usr/local/bin/sandbox-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/sandbox-entrypoint.sh"]
+```
+
+Reuses existing `services/sandbox-runtime/entrypoint.sh` (socat bridge + `bash -lc "$@"`). No multi-stage build, no file pruning, no user creation (adapter sets `User` at container create time).
+
+- [x] Create `services/sandbox-openclaw/Dockerfile` (thin layer as above)
+- [x] Copy `entrypoint.sh` from `services/sandbox-runtime/`
+- [x] Build: `docker build -t cogni-sandbox-openclaw services/sandbox-openclaw` (4s build)
+- [x] Validate: `docker run --rm cogni-sandbox-openclaw node /app/dist/index.js --version` → `2026.2.4`
+
+**Verified (2026-02-07)**: Cold boot test with `network=none`, pre-written `openclaw.json`, no proxy:
+
+- Config loaded correctly (`provider: "cogni"`, `model: "gemini-2.5-flash"`)
+- No setup/onboarding phase (`skipBootstrap: true` works)
+- State written to `OPENCLAW_STATE_DIR` (sessions, transcripts) — not to readonly rootfs
+- Valid JSON envelope on stdout (`payloads`, `meta`, `agentMeta`)
+- Timed out reaching LLM at localhost:8080 (expected — no proxy in this test)
+- Missing workspace files (AGENTS.md, SOUL.md) handled gracefully (noted as missing, no crash)
+
+#### Environment & Config (SECRETS_HOST_ONLY + ReadonlyRootfs)
+
+OpenClaw has three path-resolution mechanisms that can leak secrets or break on readonly rootfs. All three must be controlled:
+
+1. **Config file** (`OPENCLAW_CONFIG_PATH`): Points to the exact `.json` file. Set to `/workspace/.openclaw/openclaw.json` (on writable workspace mount).
+2. **State directory** (`OPENCLAW_STATE_DIR`): Where sessions, transcripts, caches go. Set to `/workspace/.openclaw-state` (writable). Prevents fallback to `$HOME/.openclaw` which would fail on readonly rootfs.
+3. **Dotenv loading** (`loadDotEnv()`): Loads `.env` from CWD + `$OPENCLAW_STATE_DIR/.env`. Prevent by ensuring no `.env` file exists in `/workspace/` or `/workspace/.openclaw-state/`.
+4. **Shell env fallback** (`OPENCLAW_LOAD_SHELL_ENV`): Off by default. Explicitly set to `0` as defense-in-depth.
+5. **HOME**: Set to `/workspace` so any `$HOME` writes go to writable mount, not readonly rootfs.
+
+**Container env vars** (set by `SandboxRunnerAdapter`):
+
+```bash
+HOME=/workspace
+OPENCLAW_CONFIG_PATH=/workspace/.openclaw/openclaw.json
+OPENCLAW_STATE_DIR=/workspace/.openclaw-state
+OPENCLAW_LOAD_SHELL_ENV=0
+```
+
+> **Source**: `src/config/paths.ts:49-74` (state dir), `src/config/paths.ts:95-104` (config path), `src/infra/dotenv.ts:6-20` (dotenv). Verified against OpenClaw v2026.2.4.
+
+#### Minimal openclaw.json
+
+Single model alias, everything dangerous disabled. Written to `/workspace/.openclaw/openclaw.json` by test/provider before `runOnce()`:
+
+```json
+{
+  "models": {
+    "mode": "replace",
+    "providers": {
+      "cogni": {
+        "baseUrl": "http://localhost:8080/v1",
+        "api": "openai-completions",
+        "apiKey": "proxy-handles-auth",
+        "models": [
+          {
+            "id": "gemini-2.5-flash",
+            "name": "Gemini 2.5 Flash",
+            "reasoning": false,
+            "input": ["text"],
+            "contextWindow": 200000,
+            "maxTokens": 8192,
+            "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": { "primary": "cogni/gemini-2.5-flash" },
+      "workspace": "/workspace",
+      "sandbox": { "mode": "off" },
+      "skipBootstrap": true,
+      "timeoutSeconds": 540
+    },
+    "list": [{ "id": "main", "default": true, "workspace": "/workspace" }]
+  },
+  "tools": {
+    "elevated": { "enabled": false },
+    "deny": [
+      "group:web",
+      "browser",
+      "cron",
+      "gateway",
+      "nodes",
+      "sessions_send",
+      "sessions_spawn",
+      "message"
+    ]
+  },
+  "cron": { "enabled": false },
+  "gateway": { "mode": "local" }
+}
+```
+
+#### Proxy Header Fix
+
+**Bug found & fixed**: Nginx template originally used `x-litellm-metadata` but LiteLLM reads `x-litellm-spend-logs-metadata` for spend log correlation. The in-proc path sets `metadata` in the request body; the proxy must use the correct header name for parity.
+
+- [x] Fix `nginx.conf.template`: rename `x-litellm-metadata` → `x-litellm-spend-logs-metadata`
+- [x] Fix all doc references (SANDBOXED_AGENTS.md, EXTERNAL_EXECUTOR_BILLING.md, sandbox-proxy/AGENTS.md)
+- [ ] Verify metadata JSON includes `run_id`, `attempt`, `graph_id` (already present in `LlmProxyManager.generateConfig`)
+
+#### Invocation
+
+```bash
+node /app/dist/index.js agent \
+  --local --agent main \
+  --message "$(cat /workspace/.cogni/prompt.txt)" \
+  --json --timeout 540
+```
+
+**Output** (stdout, `--json` mode — from `src/commands/agent/delivery.ts:138-148`):
+
+```json
+{
+  "payloads": [{ "text": "response text", "mediaUrl": null }],
+  "meta": {
+    "durationMs": 12450,
+    "agentMeta": {
+      "sessionId": "...",
+      "provider": "cogni",
+      "model": "cogni/gemini-2.5-flash",
+      "usage": { "input": 3200, "output": 890, "total": 4090 }
+    },
+    "error": null
+  }
+}
+```
+
+#### Smoke Tests (P0 Merge Gates)
+
+- [x] **OpenClaw boots**: `node /app/dist/index.js --version` → `2026.2.4`
+- [ ] **Network isolated**: `curl` from container fails
+- [x] **LLM call works**: OpenClaw agent calls LiteLLM (nemotron-nano-30b), gets response "hello from sandbox" (22s, 2128 tokens)
+- [x] **JSON output parses**: stdout is valid JSON with `payloads` and `meta` — see `tests/_fixtures/sandbox/openclaw-expected-output.json`
+- [ ] **No secrets in container**: env has no `LITELLM_MASTER_KEY`
+- [ ] **Spend logs have run_id**: LiteLLM spend logs contain entry with `metadata.run_id` matching our `runId`
+
+#### What NOT to Do (P0)
+
+- No dynamic model-catalog sync from LiteLLM config
+- No multi-stage "minimal file set" pruning of the 4GB image
+- No perfect billing reconciliation — just prove spend logs contain `run_id` + `call_id`
+- No `SandboxGraphProvider` / agent catalog / bootstrap wiring (that's P0.75)
+
+#### File Pointers (P0)
+
+| File                                                        | Status  |
+| ----------------------------------------------------------- | ------- |
+| `services/sandbox-openclaw/Dockerfile`                      | Done    |
+| `services/sandbox-openclaw/entrypoint.sh`                   | Done    |
+| `platform/infra/services/sandbox-proxy/nginx.conf.template` | Fixed   |
+| `tests/_fixtures/sandbox/openclaw-config.json`              | Done    |
+| `tests/_fixtures/sandbox/openclaw-expected-output.json`     | Done    |
+| `scripts/diag-openclaw-sandbox.mjs`                         | WIP     |
+| `tests/stack/sandbox/sandbox-openclaw.stack.test.ts`        | Pending |
+
+---
+
+### P0.75: OpenClaw via Graph Execution (E2E)
+
+**Trigger**: P0 proves OpenClaw runs in sandbox. Now wire it into the graph execution pipeline so users can select it in the chat UI.
 
 #### SandboxGraphProvider
 
 - [ ] Create `src/adapters/server/sandbox/sandbox-graph.provider.ts`:
   - `providerId: "sandbox"`
   - `canHandle(graphId)`: matches `sandbox:*`
-  - `runGraph(req)`: generate openclaw.json → write prompt → call `runOnce()` → parse JSON → emit AiEvents → reconcile billing
-- [ ] Generate openclaw.json with model catalog from LiteLLM config
-- [ ] Write workspace files (AGENTS.md, SOUL.md, .cogni/prompt.txt)
+  - `runGraph(req)`: write openclaw.json + prompt → call `runOnce()` → parse JSON → emit AiEvents
+- [ ] Write workspace files (.openclaw/openclaw.json, .cogni/prompt.txt)
 - [ ] Parse OpenClaw JSON output → `text_delta` AiEvents → `GraphFinal`
 - [ ] Handle agent errors (meta.error, non-zero exit, invalid JSON)
 
@@ -618,32 +796,26 @@ For DAO agents with persistent workspace (ONE_WORKSPACE_PER_DAO pattern), mount 
 
 #### Billing Reconciliation
 
-- [ ] Implement `reconcileRun()` querying LiteLLM `/spend/logs`
+- [ ] Query LiteLLM `/spend/logs?end_user=${billingAccountId}`, filter by `metadata.run_id`
 - [ ] Sum token usage across all LLM calls in the run
 - [ ] Emit `usage_report` AiEvent → `charge_receipt`
 
-#### Tests (Merge Gates)
+#### Tests (P0.75 Merge Gates)
 
-- [ ] **OpenClaw boots**: Container starts, `node /app/dist/index.js --version` succeeds
-- [ ] **LLM call works**: OpenClaw agent makes `/v1/chat/completions` call via proxy, gets response
-- [ ] **Tool use works**: Agent uses bash/read/write tools inside container
-- [ ] **Denied tools fail gracefully**: web_fetch, browser → agent handles denial without crash
-- [ ] **JSON output parses**: stdout contains valid JSON envelope with `payloads` and `meta`
-- [ ] **Billing tracked**: LiteLLM spend logs contain entries matching `billingAccountId` + `run_id`
-- [ ] **No secrets in container**: env has no `LITELLM_MASTER_KEY` or provider API keys
-- [ ] **Network isolated**: curl from container fails
-- [ ] **Timeout works**: Long-running agent killed cleanly
+- [ ] **E2E chat flow**: `POST /api/v1/ai/chat` with `graphName: "sandbox:agent"` → SSE response
+- [ ] **Agent catalog**: `GET /api/v1/ai/agents` includes `sandbox:agent` when `SANDBOX_ENABLED=true`
+- [ ] **Billing verified**: `charge_receipts` has entry matching `runId`
+- [ ] **Graceful failure**: Agent error → structured `GraphFinal.error`
 
 #### File Pointers (P0.75)
 
 | File                                                            | Status  |
 | --------------------------------------------------------------- | ------- |
-| `services/sandbox-openclaw/Dockerfile`                          | Pending |
 | `src/adapters/server/sandbox/sandbox-graph.provider.ts`         | Pending |
 | `src/adapters/server/sandbox/sandbox-agent-catalog.provider.ts` | Pending |
 | `src/bootstrap/graph-executor.factory.ts`                       | Update  |
 | `src/bootstrap/agent-discovery.ts`                              | Update  |
-| `tests/stack/sandbox/sandbox-openclaw.stack.test.ts`            | Pending |
+| `tests/stack/sandbox/sandbox-openclaw-e2e.stack.test.ts`        | Pending |
 
 ---
 
@@ -682,7 +854,7 @@ OpenClaw internally streams LLM responses (SSE). In `--json` mode, it buffers th
 
 The `SandboxRunnerAdapter` hardcodes `User: "sandboxer"` (uid 1001). The host-mounted workspace is created by the Node.js host process (likely running as a different uid). Will file permissions conflict?
 
-**Resolution**: The adapter already handles this for the existing P0.5 sandbox — the same pattern applies. Create workspace with `0o777` or `chown 1001:1001` on the host before mounting. Needs validation with the OpenClaw image specifically, since OpenClaw writes config/session files to `OPENCLAW_CONFIG_DIR` which is on the workspace mount.
+**Resolution**: The adapter already handles this for the existing P0.5 sandbox — the same pattern applies. Create workspace with `0o777` or `chown 1001:1001` on the host before mounting. OpenClaw writes config/session files to `OPENCLAW_CONFIG_PATH` and `OPENCLAW_STATE_DIR`, both on the workspace mount.
 
 ### OQ-6: OpenClaw Version Pinning
 
@@ -734,5 +906,5 @@ OpenClaw receives the prompt via CLI `--message` flag. For very long prompts (e.
 
 ---
 
-**Last Updated**: 2026-02-06
-**Status**: Draft — P0.5 proxy complete; pending OpenClaw container build validation
+**Last Updated**: 2026-02-07
+**Status**: Draft — P0.5 proxy complete; P0 (get OpenClaw running) in progress

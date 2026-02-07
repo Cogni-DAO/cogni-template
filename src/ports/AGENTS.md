@@ -69,6 +69,7 @@ Ports describe _what_ the domain needs from external services, not _how_ they wo
   - ScheduleRunRepository (run ledger: createRun, markRunStarted, markRunCompleted)
   - SandboxRunnerPort (runOnce; one-shot container execution with optional LLM proxy)
   - SandboxRunSpec, SandboxRunResult, SandboxLlmProxyConfig (sandbox execution types)
+  - SandboxProgramContract (stdout JSON envelope for sandbox agent output; matches OpenClaw --json format)
   - Grant errors (GrantNotFoundError, GrantExpiredError, GrantRevokedError, GrantScopeMismatchError)
   - Schedule errors (ScheduleNotFoundError, ScheduleAccessDeniedError, InvalidCronExpressionError, InvalidTimezoneError)
 - **Routes:** none

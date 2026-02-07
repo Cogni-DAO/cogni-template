@@ -16,10 +16,12 @@
  */
 
 import {
+  type AgentCatalogProvider,
   AggregatingAgentCatalog,
   LangGraphDevAgentCatalogProvider,
   LangGraphInProcAgentCatalogProvider,
 } from "@/adapters/server";
+import { SandboxAgentCatalogProvider } from "@/adapters/server/sandbox/sandbox-agent-catalog.provider";
 import type { AgentDescriptor } from "@/ports";
 import { serverEnv } from "@/shared/env";
 
@@ -39,10 +41,15 @@ export function createAgentCatalog(): {
   listAgents(): readonly AgentDescriptor[];
 } {
   // Per MUTUAL_EXCLUSION: choose provider based on LANGGRAPH_DEV_URL env
-  const devUrl = serverEnv().LANGGRAPH_DEV_URL;
-  const providers = devUrl
+  const env = serverEnv();
+  const providers: AgentCatalogProvider[] = env.LANGGRAPH_DEV_URL
     ? [new LangGraphDevAgentCatalogProvider()]
     : [new LangGraphInProcAgentCatalogProvider()];
+
+  // Add sandbox agents when LITELLM_MASTER_KEY is configured
+  if (env.LITELLM_MASTER_KEY) {
+    providers.push(new SandboxAgentCatalogProvider());
+  }
 
   return new AggregatingAgentCatalog(providers);
 }

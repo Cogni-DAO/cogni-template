@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-05
+- **Last reviewed:** 2026-02-07
 - **Status:** stable
 
 ## Purpose
@@ -33,7 +33,7 @@ Static test data for consistent test scenarios across unit and integration tests
 - **Routes:** none
 - **CLI:** none
 - **Env/Config keys:** none
-- **Files considered API:** all .json files, auth/\*.ts, wallet/\*.ts, db-utils.ts, ai/\*.ts, env/\*.ts, scheduling/\*.ts, temporal/\*.ts
+- **Files considered API:** all .json files, auth/\*.ts, wallet/\*.ts, db-utils.ts, ai/\*.ts, env/\*.ts, scheduling/\*.ts, temporal/\*.ts, sandbox/\*.json
 
 ## Responsibilities
 

@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-02-05
+- **Last reviewed:** 2026-02-07
 - **Status:** stable
 
 ## Purpose
@@ -77,6 +77,7 @@ System setup installers were moved to `platform/bootstrap/` and are out of scope
 - This directory **does**:
   - Dependency injection wiring with singleton container
   - Factory functions for adapter construction (e.g., createInProcGraphExecutor, createAgentCatalog)
+  - Sandbox provider registration (LazySandboxGraphProvider + SandboxAgentCatalogProvider, gated by LITELLM_MASTER_KEY; sandbox adapter loaded via dynamic import to avoid Turbopack bundling native deps)
   - Discovery factory for agent listing (listAgentsForApi per DISCOVERY_PIPELINE invariant)
   - Environment-based adapter selection (APP_ENV=test → fakes, production → real adapters including RipgrepAdapter)
   - Logger initialization (one per process)
