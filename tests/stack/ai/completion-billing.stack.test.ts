@@ -21,7 +21,7 @@ vi.mock("@/app/_lib/auth/session", () => ({
   getSessionUser: vi.fn(),
 }));
 
-import { TEST_MODEL_ID } from "@tests/_fakes";
+import { createCompletionRequest } from "@tests/_fakes";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST } from "@/app/api/v1/ai/completion/route";
@@ -71,19 +71,13 @@ describe("Completion Billing Stack Test", () => {
       isDefault: true,
     });
 
-    const requestBody = {
-      messages: [
-        {
-          role: "user",
-          content: "Say 'hello' in one word.",
-        },
-      ],
-      model: TEST_MODEL_ID,
-    };
-
     const req = new NextRequest("http://localhost:3000/api/v1/ai/completion", {
       method: "POST",
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify(
+        createCompletionRequest({
+          messages: [{ role: "user", content: "Say 'hello' in one word." }],
+        })
+      ),
     });
 
     // Act
@@ -197,14 +191,9 @@ describe("Completion Billing Stack Test", () => {
       isDefault: true,
     });
 
-    const requestBody = {
-      messages: [{ role: "user", content: "Hello" }],
-      model: TEST_MODEL_ID,
-    };
-
     const req = new NextRequest("http://localhost:3000/api/v1/ai/completion", {
       method: "POST",
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify(createCompletionRequest()),
     });
 
     // Act

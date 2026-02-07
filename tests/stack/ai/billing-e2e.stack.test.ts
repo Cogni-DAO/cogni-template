@@ -22,7 +22,7 @@ vi.mock("@/app/_lib/auth/session", () => ({
   getSessionUser: vi.fn(),
 }));
 
-import { TEST_MODEL_ID } from "@tests/_fakes";
+import { createCompletionRequest, TEST_MODEL_ID } from "@tests/_fakes";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { POST as completionPOST } from "@/app/api/v1/ai/completion/route";
@@ -87,10 +87,12 @@ describe("Billing E2E Stack Test", () => {
       "http://localhost:3000/api/v1/ai/completion",
       {
         method: "POST",
-        body: JSON.stringify({
-          messages: [{ role: "user", content: "Hello E2E" }],
-          model: TEST_MODEL_ID,
-        }),
+        body: JSON.stringify(
+          createCompletionRequest({
+            messages: [{ role: "user", content: "Hello E2E" }],
+            model: TEST_MODEL_ID,
+          })
+        ),
       }
     );
 

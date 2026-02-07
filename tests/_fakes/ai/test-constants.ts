@@ -19,6 +19,13 @@
 export const TEST_MODEL_ID = "test-model";
 
 /**
+ * Canonical test graph name
+ * Use this in ALL tests requiring a graphName parameter (required since P0.75)
+ * Per GRAPH_ID_NAMESPACED: format is ${providerId}:${graphName}
+ */
+export const TEST_GRAPH_NAME = "langgraph:poet";
+
+/**
  * Alternative models for multi-model test scenarios
  */
 export const TEST_MODEL_FREE = "test-free-model";
