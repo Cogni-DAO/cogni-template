@@ -1,68 +1,165 @@
-# Handoff: Sandbox P0.5 → P0.75
-
-## Goal
-
-Ship sandboxed agent containers with LLM access, billing attribution, and Langfuse observability — all through the standard graph execution pipeline. Users select a sandbox agent in chat UI, it runs in a `network=none` Docker container with LLM access via unix socket proxy, and billing/observability works identically to in-proc graphs.
+# Handoff: OpenClaw Sandbox P0 — Container Proven, Proxy Integration Next
 
 ## Branch
 
-`feat/sandbox-0.5` — PR #328 open against `staging`.
+`feat/sandbox-0.75` — working off `feat/sandbox-0.5` (PR #328 against `staging`).
 
-## Status
+## What Was Done This Session
 
-**P0.5 (proxy plumbing): COMPLETE.** Socket bridge, nginx proxy container, socat, security hardening, tests — all done.
+### 1. Deep OpenClaw source audit (verified against v2026.2.4)
 
-**P0.75 (E2E graph execution): IN PROGRESS — doc spec complete, code not started.**
+Found and fixed three spec errors by reading OpenClaw source:
 
-Last session focused on aligning sandbox billing headers with the in-proc `LiteLlmAdapter` path. Key decision made and documented:
+- **Config env var**: `OPENCLAW_CONFIG_DIR` → `OPENCLAW_CONFIG_PATH` (full file path, not directory). Source: `src/config/paths.ts:95-104`
+- **State dir**: Must set `OPENCLAW_STATE_DIR=/workspace/.openclaw-state` to prevent writes to readonly rootfs. Source: `src/config/paths.ts:49-74`
+- **Dotenv risk**: `loadDotEnv()` loads `.env` from CWD + `$STATE_DIR/.env`. Must ensure no `.env` present. Source: `src/infra/dotenv.ts:6-20`
+- **HOME**: Set to `/workspace` (writable) not `/home/sandboxer` (readonly rootfs)
 
-- `x-litellm-end-user-id` = `billingAccountId` (NOT `runId/attempt`) — matches in-proc, keeps activity dashboard working
-- Run correlation via `x-litellm-metadata` JSON header (carries `run_id`, `attempt`, Langfuse fields)
-- `litellm_call_id` captured in nginx audit log for deterministic reconciliation
+### 2. LiteLLM metadata header bug fix
 
-**Uncommitted doc edits exist** — the nginx template, SANDBOXED_AGENTS.md, EXTERNAL_EXECUTOR_BILLING.md, and SANDBOX_SCALING.md all have unstaged changes reflecting this decision. Review with `git diff`.
+**nginx.conf.template line 51**: `x-litellm-metadata` → `x-litellm-spend-logs-metadata`. The old header name was silently ignored by LiteLLM — spend logs had no `run_id` correlation, breaking per-run billing reconciliation. Fixed in template + all 6 doc references.
 
-**Developer's code changes were stashed** (userId plumbing, sock/:ro mount, symlink hardening). Check `git stash list`.
+### 3. Built `cogni-sandbox-openclaw:latest` image
 
-## What Needs Doing (P0.75)
+Thin layer: `FROM openclaw:local` + socat + our entrypoint.sh. 4-second build. Files:
 
-The spec is in `docs/SANDBOXED_AGENTS.md` under "P0.75: Sandbox Agent via Graph Execution (End-to-End)". Key deliverables:
+- `services/sandbox-openclaw/Dockerfile`
+- `services/sandbox-openclaw/entrypoint.sh` (copied from `services/sandbox-runtime/`)
 
-1. **`SandboxGraphProvider`** — implements `GraphProvider`, routes `sandbox:*` graphIds
-2. **`SandboxAgentCatalogProvider`** — exposes `sandbox:agent` in agent catalog (gated by `SANDBOX_ENABLED`)
-3. **Bootstrap wiring** — register both providers, wire `SandboxRunnerAdapter` with `litellmMasterKey`
-4. **Minimal agent script** (`services/sandbox-runtime/agent/run.mjs`) — reads messages JSON, calls `OPENAI_API_BASE`, prints response
-5. **Billing reconciliation** — query LiteLLM `/spend/logs?end_user=billingAccountId`, filter by `metadata.run_id`
-6. **Nginx template** — wire `BILLING_ACCOUNT_ID` + `LITELLM_METADATA_JSON` substitution vars through `LlmProxyConfig` → `generateConfig`
+### 4. Proved OpenClaw boots clean in sandbox (no LLM)
 
-## Critical Design Decisions
+```bash
+docker run --rm --network=none \
+  -e HOME=/workspace \
+  -e OPENCLAW_CONFIG_PATH=/workspace/.openclaw/openclaw.json \
+  -e OPENCLAW_STATE_DIR=/workspace/.openclaw-state \
+  -e OPENCLAW_LOAD_SHELL_ENV=0 \
+  -v /tmp/workspace:/workspace:rw \
+  openclaw:local node /app/dist/index.js agent --local --agent main \
+    --message "Say hello" --json --timeout 10
+```
 
-- **`end_user` = `billingAccountId` everywhere** — see `docs/EXTERNAL_EXECUTOR_BILLING.md` invariant #1
-- **Metadata parity** — sandbox proxy must inject the same LiteLLM metadata fields as `src/adapters/server/ai/litellm.adapter.ts:174-183` (the in-proc path)
-- **sock/ vs conf/ split** — `LlmProxyManager` separates socket dir (shared with sandbox) from config dir (proxy-only, contains secrets). See commit `a2ba29b2`.
-- **No streaming in P0.75** — agent runs to completion, entire response emitted as `text_delta`. Keep it boring.
+Results:
+
+- No setup/onboarding phase (`skipBootstrap: true` works)
+- Config loaded correctly (provider: "cogni", model as configured)
+- State written to `OPENCLAW_STATE_DIR` (not readonly rootfs)
+- Valid JSON envelope on stdout matching `SandboxProgramContract`
+- Missing workspace files (AGENTS.md, SOUL.md) handled gracefully
+- Timed out reaching LLM (expected — no proxy)
+
+### 5. Proved OpenClaw completes LLM call via LiteLLM
+
+Used `--network=host` to bypass proxy and hit LiteLLM directly at `localhost:4000` with nemotron-nano-30b (free model). This is NOT the production path — just proves the agent loop works.
+
+```json
+{
+  "payloads": [{ "text": "hello from sandbox", "mediaUrl": null }],
+  "meta": {
+    "durationMs": 21944,
+    "agentMeta": {
+      "provider": "cogni",
+      "model": "nemotron-nano-30b",
+      "usage": { "input": 1940, "output": 188, "total": 2128 }
+    },
+    "aborted": false
+  }
+}
+```
+
+### 6. Added P0 section to OPENCLAW_SANDBOX_SPEC.md
+
+New section "P0: Get OpenClaw Running in Sandbox (ASAP)" with Dockerfile, env vars, config, invocation, and smoke test checklist. Separates P0 (container works) from P0.75 (graph provider wiring).
+
+## What's NOT Done — Next Steps
+
+### Immediate: Run OpenClaw through the socket proxy (`network=none`)
+
+The LLM call was proven with `--network=host` (direct LiteLLM access). The next step is proving it works through the **actual proxy infrastructure** (`network=none` + socat + nginx proxy + socket bridge). This is the production path.
+
+Use `SandboxRunnerAdapter` with `imageName: "cogni-sandbox-openclaw:latest"` and pass OpenClaw env vars via `llmProxy.env`:
+
+```typescript
+runner.runOnce({
+  runId,
+  workspacePath: workspace, // contains .openclaw/openclaw.json + .cogni/prompt.txt
+  argv: [
+    "node /app/dist/index.js agent --local --agent main " +
+      '--message "$(cat /workspace/.cogni/prompt.txt)" --json --timeout 55',
+  ],
+  limits: { maxRuntimeSec: 60, maxMemoryMb: 512 },
+  llmProxy: {
+    enabled: true,
+    billingAccountId: "test-billing",
+    attempt: 0,
+    env: {
+      HOME: "/workspace",
+      OPENCLAW_CONFIG_PATH: "/workspace/.openclaw/openclaw.json",
+      OPENCLAW_STATE_DIR: "/workspace/.openclaw-state",
+      OPENCLAW_LOAD_SHELL_ENV: "0",
+    },
+  },
+});
+```
+
+The fixture config at `tests/_fixtures/sandbox/openclaw-config.json` already has `baseUrl: "http://localhost:8080/v1"` (the socat bridge endpoint).
+
+A diagnostic script exists at `scripts/diag-openclaw-sandbox.mjs` but needs `tsx` to run (imports TS). It failed on the proxy readiness check — likely because the initial attempt used `litellmHost: "host.docker.internal:4000"` instead of the default `litellm:4000` (Docker DNS). This was partially fixed but not re-tested. The default should work.
+
+### After proxy works: Write the stack test
+
+`tests/stack/sandbox/sandbox-openclaw.stack.test.ts` — modeled after `sandbox-llm-completion.stack.test.ts`. Use fixtures from `tests/_fixtures/sandbox/`. Gates:
+
+- OpenClaw boots in sandbox
+- LLM call completes via proxy
+- JSON output matches contract
+- No secrets in container env
+- Proxy audit log has entries
+
+### After tests: P0.75 wiring (separate PR scope)
+
+- `SandboxGraphProvider` (parses OpenClaw JSON → AiEvents)
+- `SandboxAgentCatalogProvider` (lists `sandbox:agent`)
+- Bootstrap wiring in `graph-executor.factory.ts` + `agent-discovery.ts`
+- Billing reconciliation via LiteLLM `/spend/logs`
+
+### Parallel track: Canary agent script (run.mjs)
+
+A separate developer is implementing `services/sandbox-runtime/agent/run.mjs` — a 25-line script that conforms to the same `SandboxProgramContract` envelope format. Feedback given: output `{ payloads: [{text}], meta: {error?, durationMs?} }` not plain text. The `SandboxGraphProvider` will parse both run.mjs and OpenClaw output identically.
 
 ## Key Files
 
-| File                                                        | What                                                                              |
-| ----------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `docs/SANDBOXED_AGENTS.md`                                  | Master spec — invariants, phase checklists, architecture diagrams                 |
-| `docs/EXTERNAL_EXECUTOR_BILLING.md`                         | Billing reconciliation pattern (recently updated)                                 |
-| `docs/SANDBOX_SCALING.md`                                   | P1+ scaling roadmap, threat model                                                 |
-| `platform/infra/services/sandbox-proxy/nginx.conf.template` | Nginx config template (needs `BILLING_ACCOUNT_ID` + `LITELLM_METADATA_JSON` vars) |
-| `src/adapters/server/sandbox/llm-proxy-manager.ts`          | Proxy container lifecycle (start/stop/cleanup, `generateConfig` substitution)     |
-| `src/adapters/server/sandbox/sandbox-runner.adapter.ts`     | Docker container runner (`runOnce()`)                                             |
-| `src/ports/sandbox-runner.port.ts`                          | Port interfaces (`SandboxRunSpec`, `SandboxLlmProxyConfig`)                       |
-| `src/adapters/server/ai/litellm.adapter.ts:169-184`         | In-proc LiteLLM request body — **the standard** sandbox must match                |
-| `src/ports/llm.port.ts:103-133`                             | `LlmCaller` / `GraphLlmCaller` — caller context flowing through graph execution   |
-| `src/ports/graph-executor.port.ts:30-62`                    | `GraphRunRequest` — what `SandboxGraphProvider.runGraph()` receives               |
-| `src/features/ai/services/ai_runtime.ts`                    | `RunEventRelay` pump+fanout — how billing events flow                             |
-| `src/features/ai/services/billing.ts`                       | `commitUsageFact()` — the one ledger writer                                       |
-| `tests/stack/sandbox/sandbox-llm-completion.stack.test.ts`  | P0.5 stack tests                                                                  |
-| `tests/_fixtures/sandbox/fixtures.ts`                       | Shared sandbox test helpers                                                       |
+| File                                                        | What                                         |
+| ----------------------------------------------------------- | -------------------------------------------- |
+| `docs/OPENCLAW_SANDBOX_SPEC.md`                             | Master spec — P0 section has verified steps  |
+| `docs/SANDBOXED_AGENTS.md`                                  | Parent spec — invariants 1-12, phase defs    |
+| `services/sandbox-openclaw/Dockerfile`                      | 6-line thin image (openclaw:local + socat)   |
+| `services/sandbox-openclaw/entrypoint.sh`                   | socat bridge + bash -lc exec                 |
+| `platform/infra/services/sandbox-proxy/nginx.conf.template` | Proxy config (header bug fixed)              |
+| `src/adapters/server/sandbox/sandbox-runner.adapter.ts`     | Container lifecycle (P0.5, done)             |
+| `src/adapters/server/sandbox/llm-proxy-manager.ts`          | Proxy lifecycle (P0.5, done)                 |
+| `src/ports/sandbox-runner.port.ts`                          | Port interfaces                              |
+| `tests/_fixtures/sandbox/openclaw-config.json`              | Working config fixture (proxy endpoint)      |
+| `tests/_fixtures/sandbox/openclaw-expected-output.json`     | Example successful output                    |
+| `tests/_fixtures/sandbox/fixtures.ts`                       | Test helpers (runWithProxy, createWorkspace) |
+| `scripts/diag-openclaw-sandbox.mjs`                         | Diagnostic script (WIP, needs tsx)           |
 
-## Validation
+## Commits This Session
 
-- `pnpm check` — fast lint/type gate
-- `pnpm test:stack:dev -- sandbox-llm` — P0.5 proxy tests (requires `dev:stack:test` running)
-- P0.75 merge gates listed in `docs/SANDBOXED_AGENTS.md` under "Tests (Merge Gates)" for P0.75
+```
+f30d9758 fix(sandbox): correct LiteLLM metadata header and add P0 OpenClaw spec
+```
+
+Uncommitted: Dockerfile, entrypoint, fixtures, diag script, spec progress updates.
+
+## Gotchas for Next Agent
+
+- `OPENCLAW_CONFIG_PATH` is a **file path** (not dir). Use `/workspace/.openclaw/openclaw.json`.
+- `loadDotEnv()` loads from CWD + `$STATE_DIR/.env` — ensure no `.env` in workspace.
+- Proxy header is `x-litellm-spend-logs-metadata` (NOT `x-litellm-metadata`).
+- OpenClaw uses uid 1000 (`node` user) in its image, but `SandboxRunnerAdapter` overrides to uid 1001 (`sandboxer`). Works fine — home dir irrelevant since `HOME=/workspace`.
+- Docker tmpfs at `/run` masks volume mounts. Socket volume is at `/llm-sock/` (top-level).
+- `openclaw:local` is 4GB. Image is already built locally. Don't try to slim it in P0.
+- Use `nemotron-nano-30b` for testing (free model via OpenRouter).
+- The `systemPromptReport` in OpenClaw output is verbose (~100 lines). Provider should only parse `payloads` and `meta` (top-level).
+- OpenClaw env var `OPENCLAW_LOAD_SHELL_ENV` defaults to OFF — set to `0` explicitly as defense-in-depth.

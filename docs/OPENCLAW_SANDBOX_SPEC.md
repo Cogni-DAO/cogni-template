@@ -612,10 +612,19 @@ ENTRYPOINT ["/usr/local/bin/sandbox-entrypoint.sh"]
 
 Reuses existing `services/sandbox-runtime/entrypoint.sh` (socat bridge + `bash -lc "$@"`). No multi-stage build, no file pruning, no user creation (adapter sets `User` at container create time).
 
-- [ ] Create `services/sandbox-openclaw/Dockerfile` (thin layer as above)
-- [ ] Copy `entrypoint.sh` from `services/sandbox-runtime/` (or symlink)
-- [ ] Build: `docker build -t cogni-sandbox-openclaw services/sandbox-openclaw`
-- [ ] Validate: `docker run --rm cogni-sandbox-openclaw node /app/dist/index.js --version`
+- [x] Create `services/sandbox-openclaw/Dockerfile` (thin layer as above)
+- [x] Copy `entrypoint.sh` from `services/sandbox-runtime/`
+- [x] Build: `docker build -t cogni-sandbox-openclaw services/sandbox-openclaw` (4s build)
+- [x] Validate: `docker run --rm cogni-sandbox-openclaw node /app/dist/index.js --version` → `2026.2.4`
+
+**Verified (2026-02-07)**: Cold boot test with `network=none`, pre-written `openclaw.json`, no proxy:
+
+- Config loaded correctly (`provider: "cogni"`, `model: "gemini-2.5-flash"`)
+- No setup/onboarding phase (`skipBootstrap: true` works)
+- State written to `OPENCLAW_STATE_DIR` (sessions, transcripts) — not to readonly rootfs
+- Valid JSON envelope on stdout (`payloads`, `meta`, `agentMeta`)
+- Timed out reaching LLM at localhost:8080 (expected — no proxy in this test)
+- Missing workspace files (AGENTS.md, SOUL.md) handled gracefully (noted as missing, no crash)
 
 #### Environment & Config (SECRETS_HOST_ONLY + ReadonlyRootfs)
 
@@ -730,10 +739,10 @@ node /app/dist/index.js agent \
 
 #### Smoke Tests (P0 Merge Gates)
 
-- [ ] **OpenClaw boots**: `node /app/dist/index.js --version` → `2026.2.4`
+- [x] **OpenClaw boots**: `node /app/dist/index.js --version` → `2026.2.4`
 - [ ] **Network isolated**: `curl` from container fails
-- [ ] **LLM call works**: OpenClaw agent calls `/v1/chat/completions` via proxy, gets response
-- [ ] **JSON output parses**: stdout is valid JSON with `payloads` and `meta`
+- [x] **LLM call works**: OpenClaw agent calls LiteLLM (nemotron-nano-30b), gets response "hello from sandbox" (22s, 2128 tokens)
+- [x] **JSON output parses**: stdout is valid JSON with `payloads` and `meta` — see `tests/_fixtures/sandbox/openclaw-expected-output.json`
 - [ ] **No secrets in container**: env has no `LITELLM_MASTER_KEY`
 - [ ] **Spend logs have run_id**: LiteLLM spend logs contain entry with `metadata.run_id` matching our `runId`
 
@@ -748,9 +757,12 @@ node /app/dist/index.js agent \
 
 | File                                                        | Status  |
 | ----------------------------------------------------------- | ------- |
-| `services/sandbox-openclaw/Dockerfile`                      | Pending |
-| `services/sandbox-openclaw/entrypoint.sh`                   | Copy    |
-| `platform/infra/services/sandbox-proxy/nginx.conf.template` | Fix     |
+| `services/sandbox-openclaw/Dockerfile`                      | Done    |
+| `services/sandbox-openclaw/entrypoint.sh`                   | Done    |
+| `platform/infra/services/sandbox-proxy/nginx.conf.template` | Fixed   |
+| `tests/_fixtures/sandbox/openclaw-config.json`              | Done    |
+| `tests/_fixtures/sandbox/openclaw-expected-output.json`     | Done    |
+| `scripts/diag-openclaw-sandbox.mjs`                         | WIP     |
 | `tests/stack/sandbox/sandbox-openclaw.stack.test.ts`        | Pending |
 
 ---
