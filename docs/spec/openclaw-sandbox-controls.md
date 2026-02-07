@@ -1,7 +1,37 @@
+---
+id: openclaw-sandbox-controls-spec
+type: spec
+title: OpenClaw Sandbox Controls Design
+status: active
+spec_state: draft
+trust: draft
+summary: Host-side git relay, dynamic agent catalog, credential strategy, and anti-patterns for sandbox code agents
+read_when: Implementing sandbox agent variants, git relay, or sandbox dashboard
+owner: derekg1729
+created: 2026-02-07
+verified: 2026-02-07
+tags: [sandbox, openclaw]
+---
+
 # OpenClaw Sandbox Controls Design
 
 > [!CRITICAL]
 > Sandbox agents produce code changes inside `network=none` containers. **Host-side git relay** handles all credential-bearing operations (clone, push, PR creation). Sandbox never holds git credentials. UI surfaces are Cogni-native (Next.js), not OpenClaw's gateway UI.
+
+## Context
+
+The sandbox runtime (SANDBOXED_AGENTS.md, invariants 1-19) provides isolated container execution. This spec extends that foundation with controls for OpenClaw-specific agent variants, host-side git relay for code PRs, dynamic catalog discovery, and credential management.
+
+## Goal
+
+Define the invariants and design contracts for sandbox agents that produce code changes: how agent variants are registered, how git credentials are kept off the sandbox, how the UI discovers agents dynamically, and how the credential strategy evolves from env vars to GitHub App installation auth.
+
+## Non-Goals
+
+- OpenClaw's gateway UI or Lit-based Control UI (COGNI_NATIVE_UI)
+- Passing git credentials into sandbox containers (SECRETS_HOST_ONLY)
+- Building dashboard before git relay is operational (P2 condition)
+- Hot-reload agent configuration (requires git commit + deployment)
 
 ## Core Invariants
 
@@ -21,67 +51,7 @@
 
 ---
 
-## Implementation Checklist
-
-### P0: Dynamic Agent Catalog + OpenClaw Wiring
-
-Wire the existing `sandbox:agent` and new `sandbox:openclaw` into the live catalog API so the chat UI discovers them dynamically.
-
-- [ ] Replace hardcoded `AVAILABLE_GRAPHS` in `ChatComposerExtras` with `GET /api/v1/ai/agents` fetch (hook: `useAgents()`). This replaces all 5 entries (4 langgraph + 1 sandbox) — see `CATALOG_STATIC_IN_P0` TODO already in source.
-- [ ] Add `sandbox:openclaw` entry to `SANDBOX_AGENTS` registry in `sandbox-graph.provider.ts` with OpenClaw-specific image, argv, limits, and workspace setup
-- [ ] Add `sandbox:openclaw` to `SANDBOX_AGENT_DESCRIPTORS` in `sandbox-agent-catalog.provider.ts`
-- [ ] Create workspace setup function for OpenClaw: writes `.openclaw/openclaw.json`, `.cogni/prompt.txt`, `AGENTS.md`, `SOUL.md`
-- [ ] Add optional `image` field to `SandboxRunSpec` port type — per-run override of adapter's constructor-level `imageName` default (`cogni-sandbox-runtime:latest`)
-- [ ] In `SandboxRunnerAdapter.runOnce()`: use `spec.image ?? this.imageName` when creating the container
-
-#### Chores
-
-- [ ] Observability: add `agentVariant` field to sandbox log events (distinguishes `agent` vs `openclaw`)
-- [ ] Documentation: update [OPENCLAW_SANDBOX_SPEC.md](OPENCLAW_SANDBOX_SPEC.md) status
-
-### P1: Host-Side Git Relay
-
-Agent makes code changes and commits locally inside the sandbox. Host clones before, pushes after. Git relay is provider-level logic wrapping `runOnce()` — it does NOT belong in `SandboxRunSpec` (the port handles container execution only).
-
-- [ ] Pre-run in `SandboxGraphProvider`: host clones repo into `${workspacePath}/repo` (shallow, single-branch) using `GITHUB_TOKEN` for private repos
-- [ ] Post-run in `SandboxGraphProvider`: host reads `git log` + `git diff` from workspace to determine if changes exist
-- [ ] If changes: host pushes branch `sandbox/${runId}` using `GITHUB_TOKEN` from env
-- [ ] If changes + PR requested: host creates PR via GitHub API (`octokit` or `gh` CLI)
-- [ ] Return PR URL in `GraphFinal.content` (appended to agent response text)
-- [ ] Defer workspace cleanup until push completes (per invariant 23)
-
-### P2: Sandbox Dashboard + Metrics
-
-- [ ] Condition: P1 git relay is operational and agents are producing PRs
-- [ ] Add Prometheus counters in `SandboxGraphProvider`: `sandbox_runs_total{agent,status}`, `sandbox_run_duration_seconds{agent}`
-- [ ] Add `/sandbox` page: run history table (runId, agent, model, status, duration, cost, PR link)
-- [ ] Add per-run detail view: agent output, stderr diagnostics, proxy audit log, Langfuse trace link
-- [ ] Add Grafana dashboard using existing Alloy → Mimir pipeline
-- [ ] **Do NOT build preemptively** — dashboard value requires run volume from P1
-
-### P2: Agentic Evolution
-
-- [ ] Condition: P1 git relay operational, `sandbox:openclaw` producing useful runs
-- [ ] Dashboard-driven agent + skill creation: allow adding new OpenClaw agent personalities (model, skills, system prompt) from the Cogni dashboard. **Note:** config changes require git commit + deployment propagation to reach the full DAO deployment — this is not a hot-reload path.
-- [ ] Leverage OpenClaw's multi-agent routing: OpenClaw natively supports multiple agent configs (`agents.list` in `openclaw.json`) and `--agent <id>` selection. Today we hardcode `--agent main`. Evolve to let the Cogni graph selector choose which OpenClaw personality to invoke per-run (e.g., `researcher`, `coder`, `reviewer`), each with distinct model and skill sets.
-- [ ] Evaluate OpenClaw subagent spawning: a running agent can internally spawn sub-agents for parallel task decomposition (e.g., "research X while coding Y"). This works within our sandbox constraints (same LLM proxy socket, same container lifetime) but needs timeout budgeting — sub-agents share the `--timeout 540` / `maxRuntimeSec: 600` envelope.
-
----
-
-## File Pointers (P0 Scope)
-
-| File                                                            | Change                                                                               |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `src/features/ai/components/ChatComposerExtras.tsx`             | Replace `AVAILABLE_GRAPHS` with `useAgents()` hook (removes all 5 hardcoded entries) |
-| `src/features/ai/hooks/useAgents.ts`                            | New: fetch `GET /api/v1/ai/agents`, return `GraphOption[]`                           |
-| `src/adapters/server/sandbox/sandbox-graph.provider.ts`         | Add `sandbox:openclaw` to `SANDBOX_AGENTS` with image, argv, limits, workspace setup |
-| `src/adapters/server/sandbox/sandbox-agent-catalog.provider.ts` | Add `sandbox:openclaw` descriptor                                                    |
-| `src/ports/sandbox-runner.port.ts`                              | Add optional `image?: string` to `SandboxRunSpec`                                    |
-| `src/adapters/server/sandbox/sandbox-runner.adapter.ts`         | Use `spec.image ?? this.imageName` in container creation                             |
-
----
-
-## Design Decisions
+## Design
 
 ### 1. Agent Variant Registry (not separate providers)
 
@@ -219,16 +189,24 @@ export function useAgents() {
 
 ---
 
-## Related Documents
+## Acceptance Checks
 
-- [SANDBOXED_AGENTS.md](SANDBOXED_AGENTS.md) — Core sandbox invariants 1–12, phase definitions
-- [OPENCLAW_SANDBOX_SPEC.md](OPENCLAW_SANDBOX_SPEC.md) — OpenClaw container image, config, I/O protocol
-- [TENANT_CONNECTIONS_SPEC.md](TENANT_CONNECTIONS_SPEC.md) — P2 credential management via ConnectionBroker
-- [SANDBOX_SCALING.md](SANDBOX_SCALING.md) — Proxy architecture, threat model
-- [GRAPH_EXECUTION.md](GRAPH_EXECUTION.md) — GraphExecutorPort, AggregatingGraphExecutor
-- [AGENT_DISCOVERY.md](AGENT_DISCOVERY.md) — AgentCatalogPort, discovery pipeline
+**Automated:**
 
----
+- `pnpm check:docs` — validates spec frontmatter and required headings
 
-**Last Updated**: 2026-02-07
-**Status**: Draft
+**Manual:**
+
+1. Verify `GET /api/v1/ai/agents` returns both langgraph and sandbox agents
+2. Verify sandbox container has no network access and no git credentials
+3. Verify host-side git relay pushes branch after successful agent run (P1)
+
+## Related
+
+- **Initiative:** [ini.sandboxed-agents](../../work/initiatives/ini.sandboxed-agents.md) — Roadmap, deliverables, file pointers
+- [Sandboxed Agents](../SANDBOXED_AGENTS.md) — Core sandbox invariants 1–12, phase definitions (pending migration)
+- [OpenClaw Sandbox Spec](../OPENCLAW_SANDBOX_SPEC.md) — OpenClaw container image, config, I/O protocol (pending migration)
+- [Tenant Connections](tenant-connections.md) — P2 credential management via ConnectionBroker
+- [Sandbox Scaling](../SANDBOX_SCALING.md) — Proxy architecture, threat model (pending migration)
+- [Graph Execution](../GRAPH_EXECUTION.md) — GraphExecutorPort (pending migration)
+- [Agent Discovery](agent-discovery.md) — AgentCatalogPort, discovery pipeline
