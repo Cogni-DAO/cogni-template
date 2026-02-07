@@ -66,7 +66,7 @@ Provide a reproducible, open-source foundation for autonomous AI-powered organiz
 
 ### AI & Evals
 
-- [AI Setup Spec](docs/AI_SETUP_SPEC.md)
+- [AI Setup Spec](docs/spec/ai-setup.md)
 - [Prompt Registry Spec](docs/spec/prompt-registry.md)
 - [Tools Authoring](docs/TOOLS_AUTHORING.md)
 - [Graph Execution](docs/GRAPH_EXECUTION.md)
