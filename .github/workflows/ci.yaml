@@ -251,6 +251,8 @@ jobs:
       AUTH_SECRET: tNf5lFM9yMhdgwS5yeQB8Y2kmigblBqobkvI2XN2brg=
       METRICS_TOKEN: test-metrics-token-for-stack-tests
       SCHEDULER_API_TOKEN: test-scheduler-api-token-for-ci-min32chars
+      # LiteLLM test config routes to mock-openai-api (no real provider keys)
+      LITELLM_CONFIG: litellm.test.config.yaml
       # Temporal env vars for HOST-based test process (vitest runs on host, not in Docker)
       # App container gets temporal:7233 from docker-compose.dev.yml; tests need localhost:7233
       TEMPORAL_ADDRESS: localhost:7233
@@ -367,7 +369,7 @@ jobs:
           # Temporal services required for schedule CRUD + execution tests
           # scheduler-worker required for workflow execution tests
           docker compose -f platform/infra/services/runtime/docker-compose.dev.yml \
-            up -d app postgres litellm caddy temporal-postgres temporal temporal-ui scheduler-worker git-sync
+            up -d app postgres litellm mock-llm caddy temporal-postgres temporal temporal-ui scheduler-worker git-sync
 
       - name: Probe container-boundary (git-sync volume)
         run: platform/ci/scripts/probe-repo-volume.sh

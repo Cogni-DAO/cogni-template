@@ -25,7 +25,7 @@
     "dev": "dotenv -e .env.local -- next dev",
     "dev:pretty": "pnpm dev | pino-pretty -S",
     "dev:infra": "docker network create cogni-edge || true && docker compose --env-file .env.local -f platform/infra/services/runtime/docker-compose.dev.yml up -d git-sync postgres litellm loki grafana alloy temporal-postgres temporal temporal-ui scheduler-worker",
-    "dev:infra:test": "docker network create cogni-edge || true && DATABASE_SERVICE_URL_DOCKER=postgresql://app_service:service_password@postgres:5432/cogni_template_stack_test docker compose --env-file .env.test -f platform/infra/services/runtime/docker-compose.dev.yml up -d git-sync postgres litellm loki grafana alloy temporal-postgres temporal temporal-ui scheduler-worker",
+    "dev:infra:test": "docker network create cogni-edge || true && DATABASE_SERVICE_URL_DOCKER=postgresql://app_service:service_password@postgres:5432/cogni_template_stack_test docker compose --env-file .env.test -f platform/infra/services/runtime/docker-compose.dev.yml up -d git-sync postgres litellm mock-llm loki grafana alloy temporal-postgres temporal temporal-ui scheduler-worker",
     "dev:infra:down": "pnpm sourcecred:down && docker compose --env-file .env.local -f platform/infra/services/runtime/docker-compose.dev.yml down",
     "dev:stack": "pnpm dev:infra && pnpm dev",
     "dev:stack:pretty": "pnpm dev:infra && pnpm dev:pretty",

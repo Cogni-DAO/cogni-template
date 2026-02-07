@@ -89,7 +89,7 @@ services:
       - LANGFUSE_HOST=${LANGFUSE_BASE_URL}
       - LANGFUSE_TRACING_ENVIRONMENT=${DEPLOY_ENVIRONMENT:-local}
     volumes:
-      - ./configs/litellm.config.yaml:/app/config.yaml:ro
+      - ./configs/${LITELLM_CONFIG:-litellm.config.yaml}:/app/config.yaml:ro
     command: --config /app/config.yaml --host 0.0.0.0 --port 4000
     healthcheck:
       test:
@@ -101,6 +101,17 @@ services:
       timeout: 3s
       retries: 3
       start_period: 30s
+
+  mock-llm:
+    image: zerob13/mock-openai-api:latest
+    container_name: mock-llm
+    networks:
+      - cogni-edge
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/v1/models"]
+      interval: 5s
+      timeout: 2s
+      retries: 5
 
   caddy:
     image: caddy:2
