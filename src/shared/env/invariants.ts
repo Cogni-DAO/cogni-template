@@ -21,7 +21,7 @@ interface ParsedEnv {
   NODE_ENV: "development" | "test" | "production";
   DATABASE_URL: string;
   DATABASE_SERVICE_URL: string;
-  LITELLM_MASTER_KEY?: string | undefined;
+  LITELLM_MASTER_KEY: string;
 }
 
 /**
@@ -118,13 +118,6 @@ let _prodSecretsValidated = false;
 export function assertRuntimeSecrets(env: ParsedEnv): void {
   // Only memoize in production (env is immutable after deployment)
   if (env.APP_ENV === "production" && _prodSecretsValidated) return;
-
-  // LITELLM_MASTER_KEY required in all modes (test stacks use real LiteLLM with mock backend)
-  if (!env.LITELLM_MASTER_KEY || env.LITELLM_MASTER_KEY.trim() === "") {
-    throw new RuntimeSecretError(
-      "LITELLM_MASTER_KEY is required in all environments (test stacks use real LiteLLM with mock-openai-api backend)"
-    );
-  }
 
   // Set flag only in production
   if (env.APP_ENV === "production") {

@@ -75,7 +75,7 @@ export const serverSchema = z.object({
         ? "http://litellm:4000"
         : "http://localhost:4000"
     ),
-  LITELLM_MASTER_KEY: z.string().min(1).optional(),
+  LITELLM_MASTER_KEY: z.string().min(1),
 
   // TODO: Remove when proper wallet→key registry exists (MVP crutch)
   // Wallet link MVP - single API key for all wallets (temporary)

@@ -71,7 +71,7 @@ export function createGraphExecutor(
   const env = serverEnv();
   const providers: GraphProvider[] = [
     langGraphProvider,
-    new LazySandboxGraphProvider(env.LITELLM_MASTER_KEY!),
+    new LazySandboxGraphProvider(env.LITELLM_MASTER_KEY),
   ];
 
   // Create aggregating executor with all configured providers
