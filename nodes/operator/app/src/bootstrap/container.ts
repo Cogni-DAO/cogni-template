@@ -469,7 +469,10 @@ function getCollectRegistries(): DefaultRegistries {
           (s) => s.sourceRefs ?? []
         )
       : [];
-    _collectRegistries = createDefaultRegistries({ excludedLogins, sourceRefs });
+    _collectRegistries = createDefaultRegistries({
+      excludedLogins,
+      sourceRefs,
+    });
   }
   return _collectRegistries;
 }
