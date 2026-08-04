@@ -1644,6 +1644,26 @@ else
   existing_temporal_pw="$(bao_get_field _shared TEMPORAL_DB_PASSWORD)"
   [[ -n "$existing_temporal_pw" ]] && TEMPORAL_DB_PASSWORD="$existing_temporal_pw"
   seed_kv _shared TEMPORAL_DB_PASSWORD "$TEMPORAL_DB_PASSWORD"
+
+  # DOLTGRES_PASSWORD — the doltgres `postgres` superuser, baked into the volume at
+  # first-init and IMMUTABLE post-init (doltgres can't ALTER the superuser; databases.md
+  # §5.2). Same shared-infra DB-cred class as OPENFGA/TEMPORAL above and MUST be seeded the
+  # same SET-ONCE way. It was the one left out: deploy-infra falls back to
+  # `derive_secret doltgres-root` = sha256(POSTGRES_ROOT_PASSWORD) when OpenBao is empty, so
+  # a root rotation (or genesis-derive ≠ later value) drifts the rendered password from the
+  # volume's frozen superuser → provision.sh `-U postgres` fails → dead knowledge plane
+  # (preview 2026-08-04). Mint ONCE (randHex, NOT derived) + reuse forever → the superuser
+  # can never drift, so NO in-place reset (impossible on doltgres) and NO volume recreate
+  # (never destroy a DB to fix a credential) is ever needed. Seeded at cogni/<env>/operator
+  # (the path deploy-infra reads via openbao_get_field).
+  DOLTGRES_PASSWORD="$(bao_get_field operator DOLTGRES_PASSWORD)"
+  if [[ -n "$DOLTGRES_PASSWORD" ]]; then
+    log_info "Seeding cogni/${DEPLOY_ENV}/operator/DOLTGRES_PASSWORD — present, reusing (set-once)"
+  else
+    DOLTGRES_PASSWORD="$(randHex 32)"
+    log_info "Seeding cogni/${DEPLOY_ENV}/operator/DOLTGRES_PASSWORD — minting fresh (set-once)"
+  fi
+  seed_kv operator DOLTGRES_PASSWORD "$DOLTGRES_PASSWORD"
   log_info "OpenBao paths seeded for ${DEPLOY_ENV}"
 
   # Write runtime/.env LAST so the VM gets reconciled values, not Phase-2
