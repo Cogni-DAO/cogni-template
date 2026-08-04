@@ -1196,6 +1196,33 @@ if doltgres_in_compose; then
   log_info "[$(date -u +%H:%M:%S)] Bringing up doltgres..."
   $RUNTIME_COMPOSE up -d doltgres
 
+  # Reconcile doltgres superuser to the OpenBao SSOT (self-healing) — the missing twin of
+  # the Step-6.5 postgres/temporal reconciles below (→ extract all three into one .ts
+  # OperatorDeployPlanePort method, net -100 lines: provisioning-north-star Pillar 3).
+  # Doltgres bakes its `postgres` superuser pw into the volume at first-init and never
+  # reconciles it; a drifted volume (older image / re-seed) then fails provision.sh's
+  # `-U postgres` → dead knowledge plane (preview 2026-08-04). No local-trust socket + the
+  # server locks the data dir, so no in-place ALTER; knowledge is rebuildable → converge by
+  # recreating the volume on auth-fail. The bounded probe also absorbs the fresh-init window
+  # (TCP up ~15s before `postgres` is connectable), so a healthy/fresh env passes first try.
+  dg_auth() { # $1=timeout secs → 0 if the SSOT superuser becomes reachable within it
+    local _e=0
+    until $RUNTIME_COMPOSE exec -T -e PGPASSWORD="$DOLTGRES_PASSWORD" postgres \
+      psql -h doltgres -p 5432 -U postgres -d postgres -c 'SELECT 1' >/dev/null 2>&1; do
+      [ "$_e" -ge "$1" ] && return 1
+      sleep 3
+      _e=$((_e + 3))
+    done
+  }
+  if ! dg_auth 45; then
+    log_warn "[$(date -u +%H:%M:%S)] doltgres superuser drifted from OpenBao SSOT — recreating the (rebuildable) volume for a clean first-init."
+    $RUNTIME_COMPOSE rm -sf doltgres
+    docker volume rm cogni-runtime_doltgres_data 2>/dev/null || true
+    $RUNTIME_COMPOSE up -d doltgres
+    dg_auth 120 || log_fatal "doltgres superuser still unreachable after fresh recreate — refusing to provision a drifted knowledge plane (would 3D000/28P01)."
+  fi
+  log_info "[$(date -u +%H:%M:%S)] doltgres superuser matches OpenBao SSOT."
+
   log_info "[$(date -u +%H:%M:%S)] Provisioning Doltgres DBs + roles..."
   $RUNTIME_COMPOSE --profile bootstrap run --rm \
     -e DOLTGRES_PASSWORD="$DOLTGRES_PASSWORD" \
