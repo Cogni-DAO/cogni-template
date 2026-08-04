@@ -1147,7 +1147,11 @@ read_node_db_secret() {
 }
 DB_READER_TOKEN="$(mint_db_reader_token || true)"
 [ -n "$DB_READER_TOKEN" ] || log_fatal "db-provision: could not mint ${DEPLOY_ENVIRONMENT}-db-reader token (OpenBao sealed / role absent) — per-node DB creds are required (#1584)"
-for node in "${NODE_TARGETS[@]}"; do
+# bug.5090: iterate the forwarded NODE_APP_TARGETS string, NOT the NODE_TARGETS array —
+# arrays don't cross the SSH env-file boundary into this remote script, so NODE_TARGETS
+# is EMPTY here and the loop silently ran zero times → no app_<node> roles on a fresh
+# env → operator/node 28P01. Matches the other NODE_APP_TARGETS loops in this file.
+for node in ${NODE_APP_TARGETS}; do
   node_db="cogni_${node//-/_}"
   app_pw="$(read_node_db_secret "$node" APP_DB_PASSWORD)"
   svc_pw="$(read_node_db_secret "$node" APP_DB_SERVICE_PASSWORD)"
@@ -1178,7 +1182,8 @@ $RUNTIME_COMPOSE --profile bootstrap run --rm openfga-migrate
 # same value rendered into RUNTIME_ENV), so the provisioner connects as the live
 # superuser — no late sed-parse of DOLTGRES_URL, no derived-vs-live reconciliation here.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^doltgres$'; then
+# bug: check the static compose FILE — `config --services` flakes empty on any unset interpolation var, so doltgres false-reads "absent" (timing-dependent).
+if grep -qE '^  doltgres:[[:space:]]*$' /opt/cogni-template-runtime/docker-compose.yml 2>/dev/null; then
   log_info "[$(date -u +%H:%M:%S)] Bringing up doltgres..."
   $RUNTIME_COMPOSE up -d doltgres
 
@@ -1260,7 +1265,8 @@ $RUNTIME_COMPOSE stop autoheal 2>/dev/null || true
 # Infra services only — excludes app, scheduler-worker, db-migrate, and one-shot backup jobs
 INFRA_SERVICES="postgres litellm openfga redis alloy temporal-postgres temporal temporal-ui autoheal repo-init git-sync"
 # Doltgres is optional — only include if it's in the compose file for this env.
-if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^doltgres$'; then
+# bug: check the static compose FILE — `config --services` flakes empty on any unset interpolation var, so doltgres false-reads "absent" (timing-dependent).
+if grep -qE '^  doltgres:[[:space:]]*$' /opt/cogni-template-runtime/docker-compose.yml 2>/dev/null; then
   INFRA_SERVICES="$INFRA_SERVICES doltgres"
 fi
 # alloy-k8s-events is optional — only include if defined in this compose file.
