@@ -1616,6 +1616,34 @@ else
   done
   log_info "Seeding cogni/${DEPLOY_ENV}/scheduler-worker/*..."
   for k in "${SCHEDULER_WORKER_KEYS[@]}"; do seed_kv scheduler-worker "$k" "${!k:-}"; done
+
+  # Shared-infra OpenFGA DB-role password (OpenBao custody, Invariant 15). OpenFGA is
+  # infra, not a node, so it carries no static catalog entry (the loader allowlist is
+  # node-domain — openfga-substrate-unification.md §Move-1); provision auto-generates it
+  # here, closing the "auto-generation on fresh provision" follow-up that left every
+  # clean reprovision unable to bind OPENFGA_DB_PASSWORD (deploy-infra Phase 5f abort).
+  # SET-ONCE: reuse the existing OpenBao value on every re-provision so it never diverges
+  # from the persisted openfga Postgres role (the Temporal-superuser-drift class, bug.5002).
+  # deploy-infra reads this via the ${env}-db-reader seam and renders the role + DSN.
+  OPENFGA_DB_PASSWORD="$(bao_get_field openfga OPENFGA_DB_PASSWORD)"
+  if [[ -n "$OPENFGA_DB_PASSWORD" ]]; then
+    log_info "Seeding cogni/${DEPLOY_ENV}/openfga/* — OPENFGA_DB_PASSWORD present, reusing (set-once)"
+  else
+    OPENFGA_DB_PASSWORD="$(randHex 32)"
+    log_info "Seeding cogni/${DEPLOY_ENV}/openfga/* — minting fresh OPENFGA_DB_PASSWORD"
+  fi
+  seed_kv openfga OPENFGA_DB_PASSWORD "$OPENFGA_DB_PASSWORD"
+
+  # TEMPORAL_DB_PASSWORD is the same shared-infra DB-cred class: the dedicated
+  # temporal-postgres superuser, baked into the volume at first-init and read by
+  # deploy-infra via the ${env}-db-reader seam (cogni/<env>/_shared). bootstrap.sh
+  # generates it, but provision never seeded it to _shared → deploy-infra's fresh-env
+  # read (SSOT off) found nothing → set -u abort (same failure as OPENFGA). Seed it,
+  # SET-ONCE: reuse the existing OpenBao value so it never diverges from the persisted
+  # temporal-postgres volume (the 2026-06-11 password-drift outage).
+  existing_temporal_pw="$(bao_get_field _shared TEMPORAL_DB_PASSWORD)"
+  [[ -n "$existing_temporal_pw" ]] && TEMPORAL_DB_PASSWORD="$existing_temporal_pw"
+  seed_kv _shared TEMPORAL_DB_PASSWORD "$TEMPORAL_DB_PASSWORD"
   log_info "OpenBao paths seeded for ${DEPLOY_ENV}"
 
   # Write runtime/.env LAST so the VM gets reconciled values, not Phase-2

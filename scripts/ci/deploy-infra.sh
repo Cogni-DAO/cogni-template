@@ -788,8 +788,23 @@ for key in \
   source_openbao_runtime_key required "$key" operator node-template _shared
 done
 source_operator_database_service_url
-source_openbao_runtime_key required OPENFGA_DB_PASSWORD openfga
-source_openbao_runtime_key required TEMPORAL_DB_PASSWORD _shared
+# OPENFGA_DB_PASSWORD is a shared-infra DB-ROLE credential (OpenBao custody, Invariant
+# 15) — read it via the env-wide ${env}-db-reader seam (openbao_get_field), which is
+# available at infra-pass time on EVERY env. It must NOT go through
+# source_openbao_runtime_key: that reader is gated on operator-env-secrets
+# (OPENBAO_RUNTIME_SSOT), which does not exist on a fresh provision, so the required
+# read silently skipped → `OPENFGA_DB_PASSWORD: unbound variable` under set -u aborted
+# deploy-infra before the app layer. Provision Phase 5c seeds cogni/<env>/openfga/*.
+OPENFGA_DB_PASSWORD="$(openbao_get_field openfga OPENFGA_DB_PASSWORD)"
+[[ -n "$OPENFGA_DB_PASSWORD" ]] || log_fatal "OPENFGA_DB_PASSWORD absent from OpenBao cogni/${DEPLOY_ENVIRONMENT}/openfga — provision Phase 5c must seed it (never fall back to a divergent .env value)"
+export OPENFGA_DB_PASSWORD
+# TEMPORAL_DB_PASSWORD — same shared-infra DB-cred class as OPENFGA (dedicated
+# temporal-postgres superuser). Read via the ungated ${env}-db-reader seam, not the
+# operator-env-secrets-gated reader, so a fresh provision (SSOT off) binds it instead
+# of aborting on set -u at the .env render. Provision Phase 5c seeds cogni/<env>/_shared.
+TEMPORAL_DB_PASSWORD="$(openbao_get_field _shared TEMPORAL_DB_PASSWORD)"
+[[ -n "$TEMPORAL_DB_PASSWORD" ]] || log_fatal "TEMPORAL_DB_PASSWORD absent from OpenBao cogni/${DEPLOY_ENVIRONMENT}/_shared — provision Phase 5c must seed it (never fall back to a divergent .env value)"
+export TEMPORAL_DB_PASSWORD
 
 for key in \
   METRICS_TOKEN \
