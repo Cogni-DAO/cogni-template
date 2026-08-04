@@ -1216,8 +1216,14 @@ if doltgres_in_compose; then
   }
   if ! dg_auth 45; then
     log_warn "[$(date -u +%H:%M:%S)] doltgres superuser drifted from OpenBao SSOT — recreating the (rebuildable) volume for a clean first-init."
+    # Derive the real volume name from the live container mount BEFORE removing it —
+    # compose pins an explicit `name: doltgres_data` (no project prefix), so a guessed
+    # `<project>_doltgres_data` silently no-ops the wipe and the drift survives.
+    _dg_vol="$($RUNTIME_COMPOSE ps -q doltgres 2>/dev/null | head -1 | xargs -r docker inspect \
+      --format '{{range .Mounts}}{{if eq .Destination "/var/lib/doltgres"}}{{.Name}}{{end}}{{end}}' 2>/dev/null)"
+    _dg_vol="${_dg_vol:-doltgres_data}"
     $RUNTIME_COMPOSE rm -sf doltgres
-    docker volume rm cogni-runtime_doltgres_data 2>/dev/null || true
+    docker volume rm "$_dg_vol" 2>/dev/null || true
     $RUNTIME_COMPOSE up -d doltgres
     dg_auth 120 || log_fatal "doltgres superuser still unreachable after fresh recreate — refusing to provision a drifted knowledge plane (would 3D000/28P01)."
   fi
