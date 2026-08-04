@@ -1552,7 +1552,11 @@ seed_kv() {
   if [[ $rc -eq 0 ]]; then
     return 0
   fi
-  if printf '%s' "$out" | grep -qiE 'no value found|does not exist|not found'; then
+  # A `bao kv patch` on a never-written KV v2 path returns HTTP `Code: 404` with an
+  # EMPTY raw message (no "not found" text) — the unambiguous absent signal on a FRESH
+  # OpenBao. Without matching it, the very first seed_kv on a clean env aborts the whole
+  # provision (a 404 means the path doesn't exist yet → no siblings → put is safe).
+  if printf '%s' "$out" | grep -qiE 'no value found|does not exist|not found|code: 404'; then
     # Genuinely absent — safe to create; no siblings to clobber.
     printf '%s' "$v" | ssh $SSH_OPTS root@"$VM_IP" \
       "kubectl exec -i -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv put '${path}' '${k}=-'" \
