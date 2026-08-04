@@ -389,7 +389,16 @@ services:
     # by the new binary (bug.5076 — the 0.56.2 → 0.56.3 roll changed the
     # auth-file serialization layout, breaking every infra flight on 2026-05-26).
     # Bump this tag deliberately, never floatingly.
-    image: dolthub/doltgresql:0.56.3
+    # 0.56.3 additionally FRESH-INITS BROKEN: it creates NO connectable default
+    # database (every `-d <name>` → `database "X" does not exist`, `role "public"
+    # does not exist`), so `doltgres-provision` (deploy-infra Phase 5f) hard-aborts
+    # the whole deploy on any CLEAN volume. Established volumes (created under an
+    # older Doltgres) dodged it — surfaced only by the 2026-08-04 fleet reprovision.
+    # 0.57.3 (verified 2026-08-04 on a throwaway): fresh init exposes a connectable
+    # `postgres` DB that survives restart; CREATE DATABASE is durable across
+    # connections + restart; ILIKE remains "not yet supported" (adapter assumption
+    # unchanged — the sql.unsafe/escapeValue path is wire-protocol-level).
+    image: dolthub/doltgresql:0.57.3
     restart: unless-stopped
     labels:
       - "autoheal=true"

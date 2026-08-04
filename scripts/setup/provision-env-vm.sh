@@ -1552,7 +1552,11 @@ seed_kv() {
   if [[ $rc -eq 0 ]]; then
     return 0
   fi
-  if printf '%s' "$out" | grep -qiE 'no value found|does not exist|not found'; then
+  # A `bao kv patch` on a never-written KV v2 path returns HTTP `Code: 404` with an
+  # EMPTY raw message (no "not found" text) — the unambiguous absent signal on a FRESH
+  # OpenBao. Without matching it, the very first seed_kv on a clean env aborts the whole
+  # provision (a 404 means the path doesn't exist yet → no siblings → put is safe).
+  if printf '%s' "$out" | grep -qiE 'no value found|does not exist|not found|code: 404'; then
     # Genuinely absent — safe to create; no siblings to clobber.
     printf '%s' "$v" | ssh $SSH_OPTS root@"$VM_IP" \
       "kubectl exec -i -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv put '${path}' '${k}=-'" \
@@ -1612,6 +1616,34 @@ else
   done
   log_info "Seeding cogni/${DEPLOY_ENV}/scheduler-worker/*..."
   for k in "${SCHEDULER_WORKER_KEYS[@]}"; do seed_kv scheduler-worker "$k" "${!k:-}"; done
+
+  # Shared-infra OpenFGA DB-role password (OpenBao custody, Invariant 15). OpenFGA is
+  # infra, not a node, so it carries no static catalog entry (the loader allowlist is
+  # node-domain — openfga-substrate-unification.md §Move-1); provision auto-generates it
+  # here, closing the "auto-generation on fresh provision" follow-up that left every
+  # clean reprovision unable to bind OPENFGA_DB_PASSWORD (deploy-infra Phase 5f abort).
+  # SET-ONCE: reuse the existing OpenBao value on every re-provision so it never diverges
+  # from the persisted openfga Postgres role (the Temporal-superuser-drift class, bug.5002).
+  # deploy-infra reads this via the ${env}-db-reader seam and renders the role + DSN.
+  OPENFGA_DB_PASSWORD="$(bao_get_field openfga OPENFGA_DB_PASSWORD)"
+  if [[ -n "$OPENFGA_DB_PASSWORD" ]]; then
+    log_info "Seeding cogni/${DEPLOY_ENV}/openfga/* — OPENFGA_DB_PASSWORD present, reusing (set-once)"
+  else
+    OPENFGA_DB_PASSWORD="$(randHex 32)"
+    log_info "Seeding cogni/${DEPLOY_ENV}/openfga/* — minting fresh OPENFGA_DB_PASSWORD"
+  fi
+  seed_kv openfga OPENFGA_DB_PASSWORD "$OPENFGA_DB_PASSWORD"
+
+  # TEMPORAL_DB_PASSWORD is the same shared-infra DB-cred class: the dedicated
+  # temporal-postgres superuser, baked into the volume at first-init and read by
+  # deploy-infra via the ${env}-db-reader seam (cogni/<env>/_shared). bootstrap.sh
+  # generates it, but provision never seeded it to _shared → deploy-infra's fresh-env
+  # read (SSOT off) found nothing → set -u abort (same failure as OPENFGA). Seed it,
+  # SET-ONCE: reuse the existing OpenBao value so it never diverges from the persisted
+  # temporal-postgres volume (the 2026-06-11 password-drift outage).
+  existing_temporal_pw="$(bao_get_field _shared TEMPORAL_DB_PASSWORD)"
+  [[ -n "$existing_temporal_pw" ]] && TEMPORAL_DB_PASSWORD="$existing_temporal_pw"
+  seed_kv _shared TEMPORAL_DB_PASSWORD "$TEMPORAL_DB_PASSWORD"
   log_info "OpenBao paths seeded for ${DEPLOY_ENV}"
 
   # Write runtime/.env LAST so the VM gets reconciled values, not Phase-2
