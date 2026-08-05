@@ -7,7 +7,7 @@ trust: draft
 severity: SEV3
 duration: "~24h (reprovision 2026-08-04 → reseed 2026-08-05)"
 services_affected: [operator]
-summary: A fresh production reprovision brought up an empty operator Postgres `nodes` registry, so the owner wallet had no RLS ownership of any node and could not see/manage them via the operator UI/API. Resolved by directly seeding 7 canonical node rows (owner resolved by wallet) and capturing a verified off-host encrypted pg_dump. Uncovered a second latent defect: the prod db-backup timer silently reports success while producing an empty app-cluster dump.
+summary: "A fresh production reprovision brought up an empty operator Postgres `nodes` registry, so the owner wallet had no RLS ownership of any node and could not see/manage them via the operator UI/API. Resolved by directly seeding 7 canonical node rows (owner resolved by wallet) and capturing a verified off-host encrypted pg_dump. Uncovered a second latent defect — the prod db-backup timer silently reports success while producing an empty app-cluster dump."
 read_when: A node is missing from the operator after a reprovision, ownership/RLS visibility is wrong, or you are reseeding the `nodes` registry.
 owner: flock-leader
 created: 2026-08-05
