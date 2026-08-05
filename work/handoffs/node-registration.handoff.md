@@ -13,7 +13,7 @@ last_commit: 793820d0c1
 
 ## Mission
 
-Pickup: the Cherry fleet was reprovisioned from scratch on 2026-08-05 (candidate-a + preview are live; prod provisioned green but the operator app image is a placeholder → 502, needs a `/promote`). During that work we found the **real reason node bring-up keeps needing hand-patching**: **the operator `nodes` registry table is EMPTY.** The node *apps* exist as infrastructure (per-node Postgres DBs `cogni_<node>`, k8s overlays, pods) but they were never **registered** as rows in the operator DB. Without a registry row, `resolveNodeRef` 404s, so the standard operator-managed paths — RBAC grants, self-serve secrets, deploy — **cannot target the node**, and the pod dies `CreateContainerConfigError` (missing ESO `<node>-env-secrets`, because no one authored its ExternalSecret leaf either). You own closing that gap **properly**: seed the existing production nodes as registry entries, **created by Derek's RLS user (a new owner account he will create)** — not raw SQL inserts — so ownership, RLS, RBAC, and deployment all line up.
+Pickup: the Cherry fleet was reprovisioned from scratch on 2026-08-05 (candidate-a + preview are live; prod provisioned green but the operator app image is a placeholder → 502, needs a `/promote`). During that work we found the **real reason node bring-up keeps needing hand-patching**: **the operator `nodes` registry table is EMPTY.** The node _apps_ exist as infrastructure (per-node Postgres DBs `cogni_<node>`, k8s overlays, pods) but they were never **registered** as rows in the operator DB. Without a registry row, `resolveNodeRef` 404s, so the standard operator-managed paths — RBAC grants, self-serve secrets, deploy — **cannot target the node**, and the pod dies `CreateContainerConfigError` (missing ESO `<node>-env-secrets`, because no one authored its ExternalSecret leaf either). You own closing that gap **properly**: seed the existing production nodes as registry entries, **created by Derek's RLS user (a new owner account he will create)** — not raw SQL inserts — so ownership, RLS, RBAC, and deployment all line up.
 
 ## Goal
 
@@ -62,13 +62,13 @@ Pickup: the Cherry fleet was reprovisioned from scratch on 2026-08-05 (candidate
 
 ## Pointers
 
-| File / Resource | Why it matters |
-| --------------- | -------------- |
-| operator `nodes` Postgres table (`cogni_operator` DB) | The registry SSOT — currently empty; the thing to seed |
-| `nodes/operator/app/src/app/api/v1/nodes/route.ts` + `resolveNodeRef` | Node create + resolution code of record; owner scoping |
-| `docs/spec/node-formation.md`, `node-setup`/`node-wizard-expert` skills | The sanctioned create/register flow to reuse |
-| `docs/spec/database-rls.md`, `database-expert` skill | `app_user` (RLS) vs `app_service` (BYPASSRLS) — create as the owner, not the bypass |
-| `rbac-expert` skill | register→approve→OpenFGA; why a registry row is required for any grant |
-| `nodes/operator/k8s/external-secrets/<env>/` | The ESO leaf pattern (only operator has it); missing leaf = CCCE (Gotcha 18) |
-| `/promote` skill | Fill prod operator's real image digest (prereq to prod DB migrate) |
-| `.local/*-init-passphrase.txt` + `gh run download <run> --name <env>-init-artifacts` | VM/kube access (on-disk keys are stale post-reprovision) |
+| File / Resource                                                                      | Why it matters                                                                      |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| operator `nodes` Postgres table (`cogni_operator` DB)                                | The registry SSOT — currently empty; the thing to seed                              |
+| `nodes/operator/app/src/app/api/v1/nodes/route.ts` + `resolveNodeRef`                | Node create + resolution code of record; owner scoping                              |
+| `docs/spec/node-formation.md`, `node-setup`/`node-wizard-expert` skills              | The sanctioned create/register flow to reuse                                        |
+| `docs/spec/database-rls.md`, `database-expert` skill                                 | `app_user` (RLS) vs `app_service` (BYPASSRLS) — create as the owner, not the bypass |
+| `rbac-expert` skill                                                                  | register→approve→OpenFGA; why a registry row is required for any grant              |
+| `nodes/operator/k8s/external-secrets/<env>/`                                         | The ESO leaf pattern (only operator has it); missing leaf = CCCE (Gotcha 18)        |
+| `/promote` skill                                                                     | Fill prod operator's real image digest (prereq to prod DB migrate)                  |
+| `.local/*-init-passphrase.txt` + `gh run download <run> --name <env>-init-artifacts` | VM/kube access (on-disk keys are stale post-reprovision)                            |

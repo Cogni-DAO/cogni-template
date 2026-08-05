@@ -13,14 +13,14 @@ description: "Deploy/provision the Cogni operator + node apps (candidate-a / pre
 
 ## Where the current knowledge lives
 
-| You want to… | Skill |
-| --- | --- |
-| Provision / reprovision an env (VM→k3s→OpenBao→Compose infra→edge→DNS→AppSets), phase map, gotchas | **`provision-env`** |
-| CI/CD pipeline, deploy branches, image promotion, the freeze policy, VM SSH policy | **`devops-expert`** |
-| Secrets: OpenBao vs GitHub-env, ESO, the `pnpm secrets:set` roll, split-brain | **`cicd-secrets-expert`** |
-| Promote a SHA to preview/production, or diagnose a stuck promote | **`promote`** |
-| RBAC / node access grants (register → approve → OpenFGA) | **`rbac-expert`** |
-| Which DB a table belongs in, migrations, Doltgres | **`database-expert`** |
+| You want to…                                                                                       | Skill                     |
+| -------------------------------------------------------------------------------------------------- | ------------------------- |
+| Provision / reprovision an env (VM→k3s→OpenBao→Compose infra→edge→DNS→AppSets), phase map, gotchas | **`provision-env`**       |
+| CI/CD pipeline, deploy branches, image promotion, the freeze policy, VM SSH policy                 | **`devops-expert`**       |
+| Secrets: OpenBao vs GitHub-env, ESO, the `pnpm secrets:set` roll, split-brain                      | **`cicd-secrets-expert`** |
+| Promote a SHA to preview/production, or diagnose a stuck promote                                   | **`promote`**             |
+| RBAC / node access grants (register → approve → OpenFGA)                                           | **`rbac-expert`**         |
+| Which DB a table belongs in, migrations, Doltgres                                                  | **`database-expert`**     |
 
 ## The one mental model to carry over
 
