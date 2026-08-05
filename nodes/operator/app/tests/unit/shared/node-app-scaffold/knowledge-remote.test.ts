@@ -25,16 +25,14 @@ describe("node knowledge remote naming", () => {
     expect(knowledgeDatabaseForSlug("my-node")).toBe("knowledge_my_node");
   });
 
-  it("uses human-readable DoltHub repo names", () => {
-    expect(knowledgeRepoForSlug("my-node")).toBe("knowledge-my-node");
+  it("uses the node slug as the DoltHub repo name", () => {
+    expect(knowledgeRepoForSlug("my-node")).toBe("my-node");
   });
 
   it("derives the human-facing DoltHub repo URL", () => {
     expect(
       knowledgeRepoWebUrl({ owner: "cogni-dao-test", slug: "my-node" })
-    ).toBe(
-      "https://www.dolthub.com/repositories/cogni-dao-test/knowledge-my-node"
-    );
+    ).toBe("https://www.dolthub.com/repositories/cogni-dao-test/my-node");
   });
 
   it("derives the human-facing DoltHub repo URL from the repo-spec remote identity", () => {
@@ -42,20 +40,18 @@ describe("node knowledge remote naming", () => {
       knowledgeRemoteWebUrl({
         database: "knowledge_my_node",
         owner: "cogni-dao-test",
-        repo: "knowledge-my-node",
-        url: "https://doltremoteapi.dolthub.com/cogni-dao-test/knowledge-my-node",
+        repo: "my-node",
+        url: "https://doltremoteapi.dolthub.com/cogni-dao-test/my-node",
       })
-    ).toBe(
-      "https://www.dolthub.com/repositories/cogni-dao-test/knowledge-my-node"
-    );
+    ).toBe("https://www.dolthub.com/repositories/cogni-dao-test/my-node");
   });
 
   it("derives the Cogni-owned DoltHub remote URL from the env-scoped owner", () => {
     expect(buildNodeKnowledgeRemote("my-node", "cogni-dao-test")).toEqual({
       database: "knowledge_my_node",
       owner: "cogni-dao-test",
-      repo: "knowledge-my-node",
-      url: "https://doltremoteapi.dolthub.com/cogni-dao-test/knowledge-my-node",
+      repo: "my-node",
+      url: "https://doltremoteapi.dolthub.com/cogni-dao-test/my-node",
     });
   });
 });
