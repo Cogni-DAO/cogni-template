@@ -37,24 +37,52 @@ const client = buildDoltgresClient({
 const adapter = new DoltgresKnowledgeStoreAdapter({ sql: client });
 const capability = createKnowledgeCapability(adapter);
 
-// Load seeds — base seeds from the shared knowledge-base package; domain seeds from node packages.
+// Load seeds — base domains + base knowledge from the shared knowledge-base package.
+// Domains MUST be registered before knowledge writes: `write()` calls
+// assertDomainRegistered and throws DomainNotRegisteredError otherwise. This is
+// why a fresh env 400s `domain 'infrastructure' not registered` — the domain
+// registry is an FK gate and nothing here used to seed it.
+const domainSeeds: { id: string; name: string; description?: string }[] = [];
 const seeds: NewKnowledge[] = [];
 
 try {
   const baseMod = await import("@cogni/knowledge-base");
+  domainSeeds.push(...baseMod.BASE_DOMAIN_SEEDS);
   seeds.push(...baseMod.BASE_KNOWLEDGE_SEEDS);
-} catch {
-  console.warn("⚠️  Could not load @cogni/knowledge-base seeds");
-}
-
-if (seeds.length === 0) {
-  console.log("   No seeds found.");
+} catch (e) {
+  // Fail LOUD — a fresh env with no base seeds must not report green.
+  console.error(
+    `❌ Could not load @cogni/knowledge-base seeds: ${e instanceof Error ? e.message : String(e)}`
+  );
   await client.end();
-  process.exit(0);
+  process.exit(1);
 }
 
-console.log(`   Upserting ${seeds.length} seed entries...`);
+let hardFailures = 0;
 
+// 1) Register base domains (idempotent — DomainAlreadyRegisteredError is a no-op).
+console.log(`   Registering ${domainSeeds.length} base domains...`);
+for (const d of domainSeeds) {
+  try {
+    await adapter.registerDomain(d);
+    console.log(`   ✅ domain ${d.id}`);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (
+      e instanceof Error &&
+      (e.name === "DomainAlreadyRegisteredError" ||
+        msg.toLowerCase().includes("already"))
+    ) {
+      console.log(`   ⏭️  domain ${d.id} (already registered)`);
+    } else {
+      console.error(`   ❌ domain ${d.id}: ${msg}`);
+      hardFailures += 1;
+    }
+  }
+}
+
+// 2) Write base knowledge entries.
+console.log(`   Upserting ${seeds.length} seed entries...`);
 for (const seed of seeds) {
   try {
     await capability.write(seed);
@@ -65,9 +93,19 @@ for (const seed of seeds) {
       console.log(`   ⏭️  ${seed.id} (already committed)`);
     } else {
       console.error(`   ❌ ${seed.id}: ${msg}`);
+      hardFailures += 1;
     }
   }
 }
 
-console.log("✅ Doltgres knowledge seed complete.");
 await client.end();
+
+if (hardFailures > 0) {
+  // Never let a provision report green with an empty/partial knowledge plane.
+  console.error(
+    `❌ Doltgres knowledge seed FAILED: ${hardFailures} hard error(s).`
+  );
+  process.exit(1);
+}
+
+console.log("✅ Doltgres knowledge seed complete.");

@@ -180,24 +180,36 @@ No edit, no delete, no row-detail Sheet in v0. The grid is read + register only.
 
 ### Seeding
 
-`domains` is **reference data**, not content. The base set is structural to the Cogni knowledge plane and ships with the migrator — every fresh fork has these rows before any agent runs.
+`domains` is **reference data**, not content. `NODES_BOOT_EMPTY` (from [knowledge-data-plane](./knowledge-data-plane.md)) scopes to **content tables** — `knowledge`, `citations`, `sources` — not the `domains` registry.
 
-`NODES_BOOT_EMPTY` (from [knowledge-data-plane](./knowledge-data-plane.md)) scopes to **content tables** — `knowledge`, `citations`, `sources`. It does **not** apply to the `domains` registry.
+**Seeding — v0 is MANUAL (deliberately).** Domains are registered one-time, by hand, via the session-authed `/knowledge` **Domains → "+ Add domain"** UI (or `POST /api/v1/knowledge/domains`); base knowledge (orientation etc.) is added via the contribution API. There is **no** automated provision-time domain seeding today, and it does **not** belong in the schema migrator (`migrate-doltgres.mjs` is DDL only — mixing reference-data seeding into a load-bearing initContainer that gates every pod start is the wrong layer). Automated fleet seeding is deferred until an actual fresh-fleet reprovision needs it; when it lands it will be a **dedicated seed step** (Job/init), not the schema migrator. `scripts/db/seed-doltgres.mts` is the convenience runner for dev + one-off manual seeding.
 
-**Seeding mechanism:** the migrator script (`nodes/operator/app/src/adapters/server/db/migrate-doltgres.mjs`) holds `BASE_DOMAIN_SEEDS` and runs a `seedBaseDomains()` step after schema migrations are reconciled. It uses `sql.unsafe` with a SELECT-then-INSERT idempotency check, sidestepping two Doltgres 0.56 quirks: (a) drizzle-orm wraps SQL migration files in transactions, and the parameterized-INSERT failure on `drizzle.__drizzle_migrations` rolls them back — DML doesn't survive but DDL does, so data-only `.sql` migrations can't safely apply; (b) `ON CONFLICT EXCLUDED` is broken. SELECT-then-INSERT via simple protocol avoids both. Same pattern as the existing `reconcileTracking` shim in the migrator.
+**Universal baseline (shipped by EVERY node).** SSOT is `BASE_DOMAIN_SEEDS` in `@cogni/knowledge-base` (`packages/knowledge-base/src/seeds/domains.ts`); the table below mirrors it for reference — if they disagree, the code wins:
 
-Base domains (operator's set):
+| id         | Purpose                                                                        | feeds cognition bundle     |
+| ---------- | ------------------------------------------------------------------------------ | -------------------------- |
+| `meta`     | How to operate this node + the hub itself (orientation, conventions, skills)   | Orientation + Skills index |
+| `mission`  | The node's charter — why it exists, values, non-goals                          | `mission` field            |
+| `strategy` | How the node pursues its mission — decision approaches + EDO hypothesis chains | Domains + the EDO engine   |
 
-| id               | Purpose                                                           |
-| ---------------- | ----------------------------------------------------------------- |
-| `meta`           | Knowledge about the knowledge system itself                       |
-| `nodes`          | Registry / lifecycle facts about other nodes in the Cogni network |
-| `infrastructure` | Runtime, deploy, observability                                    |
-| `governance`     | DAO formation, attribution, voting                                |
+Only three domains are universal, because they map 1:1 to what the cognition bootstrap
+(`nodes/operator/app/src/app/api/v1/cognition/{route,_bundle}.ts`) assembles for every session. **`skills`
+is deliberately NOT a domain** — the bundle builds its skills index cross-domain from `entry_type ∈ {skill, guide,
+playbook}`. A node registers a new domain only once it has content for it; the bundle suppresses empty domains
+(`route.ts` skips `entryCount === 0`), so registering-without-seeding is dead weight.
 
-**Per-node domain sets are per-node, not operator-wide.** Each node has its own Doltgres database; each node's migrator owns its own `BASE_DOMAIN_SEEDS`. Operator does NOT seed `prediction-market` (poly's domain) or `reservations` (resy's domain); those are seeded by `nodes/poly/.../migrate-doltgres.mjs` and `nodes/resy/.../migrate-doltgres.mjs` respectively when those nodes ship parallel registry surfaces (out of this PR's scope; see Phase 2 § Registry Node and `Rd-PORTABLE`).
+**Niche (subject-matter) domains are PER-NODE — registered on that node only, NEVER in the shared base.**
 
-Idempotency: `seedBaseDomains` SELECTs existing `domains.id` values and INSERTs only the missing ones. Re-runs are safe no-ops; net-new rows on first deploy.
+| node       | niche domains                           |
+| ---------- | --------------------------------------- |
+| `operator` | `infrastructure`, `governance`, `nodes` |
+| `poly`     | `prediction-market`                     |
+| `resy`     | `reservations`                          |
+
+The earlier prototype put `prediction-market`/`reservations` in the shared `@cogni/knowledge-base` base seeds —
+cross-node contamination. Fixed: shared base = `meta`/`mission`/`strategy` only; each node registers its own niche
+domains manually (v0). Idempotency is inherent — `POST /api/v1/knowledge/domains` (and `seed-doltgres.mts`) are
+SELECT-then-INSERT, so re-runs are safe no-ops.
 
 The UI's `+ Add domain` flow exists for **extension** — operators registering domains beyond the base set (e.g., `art-marketplace`, `dao-tooling`) as a node's specialization grows. UI registration is the path for net-new domains; it does not duplicate the base set.
 
