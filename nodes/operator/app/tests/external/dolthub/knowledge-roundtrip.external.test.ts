@@ -6,7 +6,7 @@
  * Purpose: Prove the operator's REAL adapters can add knowledge (contribution+merge)
  *   AND a work item (create+patch), sync them to DoltHub (dolt_push), and recover
  *   them by a fresh clone — the app-code round-trip, end to end.
- * Scope: Live Doltgres (Testcontainers) + live DoltHub under an explicit TEST owner.
+ * Scope: Live Doltgres (docker CLI) + live DoltHub under an explicit TEST owner.
  * Invariants:
  *   - Requires DOLTHUB_API_TOKEN + DOLTHUB_EXTERNAL_TEST_OWNER + DOLT_CREDS_JWK +
  *     DOLT_CREDS_KEYID; skips without them. NEVER targets cogni-dao (fail closed).
@@ -14,6 +14,30 @@
  *     DoltgresKnowledgeContributionAdapter + createContributionService + shapeGate +
  *     createDoltgresPusher/wrapPushSafe, DoltgresOperatorWorkItemAdapter.
  * Side-effects: Docker containers; durable repo creation under the test owner.
+ *
+ * ── HOW TO RUN (prerequisites to replicate) ─────────────────────────────────
+ *   Command:  pnpm -F operator test:external:dolthub:roundtrip
+ *   (Skips cleanly unless ALL four env vars below are set.)
+ *
+ *   1. Docker daemon running + reachable. The test shells out to `docker run` /
+ *      `docker port` / `docker rm` and pulls dolthub/doltgresql:0.57.3 on first use.
+ *      We use the docker CLI rather than the `testcontainers` package on purpose so
+ *      the lane carries one fewer transitive dependency.
+ *   2. DOLTHUB_API_TOKEN — a DoltHub Personal Access Token (DoltHub → Settings →
+ *      API Tokens) whose account can CREATE repos under DOLTHUB_EXTERNAL_TEST_OWNER.
+ *   3. DOLTHUB_EXTERNAL_TEST_OWNER — a DoltHub org/user that is NOT `cogni-dao`
+ *      (the guard throws otherwise). Canonically `cogni-test-nodes`. A durable public
+ *      repo `e2e-rt-<stamp>-<suffix>` is created there each run — DoltHub has no delete
+ *      API, so these accumulate; prune manually if desired.
+ *   4. DOLT_CREDS_JWK + DOLT_CREDS_KEYID — a DoltHub key-pair that can PUSH to that
+ *      same owner. JWK = full contents of ~/.dolt/creds/<keyid>.jwk (the {kty,crv,d,x}
+ *      object); KEYID = that file's basename. Manage via `dolt creds new/ls` and
+ *      confirm with `dolt creds check`. The token (create) and key-pair (push) are
+ *      DISTINCT credentials — BOTH must have access to the owner.
+ *
+ *   `@cogni/*` workspace packages resolve from src via tsconfig.e2e-roundtrip.json, so
+ *   NO prior `pnpm build` is required. Not run in PR CI (external lane, ❌ in CI).
+ * ────────────────────────────────────────────────────────────────────────────
  * Links: docs/runbooks/dolthub-remote-bootstrap.md, .context/dolthub-e2e-roundtrip-plan.md
  * @internal
  */
