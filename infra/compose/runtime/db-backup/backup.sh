@@ -74,7 +74,19 @@ backup_cluster() {
   local timestamp tmp_dir final_dir dbs db db_file
 
   export PGPASSWORD="$password"
-  wait_for_postgres "$cluster" "$host" "$port" "$user"
+
+  # FAIL-CLOSED CONTRACT (prod 2026-08-05 incident): run_once invokes this as
+  # `backup_cluster … || failed=1`, which DISABLES `set -e` for the entire function
+  # (bash neuters errexit for any command that is the left operand of && / ||). So
+  # every fallible step below is checked EXPLICITLY and returns non-zero on failure.
+  # Without this, a failed dump (e.g. the superuser password drifting so pg_dumpall
+  # gets `password authentication failed` and writes a 0-byte globals.sql) falls
+  # through to the `db_backup.completed` log — a silent-success that makes the
+  # completion event + a Loki hit look like a real backup when nothing was captured.
+  # `db_backup.completed` is emitted ONLY after every dump in this cluster succeeded.
+  if ! wait_for_postgres "$cluster" "$host" "$port" "$user"; then
+    return 1
+  fi
 
   timestamp="$(date -u +%Y%m%dT%H%M%SZ)-$$"
   tmp_dir="$BACKUP_ROOT/.${cluster}.${timestamp}.tmp"
@@ -84,13 +96,28 @@ backup_cluster() {
   mkdir -p "$tmp_dir" "$BACKUP_ROOT/$cluster"
 
   log_json info db_backup.started "$cluster" "starting postgres backup"
-  pg_dumpall -h "$host" -p "$port" -U "$user" --globals-only > "$tmp_dir/globals.sql"
 
-  dbs="$(psql -h "$host" -p "$port" -U "$user" -d postgres -At -c "select datname from pg_database where datallowconn and not datistemplate order by datname")"
+  if ! pg_dumpall -h "$host" -p "$port" -U "$user" --globals-only > "$tmp_dir/globals.sql"; then
+    log_json error db_backup.failed "$cluster" "pg_dumpall --globals-only failed (auth/connectivity?)"
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+
+  if ! dbs="$(psql -h "$host" -p "$port" -U "$user" -d postgres -At \
+      -c "select datname from pg_database where datallowconn and not datistemplate order by datname")"; then
+    log_json error db_backup.failed "$cluster" "enumerating databases failed"
+    rm -rf "$tmp_dir"
+    return 1
+  fi
+
   while IFS= read -r db; do
     [ -n "$db" ] || continue
     db_file="$(safe_name "$db").dump"
-    pg_dump -h "$host" -p "$port" -U "$user" -d "$db" --format=custom --file="$tmp_dir/$db_file"
+    if ! pg_dump -h "$host" -p "$port" -U "$user" -d "$db" --format=custom --file="$tmp_dir/$db_file"; then
+      log_json error db_backup.failed "$cluster" "pg_dump of database '$db' failed"
+      rm -rf "$tmp_dir"
+      return 1
+    fi
   done <<< "$dbs"
 
   write_manifest "$tmp_dir"

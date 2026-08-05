@@ -148,7 +148,34 @@ What it does:
 
 The candidate-a infra lever proves this path. `scripts/ci/deploy-infra.sh` installs/enables the timer, restarts Alloy when the log allowlist changes, forces a validation backup, verifies both latest manifests, and prints `db_backup.completed` logs. `.github/workflows/candidate-flight-infra.yml` then queries Loki for `{env="candidate-a",service="db-backup"} | json | event="db_backup.completed"` and requires hits for both clusters.
 
-Known scope: this is same-VM persistent-volume backup. It protects against logical DB damage and operator mistakes, not full VM loss. Do not claim disaster recovery until an off-host object store sink and restore drill exist. The next hardening step is S3-compatible storage (or equivalent OSS object store) plus a scheduled restore rehearsal.
+Known scope: this is same-VM persistent-volume backup — fine for logical DB damage + operator mistakes. It does NOT survive full VM loss on its own, so the off-host copy is a **periodic local pull**, not an S3 sink (keep it simple):
+
+```bash
+# Pull the newest app backup dir off the VM to gitignored local storage (run periodically / before risky ops).
+# Decrypt the reprovision vm-key first (see the reseed section). VM = the env's cluster IP.
+ssh -i "$KF" root@$VM 'docker run --rm -v cogni-runtime_db_backups:/b alpine \
+  sh -c "tar czf - -C /b app/$(ls -1t /b/app | head -1)"' > .local/prod-art/prod-app-backup-$(date +%Y%m%d).tgz
+# Recovery after a fresh provision: pg_restore each *.dump into the new DB (globals.sql first), then reseed the
+# nodes registry (below). A same-VM backup + a recent local pull IS the recovery story — no object store needed.
+```
+
+**Restore drill = the recovery path**: fresh VM via `provision-env` → `pg_restore -U postgres -d <db> <db>.dump` per database (or the operator DB alone) → apply the reseed. That's it.
+
+> **⚠️ `db_backup.completed` is NOT proof of a real backup — verify the dump is non-empty (prod, 2026-08-05, now fixed).** Two compounding failures on the fresh reprovision: **(1) superuser password drift** — the `postgres` role's stored password diverged from the declared `POSTGRES_ROOT_PASSWORD`, so `backup.sh`'s TCP connect as `postgres` got `FATAL: password authentication failed`. (The app is unaffected — it uses the ESO-synced `app_operator` role; the **superuser** is not ESO-synced, so it drifts. Same DB-cred-SSoT class as bug.5002.) **(2) silent-success** — `backup.sh` swallowed that error and still emitted `event="db_backup.completed" cluster="app"` with a **0-byte `globals.sql`**, because `set -e` is neutered inside `run_once`'s `backup_cluster … || failed=1` (bash disables errexit on the left of `&&`/`||`). **Gotcha that hid it:** the container's `pg_hba` uses `trust` for `127.0.0.1`, so an in-container `psql -h 127.0.0.1` "succeeds" with any password — a false positive; test the **service hostname over the network** (`postgres:5432` on the compose net), not localhost. **Fixes shipped:** `backup.sh` now checks every `pg_dumpall`/`psql`/`pg_dump` explicitly and emits `db_backup.failed` + returns non-zero (never `completed`) on error; the prod superuser password was re-aligned via `ALTER ROLE postgres PASSWORD …` and a re-run produced real dumps. A trustworthy manual backup is `docker exec cogni-runtime-postgres-1 pg_dump -U postgres -Fc cogni_operator` (local **socket** → trust, no TCP password) piped to an off-host encrypted file. Follow-up: ESO-sync the superuser password so it can't drift on reprovision.
+
+## Reseeding the operator `nodes` registry after a fresh reprovision
+
+A fresh env reprovision brings up a brand-new operator Postgres. Migrations run, so the schema + RLS policies are correct, but the **`nodes` registry table is empty** (the node rows are app-written state, not migration state — the June-2026 prod backup's `nodes` table was empty too, so there's nothing to restore). Result: the owner's wallet has **no RLS ownership of any node**, so the operator UI/API can't see or manage beacon/poly/etc. even though those repos + catalog/deploy artifacts exist. This is `pm.prod-reprovision-nodes-registry-reseed.2026-08-05`.
+
+Reseed pattern (mirror `nodes/operator/app/src/adapters/server/db/migrations/0037_seed_first_class_nodes.sql`):
+
+- **Owner is resolved by `wallet_address`, NEVER a hardcoded `users.id`.** The same wallet gets a different `users.id` per DB (SIWE mints `randomUUID()` on first login, `auth.ts`), so hardcoding an id breaks across reprovisions. Resolve via `SELECT id FROM users WHERE lower(wallet_address)=lower('0x…')`. A pre-seeded `users` row is reused by SIWE on the owner's next login (wallet is unique) → the seeded `owner_user_id` == the future `session.id`, so ownership + any later OpenFGA `user:<id>` tuples line up.
+- **`nodes.id` MUST be the canonical `node_id`** from each repo's `.cogni/repo-spec.yaml` (== `infra/catalog/<slug>.yaml` `node_id`), so the DB row, the deploy overlays, and OpenFGA `node:<id>` all agree. Watch for stale forks that reuse another node's id (e.g. `standalone-node`/`cogni-poly` reusing operator's `4ff8eac1…`) → PK collision; exclude them.
+- Use **`INSERT … ON CONFLICT (slug) DO UPDATE SET owner_user_id = …`** (non-destructive, idempotent, re-run safe) over `0037`'s `DELETE+INSERT` (which cascades `node_access_requests`), unless you specifically need to canonicalize a mis-`id`'d row.
+- RLS: connect as a **BYPASSRLS superuser** (`psql -U postgres` over the container's local socket) to avoid toggling policies on a live table; only fall back to `0037`'s `DISABLE/ENABLE ROW LEVEL SECURITY` dance (inside one txn) if you're stuck on the RLS-enforced app role.
+- **RLS-aware reads gotcha:** a plain `SELECT … FROM nodes` as the app role returns **0 rows without `SET LOCAL app.current_user_id`** — that's tenant isolation, not an empty table. To read true counts use the superuser; to _prove_ ownership, `BEGIN; SET LOCAL app.current_user_id='<owner id>'; SELECT count(*) FROM nodes; COMMIT;` should return the owned count while any other id returns 0.
+
+**Durability without a migration:** if you direct-apply instead of shipping a `0040` migration, the reproducible record is the DB backup (see the ⚠️ above — take a real `pg_dump`, not the broken timer) plus this callout + the postmortem. A future reprovision then recovers by **restore**, not re-seed. The reproducible alternative is a `0040_seed_registry_nodes.sql` migration (same wallet-resolved pattern) so every future fresh DB self-heals ownership — prefer this when the node set is stable.
 
 ### Migrations run inline as an initContainer (no separate migrator image)
 
