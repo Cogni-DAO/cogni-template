@@ -39,11 +39,15 @@ import {
   setCatalogEnvs,
 } from "./env-membership";
 import type { NodeFormationEnv } from "./envs";
-import { renderOverlay } from "./overlay";
+import { renderOverlay, renderOverlayFile } from "./overlay";
 
 /** Repo-relative path of a node's per-env overlay kustomization. */
 export const overlayPath = (env: string, slug: string): string =>
   `infra/k8s/overlays/${env}/${slug}/kustomization.yaml`;
+
+/** Repo-relative path of a node's per-env ESO producer (creates `<slug>-env-secrets`). */
+export const externalSecretPath = (env: string, slug: string): string =>
+  `infra/k8s/overlays/${env}/${slug}/external-secret.yaml`;
 
 /** Repo-relative path of a node's per-(env, slug) ApplicationSet object. */
 export const appsetPath = (env: string, slug: string): string =>
@@ -70,6 +74,8 @@ export interface EnvPlanCurrent {
   readonly catalog: string;
   /** The `node-template` overlay for an env being ADDED (source to clone). Keyed by env. */
   readonly templateOverlayByEnv: Readonly<Record<string, string>>;
+  /** The `node-template` overlay's `external-secret.yaml` for an env being ADDED (source to clone). Keyed by env. */
+  readonly templateExternalSecretByEnv?: Readonly<Record<string, string>>;
   /** The shared `node-applicationset.yaml.tmpl` (only needed on ADD). */
   readonly appsetTemplate?: string | undefined;
   /** Current `appsets/<env>/kustomization.yaml` per env. Keyed by env. */
@@ -160,9 +166,11 @@ function planAdd(args: {
   const nextEnvs = addCatalogEnv(currentEnvs, env);
 
   const templateOverlay = current.templateOverlayByEnv[env];
+  const templateExternalSecret = current.templateExternalSecretByEnv?.[env];
   const appsetsKustomization = current.appsetsKustomizationByEnv[env];
   if (
     templateOverlay === undefined ||
+    templateExternalSecret === undefined ||
     appsetsKustomization === undefined ||
     current.appsetTemplate === undefined ||
     current.port === undefined ||
@@ -170,7 +178,7 @@ function planAdd(args: {
   ) {
     throw new EnvPlanError(
       "env_render_inputs_missing",
-      `cannot render add of '${env}' for '${slug}': missing template overlay, appset template, kustomization, or ports.`,
+      `cannot render add of '${env}' for '${slug}': missing template overlay, external-secret, appset template, kustomization, or ports.`,
       422
     );
   }
@@ -186,6 +194,19 @@ function planAdd(args: {
       path: overlayPath(env, slug),
       content: renderOverlay(
         templateOverlay,
+        slug,
+        current.nodePort,
+        current.port
+      ),
+    },
+    // ESO producer of <slug>-env-secrets — without it the pod's envFrom secret never
+    // exists (CreateContainerConfigError). Byte-exact clone of the node-template overlay's
+    // external-secret.yaml (render-node-overlays.sh render_file twin).
+    {
+      op: "upsert",
+      path: externalSecretPath(env, slug),
+      content: renderOverlayFile(
+        templateExternalSecret,
         slug,
         current.nodePort,
         current.port
@@ -237,6 +258,7 @@ function planRemove(args: {
       content: setCatalogEnvs(current.catalog, remaining),
     },
     { op: "delete", path: overlayPath(env, slug) },
+    { op: "delete", path: externalSecretPath(env, slug) },
     { op: "delete", path: appsetPath(env, slug) },
     {
       op: "upsert",

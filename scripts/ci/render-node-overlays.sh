@@ -15,9 +15,12 @@
 #   on drift BEFORE flight.
 #
 # The node-template template overlay is itself node-at-root (/app/app migrate paths) and
-#   carries the ESO `<slug>-env-secrets` target directly — so rendering a child is a pure
-#   slug + port rename, with no path or secret rewrite. node-template thus deploys with the
-#   exact shape it hands to every spawn (no split-brain template-vs-deployable).
+#   carries the ESO `<slug>-env-secrets` producer (external-secret.yaml) directly — so
+#   rendering a child is a pure slug + port rename over EVERY file in the template dir,
+#   with no path or secret rewrite. node-template thus deploys with the exact shape it
+#   hands to every spawn (no split-brain template-vs-deployable). Without the cloned
+#   external-secret.yaml, the pod's `envFrom: <slug>-env-secrets` names a Secret nothing
+#   creates → CreateContainerConfigError (the fleet-wide node 502).
 #
 # Byte-exact twins: gens/overlay.ts `renderOverlay` (operator mint path) and
 #   scaffold-node.sh step 5 (manual CLI) MUST emit identical output — all three consume the
@@ -35,7 +38,8 @@
 #   touched; the hand-authored operator/node-template/scheduler-worker overlays are
 #   protected (derived from the catalog, never hardcoded).
 #
-# Usage: render-node-overlays.sh <env> <node>   # emit one overlay to stdout
+# Usage: render-node-overlays.sh <env> <node> [file]  # emit one overlay file to stdout
+#                                                       # (file defaults to kustomization.yaml)
 #        render-node-overlays.sh --write         # (re)write wizard-born overlays + prune orphans
 #        render-node-overlays.sh --check          # fail if any committed overlay is stale or orphaned
 set -euo pipefail
@@ -116,18 +120,33 @@ protected_overlay_dirs() {
 
 node_field() { yq -r ".$2 // \"\"" "$CATALOG_DIR/$1.yaml"; }
 
-template_path() { printf '%s/%s/%s/kustomization.yaml\n' "$OVERLAYS_DIR" "$1" "$TEMPLATE_SLUG"; }
-overlay_path() { printf '%s/%s/%s/kustomization.yaml\n' "$OVERLAYS_DIR" "$1" "$2"; }
+template_dir() { printf '%s/%s/%s\n' "$OVERLAYS_DIR" "$1" "$TEMPLATE_SLUG"; }
+overlay_dir()  { printf '%s/%s/%s\n' "$OVERLAYS_DIR" "$1" "$2"; }
+template_path() { printf '%s/kustomization.yaml\n' "$(template_dir "$1")"; }
+overlay_path()  { printf '%s/kustomization.yaml\n' "$(overlay_dir "$1" "$2")"; }
 
-# Emit one node's overlay for one env: clone the env's node-template overlay and
-# apply the byte-exact renderOverlay transforms. perl (PCRE) so `\b…\b` and `\Q…\E`
-# match the TS twin's JS semantics on every platform. Fails closed if the migrate
-# override didn't inject — a node-at-root node whose Postgres migrate still runs the
-# monorepo path crash-loops silently (the exact bug.5008 failure).
-render_one() {
-  local env="$1" node="$2" tpl np port tmp
-  tpl="$(template_path "$env")"
-  [ -f "$tpl" ] || { echo "[ERROR] missing template overlay $tpl" >&2; return 1; }
+# Basenames of the files the renderer clones from the env's node-template overlay
+# into each wizard node, sorted. Today: kustomization.yaml + external-secret.yaml
+# (the ESO producer of <slug>-env-secrets, without which the pod's envFrom secret
+# never exists → CreateContainerConfigError). Discovered from the template dir so
+# adding a sibling to node-template propagates to every node with no edit here.
+template_files() {
+  local d; d="$(template_dir "$1")"
+  ( cd "$d" 2>/dev/null && ls -1 ./*.yaml 2>/dev/null | sed 's#^\./##' ) | LC_ALL=C sort
+}
+
+# Emit ONE file of a node's overlay for one env: clone the env's node-template
+# overlay file (default kustomization.yaml) and apply the byte-exact renderOverlay
+# transforms — pure `s/node-template/<slug>/g` + the two well-known port literals.
+# perl (PCRE) so `\b…\b` matches the TS twin's JS semantics on every platform. For
+# kustomization.yaml it fails closed if the node-at-root migrate override didn't
+# inject — a node whose Postgres migrate still runs the monorepo path crash-loops
+# silently (the exact bug.5008 failure). Sibling files (external-secret.yaml) carry
+# no migrate command, so that guard applies only to the kustomization.
+render_file() {
+  local env="$1" node="$2" file="${3:-kustomization.yaml}" tpl np port tmp
+  tpl="$(template_dir "$env")/$file"
+  [ -f "$tpl" ] || { echo "[ERROR] missing template overlay file $tpl" >&2; return 1; }
   np="$(node_field "$node" node_port)"
   port="$(node_field "$node" port)"
   [ -n "$np" ] && [ -n "$port" ] \
@@ -138,7 +157,8 @@ render_one() {
     s/\b30200\b/$ENV{NODEPORT}/g;
     s/\b3200\b/$ENV{PORT}/g;
   ' "$tpl" > "$tmp"
-  if ! grep -q 'exec node /app/app/migrate.mjs /app/app/migrations' "$tmp"; then
+  if [ "$file" = "kustomization.yaml" ] \
+     && ! grep -q 'exec node /app/app/migrate.mjs /app/app/migrations' "$tmp"; then
     rm -f "$tmp"
     echo "[ERROR] $env/$node: node-at-root migrate path missing (NODE_AT_ROOT_MIGRATE_PATH); the node-template template overlay must carry /app/app migrate commands." >&2
     return 1
@@ -147,16 +167,31 @@ render_one() {
   rm -f "$tmp"
 }
 
+# Back-compat: the CLI (`<env> <node>`) + the drift-gate diff render the
+# kustomization.yaml to stdout. render_file owns the per-file transform.
+render_one() { render_file "$1" "$2" kustomization.yaml; }
+
 write() {
-  local env node count=0 pruned=0 tmp expected protected envdir d base
+  local env node count=0 pruned=0 tmp expected protected envdir d base odir f existing bf
   protected="$(protected_overlay_dirs)"
   for env in "${ENVS[@]}"; do
     expected=""
     for node in $(wizard_nodes_for_env "$env"); do
-      tmp="$(mktemp)"
-      render_one "$env" "$node" > "$tmp"
-      mkdir -p "$(dirname "$(overlay_path "$env" "$node")")"
-      mv "$tmp" "$(overlay_path "$env" "$node")"
+      odir="$(overlay_dir "$env" "$node")"
+      mkdir -p "$odir"
+      # Render every file the node-template overlay carries (kustomization.yaml +
+      # external-secret.yaml) with the byte-exact transform.
+      for f in $(template_files "$env"); do
+        tmp="$(mktemp)"
+        render_file "$env" "$node" "$f" > "$tmp"
+        mv "$tmp" "$odir/$f"
+      done
+      # Prune sibling files the template no longer carries (self-healing).
+      for existing in "$odir"/*.yaml; do
+        [ -e "$existing" ] || continue
+        bf="$(basename "$existing")"
+        [ -f "$(template_dir "$env")/$bf" ] || rm -f "$existing"
+      done
       expected="$expected$node"$'\n'
       count=$((count + 1))
     done
@@ -181,22 +216,35 @@ write() {
 }
 
 check() {
-  local env node path stale=0 expected protected envdir d base
+  local env node path stale=0 expected protected envdir d base odir f existing bf
   protected="$(protected_overlay_dirs)"
   for env in "${ENVS[@]}"; do
     expected=""
     for node in $(wizard_nodes_for_env "$env"); do
       expected="$expected$node"$'\n'
-      path="$(overlay_path "$env" "$node")"
-      if [ ! -f "$path" ]; then
-        echo "[ERROR] missing $path — run: pnpm gen:node-overlays" >&2
-        stale=1
-        continue
-      fi
-      if ! diff -u "$path" <(render_one "$env" "$node") >/dev/null; then
-        echo "[ERROR] $path is out of sync with the node-template overlay + catalog:" >&2
-        diff -u "$path" <(render_one "$env" "$node") >&2 || true
-        stale=1
+      odir="$(overlay_dir "$env" "$node")"
+      # Every file the node-template overlay carries must be present + byte-identical.
+      for f in $(template_files "$env"); do
+        path="$odir/$f"
+        if [ ! -f "$path" ]; then
+          echo "[ERROR] missing $path — run: pnpm gen:node-overlays" >&2
+          stale=1
+          continue
+        fi
+        if ! diff -u "$path" <(render_file "$env" "$node" "$f") >/dev/null; then
+          echo "[ERROR] $path is out of sync with the node-template overlay + catalog:" >&2
+          diff -u "$path" <(render_file "$env" "$node" "$f") >&2 || true
+          stale=1
+        fi
+      done
+      # An overlay file the template no longer carries is stale drift too.
+      if [ -d "$odir" ]; then
+        for existing in "$odir"/*.yaml; do
+          [ -e "$existing" ] || continue
+          bf="$(basename "$existing")"
+          [ -f "$(template_dir "$env")/$bf" ] \
+            || { echo "[ERROR] $existing has no node-template source — stale; run: pnpm gen:node-overlays" >&2; stale=1; }
+        done
       fi
     done
     # A renderer-owned overlay dir for a node no longer in the catalog (its row
@@ -226,11 +274,11 @@ case "${1:-}" in
   --check) check ;;
   --write) write ;;
   "")
-    echo "Usage: $0 [--check|--write] | $0 <env> <node>" >&2
+    echo "Usage: $0 [--check|--write] | $0 <env> <node> [file]" >&2
     exit 2
     ;;
   *)
-    [ -n "${2:-}" ] || { echo "Usage: $0 <env> <node>" >&2; exit 2; }
-    render_one "$1" "$2"
+    [ -n "${2:-}" ] || { echo "Usage: $0 <env> <node> [file]" >&2; exit 2; }
+    render_file "$1" "$2" "${3:-kustomization.yaml}"
     ;;
 esac

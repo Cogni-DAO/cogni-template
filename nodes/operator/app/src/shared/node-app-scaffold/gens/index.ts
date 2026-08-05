@@ -40,6 +40,7 @@ export {
   type EnvPlanCurrent,
   EnvPlanError,
   type EnvPlanOp,
+  externalSecretPath,
   overlayPath,
 } from "./env-membership-plan";
 export { NODE_FORMATION_ENVS, type NodeFormationEnv } from "./envs";
@@ -48,7 +49,7 @@ export {
   renderNodeExternalSecretKustomization,
 } from "./external-secret";
 export { nextFreeNodePort } from "./node-port";
-export { renderOverlay } from "./overlay";
+export { renderOverlay, renderOverlayFile } from "./overlay";
 export {
   ACTIVATION_MARKUP_FACTOR,
   ACTIVATION_REVENUE_SHARE,

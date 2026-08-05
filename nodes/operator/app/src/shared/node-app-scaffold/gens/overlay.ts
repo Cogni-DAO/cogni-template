@@ -47,13 +47,12 @@ export function renderOverlay(
   nodePort: number,
   port: number
 ): string {
-  // Rename slug first, then the word-bounded port literals (30200 must be rewritten before 3200 so
-  // the `\b30200\b` match is not shadowed by a naive `3200` substring).
-  const rendered = templateOverlay
-    .split(TEMPLATE_SLUG)
-    .join(slug)
-    .replace(/\b30200\b/g, String(nodePort))
-    .replace(/\b3200\b/g, String(port));
+  const rendered = applyOverlayTransforms(
+    templateOverlay,
+    slug,
+    nodePort,
+    port
+  );
   if (!rendered.includes(NODE_AT_ROOT_MIGRATE_CMD)) {
     throw new Error(
       "renderOverlay: node-template template overlay is missing the node-at-root Postgres " +
@@ -61,4 +60,40 @@ export function renderOverlay(
     );
   }
   return rendered;
+}
+
+/**
+ * Render a SIBLING file the node-template overlay dir carries besides the kustomization — today the
+ * ESO producer `external-secret.yaml` (creates `<slug>-env-secrets`; without it the pod's
+ * `envFrom: <slug>-env-secrets` names a Secret nothing creates → CreateContainerConfigError). Same
+ * byte-exact transform as {@link renderOverlay} MINUS the node-at-root migrate guard (only the
+ * kustomization.yaml carries a migrate command). Byte-exact twin of `render-node-overlays.sh`'s
+ * `render_file` for a non-kustomization overlay file.
+ */
+export function renderOverlayFile(
+  templateFile: string,
+  slug: string,
+  nodePort: number,
+  port: number
+): string {
+  return applyOverlayTransforms(templateFile, slug, nodePort, port);
+}
+
+/**
+ * The one byte-exact overlay transform both {@link renderOverlay} and {@link renderOverlayFile} share:
+ * rename the slug first, then the word-bounded port literals (30200 must be rewritten before 3200 so
+ * the `\b30200\b` match is not shadowed by a naive `3200` substring). Mirrors the perl in
+ * `render-node-overlays.sh render_file`.
+ */
+function applyOverlayTransforms(
+  content: string,
+  slug: string,
+  nodePort: number,
+  port: number
+): string {
+  return content
+    .split(TEMPLATE_SLUG)
+    .join(slug)
+    .replace(/\b30200\b/g, String(nodePort))
+    .replace(/\b3200\b/g, String(port));
 }

@@ -102,7 +102,19 @@ grep -q "$FN-env-secrets" <<<"$OUT" \
   || fail "$FN render missing the ESO secret target $FN-env-secrets"
 grep -q "$FN-node-app-secrets" <<<"$OUT" \
   && fail "$FN render still references the legacy $FN-node-app-secrets target"
-pass "$FN render is node-at-root + ESO-targeted"
+# The overlay also clones the node-template external-secret.yaml (the ESO PRODUCER of
+# <slug>-env-secrets). Without it the pod's envFrom names a Secret nothing creates →
+# CreateContainerConfigError (the fleet-wide node 502). Renderer file-arg mode emits it.
+ES="$(bash "$RENDER" candidate-a "$FN" external-secret.yaml)"
+grep -q "name: $FN-env-secrets" <<<"$ES" \
+  || fail "$FN external-secret render missing the ESO target $FN-env-secrets"
+grep -q "key: candidate-a/$FN" <<<"$ES" \
+  || fail "$FN external-secret render missing the OpenBao key candidate-a/$FN"
+grep -q 'node-template' <<<"$ES" \
+  && fail "$FN external-secret render still carries an un-renamed node-template token"
+[ -f "infra/k8s/overlays/candidate-a/$FN/external-secret.yaml" ] \
+  || fail "$FN overlay dir is missing the committed external-secret.yaml (run: pnpm gen:node-overlays)"
+pass "$FN render is node-at-root + ESO-targeted (kustomization + external-secret producer)"
 
 echo "[4/7] FALSIFYING: a hand-staled overlay turns --check red"
 STALE="infra/k8s/overlays/candidate-a/$FN/kustomization.yaml"

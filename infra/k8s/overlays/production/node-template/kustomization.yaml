@@ -7,6 +7,7 @@ namespace: cogni-production
 
 resources:
   - ../../../base/node-app
+  - external-secret.yaml
 
 namePrefix: node-template-
 
