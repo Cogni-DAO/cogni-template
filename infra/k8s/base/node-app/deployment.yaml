@@ -23,8 +23,17 @@ spec:
   strategy:
     type: RollingUpdate
     rollingUpdate:
-      maxUnavailable: 0
-      maxSurge: 1
+      # Single-box VM reality (one k3s node per env, memory-tight 6GB —
+      # the honest-alloc fleet, #1945). maxSurge:1 forces the new pod to
+      # schedule ALONGSIDE the old one (2× app memory) before the old dies;
+      # on a single node that surge pod goes Pending (Insufficient memory) →
+      # the rollout stalls and the env keeps serving the STALE image. That is
+      # the preview/candidate-a "stuck on old buildSha" wall. maxSurge:0 +
+      # maxUnavailable:1 is the single-box-correct strategy: kill-old-then-
+      # start-new, zero surge headroom, one brief blip on a single-replica
+      # Deployment. Revisit only when an env runs >1 schedulable node.
+      maxUnavailable: 1
+      maxSurge: 0
   selector:
     matchLabels:
       app.kubernetes.io/name: node-app
