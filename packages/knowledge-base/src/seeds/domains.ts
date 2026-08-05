@@ -18,34 +18,30 @@ export interface NewDomain {
   description?: string;
 }
 
+// UNIVERSAL baseline only — the three domains EVERY node inherits, mapping 1:1
+// to what the cognition bundle assembles (mission field, orientation, EDO/domains).
+// Niche/subject-matter domains (operator: infrastructure/governance/nodes; poly:
+// prediction-market; resy: reservations) are seeded by each node's OWN migrator,
+// NEVER here — putting them in the shared base was cross-node contamination.
+// `skills` is intentionally absent: it is an entry_type (skill/guide/playbook),
+// not a domain. See docs/spec/knowledge-domain-registry.md § Seeding.
 export const BASE_DOMAIN_SEEDS: NewDomain[] = [
   {
     id: "meta",
     name: "Meta",
-    description: "Knowledge about the knowledge system itself.",
+    description:
+      "How to operate this node and the knowledge hub itself — orientation, conventions, and operating skills.",
   },
   {
-    id: "prediction-market",
-    name: "Prediction Markets",
+    id: "mission",
+    name: "Mission",
     description:
-      "Polymarket and adjacent prediction-market knowledge — base rates, market structure, calibration.",
+      "The node's charter — why it exists, its values, and its non-goals.",
   },
   {
-    id: "infrastructure",
-    name: "Infrastructure",
+    id: "strategy",
+    name: "Strategy",
     description:
-      "Runtime, deploy, observability, and capacity knowledge for Cogni nodes.",
-  },
-  {
-    id: "governance",
-    name: "Governance",
-    description:
-      "DAO formation, attribution, voting, and operator/node contracts.",
-  },
-  {
-    id: "reservations",
-    name: "Reservations",
-    description:
-      "Restaurant / venue reservation knowledge for the resy node domain.",
+      "How the node pursues its mission — decision approaches and EDO hypothesis chains, promoted to rules once validated.",
   },
 ];
