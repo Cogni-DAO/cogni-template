@@ -15,12 +15,17 @@
  *   `infra/catalog/<name>.yaml`. Infra-only catalog entries (`type: infra`/`service`: litellm, openfga,
  *   scheduler-worker) are EXCLUDED — they have no public web tier so they can never be a gallery card.
  * Invariants:
- *   - CATALOG_IS_SSOT: this roster's slug set MUST equal the catalog's `type: node` set. The drift test
- *     (`tests/unit/adapters/node-registry/network-nodes-catalog-drift.test.ts`) enforces it; add a node
- *     to the catalog ⇒ the test fails until it is added here too.
+ *   - CATALOG_IS_SSOT: this roster is a PROJECTION of the identity SSoT, guarded on EVERY field (not just
+ *     slugs) by the TOTAL drift test (`tests/unit/adapters/node-registry/
+ *     network-nodes-catalog-drift.test.ts`): `name` ← catalog `type: node` set; `primary` ← catalog
+ *     `is_primary_host`; `nodeId` ← catalog `node_id` (submodule) or `nodes/<slug>/.cogni/repo-spec.yaml`
+ *     (in-repo), per `REPO_SPEC_IS_IDENTITY_SSOT` (infra/catalog/_schema.json). Any drift on any field
+ *     fails the test. Publish keeps it green automatically via the `insertNetworkNode` splice.
  *   - NO_OPERATOR_IDENTITY_LITERALS: this module holds NO title/tagline/thumbnail. Identity comes from the
  *     node's well-known projection at runtime (resolveNodeLiveness). The operator never names a node.
- *   - PRIMARY_SERVES_APEX: `primary: true` marks the node serving the bare base domain (operator).
+ *   - PRIMARY_SERVES_APEX (task.5078; docs/spec/ci-cd.md axiom 16): `primary: true` marks the single node
+ *     serving the bare base domain (`https://${DOMAIN}` — operator); every other node is served at
+ *     `${name}-${DOMAIN}`. It mirrors the catalog's `is_primary_host: true` (the SSoT).
  * Side-effects: none
  * Links: infra/catalog/*.yaml (the SSoT this mirrors),
  *   src/adapters/server/node-registry/static-node-registry.adapter.ts (roster → NodeSummary skeleton),

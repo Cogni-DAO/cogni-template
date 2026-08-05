@@ -56,6 +56,7 @@ import {
   hasPaymentsActivationSpec,
   insertAppsetKustomization,
   insertCaddyBlock,
+  insertNetworkNode,
   insertSchedulerEndpoint,
   NODE_FORMATION_ENVS,
   type NodeFormationEnv,
@@ -2706,6 +2707,27 @@ export class GitHubRepoWriter implements DeployPlanePort {
           insertSchedulerEndpoint(currentConfigmap, slug, input.nodeId)
         );
       }
+
+      // network-nodes roster splice: the operator runtime image can't fs-glob infra/catalog,
+      // so the web-node roster (network-nodes.data.ts) is a committed catalog projection kept
+      // honest by network-nodes-catalog-drift.test.ts (roster slug set == catalog type:node set).
+      // Splice this node in so the publish PR is born drift-green — else the roster is stale and
+      // the operator-authored auto-PR is un-mergeable (the roster was hand-maintained, blocking
+      // every new node). Mirrors the catalog splice: `readFileOnMain` FAIL-LOUD (not a
+      // fetchFileText null-guard) because the roster is a MANDATORY, always-present monorepo file —
+      // a fetch-miss must throw, never silently birth a drift-red PR (the exact bug this fixes).
+      const rosterPath =
+        "nodes/operator/app/src/adapters/server/node-registry/network-nodes.data.ts";
+      const currentRoster = await this.readFileOnMain(
+        octokit,
+        owner,
+        repo,
+        rosterPath
+      );
+      await addBlob(
+        rosterPath,
+        insertNetworkNode(currentRoster, slug, input.nodeId)
+      );
     }
 
     // No pnpm-lock.yaml: a submodule node is not a workspace member of the operator monorepo — its
