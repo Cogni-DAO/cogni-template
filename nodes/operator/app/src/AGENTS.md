@@ -6,7 +6,7 @@
 
 - **Owners:** @derekg1729
 - **Status:** draft
-- **Last reviewed:** 2026-05-12 (post-strip rebuild touch)
+- **Last reviewed:** 2026-08-05 (fleet-reprovision: force operator image rebuild on current main so prod can promote off a SHA that carries the current AppSet layer — the June-24 image predated it)
 
 ## Purpose
 
