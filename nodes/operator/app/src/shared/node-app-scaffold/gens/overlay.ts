@@ -47,7 +47,12 @@ export function renderOverlay(
   nodePort: number,
   port: number
 ): string {
-  const rendered = applyOverlayTransforms(templateOverlay, slug, nodePort, port);
+  const rendered = applyOverlayTransforms(
+    templateOverlay,
+    slug,
+    nodePort,
+    port
+  );
   if (!rendered.includes(NODE_AT_ROOT_MIGRATE_CMD)) {
     throw new Error(
       "renderOverlay: node-template template overlay is missing the node-at-root Postgres " +
