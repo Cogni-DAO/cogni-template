@@ -38,16 +38,18 @@ encrypted `pg_dump`. Investigation also surfaced a latent defect: the prod `db-b
 
 ## Timeline
 
-| Time (UTC)        | Event                                                                                                                                                           |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-08-04 ~19:00 | Prod reprovisioned onto fresh VM `5.199.162.44`; operator Postgres comes up fresh. `0037_seed_first_class_nodes.sql` runs but no-ops (see Root Cause).          |
-| 2026-08-05 ~16:xx | Investigation: promotions/management blocked; hypothesis = missing owner RLS on nodes.                                                                          |
-| 2026-08-05 17:2x  | Read-only prod recon via decrypted `.local/prod-art` artifacts. Initial `SELECT` as app role showed 0 users/nodes — later found to be RLS filtering, not truth. |
-| 2026-08-05 17:4x  | Superuser read (BYPASSRLS): 38 users (1 real SIWE human + 37 agent-register probes), **`nodes` = 0**. Owner `users.id = c2f6cdc5…` confirmed to exist.          |
-| 2026-08-05 17:4x  | Direct-applied single-txn seed of 7 nodes (owner resolved by wallet, `ON CONFLICT (slug) DO UPDATE`). `INSERT 0 7`, COMMIT.                                     |
-| 2026-08-05 17:4x  | RLS ownership proof passed (owner sees 7; others see 0).                                                                                                        |
-| 2026-08-05 17:50  | Triggered `cogni-db-backup.service` → reported `completed` but wrote **0-byte** app `globals.sql` (auth failure).                                               |
-| 2026-08-05 17:52  | Captured reliable off-host encrypted dump via local-socket `pg_dump` (158 KB, valid `PGDMP`).                                                                   |
+| Time (UTC)        | Event                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-08-04 ~19:00 | Prod reprovisioned onto fresh VM `5.199.162.44`; operator Postgres comes up fresh. `0037_seed_first_class_nodes.sql` runs but no-ops (see Root Cause).                                                                                                                                                                                                                                                                                                                                   |
+| 2026-08-05 ~16:xx | Investigation: promotions/management blocked; hypothesis = missing owner RLS on nodes.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| 2026-08-05 17:2x  | Read-only prod recon via decrypted `.local/prod-art` artifacts. Initial `SELECT` as app role showed 0 users/nodes — later found to be RLS filtering, not truth.                                                                                                                                                                                                                                                                                                                          |
+| 2026-08-05 17:4x  | Superuser read (BYPASSRLS): 38 users (1 real SIWE human + 37 agent-register probes), **`nodes` = 0**. Owner `users.id = c2f6cdc5…` confirmed to exist.                                                                                                                                                                                                                                                                                                                                   |
+| 2026-08-05 17:4x  | Direct-applied single-txn seed of 7 nodes (owner resolved by wallet, `ON CONFLICT (slug) DO UPDATE`). `INSERT 0 7`, COMMIT.                                                                                                                                                                                                                                                                                                                                                              |
+| 2026-08-05 17:4x  | RLS ownership proof passed (owner sees 7; others see 0).                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| 2026-08-05 17:50  | Triggered `cogni-db-backup.service` → reported `completed` but wrote **0-byte** app `globals.sql`. Investigation found the `postgres` superuser password had **drifted** from the declared value on the fresh reprovision (network auth as `postgres` fails; the app is unaffected because it uses the ESO-synced `app_operator` role). A first (false-positive) localhost test masked this — the container's `pg_hba` uses `trust` for `127.0.0.1`, so it "succeeds" with any password. |
+| 2026-08-05 18:1x  | Healed: `ALTER ROLE postgres PASSWORD` to the declared `.env` value; network auth as `postgres` now succeeds.                                                                                                                                                                                                                                                                                                                                                                            |
+| 2026-08-05 18:24  | Re-ran `cogni-db-backup.service` → **real** dumps: `cogni_operator.dump` 158 KB (with the seeded nodes) + beacon/poly/node-template/litellm/openfga/globals, MANIFEST written. Seeded state durably captured through the infra.                                                                                                                                                                                                                                                          |
+| 2026-08-05 18:2x  | Also captured a belt-and-suspenders off-host encrypted `pg_dump` (`.local/prod-art/…postseed…dump.enc`, valid `PGDMP`). Fixed `backup.sh` to fail-closed (this PR).                                                                                                                                                                                                                                                                                                                      |
 
 ## Root Cause
 
@@ -64,7 +66,7 @@ owns nothing under the `tenant_isolation` RLS policy (`owner_user_id = current_s
 
 1. **Proximate cause**: `nodes` rows are app-state, not migration-state, and were never seeded/backed up — a fresh DB has none.
 2. **Contributing factor**: `0037` seeds the owner-by-wallet but no-ops when the owner `users` row doesn't yet exist at migrate time; nothing later reconciles it.
-3. **Systemic factor**: no reproducible "reconcile catalog → nodes registry" step, and the prod DB backup that _should_ make this recoverable is itself silently broken (see Action Items).
+3. **Systemic factor**: no reproducible "reconcile catalog → nodes registry" step, and the prod DB backup that _should_ make this recoverable was itself broken two ways — (a) the `postgres` superuser password drifted from the declared value on the fresh reprovision (same DB-cred-SSoT divergence class as bug.5002; here it's the superuser, which — unlike `app_operator` — is not ESO-synced), and (b) `backup.sh` swallowed the resulting auth failure and still logged `db_backup.completed` (a silent-success: `set -e` is neutered inside `run_once`'s `backup_cluster … || failed=1`). Both fixed (see Action Items).
 
 ## Detection & Response
 
@@ -88,7 +90,7 @@ owns nothing under the `tenant_isolation` RLS policy (`owner_user_id = current_s
 ### Technical Impact
 
 - Operator UI/API showed no owned nodes on prod; owner-gated flows (approvals, and by extension operator-mediated promotes) were blocked pending ownership.
-- Discovered: prod has **no trustworthy automated DB backup** for the app cluster (empty dumps despite `completed`).
+- Discovered + fixed: prod had **no working automated DB backup** for the app cluster (superuser password drift → empty dumps despite `completed`). Superuser password re-aligned, backup re-run producing real dumps, and `backup.sh` hardened to fail-closed.
 
 ## Lessons Learned
 
@@ -109,13 +111,14 @@ owns nothing under the `tenant_isolation` RLS policy (`owner_user_id = current_s
 
 ## Action Items
 
-| Pri | Action                                                                                                                                                                          | Owner        | Work Item    |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------ |
-| P0  | Fix `db-backup` app-cluster auth + make `backup.sh` fail-hard (non-zero exit, no `completed` event) on `pg_dump` error; verify dump is non-empty, not just that the event fired | flock-leader | (file /bug)  |
-| P1  | Reproducible registry reseed: `0040_seed_registry_nodes.sql` (wallet-resolved, `ON CONFLICT`) so a future fresh DB self-heals ownership                                         | flock-leader | (file /task) |
-| P1  | Off-host backup sink (S3-compatible) + scheduled restore rehearsal before claiming disaster recovery                                                                            | flock-leader | (file /task) |
-| P2  | Grant the owner OpenFGA `production_promoter`/`admin` on the seeded nodes via the API grant loop (deferred out of this task) so operator-API promotes work                      | flock-leader | (file /task) |
-| P2  | Promote the merged ExternalSecret node-overlay fix (#1969) to prod so beacon/poly/node-template pods leave `CreateContainerConfigError`                                         | flock-leader | —            |
+| Pri | Action                                                                                                                                                                                                                          | Owner        | Work Item    |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------ |
+| P0  | **DONE (this PR + prod op):** `backup.sh` now fails-closed (non-zero exit, `db_backup.failed`, no `completed` on any dump error); prod `postgres` superuser password re-aligned; backup re-run → real non-empty dumps verified. | flock-leader | this PR      |
+| P1  | Make the `postgres` superuser password ESO-synced / reconciled on provision so it can't drift on a fresh reprovision (root cause of the backup break) — mirror how `app_operator` is kept in sync                               | flock-leader | (file /task) |
+| P1  | Reproducible registry reseed: `0040_seed_registry_nodes.sql` (wallet-resolved, `ON CONFLICT`) so a future fresh DB self-heals ownership                                                                                         | flock-leader | (file /task) |
+| P1  | Off-host backup sink (S3-compatible) + scheduled restore rehearsal before claiming disaster recovery                                                                                                                            | flock-leader | (file /task) |
+| P2  | Grant the owner OpenFGA `production_promoter`/`admin` on the seeded nodes via the API grant loop (deferred out of this task) so operator-API promotes work                                                                      | flock-leader | (file /task) |
+| P2  | Promote the merged ExternalSecret node-overlay fix (#1969) to prod so beacon/poly/node-template pods leave `CreateContainerConfigError`                                                                                         | flock-leader | —            |
 
 ## Related
 
