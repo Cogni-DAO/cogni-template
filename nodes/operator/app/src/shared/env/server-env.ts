@@ -176,10 +176,14 @@ export const serverSchema = z.object({
   ALCHEMY_WEBHOOK_SECRET: optionalString,
 
   // DoltHub credentials — node publish creates env-owned knowledge repos via
-  // REST. Runtime mirror remote URLs come only from repo-spec `knowledge.remote`;
-  // DOLT_CREDS_* authenticate the Dolt push protocol in Doltgres.
+  // REST. DOLT_CREDS_* authenticate the Dolt push protocol in Doltgres.
   DOLTHUB_OWNER: optionalString,
   DOLTHUB_API_TOKEN: optionalString,
+  // Per-env override for THIS node's own knowledge mirror remote. When set it
+  // wins over repo-spec `knowledge.remote.url`, letting non-prod envs sync to a
+  // throwaway test repo while prod targets the canonical `<owner>/<slug>` repo.
+  // Empty/unset → fall back to repo-spec (no per-env mirror).
+  KNOWLEDGE_DOLTHUB_REMOTE_URL: optionalUrl,
   DOLTHUB_OAUTH_CLIENT_ID: optionalString,
   DOLTHUB_OAUTH_CLIENT_SECRET: optionalString,
 
