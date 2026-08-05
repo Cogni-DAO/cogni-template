@@ -1197,7 +1197,11 @@ if doltgres_in_compose; then
   $RUNTIME_COMPOSE up -d doltgres
 
   log_info "[$(date -u +%H:%M:%S)] Provisioning Doltgres DBs + roles..."
-  $RUNTIME_COMPOSE --profile bootstrap run --rm \
+  # --no-deps is load-bearing: `compose run` otherwise RECREATES the doltgres dependency
+  # mid-fresh-init, interrupting default-database creation → `database "postgres" does not
+  # exist` on a FRESH volume (every clean prod/preview reprovision, 2026-08-05). doltgres is
+  # already up (line ~1197); the provision run must attach to it, never recreate it.
+  $RUNTIME_COMPOSE --profile bootstrap run --rm --no-deps \
     -e DOLTGRES_PASSWORD="$DOLTGRES_PASSWORD" \
     doltgres-provision
 
