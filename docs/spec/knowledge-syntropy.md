@@ -122,7 +122,20 @@ The [knowledge-data-plane spec](./knowledge-data-plane.md) defines the Doltgres 
 
 ## Seed Schema: What Ships With Every Node
 
-Every node fork inherits these four tables. They are the minimum viable knowledge infrastructure. Domain specificity lives in row content, not table structure.
+Every node fork inherits the same generic schema. Domain specificity lives in row content (`domain` + `tags` +
+`entry_type`), not table structure.
+
+**The baseline for EVERY new node's dolt (grounded in the cognition bootstrap — `api/v1/cognition/{route,_bundle}.ts`):**
+
+- **6 tables** (SSOT `@cogni/knowledge-base`, per `docs/research/dolt-baseline-port-syntropy.md`): `knowledge`,
+  `domains`, `sources`, `citations`, `knowledge_contributions`, `knowledge_contribution_commits`.
+- **3 universal domains**: `meta`, `mission`, `strategy` (shared base). Niche domains are per-node (see
+  [knowledge-domain-registry § Seeding](./knowledge-domain-registry.md)). `skills` is an `entry_type`, not a domain.
+- **1 anchor seed**: `<slug>-agent-orientation` (a `guide` in `meta`) — the "recall me first" operating map the
+  bundle excerpts. Everything else is EARNED via the EDO loop + contributions (`NODES_BOOT_EMPTY` for content).
+
+The four tables detailed below are the knowledge-family core; the two contribution tables + `work_items` are covered
+in `dolt-baseline-port-syntropy`.
 
 ### `knowledge` — Claims and facts
 
@@ -135,7 +148,7 @@ The atomic unit of what the node believes. Each row is a single assertion with p
 | `entity_id`           | text        |                           | Stable subject key (market ID, project slug, etc.)                                                                                                                                                                                          |
 | `title`               | text        | NOT NULL                  | One-line claim summary                                                                                                                                                                                                                      |
 | `content`             | text        | NOT NULL                  | Full knowledge body — the actual assertion                                                                                                                                                                                                  |
-| `entry_type`          | text        | NOT NULL                  | `event`, `hypothesis`, `decision`, `outcome` (see § The EDO Loop) + `observation`, `finding`, `conclusion`, `rule`, `scorecard`, `skill`, `guide`, `html`                                                                                   |
+| `entry_type`          | text        | NOT NULL                  | `event`, `hypothesis`, `decision`, `outcome` (see § The EDO Loop) + `observation`, `finding`, `conclusion`, `rule`, `scorecard`, `skill`, `guide`, `playbook`, `html`. Roles: EDO beats (event/hypothesis/decision/outcome) · distilled claims (observation/finding/conclusion/rule/scorecard) · actionable (`skill`=invoked to act, `guide`=read to understand, `playbook`=operational runbook; these three are what the cognition bundle indexes) · `html`=human-visual. **There is no `strategy` type — a strategy is a hypothesis→decision→outcome chain, promoted to `rule`/`conclusion` once validated.** |
 | `status`              | text        | NOT NULL, default `draft` | `draft` → `candidate` → `established` → `canonical` → `deprecated`                                                                                                                                                                          |
 | `confidence_pct`      | integer     | NOT NULL, default 40      | 0–100. Initialized + recomputed by the application confidence policy (see § CONFIDENCE_INITIALIZED); `DEFAULT 40` is a guardrail only — normal writes always send an explicit value and never `NULL`.                                       |
 | `source_type`         | text        | NOT NULL                  | `human`, `agent`, `analysis_signal`, `external`, `derived`                                                                                                                                                                                  |

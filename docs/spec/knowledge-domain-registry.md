@@ -186,16 +186,31 @@ No edit, no delete, no row-detail Sheet in v0. The grid is read + register only.
 
 **Seeding mechanism:** the migrator script (`nodes/operator/app/src/adapters/server/db/migrate-doltgres.mjs`) holds `BASE_DOMAIN_SEEDS` and runs a `seedBaseDomains()` step after schema migrations are reconciled. It uses `sql.unsafe` with a SELECT-then-INSERT idempotency check, sidestepping two Doltgres 0.56 quirks: (a) drizzle-orm wraps SQL migration files in transactions, and the parameterized-INSERT failure on `drizzle.__drizzle_migrations` rolls them back — DML doesn't survive but DDL does, so data-only `.sql` migrations can't safely apply; (b) `ON CONFLICT EXCLUDED` is broken. SELECT-then-INSERT via simple protocol avoids both. Same pattern as the existing `reconcileTracking` shim in the migrator.
 
-Base domains (operator's set):
+**Universal baseline (shipped by EVERY node — shared `@cogni/knowledge-base`):**
 
-| id               | Purpose                                                           |
-| ---------------- | ----------------------------------------------------------------- |
-| `meta`           | Knowledge about the knowledge system itself                       |
-| `nodes`          | Registry / lifecycle facts about other nodes in the Cogni network |
-| `infrastructure` | Runtime, deploy, observability                                    |
-| `governance`     | DAO formation, attribution, voting                                |
+| id         | Purpose                                                                       | feeds cognition bundle       |
+| ---------- | ----------------------------------------------------------------------------- | ---------------------------- |
+| `meta`     | How to operate this node + the hub itself (orientation, conventions, skills)  | Orientation + Skills index   |
+| `mission`  | The node's charter — why it exists, values, non-goals                         | `mission` field              |
+| `strategy` | How the node pursues its mission — decision approaches + EDO hypothesis chains | Domains + the EDO engine     |
 
-**Per-node domain sets are per-node, not operator-wide.** Each node has its own Doltgres database; each node's migrator owns its own `BASE_DOMAIN_SEEDS`. Operator does NOT seed `prediction-market` (poly's domain) or `reservations` (resy's domain); those are seeded by `nodes/poly/.../migrate-doltgres.mjs` and `nodes/resy/.../migrate-doltgres.mjs` respectively when those nodes ship parallel registry surfaces (out of this PR's scope; see Phase 2 § Registry Node and `Rd-PORTABLE`).
+Only three domains are universal, because they map 1:1 to what the cognition bootstrap
+(`nodes/operator/app/src/app/api/v1/cognition/{route,_bundle}.ts`) assembles for every session. **`skills`
+is deliberately NOT a domain** — the bundle builds its skills index cross-domain from `entry_type ∈ {skill, guide,
+playbook}`. A node registers a new domain only once it has content for it; the bundle suppresses empty domains
+(`route.ts` skips `entryCount === 0`), so registering-without-seeding is dead weight.
+
+**Niche (subject-matter) domains are PER-NODE — each node's own migrator seeds them, NEVER the shared base.**
+
+| node       | niche domains                            |
+| ---------- | ---------------------------------------- |
+| `operator` | `infrastructure`, `governance`, `nodes`  |
+| `poly`     | `prediction-market`                      |
+| `resy`     | `reservations`                           |
+
+The earlier prototype put `prediction-market`/`reservations` in the shared base — cross-node contamination. Fixed:
+shared base = `meta`/`mission`/`strategy` only; niche domains live in `nodes/<node>/.../migrate-doltgres.mjs`.
+(⚠️ code drift: `migrate-doltgres.mjs` today does NOT run `seedBaseDomains()` — the seed lives in `scripts/db/seed-doltgres.mts`. Reconcile: domain seeding belongs at provision time, per-node.)
 
 Idempotency: `seedBaseDomains` SELECTs existing `domains.id` values and INSERTs only the missing ones. Re-runs are safe no-ops; net-new rows on first deploy.
 
