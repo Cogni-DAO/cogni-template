@@ -86,7 +86,7 @@ describe("GET /api/v1/nodes/[id]/launch-pack", () => {
     expect(response.status).toBe(200);
     expect(body.nodeRepoUrl).toBe("https://github.com/Cogni-DAO/atlas");
     expect(body.knowledgeRepoUrl).toBe(
-      "https://www.dolthub.com/repositories/cogni-dao/knowledge-atlas"
+      "https://www.dolthub.com/repositories/cogni-dao/atlas"
     );
     expect(body.parentDeploymentPrUrl).toBe(
       "https://github.com/Cogni-DAO/cogni/pull/42"
@@ -96,7 +96,7 @@ describe("GET /api/v1/nodes/[id]/launch-pack", () => {
       "Cogni operator endpoint root: https://cognidao.org"
     );
     expect(body.prompt).toContain(
-      "DoltHub knowledge repo: https://www.dolthub.com/repositories/cogni-dao/knowledge-atlas"
+      "DoltHub knowledge repo: https://www.dolthub.com/repositories/cogni-dao/atlas"
     );
     expect(body.prompt).toContain(
       ".claude/skills/node-wizard-scorecard/SKILL.md"

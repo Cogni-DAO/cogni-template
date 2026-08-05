@@ -22,7 +22,11 @@ export function knowledgeDatabaseForSlug(slug: string): string {
 }
 
 export function knowledgeRepoForSlug(slug: string): string {
-  return `knowledge-${slug}`;
+  // DoltHub repo name mirrors the node slug 1:1 (dolt name == git name). The
+  // operator node is the current mismatch (its git repo is `cogni`, slug is
+  // `operator`) — that is tolerated; the git repo rename is future work. No
+  // `knowledge-` prefix and no per-node exceptions.
+  return slug;
 }
 
 export function knowledgeRepoWebUrl(input: {

@@ -222,7 +222,7 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
     mockEnsureDatabase.mockReset();
     mockEnsureDatabase.mockResolvedValue({
       owner: "cogni-dao",
-      repo: "knowledge-atlas",
+      repo: "atlas",
       created: true,
     });
     mockForkFromTemplate.mockReset();
@@ -254,7 +254,7 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
     expect(response.status).toBe(200);
     expect(mockEnsureDatabase).toHaveBeenCalledWith({
       owner: "cogni-dao",
-      repo: "knowledge-atlas",
+      repo: "atlas",
       description: "Cogni node atlas knowledge mirror",
     });
     expect(mockForkFromTemplate).toHaveBeenCalledWith({
@@ -269,8 +269,8 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
       knowledgeRemote: {
         database: "knowledge_atlas",
         owner: "cogni-dao",
-        repo: "knowledge-atlas",
-        url: "https://doltremoteapi.dolthub.com/cogni-dao/knowledge-atlas",
+        repo: "atlas",
+        url: "https://doltremoteapi.dolthub.com/cogni-dao/atlas",
       },
       // Born protected: copy the deployment monorepo's exact branch protection.
       protectionSourceOwner: "cogni-test-org",
@@ -288,8 +288,8 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
       knowledgeRemote: {
         database: "knowledge_atlas",
         owner: "cogni-dao",
-        repo: "knowledge-atlas",
-        url: "https://doltremoteapi.dolthub.com/cogni-dao/knowledge-atlas",
+        repo: "atlas",
+        url: "https://doltremoteapi.dolthub.com/cogni-dao/atlas",
       },
       nodeRepoUrl: "https://github.com/cogni-test-org/atlas.git",
       nodeRepoHeadSha: "identity-commit",
@@ -301,7 +301,7 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
     expect(body.pr.prNumber).toBe(1532);
     expect(body.doltHub).toEqual({
       owner: "cogni-dao",
-      repo: "knowledge-atlas",
+      repo: "atlas",
       created: true,
     });
     expect(mockLog.info).toHaveBeenCalledWith(

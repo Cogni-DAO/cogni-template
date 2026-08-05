@@ -22,14 +22,12 @@ describe("resolveKnowledgeMirrorRemoteUrl", () => {
         remote: {
           provider: "dolthub",
           owner: "cogni-test-nodes",
-          repo: "knowledge-atlas",
-          url: "https://doltremoteapi.dolthub.com/cogni-test-nodes/knowledge-atlas",
+          repo: "atlas",
+          url: "https://doltremoteapi.dolthub.com/cogni-test-nodes/atlas",
           custody: "cogni-owned",
         },
       })
-    ).toBe(
-      "https://doltremoteapi.dolthub.com/cogni-test-nodes/knowledge-atlas"
-    );
+    ).toBe("https://doltremoteapi.dolthub.com/cogni-test-nodes/atlas");
   });
 
   it("disables the mirror when repo-spec has no knowledge remote", () => {

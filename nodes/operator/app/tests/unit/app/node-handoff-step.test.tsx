@@ -70,8 +70,7 @@ function makeNode(overrides: Partial<WizardNode> = {}): WizardNode {
     publishPrUrl: "https://github.com/Cogni-DAO/cogni/pull/42",
     failureReason: null,
     nodeRepoUrl: "https://github.com/cogni-test-org/atlas",
-    knowledgeRepoUrl:
-      "https://www.dolthub.com/repositories/cogni-dao/knowledge-atlas",
+    knowledgeRepoUrl: "https://www.dolthub.com/repositories/cogni-dao/atlas",
     daoUrl:
       "https://app.aragon.org/dao/base-mainnet/0x1111111111111111111111111111111111111111",
     repoSpecUrl:
@@ -105,7 +104,7 @@ describe("HandoffStep", () => {
     );
     expect(screen.getByRole("link", { name: /DoltHub repo/ })).toHaveAttribute(
       "href",
-      "https://www.dolthub.com/repositories/cogni-dao/knowledge-atlas"
+      "https://www.dolthub.com/repositories/cogni-dao/atlas"
     );
     expect(screen.getByRole("link", { name: /Deployment PR/ })).toHaveAttribute(
       "href",

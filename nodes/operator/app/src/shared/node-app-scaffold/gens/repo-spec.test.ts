@@ -37,8 +37,8 @@ const rendered = renderRepoSpec({
   knowledgeRemote: {
     database: "knowledge_my_node",
     owner: "cogni-dao-test",
-    repo: "knowledge-my-node",
-    url: "https://doltremoteapi.dolthub.com/cogni-dao-test/knowledge-my-node",
+    repo: "my-node",
+    url: "https://doltremoteapi.dolthub.com/cogni-dao-test/my-node",
   },
 });
 
@@ -136,8 +136,8 @@ describe("renderRepoSpec — BORN_REVIEWABLE", () => {
       remote: {
         provider: "dolthub",
         owner: "cogni-dao-test",
-        repo: "knowledge-my-node",
-        url: "https://doltremoteapi.dolthub.com/cogni-dao-test/knowledge-my-node",
+        repo: "my-node",
+        url: "https://doltremoteapi.dolthub.com/cogni-dao-test/my-node",
         custody: "cogni-owned",
       },
     });

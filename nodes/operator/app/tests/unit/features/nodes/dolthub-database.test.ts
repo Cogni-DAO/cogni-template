@@ -16,7 +16,7 @@ import { createDoltHubDatabaseEnsurer } from "@/features/nodes/dolthub-database"
 
 const INPUT = {
   owner: "cogni-dao-test",
-  repo: "knowledge-my-node",
+  repo: "my-node",
   description: "Cogni node my-node knowledge mirror",
 };
 
@@ -42,7 +42,7 @@ describe("createDoltHubDatabaseEnsurer", () => {
 
     expect(result).toEqual({
       owner: "cogni-dao-test",
-      repo: "knowledge-my-node",
+      repo: "my-node",
       created: true,
     });
     expect(fetchMock).toHaveBeenCalledWith(
@@ -55,7 +55,7 @@ describe("createDoltHubDatabaseEnsurer", () => {
         },
         body: JSON.stringify({
           ownerName: "cogni-dao-test",
-          repoName: "knowledge-my-node",
+          repoName: "my-node",
           description: "Cogni node my-node knowledge mirror",
           visibility: "public",
         }),
@@ -80,7 +80,7 @@ describe("createDoltHubDatabaseEnsurer", () => {
       }).ensureDatabase(INPUT)
     ).resolves.toEqual({
       owner: "cogni-dao-test",
-      repo: "knowledge-my-node",
+      repo: "my-node",
       created: false,
     });
   });

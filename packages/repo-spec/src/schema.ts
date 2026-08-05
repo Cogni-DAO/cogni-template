@@ -349,7 +349,7 @@ export const knowledgeRemoteSpecSchema = z
   .object({
     provider: z.literal("dolthub"),
     owner: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/),
-    repo: z.string().regex(/^knowledge-[a-z][a-z0-9-]{0,63}$/),
+    repo: z.string().regex(/^[a-z][a-z0-9-]{0,63}$/),
     url: z.string().refine(isDoltHubRemoteUrl, {
       message:
         "DoltHub remote URL must be https://doltremoteapi.dolthub.com/<owner>/<repo> with no credentials",
