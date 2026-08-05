@@ -111,14 +111,13 @@ owns nothing under the `tenant_isolation` RLS policy (`owner_user_id = current_s
 
 ## Action Items
 
-| Pri | Action                                                                                                                                                                                                                          | Owner        | Work Item    |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------ |
-| P0  | **DONE (this PR + prod op):** `backup.sh` now fails-closed (non-zero exit, `db_backup.failed`, no `completed` on any dump error); prod `postgres` superuser password re-aligned; backup re-run → real non-empty dumps verified. | flock-leader | this PR      |
-| P1  | Make the `postgres` superuser password ESO-synced / reconciled on provision so it can't drift on a fresh reprovision (root cause of the backup break) — mirror how `app_operator` is kept in sync                               | flock-leader | (file /task) |
-| P1  | Reproducible registry reseed: `0040_seed_registry_nodes.sql` (wallet-resolved, `ON CONFLICT`) so a future fresh DB self-heals ownership                                                                                         | flock-leader | (file /task) |
-| P1  | Off-host backup sink (S3-compatible) + scheduled restore rehearsal before claiming disaster recovery                                                                                                                            | flock-leader | (file /task) |
-| P2  | Grant the owner OpenFGA `production_promoter`/`admin` on the seeded nodes via the API grant loop (deferred out of this task) so operator-API promotes work                                                                      | flock-leader | (file /task) |
-| P2  | Promote the merged ExternalSecret node-overlay fix (#1969) to prod so beacon/poly/node-template pods leave `CreateContainerConfigError`                                                                                         | flock-leader | —            |
+| Pri | Action                                                                                                                                                                                                                                                                | Owner        | Work Item    |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ------------ |
+| P0  | **DONE (this PR + prod op):** `backup.sh` now fails-closed (non-zero exit, `db_backup.failed`, no `completed` on any dump error, so a future drift is LOUD not silent); prod `postgres` superuser password re-aligned; backup re-run → real non-empty dumps verified. | flock-leader | this PR      |
+| P0  | **DONE (this PR):** off-host durability = a **periodic local pull** of the newest backup (recipe in `database-expert`). Same-VM backup + local pull IS the recovery story — no S3 sink needed.                                                                        | flock-leader | this PR      |
+| P1  | Promote the merged ExternalSecret node-overlay fix (#1969) to prod so beacon/poly/node-template pods leave `CreateContainerConfigError` (the live fleet-health gap — needs an owner-gated prod promote)                                                               | Derek        | —            |
+| P2  | Grant the owner OpenFGA `production_promoter`/`admin` on the seeded nodes via the API grant loop so operator-API promotes work (workflow-dispatch promotes already work without it)                                                                                   | flock-leader | (file /task) |
+| P3  | _Optional hardening (not blocking — fail-closed makes drift loud):_ ESO-sync the superuser/backup credential + a `0040_seed_registry_nodes.sql` migration so a future fresh DB self-heals both the backup cred and the registry ownership                             | flock-leader | (file /task) |
 
 ## Related
 
