@@ -24,6 +24,7 @@ import {
   type EnvPlanCurrent,
   EnvPlanError,
   type EnvPlanOp,
+  externalSecretPath,
   overlayPath,
 } from "./env-membership-plan";
 
@@ -65,6 +66,22 @@ initContainers:
   migrate: exec node /app/app/migrate.mjs /app/app/migrations
 `;
 
+// node-template overlay's external-secret.yaml (the ESO producer). renderOverlayFile only
+// slug/port-renames it — node-template → blue everywhere, no migrate guard.
+const TEMPLATE_EXTERNAL_SECRET = `apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: env-secrets
+  labels:
+    app.kubernetes.io/component: node-template
+spec:
+  target:
+    name: node-template-env-secrets
+  dataFrom:
+    - extract:
+        key: candidate-a/node-template
+`;
+
 const APPSET_TEMPLATE = `metadata:
   name: cogni-__ENV__-__NODE__
 spec:
@@ -92,16 +109,20 @@ path_prefix: nodes/${SLUG}/
 function baseCurrent(envs: readonly string[]): EnvPlanCurrent {
   const appsetsKustomizationByEnv: Record<string, string> = {};
   const templateOverlayByEnv: Record<string, string> = {};
+  const templateExternalSecretByEnv: Record<string, string> = {};
   for (const e of envs) {
     appsetsKustomizationByEnv[e] = kustWith(e, ["blue", "operator"]);
     templateOverlayByEnv[e] = TEMPLATE_OVERLAY;
+    templateExternalSecretByEnv[e] = TEMPLATE_EXTERNAL_SECRET;
   }
   // preview is an env we ADD in tests, so make its template overlay + kustomization available.
   appsetsKustomizationByEnv.preview ??= kustWith("preview", ["operator"]);
   templateOverlayByEnv.preview ??= TEMPLATE_OVERLAY;
+  templateExternalSecretByEnv.preview ??= TEMPLATE_EXTERNAL_SECRET;
   return {
     catalog: catalogWith(envs),
     templateOverlayByEnv,
+    templateExternalSecretByEnv,
     appsetTemplate: APPSET_TEMPLATE,
     appsetsKustomizationByEnv,
     port: 3200,
@@ -131,10 +152,20 @@ describe("buildEnvDeltaPlan — ADD env", () => {
       [
         CATALOG_PATH(SLUG),
         overlayPath("preview", SLUG),
+        externalSecretPath("preview", SLUG),
         appsetPath("preview", SLUG),
         appsetsKustomizationPath("preview"),
       ].sort()
     );
+    // ESO producer is cloned with the slug rename applied.
+    const esOp = res.ops.find(
+      (o) => o.path === externalSecretPath("preview", SLUG)
+    );
+    expect(esOp?.op).toBe("upsert");
+    if (esOp?.op === "upsert") {
+      expect(esOp.content).toContain("name: blue-env-secrets");
+      expect(esOp.content).not.toContain("node-template");
+    }
 
     const catalogOp = res.ops.find((o) => o.path === CATALOG_PATH(SLUG));
     expect(catalogOp?.op).toBe("upsert");
@@ -182,7 +213,11 @@ describe("buildEnvDeltaPlan — REMOVE env (partial)", () => {
     expect(res.nextEnvs).toEqual(["candidate-a", "preview"]);
     // Overlay + appset are DELETED (sha:null in the adapter).
     expect(deletes(res.ops).sort()).toEqual(
-      [overlayPath("production", SLUG), appsetPath("production", SLUG)].sort()
+      [
+        overlayPath("production", SLUG),
+        externalSecretPath("production", SLUG),
+        appsetPath("production", SLUG),
+      ].sort()
     );
     // Catalog edited + kustomization regenerated without blue.
     const catalogOp = res.ops.find((o) => o.path === CATALOG_PATH(SLUG));
@@ -227,7 +262,11 @@ describe("buildEnvDeltaPlan — ATOMIC_PER_ENV (candidate-a is not special)", ()
     expect(res.nextEnvs).toEqual(["preview", "production"]);
     // Only candidate-a's overlay + appset are deleted; the catalog row survives.
     expect(deletes(res.ops).sort()).toEqual(
-      [overlayPath("candidate-a", SLUG), appsetPath("candidate-a", SLUG)].sort()
+      [
+        overlayPath("candidate-a", SLUG),
+        externalSecretPath("candidate-a", SLUG),
+        appsetPath("candidate-a", SLUG),
+      ].sort()
     );
     expect(deletes(res.ops)).not.toContain(CATALOG_PATH(SLUG));
     const catalogOp = res.ops.find((o) => o.path === CATALOG_PATH(SLUG));
@@ -255,7 +294,11 @@ describe("buildEnvDeltaPlan — ATOMIC_PER_ENV (candidate-a is not special)", ()
     }
     // candidate-a's overlay + appset ARE deleted.
     expect(deletes(res.ops).sort()).toEqual(
-      [overlayPath("candidate-a", SLUG), appsetPath("candidate-a", SLUG)].sort()
+      [
+        overlayPath("candidate-a", SLUG),
+        externalSecretPath("candidate-a", SLUG),
+        appsetPath("candidate-a", SLUG),
+      ].sort()
     );
   });
 

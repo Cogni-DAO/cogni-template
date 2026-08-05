@@ -3,7 +3,10 @@
 
 import { describe, expect, it } from "vitest";
 
-import { renderOverlay } from "@/shared/node-app-scaffold/gens/overlay";
+import {
+  renderOverlay,
+  renderOverlayFile,
+} from "@/shared/node-app-scaffold/gens/overlay";
 
 // Mirrors the real node-template template overlay: node-at-root migrate paths (/app/app) + the ESO
 // `<slug>-env-secrets` target carried directly. renderOverlay only slug/port-renames it.
@@ -96,5 +99,41 @@ patches:
     expect(() => renderOverlay(noMigrate, "coulditbe", 30500, 3500)).toThrow(
       /NODE_AT_ROOT_MIGRATE_PATH/
     );
+  });
+});
+
+// The ESO producer (external-secret.yaml) the node-template overlay carries beside its
+// kustomization. renderOverlayFile applies the SAME slug/port transform with NO migrate guard,
+// so a wizard node's overlay ships its own <slug>-env-secrets. Twin of render-node-overlays.sh
+// render_file for a non-kustomization file.
+const EXTERNAL_SECRET = `apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: env-secrets
+  labels:
+    app.kubernetes.io/component: node-template
+spec:
+  target:
+    name: node-template-env-secrets
+  dataFrom:
+    - extract:
+        key: candidate-a/node-template
+`;
+
+describe("renderOverlayFile", () => {
+  it("renames the slug through a sibling overlay file (the ESO target + OpenBao key)", () => {
+    const out = renderOverlayFile(EXTERNAL_SECRET, "coulditbe", 30500, 3500);
+
+    expect(out).toContain("name: coulditbe-env-secrets");
+    expect(out).toContain("key: candidate-a/coulditbe");
+    expect(out).toContain("app.kubernetes.io/component: coulditbe");
+    expect(out).not.toContain("node-template");
+  });
+
+  it("does NOT apply the node-at-root migrate guard (siblings carry no migrate command)", () => {
+    // A file with no migrate command must NOT throw — the guard is kustomization-only.
+    expect(() =>
+      renderOverlayFile(EXTERNAL_SECRET, "coulditbe", 30500, 3500)
+    ).not.toThrow();
   });
 });

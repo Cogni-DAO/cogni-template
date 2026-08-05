@@ -66,6 +66,7 @@ import {
   renderNodeExternalSecret,
   renderNodeExternalSecretKustomization,
   renderOverlay,
+  renderOverlayFile,
   renderPaymentsActivationSpec,
   renderRepoSpec,
 } from "@/shared/node-app-scaffold/gens";
@@ -1772,14 +1773,22 @@ export class GitHubRepoWriter implements DeployPlanePort {
   ): Promise<EnvPlanCurrent> {
     const appsetsKustomizationByEnv: Record<string, string> = {};
     const templateOverlayByEnv: Record<string, string> = {};
+    const templateExternalSecretByEnv: Record<string, string> = {};
 
     if (present) {
-      // ADD touches only the one env: its template overlay, appset template, and appsets kustomization.
+      // ADD touches only the one env: its template overlay + external-secret, appset template,
+      // and appsets kustomization.
       templateOverlayByEnv[env] = await this.readFileOnMain(
         octokit,
         owner,
         repo,
         `infra/k8s/overlays/${env}/${TEMPLATE_SLUG}/kustomization.yaml`
+      );
+      templateExternalSecretByEnv[env] = await this.readFileOnMain(
+        octokit,
+        owner,
+        repo,
+        `infra/k8s/overlays/${env}/${TEMPLATE_SLUG}/external-secret.yaml`
       );
       appsetsKustomizationByEnv[env] = await this.readFileOnMain(
         octokit,
@@ -1797,6 +1806,7 @@ export class GitHubRepoWriter implements DeployPlanePort {
       return {
         catalog,
         templateOverlayByEnv,
+        templateExternalSecretByEnv,
         appsetTemplate,
         appsetsKustomizationByEnv,
         port,
@@ -2603,9 +2613,11 @@ export class GitHubRepoWriter implements DeployPlanePort {
       renderCatalog(slug, port, nodePort, catalogInput)
     );
 
-    // overlays×3 — per birth env.
+    // overlays×3 — per birth env. Each overlay dir clones BOTH the node-template
+    // kustomization.yaml AND its external-secret.yaml (the ESO producer of
+    // <slug>-env-secrets — without it the pod's envFrom secret never exists →
+    // CreateContainerConfigError). Byte-exact twin of render-node-overlays.sh.
     for (const env of NODE_FORMATION_ENVS) {
-      const overlayPath = `infra/k8s/overlays/${env}/${slug}/kustomization.yaml`;
       const templateOverlay = await this.readFileOnMain(
         octokit,
         owner,
@@ -2613,8 +2625,18 @@ export class GitHubRepoWriter implements DeployPlanePort {
         `infra/k8s/overlays/${env}/${TEMPLATE_SLUG}/kustomization.yaml`
       );
       await addBlob(
-        overlayPath,
+        `infra/k8s/overlays/${env}/${slug}/kustomization.yaml`,
         renderOverlay(templateOverlay, slug, nodePort, port)
+      );
+      const templateExternalSecret = await this.readFileOnMain(
+        octokit,
+        owner,
+        repo,
+        `infra/k8s/overlays/${env}/${TEMPLATE_SLUG}/external-secret.yaml`
+      );
+      await addBlob(
+        `infra/k8s/overlays/${env}/${slug}/external-secret.yaml`,
+        renderOverlayFile(templateExternalSecret, slug, nodePort, port)
       );
     }
 
