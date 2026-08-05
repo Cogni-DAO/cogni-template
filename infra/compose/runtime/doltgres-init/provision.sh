@@ -40,19 +40,22 @@ run_sql_quiet() {
   PGPASSWORD="$DG_PASS" psql -h "$DG_HOST" -p "$DG_PORT" -U postgres -d "$db" -v ON_ERROR_STOP=1 -c "$sql" 2>/dev/null || true
 }
 
-# Wait for Doltgres
-echo "⏳ Waiting for Doltgres at $DG_HOST:$DG_PORT..."
+# Wait for Doltgres — probe the `postgres` DB itself, NOT pg_isready. On a FRESH volume the
+# server accepts connections (pg_isready passes) a few seconds BEFORE it finishes creating the
+# default `postgres` database, so a pg_isready-gated connect races straight into
+# `database "postgres" does not exist`. Poll a real SELECT against `postgres` until it succeeds.
+echo "⏳ Waiting for Doltgres postgres DB at $DG_HOST:$DG_PORT..."
 ELAPSED=0
-TIMEOUT=60
-until PGPASSWORD="$DG_PASS" pg_isready -h "$DG_HOST" -p "$DG_PORT" -U postgres >/dev/null 2>&1; do
+TIMEOUT=120
+until PGPASSWORD="$DG_PASS" psql -h "$DG_HOST" -p "$DG_PORT" -U postgres -d postgres -c 'SELECT 1' >/dev/null 2>&1; do
   if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
-    echo "❌ Timed out waiting for Doltgres after ${TIMEOUT}s"
+    echo "❌ Timed out waiting for Doltgres postgres DB after ${TIMEOUT}s"
     exit 1
   fi
   sleep 2
   ELAPSED=$((ELAPSED + 2))
 done
-echo "✅ Doltgres is up."
+echo "✅ Doltgres postgres DB connectable."
 
 # ── Roles ──────────────────────────────────────────────────────────────────
 echo "🔧 Creating roles..."
