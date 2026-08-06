@@ -516,20 +516,28 @@ Per-class cadence:
 | Class                             | Cadence                                           | Mechanism                                                        |
 | --------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
 | Dynamic DB credentials            | per-session (≤1h TTL)                             | OpenBao DB engine issues per-session; old expires automatically  |
-| Routine app tokens                | quarterly                                         | Scripted `pnpm secrets:rotate` or workflow_dispatch              |
-| External API keys                 | annually                                          | Manual mint + `bao kv patch` (some issuers expose rotation APIs) |
+| Routine app tokens (`source: agent`) | quarterly                                     | Substrate re-mints via `secret-materialize`; never hand-rotated  |
+| External API keys (`source: human`)  | annually                                      | Manual mint at issuer, then self-serve API (`POST /nodes/<id>/secrets` `op:rotate`) in the operator's own env; some issuers expose rotation APIs |
 | Bootstrap tokens (Cherry, CF, GH) | annually                                          | Manual rotation; documented in fork-quickstart                   |
 | ESO seed token                    | per-pod-lifetime (Kubernetes auth method renewal) | Automated by k8s ServiceAccount token rotation                   |
 | Emergency (compromised)           | immediate                                         | Force-sync ESO; alert chain via Loki; incident report            |
 
-**Routine rotation = ZERO PR:**
+**Routine rotation of a `source: human` value = ZERO PR** (the primary path; a
+node owner with a `secrets_manager` grant, holding only an API key):
 
-1. `pnpm secrets:rotate candidate-a node-template AUTH_SECRET`
-2. Tool generates new value (or accepts input for non-generatable keys)
-3. `bao kv patch cogni/candidate-a/node-template AUTH_SECRET=<new>` (OpenBao retains prior version)
-4. ESO refresh interval pulls new value into k8s Secret
-5. Reloader detects Secret change → restarts pod (zero-downtime; controlled rolling update)
-6. Audit log entry in OpenBao + Loki
+1. `POST /api/v1/nodes/<id>/secrets { env, key, value, op: "rotate" }` (Entry 3 above)
+2. Operator writes `cogni/<env>/<node>/<KEY>` with its own OpenBao identity (OpenBao retains prior version)
+3. ESO refresh interval pulls new value into k8s Secret
+4. Reloader detects Secret change → restarts pod (zero-downtime; controlled rolling update)
+5. Audit log entry in OpenBao + Loki
+
+The break-glass CLI equivalent (`pnpm secrets:set <env> <service> <KEY>`, Entry 1)
+runs the same `bao kv patch` primitive but requires kube custody + a writer JWT —
+reserved for cross-env writes or genuine break-glass. `source: agent`/`derived`
+keys (`AUTH_SECRET`, DB creds, DSNs) are never hand-rotated on either lane; the
+substrate re-mints them. (A dedicated `pnpm secrets:rotate` generate-then-write
+wrapper is a tracked follow-up under `proj.security-hardening`; today the
+primitive is `secrets:set`.) See [`secrets-rotate.md`](../guides/secrets-rotate.md).
 
 **Rollback path:** `bao kv rollback -version=N cogni/<env>/<service>` restores the prior version. Useful for incident response (e.g., rotated key turned out to be invalid).
 
@@ -583,8 +591,9 @@ Bound via OpenBao role definitions to Kubernetes ServiceAccounts (per-service-pe
 | `infra/k8s/argocd/reloader/`                             | Argo Application installing Stakater Reloader (`task.5056`)                                     |
 | `nodes/<node>/k8s/external-secrets/<env>/`               | Remote-source/wizard node ExternalSecret YAML, pinned into the operator tree                    |
 | `infra/k8s/overlays/<env>/operator/external-secret.yaml` | Legacy operator overlay copy; Argo-owned exception for the operator Deployment patch            |
-| `scripts/secrets/set-secret.sh`                          | CLI implementation (`pnpm secrets:set`)                                                         |
-| `scripts/secrets/rotate-secret.sh`                       | CLI implementation (`pnpm secrets:rotate`)                                                      |
+| `scripts/secrets/set-secret.sh`                          | Break-glass CLI implementation (`pnpm secrets:set`); rotation reuses it (`op:rotate` == a re-`set`) |
+| `nodes/operator/app/src/app/api/v1/nodes/[id]/secrets/route.ts` | Operator self-serve write/rotate route (Entry 3 — the primary human-value path)          |
+| `scripts/ci/secret-materialize.sh`                       | Materializer — writes `source: agent`/`derived` + inherits `_shared`/`inheritFrom` per node     |
 | `.github/workflows/secret-set.yml`                       | Planned day-2 self-serve write (GH-OIDC → OpenBao; per-operation); auth roles already provision |
 | `scripts/lib/secrets-catalog-loader.ts`                  | The one catalog reader (Zod); emits the pod-key universe                                        |
 | `nodes/<node>/.cogni/secrets-catalog.yaml`               | Per-node declaration surface (one-PR self-serve)                                                |
