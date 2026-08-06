@@ -98,3 +98,86 @@ runtime-registry dependency.
 
 Re-flight oss with **no manual scheduler edit** → catalog projection feeds the
 configmap → worker polls oss's queue → `chat/completions` returns a completion.
+
+---
+
+# Owner binding — node registry ownership from repo-spec approvers (registry RLS)
+
+> Added 2026-08-05 after `pm.prod-reprovision-nodes-registry-reseed.2026-08-05`. Same
+> `REPO_SPEC_IS_IDENTITY_SSOT` direction as above, applied to **ownership** instead of routing.
+
+## Problem
+
+A fresh env reprovision brings up an **empty operator `nodes` registry** (node rows are
+app-written state, not migration state). Node ownership is `nodes.owner_user_id` enforced by the
+`tenant_isolation` RLS policy, so the owner wallet ends up owning **zero** nodes and the operator UI/API
+can't see or manage any of them — even though the repos, catalog, overlays, and pods all exist. This
+recurs on **every** reprovision until ownership is _derived_, not hand-seeded.
+
+## The load-bearing identity principle (why this is env-agnostic)
+
+`wallet_address` is a **stable, env-independent binding** (identity-model.md: bindings are
+auth-method-agnostic). `user_id` is an **env-local surrogate** — SIWE mints a fresh UUID per env on
+first login. **Ownership MUST resolve _through_ the wallet, never a hardcoded per-env `user_id`.** Do
+that and one seed/binding is correct on candidate-a, preview, and production simultaneously — SIWE
+reuses the wallet's row on the owner's next login, so `session.id == owner_user_id` falls out for free.
+This is why registry seeding is **not** per-env; a "different migration per env" is the anti-pattern.
+
+## Tactical (do-now): one env-agnostic seed migration
+
+Mirror `nodes/operator/app/src/adapters/server/db/migrations/0037_seed_first_class_nodes.sql`:
+
+1. `INSERT INTO users (id, wallet_address) … ON CONFLICT (wallet_address) DO NOTHING` — ensures the
+   owner exists even on an env where the wallet has never logged in (0037 silently no-ops there).
+2. `INSERT INTO nodes (…) SELECT …, u.id, 'active' FROM users u WHERE lower(u.wallet_address)=lower('<approver wallet>') ON CONFLICT (slug) DO UPDATE SET owner_user_id = EXCLUDED.owner_user_id`
+   — non-destructive (no `node_access_requests` cascade), idempotent, re-run safe.
+
+- `nodes.id` MUST be the canonical `node_id` (repo-spec / catalog projection — `REPO_SPEC_IS_IDENTITY_SSOT`).
+  Exclude stale forks that reuse another node's id (e.g. `standalone-node`/`cogni-poly` reusing operator's
+  `4ff8eac1…`) → PK collision.
+- Runs as the operator `migrate` initContainer → seeds all three envs + self-heals on every future reprovision.
+- Operational how-to + the RLS-read gotcha: `.claude/skills/database-expert` § "Reseeding the operator `nodes` registry".
+
+## Ideal (#2 — the endgame, and the right design): bind ownership from repo-spec approvers at formation
+
+The migration is a stopgap. The **correct** design derives ownership from the DAO governance SSoT that
+**already exists** — `.cogni/repo-spec.yaml` `governance.approvers` (line 23; today `0x070075…c949`,
+`derekg1729.eth`). This is the ownership peer of the `node_id` projection above: identity lives in
+repo-spec, ownership is _read from it_, never authored in a migration or hand-seeded.
+
+- **Node-wizard formation** (`gens/*` + `github-repo-write.ts`, the `POST /api/v1/nodes` + publish path)
+  binds `nodes.owner_user_id` at creation by resolving the repo-spec `governance.approvers[0]` wallet →
+  the env-local `users.id` (get-or-create by wallet). Self-projecting, exactly like `node_id`.
+- **Registry recovery** stops needing a migration at all: a reprovision replays formation-time ownership
+  from repo-spec. The migration path stays only as a break-glass backfill for pre-existing nodes.
+- **Multi-approver:** repo-spec `approvers` is a list → future multi-owner is a fan-out over the list,
+  not a schema change.
+
+### Also required for #2: the operator **nodes page** RLS read
+
+The nodes page loads via the `tenant_isolation` RLS policy (`owner_user_id = current_setting('app.current_user_id')`),
+so it only ever returns rows the session's wallet owns. Two things to verify/fix when wiring #2:
+
+- **Correctness:** the page must run inside a tenant scope (`SET LOCAL app.current_user_id = <session user_id>`);
+  a query without it returns **0 rows** (silent — looks like an empty account, not an error). This is the
+  same trap that made the fresh prod DB _look_ empty during the incident.
+- **Performance:** the per-request RLS-scoped registry query should be **cached / optimized** (owner→nodes
+  is small and changes rarely) — don't re-scan under RLS on every page load. A short-TTL per-session cache
+  or a covering index on `nodes(owner_user_id)` (already present as `nodes_owner_user_id_idx`) is enough.
+
+## Invariants (review criteria)
+
+- [ ] OWNER_RESOLVED_BY_BINDING: `owner_user_id` is resolved from the repo-spec approver **wallet**, never a
+      hardcoded env-local `user_id`. One migration/binding is correct on all envs.
+- [ ] OWNER_FROM_REPO_SPEC (ideal): formation reads `governance.approvers` from repo-spec — ownership is
+      derived from the governance SSoT, not authored (peer of `REPO_SPEC_IS_IDENTITY_SSOT`).
+- [ ] CANONICAL_NODE_ID: `nodes.id` == repo-spec/catalog `node_id`; stale-fork id collisions excluded.
+- [ ] RLS_SCOPED_READ: the nodes page reads inside `SET LOCAL app.current_user_id`; unscoped reads (0 rows)
+      are treated as a bug, not an empty account. Cache/optimize the scoped query.
+
+## Files (to touch when executing #2)
+
+- `nodes/operator/app/src/adapters/server/vcs/github-repo-write.ts` + `gens/` — bind `owner_user_id` from repo-spec approver at formation
+- `nodes/operator/app/src/app/api/v1/nodes/route.ts` — owner resolution get-or-create by wallet
+- the operator nodes page + its data loader — RLS scope correctness + caching/optimization
+- `nodes/operator/app/src/adapters/server/db/migrations/00XX_seed_registry_nodes.sql` — the stopgap backfill (mirror 0037)
