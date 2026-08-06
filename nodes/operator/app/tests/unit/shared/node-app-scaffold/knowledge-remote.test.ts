@@ -10,6 +10,7 @@
  * @public
  */
 
+import { knowledgeRemoteSpecSchema } from "@cogni/repo-spec";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -53,5 +54,36 @@ describe("node knowledge remote naming", () => {
       repo: "my-node",
       url: "https://doltremoteapi.dolthub.com/cogni-dao-test/my-node",
     });
+  });
+});
+
+describe("knowledgeRemoteSpecSchema legacy-prefix purge", () => {
+  const base = {
+    provider: "dolthub" as const,
+    owner: "cogni-dao-test",
+    custody: "cogni-owned" as const,
+  };
+
+  it("accepts a bare-slug repo", () => {
+    const parsed = knowledgeRemoteSpecSchema.safeParse({
+      ...base,
+      repo: "my-node",
+      url: "https://doltremoteapi.dolthub.com/cogni-dao-test/my-node",
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it("rejects the retired `knowledge-` repo prefix (fail closed, not tolerated)", () => {
+    const parsed = knowledgeRemoteSpecSchema.safeParse({
+      ...base,
+      repo: "knowledge-my-node",
+      url: "https://doltremoteapi.dolthub.com/cogni-dao-test/knowledge-my-node",
+    });
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues.some((i) => i.path.includes("repo"))).toBe(
+        true
+      );
+    }
   });
 });

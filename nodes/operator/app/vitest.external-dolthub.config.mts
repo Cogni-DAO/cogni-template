@@ -28,6 +28,12 @@ export default defineConfig({
   plugins: [tsconfigPaths({ projects: ["./tsconfig.test.json"] })],
   test: {
     include: ["tests/external/dolthub/**/*.external.test.ts"],
+    // The container-backed round-trip proof owns its own lane
+    // (test:external:dolthub:roundtrip): a 180s hookTimeout for the Docker
+    // pull + Doltgres migrate, and tsconfig.e2e-roundtrip.json to resolve
+    // @cogni/* from src. Exclude it here so this HTTP-only lane's 30s hook
+    // budget never sweeps it in and times out.
+    exclude: ["tests/external/dolthub/knowledge-roundtrip.external.test.ts"],
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
     pool: "forks",

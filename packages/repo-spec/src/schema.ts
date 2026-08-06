@@ -357,6 +357,17 @@ export const knowledgeRemoteSpecSchema = z
     custody: z.literal("cogni-owned"),
   })
   .superRefine((remote, ctx) => {
+    // Fail closed against the retired `knowledge-<slug>` naming. The DoltHub repo
+    // now mirrors the node slug 1:1 (dolt name == git name); the legacy prefix is
+    // gone, not merely tolerated, so a `knowledge-` repo can never be reintroduced.
+    if (remote.repo.startsWith("knowledge-")) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["repo"],
+        message:
+          "knowledge.remote.repo must be the bare node slug — the legacy `knowledge-` prefix is retired",
+      });
+    }
     let url: URL;
     try {
       url = new URL(remote.url);
