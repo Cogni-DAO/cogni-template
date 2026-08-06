@@ -28,10 +28,10 @@ ConfigMaps or repo config; it does not rotate.
 Rotation is a re-write with a new value, so it uses the **same two lanes** as
 adding a secret — choose before you touch anything:
 
-| What you're rotating | Lane | Who runs it |
-| --- | --- | --- |
-| A `source: human` vendor value (OAuth secret, API key, `DOLT_CREDS_JWK`) **in the same env as the operator you call** | ✅ **THE PATH — Self-serve API** (below) | node owner / their agent |
-| A `source: agent`/`derived` value the substrate mints (`AUTH_SECRET`, DB creds, DSNs) | Substrate re-mints it — see "Substrate-owned values" below | the substrate (CI), automatically |
+| What you're rotating                                                                                                                | Lane                                                       | Who runs it                        |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------- |
+| A `source: human` vendor value (OAuth secret, API key, `DOLT_CREDS_JWK`) **in the same env as the operator you call**               | ✅ **THE PATH — Self-serve API** (below)                   | node owner / their agent           |
+| A `source: agent`/`derived` value the substrate mints (`AUTH_SECRET`, DB creds, DSNs)                                               | Substrate re-mints it — see "Substrate-owned values" below | the substrate (CI), automatically  |
 | A `source: human` value in a **different env** than any operator that knows the node, or an env the API can't yet serve (cross-env) | ⚠️ **Break-glass operator-admin CLI** (`pnpm secrets:set`) | operator-admin (kube + writer JWT) |
 
 The API contract, the `secrets_manager` grant, and the **live per-env status** are
@@ -108,15 +108,15 @@ the exceptions where a live resource also holds state.
 
 Per [NIST SP 800-57 §8 Key States](https://csrc.nist.gov/publications/detail/sp/800-57-part-1/rev-5/final), every key has a lifecycle. Cogni's cadence table:
 
-| Class                      | Cadence                                   | Mechanism                                                                                                                                                      |
-| -------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Dynamic DB credentials** | per-session (≤1h TTL)                     | OpenBao DB engine issues per-session; old expires automatically. Pod re-auths transparently.                                                                   |
-| **Routine app tokens** (`source: agent`) | quarterly                   | Substrate re-mints via `secret-materialize`; ESO + Reloader handle propagation. Never hand-rotated.                                                            |
-| **External API keys** (`source: human`)  | annually                    | Manual mint at issuer, then **self-serve API** (`POST /nodes/<id>/secrets` `op:rotate`) in the operator's own env. Some issuers expose rotation APIs (see "Issuer-driven" below). |
-| **Bootstrap tokens**       | annually                                  | Cherry / Cloudflare / GH PAT / OpenRouter. Re-mint at the issuer, then self-serve API (same-env human value) or `gh secret set` (for chicken-and-egg GH env values). |
-| **AEAD / encryption keys** | every 6 months OR on suspected compromise | Special handling — two-step (encrypt new + decrypt old) required to prevent data loss. Lands with task.5056 (Reloader) + the dedicated AEAD migration runbook. |
-| **ESO seed token**         | per-pod-lifetime                          | Automated by Kubernetes ServiceAccount token rotation. **Never touched manually.**                                                                             |
-| **Emergency (compromise)** | immediate                                 | Force-sync; alert chain; incident report. See "Emergency rotation" below.                                                                                      |
+| Class                                    | Cadence                                   | Mechanism                                                                                                                                                                         |
+| ---------------------------------------- | ----------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dynamic DB credentials**               | per-session (≤1h TTL)                     | OpenBao DB engine issues per-session; old expires automatically. Pod re-auths transparently.                                                                                      |
+| **Routine app tokens** (`source: agent`) | quarterly                                 | Substrate re-mints via `secret-materialize`; ESO + Reloader handle propagation. Never hand-rotated.                                                                               |
+| **External API keys** (`source: human`)  | annually                                  | Manual mint at issuer, then **self-serve API** (`POST /nodes/<id>/secrets` `op:rotate`) in the operator's own env. Some issuers expose rotation APIs (see "Issuer-driven" below). |
+| **Bootstrap tokens**                     | annually                                  | Cherry / Cloudflare / GH PAT / OpenRouter. Re-mint at the issuer, then self-serve API (same-env human value) or `gh secret set` (for chicken-and-egg GH env values).              |
+| **AEAD / encryption keys**               | every 6 months OR on suspected compromise | Special handling — two-step (encrypt new + decrypt old) required to prevent data loss. Lands with task.5056 (Reloader) + the dedicated AEAD migration runbook.                    |
+| **ESO seed token**                       | per-pod-lifetime                          | Automated by Kubernetes ServiceAccount token rotation. **Never touched manually.**                                                                                                |
+| **Emergency (compromise)**               | immediate                                 | Force-sync; alert chain; incident report. See "Emergency rotation" below.                                                                                                         |
 
 ## Break-glass / cross-env CLI rotation (`pnpm secrets:set`) — LEGACY
 

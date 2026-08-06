@@ -156,7 +156,7 @@ Before THE PATH resolves at all:
    candidate-a operator (and vice-versa) — this is the same fact as "cross-env is
    not yet API-reachable" below, stated as a prerequisite.
 2. **A `secrets_manager` grant on that node** — `POST /nodes/{id}/access-requests
-   {role:"secrets_manager"}` → owner approves. The route checks
+{role:"secrets_manager"}` → owner approves. The route checks
    `can_manage_secrets ← secrets_manager`, fail-closed (`503 authz_unavailable` /
    `403 authz_denied`, never owner-fallback).
 3. **You call the host that serves your target env** (see the mapping below).
@@ -193,7 +193,7 @@ registered on prod is not yet API-reachable — use the operator-admin CLI (§3�
 against that env's OpenBao until the env-aware node model + cross-env write adapter
 land (see `docs/design/node-self-serve-secrets.md` Phase 3, deliverables D1–D4).
 
-### A catalog `service: _shared` *human* secret is STILL self-served
+### A catalog `service: _shared` _human_ secret is STILL self-served
 
 Do not confuse the **catalog service tier** `_shared` with the OpenBao **`_shared`
 namespace** the self-serve route denies. They are different things:

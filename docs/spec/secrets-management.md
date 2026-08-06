@@ -513,14 +513,14 @@ A value's origin is independent of whether it must be mirrored outward. The GitH
 
 Per-class cadence:
 
-| Class                             | Cadence                                           | Mechanism                                                        |
-| --------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------- |
-| Dynamic DB credentials            | per-session (≤1h TTL)                             | OpenBao DB engine issues per-session; old expires automatically  |
-| Routine app tokens (`source: agent`) | quarterly                                     | Substrate re-mints via `secret-materialize`; never hand-rotated  |
-| External API keys (`source: human`)  | annually                                      | Manual mint at issuer, then self-serve API (`POST /nodes/<id>/secrets` `op:rotate`) in the operator's own env; some issuers expose rotation APIs |
-| Bootstrap tokens (Cherry, CF, GH) | annually                                          | Manual rotation; documented in fork-quickstart                   |
-| ESO seed token                    | per-pod-lifetime (Kubernetes auth method renewal) | Automated by k8s ServiceAccount token rotation                   |
-| Emergency (compromised)           | immediate                                         | Force-sync ESO; alert chain via Loki; incident report            |
+| Class                                | Cadence                                           | Mechanism                                                                                                                                        |
+| ------------------------------------ | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Dynamic DB credentials               | per-session (≤1h TTL)                             | OpenBao DB engine issues per-session; old expires automatically                                                                                  |
+| Routine app tokens (`source: agent`) | quarterly                                         | Substrate re-mints via `secret-materialize`; never hand-rotated                                                                                  |
+| External API keys (`source: human`)  | annually                                          | Manual mint at issuer, then self-serve API (`POST /nodes/<id>/secrets` `op:rotate`) in the operator's own env; some issuers expose rotation APIs |
+| Bootstrap tokens (Cherry, CF, GH)    | annually                                          | Manual rotation; documented in fork-quickstart                                                                                                   |
+| ESO seed token                       | per-pod-lifetime (Kubernetes auth method renewal) | Automated by k8s ServiceAccount token rotation                                                                                                   |
+| Emergency (compromised)              | immediate                                         | Force-sync ESO; alert chain via Loki; incident report                                                                                            |
 
 **Routine rotation of a `source: human` value = ZERO PR** (the primary path; a
 node owner with a `secrets_manager` grant, holding only an API key):
@@ -584,23 +584,23 @@ Bound via OpenBao role definitions to Kubernetes ServiceAccounts (per-service-pe
 
 ## File Pointers
 
-| File                                                     | Purpose                                                                                         |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `infra/k8s/argocd/openbao/`                              | Argo Application installing OpenBao (`task.0284`)                                               |
-| `infra/k8s/argocd/external-secrets/`                     | Argo Application installing ESO controller (`task.0284`)                                        |
-| `infra/k8s/argocd/reloader/`                             | Argo Application installing Stakater Reloader (`task.5056`)                                     |
-| `nodes/<node>/k8s/external-secrets/<env>/`               | Remote-source/wizard node ExternalSecret YAML, pinned into the operator tree                    |
-| `infra/k8s/overlays/<env>/operator/external-secret.yaml` | Legacy operator overlay copy; Argo-owned exception for the operator Deployment patch            |
-| `scripts/secrets/set-secret.sh`                          | Break-glass CLI implementation (`pnpm secrets:set`); rotation reuses it (`op:rotate` == a re-`set`) |
-| `nodes/operator/app/src/app/api/v1/nodes/[id]/secrets/route.ts` | Operator self-serve write/rotate route (Entry 3 — the primary human-value path)          |
-| `scripts/ci/secret-materialize.sh`                       | Materializer — writes `source: agent`/`derived` + inherits `_shared`/`inheritFrom` per node     |
-| `.github/workflows/secret-set.yml`                       | Planned day-2 self-serve write (GH-OIDC → OpenBao; per-operation); auth roles already provision |
-| `scripts/lib/secrets-catalog-loader.ts`                  | The one catalog reader (Zod); emits the pod-key universe                                        |
-| `nodes/<node>/.cogni/secrets-catalog.yaml`               | Per-node declaration surface (one-PR self-serve)                                                |
-| `docs/runbooks/fork-quickstart.md`                       | Bootstrap flow (substrate install + unseal + role bind, Steps 6 / 6.5)                          |
-| `docs/runbooks/production-operator-eso-cutover.md`       | Production operator OpenBao/ESO cutover, custody discovery, force-sync, and cleanup ordering    |
-| `docs/guides/secrets-add-new.md`                         | Practical guide — adding a new secret                                                           |
-| `docs/guides/secrets-rotate.md`                          | Practical guide — rotation playbook + substrate-token rotation                                  |
+| File                                                            | Purpose                                                                                             |
+| --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `infra/k8s/argocd/openbao/`                                     | Argo Application installing OpenBao (`task.0284`)                                                   |
+| `infra/k8s/argocd/external-secrets/`                            | Argo Application installing ESO controller (`task.0284`)                                            |
+| `infra/k8s/argocd/reloader/`                                    | Argo Application installing Stakater Reloader (`task.5056`)                                         |
+| `nodes/<node>/k8s/external-secrets/<env>/`                      | Remote-source/wizard node ExternalSecret YAML, pinned into the operator tree                        |
+| `infra/k8s/overlays/<env>/operator/external-secret.yaml`        | Legacy operator overlay copy; Argo-owned exception for the operator Deployment patch                |
+| `scripts/secrets/set-secret.sh`                                 | Break-glass CLI implementation (`pnpm secrets:set`); rotation reuses it (`op:rotate` == a re-`set`) |
+| `nodes/operator/app/src/app/api/v1/nodes/[id]/secrets/route.ts` | Operator self-serve write/rotate route (Entry 3 — the primary human-value path)                     |
+| `scripts/ci/secret-materialize.sh`                              | Materializer — writes `source: agent`/`derived` + inherits `_shared`/`inheritFrom` per node         |
+| `.github/workflows/secret-set.yml`                              | Planned day-2 self-serve write (GH-OIDC → OpenBao; per-operation); auth roles already provision     |
+| `scripts/lib/secrets-catalog-loader.ts`                         | The one catalog reader (Zod); emits the pod-key universe                                            |
+| `nodes/<node>/.cogni/secrets-catalog.yaml`                      | Per-node declaration surface (one-PR self-serve)                                                    |
+| `docs/runbooks/fork-quickstart.md`                              | Bootstrap flow (substrate install + unseal + role bind, Steps 6 / 6.5)                              |
+| `docs/runbooks/production-operator-eso-cutover.md`              | Production operator OpenBao/ESO cutover, custody discovery, force-sync, and cleanup ordering        |
+| `docs/guides/secrets-add-new.md`                                | Practical guide — adding a new secret                                                               |
+| `docs/guides/secrets-rotate.md`                                 | Practical guide — rotation playbook + substrate-token rotation                                      |
 
 ## Related
 
