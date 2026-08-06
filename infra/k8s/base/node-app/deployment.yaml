@@ -32,6 +32,11 @@ spec:
       # maxUnavailable:1 is the single-box-correct strategy: kill-old-then-
       # start-new, zero surge headroom, one brief blip on a single-replica
       # Deployment. Revisit only when an env runs >1 schedulable node.
+      # That "brief blip" is a hard edge 502 on EVERY deploy (candidate-a +
+      # preview + PRODUCTION) — masked memory-neutrally by the edge Caddy
+      # `lb_try_duration` retry (scripts/ci/render-caddyfile.sh
+      # ZERO_DOWNTIME_ROLLOUT), which holds + re-dials across the swap. The real
+      # zero-downtime fix is maxSurge:1, unlocked by VM headroom (#1945).
       maxUnavailable: 1
       maxSurge: 0
   selector:

@@ -37,9 +37,21 @@ emit_site_block() {
 ${host} {
   encode zstd gzip
 
+  # ZERO_DOWNTIME_ROLLOUT: the node-app runs replicas:1 with maxSurge:0 /
+  # maxUnavailable:1 (memory-tight single-box VM — a surge pod can't schedule,
+  # infra/k8s/base/node-app/deployment.yaml). So a flight/promote KILLS the old
+  # pod before the new one is Ready → a brief window with zero upstream endpoints.
+  # Without retry the edge 502s every deploy on candidate-a/preview/PRODUCTION.
+  # lb_try_duration makes Caddy hold + re-dial the (connection-refused) upstream
+  # across the swap instead of failing fast — turning a guaranteed 502 into a
+  # short latency blip. Memory-neutral; the real zero-downtime fix (maxSurge:1)
+  # waits on VM headroom. Only pre-send dial failures are retried, so it is safe
+  # for non-idempotent methods (the request never reached the app).
   @public path /api/v1/public/*
   handle @public {
     reverse_proxy ${upstream} {
+      lb_try_duration 30s
+      lb_try_interval 250ms
       header_up X-Real-IP {remote_host}
       transport http {
         response_header_timeout 10s
@@ -47,7 +59,10 @@ ${host} {
     }
   }
 
-  reverse_proxy ${upstream}
+  reverse_proxy ${upstream} {
+    lb_try_duration 30s
+    lb_try_interval 250ms
+  }
 
   log {
     format json
