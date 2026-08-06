@@ -11,8 +11,8 @@
  *   Model:  COGNI_MODEL env var
  *   LLM:    OPENAI_API_BASE env var (socat bridge → proxy → LiteLLM)
  *
- * Output envelope matches OpenClaw --json format so SandboxGraphProvider
- * uses identical parse logic for both this script and OpenClaw.
+ * Output envelope matches the SandboxProgramContract --json format so
+ * SandboxGraphProvider uses identical parse logic across sandbox programs.
  */
 
 import { readFile } from "node:fs/promises";

@@ -149,8 +149,7 @@ same Loki:
 
 # 2. Host-side compose container stdout (host alloy → Loki)
 {env="<env>",service="<compose-svc>"} | json | level=~"error|warn"
-# compose-svc ∈ {litellm, caddy, temporal, autoheal, db-backup, openclaw-gateway,
-#                llm-proxy-openclaw, alloy-k8s-events}
+# compose-svc ∈ {litellm, caddy, temporal, autoheal, db-backup, alloy-k8s-events}
 
 # 3. Kubernetes Events stream (pod OOMKilled, probe failures, evictions, rollout)
 {env="<env>",source="k8s-events"} | json

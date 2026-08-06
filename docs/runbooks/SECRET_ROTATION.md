@@ -35,8 +35,6 @@ These are validated by `scripts/ci/deploy.sh` — missing = hard failure.
 | `LITELLM_MASTER_KEY`       | Yes                      | Agent: `openssl rand -hex 24` (prefixed `sk-cogni-`)                                                                                               | ROTATED | —                                                         |
 | `OPENROUTER_API_KEY`       | Yes                      | Human: [OpenRouter Keys](https://openrouter.ai/keys)                                                                                               | MISSING | Create key, then `gh secret set OPENROUTER_API_KEY`       |
 | `EVM_RPC_URL`              | Yes                      | Human: [Alchemy Dashboard](https://dashboard.alchemy.com/) → Apps → Create App (Base mainnet) → API Key                                            | MISSING | Copy full URL, then `gh secret set EVM_RPC_URL`           |
-| `OPENCLAW_GATEWAY_TOKEN`   | Yes                      | Agent: `openssl rand -base64 32`                                                                                                                   | ROTATED | —                                                         |
-| `OPENCLAW_GITHUB_RW_TOKEN` | Yes                      | Human: [GitHub PAT](https://github.com/settings/tokens?type=beta) → Fine-grained → Contents:Write + Pull requests:Write, scoped to cogni-dao repos | STALE   | Regenerate, then `gh secret set OPENCLAW_GITHUB_RW_TOKEN` |
 | `POSTHOG_API_KEY`          | Yes                      | Human: [PostHog](https://us.posthog.com/settings/project#variables) → Project Settings → Project API Key                                           | MISSING | Copy key, then `gh secret set POSTHOG_API_KEY`            |
 | `POSTHOG_HOST`             | Yes                      | Human: PostHog instance URL (e.g. `https://us.i.posthog.com`)                                                                                      | MISSING | `gh secret set POSTHOG_HOST`                              |
 | `DATABASE_URL`             | Yes                      | Agent (on fresh deploy): auto-derived from DB credentials below                                                                                    | MISSING | Set after choosing DB passwords (see Database section)    |
@@ -137,7 +135,7 @@ Deploy uses `${VAR:-}` fallback — empty = feature disabled.
 | `GOOGLE_OAUTH_CLIENT_ID`      | Human: [Google Cloud Console](https://console.cloud.google.com/apis/credentials) → OAuth 2.0 Client IDs | MISSING |
 | `GOOGLE_OAUTH_CLIENT_SECRET`  | Human: same page                                                                                        | MISSING |
 
-### Discord Bot (OpenClaw gateway)
+### Discord Bot
 
 | Secret              | Rotated By                                                                                         | Status |
 | ------------------- | -------------------------------------------------------------------------------------------------- | ------ |
@@ -193,7 +191,7 @@ Deploy uses `${VAR:-}` fallback — empty = feature disabled.
 
 ```bash
 # One-liner to rotate all agent-owned secrets
-for SECRET in AUTH_SECRET SCHEDULER_API_TOKEN BILLING_INGEST_TOKEN INTERNAL_OPS_TOKEN METRICS_TOKEN OPENCLAW_GATEWAY_TOKEN; do
+for SECRET in AUTH_SECRET SCHEDULER_API_TOKEN BILLING_INGEST_TOKEN INTERNAL_OPS_TOKEN METRICS_TOKEN; do
   openssl rand -base64 32 | gh secret set "$SECRET" --repo cogni-dao/cogni
 done
 echo "sk-cogni-$(openssl rand -hex 24)" | gh secret set LITELLM_MASTER_KEY --repo cogni-dao/cogni

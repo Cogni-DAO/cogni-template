@@ -33,7 +33,7 @@ Add ONE entry to the catalog that owns it:
 ```yaml
 - name: MY_NEW_KEY
   tier: A1 # A1 pod-baseline · A2 node-specific · B Compose-infra · D/E CI-only · G derived
-  appliesTo: all-nodes # capability marker: all-nodes | web | database | llm | openclaw | payments
+  appliesTo: all-nodes # capability marker: all-nodes | web | database | llm | payments
   shared: false # false → distinct per node (cogni/<env>/<node>/*); true → cogni/<env>/_shared/*
   source: human # human (you provide the value) | agent (generated) | derived
   required: false

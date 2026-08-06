@@ -66,9 +66,8 @@ Derive `REPO_SLUG` (e.g., `my-cogni-node`) and `REPO_SNAKE` (e.g., `my_cogni_nod
    | `EVM_RPC_URL`              | https://dashboard.alchemy.com/apps (Base Mainnet)                                       |
    | `GHCR_DEPLOY_TOKEN`        | https://github.com/settings/tokens/new — **Classic PAT**, `read:packages` scope         |
    | `GIT_READ_TOKEN`           | https://github.com/settings/personal-access-tokens/new — Fine-grained, `Contents: Read` |
-   | `OPENCLAW_GITHUB_RW_TOKEN` | https://github.com/settings/tokens/new — Classic PAT, `repo` scope                      |
 
-3. Auto-generate: `LITELLM_MASTER_KEY`, `AUTH_SECRET`, `OPENCLAW_GATEWAY_TOKEN` via `openssl rand`
+3. Auto-generate: `LITELLM_MASTER_KEY`, `AUTH_SECRET` via `openssl rand`
 4. Start dev infrastructure: `pnpm dev:infra`
 5. Provision database + run migrations: `pnpm dev:setup`
 6. Start dev server: `pnpm dev`

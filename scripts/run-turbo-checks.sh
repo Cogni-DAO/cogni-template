@@ -48,8 +48,6 @@ export AUTH_SECRET="${AUTH_SECRET:-tNf5lFM9yMhdgwS5yeQB8Y2kmigblBqobkvI2XN2brg=}
 export SCHEDULER_API_TOKEN="${SCHEDULER_API_TOKEN:-test-scheduler-api-token-for-ci-min32chars}"
 export BILLING_INGEST_TOKEN="${BILLING_INGEST_TOKEN:-test-billing-ingest-token-for-ci-min32ch}"
 export INTERNAL_OPS_TOKEN="${INTERNAL_OPS_TOKEN:-test-internal-ops-token-for-ci-min32}"
-export OPENCLAW_GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-test-openclaw-gateway-token-for-ci-32ch}"
-export OPENCLAW_GITHUB_RW_TOKEN="${OPENCLAW_GITHUB_RW_TOKEN:-test-github-rw-token}"
 export DISCORD_BOT_TOKEN="${DISCORD_BOT_TOKEN:-test-discord-bot-token-for-ci}"
 export POSTHOG_API_KEY="${POSTHOG_API_KEY:-phc_test_key_for_ci}"
 export POSTHOG_HOST="${POSTHOG_HOST:-http://localhost:18000}"

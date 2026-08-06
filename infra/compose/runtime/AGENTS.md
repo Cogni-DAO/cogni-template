@@ -9,16 +9,15 @@
 
 ## Purpose
 
-Production runtime configuration directory copied to VM hosts for container orchestration and database initialization. Contains app + postgres + litellm + openfga + alloy + temporal + git-sync services, OpenClaw gateway services under the `sandbox-openclaw` profile, and Playwright MCP server under the `mcp-playwright` profile (dev-only). Edge (Caddy) is in separate `../edge/` project.
+Production runtime configuration directory copied to VM hosts for container orchestration and database initialization. Contains app + postgres + litellm + openfga + alloy + temporal + git-sync services, and Playwright MCP server under the `mcp-playwright` profile (dev-only). Edge (Caddy) is in separate `../edge/` project.
 
 ## Pointers
 
-- [docker-compose.yml](docker-compose.yml): Production container stack (app, postgres, litellm, alloy, temporal, OpenClaw gateway profile)
+- [docker-compose.yml](docker-compose.yml): Production container stack (app, postgres, litellm, alloy, temporal)
 - [docker-compose.dev.yml](docker-compose.dev.yml): Development container stack (includes local loki, grafana)
 - [postgres-init/](postgres-init/): Postgres database initialization scripts
 - [doltgres-init/](doltgres-init/): Doltgres knowledge-plane provisioning (roles, per-node `knowledge_*` databases)
 - [configs/](configs/): Service configuration templates (litellm, alloy, temporal)
-- [sandbox-proxy/](../../images/sandbox-proxy/): nginx gateway config template for OpenClaw LLM proxy (rsync'd by deploy.sh)
 - [docker-daemon.json](docker-daemon.json): Docker daemon log limits (reference only, applied via bootstrap.yaml)
 - [Edge stack](../edge/): TLS termination (Caddy) - separate compose project, never stopped during deploys
 
@@ -37,7 +36,7 @@ Production runtime configuration directory copied to VM hosts for container orch
 - **Exports:** none
 - **CLI (if any):** docker-compose commands
 - **Env/Config keys:** `APP_IMAGE`, `MIGRATOR_IMAGE`, `APP_ENV`, `DEPLOY_ENVIRONMENT`, `COGNI_REPO_URL` (git-sync), `COGNI_REPO_REF` (git-sync, pinned SHA), `GIT_READ_USERNAME` (git-sync), `GIT_READ_TOKEN` (git-sync, Contents:Read PAT), `COGNI_REPO_PATH` (app, `/repo/current`), `COGNI_REPO_SHA` (app), `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_SERVICE_USER`, `APP_DB_SERVICE_PASSWORD`, `APP_DB_READONLY_USER`, `APP_DB_READONLY_PASSWORD`, `APP_DB_NAME`, `DATABASE_URL` (explicit DSN, app_user), `DATABASE_SERVICE_URL` (explicit DSN, app_service), `DB_BACKUP_INTERVAL_SECONDS`, `DB_BACKUP_RETENTION_DAYS`, `DB_BACKUP_OBSERVABILITY_GRACE_SECONDS`, `DOLTGRES_PASSWORD` / `DOLTGRES_READER_PASSWORD` / `DOLTGRES_WRITER_PASSWORD` (provisioning; derived deterministically from `POSTGRES_ROOT_PASSWORD` in deploy-infra.sh), `APP_BASE_URL`, `NEXTAUTH_URL`, `AUTH_SECRET`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `LITELLM_DATABASE_URL`, `OPENFGA_API_URL`, `OPENFGA_STORE_ID`, `OPENFGA_AUTHORIZATION_MODEL_ID`, `OPENFGA_API_TOKEN`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`, `LANGFUSE_TRACING_ENVIRONMENT` (derived from DEPLOY_ENVIRONMENT), `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY`, `GRAFANA_PDC_SIGNING_TOKEN`, `GRAFANA_PDC_HOSTED_GRAFANA_ID`, `GRAFANA_PDC_CLUSTER`, `GRAFANA_PDC_NETWORK_ID`, `GRAFANA_PDC_NETWORK_UUID`, `METRICS_TOKEN` (app+alloy), `BILLING_INGEST_TOKEN` (app+litellm, callback auth), `INTERNAL_OPS_TOKEN` (app internal ops auth), `COGNI_NODE_ENDPOINTS` (litellm, per-node callback routing), `COGNI_DEFAULT_NODE_ID` (repo-spec-derived default node label for shared runtime metrics), `PROMETHEUS_REMOTE_WRITE_URL` (alloy), `PROMETHEUS_USERNAME` (alloy), `PROMETHEUS_PASSWORD` (alloy), `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, `TEMPORAL_DB_USER`, `TEMPORAL_DB_PASSWORD`, `TEMPORAL_DB_HOST`, `TEMPORAL_DB_PORT`
-- **Files considered API:** `docker-compose.yml`, `db-backup/*.sh`, `postgres-init/*.sh`, `configs/alloy-config.alloy`, `sandbox-proxy/nginx-gateway.conf.template`, `openclaw/openclaw-gateway.json`
+- **Files considered API:** `docker-compose.yml`, `db-backup/*.sh`, `postgres-init/*.sh`, `configs/alloy-config.alloy`
 
 ## Responsibilities
 
@@ -94,7 +93,6 @@ docker compose --project-name cogni-runtime logs -f app
 - `MIGRATOR_IMAGE` required in production compose (no fallback), derived from APP_IMAGE with `-migrate` suffix
 - `git-sync` runs as bootstrap profile service (prod) or regular service (dev), populates `repo_data` volume at `/repo/current` via atomic symlink
 - App reads `COGNI_REPO_PATH=/repo/current` in all environments; `COGNI_REPO_REF` pins to deploy commit SHA
-- `openclaw-gateway` mounts `repo_data:/repo:ro` + `cogni_workspace:/workspace` (named volume, pnpm hardlinks require same fs as pnpm_store) + `pnpm_store:/pnpm-store`
 - Both dev and prod git-sync clone via HTTPS from `COGNI_REPO_URL` at `COGNI_REPO_REF` with `GIT_READ_TOKEN` auth (same path everywhere, no file:// shortcut)
 
 **Local Dev (docker-compose.dev.yml):**
@@ -111,15 +109,6 @@ docker compose --project-name cogni-runtime logs -f app
 - Environment variables: `DEPLOY_ENVIRONMENT`, `LOKI_WRITE_URL`, `LOKI_USERNAME`, `LOKI_PASSWORD`
 - Metrics: App exposes `/api/metrics` (auth via `METRICS_TOKEN`); Alloy scrapes app + scheduler-worker + OpenFGA + cAdvisor + node exporter and ships to Mimir (via `PROMETHEUS_*`)
 - Verify in Alloy UI (http://127.0.0.1:12345) and Grafana Cloud
-
-**OpenClaw Gateway Services (profile: sandbox-openclaw):**
-
-- `llm-proxy-openclaw`: nginx auth-injecting proxy on `sandbox-internal` network, injects `LITELLM_MASTER_KEY`
-- `openclaw-gateway`: long-running OpenClaw gateway on `sandbox-internal` + `internal`, port 127.0.0.1:3333→18789
-- Both behind `sandbox-openclaw` profile — activated by deploy.sh `--profile sandbox-openclaw`
-- Config: `sandbox-proxy/nginx-gateway.conf.template` (nginx), `openclaw/openclaw-gateway.json` (OpenClaw)
-- Networks: `sandbox-internal` (internal: true) for isolation; `litellm` on both `internal` and `sandbox-internal`
-- Post-deploy health gate: `healthcheck-openclaw.sh` fails deploy if either service crashes or times out
 
 **Doltgres (knowledge plane):**
 

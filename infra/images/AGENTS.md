@@ -16,7 +16,7 @@ or deployed to GHCR for k8s consumption.
 
 - [litellm/](litellm/): LiteLLM proxy with custom CogniNodeRouter billing callback
 - [openfga/](openfga/): OpenFGA runtime image with `curl` for Compose healthchecks
-- [sandbox-proxy/](sandbox-proxy/): nginx gateway config templates for OpenClaw LLM proxy
+- [sandbox-proxy/](sandbox-proxy/): nginx config template for the ephemeral sandbox LLM proxy
 
 ## Boundaries
 

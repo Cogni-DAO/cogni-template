@@ -87,7 +87,7 @@ model_list:
         provider:
           zdr: true
       # OpenRouter prompt caching (Anthropic): requires cache_control breakpoints.
-      # Inject markers automatically so callers (e.g. OpenClaw) don’t need to emit
+      # Inject markers automatically so callers don’t need to emit
       # multipart content blocks explicitly.
       #
       # NOTE: This injects `{cache_control:{type:"ephemeral"}}` (OpenRouter default TTL ~5m).
@@ -222,7 +222,7 @@ model_list:
           default_flash: true
 
   # ===== EMBEDDING MODELS =====
-  # Used by OpenClaw memory_search for semantic vector search
+  # Used by memory_search for semantic vector search
   # Uses openai/ prefix + api_base to avoid openrouter/ embedding routing bugs (BerriAI/litellm#19016)
   - model_name: text-embedding-3-small
     litellm_params:

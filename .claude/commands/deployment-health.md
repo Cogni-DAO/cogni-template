@@ -65,7 +65,6 @@ Provide a concise dashboard-style summary:
 === Services ===
   ✓ app
   ✓ scheduler-worker
-  ✓ openclaw-gateway
 
 === Per-Service Health ===
 app:
