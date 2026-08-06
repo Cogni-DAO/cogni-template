@@ -13,8 +13,8 @@ namePrefix: beacon-
 
 images:
   - name: ghcr.io/cogni-dao/cogni-template
-    newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:cfd0f2335e03e181248f8e4b640aba28c8138d0d70e1ca8cc6f153b48993a027"
+    newName: ghcr.io/cogni-dao/beacon
+    newTag: "sha-1fb70881ddeed04817129fd9fefbc3c03b56fa47"
 
 patches:
   - target:
@@ -69,7 +69,7 @@ patches:
         value: "beacon-env-secrets"
       - op: replace
         path: /spec/template/spec/initContainers/0/command/2
-        value: exec node /app/nodes/$(NODE_NAME)/app/migrate.mjs /app/nodes/$(NODE_NAME)/app/migrations
+        value: exec node /app/app/migrate.mjs /app/app/migrations
       - op: replace
         path: /spec/template/spec/containers/0/ports/0/containerPort
         value: 3200
@@ -96,7 +96,7 @@ patches:
           command:
             - /bin/sh
             - -c
-            - exec node /app/nodes/$(NODE_NAME)/app/migrate-doltgres.mjs /app/nodes/$(NODE_NAME)/app/doltgres-migrations
+            - exec node /app/app/migrate-doltgres.mjs /app/app/doltgres-migrations
           envFrom:
             - configMapRef:
                 name: beacon-node-app-config
