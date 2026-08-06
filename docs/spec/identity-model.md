@@ -274,6 +274,22 @@ These are hard constraints. Violating any of them is a design error.
 
 **Synonym prohibition:** Do not introduce `org_id`, `account_id`, `tenant_id` (DB column), `project_id` (DB column), or `contributor_id` as new terms. The six keys above are the complete set. External provider IDs (e.g., WalletConnect project ID, Terraform workspace ID) must be namespaced (e.g., `walletconnect_project_id`) to avoid collision with `scope_id`.
 
+### BINDING_IS_THE_MULTI_ENV_KEY (resolve through the binding, never author a surrogate)
+
+`user_id` / `actor_id` are **env-local surrogates** — a fresh UUID is minted per env at first contact
+(SIWE, OAuth). The **binding** (`wallet_address`, Discord snowflake, GitHub id, DID) is the **stable,
+env-independent identity** — the same value in candidate-a, preview, and production. Therefore:
+
+- **Any cross-env artifact** (seed migration, config, ownership grant, RLS row) that needs "who" MUST
+  **resolve through the binding** (`… WHERE wallet_address = <stable>`), never hardcode a per-env `user_id`.
+  A "different migration per env" or a committed surrogate UUID is the anti-pattern — one binding-resolved
+  artifact is correct on every env at once, and SIWE reuses the binding's row on next login so the surrogate
+  lines up automatically.
+- This is the top-0.1% multi-env pattern (Stripe/Auth0/Clerk): one external identity, per-env internal ids,
+  joined by the external ref. Applied to node ownership in
+  [`docs/design/node-wizard-formation-wiring.md`](../design/node-wizard-formation-wiring.md) § Owner binding
+  and proven in `pm.prod-reprovision-nodes-registry-reseed.2026-08-05`.
+
 ## V0 Defaults
 
 In V0 (single-project nodes), most keys resolve to a single value:
