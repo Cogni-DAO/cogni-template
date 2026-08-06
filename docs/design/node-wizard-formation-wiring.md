@@ -140,18 +140,34 @@ Mirror `nodes/operator/app/src/adapters/server/db/migrations/0037_seed_first_cla
 
 ## Ideal (#2 — the endgame, and the right design): bind ownership from repo-spec approvers at formation
 
-The migration is a stopgap. The **correct** design derives ownership from the DAO governance SSoT that
-**already exists** — `.cogni/repo-spec.yaml` `governance.approvers` (line 23; today `0x070075…c949`,
-`derekg1729.eth`). This is the ownership peer of the `node_id` projection above: identity lives in
-repo-spec, ownership is _read from it_, never authored in a migration or hand-seeded.
+The migration is a stopgap. The **correct** design derives ownership from a DAO **governance-owner**
+SSoT in repo-spec: identity lives in repo-spec, ownership is _read from it_, never authored in a
+migration or hand-seeded — the ownership peer of the `node_id` projection above.
+
+> ⚠️ **TERM RECONCILIATION REQUIRED AT IMPLEMENTATION — do not skip.** There is **no distinct
+> governance-owner / node-admin field in repo-spec today.** The only wallet in the spec is
+> `activity_ledger.approvers[0]` (line 22-23; today `0x070075…c949`, `derekg1729.eth`) — but that is a
+> **ledger-attribution term** (who approves epochs / attribution — the money plane), **NOT** a
+> governance-ownership term. Governance ownership and ledger approval are two deliberately-separate
+> planes; **the implementer MUST NOT overload `activity_ledger.approvers` as the ownership source**
+> just because the wallet happens to match in MVP. Reconcile the term before wiring #2 — pick one and
+> record the decision right here:
+> 1. **Add a distinct field** (e.g. repo-spec `governance.owners` / `admin`) and bind `owner_user_id`
+>    from *that*. Cleanest; keeps the two planes un-overloaded.
+> 2. **Consciously reuse** `activity_ledger.approvers` with a stated "same wallet in MVP" rationale
+>    **and** a repo-spec alias so the ownership meaning is explicit, not silently inferred.
+>
+> The wallet *value* is unambiguous today (one wallet in the spec), so the tactical migration below is
+> **unblocked**; but #2's formation-binding is **blocked on this reconciliation.**
 
 - **Node-wizard formation** (`gens/*` + `github-repo-write.ts`, the `POST /api/v1/nodes` + publish path)
-  binds `nodes.owner_user_id` at creation by resolving the repo-spec `governance.approvers[0]` wallet →
-  the env-local `users.id` (get-or-create by wallet). Self-projecting, exactly like `node_id`.
+  binds `nodes.owner_user_id` at creation by resolving the repo-spec **governance-owner wallet** (the
+  reconciled field — see ⚠️ callout) → the env-local `users.id` (get-or-create by wallet).
+  Self-projecting, exactly like `node_id`.
 - **Registry recovery** stops needing a migration at all: a reprovision replays formation-time ownership
   from repo-spec. The migration path stays only as a break-glass backfill for pre-existing nodes.
-- **Multi-approver:** repo-spec `approvers` is a list → future multi-owner is a fan-out over the list,
-  not a schema change.
+- **Multi-owner:** the reconciled governance-owner field is a list → future multi-owner is a fan-out over
+  the list, not a schema change.
 
 ### Also required for #2: the operator **nodes page** RLS read
 
@@ -169,15 +185,18 @@ so it only ever returns rows the session's wallet owns. Two things to verify/fix
 
 - [ ] OWNER_RESOLVED_BY_BINDING: `owner_user_id` is resolved from the repo-spec approver **wallet**, never a
       hardcoded env-local `user_id`. One migration/binding is correct on all envs.
-- [ ] OWNER_FROM_REPO_SPEC (ideal): formation reads `governance.approvers` from repo-spec — ownership is
-      derived from the governance SSoT, not authored (peer of `REPO_SPEC_IS_IDENTITY_SSOT`).
+- [ ] OWNER_FROM_REPO_SPEC (ideal): formation reads the **reconciled governance-owner field** from
+      repo-spec — ownership is derived from the governance SSoT, not authored (peer of
+      `REPO_SPEC_IS_IDENTITY_SSOT`). **Blocked on the ⚠️ term-reconciliation above:** must NOT overload
+      `activity_ledger.approvers` (ledger/money plane) as the ownership source.
 - [ ] CANONICAL_NODE_ID: `nodes.id` == repo-spec/catalog `node_id`; stale-fork id collisions excluded.
 - [ ] RLS_SCOPED_READ: the nodes page reads inside `SET LOCAL app.current_user_id`; unscoped reads (0 rows)
       are treated as a bug, not an empty account. Cache/optimize the scoped query.
 
 ## Files (to touch when executing #2)
 
-- `nodes/operator/app/src/adapters/server/vcs/github-repo-write.ts` + `gens/` — bind `owner_user_id` from repo-spec approver at formation
+- `.cogni/repo-spec.yaml` schema + `node-formation` mint — **FIRST: resolve the ⚠️ term reconciliation** (add a distinct governance-owner/`admin` field, or alias `activity_ledger.approvers`); everything below reads that reconciled field, never `activity_ledger.approvers` verbatim
+- `nodes/operator/app/src/adapters/server/vcs/github-repo-write.ts` + `gens/` — bind `owner_user_id` from the reconciled governance-owner field at formation
 - `nodes/operator/app/src/app/api/v1/nodes/route.ts` — owner resolution get-or-create by wallet
 - the operator nodes page + its data loader — RLS scope correctness + caching/optimization
 - `nodes/operator/app/src/adapters/server/db/migrations/00XX_seed_registry_nodes.sql` — the stopgap backfill (mirror 0037)
