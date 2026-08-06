@@ -152,12 +152,13 @@ migration or hand-seeded — the ownership peer of the `node_id` projection abov
 > planes; **the implementer MUST NOT overload `activity_ledger.approvers` as the ownership source**
 > just because the wallet happens to match in MVP. Reconcile the term before wiring #2 — pick one and
 > record the decision right here:
+>
 > 1. **Add a distinct field** (e.g. repo-spec `governance.owners` / `admin`) and bind `owner_user_id`
->    from *that*. Cleanest; keeps the two planes un-overloaded.
+>    from _that_. Cleanest; keeps the two planes un-overloaded.
 > 2. **Consciously reuse** `activity_ledger.approvers` with a stated "same wallet in MVP" rationale
 >    **and** a repo-spec alias so the ownership meaning is explicit, not silently inferred.
 >
-> The wallet *value* is unambiguous today (one wallet in the spec), so the tactical migration below is
+> The wallet _value_ is unambiguous today (one wallet in the spec), so the tactical migration below is
 > **unblocked**; but #2's formation-binding is **blocked on this reconciliation.**
 
 - **Node-wizard formation** (`gens/*` + `github-repo-write.ts`, the `POST /api/v1/nodes` + publish path)
