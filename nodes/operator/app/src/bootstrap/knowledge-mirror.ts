@@ -22,5 +22,6 @@ export function resolveKnowledgeMirrorRemoteUrl(
   knowledge: KnowledgeConfig | undefined,
   envRemoteUrl?: string | undefined
 ): string | undefined {
+  // candidate-a flight trigger: prove knowledge->DoltHub sync+recover E2E.
   return envRemoteUrl ?? knowledge?.remote.url;
 }
