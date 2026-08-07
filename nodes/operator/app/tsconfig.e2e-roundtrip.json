@@ -1,0 +1,87 @@
+{
+  "extends": "./tsconfig.test.json",
+  "compilerOptions": {
+    "baseUrl": "../../..",
+    "paths": {
+      "@/*": ["nodes/operator/app/src/*"],
+      "@cogni/ai-core": ["packages/ai-core/src/index.ts"],
+      "@cogni/ai-core/*": ["packages/ai-core/src/*"],
+      "@cogni/ai-tools": ["packages/ai-tools/src/index.ts"],
+      "@cogni/ai-tools/*": ["packages/ai-tools/src/*"],
+      "@cogni/aragon-osx": ["packages/aragon-osx/src/index.ts"],
+      "@cogni/aragon-osx/*": ["packages/aragon-osx/src/*"],
+      "@cogni/attribution-ledger": ["packages/attribution-ledger/src/index.ts"],
+      "@cogni/attribution-ledger/*": ["packages/attribution-ledger/src/*"],
+      "@cogni/attribution-pipeline-contracts": [
+        "packages/attribution-pipeline-contracts/src/index.ts"
+      ],
+      "@cogni/attribution-pipeline-contracts/*": [
+        "packages/attribution-pipeline-contracts/src/*"
+      ],
+      "@cogni/attribution-pipeline-plugins": [
+        "packages/attribution-pipeline-plugins/src/index.ts"
+      ],
+      "@cogni/attribution-pipeline-plugins/*": [
+        "packages/attribution-pipeline-plugins/src/*"
+      ],
+      "@cogni/authorization-core": ["packages/authorization-core/src/index.ts"],
+      "@cogni/authorization-core/*": ["packages/authorization-core/src/*"],
+      "@cogni/cogni-contracts": ["packages/cogni-contracts/src/index.ts"],
+      "@cogni/cogni-contracts/*": ["packages/cogni-contracts/src/*"],
+      "@cogni/db-client": ["packages/db-client/src/index.ts"],
+      "@cogni/db-client/*": ["packages/db-client/src/*"],
+      "@cogni/db-schema": ["packages/db-schema/src/index.ts"],
+      "@cogni/db-schema/*": ["packages/db-schema/src/*"],
+      "@cogni/dns-ops": ["packages/dns-ops/src/index.ts"],
+      "@cogni/dns-ops/*": ["packages/dns-ops/src/*"],
+      "@cogni/financial-ledger": ["packages/financial-ledger/src/index.ts"],
+      "@cogni/financial-ledger/*": ["packages/financial-ledger/src/*"],
+      "@cogni/graph-execution-core": [
+        "packages/graph-execution-core/src/index.ts"
+      ],
+      "@cogni/graph-execution-core/*": ["packages/graph-execution-core/src/*"],
+      "@cogni/graph-execution-host": [
+        "packages/graph-execution-host/src/index.ts"
+      ],
+      "@cogni/graph-execution-host/*": ["packages/graph-execution-host/src/*"],
+      "@cogni/ids": ["packages/ids/src/index.ts"],
+      "@cogni/ids/*": ["packages/ids/src/*"],
+      "@cogni/ingestion-core": ["packages/ingestion-core/src/index.ts"],
+      "@cogni/ingestion-core/*": ["packages/ingestion-core/src/*"],
+      "@cogni/knowledge-base": ["packages/knowledge-base/src/index.ts"],
+      "@cogni/knowledge-base/*": ["packages/knowledge-base/src/*"],
+      "@cogni/knowledge-store": ["packages/knowledge-store/src/index.ts"],
+      "@cogni/knowledge-store/*": ["packages/knowledge-store/src/*"],
+      "@cogni/langgraph-graphs": ["packages/langgraph-graphs/src/index.ts"],
+      "@cogni/langgraph-graphs/*": ["packages/langgraph-graphs/src/*"],
+      "@cogni/node-app": ["packages/node-app/src/index.ts"],
+      "@cogni/node-app/*": ["packages/node-app/src/*"],
+      "@cogni/node-contracts": ["packages/node-contracts/src/index.ts"],
+      "@cogni/node-contracts/*": ["packages/node-contracts/src/*"],
+      "@cogni/node-core": ["packages/node-core/src/index.ts"],
+      "@cogni/node-core/*": ["packages/node-core/src/*"],
+      "@cogni/node-shared": ["packages/node-shared/src/index.ts"],
+      "@cogni/node-shared/*": ["packages/node-shared/src/*"],
+      "@cogni/node-streams": ["packages/node-streams/src/index.ts"],
+      "@cogni/node-streams/*": ["packages/node-streams/src/*"],
+      "@cogni/node-ui-kit": ["packages/node-ui-kit/src/index.ts"],
+      "@cogni/node-ui-kit/*": ["packages/node-ui-kit/src/*"],
+      "@cogni/operator-wallet": ["packages/operator-wallet/src/index.ts"],
+      "@cogni/operator-wallet/*": ["packages/operator-wallet/src/*"],
+      "@cogni/repo-spec": ["packages/repo-spec/src/index.ts"],
+      "@cogni/repo-spec/*": ["packages/repo-spec/src/*"],
+      "@cogni/scheduler-core": ["packages/scheduler-core/src/index.ts"],
+      "@cogni/scheduler-core/*": ["packages/scheduler-core/src/*"],
+      "@cogni/temporal-workflows": ["packages/temporal-workflows/src/index.ts"],
+      "@cogni/temporal-workflows/*": ["packages/temporal-workflows/src/*"],
+      "@cogni/work-items": ["packages/work-items/src/index.ts"],
+      "@cogni/work-items/*": ["packages/work-items/src/*"],
+      "@cogni/operator-doltgres-schema": [
+        "nodes/operator/packages/doltgres-schema/src/index.ts"
+      ],
+      "@cogni/operator-doltgres-schema/*": [
+        "nodes/operator/packages/doltgres-schema/src/*"
+      ]
+    }
+  }
+}

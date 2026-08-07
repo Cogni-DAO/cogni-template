@@ -22,7 +22,17 @@ export function knowledgeDatabaseForSlug(slug: string): string {
 }
 
 export function knowledgeRepoForSlug(slug: string): string {
-  return `knowledge-${slug}`;
+  // DoltHub repo name mirrors the node slug 1:1 (dolt name == git name). The
+  // operator node is the current mismatch (its git repo is `cogni`, slug is
+  // `operator`) — that is tolerated; the git repo rename is future work. No
+  // `knowledge-` prefix and no per-node exceptions — the retired prefix is now
+  // rejected by knowledgeRemoteSpecSchema, not merely dropped here.
+  //
+  // The local Doltgres DATABASE keeps its `knowledge_<slug>` prefix
+  // (knowledgeDatabaseForSlug) on purpose: that is the node's live internal DB
+  // identity, distinct from the mirror repo name. The mirror is push-only, so
+  // nothing clones back expecting the two to match.
+  return slug;
 }
 
 export function knowledgeRepoWebUrl(input: {

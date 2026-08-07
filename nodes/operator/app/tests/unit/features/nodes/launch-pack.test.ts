@@ -85,8 +85,7 @@ describe("buildNodeLaunchPack", () => {
       status: "published",
       operatorOrigin: "https://test.cognidao.org/",
       nodeRepoUrl: "https://github.com/Cogni-DAO/atlas",
-      knowledgeRepoUrl:
-        "https://www.dolthub.com/repositories/cogni-dao/knowledge-atlas",
+      knowledgeRepoUrl: "https://www.dolthub.com/repositories/cogni-dao/atlas",
       publishPrUrl: "https://github.com/Cogni-DAO/cogni/pull/42",
     });
 
@@ -104,7 +103,7 @@ describe("buildNodeLaunchPack", () => {
     );
     expect(pack.nodeRepoUrl).toBe("https://github.com/Cogni-DAO/atlas");
     expect(pack.knowledgeRepoUrl).toBe(
-      "https://www.dolthub.com/repositories/cogni-dao/knowledge-atlas"
+      "https://www.dolthub.com/repositories/cogni-dao/atlas"
     );
     expect(pack.prompt).toContain("Launch Cogni node atlas.");
     expect(pack.prompt).toContain(
@@ -119,7 +118,7 @@ describe("buildNodeLaunchPack", () => {
       "Cogni knowledge block: https://cognidao.org/knowledge/node-launch-handoff"
     );
     expect(pack.prompt).toContain(
-      "DoltHub knowledge repo: https://www.dolthub.com/repositories/cogni-dao/knowledge-atlas"
+      "DoltHub knowledge repo: https://www.dolthub.com/repositories/cogni-dao/atlas"
     );
     expect(pack.prompt).toContain("Parent deployment PR:");
     expect(pack.prompt).toContain("Candidate URL:");

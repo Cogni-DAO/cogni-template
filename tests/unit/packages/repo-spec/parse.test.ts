@@ -129,8 +129,8 @@ describe("parseRepoSpec", () => {
           remote: {
             provider: "dolthub",
             owner: "cogni-dao-test",
-            repo: "knowledge-my-node",
-            url: "https://doltremoteapi.dolthub.com/cogni-dao-test/knowledge-my-node",
+            repo: "my-node",
+            url: "https://doltremoteapi.dolthub.com/cogni-dao-test/my-node",
             custody: "cogni-owned",
           },
         },
@@ -149,8 +149,8 @@ describe("parseRepoSpec", () => {
             remote: {
               provider: "dolthub",
               owner: "cogni-dao-test",
-              repo: "knowledge-my-node",
-              url: "https://www.dolthub.com/cogni-dao-test/knowledge-my-node",
+              repo: "my-node",
+              url: "https://www.dolthub.com/cogni-dao-test/my-node",
               custody: "cogni-owned",
             },
           },
@@ -167,7 +167,7 @@ describe("parseRepoSpec", () => {
             remote: {
               provider: "dolthub",
               owner: "cogni-dao-test",
-              repo: "knowledge-my-node",
+              repo: "my-node",
               url: "not-a-url",
               custody: "cogni-owned",
             },
@@ -185,8 +185,8 @@ describe("parseRepoSpec", () => {
             remote: {
               provider: "dolthub",
               owner: "cogni-dao-test",
-              repo: "knowledge-my-node",
-              url: "https://token@doltremoteapi.dolthub.com/cogni-dao-test/knowledge-my-node",
+              repo: "my-node",
+              url: "https://token@doltremoteapi.dolthub.com/cogni-dao-test/my-node",
               custody: "cogni-owned",
             },
           },
@@ -203,8 +203,8 @@ describe("parseRepoSpec", () => {
             remote: {
               provider: "dolthub",
               owner: "cogni-dao-test",
-              repo: "knowledge-my-node",
-              url: "https://doltremoteapi.dolthub.com/cogni-dao-test/knowledge-other",
+              repo: "my-node",
+              url: "https://doltremoteapi.dolthub.com/cogni-dao-test/other",
               custody: "cogni-owned",
             },
           },

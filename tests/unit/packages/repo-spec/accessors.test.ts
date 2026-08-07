@@ -290,8 +290,8 @@ describe("extractKnowledgeConfig", () => {
         remote: {
           provider: "dolthub",
           owner: "cogni-dao-test",
-          repo: "knowledge-my-node",
-          url: "https://doltremoteapi.dolthub.com/cogni-dao-test/knowledge-my-node",
+          repo: "my-node",
+          url: "https://doltremoteapi.dolthub.com/cogni-dao-test/my-node",
           custody: "cogni-owned",
         },
       },
@@ -302,8 +302,8 @@ describe("extractKnowledgeConfig", () => {
       remote: {
         provider: "dolthub",
         owner: "cogni-dao-test",
-        repo: "knowledge-my-node",
-        url: "https://doltremoteapi.dolthub.com/cogni-dao-test/knowledge-my-node",
+        repo: "my-node",
+        url: "https://doltremoteapi.dolthub.com/cogni-dao-test/my-node",
         custody: "cogni-owned",
       },
     });
