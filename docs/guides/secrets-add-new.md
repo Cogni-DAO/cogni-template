@@ -78,20 +78,16 @@ workflow that writes OpenBao.
 
 ## Authority Gate
 
-Before choosing a tier, separate three concepts:
+A secret decision has three orthogonal axes — `origin` / `custody` / `consumers`.
+The canonical table + rules live in the spec: see
+[`secrets-management.md` § Authority Model](../spec/secrets-management.md#authority-model).
+Do not re-derive them here.
 
-| Axis        | Values                                   | Question                       |
-| ----------- | ---------------------------------------- | ------------------------------ |
-| `origin`    | `agent` · `human` · `derived`            | Who can produce the bytes?     |
-| `custody`   | `openbao` · `github-env` · `repo-config` | Which system is authoritative? |
-| `consumers` | `pod` · `compose` · `ci` · `external`    | Where does the value get used? |
-
-The rule is strict: if a value is consumed by a pod, provisions a pod-facing
-role, or must agree with a pod-facing value, custody is OpenBao. VM `.env`
-files are rendered views for Compose, not authorities. GitHub Environment
-Secrets may carry CI-only/bootstrap credentials or sealed staging for a
-workflow that writes OpenBao; they are not the source of truth for app/runtime
-credentials.
+The one rule you need at the keyboard: **if a value is consumed by a pod,
+provisions a pod-facing role, or must agree with a pod-facing value, its custody
+is OpenBao.** VM `.env` files are rendered views for Compose, not authorities.
+GitHub Environment Secrets carry only CI-only/bootstrap credentials or sealed
+staging for a workflow that writes OpenBao.
 
 For DB material, this means:
 
@@ -148,6 +144,23 @@ break-glass admin (see the the hub guide `node-self-serve-secrets`).
 > `GH_WEBHOOK_SECRET` silently fails webhook HMAC. If the value already exists,
 > the substrate owns it; leave it alone.
 
+### Self-serve API prerequisites (satisfy these first)
+
+Before THE PATH resolves at all:
+
+1. **The node must exist in that env's `nodes` registry.** The route resolves
+   `id` (UUID or slug) against the registry (`resolveNodeRef` in
+   `nodes/operator/app/src/app/_lib/node-rbac.ts`) **status-agnostically**, and
+   returns **`404 node_not_found`** if the node isn't registered on the operator
+   you're calling. A node registered only on prod is not resolvable on the
+   candidate-a operator (and vice-versa) — this is the same fact as "cross-env is
+   not yet API-reachable" below, stated as a prerequisite.
+2. **A `secrets_manager` grant on that node** — `POST /nodes/{id}/access-requests
+{role:"secrets_manager"}` → owner approves. The route checks
+   `can_manage_secrets ← secrets_manager`, fail-closed (`503 authz_unavailable` /
+   `403 authz_denied`, never owner-fallback).
+3. **You call the host that serves your target env** (see the mapping below).
+
 ### Self-serve API: `env` is a required, validated body field
 
 `POST /api/v1/nodes/<id>/secrets` takes a **required `env`** (a `FLIGHT_ENVS`
@@ -179,6 +192,34 @@ also exist on that env's operator. Setting a _candidate-a_ secret for a node onl
 registered on prod is not yet API-reachable — use the operator-admin CLI (§3–8)
 against that env's OpenBao until the env-aware node model + cross-env write adapter
 land (see `docs/design/node-self-serve-secrets.md` Phase 3, deliverables D1–D4).
+
+### A catalog `service: _shared` _human_ secret is STILL self-served
+
+Do not confuse the **catalog service tier** `_shared` with the OpenBao **`_shared`
+namespace** the self-serve route denies. They are different things:
+
+- The route's `_shared` deny (NAMESPACE_OWNERSHIP invariant in
+  `nodes/operator/app/src/app/api/v1/nodes/[id]/secrets/route.ts`) is about the
+  **destination OpenBao path** — a node owner may write only their own
+  `cogni/<env>/<node>/*`, never the cross-cutting `cogni/<env>/_shared` or
+  `cogni/<env>/_system` paths.
+- A catalog entry's `service: _shared` is a **fan-out/inheritance tier** — it means
+  "every node that opts in inherits this value," not "write it to the `_shared`
+  OpenBao path."
+
+So a `service: _shared`, `source: human` catalog secret is set the normal
+self-serve way: **you write it node-scoped on the OWNING node** (`cogni/<env>/<node>/<KEY>`,
+via `POST /api/v1/nodes/<owning-node>/secrets`), and the materializer inherits
+the shared value into other nodes on their next flight (`inherit_shared_value` in
+`scripts/ci/secret-materialize.sh` scans the `node-template`/`operator`/`_shared`
+ancestors and writes the value into each consuming node's own path).
+
+**Worked example — `DOLT_CREDS_JWK`** (catalog `tier: A1`, `service: _shared`,
+`source: human`, the DoltHub mirror push key): mint it once (`dolt creds new`),
+then self-serve it to the owning node's path (the operator that runs the mirror),
+e.g. `POST /api/v1/nodes/operator/secrets {env, key:"DOLT_CREDS_JWK", value, op:"set"}`.
+`secret-materialize` then inherits it to any other node that consumes it. You never
+need kube custody or the `_shared` OpenBao path for this.
 
 ### Catalog lanes (for completeness)
 
