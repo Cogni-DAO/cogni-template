@@ -135,6 +135,10 @@ bao_exec "write auth/kubernetes/role/${DEPLOY_ENV}-db-reader \
 # cogni-<env> namespace (where the operator actually runs — NOT default), and
 # explicit-deny on the two shared paths a per-node grant must never reach. The SA +
 # projected token (audience cogni-openbao) are created by the operator overlay.
+#
+# ⚠️ KEEP IN SYNC with scripts/setup/provision-env-vm.sh Phase 5b.4d (cold-start) —
+# this policy+role is duplicated there so a FRESH provision is born with it. Converging
+# the two onto this script is the tracked DRY fast-follow; until then edit BOTH copies.
 log "writing ${DEPLOY_ENV}-node-secrets-writer policy + role (SA operator-secrets-writer @ cogni-${DEPLOY_ENV})..."
 bao_policy "${DEPLOY_ENV}-node-secrets-writer" <<HCL
 path "cogni/data/${DEPLOY_ENV}/*"             { capabilities = ["read", "create", "update", "patch"] }

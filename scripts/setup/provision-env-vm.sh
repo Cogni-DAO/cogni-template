@@ -1497,6 +1497,41 @@ HCL
     token_max_ttl=10m \
     token_num_uses=3" >/dev/null
   log_info "  gha-${DEPLOY_ENV}-writer (jwt) role bound — sub=repo:${GH_REPO}:environment:${DEPLOY_ENV} → ${DEPLOY_ENV}-writer policy"
+
+  # ── 5b.4d <env>-node-secrets-writer (operator pod's OWN identity; node self-serve) ──
+  # Ships the runtime writer role the operator POD self-logins as to fulfil node
+  # self-serve secret writes (POST /api/v1/nodes/<id>/secrets → OpenBaoSecretsAdapter,
+  # design.node-self-serve-secrets §1.B). Without it a FRESH env comes up missing the
+  # role and the operator's k8s-auth login fast-fails `openbao_login_failed` (a 502 at
+  # write) even though RBAC + seeded/ESO secrets all work — the paths are independent.
+  #
+  # Distinct from ${DEPLOY_ENV}-writer above: bound to the operator-secrets-writer SA
+  # in the cogni-${DEPLOY_ENV} namespace (where the operator actually runs — NOT
+  # default), audience cogni-openbao, and explicit-DENY on the two shared paths a
+  # per-node grant must never reach. The SA + projected token are created by the
+  # operator overlay, not here.
+  #
+  # ⚠️ KEEP IN SYNC with scripts/setup/reconcile-env-substrate.sh:131-151 (the
+  # substrate-only heal path) — this policy+role is duplicated across both cold-start
+  # (here) and reconcile (there). Converging Phase 5b onto reconcile-env-substrate.sh
+  # is the tracked DRY fast-follow; until then, edit BOTH copies together.
+  log_info "Writing ${DEPLOY_ENV}-node-secrets-writer policy + role binding..."
+  ssh $SSH_OPTS root@"$VM_IP" \
+    "kubectl exec -i -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao policy write ${DEPLOY_ENV}-node-secrets-writer -" <<HCL
+path "cogni/data/${DEPLOY_ENV}/*"             { capabilities = ["read", "create", "update", "patch"] }
+path "cogni/metadata/${DEPLOY_ENV}/*"         { capabilities = ["read", "list"] }
+path "cogni/data/${DEPLOY_ENV}/_system/*"     { capabilities = ["deny"] }
+path "cogni/data/${DEPLOY_ENV}/_shared/*"     { capabilities = ["deny"] }
+path "cogni/metadata/${DEPLOY_ENV}/_system/*" { capabilities = ["deny"] }
+path "cogni/metadata/${DEPLOY_ENV}/_shared/*" { capabilities = ["deny"] }
+HCL
+  bao_exec "write auth/kubernetes/role/${DEPLOY_ENV}-node-secrets-writer \
+    bound_service_account_names=operator-secrets-writer \
+    bound_service_account_namespaces=cogni-${DEPLOY_ENV} \
+    audience=cogni-openbao \
+    policies=${DEPLOY_ENV}-node-secrets-writer \
+    ttl=1h" >/dev/null
+  log_info "  ${DEPLOY_ENV}-node-secrets-writer role bound — operator pod self-serve secret writes (SA operator-secrets-writer @ cogni-${DEPLOY_ENV})"
 else
   log_warn "No root token at $OPENBAO_ROOT_TOKEN_LOCAL — skipping KV mount + auth setup. Re-run provision after recovering init artifacts."
 fi
