@@ -281,6 +281,13 @@
       "when": 1782951526052,
       "tag": "0039_salty_maggott",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1785991086144,
+      "tag": "0040_seed_registry_nodes",
+      "breakpoints": true
     }
   ]
 }

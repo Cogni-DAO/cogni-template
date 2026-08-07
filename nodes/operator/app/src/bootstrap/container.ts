@@ -702,7 +702,10 @@ function createContainer(): Container {
     const contributionPort = new DoltgresKnowledgeContributionAdapter({
       sql: doltClient,
     });
-    const remoteUrl = resolveKnowledgeMirrorRemoteUrl(getKnowledgeConfig());
+    const remoteUrl = resolveKnowledgeMirrorRemoteUrl(
+      getKnowledgeConfig(),
+      env.KNOWLEDGE_DOLTHUB_REMOTE_URL
+    );
     const pushMainOnMerge = remoteUrl
       ? wrapPushSafe(
           createDoltgresPusher({

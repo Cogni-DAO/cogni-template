@@ -60,6 +60,14 @@ patches:
       - op: add
         path: /data/DOLTHUB_OWNER
         value: "cogni-test-nodes"
+      # Per-env override for the operator's OWN knowledge mirror: candidate-a
+      # syncs to a throwaway repo so validation here never touches prod knowledge.
+      # A doltgres push only lands cleanly on a repo with no prior (divergent)
+      # history, so this is a dedicated fresh repo — NOT the reused probe. Prod
+      # instead targets its canonical <owner>/<slug> repo.
+      - op: add
+        path: /data/KNOWLEDGE_DOLTHUB_REMOTE_URL
+        value: "https://doltremoteapi.dolthub.com/cogni-dao/knowledge-operator-candidate-a"
       # Submodule pin-PR target: candidate-a uses the throwaway org mirror.
       - op: add
         path: /data/NODE_SUBMODULE_PARENT_OWNER
