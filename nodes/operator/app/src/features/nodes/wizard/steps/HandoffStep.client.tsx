@@ -53,9 +53,9 @@ export function HandoffStep({ node }: WizardStepProps): ReactElement {
         {/* What the human does — one paste, one approval. The AI dev does the rest. */}
         <p className="text-center text-muted-foreground">
           Hand this prompt to an AI developer that has a GitHub account{" "}
-          <span className="text-foreground">(Claude Code, …)</span>.
-          It forks your node repo, ships a first change to a live test deploy,
-          and reports back —{" "}
+          <span className="text-foreground">(Claude Code, …)</span>. It forks
+          your node repo, ships a first change to a live test deploy, and
+          reports back —{" "}
           <span className="text-foreground">
             your only step is to approve its access request
           </span>{" "}
