@@ -22,5 +22,6 @@ export function resolveKnowledgeMirrorRemoteUrl(
   knowledge: KnowledgeConfig | undefined,
   envRemoteUrl?: string | undefined
 ): string | undefined {
+  // ENV_OVERRIDE_WINS: candidate-a → throwaway repo; prod → repo-spec default.
   return envRemoteUrl ?? knowledge?.remote.url;
 }
