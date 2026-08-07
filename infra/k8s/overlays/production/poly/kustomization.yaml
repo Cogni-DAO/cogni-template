@@ -14,7 +14,7 @@ namePrefix: poly-
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/poly
-    newTag: "sha-bbf0a1915b127e025d0c72e262a5029672482c6b"
+    newTag: "sha-c381d43fb8498bced0990ee2db53ce8d4dee0d0c"
 
 patches:
   - target:
