@@ -3,7 +3,8 @@
 
 /**
  * Module: `@tests/unit/bootstrap/knowledge-mirror`
- * Purpose: Unit tests for DoltHub mirror runtime wiring (repo-spec + env override).
+ * Purpose: Unit tests for DoltHub mirror remote resolution — derivation is the
+ *   default, config is the override, fail-closed on missing owner.
  * Scope: Pure resolver.
  * Side-effects: none
  * Links: src/bootstrap/knowledge-mirror.ts
@@ -12,63 +13,64 @@
 
 import { describe, expect, it } from "vitest";
 
-import { resolveKnowledgeMirrorRemoteUrl } from "@/bootstrap/knowledge-mirror";
+import { resolveNodeKnowledgeRemoteUrl } from "@/bootstrap/knowledge-mirror";
 
-describe("resolveKnowledgeMirrorRemoteUrl", () => {
-  it("uses the repo-spec knowledge remote URL", () => {
+const REPO_SPEC = {
+  database: "knowledge_operator",
+  remote: {
+    provider: "dolthub",
+    owner: "cogni-dao",
+    repo: "operator",
+    url: "https://doltremoteapi.dolthub.com/cogni-dao/operator",
+    custody: "cogni-owned",
+  },
+} as const;
+
+describe("resolveNodeKnowledgeRemoteUrl", () => {
+  it("DERIVES <owner>/<slug> by default from slug + owner (no config)", () => {
     expect(
-      resolveKnowledgeMirrorRemoteUrl({
-        database: "knowledge_atlas",
-        remote: {
-          provider: "dolthub",
-          owner: "cogni-test-nodes",
-          repo: "atlas",
-          url: "https://doltremoteapi.dolthub.com/cogni-test-nodes/atlas",
-          custody: "cogni-owned",
-        },
+      resolveNodeKnowledgeRemoteUrl({ slug: "operator", owner: "cogni-dao" })
+    ).toBe("https://doltremoteapi.dolthub.com/cogni-dao/operator");
+  });
+
+  it("derives per-env: a non-prod owner keeps a fresh node off the prod org", () => {
+    expect(
+      resolveNodeKnowledgeRemoteUrl({
+        slug: "beacon",
+        owner: "cogni-test-nodes",
       })
-    ).toBe("https://doltremoteapi.dolthub.com/cogni-test-nodes/atlas");
+    ).toBe("https://doltremoteapi.dolthub.com/cogni-test-nodes/beacon");
   });
 
-  it("disables the mirror when repo-spec has no knowledge remote", () => {
-    expect(resolveKnowledgeMirrorRemoteUrl(undefined)).toBeUndefined();
+  it("FAILS CLOSED: no override, no repo-spec, no owner => undefined (mirror off)", () => {
+    expect(
+      resolveNodeKnowledgeRemoteUrl({ slug: "operator", owner: undefined })
+    ).toBeUndefined();
+    expect(
+      resolveNodeKnowledgeRemoteUrl({ slug: undefined, owner: "cogni-dao" })
+    ).toBeUndefined();
   });
 
-  it("prefers the per-env override over repo-spec (candidate-a → throwaway repo)", () => {
+  it("explicit env override wins over derivation AND repo-spec (throwaway isolation)", () => {
     const override =
       "https://doltremoteapi.dolthub.com/cogni-dao/knowledge-operator-candidate-a";
     expect(
-      resolveKnowledgeMirrorRemoteUrl(
-        {
-          database: "knowledge_operator",
-          remote: {
-            provider: "dolthub",
-            owner: "cogni-dao",
-            repo: "operator",
-            url: "https://doltremoteapi.dolthub.com/cogni-dao/operator",
-            custody: "cogni-owned",
-          },
-        },
-        override
-      )
+      resolveNodeKnowledgeRemoteUrl({
+        slug: "operator",
+        owner: "cogni-dao",
+        override,
+        repoSpec: REPO_SPEC,
+      })
     ).toBe(override);
   });
 
-  it("falls back to repo-spec when the env override is undefined", () => {
+  it("repo-spec knowledge.remote.url overrides derivation (custody exception)", () => {
     expect(
-      resolveKnowledgeMirrorRemoteUrl(
-        {
-          database: "knowledge_operator",
-          remote: {
-            provider: "dolthub",
-            owner: "cogni-dao",
-            repo: "operator",
-            url: "https://doltremoteapi.dolthub.com/cogni-dao/operator",
-            custody: "cogni-owned",
-          },
-        },
-        undefined
-      )
+      resolveNodeKnowledgeRemoteUrl({
+        slug: "operator",
+        owner: "cogni-dao",
+        repoSpec: REPO_SPEC,
+      })
     ).toBe("https://doltremoteapi.dolthub.com/cogni-dao/operator");
   });
 });

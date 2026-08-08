@@ -151,7 +151,7 @@ import { createVcsCapability } from "@/bootstrap/capabilities/vcs";
 import { createWebSearchCapability } from "@/bootstrap/capabilities/web-search";
 import { createWorkItemCapability } from "@/bootstrap/capabilities/work-item";
 import type { RateLimitBypassConfig } from "@/bootstrap/http/wrapPublicRoute";
-import { resolveKnowledgeMirrorRemoteUrl } from "@/bootstrap/knowledge-mirror";
+import { resolveNodeKnowledgeRemoteUrl } from "@/bootstrap/knowledge-mirror";
 import { startProcessHealthPublisher } from "@/bootstrap/publishers";
 import { startGovernanceSyncOnBoot } from "@/bootstrap/startup-reconcile";
 import {
@@ -197,6 +197,7 @@ import {
   getDaoTreasuryAddress,
   getKnowledgeConfig,
   getNodeId,
+  getNodeName,
   getOperatorWalletConfig,
   getPaymentConfig,
   getScopeId,
@@ -702,10 +703,12 @@ function createContainer(): Container {
     const contributionPort = new DoltgresKnowledgeContributionAdapter({
       sql: doltClient,
     });
-    const remoteUrl = resolveKnowledgeMirrorRemoteUrl(
-      getKnowledgeConfig(),
-      env.KNOWLEDGE_DOLTHUB_REMOTE_URL
-    );
+    const remoteUrl = resolveNodeKnowledgeRemoteUrl({
+      slug: getNodeName(),
+      owner: env.DOLTHUB_OWNER,
+      override: env.KNOWLEDGE_DOLTHUB_REMOTE_URL,
+      repoSpec: getKnowledgeConfig(),
+    });
     const pushMainOnMerge = remoteUrl
       ? wrapPushSafe(
           createDoltgresPusher({
