@@ -9,7 +9,7 @@
 
 ## Purpose
 
-Nginx config templates for sandbox LLM proxy containers — **ephemeral** (`nginx.conf.template`, per-run, overwrites billing headers, writes audit log for `LlmProxyManager`) and **gateway** (`nginx-gateway.conf.template`, long-running, passes through OpenClaw outboundHeaders, no audit log — billing via LiteLLM callback). Both inject LiteLLM authentication. No bespoke code — config-only proxy.
+Nginx config template for the **ephemeral** sandbox LLM proxy container (`nginx.conf.template`, per-run, overwrites billing headers, writes audit log for `LlmProxyManager`). Injects LiteLLM authentication. No bespoke code — config-only proxy.
 
 ## Pointers
 
@@ -30,13 +30,13 @@ Nginx config templates for sandbox LLM proxy containers — **ephemeral** (`ngin
 
 ## Public Surface
 
-- **Exports:** `nginx.conf.template` (consumed by `LlmProxyManager.generateConfig()`), `nginx-gateway.conf.template` (consumed by compose `envsubst`)
+- **Exports:** `nginx.conf.template` (consumed by `LlmProxyManager.generateConfig()`)
 - **Env/Config keys (template vars):** `SOCKET_PATH`, `LITELLM_MASTER_KEY`, `BILLING_ACCOUNT_ID`, `LITELLM_METADATA_JSON`, `RUN_ID`, `ATTEMPT`, `LITELLM_HOST`, `ACCESS_LOG_PATH`
-- **Files considered API:** nginx.conf.template, nginx-gateway.conf.template
+- **Files considered API:** nginx.conf.template
 
 ## Responsibilities
 
-- This directory **does**: Define nginx listen-on-socket config; inject Authorization header (LITELLM_MASTER_KEY); inject x-litellm-end-user-id (billingAccountId); inject x-litellm-spend-logs-metadata (run correlation + Langfuse); overwrite client-sent identity headers; write JSONL audit log to `ACCESS_LOG_PATH` (ephemeral only — gateway has no audit log, billing via LiteLLM callback); serve /health endpoint
+- This directory **does**: Define nginx listen-on-socket config; inject Authorization header (LITELLM_MASTER_KEY); inject x-litellm-end-user-id (billingAccountId); inject x-litellm-spend-logs-metadata (run correlation + Langfuse); overwrite client-sent identity headers; write JSONL audit log to `ACCESS_LOG_PATH`; serve /health endpoint
 - This directory **does not**: Run as a standalone service; contain secrets at rest; implement application logic; count tokens
 
 ## Usage

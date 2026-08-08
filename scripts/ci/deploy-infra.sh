@@ -925,7 +925,7 @@ append_env_if_set "$RUNTIME_ENV" PROMETHEUS_READ_PASSWORD "${PROMETHEUS_READ_PAS
 append_env_if_set "$RUNTIME_ENV" LANGFUSE_PUBLIC_KEY "${LANGFUSE_PUBLIC_KEY-}"
 append_env_if_set "$RUNTIME_ENV" LANGFUSE_SECRET_KEY "${LANGFUSE_SECRET_KEY-}"
 append_env_if_set "$RUNTIME_ENV" LANGFUSE_BASE_URL "${LANGFUSE_BASE_URL-}"
-# Discord bot (OpenClaw channel plugin)
+# Discord bot
 append_env_if_set "$RUNTIME_ENV" DISCORD_BOT_TOKEN "${DISCORD_BOT_TOKEN-}"
 # OAuth providers (optional)
 append_env_if_set "$RUNTIME_ENV" GH_OAUTH_CLIENT_ID "${GH_OAUTH_CLIENT_ID-}"
@@ -963,7 +963,7 @@ append_env_if_set "$RUNTIME_ENV" CONNECTIONS_ENCRYPTION_KEY "${CONNECTIONS_ENCRY
 # commit it in manifests.
 append_env_if_set "$RUNTIME_ENV" OPENFGA_AUTHN_METHOD "${OPENFGA_AUTHN_METHOD-}"
 append_env_if_set "$RUNTIME_ENV" OPENFGA_API_TOKEN "${OPENFGA_API_TOKEN-}"
-# Grafana observability (for OpenClaw grafana-health skill)
+# Grafana observability
 derive_pdc_defaults_from_token
 append_env_if_set "$RUNTIME_ENV" GRAFANA_URL "${GRAFANA_URL-}"
 append_env_if_set "$RUNTIME_ENV" GRAFANA_SERVICE_ACCOUNT_TOKEN "${GRAFANA_SERVICE_ACCOUNT_TOKEN-}"
@@ -1093,7 +1093,7 @@ fi
 # Step 4: Assert profile services exist (guard against silent compose drift)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RESOLVED_SERVICES=$($RUNTIME_COMPOSE --profile bootstrap config --services)
-log_info "Profile guardrail passed (sandbox-openclaw disabled)"
+log_info "Profile guardrail passed"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 5: Start/update postgres (must be healthy before provisioning)
@@ -1337,8 +1337,6 @@ if $pdc_enabled; then
 else
   runtime_compose_up_with_retry "" $INFRA_SERVICES
 fi
-
-# Sandbox-openclaw disabled — removed from k8s catalog and compose deploy path.
 
 log_info "[$(date -u +%H:%M:%S)] Infra stack up complete"
 emit_deployment_event "infra_deployment.stack_up_complete" "success" "Infrastructure services started"
@@ -1611,7 +1609,6 @@ else
   fi
 fi
 
-# Steps 6.6c–6.6d (OpenClaw config hash + readiness gate) removed — sandbox-openclaw disabled.
 # Step 6.6d (alloy checksum-restart) lives near the litellm block above; main
 # already added it at 88e67cdd4 (bug.5169) so this branch's earlier copy is dropped.
 
@@ -1823,8 +1820,6 @@ SECEOF
     --from-env-file="$SECRET_FILE" --dry-run=client -o yaml | kubectl apply -f -
   rm -f "$SECRET_FILE"
   log_info "  Applied scheduler-worker-secrets"
-
-  # Sandbox-openclaw secret removed — sandbox-openclaw disabled.
 
   log_info "[$(date -u +%H:%M:%S)] k8s secrets applied"
   emit_deployment_event "infra_deployment.k8s_secrets_complete" "success" "k8s secrets applied"
@@ -2184,8 +2179,6 @@ if [[ -d "$REPO_ROOT/infra/k8s/argocd/image-updater" ]]; then
     "$REPO_ROOT/infra/k8s/argocd/image-updater/" \
     root@"$VM_HOST":/opt/cogni-template-argocd-updater/
 fi
-
-# OpenClaw config/workspace uploads removed — sandbox-openclaw disabled.
 
 # Upload deployment script
 scp $SSH_OPTS "$ARTIFACT_DIR/deploy-infra-remote.sh" root@"$VM_HOST":/tmp/deploy-infra-remote.sh

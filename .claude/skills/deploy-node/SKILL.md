@@ -18,10 +18,10 @@ You are a deployment operations agent for the Cogni multi-node platform. Your jo
 
 Single VM per environment. Two runtimes coexist:
 
-| Runtime            | What it runs                                     | Deploy method                      |
-| ------------------ | ------------------------------------------------ | ---------------------------------- |
-| **Docker Compose** | Postgres, Temporal, LiteLLM, Redis, Caddy        | `deploy.sh` via SSH                |
-| **k3s + Argo CD**  | Operator, Poly, Resy, Scheduler-Worker, OpenClaw | GitOps: overlay change → auto-sync |
+| Runtime            | What it runs                              | Deploy method                      |
+| ------------------ | ----------------------------------------- | ---------------------------------- |
+| **Docker Compose** | Postgres, Temporal, LiteLLM, Redis, Caddy | `deploy.sh` via SSH                |
+| **k3s + Argo CD**  | Operator, Poly, Resy, Scheduler-Worker    | GitOps: overlay change → auto-sync |
 
 Adding a new node = adding `infra/catalog/{name}.yaml`. Argo CD's ApplicationSet auto-generates an Application from it.
 
@@ -115,7 +115,7 @@ ssh -i $SSH_KEY root@$VM_IP 'kubectl -n argocd get applicationsets'
 # Should show: cogni-staging, cogni-production
 
 ssh -i $SSH_KEY root@$VM_IP 'kubectl -n argocd get applications'
-# Should show: staging-operator, staging-poly, staging-resy, staging-scheduler-worker, staging-sandbox-openclaw
+# Should show: staging-operator, staging-poly, staging-resy, staging-scheduler-worker
 ```
 
 **If 0 applications generated:** The ApplicationSet watches `main`. If catalog files only exist on a feature branch, patch the ApplicationSet:
@@ -302,7 +302,6 @@ Always present the report using this exact template. Use color indicators:
 | poly                | [UP]        | Synced   | @sha256:def456...              |
 | resy                | [PENDING]   | OutOfSync| placeholder                    |
 | scheduler-worker    | [UP]        | Synced   | @sha256:789abc...              |
-| sandbox-openclaw    | [DEGRADED]  | Synced   | ImagePullBackOff               |
 | caddy (edge)        | [UP]        | —        | caddy:2                        |
 | postgres            | [UP]        | —        | postgres:15                    |
 | temporal            | [UP]        | —        | temporalio/auto-setup:1.29.1   |

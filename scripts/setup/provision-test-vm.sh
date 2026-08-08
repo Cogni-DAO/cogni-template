@@ -542,8 +542,6 @@ DATABASE_URL=${DATABASE_URL}
 DATABASE_SERVICE_URL=${DATABASE_SERVICE_URL}
 POSTHOG_API_KEY=${POSTHOG_API_KEY}
 POSTHOG_HOST=${POSTHOG_HOST}
-OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
-OPENCLAW_GITHUB_RW_TOKEN=placeholder-not-started
 SCHEDULER_WORKER_IMAGE=placeholder:not-started
 MIGRATOR_IMAGE=placeholder:not-started
 APP_IMAGE=placeholder:not-started
@@ -657,8 +655,6 @@ for node in operator; do
     --from-literal=EVM_RPC_URL='${EVM_RPC_URL}' \
     --from-literal=POSTHOG_API_KEY='${POSTHOG_API_KEY}' \
     --from-literal=POSTHOG_HOST='${POSTHOG_HOST}' \
-    --from-literal=OPENCLAW_GATEWAY_TOKEN='${OPENCLAW_GATEWAY_TOKEN}' \
-    --from-literal=OPENCLAW_GITHUB_RW_TOKEN='placeholder-not-needed-for-test' \
     --from-literal=SCHEDULER_API_TOKEN='${SCHEDULER_API_TOKEN}' \
     --from-literal=BILLING_INGEST_TOKEN='${BILLING_INGEST_TOKEN}' \
     --from-literal=INTERNAL_OPS_TOKEN='${INTERNAL_OPS_TOKEN}' \
@@ -682,15 +678,6 @@ ssh $SSH_OPTS root@"$VM_IP" "kubectl -n ${K8S_NAMESPACE} create secret generic s
   --from-literal=INTERNAL_OPS_TOKEN='${INTERNAL_OPS_TOKEN}' \
   --dry-run=client -o yaml | kubectl apply -f -"
 log_info "  Created scheduler-worker-secrets"
-
-# Sandbox-openclaw secret (placeholder)
-ssh $SSH_OPTS root@"$VM_IP" "kubectl -n ${K8S_NAMESPACE} create secret generic sandbox-openclaw-secrets \
-  --from-literal=OPENCLAW_GATEWAY_TOKEN='${OPENCLAW_GATEWAY_TOKEN}' \
-  --from-literal=OPENCLAW_GITHUB_RW_TOKEN='placeholder-not-needed-for-test' \
-  --from-literal=LITELLM_MASTER_KEY='${LITELLM_MASTER_KEY}' \
-  --from-literal=DISCORD_BOT_TOKEN='placeholder' \
-  --dry-run=client -o yaml | kubectl apply -f -"
-log_info "  Created sandbox-openclaw-secrets"
 
 log_info "All k8s secrets created"
 

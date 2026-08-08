@@ -49,7 +49,7 @@
 #   PROMOTED_APPS       (optional) CSV of app names to scope the wait to.
 #                       Empty → fall back to full catalog. Apps not promoted
 #                       in this run may legitimately be pinned at prior digest
-#                       (e.g. sandbox-openclaw placeholder) and would false-fail.
+#                       and would false-fail.
 #   ARGOCD_TIMEOUT      (optional, default 600) per-app timeout in seconds.
 #                       600s is conservative headroom — post-task.0370-step1
 #                       the runtime image is already warm for the app pod, so
