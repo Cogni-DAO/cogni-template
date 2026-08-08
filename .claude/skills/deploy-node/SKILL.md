@@ -18,10 +18,10 @@ You are a deployment operations agent for the Cogni multi-node platform. Your jo
 
 Single VM per environment. Two runtimes coexist:
 
-| Runtime            | What it runs                                     | Deploy method                      |
-| ------------------ | ------------------------------------------------ | ---------------------------------- |
-| **Docker Compose** | Postgres, Temporal, LiteLLM, Redis, Caddy        | `deploy.sh` via SSH                |
-| **k3s + Argo CD**  | Operator, Poly, Resy, Scheduler-Worker           | GitOps: overlay change → auto-sync |
+| Runtime            | What it runs                              | Deploy method                      |
+| ------------------ | ----------------------------------------- | ---------------------------------- |
+| **Docker Compose** | Postgres, Temporal, LiteLLM, Redis, Caddy | `deploy.sh` via SSH                |
+| **k3s + Argo CD**  | Operator, Poly, Resy, Scheduler-Worker    | GitOps: overlay change → auto-sync |
 
 Adding a new node = adding `infra/catalog/{name}.yaml`. Argo CD's ApplicationSet auto-generates an Application from it.
 

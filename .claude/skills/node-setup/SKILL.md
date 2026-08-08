@@ -59,13 +59,13 @@ Derive `REPO_SLUG` (e.g., `my-cogni-node`) and `REPO_SNAKE` (e.g., `my_cogni_nod
 1. Copy `.env.local.example` → `.env.local`, update DB names and `COGNI_REPO_URL`
 2. Prompt user for credentials they must create (see [SETUP_DESIGN.md](../../../scripts/setup/SETUP_DESIGN.md) for full list):
 
-   | Secret                     | Where to create                                                                         |
-   | -------------------------- | --------------------------------------------------------------------------------------- |
-   | `CHERRY_AUTH_TOKEN`        | https://portal.cherryservers.com/settings/api-keys                                      |
-   | `OPENROUTER_API_KEY`       | https://openrouter.ai/settings/keys                                                     |
-   | `EVM_RPC_URL`              | https://dashboard.alchemy.com/apps (Base Mainnet)                                       |
-   | `GHCR_DEPLOY_TOKEN`        | https://github.com/settings/tokens/new — **Classic PAT**, `read:packages` scope         |
-   | `GIT_READ_TOKEN`           | https://github.com/settings/personal-access-tokens/new — Fine-grained, `Contents: Read` |
+   | Secret               | Where to create                                                                         |
+   | -------------------- | --------------------------------------------------------------------------------------- |
+   | `CHERRY_AUTH_TOKEN`  | https://portal.cherryservers.com/settings/api-keys                                      |
+   | `OPENROUTER_API_KEY` | https://openrouter.ai/settings/keys                                                     |
+   | `EVM_RPC_URL`        | https://dashboard.alchemy.com/apps (Base Mainnet)                                       |
+   | `GHCR_DEPLOY_TOKEN`  | https://github.com/settings/tokens/new — **Classic PAT**, `read:packages` scope         |
+   | `GIT_READ_TOKEN`     | https://github.com/settings/personal-access-tokens/new — Fine-grained, `Contents: Read` |
 
 3. Auto-generate: `LITELLM_MASTER_KEY`, `AUTH_SECRET` via `openssl rand`
 4. Start dev infrastructure: `pnpm dev:infra`
