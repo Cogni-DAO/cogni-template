@@ -26,8 +26,8 @@
  * @internal
  */
 
-import { buildNodeKnowledgeRemote } from "@/shared/node-app-scaffold/knowledge-remote";
 import type { KnowledgeConfig } from "@/shared/config";
+import { buildNodeKnowledgeRemote } from "@/shared/node-app-scaffold/knowledge-remote";
 
 export interface NodeKnowledgeRemoteInput {
   /** This node's slug (repo-spec `intent.name`) — the `<slug>` in `<owner>/<slug>`. */
