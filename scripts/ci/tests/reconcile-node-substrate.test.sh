@@ -72,6 +72,13 @@ put_secret operator APP_DB_SERVICE_PASSWORD pernode-svc-pw-sentinel
 # Doltgres superuser SSOT is operator-canonical (cogni/<env>/operator/DOLTGRES_PASSWORD),
 # shared env-wide; reconcile reads it from operator and injects it into doltgres-provision.
 put_secret operator DOLTGRES_PASSWORD doltgres-super-sentinel
+# DoltHub knowledge-mirror creds — env-global, read from the operator-canonical bank
+# (mirrors DOLTGRES_PASSWORD). secret-materialize already materializes these into every
+# node bank. The reconcile lane renders them to the VM runtime .env + recreates doltgres
+# so install-creds.sh re-runs — Option B (substrate lane, not deploy-infra). The JWK value
+# carries JSON metachars ({,",}) on purpose so the base64 no-injection path is exercised.
+put_secret operator DOLT_CREDS_JWK '{"kty":"OKP","d":"jwk-secret-sentinel"}'
+put_secret operator DOLT_CREDS_KEYID dolt-mirror-keyid-sentinel
 
 cat > "$FAKEBIN/ssh" <<'EOF'
 #!/usr/bin/env bash
@@ -247,7 +254,7 @@ grep -q -- "-n cogni-candidate-a get secret operator-env-secrets" "$REMOTE_ROOT/
 # operator's bank carries the env-wide DOLTGRES superuser SSOT in addition to its
 # per-node DB creds; reconcile must leave all three untouched.
 after_keys="$(cd "$BAO_ROOT/cogni/candidate-a/operator" && printf '%s\n' * | sort | paste -sd, -)"
-if [ "$after_keys" != "APP_DB_PASSWORD,APP_DB_SERVICE_PASSWORD,DOLTGRES_PASSWORD" ]; then
+if [ "$after_keys" != "APP_DB_PASSWORD,APP_DB_SERVICE_PASSWORD,DOLTGRES_PASSWORD,DOLT_CREDS_JWK,DOLT_CREDS_KEYID" ]; then
   echo "reconcile must perform ZERO OpenBao writes; operator bank changed to: $after_keys" >&2
   exit 1
 fi
@@ -265,6 +272,43 @@ grep -qE -- '--profile bootstrap run --rm .* db-provision' "$REMOTE_ROOT/docker.
 # not silently skipped → no node-app Init:CrashLoopBackOff).
 grep -qE -- '--profile bootstrap run --rm -e COGNI_NODE_DBS=cogni_operator -e DOLTGRES_PASSWORD=.* doltgres-provision' "$REMOTE_ROOT/docker.log"
 
+# DoltHub mirror (Option B): with creds present in OpenBao, the always-run lane renders
+# them to the VM runtime .env and force-recreates doltgres so install-creds.sh re-runs.
+# This is the whole point — an app-only promote (skip_infra) now brings the mirror up
+# with NO separate deploy-infra run. The JWK is decoded from base64 VM-side; the file
+# holds the literal JSON value with its metachars intact (no sed corruption).
+grep -qF 'DOLT_CREDS_KEYID=dolt-mirror-keyid-sentinel' "$REMOTE_ROOT/opt/cogni-template-runtime/.env" \
+  || { echo "DOLT_CREDS_KEYID not rendered to VM runtime .env" >&2; exit 1; }
+grep -qF 'DOLT_CREDS_JWK={"kty":"OKP","d":"jwk-secret-sentinel"}' "$REMOTE_ROOT/opt/cogni-template-runtime/.env" \
+  || { echo "DOLT_CREDS_JWK not rendered verbatim to VM runtime .env (base64 round-trip broke)" >&2; exit 1; }
+grep -q 'up -d --force-recreate doltgres' "$REMOTE_ROOT/docker.log" \
+  || { echo "doltgres not force-recreated after mirror creds change (install-creds.sh would not re-run)" >&2; exit 1; }
+grep -q 'dolt_mirror_creds' <(python3 -c 'import json,sys; print("\n".join(r["row"] for r in json.load(open(sys.argv[1]))["rows"]))' "$TMPROOT/summary.json") \
+  || { echo "dolt_mirror_creds row missing from reconcile summary" >&2; exit 1; }
+
+# Idempotency: a second reconcile with UNCHANGED creds must NOT recreate doltgres again
+# (hash-gate). Count force-recreates before/after a re-run and assert no new one — never
+# clear docker.log, so the first-run evidence later assertions read (e.g. 'restart alloy')
+# stays intact regardless of ordering.
+recreate_before="$(grep -c 'up -d --force-recreate doltgres' "$REMOTE_ROOT/docker.log" || true)"
+env \
+  VM_HOST=fake \
+  DOMAIN=test.cognidao.org \
+  SSH_OPTS="-i fake-key -o StrictHostKeyChecking=no" \
+  RECONCILE_NODE_SUBSTRATE_SSH_BIN="$FAKEBIN/ssh" \
+  RECONCILE_NODE_SUBSTRATE_SCP_BIN="$FAKEBIN/scp" \
+  FAKE_REMOTE_ROOT="$REMOTE_ROOT" \
+  FAKE_REMOTE_PATH="$FAKEBIN" \
+  FAKE_BAO_ROOT="$BAO_ROOT" \
+  FAKE_LEGACY_EXTERNAL_SECRET_TARGET="operator-env-secrets" \
+  bash scripts/ci/reconcile-node-substrate.sh candidate-a operator > "$TMPROOT/rerun.txt"
+recreate_after="$(grep -c 'up -d --force-recreate doltgres' "$REMOTE_ROOT/docker.log" || true)"
+if [ "$recreate_before" != "$recreate_after" ]; then
+  echo "hash-gate broken: doltgres force-recreated on a no-change re-reconcile (would churn the mirror every flight)" >&2
+  exit 1
+fi
+grep -q 'substrate ready inputs reconciled for operator' "$TMPROOT/rerun.txt"
+
 # Born-observable (bug.5041): the Alloy node-label config is staged to the VM and
 # the shared hash-gated restart helper runs — on EVERY substrate-readiness pass,
 # so an app-only promote (skip_infra) re-pushes it. First run = changed = restart.
@@ -275,7 +319,7 @@ grep -q 'restart alloy' "$REMOTE_ROOT/docker.log" \
 
 # Per-node DB passwords + the doltgres superuser transit the VM-local SSH/docker env
 # (by design), but must NEVER reach CI stdout. The db-reader token must not leak either.
-if grep -q 'sk-or-existing\|pernode-app-pw-sentinel\|pernode-svc-pw-sentinel\|doltgres-super-sentinel\|dolt-token\|writer-token' "$TMPROOT/out.txt"; then
+if grep -q 'sk-or-existing\|pernode-app-pw-sentinel\|pernode-svc-pw-sentinel\|doltgres-super-sentinel\|dolt-token\|writer-token\|jwk-secret-sentinel' "$TMPROOT/out.txt"; then
   echo "secret value leaked to output" >&2
   exit 1
 fi
