@@ -264,9 +264,7 @@ describe("syncGovernanceSchedules", () => {
       await syncGovernanceSchedules(config, deps);
 
       const expectedScope = nodeTaskScope(NODE_ID, COLLECT_ROUTE);
-      expect(expectedScope).toBe(
-        `task:dispatch:${NODE_ID}:${COLLECT_ROUTE}`
-      );
+      expect(expectedScope).toBe(`task:dispatch:${NODE_ID}:${COLLECT_ROUTE}`);
       expect(deps.ensureNodeCollectGrant).toHaveBeenCalledWith(expectedScope);
     });
   });
