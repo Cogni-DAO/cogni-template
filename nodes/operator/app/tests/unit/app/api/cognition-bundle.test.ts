@@ -59,6 +59,17 @@ describe("renderBundleMarkdown", () => {
     expect(heading).not.toContain("f52036b3");
   });
 
+  it("surfaces the derived candidate (flight + validate) URL for the node", () => {
+    // operator is the primary test apex...
+    expect(renderBundleMarkdown(baseInput)).toContain(
+      "https://test.cognidao.org"
+    );
+    // ...every other node is a slugged test host.
+    expect(renderBundleMarkdown({ ...baseInput, name: "poly" })).toContain(
+      "https://poly-test.cognidao.org"
+    );
+  });
+
   it("renders the current-node orientation entry IN FULL above the tooling invariants", () => {
     const fullOrientation = [
       "**USE WHEN:** first read of every operator session.",
