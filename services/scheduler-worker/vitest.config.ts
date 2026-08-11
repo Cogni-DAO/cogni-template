@@ -13,12 +13,23 @@
  * @internal
  */
 
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { defineProject } from "vitest/config";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
+
+// Dedupe `viem` to a single physical copy. pnpm installs several peer-scoped
+// viem copies; this package and @cogni/attribution-collect (which owns
+// finalizeEpoch's `verifyTypedData` call) otherwise resolve to DIFFERENT copies.
+// That mismatch means `vi.mock("viem")` in ledger-activities.test.ts mocks one
+// copy while finalizeEpoch imports the other, so real viem runs and rejects the
+// fixture signature with "invalid signature length". Aliasing forces both to the
+// same module so the mock applies uniformly.
+const viemDir = path.dirname(require.resolve("viem/package.json"));
 
 export default defineProject({
   plugins: [
@@ -27,6 +38,12 @@ export default defineProject({
       projects: [path.resolve(__dirname, "../../tsconfig.json")],
     }),
   ],
+  resolve: {
+    // Exact-match only (regex) so `viem/accounts` and other subpaths keep using
+    // the package `exports` map — we only dedupe the bare `viem` specifier. The
+    // replacement is the package dir so Vite resolves the correct ESM entry.
+    alias: [{ find: /^viem$/, replacement: viemDir }],
+  },
   test: {
     name: "scheduler-worker",
     globals: true,
@@ -34,16 +51,5 @@ export default defineProject({
     include: ["tests/**/*.{test,spec}.{ts,tsx}"],
     exclude: ["node_modules", "dist"],
     testTimeout: 10_000,
-    // Inline the moved attribution-collect package so its src (which imports
-    // `viem`) is transformed into this test file's module graph. Without this,
-    // the package resolves via its package.json `exports` (dist) as an external
-    // module and `vi.mock("viem")` in ledger-activities.test.ts cannot reach the
-    // `verifyTypedData` call inside finalizeEpoch — the real viem then rejects
-    // the fixture signature with "invalid signature length".
-    server: {
-      deps: {
-        inline: [/@cogni\/attribution-collect/],
-      },
-    },
   },
 });
