@@ -12,13 +12,14 @@ description: >
 
 ## The roster is live state — read it, never hardcode
 
-| Want | Source |
-| --- | --- |
-| Who's registered + owner (per env) | `GET /api/v1/nodes` (owner Bearer) — the Postgres `nodes` SSOT. Per-env status: `GET /api/v1/nodes/{id}/deploy-state`. |
-| Git-declared in-repo nodes | `infra/catalog/*.yaml` `type:node` → **operator, node-template, beacon, poly** (`litellm`/`openfga`=infra, `scheduler-worker`=service). |
-| Is it actually serving | `curl https://<host>/version` from **outside** the cluster (buildSha, not workflow-green). |
+| Want                               | Source                                                                                                                                  |
+| ---------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Who's registered + owner (per env) | `GET /api/v1/nodes` (owner Bearer) — the Postgres `nodes` SSOT. Per-env status: `GET /api/v1/nodes/{id}/deploy-state`.                  |
+| Git-declared in-repo nodes         | `infra/catalog/*.yaml` `type:node` → **operator, node-template, beacon, poly** (`litellm`/`openfga`=infra, `scheduler-worker`=service). |
+| Is it actually serving             | `curl https://<host>/version` from **outside** the cluster (buildSha, not workflow-green).                                              |
 
 **URL rule** (`verify-buildsha.sh`): operator = the bare env domain; every other node = `<node>-<envprefix>.<base>`.
+
 - prod `cognidao.org` / `<node>.cognidao.org` · preview `preview.cognidao.org` / `<node>-preview…` · candidate-a `test.cognidao.org` / `<node>-test…`
 
 **External submodule nodes** (e.g. blue, oss, habitat) carry their own repo-spec `node_id` — they show in `GET /api/v1/nodes` but **not** the in-repo catalog. Not-in-catalog + not-serving = an external node's own deploy, not an in-repo gap.
@@ -33,13 +34,13 @@ description: >
 
 Every write is `(node_id, env)`-scoped, resolves the node via the registry, gates OpenFGA `node:<id>`, and runs as the operator's own identity — the caller holds only an API key.
 
-| Action | Endpoint | Role |
-| --- | --- | --- |
-| Flight → candidate-a | `POST /api/v1/vcs/flight` | `developer` |
-| Merge a node PR (on green) | `POST /api/v1/vcs/merge` | `developer` |
-| Promote → production | `POST /api/v1/deploy/promote` | `production_promoter` |
-| Write/rotate a node secret value | `POST /api/v1/nodes/{id}/secrets` | `secrets_manager` |
-| Read deploy-state / logs | `GET /api/v1/nodes/{id}/{deploy-state,observability/logs}` | `developer` |
+| Action                           | Endpoint                                                   | Role                  |
+| -------------------------------- | ---------------------------------------------------------- | --------------------- |
+| Flight → candidate-a             | `POST /api/v1/vcs/flight`                                  | `developer`           |
+| Merge a node PR (on green)       | `POST /api/v1/vcs/merge`                                   | `developer`           |
+| Promote → production             | `POST /api/v1/deploy/promote`                              | `production_promoter` |
+| Write/rotate a node secret value | `POST /api/v1/nodes/{id}/secrets`                          | `secrets_manager`     |
+| Read deploy-state / logs         | `GET /api/v1/nodes/{id}/{deploy-state,observability/logs}` | `developer`           |
 
 `owner` (the repo-spec governance-approver wallet) RLS-owns the row and approves access-requests (`POST /nodes/{id}/access-requests` → `POST /nodes/{id}/developers`). `403 authz_denied` = no grant; `503 authz_unavailable` = OpenFGA store unbootstrapped (not a denial).
 
