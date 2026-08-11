@@ -12,11 +12,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  excerptFromContent,
-  ORIENTATION_EXCERPT_MAX,
-  renderBundleMarkdown,
-} from "@/app/api/v1/cognition/_bundle";
+import { renderBundleMarkdown } from "@/app/api/v1/cognition/_bundle";
 
 const baseInput = {
   node: "4ff8eac1-4eba-4ed0-931b-b1fe4f64713d",
@@ -63,21 +59,32 @@ describe("renderBundleMarkdown", () => {
     expect(heading).not.toContain("f52036b3");
   });
 
-  it("surfaces a current-node orientation excerpt above the tooling invariants", () => {
+  it("renders the current-node orientation entry IN FULL above the tooling invariants", () => {
+    const fullOrientation = [
+      "**USE WHEN:** first read of every operator session.",
+      "",
+      "## Mission",
+      "Operator is the agentic git-manager. Edit nodes/operator/app.",
+      "",
+      "## Principles",
+      "- Recall before write, refine over extend.",
+    ].join("\n");
     const markdown = renderBundleMarkdown({
       ...baseInput,
       orientation: {
         id: "operator-agent-orientation",
-        excerpt:
-          "Operator is the agentic git-manager. Edit nodes/operator/app.",
+        content: fullOrientation,
       },
     });
 
     expect(markdown).toContain("## Orientation — recall this first");
-    expect(markdown).toContain(
-      "Operator is the agentic git-manager. Edit nodes/operator/app."
-    );
-    expect(markdown).toContain("Recall `operator-agent-orientation`");
+    // The whole entry body is inlined, not a truncated excerpt — every section
+    // survives, including ones past the old 480-char first-paragraph cut.
+    expect(markdown).toContain(fullOrientation);
+    expect(markdown).toContain("## Mission");
+    expect(markdown).toContain("- Recall before write, refine over extend.");
+    // No second-recall footer: the bootstrap IS the orientation.
+    expect(markdown).not.toContain("for the full context");
     // Map comes before the constitution.
     expect(markdown.indexOf("## Orientation — recall this first")).toBeLessThan(
       markdown.indexOf("## Tooling invariants")
@@ -89,23 +96,5 @@ describe("renderBundleMarkdown", () => {
 
     expect(markdown).toContain("## Orientation — recall this first");
     expect(markdown).toContain("No `operator-agent-orientation` entry yet");
-  });
-});
-
-describe("excerptFromContent", () => {
-  it("takes the leading paragraph and flattens whitespace", () => {
-    const excerpt = excerptFromContent(
-      "**Use when:** starting a session.\nLine two.\n\nSecond block ignored."
-    );
-    expect(excerpt).toBe("**Use when:** starting a session. Line two.");
-    expect(excerpt).not.toContain("Second block");
-  });
-
-  it("caps length with an ellipsis", () => {
-    const excerpt = excerptFromContent(
-      "x".repeat(ORIENTATION_EXCERPT_MAX + 50)
-    );
-    expect(excerpt.length).toBeLessThanOrEqual(ORIENTATION_EXCERPT_MAX + 1);
-    expect(excerpt.endsWith("…")).toBe(true);
   });
 });
