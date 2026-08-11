@@ -263,13 +263,13 @@ Supabase delivers Auth, Storage, and a generated API as managed services. The sa
 
 **Endpoint.** `GET /api/v1/cognition` returns a node's kickstart bundle, advertised under `cognition` + `endpoints.knowledgeBootstrap` in `/.well-known/agent.json`. The bundle has five parts:
 
-| Part                | Source                                                                     | Owner         |
-| ------------------- | -------------------------------------------------------------------------- | ------------- |
-| Mission             | `intent.mission` in the node's `.cogni/repo-spec.yaml`                     | repo-spec     |
-| Orientation (full)  | the `<slug>-agent-orientation` hub entry, rendered IN FULL                 | knowledge hub |
-| Tooling invariants  | `SESSION_BOOTSTRAP_INVARIANTS` constant in the node app                    | code          |
-| Skills index        | hub entries of type `skill`/`guide`/`playbook` (use-when framed titles)    | knowledge hub |
-| Domain pointers     | `listDomainsFull()` — registered domains + entry counts (empty suppressed) | knowledge hub |
+| Part               | Source                                                                     | Owner         |
+| ------------------ | -------------------------------------------------------------------------- | ------------- |
+| Mission            | `intent.mission` in the node's `.cogni/repo-spec.yaml`                     | repo-spec     |
+| Orientation (full) | the `<slug>-agent-orientation` hub entry, rendered IN FULL                 | knowledge hub |
+| Tooling invariants | `SESSION_BOOTSTRAP_INVARIANTS` constant in the node app                    | code          |
+| Skills index       | hub entries of type `skill`/`guide`/`playbook` (use-when framed titles)    | knowledge hub |
+| Domain pointers    | `listDomainsFull()` — registered domains + entry counts (empty suppressed) | knowledge hub |
 
 The bundle's stance is **constitution + map**: the code-owned invariants say how every agent must behave; the repo-spec mission says why this node exists; the orientation entry is the current-node map an agent needs to start (where to edit, what not to run, what can break prod/candidate, what to recall next). The git skeleton is deliberately **minimal** — invariants + section frame + recall pointers — and the substance is the Dolt orientation entry, rendered **IN FULL** so the bootstrap _is_ the operating map (no second recall to be useful). Everything else (skills, domains) stays **index-first**: pointers only, never full bodies.
 
