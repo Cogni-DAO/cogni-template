@@ -51,11 +51,11 @@ docker rm -f hub-read      # 4. clean up
 curl -s "https://www.dolthub.com/api/v1alpha1/cogni-dao/operator/main" | jq -r .query_execution_message
 ```
 
-| Response | Meaning |
-| --- | --- |
-| `doltgres data is not supported` | ✅ **Healthy** — clone it with the recipe |
+| Response                                      | Meaning                                          |
+| --------------------------------------------- | ------------------------------------------------ |
+| `doltgres data is not supported`              | ✅ **Healthy** — clone it with the recipe        |
 | `table has unknown fields` (from **web-SQL**) | 🔴 **Corrupted** — a chunk is missing/unwalkable |
-| `branch not found` / `no such repository` | Empty / nonexistent — nothing pushed yet |
+| `branch not found` / `no such repository`     | Empty / nonexistent — nothing pushed yet         |
 
 > Same string, opposite meaning: `table has unknown fields` from the **`dolt` CLI** = healthy-but-wrong-tool; from **web-SQL** = corrupted.
 
