@@ -127,7 +127,33 @@ class FakeSql {
   }
 }
 
-function adapterFor(fake: FakeSql): DoltgresKnowledgeContributionAdapter {
+// Injects specific dolt_diff rows per table so diff() output can be asserted.
+class FakeDiffSql {
+  readonly queries: string[] = [];
+  readonly conn = new FakeReservedSql();
+
+  constructor(
+    private readonly knowledgeRows: Record<string, unknown>[],
+    private readonly citationRows: Record<string, unknown>[]
+  ) {}
+
+  async unsafe(query: string): Promise<Record<string, unknown>[]> {
+    this.queries.push(query);
+    if (query.includes("FROM knowledge_contributions")) return [record];
+    if (query.includes("dolt_diff") && query.includes("'citations'"))
+      return this.citationRows;
+    if (query.includes("dolt_diff")) return this.knowledgeRows;
+    return [];
+  }
+
+  async reserve(): Promise<ReservedSql> {
+    return this.conn as unknown as ReservedSql;
+  }
+}
+
+function adapterFor(
+  fake: FakeSql | FakeDiffSql
+): DoltgresKnowledgeContributionAdapter {
   return new DoltgresKnowledgeContributionAdapter({
     sql: fake as unknown as Sql,
   });
@@ -139,9 +165,11 @@ describe("DoltgresKnowledgeContributionAdapter", () => {
 
     await adapterFor(fake).diff("contrib-agent-1-abc123");
 
-    expect(fake.queries.at(-1)).toContain(
-      "dolt_diff('base123', 'head123', 'knowledge')"
-    );
+    expect(
+      fake.queries.some((q) =>
+        q.includes("dolt_diff('base123', 'head123', 'knowledge')")
+      )
+    ).toBe(true);
   });
 
   it("uses base commit as both sides for diff when no branch commit exists", async () => {
@@ -149,9 +177,61 @@ describe("DoltgresKnowledgeContributionAdapter", () => {
 
     await adapterFor(fake).diff("contrib-agent-1-abc123");
 
-    expect(fake.queries.at(-1)).toContain(
-      "dolt_diff('base123', 'base123', 'knowledge')"
+    expect(
+      fake.queries.some((q) =>
+        q.includes("dolt_diff('base123', 'base123', 'knowledge')")
+      )
+    ).toBe(true);
+  });
+
+  it("surfaces citation adds as links and suppresses phantom modified (bug.5004)", async () => {
+    // knowledge diff returns a `modified` row whose DISPLAYED fields are identical
+    // (a citation confidence-recompute side-effect); citations diff returns one add.
+    const fake = new FakeDiffSql(
+      [
+        {
+          diff_type: "modified",
+          from_id: "operator-agent-orientation",
+          to_id: "operator-agent-orientation",
+          from_title: "orientation",
+          to_title: "orientation",
+          from_content: "body",
+          to_content: "body",
+          from_entry_type: "reference",
+          to_entry_type: "reference",
+          from_domain: "operator",
+          to_domain: "operator",
+        },
+      ],
+      [
+        {
+          diff_type: "added",
+          to_id: "cit-1",
+          to_citing_id: "operator-node-catalog",
+          to_cited_id: "operator-agent-orientation",
+          to_citation_type: "extends",
+        },
+      ]
     );
+
+    const entries = await adapterFor(fake).diff("contrib-agent-1-abc123");
+
+    // the phantom `modified` on the cited entry is dropped; only the link remains
+    expect(entries).toHaveLength(1);
+    expect(entries[0]).toMatchObject({
+      changeType: "citation_added",
+      after: {
+        citingId: "operator-node-catalog",
+        citedId: "operator-agent-orientation",
+        citationType: "extends",
+      },
+    });
+    // and the citations table is actually diffed
+    expect(
+      fake.queries.some((q) =>
+        q.includes("dolt_diff('base123', 'head123', 'citations')")
+      )
+    ).toBe(true);
   });
 
   it("normalizes persisted brace-wrapped refs before building diff refs", async () => {
@@ -163,9 +243,11 @@ describe("DoltgresKnowledgeContributionAdapter", () => {
 
     await adapterFor(fake).diff("contrib-agent-1-abc123");
 
-    expect(fake.queries.at(-1)).toContain(
-      "dolt_diff('base123', 'head123', 'knowledge')"
-    );
+    expect(
+      fake.queries.some((q) =>
+        q.includes("dolt_diff('base123', 'head123', 'knowledge')")
+      )
+    ).toBe(true);
   });
 
   it("commits merge metadata before deleting the contribution branch", async () => {
