@@ -149,9 +149,24 @@ DoltHub owner configured by `DOLTHUB_OWNER`.
 
 The bootstrap host can now delete its local `~/.dolt/creds/<keyid>.jwk` — the cluster has the only authoritative copy.
 
-## Step 5 — Verify (after the next infra flight)
+> **OpenBao is the runtime SSOT (Option B, `feat/dolt-creds-substrate-materialize`).**
+> The GH-env `gh secret set` above is the provision-time seed. At runtime the creds
+> live in OpenBao at `cogni/<env>/operator` (materialized by `secret-materialize.sh`
+> from the catalog `_shared` entries — they are already in `NODE_BASELINE_KEYS`), and
+> the **always-run substrate lane** (`reconcile-node-substrate.sh`, ci-cd.md Axiom 22)
+> reads them via the read-only `<env>-db-reader` token and renders them into the VM
+> runtime `.env` + force-recreates doltgres on change. This means **a normal app
+> promote materializes the mirror creds — no separate `deploy-infra` run is required.**
+> For a fresh env the whole enablement is: (1) paste the DoltHub `_shared` secrets once
+> via THE PATH (`POST /api/v1/nodes/{id}/secrets` or provision), (2) a normal promote.
+> Fail-closed: absent `DOLT_CREDS_JWK`/`KEYID` ⇒ the mirror stays disabled
+> (`install-creds.sh` no-ops), never a hardcoded fallback.
 
-After `candidate-flight-infra.yml` next runs on a branch that includes this PR:
+## Step 5 — Verify (after the next flight or promote)
+
+After **any** candidate-flight OR promote-and-deploy for the operator node runs on a
+branch that includes this PR (the substrate lane runs on every one — an infra flight is
+no longer required; the legacy `candidate-flight-infra.yml` path still works too):
 
 ```bash
 # SSH into the candidate-a VM
@@ -166,14 +181,15 @@ End-to-end push validation: merge any contribution via the inbox UI on candidate
 
 ## What's wired by code (no manual steps)
 
-| Surface                        | File                                                                                   |
-| ------------------------------ | -------------------------------------------------------------------------------------- |
-| Push SQL                       | `packages/knowledge-store/src/adapters/doltgres/dolt-remote.ts`                        |
-| Lazy `dolt_remote add`         | same — first push registers `origin` idempotently                                      |
-| Service post-merge hook        | `packages/knowledge-store/src/service/contribution-service.ts` (`pushMainOnMerge` dep) |
-| DI wire-up                     | `nodes/*/app/src/bootstrap/container.ts` (`createDoltgresPusher`)                      |
-| Doltgres entrypoint wrapper    | `infra/compose/runtime/doltgres-init/install-creds.sh`                                 |
-| Compose `entrypoint:` override | `infra/compose/runtime/docker-compose.yml` doltgres service                            |
+| Surface                        | File                                                                                                                                                                                                      |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Push SQL                       | `packages/knowledge-store/src/adapters/doltgres/dolt-remote.ts`                                                                                                                                           |
+| Lazy `dolt_remote add`         | same — first push registers `origin` idempotently                                                                                                                                                         |
+| Service post-merge hook        | `packages/knowledge-store/src/service/contribution-service.ts` (`pushMainOnMerge` dep)                                                                                                                    |
+| DI wire-up                     | `nodes/*/app/src/bootstrap/container.ts` (`createDoltgresPusher`)                                                                                                                                         |
+| Doltgres entrypoint wrapper    | `infra/compose/runtime/doltgres-init/install-creds.sh`                                                                                                                                                    |
+| Compose `entrypoint:` override | `infra/compose/runtime/docker-compose.yml` doltgres service                                                                                                                                               |
+| Runtime cred materialization   | `scripts/ci/reconcile-node-substrate.sh` (reads OpenBao) → `scripts/ci/reconcile-dolt-mirror-creds.remote.sh` (renders VM `.env` + hash-gated doltgres recreate) — Option B, runs on every flight/promote |
 
 When repo-spec has no `knowledge.remote`, the push job is silently disabled —
 `pushMainOnMerge` is `undefined`, and merges succeed locally with no remote
