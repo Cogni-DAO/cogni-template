@@ -28,6 +28,13 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { TemporalScheduleControlAdapter } from "@/adapters/server/temporal/schedule-control.adapter";
 import { runGovernanceSchedulesSyncJob } from "@/bootstrap/jobs/syncGovernanceSchedules.job";
+import { getNodeId } from "@/shared/config";
+
+// MULTI_NODE_SCHEDULE_ID (story.5001): governance schedule ids are node-scoped
+// (`governance:{nodeId}:{charter}`). The operator's own charters use its own node id.
+const OPERATOR_NODE_ID = getNodeId();
+const govSid = (charter: string): string =>
+  `governance:${OPERATOR_NODE_ID}:${charter.toLowerCase()}`;
 
 describe("Governance Schedule Sync Job (Stack)", () => {
   const createdScheduleIds: string[] = [];
@@ -94,13 +101,13 @@ describe("Governance Schedule Sync Job (Stack)", () => {
     // Verify schedule was created in Temporal (use getHandle directly —
     // schedule.list() has eventual consistency and may lag after create)
     const client = await getTestTemporalClient();
-    const handle = client.schedule.getHandle("governance:heartbeat");
+    const handle = client.schedule.getHandle(govSid("heartbeat"));
     const rawDesc = await handle.describe();
     expect(rawDesc).toBeDefined();
-    createdScheduleIds.push("governance:heartbeat");
+    createdScheduleIds.push(govSid("heartbeat"));
 
     // Verify schedule details using adapter
-    const desc = await adapter.describeSchedule("governance:heartbeat");
+    const desc = await adapter.describeSchedule(govSid("heartbeat"));
     expect(desc).toBeDefined();
     expect(desc?.isPaused).toBe(false);
     expect(desc?.nextRunAtIso).toBeDefined();
@@ -145,22 +152,31 @@ describe("Governance Schedule Sync Job (Stack)", () => {
     expect(grantsAfterSecond).toHaveLength(1);
     expect(grantsAfterSecond[0]?.id).toBe(firstGrantId);
 
-    // Schedules should still be 2 (heartbeat + ledger_ingest, not duplicated)
+    // Collect operator's own (node-scoped) schedules after the first run for a
+    // stable idempotency comparison. We compare the count across runs rather than
+    // asserting an exact number, because a stack DB seeded with other routable
+    // nodes could add their `/collect` dispatch schedules too (MULTI_NODE).
+    const operatorPrefix = `governance:${OPERATOR_NODE_ID}:`;
     const schedulesAfterSecond: string[] = [];
     for await (const summary of client.schedule.list()) {
-      if (summary.scheduleId.startsWith("governance:")) {
+      if (summary.scheduleId.startsWith(operatorPrefix)) {
         schedulesAfterSecond.push(summary.scheduleId);
       }
     }
 
+    // Operator's own charters: heartbeat + ledger_ingest, not duplicated on re-run.
     expect(schedulesAfterSecond).toHaveLength(2);
   });
 
-  it("pauses schedules removed from config", async () => {
-    // First, create a schedule that's NOT in the current config
+  it("pauses schedules removed from config (node-scoped prune)", async () => {
+    // Create a NODE-SCOPED schedule that's NOT in the current config. The prune is
+    // scoped to `governance:{operatorNodeId}:` so it must carry the operator's node id
+    // to be a prune candidate (a flat legacy `governance:old-charter` would NOT be
+    // pruned — REGRESSION_BAR protects the operator's live flat CollectEpochWorkflow).
+    const staleId = govSid("old-charter");
     const client = await getTestTemporalClient();
     await client.schedule.create({
-      scheduleId: "governance:old-charter",
+      scheduleId: staleId,
       spec: {
         cronExpressions: ["0 * * * *"],
         timezone: "UTC",
@@ -168,27 +184,25 @@ describe("Governance Schedule Sync Job (Stack)", () => {
       action: {
         type: "startWorkflow",
         workflowType: "GraphRunWorkflow",
-        workflowId: "governance:old-charter",
-        args: [
-          { scheduleId: "governance:old-charter", input: { message: "OLD" } },
-        ],
+        workflowId: staleId,
+        args: [{ scheduleId: staleId, input: { message: "OLD" } }],
         taskQueue: "scheduler-worker",
       },
     });
-    createdScheduleIds.push("governance:old-charter");
+    createdScheduleIds.push(staleId);
 
     // Run sync job
     await runGovernanceSchedulesSyncJob();
 
     // Verify old schedule was paused using adapter
-    const desc = await adapter.describeSchedule("governance:old-charter");
+    const desc = await adapter.describeSchedule(staleId);
     expect(desc).toBeDefined();
     expect(desc?.isPaused).toBe(true);
   });
 
   it("executes a governance schedule end-to-end", async () => {
     await runGovernanceSchedulesSyncJob();
-    const temporalScheduleId = "governance:heartbeat";
+    const temporalScheduleId = govSid("heartbeat");
     createdScheduleIds.push(temporalScheduleId);
 
     const before = await getExecutionRequestsByPrefix(`${temporalScheduleId}:`);
