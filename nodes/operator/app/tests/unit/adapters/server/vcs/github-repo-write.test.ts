@@ -1945,7 +1945,8 @@ knowledge:
         () => {
           throw new Error("expected prepareNodeRefCandidateFlight to reject");
         },
-        (error: unknown) => error as { code: string; status: number; message: string }
+        (error: unknown) =>
+          error as { code: string; status: number; message: string }
       );
 
     expect(rejection).toMatchObject({
@@ -1954,7 +1955,9 @@ knowledge:
     });
     // The actionable part: the failing field is named, not swallowed.
     expect(rejection.message).toContain("knowledge.remote.repo");
-    expect(rejection.message).not.toBe("node repo-spec is invalid at sourceSha");
+    expect(rejection.message).not.toBe(
+      "node repo-spec is invalid at sourceSha"
+    );
   });
 });
 
