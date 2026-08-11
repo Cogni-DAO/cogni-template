@@ -340,6 +340,25 @@ function deployPlaneError(
   return Object.assign(new Error(message), { code, status });
 }
 
+/**
+ * Build the actionable `invalid_repo_spec` error, surfacing the underlying
+ * parse/validation reason instead of swallowing it. `parseRepoSpec` throws
+ * with the failing Zod path + message (e.g. `knowledge.remote.repo must be the
+ * bare node slug`), which is exactly what a node dev needs to self-fix the
+ * flight — a bare "node repo-spec is invalid" forces them to reverse-engineer
+ * the operator's schema (bug.5006).
+ */
+function invalidRepoSpecError(
+  error: unknown
+): Error & { readonly code: string; readonly status: number } {
+  const reason = error instanceof Error ? error.message : String(error);
+  return deployPlaneError(
+    "invalid_repo_spec",
+    `node repo-spec is invalid at sourceSha: ${reason}`,
+    422
+  );
+}
+
 /** Read a node's container `port` + `node_port` from its catalog row (for the env-add overlay render). */
 function parseCatalogPorts(
   catalogYaml: string,
@@ -642,12 +661,8 @@ export class GitHubRepoWriter implements DeployPlanePort {
       let actualNodeId: string;
       try {
         actualNodeId = extractNodeId(parseRepoSpec(repoSpecText));
-      } catch {
-        throw deployPlaneError(
-          "invalid_repo_spec",
-          "node repo-spec is invalid at sourceSha",
-          422
-        );
+      } catch (error) {
+        throw invalidRepoSpecError(error);
       }
       if (actualNodeId !== nodeId) {
         throw deployPlaneError(
@@ -725,12 +740,8 @@ export class GitHubRepoWriter implements DeployPlanePort {
     let actualNodeId: string;
     try {
       actualNodeId = extractNodeId(parseRepoSpec(repoSpecText));
-    } catch {
-      throw deployPlaneError(
-        "invalid_repo_spec",
-        "node repo-spec is invalid at sourceSha",
-        422
-      );
+    } catch (error) {
+      throw invalidRepoSpecError(error);
     }
     if (actualNodeId !== nodeId) {
       throw deployPlaneError(
