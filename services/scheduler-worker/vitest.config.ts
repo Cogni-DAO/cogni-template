@@ -34,5 +34,16 @@ export default defineProject({
     include: ["tests/**/*.{test,spec}.{ts,tsx}"],
     exclude: ["node_modules", "dist"],
     testTimeout: 10_000,
+    // Inline the moved attribution-collect package so its src (which imports
+    // `viem`) is transformed into this test file's module graph. Without this,
+    // the package resolves via its package.json `exports` (dist) as an external
+    // module and `vi.mock("viem")` in ledger-activities.test.ts cannot reach the
+    // `verifyTypedData` call inside finalizeEpoch — the real viem then rejects
+    // the fixture signature with "invalid signature length".
+    server: {
+      deps: {
+        inline: [/@cogni\/attribution-collect/],
+      },
+    },
   },
 });
