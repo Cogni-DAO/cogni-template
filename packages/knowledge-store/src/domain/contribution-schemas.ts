@@ -131,7 +131,18 @@ export type ContributionCommitRecord = z.infer<
 >;
 
 export const ContributionDiffEntrySchema = z.object({
-  changeType: z.enum(["added", "modified", "removed"]),
+  // `citation_*` make links first-class in the diff: a `cite` edit writes to the
+  // separate `citations` table, so without these it was invisible — and its
+  // confidence-recompute side-effect on the CITED entry surfaced as a phantom
+  // `modified` with no visible change (bug.5004). `before`/`after` for a citation
+  // entry carry `{citingId, citedId, citationType}`, not a knowledge row.
+  changeType: z.enum([
+    "added",
+    "modified",
+    "removed",
+    "citation_added",
+    "citation_removed",
+  ]),
   rowId: z.string(),
   before: z.record(z.string(), z.unknown()).nullable(),
   after: z.record(z.string(), z.unknown()).nullable(),

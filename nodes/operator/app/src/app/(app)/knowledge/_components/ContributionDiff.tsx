@@ -81,6 +81,41 @@ export function ContributionDiff({
   return (
     <div className="flex flex-col gap-2">
       {diff.map((d) => {
+        // Citations are links, not entries — render `A —type→ B`, not an entry card.
+        if (
+          d.changeType === "citation_added" ||
+          d.changeType === "citation_removed"
+        ) {
+          const c = (d.after ?? d.before) as {
+            citingId?: string;
+            citedId?: string;
+            citationType?: string;
+          } | null;
+          const added = d.changeType === "citation_added";
+          return (
+            <div
+              key={d.rowId}
+              className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/20 px-3 py-1.5 text-xs"
+            >
+              <span
+                className={`inline-flex rounded-md px-1.5 py-0.5 font-mono uppercase tracking-wider ${
+                  added
+                    ? "bg-success/15 text-success"
+                    : "bg-destructive/15 text-destructive"
+                }`}
+              >
+                {added ? "link +" : "link −"}
+              </span>
+              <span className="font-mono text-muted-foreground">
+                {String(c?.citingId ?? "?")}{" "}
+                <span className="text-primary">
+                  {String(c?.citationType ?? "cites")}
+                </span>{" "}
+                {String(c?.citedId ?? "?")}
+              </span>
+            </div>
+          );
+        }
         const row = (d.after ?? d.before) as {
           id?: string;
           title?: string;
