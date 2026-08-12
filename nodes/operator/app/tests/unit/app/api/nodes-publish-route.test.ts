@@ -65,6 +65,7 @@ const envState = vi.hoisted(() => ({
     NODE_CAPACITY_CEILING?: number;
     DOLTHUB_OWNER?: string;
     DOLTHUB_API_TOKEN?: string;
+    DOLTHUB_NONPROD_OWNER?: string;
   },
 }));
 
@@ -245,6 +246,50 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
     mockLog.error.mockClear();
     mockLog.info.mockClear();
     mockLog.warn.mockClear();
+  });
+
+  it("also creates the mirror repo under DOLTHUB_NONPROD_OWNER so non-prod targets exist (bug.5002)", async () => {
+    envState.current.DOLTHUB_NONPROD_OWNER = "cogni-test-nodes";
+    const response = await publishNode();
+
+    expect(response.status).toBe(200);
+    // Primary (prod) owner + the non-prod test org — both bootstrapped from prod
+    // (the only context holding a cross-org PAT).
+    expect(mockEnsureDatabase).toHaveBeenCalledWith({
+      owner: "cogni-dao",
+      repo: "atlas",
+      description: "Cogni node atlas knowledge mirror",
+    });
+    expect(mockEnsureDatabase).toHaveBeenCalledWith({
+      owner: "cogni-test-nodes",
+      repo: "atlas",
+      description: "Cogni node atlas knowledge mirror (cogni-test-nodes)",
+    });
+  });
+
+  it("does not fail publish when the non-prod mirror-repo create errors (best-effort)", async () => {
+    envState.current.DOLTHUB_NONPROD_OWNER = "cogni-test-nodes";
+    mockEnsureDatabase
+      .mockReset()
+      .mockResolvedValueOnce({
+        owner: "cogni-dao",
+        repo: "atlas",
+        created: true,
+      })
+      .mockRejectedValueOnce(new Error("dolthub test org unavailable"));
+
+    const response = await publishNode();
+
+    expect(response.status).toBe(200); // primary succeeded; non-prod is best-effort
+    expect(mockEnsureDatabase).toHaveBeenCalledTimes(2);
+    expect(mockForkFromTemplate).toHaveBeenCalled(); // birth proceeded past the extra bootstrap
+  });
+
+  it("skips the extra bootstrap when DOLTHUB_NONPROD_OWNER is unset", async () => {
+    // Default beforeEach leaves DOLTHUB_NONPROD_OWNER undefined.
+    const response = await publishNode();
+    expect(response.status).toBe(200);
+    expect(mockEnsureDatabase).toHaveBeenCalledTimes(1);
   });
 
   it("mints the node repo as a template fork before opening the submodule pin PR", async () => {

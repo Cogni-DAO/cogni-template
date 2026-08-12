@@ -148,6 +148,7 @@ type PublishStep =
   | "validate_addresses"
   | "check_capacity"
   | "bootstrap_dolthub"
+  | "bootstrap_dolthub_nonprod"
   | "fork_from_template"
   | "open_submodule_pr"
   | "update_node";
@@ -502,6 +503,47 @@ export async function POST(request: Request, routeArgs: RouteParams) {
             { error: "dolthub bootstrap failed", reason: message },
             { status: 502 }
           );
+        }
+
+        // Also create the node's mirror repo under any additional env-scoped owner
+        // (bug.5002). A non-prod env derives its mirror as <DOLTHUB_NONPROD_OWNER>/<slug>,
+        // so that repo must exist too or the first candidate/preview dolt_push 404s. Only
+        // the PROD operator holds a cross-org DoltHub PAT (bug.5003 gates it out of non-prod),
+        // so publish — running here — is the one context that can create every env's repo.
+        // BEST-EFFORT: the primary (prod) repo above gated hard; a hiccup on the test org
+        // must not block a real node's birth (the repo is created lazily-or-here, never a
+        // dependency of the git/submodule birth below).
+        const extraOwners =
+          env.DOLTHUB_NONPROD_OWNER &&
+          env.DOLTHUB_NONPROD_OWNER !== env.DOLTHUB_OWNER
+            ? [env.DOLTHUB_NONPROD_OWNER]
+            : [];
+        for (const owner of extraOwners) {
+          currentStep = "bootstrap_dolthub_nonprod";
+          const extra = buildNodeKnowledgeRemote(node.slug, owner);
+          try {
+            const r = await createDoltHubDatabaseEnsurer({
+              DOLTHUB_API_TOKEN: env.DOLTHUB_API_TOKEN,
+            }).ensureDatabase({
+              owner: extra.owner,
+              repo: extra.repo,
+              description: `Cogni node ${node.slug} knowledge mirror (${owner})`,
+            });
+            logStep("bootstrap_dolthub_nonprod", "success", {
+              slug: node.slug,
+              owner: r.owner,
+              repo: r.repo,
+              created: r.created,
+            });
+          } catch (err) {
+            logStep("bootstrap_dolthub_nonprod", "error", {
+              slug: node.slug,
+              owner: extra.owner,
+              repo: extra.repo,
+              errorCode: "dolthub_nonprod_bootstrap_failed",
+              reason: err instanceof Error ? err.message : "unknown",
+            });
+          }
         }
 
         // Submodule birth: mint the node's own repo as a named fork of node-template (its ~1100 files

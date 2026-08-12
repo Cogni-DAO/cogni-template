@@ -179,6 +179,13 @@ export const serverSchema = z.object({
   // REST. DOLT_CREDS_* authenticate the Dolt push protocol in Doltgres.
   DOLTHUB_OWNER: optionalString,
   DOLTHUB_API_TOKEN: optionalString,
+  // Additional non-prod DoltHub org whose <owner>/<slug> repo publish must ALSO
+  // create (bug.5002). Non-prod envs derive their mirror as <this-owner>/<slug>,
+  // so that repo must exist or the first candidate/preview dolt_push 404s. Only
+  // the PROD operator holds a cross-org DoltHub PAT (bug.5003 gates it out of
+  // non-prod), so publish — always run on prod — is the single context that can
+  // create every env's repo. Unset → publish bootstraps only DOLTHUB_OWNER.
+  DOLTHUB_NONPROD_OWNER: optionalString,
   // Per-env override for THIS node's own knowledge mirror remote. When set it
   // wins over repo-spec `knowledge.remote.url`, letting non-prod envs sync to a
   // throwaway test repo while prod targets the canonical `<owner>/<slug>` repo.
