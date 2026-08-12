@@ -16,6 +16,9 @@ export {
   type GovernanceScheduleEntry,
   type GovernanceScheduleSyncDeps,
   type GovernanceScheduleSyncResult,
+  governancePrunePrefix,
   governanceScheduleId,
+  isLegacyGovernanceScheduleId,
+  legacyGovernanceScheduleId,
   syncGovernanceSchedules,
 } from "@cogni/scheduler-core";

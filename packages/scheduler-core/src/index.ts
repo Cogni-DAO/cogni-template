@@ -84,8 +84,11 @@ export {
   type GovernanceScheduleEntry,
   type GovernanceScheduleSyncDeps,
   type GovernanceScheduleSyncResult,
+  governancePrunePrefix,
   governanceScheduleId,
+  isLegacyGovernanceScheduleId,
   type LedgerScheduleConfig,
+  legacyGovernanceScheduleId,
   syncGovernanceSchedules,
   type UpsertGovernanceScheduleRowParams,
 } from "./services/syncGovernanceSchedules";

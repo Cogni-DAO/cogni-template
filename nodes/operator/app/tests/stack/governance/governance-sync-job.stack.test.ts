@@ -28,6 +28,19 @@ import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { TemporalScheduleControlAdapter } from "@/adapters/server/temporal/schedule-control.adapter";
 import { runGovernanceSchedulesSyncJob } from "@/bootstrap/jobs/syncGovernanceSchedules.job";
+import { getNodeId } from "@/shared/config";
+
+// OPERATOR_STAYS_ON_COLLECT_EPOCH (story.5001 REGRESSION_BAR): the operator syncs its OWN
+// charters on the FLAT legacy id (`governance:{charter}`) so its live single-tenant
+// `governance:ledger_ingest` CollectEpochWorkflow schedule is matched/updated in place, never
+// forked into a node-scoped ghost. Only OTHER routable nodes use the node-scoped
+// (`governance:{nodeId}:{charter}`) MULTI_NODE_SCHEDULE_ID form.
+const OPERATOR_NODE_ID = getNodeId();
+const govSid = (charter: string): string =>
+  `governance:${charter.toLowerCase()}`;
+/** Node-scoped id for a NON-operator routable node (the multi-node dispatch form). */
+const nodeScopedSid = (nodeId: string, charter: string): string =>
+  `governance:${nodeId}:${charter.toLowerCase()}`;
 
 describe("Governance Schedule Sync Job (Stack)", () => {
   const createdScheduleIds: string[] = [];
@@ -94,13 +107,13 @@ describe("Governance Schedule Sync Job (Stack)", () => {
     // Verify schedule was created in Temporal (use getHandle directly —
     // schedule.list() has eventual consistency and may lag after create)
     const client = await getTestTemporalClient();
-    const handle = client.schedule.getHandle("governance:heartbeat");
+    const handle = client.schedule.getHandle(govSid("heartbeat"));
     const rawDesc = await handle.describe();
     expect(rawDesc).toBeDefined();
-    createdScheduleIds.push("governance:heartbeat");
+    createdScheduleIds.push(govSid("heartbeat"));
 
     // Verify schedule details using adapter
-    const desc = await adapter.describeSchedule("governance:heartbeat");
+    const desc = await adapter.describeSchedule(govSid("heartbeat"));
     expect(desc).toBeDefined();
     expect(desc?.isPaused).toBe(false);
     expect(desc?.nextRunAtIso).toBeDefined();
@@ -145,22 +158,45 @@ describe("Governance Schedule Sync Job (Stack)", () => {
     expect(grantsAfterSecond).toHaveLength(1);
     expect(grantsAfterSecond[0]?.id).toBe(firstGrantId);
 
-    // Schedules should still be 2 (heartbeat + ledger_ingest, not duplicated)
-    const schedulesAfterSecond: string[] = [];
+    // Collect the operator's own FLAT charter ids after the second run (idempotency).
+    // OPERATOR_STAYS_ON_COLLECT_EPOCH: the operator's charters live on the flat legacy
+    // ids, NOT node-scoped. We assert the two exact ids rather than a prefix count,
+    // because a bare `governance:` prefix would also catch OTHER routable nodes'
+    // node-scoped `/collect` dispatch schedules (MULTI_NODE).
+    const operatorFlatIds = new Set([
+      govSid("heartbeat"),
+      govSid("ledger_ingest"),
+    ]);
+    const operatorSchedulesAfterSecond: string[] = [];
     for await (const summary of client.schedule.list()) {
-      if (summary.scheduleId.startsWith("governance:")) {
-        schedulesAfterSecond.push(summary.scheduleId);
+      if (operatorFlatIds.has(summary.scheduleId)) {
+        operatorSchedulesAfterSecond.push(summary.scheduleId);
       }
     }
 
-    expect(schedulesAfterSecond).toHaveLength(2);
+    // Operator's own charters: flat heartbeat + ledger_ingest, not duplicated on re-run.
+    // No node-scoped `governance:{operatorNodeId}:` ghost is created for the operator.
+    expect(operatorSchedulesAfterSecond.sort()).toEqual(
+      [govSid("heartbeat"), govSid("ledger_ingest")].sort()
+    );
+    const operatorNodeScopedGhost: string[] = [];
+    for await (const summary of client.schedule.list()) {
+      if (summary.scheduleId.startsWith(`governance:${OPERATOR_NODE_ID}:`)) {
+        operatorNodeScopedGhost.push(summary.scheduleId);
+      }
+    }
+    expect(operatorNodeScopedGhost).toEqual([]);
   });
 
-  it("pauses schedules removed from config", async () => {
-    // First, create a schedule that's NOT in the current config
+  it("pauses an operator charter removed from config (flat prune)", async () => {
+    // OPERATOR_STAYS_ON_COLLECT_EPOCH: the operator prunes its OWN flat
+    // (`governance:{charter}`) schedules. Create a flat legacy id NOT in the current
+    // config — it must be paused. (A node-scoped `governance:{otherNodeId}:...` id is
+    // NOT a prune candidate here — the operator never touches a sibling's dispatch.)
+    const staleId = govSid("old-charter");
     const client = await getTestTemporalClient();
     await client.schedule.create({
-      scheduleId: "governance:old-charter",
+      scheduleId: staleId,
       spec: {
         cronExpressions: ["0 * * * *"],
         timezone: "UTC",
@@ -168,27 +204,54 @@ describe("Governance Schedule Sync Job (Stack)", () => {
       action: {
         type: "startWorkflow",
         workflowType: "GraphRunWorkflow",
-        workflowId: "governance:old-charter",
+        workflowId: staleId,
+        args: [{ scheduleId: staleId, input: { message: "OLD" } }],
+        taskQueue: "scheduler-worker",
+      },
+    });
+    createdScheduleIds.push(staleId);
+
+    // A sibling node's node-scoped schedule must NOT be pruned by the operator's flat
+    // prune (MULTI_NODE_SCHEDULE_ID isolation is preserved).
+    const siblingId = nodeScopedSid("sibling-node-xyz", "ledger_ingest");
+    await client.schedule.create({
+      scheduleId: siblingId,
+      spec: { cronExpressions: ["0 0 * * *"], timezone: "UTC" },
+      action: {
+        type: "startWorkflow",
+        workflowType: "NodeTaskWorkflow",
+        workflowId: siblingId,
         args: [
-          { scheduleId: "governance:old-charter", input: { message: "OLD" } },
+          {
+            scheduleId: siblingId,
+            input: {
+              route: "/api/internal/attribution/collect",
+              payload: { nodeId: "sibling-node-xyz" },
+            },
+          },
         ],
         taskQueue: "scheduler-worker",
       },
     });
-    createdScheduleIds.push("governance:old-charter");
+    createdScheduleIds.push(siblingId);
 
     // Run sync job
     await runGovernanceSchedulesSyncJob();
 
-    // Verify old schedule was paused using adapter
-    const desc = await adapter.describeSchedule("governance:old-charter");
+    // Verify the operator's stale flat charter was paused using adapter
+    const desc = await adapter.describeSchedule(staleId);
     expect(desc).toBeDefined();
     expect(desc?.isPaused).toBe(true);
+
+    // Verify the sibling node's node-scoped schedule was left running (not clobbered).
+    const siblingDesc = await adapter.describeSchedule(siblingId);
+    expect(siblingDesc).toBeDefined();
+    expect(siblingDesc?.isPaused).toBe(false);
   });
 
   it("executes a governance schedule end-to-end", async () => {
     await runGovernanceSchedulesSyncJob();
-    const temporalScheduleId = "governance:heartbeat";
+    const temporalScheduleId = govSid("heartbeat");
     createdScheduleIds.push(temporalScheduleId);
 
     const before = await getExecutionRequestsByPrefix(`${temporalScheduleId}:`);
