@@ -305,7 +305,13 @@ describe("syncGovernanceSchedules", () => {
 
     it("uses the FLAT `governance:ledger_ingest` id running CollectEpochWorkflow on the ledger-tasks queue", async () => {
       const config = makeConfig(
-        [{ charter: "LEDGER_INGEST", cron: "0 0 * * *", entrypoint: "LEDGER_INGEST" }],
+        [
+          {
+            charter: "LEDGER_INGEST",
+            cron: "0 0 * * *",
+            entrypoint: "LEDGER_INGEST",
+          },
+        ],
         { ledger: LEDGER }
       );
 
@@ -340,7 +346,13 @@ describe("syncGovernanceSchedules", () => {
 
     it("does NOT dispatch NodeTaskWorkflow(/collect) — no node-collect grant, no /collect route", async () => {
       const config = makeConfig(
-        [{ charter: "LEDGER_INGEST", cron: "0 0 * * *", entrypoint: "LEDGER_INGEST" }],
+        [
+          {
+            charter: "LEDGER_INGEST",
+            cron: "0 0 * * *",
+            entrypoint: "LEDGER_INGEST",
+          },
+        ],
         { ledger: LEDGER }
       );
 
