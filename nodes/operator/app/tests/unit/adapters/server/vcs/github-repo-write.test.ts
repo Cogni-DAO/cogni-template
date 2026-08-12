@@ -1882,6 +1882,83 @@ image_repository: ghcr.io/cogni-test-org/other
       "GET /repos/{owner}/{repo}/commits/{ref}"
     );
   });
+
+  it("surfaces the repo-spec validation reason in invalid_repo_spec (bug.5006)", async () => {
+    // A stale node branch that still carries the retired `knowledge-<slug>`
+    // DoltHub name (retired by #1974). The flight must reject it — but the
+    // error must name the failing field so the node dev can self-fix instead
+    // of reverse-engineering the operator schema.
+    const sourceSha = "0123456789012345678901234567890123456789";
+    const nodeId = "11111111-1111-4111-8111-111111111111";
+    const encode = (value: string) =>
+      Buffer.from(value, "utf-8").toString("base64");
+    routeHandlers = {
+      "GET /repos/{owner}/{repo}/contents/{path}": (params) => {
+        if (params.path === "infra/catalog/ghcr.yaml") {
+          return {
+            type: "file",
+            encoding: "base64",
+            content: encode(`name: ghcr
+type: node
+path_prefix: nodes/ghcr/
+source_repo: https://github.com/cogni-test-org/ghcr
+image_repository: ghcr.io/cogni-test-org/ghcr
+`),
+          };
+        }
+        if (
+          params.owner === "cogni-test-org" &&
+          params.repo === "ghcr" &&
+          params.path === ".cogni/repo-spec.yaml"
+        ) {
+          return {
+            type: "file",
+            encoding: "base64",
+            content: encode(`node_id: "${nodeId}"
+governance:
+  chain_id: "8453"
+knowledge:
+  database: "knowledge_ghcr"
+  remote:
+    provider: dolthub
+    owner: "cogni-dao"
+    repo: "knowledge-ghcr"
+    url: "https://doltremoteapi.dolthub.com/cogni-dao/knowledge-ghcr"
+    custody: cogni-owned
+`),
+          };
+        }
+        throw statusError(404, `not found: ${String(params.path)}`);
+      },
+      "GET /repos/{owner}/{repo}/commits/{ref}": () => ({ sha: sourceSha }),
+    };
+
+    const rejection = await makeWriter()
+      .prepareNodeRefCandidateFlight({
+        parentOwner: "cogni-test-org",
+        parentRepo: "cogni-monorepo",
+        nodeId,
+        slug: "ghcr",
+        sourceSha,
+      })
+      .then(
+        () => {
+          throw new Error("expected prepareNodeRefCandidateFlight to reject");
+        },
+        (error: unknown) =>
+          error as { code: string; status: number; message: string }
+      );
+
+    expect(rejection).toMatchObject({
+      code: "invalid_repo_spec",
+      status: 422,
+    });
+    // The actionable part: the failing field is named, not swallowed.
+    expect(rejection.message).toContain("knowledge.remote.repo");
+    expect(rejection.message).not.toBe(
+      "node repo-spec is invalid at sourceSha"
+    );
+  });
 });
 
 describe("GitHubRepoWriter.packageImageTagExists", () => {
