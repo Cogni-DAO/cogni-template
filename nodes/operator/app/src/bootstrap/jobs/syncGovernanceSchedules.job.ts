@@ -32,6 +32,7 @@ import {
 } from "@cogni/node-shared";
 import {
   governancePrunePrefix,
+  governanceScheduleId,
   isLegacyGovernanceScheduleId,
   syncGovernanceSchedules,
 } from "@cogni/scheduler-core";
@@ -264,6 +265,20 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
       if (nodeId === operatorNodeId) continue; // OPERATOR_NOT_DOUBLE_COLLECTED
       try {
         add(await syncFor(nodeId, config, false));
+
+        // COLD_START_COLLECT: a node's epoch-collect dispatch schedule that has NEVER fired yet
+        // gets an immediate first collect, so a newly-registered node's ledger is populated on
+        // registration instead of waiting up to a full cron period. Idempotent — once it has run,
+        // `lastRunAtIso` is set and it is never re-triggered on a later sync.
+        const collectSid = governanceScheduleId(nodeId, "LEDGER_INGEST");
+        const desc = await container.scheduleControl.describeSchedule(collectSid);
+        if (desc && !desc.lastRunAtIso) {
+          await container.scheduleControl.triggerSchedule(collectSid);
+          log.info(
+            { event: "governance.node_collect_kicked", nodeId, slug, scheduleId: collectSid },
+            "kicked initial collect (dispatch schedule had no prior run)"
+          );
+        }
       } catch (err) {
         log.warn(
           {
