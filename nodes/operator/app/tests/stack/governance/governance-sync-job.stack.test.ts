@@ -30,11 +30,17 @@ import { TemporalScheduleControlAdapter } from "@/adapters/server/temporal/sched
 import { runGovernanceSchedulesSyncJob } from "@/bootstrap/jobs/syncGovernanceSchedules.job";
 import { getNodeId } from "@/shared/config";
 
-// MULTI_NODE_SCHEDULE_ID (story.5001): governance schedule ids are node-scoped
-// (`governance:{nodeId}:{charter}`). The operator's own charters use its own node id.
+// OPERATOR_STAYS_ON_COLLECT_EPOCH (story.5001 REGRESSION_BAR): the operator syncs its OWN
+// charters on the FLAT legacy id (`governance:{charter}`) so its live single-tenant
+// `governance:ledger_ingest` CollectEpochWorkflow schedule is matched/updated in place, never
+// forked into a node-scoped ghost. Only OTHER routable nodes use the node-scoped
+// (`governance:{nodeId}:{charter}`) MULTI_NODE_SCHEDULE_ID form.
 const OPERATOR_NODE_ID = getNodeId();
 const govSid = (charter: string): string =>
-  `governance:${OPERATOR_NODE_ID}:${charter.toLowerCase()}`;
+  `governance:${charter.toLowerCase()}`;
+/** Node-scoped id for a NON-operator routable node (the multi-node dispatch form). */
+const nodeScopedSid = (nodeId: string, charter: string): string =>
+  `governance:${nodeId}:${charter.toLowerCase()}`;
 
 describe("Governance Schedule Sync Job (Stack)", () => {
   const createdScheduleIds: string[] = [];
@@ -152,27 +158,41 @@ describe("Governance Schedule Sync Job (Stack)", () => {
     expect(grantsAfterSecond).toHaveLength(1);
     expect(grantsAfterSecond[0]?.id).toBe(firstGrantId);
 
-    // Collect operator's own (node-scoped) schedules after the first run for a
-    // stable idempotency comparison. We compare the count across runs rather than
-    // asserting an exact number, because a stack DB seeded with other routable
-    // nodes could add their `/collect` dispatch schedules too (MULTI_NODE).
-    const operatorPrefix = `governance:${OPERATOR_NODE_ID}:`;
-    const schedulesAfterSecond: string[] = [];
+    // Collect the operator's own FLAT charter ids after the second run (idempotency).
+    // OPERATOR_STAYS_ON_COLLECT_EPOCH: the operator's charters live on the flat legacy
+    // ids, NOT node-scoped. We assert the two exact ids rather than a prefix count,
+    // because a bare `governance:` prefix would also catch OTHER routable nodes'
+    // node-scoped `/collect` dispatch schedules (MULTI_NODE).
+    const operatorFlatIds = new Set([
+      govSid("heartbeat"),
+      govSid("ledger_ingest"),
+    ]);
+    const operatorSchedulesAfterSecond: string[] = [];
     for await (const summary of client.schedule.list()) {
-      if (summary.scheduleId.startsWith(operatorPrefix)) {
-        schedulesAfterSecond.push(summary.scheduleId);
+      if (operatorFlatIds.has(summary.scheduleId)) {
+        operatorSchedulesAfterSecond.push(summary.scheduleId);
       }
     }
 
-    // Operator's own charters: heartbeat + ledger_ingest, not duplicated on re-run.
-    expect(schedulesAfterSecond).toHaveLength(2);
+    // Operator's own charters: flat heartbeat + ledger_ingest, not duplicated on re-run.
+    // No node-scoped `governance:{operatorNodeId}:` ghost is created for the operator.
+    expect(operatorSchedulesAfterSecond.sort()).toEqual(
+      [govSid("heartbeat"), govSid("ledger_ingest")].sort()
+    );
+    const operatorNodeScopedGhost: string[] = [];
+    for await (const summary of client.schedule.list()) {
+      if (summary.scheduleId.startsWith(`governance:${OPERATOR_NODE_ID}:`)) {
+        operatorNodeScopedGhost.push(summary.scheduleId);
+      }
+    }
+    expect(operatorNodeScopedGhost).toEqual([]);
   });
 
-  it("pauses schedules removed from config (node-scoped prune)", async () => {
-    // Create a NODE-SCOPED schedule that's NOT in the current config. The prune is
-    // scoped to `governance:{operatorNodeId}:` so it must carry the operator's node id
-    // to be a prune candidate (a flat legacy `governance:old-charter` would NOT be
-    // pruned — REGRESSION_BAR protects the operator's live flat CollectEpochWorkflow).
+  it("pauses an operator charter removed from config (flat prune)", async () => {
+    // OPERATOR_STAYS_ON_COLLECT_EPOCH: the operator prunes its OWN flat
+    // (`governance:{charter}`) schedules. Create a flat legacy id NOT in the current
+    // config — it must be paused. (A node-scoped `governance:{otherNodeId}:...` id is
+    // NOT a prune candidate here — the operator never touches a sibling's dispatch.)
     const staleId = govSid("old-charter");
     const client = await getTestTemporalClient();
     await client.schedule.create({
@@ -191,13 +211,42 @@ describe("Governance Schedule Sync Job (Stack)", () => {
     });
     createdScheduleIds.push(staleId);
 
+    // A sibling node's node-scoped schedule must NOT be pruned by the operator's flat
+    // prune (MULTI_NODE_SCHEDULE_ID isolation is preserved).
+    const siblingId = nodeScopedSid("sibling-node-xyz", "ledger_ingest");
+    await client.schedule.create({
+      scheduleId: siblingId,
+      spec: { cronExpressions: ["0 0 * * *"], timezone: "UTC" },
+      action: {
+        type: "startWorkflow",
+        workflowType: "NodeTaskWorkflow",
+        workflowId: siblingId,
+        args: [
+          {
+            scheduleId: siblingId,
+            input: {
+              route: "/api/internal/attribution/collect",
+              payload: { nodeId: "sibling-node-xyz" },
+            },
+          },
+        ],
+        taskQueue: "scheduler-worker",
+      },
+    });
+    createdScheduleIds.push(siblingId);
+
     // Run sync job
     await runGovernanceSchedulesSyncJob();
 
-    // Verify old schedule was paused using adapter
+    // Verify the operator's stale flat charter was paused using adapter
     const desc = await adapter.describeSchedule(staleId);
     expect(desc).toBeDefined();
     expect(desc?.isPaused).toBe(true);
+
+    // Verify the sibling node's node-scoped schedule was left running (not clobbered).
+    const siblingDesc = await adapter.describeSchedule(siblingId);
+    expect(siblingDesc).toBeDefined();
+    expect(siblingDesc?.isPaused).toBe(false);
   });
 
   it("executes a governance schedule end-to-end", async () => {

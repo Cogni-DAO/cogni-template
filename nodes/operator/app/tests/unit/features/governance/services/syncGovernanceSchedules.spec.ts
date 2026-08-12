@@ -5,10 +5,13 @@
  * Module: `@tests/unit/features/governance/services/syncGovernanceSchedules`
  * Purpose: Unit tests for governance schedule sync logic (multi-node, story.5001).
  * Scope: Tests sync function with mocked ScheduleControlPort; verifies node-scoped schedule ids,
- *   create/update/resume/skip/prune behavior, and the LEDGER_INGEST → NodeTaskWorkflow(/collect)
- *   dispatch swap (route + payload + node-task grant scope). Does not test Temporal integration or DB.
+ *   create/update/resume/skip/prune behavior, the NON-operator LEDGER_INGEST → NodeTaskWorkflow(/collect)
+ *   dispatch swap (route + payload + node-task grant scope), AND the OPERATOR LEDGER_INGEST staying on
+ *   the flat `governance:ledger_ingest` CollectEpochWorkflow schedule (story.5001 REGRESSION_BAR).
+ *   Does not test Temporal integration or DB.
  * Invariants: Prune pauses (never deletes); conflict = update or skip or resume; idempotent on repeat;
- *   LEDGER_INGEST dispatches NodeTaskWorkflow, never CollectEpochWorkflow.
+ *   NON-operator LEDGER_INGEST dispatches NodeTaskWorkflow; OPERATOR LEDGER_INGEST stays on
+ *   CollectEpochWorkflow + flat id + `ledger-tasks` queue (OPERATOR_STAYS_ON_COLLECT_EPOCH).
  * Side-effects: none (all deps mocked)
  * Links: packages/scheduler-core/src/services/syncGovernanceSchedules.ts
  * @public
@@ -25,6 +28,7 @@ import {
   type GovernanceScheduleSyncDeps,
   governanceScheduleId,
   isLegacyGovernanceScheduleId,
+  legacyGovernanceScheduleId,
   syncGovernanceSchedules,
 } from "@/features/governance/services/syncGovernanceSchedules";
 import type { GovernanceConfig } from "@/shared/config";
@@ -68,13 +72,30 @@ function makeMockDeps(
   };
 }
 
+/** A minimal ledger config — required for the OPERATOR CollectEpochWorkflow path. */
+const LEDGER: NonNullable<GovernanceConfig["ledger"]> = {
+  scopeId: "scope-uuid-001",
+  scopeKey: "default",
+  epochLengthDays: 7,
+  activitySources: {
+    github: {
+      attributionPipeline: "cogni-v0.0",
+      sourceRefs: ["cogni-dao/cogni"],
+    },
+  },
+  poolConfig: { baseIssuanceCredits: 10000n },
+  baseIssuanceCredits: "10000",
+  approvers: ["0x070075F1389Ae1182aBac722B36CA12285d0c949"],
+};
+
 function makeConfig(
   charters: Array<{
     charter: string;
     cron: string;
     entrypoint: string;
     timezone?: string;
-  }>
+  }>,
+  opts?: { ledger?: GovernanceConfig["ledger"] }
 ): GovernanceConfig {
   return {
     schedules: charters.map((c) => ({
@@ -83,6 +104,7 @@ function makeConfig(
       timezone: c.timezone ?? "UTC",
       entrypoint: c.entrypoint,
     })),
+    ...(opts?.ledger ? { ledger: opts.ledger } : {}),
   };
 }
 
@@ -196,9 +218,10 @@ describe("syncGovernanceSchedules", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // LEDGER_INGEST → NodeTaskWorkflow(/collect) dispatch swap (story.5001 core change)
+  // NON-operator LEDGER_INGEST → NodeTaskWorkflow(/collect) dispatch swap (story.5001).
+  // Default deps have no `isOperatorNode` (⇒ false), i.e. a routable NON-operator node.
   // ---------------------------------------------------------------------------
-  describe("LEDGER_INGEST dispatch (story.5001)", () => {
+  describe("LEDGER_INGEST dispatch — non-operator node (story.5001)", () => {
     it("targets NodeTaskWorkflow with the /collect route + { nodeId } payload", async () => {
       const config = makeConfig([
         {
@@ -266,6 +289,72 @@ describe("syncGovernanceSchedules", () => {
       const expectedScope = nodeTaskScope(NODE_ID, COLLECT_ROUTE);
       expect(expectedScope).toBe(`task:dispatch:${NODE_ID}:${COLLECT_ROUTE}`);
       expect(deps.ensureNodeCollectGrant).toHaveBeenCalledWith(expectedScope);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // OPERATOR LEDGER_INGEST stays on the live single-tenant CollectEpochWorkflow schedule.
+  // OPERATOR_STAYS_ON_COLLECT_EPOCH (story.5001 REGRESSION_BAR): with isOperatorNode=true,
+  // the operator's ledger is NOT rewired onto NodeTaskWorkflow(/collect) — no dead 404,
+  // no latent double-collect, no dependency on the operator `/collect` route PR.
+  // ---------------------------------------------------------------------------
+  describe("LEDGER_INGEST — operator node stays on CollectEpochWorkflow (story.5001)", () => {
+    beforeEach(() => {
+      deps = makeMockDeps({ isOperatorNode: true });
+    });
+
+    it("uses the FLAT `governance:ledger_ingest` id running CollectEpochWorkflow on the ledger-tasks queue", async () => {
+      const config = makeConfig(
+        [{ charter: "LEDGER_INGEST", cron: "0 0 * * *", entrypoint: "LEDGER_INGEST" }],
+        { ledger: LEDGER }
+      );
+
+      const result = await syncGovernanceSchedules(config, deps);
+
+      // FLAT id — byte-for-byte the operator's live schedule, NOT node-scoped.
+      expect(result.created).toEqual(["governance:ledger_ingest"]);
+      expect(result.created).not.toContain(sid("LEDGER_INGEST"));
+      expect(deps.scheduleControl.createSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({
+          scheduleId: "governance:ledger_ingest",
+          nodeId: NODE_ID,
+          workflowType: "CollectEpochWorkflow",
+          taskQueueOverride: "ledger-tasks",
+          graphId: "ledger:ingest",
+          executionGrantId: GRANT_ID,
+          // LedgerIngestRunV1 envelope — NOT the { route, payload } dispatch shape.
+          input: {
+            version: 1,
+            scopeId: LEDGER.scopeId,
+            scopeKey: LEDGER.scopeKey,
+            epochLengthDays: LEDGER.epochLengthDays,
+            activitySources: LEDGER.activitySources,
+            baseIssuanceCredits: LEDGER.baseIssuanceCredits,
+            approvers: LEDGER.approvers,
+          },
+          overlapPolicy: "skip",
+          catchupWindowMs: 0,
+        })
+      );
+    });
+
+    it("does NOT dispatch NodeTaskWorkflow(/collect) — no node-collect grant, no /collect route", async () => {
+      const config = makeConfig(
+        [{ charter: "LEDGER_INGEST", cron: "0 0 * * *", entrypoint: "LEDGER_INGEST" }],
+        { ledger: LEDGER }
+      );
+
+      await syncGovernanceSchedules(config, deps);
+
+      // The dispatch swap is other-nodes-only: the operator mints NO task:dispatch grant.
+      expect(deps.ensureNodeCollectGrant).not.toHaveBeenCalled();
+      const call = vi
+        .mocked(deps.scheduleControl.createSchedule)
+        .mock.calls.find(([p]) => p.scheduleId === "governance:ledger_ingest");
+      const params = call?.[0];
+      expect(params?.workflowType).not.toBe("NodeTaskWorkflow");
+      // No `/collect` route leaks into the operator's payload.
+      expect(JSON.stringify(params?.input)).not.toContain(COLLECT_ROUTE);
     });
   });
 
@@ -518,10 +607,26 @@ describe("governanceScheduleId", () => {
   });
 });
 
+describe("legacyGovernanceScheduleId", () => {
+  it("is the FLAT operator form (`governance:{charter}`, no nodeId)", () => {
+    // OPERATOR_STAYS_ON_COLLECT_EPOCH: the operator's live ledger schedule id.
+    expect(legacyGovernanceScheduleId("LEDGER_INGEST")).toBe(
+      "governance:ledger_ingest"
+    );
+    expect(legacyGovernanceScheduleId("COMMUNITY")).toBe(
+      "governance:community"
+    );
+    // Distinct from the node-scoped form used by every other routable node.
+    expect(legacyGovernanceScheduleId("LEDGER_INGEST")).not.toBe(
+      governanceScheduleId("node-x", "LEDGER_INGEST")
+    );
+  });
+});
+
 describe("isLegacyGovernanceScheduleId", () => {
   it("classifies the flat operator id as legacy (2 segments), node-scoped as not", () => {
-    // The operator's live single-tenant epoch runs on this flat id — classified legacy,
-    // but NOT pruned by this job (REGRESSION_BAR, story.5001).
+    // The operator's live single-tenant epoch runs on this flat id (classified legacy);
+    // with isOperatorNode=true the operator syncs it in place (OPERATOR_STAYS_ON_COLLECT_EPOCH).
     expect(isLegacyGovernanceScheduleId("governance:ledger_ingest")).toBe(true);
     expect(
       isLegacyGovernanceScheduleId("governance:node-abc-123:ledger_ingest")

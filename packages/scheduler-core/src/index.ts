@@ -88,6 +88,7 @@ export {
   governanceScheduleId,
   isLegacyGovernanceScheduleId,
   type LedgerScheduleConfig,
+  legacyGovernanceScheduleId,
   syncGovernanceSchedules,
   type UpsertGovernanceScheduleRowParams,
 } from "./services/syncGovernanceSchedules";

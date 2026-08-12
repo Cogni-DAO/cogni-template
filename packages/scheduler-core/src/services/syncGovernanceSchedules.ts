@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/scheduler-core/services/syncGovernanceSchedules`
  * Purpose: Sync governance schedules from config to Temporal. Pure orchestration — depends only on ports and types.
- * Scope: Creates/updates/resumes Temporal schedules for each charter in governance config; pauses schedules removed from config. Routes LEDGER_INGEST charters to a per-node NodeTaskWorkflow dispatch (`/api/internal/attribution/collect`) that runs the collect pass IN the owning node on its own ledger DB. Does not manage tenant-facing schedule CRUD or workflow execution.
+ * Scope: Creates/updates/resumes Temporal schedules for each charter in governance config; pauses schedules removed from config. For NON-operator routable nodes, routes LEDGER_INGEST charters to a per-node NodeTaskWorkflow dispatch (`/api/internal/attribution/collect`) that runs the collect pass IN the owning node on its own ledger DB. For the OPERATOR node it preserves the live single-tenant CollectEpochWorkflow path byte-for-byte. Does not manage tenant-facing schedule CRUD or workflow execution.
  * Invariants:
  *   - OVERLAP_SKIP_DEFAULT: All governance schedules use overlap=SKIP (enforced by ScheduleControlPort)
  *   - CATCHUP_WINDOW_ZERO: No backfill (enforced by ScheduleControlPort)
@@ -13,12 +13,18 @@
  *   - PURE_ORCHESTRATION: No adapters, no Temporal client — only ports/types/callbacks
  *   - SYSTEM_TENANT_IS_TENANT: Governance schedules are first-class DB rows owned by system principal
  *   - UPDATE_ON_DRIFT: Existing schedules are updated in-place when config changes (model, cron, timezone, input)
- *   - MULTI_NODE_SCHEDULE_ID: schedule ids are node-scoped (`governance:{nodeId}:{charter}`) so an operator
- *     loop over N nodes never clobbers a sibling (last-writer-wins) — see {@link governanceScheduleId}.
- *   - LEDGER_INGEST_IS_DISPATCH: LEDGER_INGEST does NOT run CollectEpochWorkflow on the operator's single-DB
- *     worker; it schedules a NodeTaskWorkflow that POSTs `/api/internal/attribution/collect` INTO the owning
- *     node, which runs the collect pass on ITS OWN ledger DB. The node-task grant scope binds the dispatch
- *     to that node (M1). (story.5001 — multi-node epochs.)
+ *   - MULTI_NODE_SCHEDULE_ID: for NON-operator nodes, schedule ids are node-scoped
+ *     (`governance:{nodeId}:{charter}`) so an operator loop over N nodes never clobbers a sibling
+ *     (last-writer-wins) — see {@link governanceScheduleId}.
+ *   - OPERATOR_STAYS_ON_COLLECT_EPOCH (story.5001 REGRESSION_BAR): when `deps.isOperatorNode` is true,
+ *     LEDGER_INGEST resolves to the operator's live behavior EXACTLY — the FLAT `governance:ledger_ingest`
+ *     schedule id, `CollectEpochWorkflow` on the `ledger-tasks` queue, and the LedgerIngestRunV1 envelope.
+ *     It is NOT rewired onto NodeTaskWorkflow(/collect), so there is no dead 404 (before #1953) and no
+ *     latent double-collect (after #1953). The dispatch swap is other-nodes-only.
+ *   - LEDGER_INGEST_IS_DISPATCH: for a NON-operator node, LEDGER_INGEST does NOT run CollectEpochWorkflow;
+ *     it schedules a NodeTaskWorkflow that POSTs `/api/internal/attribution/collect` INTO the owning node,
+ *     which runs the collect pass on ITS OWN ledger DB. The node-task grant scope binds the dispatch to
+ *     that node (M1). (story.5001 — multi-node epochs.)
  * Side-effects: IO (Temporal RPC via ScheduleControlPort, grant creation via ensureGovernanceGrant / ensureNodeCollectGrant)
  * Links: docs/spec/substrate-temporal.md, docs/spec/scheduler.md, docs/spec/governance-council.md, .cogni/repo-spec.yaml
  * @public
@@ -46,6 +52,19 @@ const GOVERNANCE_MODEL = "kimi-k2.5";
 
 /** Workflow type for node http-dispatch tasks (the shared operator worker POSTs into the node). */
 const NODE_TASK_WORKFLOW_TYPE = "NodeTaskWorkflow";
+
+/**
+ * Workflow type for the OPERATOR's live single-tenant epoch collect. story.5001 keeps the
+ * operator on this (NOT NodeTaskWorkflow) so its live `governance:ledger_ingest` schedule is
+ * byte-for-byte unchanged — no dead dispatch, no double-collect (REGRESSION_BAR).
+ */
+const COLLECT_EPOCH_WORKFLOW_TYPE = "CollectEpochWorkflow";
+
+/** Task queue the operator's ledger workflows poll (CollectEpochWorkflow / finalize). */
+const LEDGER_TASK_QUEUE = "ledger-tasks";
+
+/** graphId tunnel for the operator's ledger workflows (satisfies the NOT-NULL graphId column). */
+const LEDGER_INGEST_GRAPH_ID = "ledger:ingest";
 
 /**
  * The node-relative route a LEDGER_INGEST charter dispatches against. The node's
@@ -127,6 +146,16 @@ export interface GovernanceScheduleSyncDeps {
    * still uses {@link GovernanceScheduleSyncDeps.ensureGovernanceGrant}.
    */
   ensureNodeCollectGrant(scope: string): Promise<string>;
+  /**
+   * OPERATOR_STAYS_ON_COLLECT_EPOCH (story.5001 REGRESSION_BAR): true only for the operator's
+   * OWN node. When true, LEDGER_INGEST resolves to the operator's live single-tenant behavior —
+   * the FLAT `governance:ledger_ingest` id running `CollectEpochWorkflow` on the `ledger-tasks`
+   * queue with the LedgerIngestRunV1 envelope — instead of the NodeTaskWorkflow(/collect) dispatch
+   * every OTHER routable node gets. This keeps the operator's live epoch untouched (no dead 404
+   * before the node `/collect` route ships, no latent double-collect after). Non-ledger charters
+   * are unaffected by this flag.
+   */
+  isOperatorNode?: boolean;
   /** Upsert governance schedule row in DB, returns dbScheduleId (UUID) */
   upsertGovernanceScheduleRow(
     params: UpsertGovernanceScheduleRowParams
@@ -169,6 +198,16 @@ export function governanceScheduleId(nodeId: string, charter: string): string {
   return `governance:${nodeId}:${charter.toLowerCase()}`;
 }
 
+/**
+ * The FLAT (pre-multi-node) schedule ID: `governance:{charter}`. Used ONLY for the
+ * operator node so its live single-tenant schedules (`governance:ledger_ingest`
+ * CollectEpochWorkflow) are matched/updated in place, never forked into a new
+ * node-scoped ghost (OPERATOR_STAYS_ON_COLLECT_EPOCH, story.5001 REGRESSION_BAR).
+ */
+export function legacyGovernanceScheduleId(charter: string): string {
+  return `governance:${charter.toLowerCase()}`;
+}
+
 /** Per-node prune prefix — pairs with {@link governanceScheduleId}. A node's sync
  * prunes only ITS OWN schedules, never a sibling node's. */
 export function governancePrunePrefix(nodeId: string): string {
@@ -177,10 +216,10 @@ export function governancePrunePrefix(nodeId: string): string {
 
 /**
  * True for a legacy pre-multi-node schedule ID (`governance:{charter}`, two
- * colon-segments, no `{nodeId}`). Kept as a classifier only. NOTE: unlike #1944 we
- * do NOT prune these — the operator's own single-tenant epoch runs on the flat
- * `governance:ledger_ingest` id and pausing it would kill live collection
- * (REGRESSION_BAR, story.5001). Exposed for observability / future migration.
+ * colon-segments, no `{nodeId}`). This IS the operator's live form: with
+ * `isOperatorNode=true` the operator writes/updates its `governance:ledger_ingest`
+ * CollectEpochWorkflow schedule on exactly this flat id (OPERATOR_STAYS_ON_COLLECT_EPOCH,
+ * story.5001). Non-operator nodes never produce or prune it. Exposed for observability.
  */
 export function isLegacyGovernanceScheduleId(scheduleId: string): boolean {
   return (
@@ -246,8 +285,16 @@ export async function syncGovernanceSchedules(
 
   const configScheduleIds = new Set<string>();
 
+  // OPERATOR_STAYS_ON_COLLECT_EPOCH: the operator's ids stay on the FLAT legacy form
+  // (`governance:{charter}`) so its live `governance:ledger_ingest` CollectEpochWorkflow
+  // schedule is matched/updated in place (never a NEW node-scoped ghost). Every other
+  // routable node uses the node-scoped id (MULTI_NODE_SCHEDULE_ID).
+  const isOperator = deps.isOperatorNode === true;
+
   for (const schedule of config.schedules) {
-    const scheduleId = governanceScheduleId(deps.nodeId, schedule.charter);
+    const scheduleId = isOperator
+      ? legacyGovernanceScheduleId(schedule.charter)
+      : governanceScheduleId(deps.nodeId, schedule.charter);
     configScheduleIds.add(scheduleId);
 
     // Determine if this is a LEDGER_INGEST (epoch-collect) schedule.
@@ -255,10 +302,36 @@ export async function syncGovernanceSchedules(
 
     let desiredInput: JsonValue;
     let workflowType: string | undefined;
+    let taskQueueOverride: string | undefined;
     let graphId: string;
     let grantId: string;
 
-    if (isLedgerIngest) {
+    if (isLedgerIngest && isOperator && config.ledger) {
+      // OPERATOR_STAYS_ON_COLLECT_EPOCH (story.5001 REGRESSION_BAR): the operator keeps its
+      // live single-tenant epoch EXACTLY — CollectEpochWorkflow on the `ledger-tasks` queue,
+      // the LedgerIngestRunV1 envelope, the `ledger:ingest` graphId, the governance grant. It
+      // is NOT rewired onto NodeTaskWorkflow(/collect): that would dead-dispatch (the operator's
+      // `/api/internal/attribution/collect` route ships in a sibling PR) AND, once it lands,
+      // double-collect alongside this schedule. The dispatch swap below is other-nodes-only.
+      desiredInput = {
+        version: 1,
+        scopeId: config.ledger.scopeId,
+        scopeKey: config.ledger.scopeKey,
+        epochLengthDays: config.ledger.epochLengthDays,
+        activitySources: config.ledger.activitySources,
+        ...(config.ledger.baseIssuanceCredits && {
+          baseIssuanceCredits: config.ledger.baseIssuanceCredits,
+        }),
+        ...(config.ledger.approvers &&
+          config.ledger.approvers.length > 0 && {
+            approvers: config.ledger.approvers,
+          }),
+      };
+      workflowType = COLLECT_EPOCH_WORKFLOW_TYPE;
+      taskQueueOverride = LEDGER_TASK_QUEUE;
+      graphId = LEDGER_INGEST_GRAPH_ID;
+      grantId = governanceGrantId;
+    } else if (isLedgerIngest && !isOperator) {
       // LEDGER_INGEST_IS_DISPATCH (story.5001): schedule a NodeTaskWorkflow that
       // POSTs `/api/internal/attribution/collect` INTO the owning node, which runs
       // the collect pass on ITS OWN ledger DB. We do NOT run CollectEpochWorkflow on
@@ -309,9 +382,13 @@ export async function syncGovernanceSchedules(
       input: desiredInput,
       overlapPolicy: "skip",
       catchupWindowMs: 0,
-      // NodeTaskWorkflow for LEDGER_INGEST (dispatch INTO the node); undefined ⇒
-      // GraphRunWorkflow (adapter default) for governance-agent charters.
+      // NON-operator LEDGER_INGEST ⇒ NodeTaskWorkflow (dispatch INTO the node);
+      // operator LEDGER_INGEST ⇒ CollectEpochWorkflow; undefined ⇒ GraphRunWorkflow
+      // (adapter default) for governance-agent charters.
       workflowType,
+      // Operator's CollectEpochWorkflow polls the `ledger-tasks` queue; undefined
+      // for everything else (shared operator worker + its default queue).
+      taskQueueOverride,
     };
 
     try {

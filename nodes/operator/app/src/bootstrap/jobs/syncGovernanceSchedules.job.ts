@@ -11,10 +11,13 @@
  *   - SINGLE_WRITER: pg_advisory_lock on a reserved (pinned) pool connection prevents concurrent sync runs
  *   - GRANT_VIA_PORT: Uses ensureGrant on ExecutionGrantUserPort, no raw SQL
  *   - SYSTEM_PRINCIPAL: Grant created for COGNI_SYSTEM_PRINCIPAL_USER_ID
- *   - MULTI_NODE_SCHEDULE_ID: each node's sync prunes only ITS OWN `governance:{nodeId}:` schedules.
- *   - OPERATOR_NOT_DOUBLE_COLLECTED (story.5001): the operator's own node is EXCLUDED from the
- *     NodeTaskWorkflow(/collect) dispatch loop — it keeps collecting via its own governance sync
- *     (CollectEpochWorkflow path is untouched by this job; see REGRESSION_BAR note in the loop below).
+ *   - MULTI_NODE_SCHEDULE_ID: each NON-operator node's sync prunes only ITS OWN `governance:{nodeId}:`
+ *     schedules; the operator syncs its FLAT `governance:{charter}` schedules.
+ *   - OPERATOR_STAYS_ON_COLLECT_EPOCH (story.5001 REGRESSION_BAR): step 1 syncs the operator with
+ *     `isOperator=true`, so its LEDGER_INGEST stays on the live FLAT `governance:ledger_ingest`
+ *     CollectEpochWorkflow schedule (`ledger-tasks` queue) — byte-for-byte unchanged, NOT rewired
+ *     onto NodeTaskWorkflow(/collect). The dispatch swap is other-nodes-only (step 2), so there is
+ *     no dead 404 (before the operator `/collect` route ships) and no latent double-collect (after).
  * Side-effects: IO (database advisory lock, Temporal RPC, grant creation)
  * Links: packages/scheduler-core/src/services/syncGovernanceSchedules.ts,
  *   nodes/operator/app/src/bootstrap/jobs/resolveRoutableNodeGovernanceConfigs.ts,
@@ -29,6 +32,7 @@ import {
 } from "@cogni/node-shared";
 import {
   governancePrunePrefix,
+  isLegacyGovernanceScheduleId,
   syncGovernanceSchedules,
 } from "@cogni/scheduler-core";
 import cronParser from "cron-parser";
@@ -112,11 +116,19 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
     // Sync ONE node's governance schedules. Deps are identical across nodes except
     // `nodeId` + the prune scope (MULTI_NODE_SCHEDULE_ID): a node prunes only its
     // own `governance:{nodeId}:` schedules, never a sibling node's.
+    //
+    // `isOperator` (OPERATOR_STAYS_ON_COLLECT_EPOCH, story.5001 REGRESSION_BAR): true ONLY for
+    // the operator's own node (step 1). It keeps the operator's LEDGER_INGEST on the live FLAT
+    // `governance:ledger_ingest` CollectEpochWorkflow schedule (`ledger-tasks` queue), instead of
+    // rewiring it onto the NodeTaskWorkflow(/collect) dispatch every OTHER routable node gets —
+    // so the operator's live epoch is byte-for-byte unchanged (no dead 404, no double-collect).
     const syncFor = (
       nodeId: string,
-      cfg: Parameters<typeof syncGovernanceSchedules>[0]
+      cfg: Parameters<typeof syncGovernanceSchedules>[0],
+      isOperator: boolean
     ) =>
       syncGovernanceSchedules(cfg, {
+        isOperatorNode: isOperator,
         ensureGovernanceGrant: async () => {
           const grant = await container.executionGrantPort.ensureGrant({
             userId: systemUserId,
@@ -188,11 +200,23 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
         systemUserId: COGNI_SYSTEM_PRINCIPAL_USER_ID,
         nodeId,
         scheduleControl: container.scheduleControl,
-        // MULTI_NODE_SCHEDULE_ID: prune scoped to THIS node's schedules only.
-        listGovernanceScheduleIds: () =>
-          container.scheduleControl.listScheduleIds(
-            governancePrunePrefix(nodeId)
-          ),
+        // Prune scope:
+        //  - NON-operator node → MULTI_NODE_SCHEDULE_ID: only its own
+        //    `governance:{nodeId}:` schedules (never a sibling's, never the operator's flat).
+        //  - operator (isOperator) → its own FLAT `governance:{charter}` schedules only. It
+        //    lists the bare `governance:` prefix (pre-swap behavior) then filters to the flat
+        //    (legacy, 2-segment) ids, so it prunes a removed operator charter WITHOUT ever
+        //    pausing another node's node-scoped dispatch schedule (OPERATOR_STAYS_ON_COLLECT_EPOCH).
+        listGovernanceScheduleIds: isOperator
+          ? async () => {
+              const all =
+                await container.scheduleControl.listScheduleIds("governance:");
+              return all.filter(isLegacyGovernanceScheduleId);
+            }
+          : () =>
+              container.scheduleControl.listScheduleIds(
+                governancePrunePrefix(nodeId)
+              ),
         disableSchedule,
         log,
       });
@@ -214,29 +238,32 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
       totals.paused += r.paused.length;
     };
 
-    // 1) Operator's OWN governance (from its mounted repo-spec). This runs the operator's
-    //    own governance-agent charters + its LEDGER_INGEST epoch-collect dispatch under the
-    //    node-scoped `governance:{operatorNodeId}:...` ids.
+    // 1) Operator's OWN governance (from its mounted repo-spec), synced as the OPERATOR
+    //    (isOperator=true → OPERATOR_STAYS_ON_COLLECT_EPOCH). Its LEDGER_INGEST resolves to the
+    //    live single-tenant epoch EXACTLY: the FLAT `governance:ledger_ingest` schedule running
+    //    CollectEpochWorkflow on the `ledger-tasks` queue. It is NOT rewired onto
+    //    NodeTaskWorkflow(/collect) — that swap is other-nodes-only (step 2).
     //
-    //    REGRESSION_BAR (story.5001): this job does NOT touch the operator's live single-tenant
-    //    epoch running on the FLAT `governance:ledger_ingest` CollectEpochWorkflow schedule — its
-    //    prune is node-scoped (`governance:{operatorNodeId}:`), so the flat id is never listed,
-    //    never pruned, never repointed. That schedule keeps collecting the operator's own ledger.
+    //    REGRESSION_BAR (story.5001): because the operator's ids stay FLAT, its live
+    //    `governance:ledger_ingest` schedule is matched/updated in place (never forked into a
+    //    node-scoped ghost), and its node-scoped prune prefix never lists the flat id. So the
+    //    operator's live epoch is byte-for-byte unchanged: no dead 404 before the sibling
+    //    `/api/internal/attribution/collect` route ships, no latent double-collect after.
     const operatorNodeId = getNodeId();
-    add(await syncFor(operatorNodeId, getGovernanceConfig()));
+    add(await syncFor(operatorNodeId, getGovernanceConfig(), true));
 
     // 2) Every OTHER routable node — read its git-authoritative governance config and sync its
     //    epoch-collect NodeTaskWorkflow(/collect) dispatch. THIS is what gives spawned nodes
     //    multi-node epochs (previously the operator scheduled only its own — single-tenant).
     //
     //    OPERATOR_NOT_DOUBLE_COLLECTED: skip the operator's own node — it already collects via
-    //    step (1) / its flat CollectEpochWorkflow schedule; a NodeTaskWorkflow(/collect) here
-    //    would double-collect it.
+    //    step (1) on its flat CollectEpochWorkflow schedule; a NodeTaskWorkflow(/collect) here
+    //    would double-collect it (and dead-dispatch until the operator's `/collect` route ships).
     const nodeConfigs = await resolveRoutableNodeGovernanceConfigs();
     for (const { nodeId, slug, config } of nodeConfigs) {
       if (nodeId === operatorNodeId) continue; // OPERATOR_NOT_DOUBLE_COLLECTED
       try {
-        add(await syncFor(nodeId, config));
+        add(await syncFor(nodeId, config, false));
       } catch (err) {
         log.warn(
           {
