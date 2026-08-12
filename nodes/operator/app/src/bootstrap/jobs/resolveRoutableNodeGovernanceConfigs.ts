@@ -42,11 +42,13 @@ import { nodes } from "@/shared/db/nodes";
 const ROUTABLE_NODE_STATUSES = ["published", "active"] as const;
 
 /**
- * Daily at 06:00 UTC — mirrors the operator's own LEDGER_INGEST cron (`.cogni/repo-spec.yaml`). The
- * cron controls how often the operator POKES a node's `/collect`; the node dedups the epoch window
- * (`ensureEpochForWindow` is idempotent), so a fixed operator-side cadence needs no per-node config.
+ * Hourly, on the hour — the operator polls each node's `/collect` every hour. The cron controls
+ * how often the operator POKES a node; the node dedups the epoch window (`ensureEpochForWindow` is
+ * idempotent), so a frequent poll is safe and just keeps each node's current epoch fresh. Hourly
+ * (vs the operator's own daily cadence) keeps node epochs timely and makes the dispatch observable
+ * without an out-of-band trigger. A fixed operator-side cadence needs no per-node git read.
  */
-const COLLECT_DISPATCH_CRON = "0 6 * * *";
+const COLLECT_DISPATCH_CRON = "0 * * * *";
 const COLLECT_DISPATCH_TIMEZONE = "UTC";
 
 /** A routable node's identity + its synthesized epoch-collect dispatch config. */
