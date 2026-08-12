@@ -40,13 +40,45 @@
 
 set -euo pipefail
 
+# MODE=render (default) installs the creds; MODE=purge strips them (bug.5003 —
+# non-prod must never hold the prod-capable DoltHub push cred).
+MODE="${MODE:-render}"
+
 : "${RUNTIME_ENV:?RUNTIME_ENV required}"
 : "${RUNTIME_COMPOSE_BIN:?RUNTIME_COMPOSE_BIN required}"
 : "${HASH_DIR:?HASH_DIR required}"
-: "${DOLT_CREDS_JWK_B64:?DOLT_CREDS_JWK_B64 required}"
-: "${DOLT_CREDS_KEYID_B64:?DOLT_CREDS_KEYID_B64 required}"
 
 read -r -a RUNTIME_COMPOSE <<< "$RUNTIME_COMPOSE_BIN"
+
+# PURGE MODE (bug.5003): non-prod must not hold the prod-capable mirror creds. Strip
+# the four keys from the runtime .env; if any were present, force-recreate doltgres so
+# install-creds.sh re-runs and no-ops (mirror goes dark). No values are ever passed in;
+# a .env that already lacks them is a pure no-op (no doltgres churn on healthy re-flights).
+if [[ "$MODE" == "purge" ]]; then
+  touch "$RUNTIME_ENV"
+  removed=""; tmp="$(mktemp)"; cp "$RUNTIME_ENV" "$tmp"
+  for k in DOLT_CREDS_JWK DOLT_CREDS_KEYID DOLTHUB_OWNER DOLTHUB_API_TOKEN; do
+    grep -qE "^${k}=" "$tmp" && removed="$removed $k"
+    grep -vE "^${k}=" "$tmp" > "${tmp}.n" || true
+    mv "${tmp}.n" "$tmp"
+  done
+  cat "$tmp" > "$RUNTIME_ENV"; rm -f "$tmp"
+  # Drop the render marker so a future prod render is never falsely hash-skipped.
+  rm -f "${HASH_DIR}/dolt-mirror-creds.hash"
+  if [[ -n "$removed" ]]; then
+    echo "[dolt-mirror-creds] purged from runtime .env:${removed}"
+    if "${RUNTIME_COMPOSE[@]}" config --services 2>/dev/null | grep -q '^doltgres$'; then
+      echo "[dolt-mirror-creds] recreating doltgres so install-creds.sh re-runs (mirror dark)"
+      "${RUNTIME_COMPOSE[@]}" up -d --force-recreate doltgres >/dev/null
+    fi
+  else
+    echo "[dolt-mirror-creds] no mirror creds present in runtime .env — purge is a no-op"
+  fi
+  exit 0
+fi
+
+: "${DOLT_CREDS_JWK_B64:?DOLT_CREDS_JWK_B64 required}"
+: "${DOLT_CREDS_KEYID_B64:?DOLT_CREDS_KEYID_B64 required}"
 
 # Clean upsert of KEY=VALUE into an env file. The VALUE is written via printf into
 # a fresh file (grep-out the old line, append the new one) — it is NEVER interpolated
