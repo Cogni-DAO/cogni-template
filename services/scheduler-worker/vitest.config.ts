@@ -51,5 +51,19 @@ export default defineProject({
     include: ["tests/**/*.{test,spec}.{ts,tsx}"],
     exclude: ["node_modules", "dist"],
     testTimeout: 10_000,
+    server: {
+      deps: {
+        // Inline @cogni/attribution-collect (which owns finalizeEpoch's
+        // `verifyTypedData` call) into this test's module graph. CI builds the
+        // package, so it would otherwise be treated as an external dep whose
+        // `import { verifyTypedData } from "viem"` resolves OUTSIDE the graph
+        // `vi.mock("viem")` in ledger-activities.test.ts controls — the mock
+        // would miss it and real viem would reject the fixture signature with
+        // "invalid signature length". Inlining routes the package's imports
+        // (including viem, deduped to one copy by the resolve.alias above)
+        // through vitest's module runner so the mock applies uniformly.
+        inline: [/@cogni\/attribution-collect/],
+      },
+    },
   },
 });
