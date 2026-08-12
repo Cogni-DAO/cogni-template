@@ -77,6 +77,7 @@ interface DeveloperDecisionLogFields {
   readonly role?: string | undefined;
   readonly branchPush?: BranchPushOutcome | undefined;
   readonly errorCode?: string | undefined;
+  readonly errorReason?: string | undefined;
 }
 
 interface RouteParams {
@@ -247,7 +248,9 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
         nodeId: id,
         decision: parsed.data.decision,
         agentUserId: parsed.data.agentUserId,
+        role: parsed.data.role,
         errorCode: write.code,
+        errorReason: write.reason,
       });
       return NextResponse.json(
         {

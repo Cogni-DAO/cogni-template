@@ -203,6 +203,24 @@ function deniedDecision(
   };
 }
 
+/**
+ * Extract a stable, log-safe cause from an OpenFGA client error. Prefers the HTTP
+ * status when present (distinguishes a 4xx model/validation reject from a transport
+ * failure), else the error message (e.g. the withTimeout message, ECONNREFUSED).
+ */
+function errorMessage(error: unknown): string {
+  if (error && typeof error === "object") {
+    const status =
+      (error as { statusCode?: unknown; status?: unknown }).statusCode ??
+      (error as { status?: unknown }).status;
+    if (typeof status === "number") {
+      const msg = error instanceof Error ? error.message : String(error);
+      return `status=${status} ${msg}`;
+    }
+  }
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number
@@ -286,11 +304,14 @@ export class OpenFgaAuthorizationAdapter implements AuthorizationPort {
         this.timeoutMs
       );
       return { decision: "success", code: "authz_write_success" };
-    } catch {
+    } catch (error) {
+      // Surface the underlying cause (timeout vs connection-refused vs OpenFGA 4xx).
+      // A bare `catch {}` here turns every write failure into an indistinguishable
+      // `authz_write_unavailable`, which forces deep spelunking during an outage.
       return {
         decision: "failure",
         code: "authz_write_unavailable",
-        reason: "OpenFGA write unavailable",
+        reason: `OpenFGA write unavailable: ${errorMessage(error)}`,
       };
     }
   }
@@ -313,11 +334,11 @@ export class OpenFgaAuthorizationAdapter implements AuthorizationPort {
         this.timeoutMs
       );
       return { decision: "success", code: "authz_write_success" };
-    } catch {
+    } catch (error) {
       return {
         decision: "failure",
         code: "authz_write_unavailable",
-        reason: "OpenFGA delete unavailable",
+        reason: `OpenFGA delete unavailable: ${errorMessage(error)}`,
       };
     }
   }
