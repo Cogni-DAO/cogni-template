@@ -210,8 +210,9 @@ function deniedDecision(
  */
 function errorMessage(error: unknown): string {
   if (error && typeof error === "object") {
-    const status = (error as { statusCode?: unknown; status?: unknown })
-      .statusCode ?? (error as { status?: unknown }).status;
+    const status =
+      (error as { statusCode?: unknown; status?: unknown }).statusCode ??
+      (error as { status?: unknown }).status;
     if (typeof status === "number") {
       const msg = error instanceof Error ? error.message : String(error);
       return `status=${status} ${msg}`;
