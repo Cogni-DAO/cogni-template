@@ -148,6 +148,7 @@ type PublishStep =
   | "validate_addresses"
   | "check_capacity"
   | "bootstrap_dolthub"
+  | "bootstrap_dolthub_nonprod"
   | "fork_from_template"
   | "open_submodule_pr"
   | "update_node";
