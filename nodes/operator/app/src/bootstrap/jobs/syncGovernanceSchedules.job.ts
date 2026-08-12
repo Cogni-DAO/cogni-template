@@ -266,17 +266,19 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
       try {
         add(await syncFor(nodeId, config, false));
 
-        // COLD_START_COLLECT: a node's epoch-collect dispatch schedule that has NEVER fired yet
-        // gets an immediate first collect, so a newly-registered node's ledger is populated on
-        // registration instead of waiting up to a full cron period. Idempotent — once it has run,
-        // `lastRunAtIso` is set and it is never re-triggered on a later sync.
+        // DEPLOY_COLLECT: kick each routable node's epoch-collect dispatch once per sync so a
+        // node's ledger is populated promptly instead of waiting up to a full cron period. This
+        // is idempotent (the node dedups the epoch window — `ensureEpochForWindow`), and it does
+        // NOT gate on `lastRunAtIso`: a node whose FIRST dispatch failed (e.g. it wasn't yet on
+        // the M2 grant-validate contract) has `lastRunAtIso` set but never actually collected, so
+        // a never-run gate would strand it. A node the worker can't reach fail-softs at dispatch.
         const collectSid = governanceScheduleId(nodeId, "LEDGER_INGEST");
         const desc = await container.scheduleControl.describeSchedule(collectSid);
-        if (desc && !desc.lastRunAtIso) {
+        if (desc) {
           await container.scheduleControl.triggerSchedule(collectSid);
           log.info(
             { event: "governance.node_collect_kicked", nodeId, slug, scheduleId: collectSid },
-            "kicked initial collect (dispatch schedule had no prior run)"
+            "kicked epoch collect for a routable node"
           );
         }
       } catch (err) {
