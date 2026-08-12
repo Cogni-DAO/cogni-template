@@ -36,6 +36,10 @@ APP_DB_PASSWORD=app-pass
 APP_DB_SERVICE_USER=app_service
 APP_DB_SERVICE_PASSWORD=service-pass
 DOLTGRES_PASSWORD=dolt-pass
+DOLT_CREDS_JWK={"kty":"OKP","d":"stale-prod-cred-sentinel"}
+DOLT_CREDS_KEYID=stale-keyid-sentinel
+DOLTHUB_OWNER=cogni-dao
+DOLTHUB_API_TOKEN=stale-pat-sentinel
 EOF
 cat > "$REMOTE_ROOT/opt/cogni-template-runtime/docker-compose.yml" <<'EOF'
 services: {}
@@ -272,17 +276,18 @@ grep -qE -- '--profile bootstrap run --rm .* db-provision' "$REMOTE_ROOT/docker.
 # not silently skipped → no node-app Init:CrashLoopBackOff).
 grep -qE -- '--profile bootstrap run --rm -e COGNI_NODE_DBS=cogni_operator -e DOLTGRES_PASSWORD=.* doltgres-provision' "$REMOTE_ROOT/docker.log"
 
-# DoltHub mirror (Option B): with creds present in OpenBao, the always-run lane renders
-# them to the VM runtime .env and force-recreates doltgres so install-creds.sh re-runs.
-# This is the whole point — an app-only promote (skip_infra) now brings the mirror up
-# with NO separate deploy-infra run. The JWK is decoded from base64 VM-side; the file
-# holds the literal JSON value with its metachars intact (no sed corruption).
-grep -qF 'DOLT_CREDS_KEYID=dolt-mirror-keyid-sentinel' "$REMOTE_ROOT/opt/cogni-template-runtime/.env" \
-  || { echo "DOLT_CREDS_KEYID not rendered to VM runtime .env" >&2; exit 1; }
-grep -qF 'DOLT_CREDS_JWK={"kty":"OKP","d":"jwk-secret-sentinel"}' "$REMOTE_ROOT/opt/cogni-template-runtime/.env" \
-  || { echo "DOLT_CREDS_JWK not rendered verbatim to VM runtime .env (base64 round-trip broke)" >&2; exit 1; }
+# DoltHub mirror PROD-ONLY purge (bug.5003): candidate-a is NON-PROD, so the lane must
+# NEVER deliver the prod-capable DoltHub push cred — even one left in the VM .env by a
+# pre-guard flight (seeded above). It actively STRIPS the four keys and force-recreates
+# doltgres so install-creds.sh re-runs and no-ops (mirror dark). It also does NOT read
+# the operator bank creds at all in non-prod (the zero-write bank assertion above still
+# holds: the seeded bank DOLT_CREDS_* remain untouched).
+for k in DOLT_CREDS_JWK DOLT_CREDS_KEYID DOLTHUB_OWNER DOLTHUB_API_TOKEN; do
+  grep -qE "^${k}=" "$REMOTE_ROOT/opt/cogni-template-runtime/.env" \
+    && { echo "non-prod: ${k} was NOT stripped from VM runtime .env (prod-capable cred left on a test VM)" >&2; exit 1; }
+done
 grep -q 'up -d --force-recreate doltgres' "$REMOTE_ROOT/docker.log" \
-  || { echo "doltgres not force-recreated after mirror creds change (install-creds.sh would not re-run)" >&2; exit 1; }
+  || { echo "doltgres not force-recreated after mirror-cred purge (install-creds.sh would not re-run → mirror not dark)" >&2; exit 1; }
 grep -q 'dolt_mirror_creds' <(python3 -c 'import json,sys; print("\n".join(r["row"] for r in json.load(open(sys.argv[1]))["rows"]))' "$TMPROOT/summary.json") \
   || { echo "dolt_mirror_creds row missing from reconcile summary" >&2; exit 1; }
 

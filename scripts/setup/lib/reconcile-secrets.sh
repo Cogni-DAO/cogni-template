@@ -129,6 +129,21 @@ _cat_field() {
 # catalog (DATABASE_URL/_SERVICE_URL) are baseline → kept.
 _node_gets_key() {
   local node="$1" k="$2" appliesTo service
+  # PROD-ONLY blast-radius guard (bug.5003): the DoltHub push identity
+  # (DOLT_CREDS_JWK/KEYID) + repo-create PAT (DOLTHUB_API_TOKEN) are ONE shared
+  # service-account credential with push rights to the PROD org (cogni-dao). They
+  # must live ONLY in production banks — never fan to candidate-a/preview, whose
+  # app routes DOLTHUB_OWNER at the test org (cogni-test-nodes) and must never hold
+  # a prod-capable secret. Non-prod therefore mirrors dark until it is given a
+  # separate test-scoped credential (deliberate opt-in), NEVER the prod one. The
+  # org name DOLTHUB_OWNER (non-secret) is unaffected — it stays env-routed via the
+  # k8s overlay. Covers every fan-out (provision + the always-run secret-materialize
+  # lane, both via this seam). See knowledge-mirror.ts FAIL_CLOSED_ON_OWNER +
+  # infra/secrets-catalog.yaml ("Do not point test/preview at cogni-dao").
+  case "$k" in
+    DOLT_CREDS_JWK | DOLT_CREDS_KEYID | DOLTHUB_API_TOKEN)
+      [[ "${DEPLOY_ENV:-}" == "production" ]] || return 1 ;;
+  esac
   appliesTo=$(_cat_field "$k" '.appliesTo')
   service=$(_cat_field "$k" '.service')
   if [[ "$appliesTo" == "payments" ]]; then

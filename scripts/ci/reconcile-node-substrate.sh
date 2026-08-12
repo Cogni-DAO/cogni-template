@@ -300,18 +300,33 @@ dg_pw_env="-e DOLTGRES_PASSWORD='${doltgres_superuser_password}'"
 #
 # FAIL-CLOSED: absent JWK/KEYID ⇒ mirror stays disabled (install-creds.sh is a no-op when
 # unset). NEVER a hardcoded fallback. Key names only in logs; values never echoed.
-dolt_creds_jwk="$(bao_get_field operator DOLT_CREDS_JWK)"
-dolt_creds_keyid="$(bao_get_field operator DOLT_CREDS_KEYID)"
-dolthub_owner="$(bao_get_field operator DOLTHUB_OWNER)"
-dolthub_api_token="$(bao_get_field operator DOLTHUB_API_TOKEN)"
-if [[ -n "$dolt_creds_jwk" && -n "$dolt_creds_keyid" ]]; then
-  dolt_mirror_enabled=true
-  mark_row dolt_mirror_creds read "read DoltHub mirror creds from OpenBao (key names only)"
-  log "DoltHub mirror creds present — will render to VM runtime .env + recreate doltgres"
+# PROD-ONLY blast-radius guard (bug.5003): the DoltHub push identity (JWK/KEYID) +
+# repo-create PAT are ONE shared, PROD-CAPABLE credential (push rights to cogni-dao).
+# A non-prod env must NEVER hold it in the doltgres — not even a value left over from a
+# pre-guard materialize or a prior flight's render. So ONLY production reads + delivers
+# the mirror creds; every other env actively STRIPS them from the VM runtime .env +
+# recreates doltgres (fail-closed = actively disabled, not merely not-rendered). This
+# is the VM-side complement to the reconcile-secrets.sh _node_gets_key prod-only guard
+# (which stops future bank writes but cannot remove an already-delivered VM cred).
+dolt_mirror_enabled=false
+dolt_mirror_purge=false
+if [[ "$DEPLOY_ENVIRONMENT" == "production" ]]; then
+  dolt_creds_jwk="$(bao_get_field operator DOLT_CREDS_JWK)"
+  dolt_creds_keyid="$(bao_get_field operator DOLT_CREDS_KEYID)"
+  dolthub_owner="$(bao_get_field operator DOLTHUB_OWNER)"
+  dolthub_api_token="$(bao_get_field operator DOLTHUB_API_TOKEN)"
+  if [[ -n "$dolt_creds_jwk" && -n "$dolt_creds_keyid" ]]; then
+    dolt_mirror_enabled=true
+    mark_row dolt_mirror_creds read "read DoltHub mirror creds from OpenBao (key names only)"
+    log "DoltHub mirror creds present — will render to VM runtime .env + recreate doltgres"
+  else
+    mark_row dolt_mirror_creds skipped "DoltHub mirror creds absent — mirror stays disabled (no fallback)"
+    log "DoltHub mirror creds absent at cogni/${DEPLOY_ENVIRONMENT}/operator — mirror disabled (fail-closed, no fallback)"
+  fi
 else
-  dolt_mirror_enabled=false
-  mark_row dolt_mirror_creds skipped "DoltHub mirror creds absent — mirror stays disabled (no fallback)"
-  log "DoltHub mirror creds absent at cogni/${DEPLOY_ENVIRONMENT}/operator — mirror disabled (fail-closed, no fallback)"
+  dolt_mirror_purge=true
+  mark_row dolt_mirror_creds purged "non-prod: DoltHub mirror is prod-only — creds withheld + stripped from VM .env (bug.5003)"
+  log "non-prod (${DEPLOY_ENVIRONMENT}): DoltHub mirror is prod-only — stripping any mirror creds from VM runtime .env + recreating doltgres if present"
 fi
 
 # DSN seeding removed: secret-materialize composes + writes the per-node DSNs
@@ -390,7 +405,19 @@ copy_to_remote "$REPO_ROOT/scripts/ci/reconcile-alloy-config.remote.sh" "/tmp/re
 # dolt_mirror_reconcile_snippet is spliced into the remote heredoc's doltgres block
 # below (empty string when disabled → the heredoc is byte-identical to before).
 dolt_mirror_reconcile_snippet=""
-if "$dolt_mirror_enabled"; then
+if "$dolt_mirror_purge"; then
+  # Non-prod: strip any DoltHub mirror creds from the VM runtime .env + hash-gated
+  # recreate so a prod-capable cred can never linger on a test VM (bug.5003). No
+  # values transit — MODE=purge only removes keys. Byte-identical no-op when the
+  # .env already lacks them.
+  copy_to_remote "$REPO_ROOT/scripts/ci/reconcile-dolt-mirror-creds.remote.sh" "/tmp/reconcile-dolt-mirror-creds.remote.sh"
+  dolt_mirror_reconcile_snippet="    RUNTIME_ENV=\"\$runtime_env\" \\
+    RUNTIME_COMPOSE_BIN=\"docker compose --project-name cogni-runtime --env-file \$runtime_env -f /opt/cogni-template-runtime/docker-compose.yml\" \\
+    HASH_DIR=/var/lib/cogni \\
+    MODE=purge \\
+      bash /tmp/reconcile-dolt-mirror-creds.remote.sh
+"
+elif "$dolt_mirror_enabled"; then
   copy_to_remote "$REPO_ROOT/scripts/ci/reconcile-dolt-mirror-creds.remote.sh" "/tmp/reconcile-dolt-mirror-creds.remote.sh"
   # base64 the values CI-side so the single-line-JSON JWK never touches a sed/shell
   # interpolation path (no injection; never echoed). Decoded VM-side by the helper.

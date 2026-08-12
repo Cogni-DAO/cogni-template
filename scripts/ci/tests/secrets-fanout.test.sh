@@ -129,6 +129,29 @@ assert "$r" "LITELLM_MASTER_KEY shared value across nodes"
 r=0; [[ "$(val_for node-template OPENROUTER_API_KEY)" == "$(val_for poly OPENROUTER_API_KEY)" ]] || r=1
 assert "$r" "OPENROUTER_API_KEY shared value across nodes"
 
+# 7b. PROD-ONLY blast-radius guard (bug.5003): the DoltHub push identity + repo-
+#     create PAT are one shared prod-capable credential. They MUST NOT fan to a
+#     non-prod env (regardless of value presence); production banks DO receive
+#     them. Same seam gates the provision fan-out AND the always-run materialize.
+DOLT_CREDS_JWK="jwk-secret"; DOLT_CREDS_KEYID="keyid-secret"
+DOLTHUB_API_TOKEN="pat-secret"; DOLTHUB_OWNER="cogni-test-nodes"
+export DOLT_CREDS_JWK DOLT_CREDS_KEYID DOLTHUB_API_TOKEN DOLTHUB_OWNER
+: >"$SEED_LOG"; seed_node_app_secrets node-template
+r=0; for k in DOLT_CREDS_JWK DOLT_CREDS_KEYID DOLTHUB_API_TOKEN; do
+  seeded node-template "$k" && r=1
+done
+assert "$r" "DoltHub push creds withheld from non-prod (candidate-a) bank"
+r=0; [[ "$(val_for node-template DOLTHUB_OWNER)" == "cogni-test-nodes" ]] || r=1
+assert "$r" "DOLTHUB_OWNER (org name, non-secret) still reaches non-prod"
+DEPLOY_ENV="production"
+: >"$SEED_LOG"; seed_node_app_secrets node-template
+r=0; for k in DOLT_CREDS_JWK DOLT_CREDS_KEYID DOLTHUB_API_TOKEN; do
+  seeded node-template "$k" || r=1
+done
+assert "$r" "DoltHub push creds seeded in production bank"
+DEPLOY_ENV="candidate-a"  # restore for downstream sections
+: >"$SEED_LOG"; seed_node_app_secrets node-template; seed_node_app_secrets poly
+
 # 8. Idempotency: an existing OpenBao value is preserved (no churn → 0 restarts).
 bao_get_field() { if [[ "$2" == "AUTH_SECRET" ]]; then printf 'PRESERVED-EXISTING'; else printf ''; fi; }
 : >"$SEED_LOG"
