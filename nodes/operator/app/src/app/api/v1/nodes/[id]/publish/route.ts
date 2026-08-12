@@ -514,7 +514,8 @@ export async function POST(request: Request, routeArgs: RouteParams) {
         // must not block a real node's birth (the repo is created lazily-or-here, never a
         // dependency of the git/submodule birth below).
         const extraOwners =
-          env.DOLTHUB_NONPROD_OWNER && env.DOLTHUB_NONPROD_OWNER !== env.DOLTHUB_OWNER
+          env.DOLTHUB_NONPROD_OWNER &&
+          env.DOLTHUB_NONPROD_OWNER !== env.DOLTHUB_OWNER
             ? [env.DOLTHUB_NONPROD_OWNER]
             : [];
         for (const owner of extraOwners) {

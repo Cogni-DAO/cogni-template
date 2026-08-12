@@ -271,7 +271,11 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
     envState.current.DOLTHUB_NONPROD_OWNER = "cogni-test-nodes";
     mockEnsureDatabase
       .mockReset()
-      .mockResolvedValueOnce({ owner: "cogni-dao", repo: "atlas", created: true })
+      .mockResolvedValueOnce({
+        owner: "cogni-dao",
+        repo: "atlas",
+        created: true,
+      })
       .mockRejectedValueOnce(new Error("dolthub test org unavailable"));
 
     const response = await publishNode();
