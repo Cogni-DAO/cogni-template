@@ -1,0 +1,14 @@
+{
+  "type": "story",
+  "title": "Wire LangGraph agents into the knowledge DAG (Write / Recall / Apply)",
+  "summary": "The Dolt knowledge hub is a real typed graph (citations DAG, 9 edge types, provenance, Dolt versioning) but the LangGraph runtime is unplugged from it: 9/13 graphs have zero knowledge access, recall (RECALL_BEFORE_WRITE) exists only as prompt text on the human-CLI plane, the research graph discards its findings, and search returns edge-less rows. Cross-analysis vs the agent-memory blueprint (write/consolidate/recall/apply + extract/resolve/assemble/query) shows we are ahead on 'assemble' and missing runtime Write/Recall/Apply/Query. Wire the graphs to the existing DAG instead of adding a parallel memory substrate.",
+  "outcome": "LangGraph agents recall merged knowledge atoms before acting and write durable findings back as atoms + citation edges; recall hits are observable per run. No parallel memory system (LangGraph Store / separate vector memory) is introduced.",
+  "node": "operator",
+  "priority": 1,
+  "labels": ["agent-infrastructure", "knowledge", "langgraph"],
+  "specRefs": [
+    "docs/spec/knowledge-data-plane.md",
+    "docs/spec/graph-execution.md",
+    "docs/spec/knowledge-syntropy.md"
+  ]
+}

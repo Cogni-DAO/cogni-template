@@ -1,0 +1,13 @@
+{
+  "type": "task",
+  "title": "Research graph write-back: persist compressed findings as knowledge atoms + edges",
+  "summary": "The research graph (packages/langgraph-graphs/src/graphs/research/graph.ts) is the only real StateGraph in the repo — supervisor + parallel researcher subgraphs + compress_research — and it throws everything away at final_report. Add a write-back stage: after final_report, persist compressed findings as knowledge entries (entryType finding, provenance = run id + cited sources) on a contribution branch via the existing branch-based contribution flow, so syntropy gates and human review still apply. Each atom should cite at least one existing entry or sibling (no islands). This closes the blueprint's 'workers write to shared memory' stage for our deepest reasoner and makes overnight research runs compound.",
+  "outcome": "A research run produces a knowledge contribution branch containing finding atoms with citation edges, reviewable and mergeable via the existing contribution inbox; findings survive the invocation.",
+  "node": "operator",
+  "priority": 2,
+  "labels": ["agent-infrastructure", "knowledge", "langgraph"],
+  "specRefs": [
+    "docs/spec/knowledge-syntropy.md",
+    "docs/design/knowledge-contribution-api.md"
+  ]
+}

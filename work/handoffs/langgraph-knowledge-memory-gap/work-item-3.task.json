@@ -1,0 +1,13 @@
+{
+  "type": "task",
+  "title": "Edge-aware recall: attach citations to knowledge search results + bounded subgraph read",
+  "summary": "core__knowledge_search returns flat edge-less rows and the KnowledgeStorePort offers only 1-hop listCitationsBy* — the citations DAG is written and rendered but never traversed at recall time, and /api/v1/knowledge/graph is session-cookie-only (403 for Bearer agents). Two increments: (1) attach 1-hop citation edges (type, target id+title, confidence) to searchKnowledge results so agents see contradicts/supersedes/extends signals inline; (2) add a bounded multi-hop subgraph read to the port (depth ≤3, node cap, e.g. WITH RECURSIVE on Doltgres — validate performance) and expose it as a core__knowledge_subgraph tool that serializes the neighborhood for reasoning, so agent answers can cite specific edges.",
+  "outcome": "Agents recall knowledge with its edge context instead of isolated rows; a bounded subgraph around any entry is retrievable by Bearer-authenticated agents via a tool.",
+  "node": "operator",
+  "priority": 3,
+  "labels": ["knowledge", "langgraph", "doltgres"],
+  "specRefs": [
+    "docs/spec/knowledge-data-plane.md",
+    "docs/spec/knowledge-syntropy.md"
+  ]
+}

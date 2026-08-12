@@ -1,0 +1,13 @@
+{
+  "type": "task",
+  "title": "Recall step in graph runtime: inject top-k merged knowledge atoms at run start",
+  "summary": "RECALL_BEFORE_WRITE is currently prompt text served to human-CLI sessions via the cognition bundle; no LangGraph graph executes it. Add a recall step to the graph runtime — a pre-model hook or initial node in the InProc runner path (packages/langgraph-graphs/src/inproc/runner.ts) that runs KnowledgeCapability search against the run input and injects the top-k merged atoms (id, title, content, confidence) into the system context before the first model call. Roll out first to operating-review, pr-manager, and research; emit a recall-hit count via the observability decorator so 'Apply' becomes measurable.",
+  "outcome": "Targeted graphs receive relevant merged knowledge atoms in context on every run without relying on the model choosing to call a search tool; recall hits visible in run observability.",
+  "node": "operator",
+  "priority": 1,
+  "labels": ["agent-infrastructure", "knowledge", "langgraph"],
+  "specRefs": [
+    "docs/spec/graph-execution.md",
+    "docs/spec/knowledge-data-plane.md"
+  ]
+}
