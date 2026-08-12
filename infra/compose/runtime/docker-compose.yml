@@ -316,6 +316,18 @@ services:
       - OPENFGA_PLAYGROUND_ENABLED=false
       - OPENFGA_AUTHN_METHOD=${OPENFGA_AUTHN_METHOD:-none}
       - OPENFGA_AUTHN_PRESHARED_KEYS=${OPENFGA_API_TOKEN:-}
+    # Without a healthcheck the `autoheal=true` label above is inert: willfarrell/autoheal
+    # only restarts containers Docker reports `unhealthy`, and a container with no probe stays
+    # `health: none` forever. This left a wedged OpenFGA (process up but datastore path dead)
+    # with no self-heal — a factor in the 2026-08-12 prod RBAC-write outage. grpc_health_probe
+    # ships in the OpenFGA image (distroless — no curl/shell); 8081 is the internal gRPC health
+    # port, and OpenFGA's health service reports NOT_SERVING when its datastore is unreachable.
+    healthcheck:
+      test: ["CMD", "grpc_health_probe", "-addr=localhost:8081"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
     depends_on:
       openfga-migrate:
         condition: service_completed_successfully
