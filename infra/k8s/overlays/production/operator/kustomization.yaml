@@ -63,6 +63,13 @@ patches:
       - op: add
         path: /data/DOLTHUB_OWNER
         value: "cogni-dao"
+      # Non-prod mirror org: prod publish ALSO creates <this>/<slug> so a fresh
+      # node's candidate-a/preview mirror target exists (bug.5002). The prod PAT is
+      # cross-org (creates in cogni-dao AND cogni-test-nodes); non-prod holds no PAT
+      # (bug.5003), so this bootstrap can only run here on prod.
+      - op: add
+        path: /data/DOLTHUB_NONPROD_OWNER
+        value: "cogni-test-nodes"
       - op: add
         path: /data/OPENFGA_API_URL
         value: "http://operator-openfga-external:8080"
