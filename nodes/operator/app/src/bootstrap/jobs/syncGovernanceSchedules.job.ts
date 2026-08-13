@@ -277,7 +277,12 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
         if (desc) {
           await container.scheduleControl.triggerSchedule(collectSid);
           log.info(
-            { event: "governance.node_collect_kicked", nodeId, slug, scheduleId: collectSid },
+            {
+              event: "governance.node_collect_kicked",
+              nodeId,
+              slug,
+              scheduleId: collectSid,
+            },
             "kicked epoch collect for a routable node"
           );
         }
