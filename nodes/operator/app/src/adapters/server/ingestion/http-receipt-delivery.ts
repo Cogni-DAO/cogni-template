@@ -13,7 +13,8 @@
  *   to ISO strings for the wire.
  * Invariants:
  *   - NO_DB_IN_DELIVERY: only fetch(); the owning node stamps its own node_id.
- *   - nodeId is resolved against COGNI_NODE_ENDPOINTS at call time; unknown → throw (fail fast).
+ *   - nodeId → URL is resolved via the injected registry resolver at call time (operator DB
+ *     registry, NORTH_STAR — not a static COGNI_NODE_ENDPOINTS map); unknown → throw (fail fast).
  *   - Bearer SCHEDULER_API_TOKEN attached to every request (MVP dispatch identity, same as graph
  *     dispatch; the per-node principal is the hardening — task.5033).
  *   - Idempotency-Key: `${nodeId}/${firstReceiptId}` — repeat delivery is a no-op on the node
@@ -39,8 +40,13 @@ import type { Logger } from "@/shared/observability";
 // ReceiptDelivery port lives in @/ports/receipt-delivery.port; this adapter implements it.
 
 export interface HttpReceiptDeliveryDeps {
-  /** nodeId → base URL, parsed from COGNI_NODE_ENDPOINTS. */
-  readonly nodeEndpoints: ReadonlyMap<string, string>;
+  /**
+   * Resolve a node's internal base URL by nodeId. NORTH_STAR: the operator resolves its
+   * nodes from its OWN DB registry (listRoutableNodes), never a static COGNI_NODE_ENDPOINTS
+   * map — that static map exists only for the DB-less scheduler-worker. Returns null when the
+   * nodeId is not a routable node in the registry.
+   */
+  readonly resolveNodeUrl: (nodeId: string) => Promise<string | null>;
   /** Bearer token for the internal dispatch identity (SCHEDULER_API_TOKEN). */
   readonly schedulerApiToken: string;
   readonly logger: Logger;
@@ -73,14 +79,14 @@ function isRetryableStatus(status: number): boolean {
   return RETRYABLE_TRANSIENT_4XX.has(status);
 }
 
-function resolveNodeUrl(
-  nodeEndpoints: ReadonlyMap<string, string>,
+async function resolveNodeUrl(
+  resolve: (nodeId: string) => Promise<string | null>,
   nodeId: string
-): string {
-  const url = nodeEndpoints.get(nodeId);
+): Promise<string> {
+  const url = await resolve(nodeId);
   if (!url) {
     throw new ReceiptDeliveryError(
-      `Unknown nodeId "${nodeId}" — not in COGNI_NODE_ENDPOINTS`,
+      `Unknown nodeId "${nodeId}" — not a routable node in the operator registry`,
       0,
       false
     );
@@ -129,13 +135,13 @@ function toWireReceipt(r: InsertReceiptParams): InternalReceipt {
 export function createHttpReceiptDelivery(
   deps: HttpReceiptDeliveryDeps
 ): ReceiptDelivery {
-  const { nodeEndpoints, schedulerApiToken, logger } = deps;
+  const { resolveNodeUrl: resolveUrl, schedulerApiToken, logger } = deps;
 
   return {
     async deliverReceipts(nodeId, source, receipts): Promise<void> {
       if (receipts.length === 0) return;
 
-      const base = resolveNodeUrl(nodeEndpoints, nodeId);
+      const base = await resolveNodeUrl(resolveUrl, nodeId);
       const url = `${base}/api/internal/attribution/receipts`;
 
       const body: InternalDeliverReceiptsInput = {

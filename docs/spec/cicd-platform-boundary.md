@@ -140,6 +140,7 @@ Heuristic: _if the request needs a new `if`, a new env var threaded through SSH,
 | Health / readiness           | k8s probes in base + `verify-buildsha.sh` `/version.buildSha` contract (Axiom 19)                                                            | `/readyz`-as-rollout-proof                             |
 | Resource sizing              | Kustomize overlay `resources:` patch                                                                                                         | VM-side edits                                          |
 | Database setup               | node declares `packages/postgres` schema; operator provisions per-node DB via the substrate lane (`materialize → reconcile`, Axiom 22) + ESO | a new DB path in `deploy-infra.sh`                     |
+| Operator resolves a node (list / id→slug / id→internal URL) | operator app reads its **DB registry** (`resolveNodeRegistry` / `listRoutableNodes`) + the `http://<slug>-node-app:3000` convention (`internalNodeAppUrl`) | a static `COGNI_NODE_ENDPOINTS` map on the operator app, or splicing a configmap at node-formation. The static map is **worker-only** (the DB-less `scheduler-worker` must consume a catalog-rendered CSV) |
 | Operator convenience command | thin wrapper that calls the above; **zero** platform logic of its own                                                                        | a script that grows its own promotion/secret/env brain |
 
 Routing target definitions (the consultant's seven homes, mapped to this repo):
