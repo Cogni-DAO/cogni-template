@@ -273,7 +273,8 @@ export async function runGovernanceSchedulesSyncJob(): Promise<GovernanceSchedul
         // the M2 grant-validate contract) has `lastRunAtIso` set but never actually collected, so
         // a never-run gate would strand it. A node the worker can't reach fail-softs at dispatch.
         const collectSid = governanceScheduleId(nodeId, "LEDGER_INGEST");
-        const desc = await container.scheduleControl.describeSchedule(collectSid);
+        const desc =
+          await container.scheduleControl.describeSchedule(collectSid);
         if (desc) {
           await container.scheduleControl.triggerSchedule(collectSid);
           log.info(
