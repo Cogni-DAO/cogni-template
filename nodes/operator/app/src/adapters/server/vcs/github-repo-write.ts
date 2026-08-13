@@ -2719,6 +2719,25 @@ export class GitHubRepoWriter implements DeployPlanePort {
         );
       }
 
+      // Same map, second consumer: the operator app (node-app base configmap) — its
+      // attribution operator-gateway resolves a FOREIGN owning node's URL from
+      // COGNI_NODE_ENDPOINTS to deliver git receipts (http-receipt-delivery.ts). Splice the
+      // new node here too so both configmaps stay byte-identical by construction (no drift
+      // guard needed — both writers write both files; pnpm gen:scheduler-worker-endpoints too).
+      const nodeAppConfigmapPath = "infra/k8s/base/node-app/configmap.yaml";
+      const currentNodeAppConfigmap = await this.fetchFileText({
+        owner,
+        repo,
+        path: nodeAppConfigmapPath,
+        ref: "main",
+      });
+      if (currentNodeAppConfigmap) {
+        await addBlob(
+          nodeAppConfigmapPath,
+          insertSchedulerEndpoint(currentNodeAppConfigmap, slug, input.nodeId)
+        );
+      }
+
       // network-nodes roster splice: the operator runtime image can't fs-glob infra/catalog,
       // so the web-node roster (network-nodes.data.ts) is a committed catalog projection kept
       // honest by network-nodes-catalog-drift.test.ts (roster slug set == catalog type:node set).
