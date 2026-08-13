@@ -440,10 +440,22 @@ export async function syncGovernanceSchedules(
     }
   }
 
-  // 3. Prune: pause governance schedules not in current config
+  // 3. Prune: pause governance schedules not in current config — but ONLY within
+  // THIS sync call's ownership scope (bug.5009 CROSS_TENANT_PRUNE). All nodes in an
+  // env share ONE Temporal namespace and each boot-syncs into it, so an unscoped
+  // prune lets any node pause a sibling's `governance:{nodeId}:ledger_ingest`
+  // dispatch schedule (Loki-proven: a node paused every peer at boot → paused
+  // schedules skip their cron and only ever fire on a manual operator boot-kick).
+  // Ownership, mirroring syncNodeSchedules' `node-task:{nodeId}:` isolation:
+  //   - operator (isOperator): owns ONLY the flat legacy id `governance:{charter}`
+  //   - a node: owns ONLY its own `governance:{nodeId}:` prefix
+  const prunePrefix = governancePrunePrefix(deps.nodeId);
+  const ownsScheduleId = (id: string): boolean =>
+    isOperator ? isLegacyGovernanceScheduleId(id) : id.startsWith(prunePrefix);
+
   const allGovernanceIds = await deps.listGovernanceScheduleIds();
   for (const existingId of allGovernanceIds) {
-    if (!configScheduleIds.has(existingId)) {
+    if (ownsScheduleId(existingId) && !configScheduleIds.has(existingId)) {
       try {
         await scheduleControl.pauseSchedule(existingId);
         await deps.disableSchedule(existingId);

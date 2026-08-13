@@ -555,6 +555,105 @@ describe("syncGovernanceSchedules", () => {
     expect(result.paused).toEqual([]);
   });
 
+  // ---------------------------------------------------------------------------
+  // CROSS_TENANT_PRUNE (bug.5009): all nodes in an env share ONE Temporal namespace
+  // and each boot-syncs into it. A node's prune MUST be scoped to its OWN
+  // `governance:{nodeId}:` ids — never a sibling's, never the operator's flat id.
+  // Regression: an unscoped prune let a node pause every peer's dispatch schedule.
+  // ---------------------------------------------------------------------------
+  describe("cross-tenant prune isolation (bug.5009)", () => {
+    const SIBLING_ID = governanceScheduleId(
+      "sibling-node-999",
+      "LEDGER_INGEST"
+    );
+    const OPERATOR_FLAT_ID = legacyGovernanceScheduleId("LEDGER_INGEST");
+
+    it("a node does NOT pause a sibling node's dispatch schedule", async () => {
+      deps = makeMockDeps({
+        listGovernanceScheduleIds: vi
+          .fn()
+          .mockResolvedValue([sid("COMMUNITY"), SIBLING_ID]),
+      });
+
+      const result = await syncGovernanceSchedules(
+        makeConfig([
+          { charter: "COMMUNITY", cron: "0 */6 * * *", entrypoint: "COMMUNITY" },
+        ]),
+        deps
+      );
+
+      expect(result.paused).toEqual([]);
+      expect(deps.scheduleControl.pauseSchedule).not.toHaveBeenCalledWith(
+        SIBLING_ID
+      );
+    });
+
+    it("a node does NOT pause the operator's flat legacy schedule", async () => {
+      deps = makeMockDeps({
+        listGovernanceScheduleIds: vi
+          .fn()
+          .mockResolvedValue([sid("COMMUNITY"), OPERATOR_FLAT_ID]),
+      });
+
+      const result = await syncGovernanceSchedules(
+        makeConfig([
+          { charter: "COMMUNITY", cron: "0 */6 * * *", entrypoint: "COMMUNITY" },
+        ]),
+        deps
+      );
+
+      expect(result.paused).toEqual([]);
+      expect(deps.scheduleControl.pauseSchedule).not.toHaveBeenCalledWith(
+        OPERATOR_FLAT_ID
+      );
+    });
+
+    it("a node still prunes its OWN stale node-scoped schedule", async () => {
+      deps = makeMockDeps({
+        listGovernanceScheduleIds: vi
+          .fn()
+          .mockResolvedValue([sid("COMMUNITY"), sid("OLD-CHARTER"), SIBLING_ID]),
+      });
+
+      const result = await syncGovernanceSchedules(
+        makeConfig([
+          { charter: "COMMUNITY", cron: "0 */6 * * *", entrypoint: "COMMUNITY" },
+        ]),
+        deps
+      );
+
+      // Own stale id pruned; sibling untouched.
+      expect(result.paused).toEqual([sid("OLD-CHARTER")]);
+    });
+
+    it("operator prunes only its flat legacy id, never a node's dispatch schedule", async () => {
+      deps = makeMockDeps({
+        isOperatorNode: true,
+        listGovernanceScheduleIds: vi
+          .fn()
+          .mockResolvedValue([
+            legacyGovernanceScheduleId("COMMUNITY"),
+            legacyGovernanceScheduleId("OLD-CHARTER"),
+            SIBLING_ID,
+          ]),
+      });
+
+      const result = await syncGovernanceSchedules(
+        makeConfig([
+          { charter: "COMMUNITY", cron: "0 */6 * * *", entrypoint: "COMMUNITY" },
+        ]),
+        deps
+      );
+
+      // Operator owns ONLY the flat legacy namespace → prunes the stale flat id,
+      // never the node-scoped dispatch schedule owned by a per-node sync call.
+      expect(result.paused).toEqual([legacyGovernanceScheduleId("OLD-CHARTER")]);
+      expect(deps.scheduleControl.pauseSchedule).not.toHaveBeenCalledWith(
+        SIBLING_ID
+      );
+    });
+  });
+
   it("is idempotent: no-op on repeat call with same config", async () => {
     // Use a stable dbScheduleId for both calls
     const stableDbId = "stable-db-id-for-idempotency";
