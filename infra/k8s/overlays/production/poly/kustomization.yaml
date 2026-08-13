@@ -14,7 +14,7 @@ namePrefix: poly-
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/poly
-    digest: "sha256:9f88bc663bd8e90561837631928a866ffbbda6bfb8d24db5364a48f0b58b23a3"
+    digest: "sha256:d74798d8123c0160e0c99ee40914e712914e43a8cb9769a34acd6db3c3fd4bfc"
 
 patches:
   - target:
