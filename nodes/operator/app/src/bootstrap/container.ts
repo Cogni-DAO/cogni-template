@@ -158,6 +158,10 @@ import {
   type AttributionProfileResolver,
   createAttributionProfileResolver,
 } from "@/features/nodes/attribution-profile-resolver";
+import {
+  createNodeDistributionConfigResolver,
+  type NodeDistributionConfigResolver,
+} from "@/features/nodes/node-distribution-config";
 import type {
   AccountService,
   AiTelemetryPort,
@@ -1226,4 +1230,42 @@ export function resolveAttributionProfileResolver(): AttributionProfileResolver 
     parentRepo,
   });
   return cachedAttributionProfileResolver;
+}
+
+/**
+ * Module-singleton per-node distribution-config resolver (R3 finalize-fold seam, bug.5020).
+ * Same deploy-plane fetch deps as the attribution-profile resolver — App-read of
+ * `infra/catalog/<slug>.yaml` + the node's own repo-spec at git HEAD — but extracting the
+ * DISTRIBUTION config (token / emissions holder / distributor / chain) instead of source-refs.
+ * Consumed by /api/internal/attribution/distribution-config (worker-facing gateway).
+ */
+let cachedNodeDistributionConfigResolver:
+  | NodeDistributionConfigResolver
+  | undefined;
+
+export function resolveNodeDistributionConfigResolver(): NodeDistributionConfigResolver {
+  if (cachedNodeDistributionConfigResolver)
+    return cachedNodeDistributionConfigResolver;
+  const env = serverEnv();
+  const plane = createOperatorDeployPlane(env);
+  const parentOwner = env.NODE_SUBMODULE_PARENT_OWNER ?? "";
+  const parentRepo = env.NODE_SUBMODULE_PARENT_REPO ?? "";
+
+  cachedNodeDistributionConfigResolver = createNodeDistributionConfigResolver({
+    listRoutableNodes,
+    resolveNodeRepo: (slug) =>
+      plane.resolveNodeRepo({ parentOwner, parentRepo, slug }),
+    fetchRepoSpecText: ({ owner, repo, isInRepo, slug }) =>
+      plane.fetchFileText({
+        owner,
+        repo,
+        path: isInRepo
+          ? `nodes/${slug}/.cogni/repo-spec.yaml`
+          : ".cogni/repo-spec.yaml",
+        ref: "main",
+      }),
+    parentOwner,
+    parentRepo,
+  });
+  return cachedNodeDistributionConfigResolver;
 }
