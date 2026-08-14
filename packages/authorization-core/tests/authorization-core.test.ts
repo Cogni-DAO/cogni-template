@@ -285,4 +285,177 @@ describe("OpenFgaAuthorizationAdapter", () => {
     expect(written).toEqual([tuple]);
     expect(deleted).toEqual([tuple]);
   });
+
+  const retryTuple = {
+    user: "user:agent-1",
+    relation: "developer",
+    object: "node:node-1",
+  };
+
+  it("retries a transient transport failure (no HTTP status) and succeeds", async () => {
+    let attempts = 0;
+    const client = {
+      async check(): Promise<{ allowed: boolean }> {
+        return { allowed: true };
+      },
+      async writeTuples(): Promise<void> {
+        attempts += 1;
+        if (attempts === 1) throw new Error("ECONNRESET"); // no status → transient
+      },
+      async deleteTuples(): Promise<void> {},
+    } satisfies OpenFgaWriteClient;
+
+    const authz = new OpenFgaAuthorizationAdapter({
+      apiUrl: "http://openfga.test",
+      storeId: "store",
+      client,
+      writeMaxRetries: 2,
+      writeRetryBackoffMs: 0,
+    });
+
+    await expect(authz.writeRelation(retryTuple)).resolves.toMatchObject({
+      decision: "success",
+      code: "authz_write_success",
+    });
+    expect(attempts).toBe(2);
+  });
+
+  it("retries the actual timeout path (slow first attempt, fast retry) — the incident", async () => {
+    let attempts = 0;
+    const client = {
+      async check(): Promise<{ allowed: boolean }> {
+        return { allowed: true };
+      },
+      async writeTuples(): Promise<void> {
+        attempts += 1;
+        // Attempt 1 exceeds the 10ms deadline (cold-path spike); the retry is instant.
+        if (attempts === 1) await new Promise((r) => setTimeout(r, 40));
+      },
+      async deleteTuples(): Promise<void> {},
+    } satisfies OpenFgaWriteClient;
+
+    const authz = new OpenFgaAuthorizationAdapter({
+      apiUrl: "http://openfga.test",
+      storeId: "store",
+      client,
+      timeoutMs: 10,
+      writeMaxRetries: 2,
+      writeRetryBackoffMs: 0,
+    });
+
+    await expect(authz.writeRelation(retryTuple)).resolves.toMatchObject({
+      decision: "success",
+      code: "authz_write_success",
+    });
+    expect(attempts).toBe(2);
+  });
+
+  it("retries the delete path too", async () => {
+    let attempts = 0;
+    const client = {
+      async check(): Promise<{ allowed: boolean }> {
+        return { allowed: true };
+      },
+      async writeTuples(): Promise<void> {},
+      async deleteTuples(): Promise<void> {
+        attempts += 1;
+        if (attempts === 1)
+          throw Object.assign(new Error("upstream"), { status: 502 });
+      },
+    } satisfies OpenFgaWriteClient;
+
+    const authz = new OpenFgaAuthorizationAdapter({
+      apiUrl: "http://openfga.test",
+      storeId: "store",
+      client,
+      writeMaxRetries: 2,
+      writeRetryBackoffMs: 0,
+    });
+
+    await expect(authz.deleteRelation(retryTuple)).resolves.toMatchObject({
+      decision: "success",
+      code: "authz_write_success",
+    });
+    expect(attempts).toBe(2);
+  });
+
+  it("does NOT retry checks (reads stay fail-closed-fast) — guards the writes-only design", async () => {
+    let checks = 0;
+    const client = {
+      async check(): Promise<{ allowed: boolean }> {
+        checks += 1;
+        throw Object.assign(new Error("upstream"), { status: 503 });
+      },
+    } satisfies OpenFgaCheckClient;
+
+    const authz = new OpenFgaAuthorizationAdapter({
+      apiUrl: "http://openfga.test",
+      storeId: "store",
+      client,
+      writeMaxRetries: 2,
+      writeRetryBackoffMs: 0,
+    });
+
+    await expect(authz.check(baseCheck)).resolves.toMatchObject({
+      decision: "deny",
+      code: "authz_unavailable",
+    });
+    expect(checks).toBe(1); // no retry on the hot path
+  });
+
+  it("does NOT retry a deterministic 4xx (fails fast)", async () => {
+    let attempts = 0;
+    const client = {
+      async check(): Promise<{ allowed: boolean }> {
+        return { allowed: true };
+      },
+      async writeTuples(): Promise<void> {
+        attempts += 1;
+        throw Object.assign(new Error("validation_error"), { status: 400 });
+      },
+      async deleteTuples(): Promise<void> {},
+    } satisfies OpenFgaWriteClient;
+
+    const authz = new OpenFgaAuthorizationAdapter({
+      apiUrl: "http://openfga.test",
+      storeId: "store",
+      client,
+      writeMaxRetries: 2,
+      writeRetryBackoffMs: 0,
+    });
+
+    await expect(authz.writeRelation(retryTuple)).resolves.toMatchObject({
+      decision: "failure",
+      code: "authz_write_unavailable",
+    });
+    expect(attempts).toBe(1);
+  });
+
+  it("exhausts retries on a persistent transient failure", async () => {
+    let attempts = 0;
+    const client = {
+      async check(): Promise<{ allowed: boolean }> {
+        return { allowed: true };
+      },
+      async writeTuples(): Promise<void> {
+        attempts += 1;
+        throw Object.assign(new Error("upstream"), { status: 503 });
+      },
+      async deleteTuples(): Promise<void> {},
+    } satisfies OpenFgaWriteClient;
+
+    const authz = new OpenFgaAuthorizationAdapter({
+      apiUrl: "http://openfga.test",
+      storeId: "store",
+      client,
+      writeMaxRetries: 2,
+      writeRetryBackoffMs: 0,
+    });
+
+    await expect(authz.writeRelation(retryTuple)).resolves.toMatchObject({
+      decision: "failure",
+      code: "authz_write_unavailable",
+    });
+    expect(attempts).toBe(3); // initial + 2 retries
+  });
 });

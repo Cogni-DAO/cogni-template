@@ -80,6 +80,10 @@ export interface OpenFgaAuthorizationAdapterConfig {
   readonly authorizationModelId?: string;
   readonly apiToken?: string;
   readonly timeoutMs?: number;
+  /** Retries for idempotent write/delete on a transient failure (default 2). */
+  readonly writeMaxRetries?: number;
+  /** Fixed backoff between write retries, ms (default 100 — matches OpenFGA SDK). */
+  readonly writeRetryBackoffMs?: number;
   readonly client?: OpenFgaCheckClient;
   readonly storeClient?: OpenFgaStoreClient;
 }
@@ -92,6 +96,12 @@ interface PlannedSubcheck {
 }
 
 const DEFAULT_TIMEOUT_MS = 1_500;
+// Writes (approve/deny/revoke) are deliberate, low-frequency, and idempotent
+// (onDuplicateWrites/onMissingDeletes: ignore) — safe to retry. Checks are hot-path
+// and stay fail-closed-fast (no retry). Default 2 retries ≈ OpenFGA SDK's 3-attempt
+// policy; 100ms backoff = its min_wait_in_ms.
+const DEFAULT_WRITE_MAX_RETRIES = 2;
+const DEFAULT_WRITE_RETRY_BACKOFF_MS = 100;
 
 function openFgaClientConfig(
   config: OpenFgaAuthorizationAdapterConfig,
@@ -221,16 +231,29 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+class OpenFgaTimeoutError extends Error {}
+
 async function withTimeout<T>(
   promise: Promise<T>,
-  timeoutMs: number
+  timeoutMs: number,
+  operation = "request"
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {
     timer = setTimeout(() => {
-      reject(new Error(`OpenFGA check timed out after ${timeoutMs}ms`));
+      reject(
+        new OpenFgaTimeoutError(
+          `OpenFGA ${operation} timed out after ${timeoutMs}ms`
+        )
+      );
     }, timeoutMs);
   });
+
+  // If the timeout wins, the underlying SDK promise stays pending and may reject
+  // later (the slow request usually errors during an outage) — with nothing awaiting
+  // it that becomes an unhandledRejection, multiplied per retry attempt. Swallow the
+  // loser explicitly.
+  promise.catch(() => {});
 
   try {
     return await Promise.race([promise, timeout]);
@@ -239,12 +262,64 @@ async function withTimeout<T>(
   }
 }
 
+/**
+ * Whether an OpenFGA failure is worth retrying. Transient = our own timeout, a
+ * 5xx, a 429, or a bare transport error (no HTTP status). A 4xx (model/validation
+ * reject, e.g. an unknown relation) is deterministic — retrying only wastes the
+ * caller's latency budget, so it fails fast.
+ */
+function isTransientError(error: unknown): boolean {
+  if (error instanceof OpenFgaTimeoutError) return true;
+  if (error && typeof error === "object") {
+    const status =
+      (error as { statusCode?: unknown; status?: unknown }).statusCode ??
+      (error as { status?: unknown }).status;
+    if (typeof status === "number") return status >= 500 || status === 429;
+  }
+  // No HTTP status → transport-level failure (ECONNREFUSED/RESET, DNS) → transient.
+  return true;
+}
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Retry a transient-failing async op with fixed backoff. OpenFGA's own SDKs retry
+ * 3× on 429/5xx (min 100ms wait); our hand-rolled `withTimeout` race pre-empts that
+ * built-in retry, so we restore it here for idempotent writes. A single cold-path
+ * latency spike (connection re-establish — OpenFGA's documented p99 factor) that
+ * crosses the per-attempt deadline is masked instead of surfacing a user-facing 503.
+ * Only retries when `isTransientError`; deterministic 4xx fail on the first attempt.
+ */
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number,
+  backoffMs: number
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxRetries || !isTransientError(error)) throw error;
+      await sleep(backoffMs);
+    }
+  }
+  throw lastError;
+}
+
 export class OpenFgaAuthorizationAdapter implements AuthorizationPort {
   private readonly client: OpenFgaCheckClient;
   private readonly timeoutMs: number;
+  private readonly writeMaxRetries: number;
+  private readonly writeRetryBackoffMs: number;
 
   constructor(config: OpenFgaAuthorizationAdapterConfig) {
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.writeMaxRetries = config.writeMaxRetries ?? DEFAULT_WRITE_MAX_RETRIES;
+    this.writeRetryBackoffMs =
+      config.writeRetryBackoffMs ?? DEFAULT_WRITE_RETRY_BACKOFF_MS;
     if (config.client !== undefined) {
       this.client = config.client;
     } else if (config.storeId !== undefined) {
@@ -297,11 +372,17 @@ export class OpenFgaAuthorizationAdapter implements AuthorizationPort {
     }
 
     try {
-      await withTimeout(
-        client.writeTuples([tuple], {
-          conflict: { onDuplicateWrites: "ignore" },
-        }),
-        this.timeoutMs
+      await withRetry(
+        () =>
+          withTimeout(
+            client.writeTuples([tuple], {
+              conflict: { onDuplicateWrites: "ignore" },
+            }),
+            this.timeoutMs,
+            "write"
+          ),
+        this.writeMaxRetries,
+        this.writeRetryBackoffMs
       );
       return { decision: "success", code: "authz_write_success" };
     } catch (error) {
@@ -327,11 +408,17 @@ export class OpenFgaAuthorizationAdapter implements AuthorizationPort {
     }
 
     try {
-      await withTimeout(
-        client.deleteTuples([tuple], {
-          conflict: { onMissingDeletes: "ignore" },
-        }),
-        this.timeoutMs
+      await withRetry(
+        () =>
+          withTimeout(
+            client.deleteTuples([tuple], {
+              conflict: { onMissingDeletes: "ignore" },
+            }),
+            this.timeoutMs,
+            "delete"
+          ),
+        this.writeMaxRetries,
+        this.writeRetryBackoffMs
       );
       return { decision: "success", code: "authz_write_success" };
     } catch (error) {
@@ -372,7 +459,8 @@ export class OpenFgaAuthorizationAdapter implements AuthorizationPort {
           relation: check.relation,
           object: check.object,
         }),
-        this.timeoutMs
+        this.timeoutMs,
+        "check"
       );
 
       return {

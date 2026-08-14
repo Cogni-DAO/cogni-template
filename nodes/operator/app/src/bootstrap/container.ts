@@ -919,6 +919,8 @@ function createContainer(): Container {
       ? new OpenFgaAuthorizationAdapter({
           apiUrl: env.OPENFGA_API_URL,
           storeId: env.OPENFGA_STORE_ID,
+          timeoutMs: env.OPENFGA_TIMEOUT_MS,
+          writeMaxRetries: env.OPENFGA_WRITE_MAX_RETRIES,
           ...(env.OPENFGA_API_TOKEN !== undefined
             ? { apiToken: env.OPENFGA_API_TOKEN }
             : {}),
