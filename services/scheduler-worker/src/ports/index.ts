@@ -32,6 +32,7 @@ export type {
 
 import type { ActorId } from "@cogni/ids";
 import type {
+  InternalNodeDistributionConfig,
   InternalReviewCreateCheckRunInput,
   InternalReviewPostPrCommentInput,
   InternalReviewPostPrCommentOutput,
