@@ -32,9 +32,10 @@ import type {
  */
 export const SESSION_BOOTSTRAP_INVARIANTS: readonly string[] = [
   "ONE work item + ONE node per session (CI-gated). Claim, heartbeat, and link your PR at /api/v1/work/items/{id}; coordination.nextAction is authoritative.",
-  "Recall before you write. Search the hub first — merged (/api/v1/knowledge?domain=) and your own open branch — and refine in place over adding new.",
+  "Cite before you act — not just before you write. Ladder: skills/guides → this hub (/api/v1/knowledge?domain=) → our code (node-template, operator) → external OSS. Recall merged + your own open branch; refine in place over adding new. An action with no citation is the exception you justify.",
   "Ship via PR: same-repo branch → CI green (gh pr checks) → flight to candidate → merge. The operator is the deploy plane (flight, logs, secrets); code, work, and knowledge live in the node repo + hub.",
-  "Done = validated on candidate, not merged. Flight, exercise the live surface, read your request back from Loki at that SHA, and post a /validate-candidate scorecard — the merge gate.",
+  "Done = before→after behavior proven on the live surface, NOT a SHA deployed. Capture the BROKEN signal first, flight, then exercise the same surface and read the FIXED behavior back from Loki at that SHA. 'My request reached the build' is deployment proof, not function. Post a /validate-candidate scorecard — the merge gate; reprove prod-facing changes in preview/prod.",
+  "Drive to done autonomously. You hold durable authority (flight/merge/promote via RBAC) and hours of runway — spend it. Checkpoint a human only for the irreversible or out-of-scope, never for approval you already have; a pending question usually means lost work.",
   "Your <slug>-agent-orientation is the operating map: recall it first, refine it as the node changes.",
 ];
 
