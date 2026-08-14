@@ -418,14 +418,18 @@ export async function POST(request: Request, routeArgs: RouteParams) {
           owner: parentOwner,
           repo: parentRepo,
         });
-        // The deployed-node count is a live GitHub `infra/catalog` tree-walk (N blob
-        // reads). A transient/permission failure there is NOT a capacity condition and
-        // MUST NOT leak as a raw adapter throw → `unhandled` 500 (error-handling.md
-        // Inv 2/3/6: translate at the boundary, fault-party before bucket). Fail OPEN:
-        // the ceiling is a soft guard re-enforced at the deploy layer, so a count we
-        // cannot read never blocks repo/knowledge birth — log a coded warning + proceed.
-        // Proper fix (count from the `nodes` registry SSOT, move the gate to the deploy
-        // step) is tracked as a follow-up story; this is the v0 unblock.
+        // The deployed-node count is a live GitHub `infra/catalog` tree-walk. A read
+        // failure is NOT a capacity condition — but it also must NOT silently ALLOW a
+        // birth: this is the network's ONLY capacity gate, so fail-open would disable it
+        // exactly when something is wrong (violating operator-fleet-safety.md "a node or
+        // deploy spec must never silently starve an environment of capacity"). Fail
+        // CLOSED with a diagnostic 503 — never a raw adapter throw → `unhandled` 500
+        // (error-handling.md Inv 2/3/6: translate at the boundary, fault-party before
+        // bucket). Node birth needs this SAME GitHub/App plane for the very next steps
+        // (fork + submodule PR), so a catalog read we cannot make means the birth cannot
+        // succeed anyway — failing here fails faster and names the real cause. (Advisory
+        // fail-open becomes safe only once the deploy layer independently enforces the
+        // ceiling — follow-up story.)
         let deployedNodeCount: number;
         try {
           deployedNodeCount = await writer.countDeployedWizardNodes({
@@ -439,9 +443,8 @@ export async function POST(request: Request, routeArgs: RouteParams) {
             errorCode: "capacity_check_unavailable",
             reasonCode: errorCode,
             githubStatus: status,
-            failOpen: true,
           });
-          ctx.log.warn(
+          ctx.log.error(
             {
               event: EVENT_NAMES.ADAPTER_GITHUB_REPO_WRITE_ERROR,
               reqId: ctx.reqId,
@@ -451,12 +454,27 @@ export async function POST(request: Request, routeArgs: RouteParams) {
               step: "check_capacity",
               reasonCode: errorCode,
               githubStatus: status,
-              failOpen: true,
               durationMs: durationMs(),
             },
             EVENT_NAMES.ADAPTER_GITHUB_REPO_WRITE_ERROR
           );
-          deployedNodeCount = 0;
+          logTerminal("error", {
+            outcome: "error",
+            errorCode: "capacity_check_unavailable",
+            status: 503,
+            slug: node.slug,
+            nodeStatus: node.status,
+          });
+          logRequestEnd(ctx.log, { status: 503, durationMs: durationMs() });
+          return NextResponse.json(
+            {
+              error: "capacity check unavailable",
+              errorCode: "capacity_check_unavailable",
+              reason:
+                "could not read the deploy catalog to verify network capacity — likely an operator GitHub App/installation problem; retry once resolved",
+            },
+            { status: 503 }
+          );
         }
         const capacity = evaluateNodeCapacity({
           deployedNodeCount,
