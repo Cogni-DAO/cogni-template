@@ -288,6 +288,13 @@
       "when": 1785991086144,
       "tag": "0040_seed_registry_nodes",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1786683260781,
+      "tag": "0041_epoch_distribution_manifest",
+      "breakpoints": true
     }
   ]
 }
