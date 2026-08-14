@@ -431,7 +431,6 @@ function getWebhookRegistrations(): ReadonlyMap<
   return _webhookRegistrations;
 }
 
-/**
 function createContainer(): Container {
   const env = serverEnv();
   const nodeId = getNodeId();
