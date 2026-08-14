@@ -1657,7 +1657,17 @@ describe("finalizeEpoch — per-node distribution config (bug.5020)", () => {
           weightOverrideMilli: null,
         },
       ]),
-      getEvaluationsForEpoch: vi.fn().mockResolvedValue([]),
+      getEvaluationsForEpoch: vi.fn().mockResolvedValue([
+        makeEvaluation({
+          status: "locked",
+          epochId: reviewEpoch.id,
+          payloadJson: {
+            totalEvents: 1,
+            byEventType: { pr_merged: 1 },
+            byUserId: { "user-1": 1 },
+          },
+        }),
+      ]),
       getPoolComponentsForEpoch: vi.fn().mockResolvedValue([
         {
           id: "pool-1",
