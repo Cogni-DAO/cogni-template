@@ -53,6 +53,21 @@ slug="$(curl -fsS -H "Authorization: Bearer $jwt" -H "Accept: application/vnd.gi
 [[ -n "$slug" ]] || { err "FATAL: App JWT rejected (check GH_REVIEW_APP_ID matches the private key)"; exit 1; }
 err "syncing webhook secret to App '${slug}' (id ${APP_ID})"
 
+# Cross-env clobber guard (bug.5012 follow-on, incident 2026-08-14): an env
+# holding ANOTHER env's App credentials would PATCH that env's App and 401 its
+# webhooks (candidate-a carried prod's App creds and broke prod for 4 min).
+# The App's hook URL names its one true receiver — refuse to PATCH an App that
+# does not deliver to THIS env. Skip (exit 0), loudly: the creds misconfig is
+# its own bug; this sync must never be the blast radius.
+if [[ -n "${EXPECTED_WEBHOOK_HOST:-}" ]]; then
+  hook_url="$(curl -fsS -H "Authorization: Bearer $jwt" -H "Accept: application/vnd.github+json" "$api/app/hook/config" 2>/dev/null | sed -n 's/.*"url":[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
+  hook_host="${hook_url#*://}"; hook_host="${hook_host%%/*}"
+  if [[ "$hook_host" != "$EXPECTED_WEBHOOK_HOST" ]]; then
+    err "REFUSING cross-env sync — App '${slug}' delivers to '${hook_host}', this env is '${EXPECTED_WEBHOOK_HOST}' (env holds another env's App creds — fix the creds, not the App)"
+    exit 0
+  fi
+fi
+
 code="$(curl -sS -o /dev/null -w '%{http_code}' -X PATCH \
   -H "Authorization: Bearer $jwt" -H "Accept: application/vnd.github+json" \
   "$api/app/hook/config" \

@@ -1840,6 +1840,7 @@ SECEOF
   if GH_REVIEW_APP_ID="${GH_REVIEW_APP_ID:-}" \
      GH_REVIEW_APP_PRIVATE_KEY_BASE64="${GH_REVIEW_APP_PRIVATE_KEY_BASE64:-}" \
      GH_WEBHOOK_SECRET="${APP_SYNC_WEBHOOK_SECRET:-${GH_WEBHOOK_SECRET:-}}" \
+     EXPECTED_WEBHOOK_HOST="${DOMAIN:-}" \
      bash /tmp/sync-app-webhook-secret.sh; then
     log_info "  GitHub App webhook secret synced (operator OpenBao ↔ App)"
   elif [[ "${OPENBAO_RUNTIME_SSOT:-false}" == "true" ]]; then
