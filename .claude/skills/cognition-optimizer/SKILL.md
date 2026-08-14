@@ -54,11 +54,11 @@ orientation       = getKnowledge("<slug>-agent-orientation")  // DOLT, hub
 → renderBundleMarkdown({ toolingInvariants, orientation, skillsIndex, ... })
 ```
 
-| Layer | Home | Scope | Edit when the lesson is… |
-| --- | --- | --- | --- |
-| **Invariants** (code) | `SESSION_BOOTSTRAP_INVARIANTS` in `_bundle.ts` | UNIVERSAL law — all nodes, survives an empty/unreachable hub | a law every agent everywhere must obey |
-| **Orientation** (dolt) | `<slug>-agent-orientation` hub entry | PER-NODE operating map | specific to one node's mission / topology / authority |
-| **Skills + guides** (`.claude/skills` + hub) | the skills index | reusable PROCEDURE | a how-to an agent loads for a task |
+| Layer                                        | Home                                           | Scope                                                        | Edit when the lesson is…                              |
+| -------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------- |
+| **Invariants** (code)                        | `SESSION_BOOTSTRAP_INVARIANTS` in `_bundle.ts` | UNIVERSAL law — all nodes, survives an empty/unreachable hub | a law every agent everywhere must obey                |
+| **Orientation** (dolt)                       | `<slug>-agent-orientation` hub entry           | PER-NODE operating map                                       | specific to one node's mission / topology / authority |
+| **Skills + guides** (`.claude/skills` + hub) | the skills index                               | reusable PROCEDURE                                           | a how-to an agent loads for a task                    |
 
 One home per fact. Route to exactly one layer; **cite across layers, never
 restate** (the syntropy rule). A lesson duplicated in two layers drifts.
@@ -97,12 +97,12 @@ restate** (the syntropy rule). A lesson duplicated in two layers drifts.
 The richest source is a **bad session transcript**. Each failure mode maps to a
 blunt or missing layer:
 
-| Observed failure | Missing / blunt cognition |
-| --- | --- |
-| Proved a deployed SHA, hand-waved the function | invariant on before→after proof |
+| Observed failure                                                | Missing / blunt cognition                        |
+| --------------------------------------------------------------- | ------------------------------------------------ |
+| Proved a deployed SHA, hand-waved the function                  | invariant on before→after proof                  |
 | Asked a human to approve something it already had authority for | invariant on autonomous drive / checkpoint scope |
-| Wall of text, no link, asked to merge an unreviewed thing | invariant on comms discipline |
-| Invented a parallel abstraction of existing code | cite-before-act ladder / recall |
+| Wall of text, no link, asked to merge an unreviewed thing       | invariant on comms discipline                    |
+| Invented a parallel abstraction of existing code                | cite-before-act ladder / recall                  |
 
 Hard signals to pull:
 
@@ -112,6 +112,7 @@ gh run list --workflow=candidate-flight.yml --limit 20 --json conclusion,created
 # Revision churn — review-loop thrash
 gh pr list --state merged --base main --limit 30 --json number,title,body | jq '.[] | select(.body // "" | test("revision: [3-9]"))'
 ```
+
 ```
 # candidate-a deployed-SHA + smoke signals (Loki)
 {namespace="cogni-candidate-a"} | json | msg="startup"
