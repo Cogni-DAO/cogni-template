@@ -341,6 +341,14 @@ export const serverSchema = z.object({
   OPENFGA_STORE_ID: optionalString,
   OPENFGA_AUTHORIZATION_MODEL_ID: optionalString,
   OPENFGA_API_TOKEN: optionalString,
+  // Per-attempt client deadline (checks + each write attempt). OpenFGA's p99 target
+  // is ≤50ms, so 1500ms is a generous safety net, not a tuning knob.
+  OPENFGA_TIMEOUT_MS: z.coerce.number().int().positive().default(1500),
+  // Retries for idempotent writes (approve/deny/revoke) on a transient failure —
+  // masks a single cold-path latency spike instead of surfacing a user-facing 503.
+  // Bounded (0–5): 0 disables retry; the ceiling caps worst-case write latency
+  // (retries × OPENFGA_TIMEOUT_MS + backoff) so a fat-fingered value can't hang requests.
+  OPENFGA_WRITE_MAX_RETRIES: z.coerce.number().int().min(0).max(5).default(2),
 
   // OpenBao node-secrets writer — the operator pod's OWN in-cluster identity for
   // node self-serve secret writes (design.node-self-serve-secrets §Phase 1.B).
