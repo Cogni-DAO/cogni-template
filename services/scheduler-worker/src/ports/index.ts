@@ -94,6 +94,27 @@ export interface ReviewHttpClient {
 }
 
 /**
+ * Read the FINALIZING node's distribution config (token / emissions holder /
+ * distributor / chain) from that node's OWN `.cogni/repo-spec.yaml`, HTTP-delegated
+ * to the operator gateway (bug.5000 — the ledger worker holds no GitHub credential;
+ * bug.5020 — the worker must NOT bake any node's governance identity). Every call
+ * routes to the operator with Bearer SCHEDULER_API_TOKEN.
+ */
+export interface DistributionConfigHttpClient {
+  /**
+   * @returns `distribution: null` ⇔ distributions not activated for this node
+   *   (or the node/spec is permanently unresolvable) — the finalize fold no-ops.
+   * @throws RunHttpClientError (retryable) on a transient gateway failure
+   *   (5xx / 503 / network). A network blip must NEVER masquerade as "inactive";
+   *   the fold caller falls back to the worker's baked config for its own node.
+   */
+  resolveForNode: (nodeId: string) => Promise<{
+    readonly distribution: InternalNodeDistributionConfig | null;
+    readonly reason?: string;
+  }>;
+}
+
+/**
  * Per-node dispatch principal (G1, task.5029 — the seam to the secrets-on-spawn
  * work). Resolves the wire credential a NodeTask dispatch authenticates with,
  * scoped to ONE node. FAIL-CLOSED: the shared `SCHEDULER_API_TOKEN` must NOT be

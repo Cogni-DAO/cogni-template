@@ -67,6 +67,8 @@ export async function startAttributionWorker(
     tokenAddress: container.tokenAddress,
     distributorAddress: container.distributorAddress,
     walletResolver: container.walletResolver,
+    distributionConfigClient: container.distributionConfigClient,
+    deploymentEnvironment: container.deploymentEnvironment,
     logger: container.logger,
   });
 
