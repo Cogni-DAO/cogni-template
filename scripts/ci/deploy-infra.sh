@@ -1805,16 +1805,15 @@ SECEOF
   # ── Scheduler-worker secret ────────────────────────────────────────────────
   # Non-secret routing (COGNI_NODE_ENDPOINTS) belongs in the overlay ConfigMap —
   # see docs/spec/services-architecture.md → "Configuration source of truth".
-  # bug.5000: GH_REVIEW_APP_* are NOT injected — the worker HTTP-delegates PR
-  # review GitHub I/O to the operator and holds no GitHub credential. (Keep in
-  # parity with SCHEDULER_WORKER_KEYS in scripts/setup/lib/reconcile-secrets.sh.)
+  # bug.5000/bug.5012: GH_REVIEW_APP_* + GH_WEBHOOK_SECRET are NOT injected —
+  # the worker HTTP-delegates GitHub I/O to the operator and holds no GitHub
+  # credential. (Parity: SCHEDULER_WORKER_KEYS in scripts/setup/lib/reconcile-secrets.sh.)
   SECRET_FILE=$(mktemp)
   cat > "$SECRET_FILE" <<SECEOF
 DATABASE_URL=${OPERATOR_DATABASE_SERVICE_URL:-postgresql://${APP_DB_SERVICE_USER}:${APP_DB_SERVICE_PASSWORD}@${HOST_IP}:5432/cogni_operator?sslmode=disable}
 SCHEDULER_API_TOKEN=${SCHEDULER_API_TOKEN:-}
 INTERNAL_OPS_TOKEN=${INTERNAL_OPS_TOKEN:-}
 COGNI_NODE_DBS=${COGNI_NODE_DBS:-}
-GH_WEBHOOK_SECRET=${GH_WEBHOOK_SECRET:-}
 SECEOF
   kubectl -n "${K8S_NS}" create secret generic scheduler-worker-secrets \
     --from-env-file="$SECRET_FILE" --dry-run=client -o yaml | kubectl apply -f -
@@ -1824,24 +1823,25 @@ SECEOF
   log_info "[$(date -u +%H:%M:%S)] k8s secrets applied"
   emit_deployment_event "infra_deployment.k8s_secrets_complete" "success" "k8s secrets applied"
 
-  # ── Sync GitHub App webhook secret (source: external) ───────────────────────
-  # GH_WEBHOOK_SECRET is agent-generated but must byte-match the GitHub App's
-  # webhook secret (the value lives on GitHub's side too). Push the provisioned
-  # value to the App via the App's own key so BOTH copies converge — otherwise
-  # every inbound webhook fails HMAC verification silently and this very step
-  # (re-writing the pod Secret each deploy) is the BREAKING path, not the
-  # healing one. Fail-soft: a sync failure warns but never aborts the deploy.
-  # See docs/spec/secrets-management.md (source: external).
-  # Runs ON THE VM (inside the remote heredoc) — REPO_ROOT is a runner-only var
-  # and is UNBOUND here under `set -u`; the script is scp'd to /tmp alongside
-  # ensure-temporal-namespace.sh (see upload block). A bare $REPO_ROOT ref aborts
-  # the whole deploy before Phase 7 → zero app layer (regression #1482, candidate-a
-  # 2026-06-04). Invoke the uploaded /tmp copy instead.
+  # ── Sync GitHub App webhook secret (single App plane — bug.5012) ────────────
+  # ONE GitHub App signs all webhooks for ONE receiver: the operator pod, which
+  # verifies with cogni/<env>/operator/GH_WEBHOOK_SECRET (ESO). The App PATCH
+  # must push THAT copy — never the ambient env value, which the flat .env
+  # reconcile can point at another service's stale copy. Empty operator read in
+  # SSoT mode fails closed — a wrong-copy sync 401s every webhook silently.
+  # Fresh/plain-Secret bootstrap falls back to the workflow env value. Runs ON
+  # THE VM — REPO_ROOT is runner-only and UNBOUND here under `set -u`; invoke
+  # the scp'd /tmp copy, never $REPO_ROOT (regression #1482).
+  APP_SYNC_WEBHOOK_SECRET="$(openbao_get_field operator GH_WEBHOOK_SECRET || true)"
+  if [[ -z "$APP_SYNC_WEBHOOK_SECRET" && "${OPENBAO_RUNTIME_SSOT:-false}" == "true" ]]; then
+    log_error "  GH_WEBHOOK_SECRET absent from OpenBao cogni/${DEPLOY_ENVIRONMENT}/operator — refusing to sync a non-operator copy to the App"
+    exit 1
+  fi
   if GH_REVIEW_APP_ID="${GH_REVIEW_APP_ID:-}" \
      GH_REVIEW_APP_PRIVATE_KEY_BASE64="${GH_REVIEW_APP_PRIVATE_KEY_BASE64:-}" \
-     GH_WEBHOOK_SECRET="${GH_WEBHOOK_SECRET:-}" \
+     GH_WEBHOOK_SECRET="${APP_SYNC_WEBHOOK_SECRET:-${GH_WEBHOOK_SECRET:-}}" \
      bash /tmp/sync-app-webhook-secret.sh; then
-    log_info "  GitHub App webhook secret synced (pod ↔ App)"
+    log_info "  GitHub App webhook secret synced (operator OpenBao ↔ App)"
   elif [[ "${OPENBAO_RUNTIME_SSOT:-false}" == "true" ]]; then
     log_error "  GitHub App webhook secret sync FAILED in OpenBao SSoT mode — refusing a silent webhook mismatch"
     exit 1

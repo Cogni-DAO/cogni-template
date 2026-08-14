@@ -71,8 +71,11 @@ declare -ga NODE_BASELINE_KEYS=(
 # Back-compat alias — reconcile_secrets_on_rerun reconciles the primary node's
 # OpenBao SSoT into .env for the runtime/.env (Compose) write.
 declare -ga NODE_TEMPLATE_KEYS=("${NODE_BASELINE_KEYS[@]}")
+# GH_WEBHOOK_SECRET is NOT a worker key (bug.5012): the worker holds no GitHub
+# credential (bug.5000), and a second copy here let the flat-.env reconcile
+# below overwrite the operator's single-App-plane value by ordering.
 declare -ga SCHEDULER_WORKER_KEYS=(
-  DATABASE_SERVICE_URL SCHEDULER_API_TOKEN GH_WEBHOOK_SECRET
+  DATABASE_SERVICE_URL SCHEDULER_API_TOKEN
   INTERNAL_OPS_TOKEN
 )
 # Compose-tier secrets — bootstrap postgres/temporal directly via runtime/.env,
