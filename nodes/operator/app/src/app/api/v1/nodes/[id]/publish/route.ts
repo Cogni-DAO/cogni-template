@@ -418,11 +418,48 @@ export async function POST(request: Request, routeArgs: RouteParams) {
           owner: parentOwner,
           repo: parentRepo,
         });
-        const capacity = evaluateNodeCapacity({
-          deployedNodeCount: await writer.countDeployedWizardNodes({
+        // The deployed-node count is a live GitHub `infra/catalog` tree-walk (N blob
+        // reads). A transient/permission failure there is NOT a capacity condition and
+        // MUST NOT leak as a raw adapter throw → `unhandled` 500 (error-handling.md
+        // Inv 2/3/6: translate at the boundary, fault-party before bucket). Fail OPEN:
+        // the ceiling is a soft guard re-enforced at the deploy layer, so a count we
+        // cannot read never blocks repo/knowledge birth — log a coded warning + proceed.
+        // Proper fix (count from the `nodes` registry SSOT, move the gate to the deploy
+        // step) is tracked as a follow-up story; this is the v0 unblock.
+        let deployedNodeCount: number;
+        try {
+          deployedNodeCount = await writer.countDeployedWizardNodes({
             owner: parentOwner,
             repo: parentRepo,
-          }),
+          });
+        } catch (err) {
+          const { errorCode, status } = classifyMintError(err);
+          logStep("check_capacity", "error", {
+            slug: node.slug,
+            errorCode: "capacity_check_unavailable",
+            reasonCode: errorCode,
+            githubStatus: status,
+            failOpen: true,
+          });
+          ctx.log.warn(
+            {
+              event: EVENT_NAMES.ADAPTER_GITHUB_REPO_WRITE_ERROR,
+              reqId: ctx.reqId,
+              routeId: ctx.routeId,
+              nodeId: id,
+              dep: "github",
+              step: "check_capacity",
+              reasonCode: errorCode,
+              githubStatus: status,
+              failOpen: true,
+              durationMs: durationMs(),
+            },
+            EVENT_NAMES.ADAPTER_GITHUB_REPO_WRITE_ERROR
+          );
+          deployedNodeCount = 0;
+        }
+        const capacity = evaluateNodeCapacity({
+          deployedNodeCount,
           ceiling: env.NODE_CAPACITY_CEILING,
         });
         if (!capacity.allowed) {
