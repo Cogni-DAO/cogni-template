@@ -205,7 +205,7 @@ import {
 } from "@/shared/config";
 import { nodes } from "@/shared/db/nodes";
 import { serverEnv } from "@/shared/env/server-env";
-import { baseDomain } from "@/shared/node-registry/resolve";
+import { baseDomain, internalNodeAppUrl } from "@/shared/node-registry/resolve";
 import { makeLogger } from "@/shared/observability";
 import { USDC_TOKEN_ADDRESS } from "@/shared/web3";
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
@@ -429,25 +429,6 @@ function getWebhookRegistrations(): ReadonlyMap<
     _webhookRegistrations = registrations;
   }
   return _webhookRegistrations;
-}
-
-/**
- * Parse COGNI_NODE_ENDPOINTS into a `nodeId → baseUrl` map. Mirrors the scheduler-worker parser
- * (`services/scheduler-worker/src/bootstrap/container.ts`): comma-separated `key=url` pairs, `=`
- * preserved inside URLs. Unset/empty → empty map (foreign-node delivery then throws at call time;
- * the operator's own repos are unaffected).
- */
-function parseNodeEndpoints(raw: string | undefined): Map<string, string> {
-  const map = new Map<string, string>();
-  if (!raw) return map;
-  for (const pair of raw.split(",")) {
-    const [key, ...rest] = pair.trim().split("=");
-    const value = rest.join("="); // Handle URLs with = in them
-    if (key && value) {
-      map.set(key.trim(), value.trim());
-    }
-  }
-  return map;
 }
 
 function createContainer(): Container {
@@ -957,9 +938,14 @@ function createContainer(): Container {
   const nodeStream = new RedisNodeStreamAdapter(redisClient);
 
   // Attribution operator-gateway: HTTP delivery of receipts to FOREIGN owning nodes' own ledgers
-  // (#1924 routing). Resolves nodeId → baseUrl from COGNI_NODE_ENDPOINTS; Bearer SCHEDULER_API_TOKEN.
+  // (#1924 routing). NORTH_STAR: resolve the node's internal URL from the operator's OWN DB
+  // registry (listRoutableNodes → slug → internalNodeAppUrl), NOT a static COGNI_NODE_ENDPOINTS
+  // map — that map is only for the DB-less scheduler-worker. Bearer SCHEDULER_API_TOKEN.
   const receiptDelivery = createHttpReceiptDelivery({
-    nodeEndpoints: parseNodeEndpoints(env.COGNI_NODE_ENDPOINTS),
+    resolveNodeUrl: async (nodeId) => {
+      const node = (await listRoutableNodes()).find((n) => n.id === nodeId);
+      return node ? internalNodeAppUrl(node.slug) : null;
+    },
     schedulerApiToken: env.SCHEDULER_API_TOKEN,
     logger: log.child({ component: "http-receipt-delivery" }),
   });

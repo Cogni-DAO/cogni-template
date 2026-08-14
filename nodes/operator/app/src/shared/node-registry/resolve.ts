@@ -37,6 +37,16 @@ export function baseDomain(env: {
   return undefined;
 }
 
+/**
+ * In-cluster internal Service DNS for a node app, by slug: `http://<slug>-node-app:3000`.
+ * The single canonical convention for operator→node internal calls (receipt delivery, etc.),
+ * mirroring the CSV the DB-less scheduler-worker consumes via COGNI_NODE_ENDPOINTS. The operator
+ * derives it live from its DB registry slug — it does NOT read the static map.
+ */
+export function internalNodeAppUrl(slug: string): string {
+  return `http://${slug}-node-app:3000`;
+}
+
 /** Port of host_for_node(): primary serves the base domain; others prefix by convention. */
 export function hostForNode(
   name: string,

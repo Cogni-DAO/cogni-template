@@ -19,7 +19,7 @@ export interface ReceiptDelivery {
   /**
    * POST the given receipts to the owning node's `/api/internal/attribution/receipts`.
    * Resolves on 2xx; throws (classified retryable-vs-permanent) otherwise, or if `nodeId` is
-   * not present in COGNI_NODE_ENDPOINTS. Receipts carry `Date` `eventTime`/`retrievedAt`; the
+   * not a routable node in the operator registry. Receipts carry `Date` `eventTime`/`retrievedAt`; the
    * wire format converts them to ISO-8601 strings.
    */
   deliverReceipts(
