@@ -64,6 +64,18 @@ const EnvSchema = z.object({
     .optional()
     .or(z.literal("").transform(() => undefined)),
 
+  /**
+   * Deployment environment (patched per-env into the worker configmap; overlays set
+   * `production`/`candidate-*`/`preview`). Read by the bug.5020 execute-guard: any value
+   * other than `production` (including absent) is treated as non-production, fail-closed —
+   * a non-production worker must never build a distribution against the production DAO.
+   */
+  DEPLOY_ENVIRONMENT: z
+    .string()
+    .min(1)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+
   /** Log level (default: info) */
   LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
 
