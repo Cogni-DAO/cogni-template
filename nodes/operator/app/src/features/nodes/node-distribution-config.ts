@@ -96,7 +96,10 @@ export interface NodeDistributionConfigResolver {
   resolveForNode(nodeId: string): Promise<ResolvedNodeDistribution>;
 }
 
-const inactive = (nodeId: string, reason: string): ResolvedNodeDistribution => ({
+const inactive = (
+  nodeId: string,
+  reason: string
+): ResolvedNodeDistribution => ({
   nodeId,
   distribution: null,
   reason,
@@ -105,8 +108,7 @@ const inactive = (nodeId: string, reason: string): ResolvedNodeDistribution => (
 export function createNodeDistributionConfigResolver(
   deps: NodeDistributionConfigResolverDeps
 ): NodeDistributionConfigResolver {
-  const log =
-    deps.log ?? makeLogger({ component: "node-distribution-config" });
+  const log = deps.log ?? makeLogger({ component: "node-distribution-config" });
 
   return {
     async resolveForNode(nodeId: string): Promise<ResolvedNodeDistribution> {
