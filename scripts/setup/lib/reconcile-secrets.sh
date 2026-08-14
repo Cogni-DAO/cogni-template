@@ -71,8 +71,13 @@ declare -ga NODE_BASELINE_KEYS=(
 # Back-compat alias — reconcile_secrets_on_rerun reconciles the primary node's
 # OpenBao SSoT into .env for the runtime/.env (Compose) write.
 declare -ga NODE_TEMPLATE_KEYS=("${NODE_BASELINE_KEYS[@]}")
+# GH_WEBHOOK_SECRET is NOT a worker key (bug.5012): the worker holds no GitHub
+# credential (bug.5000, zero code reads) and reconciling it here let the
+# scheduler-worker copy last-wins the operator's — the ONE value the GitHub App
+# must byte-match. Keep in parity with the scheduler-worker-secrets heredoc in
+# scripts/ci/deploy-infra.sh.
 declare -ga SCHEDULER_WORKER_KEYS=(
-  DATABASE_SERVICE_URL SCHEDULER_API_TOKEN GH_WEBHOOK_SECRET
+  DATABASE_SERVICE_URL SCHEDULER_API_TOKEN
   INTERNAL_OPS_TOKEN
 )
 # Compose-tier secrets — bootstrap postgres/temporal directly via runtime/.env,
@@ -175,7 +180,7 @@ _resolve_node_value() {
 # composed DSN — e.g. a pre-#1584 DATABASE_URL still naming the legacy app_user
 # instead of the per-node app_<node> role (#1584 half-rollout self-heal).
 _compose_node_value() {
-  local node="$1" k="$2" kind source shared service db
+  local node="$1" k="$2" kind source shared service inherit _iv db
   db="cogni_${node//-/_}"
   case "$k" in
     DATABASE_URL)
@@ -215,10 +220,20 @@ _compose_node_value() {
   source=$(_cat_field "$k" '.source')
   shared=$(_cat_field "$k" '.shared')
   service=$(_cat_field "$k" '.service')
+  inherit=$(_cat_field "$k" '.inheritFrom')
   if [[ "$kind" == "derive-env" ]]; then
     printf 'https://%s' "$(host_for_node "$node" "$DOMAIN")"; return 0
   fi
-  if [[ "$source" == "agent" && "$service" != "_shared" && "$shared" != "true" \
+  # inheritFrom keys must byte-match ONE canonical owner (bug.5012:
+  # GH_WEBHOOK_SECRET ← operator, the single receiver the GitHub App signs for).
+  # NEVER mint a distinct per-node value: prefer the owner's seeded OpenBao
+  # value; else fall through to passthrough (one bootstrap value env-wide).
+  # secret-materialize.sh overwrite-on-drift converges existing nodes.
+  if [[ -n "$inherit" && "$inherit" != "$node" ]]; then
+    _iv="$(bao_get_field "$inherit" "$k")"
+    [[ -n "$_iv" ]] && { printf '%s' "$_iv"; return 0; }
+  fi
+  if [[ "$source" == "agent" && -z "$inherit" && "$service" != "_shared" && "$shared" != "true" \
         && "$kind" =~ ^(base64|hex|sk-cogni)$ ]]; then
     case "$kind" in
       base64) rand64 "$(_cat_field "$k" '.generate.bytes')" ;;

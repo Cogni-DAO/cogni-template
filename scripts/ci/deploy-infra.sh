@@ -1806,7 +1806,8 @@ SECEOF
   # Non-secret routing (COGNI_NODE_ENDPOINTS) belongs in the overlay ConfigMap —
   # see docs/spec/services-architecture.md → "Configuration source of truth".
   # bug.5000: GH_REVIEW_APP_* are NOT injected — the worker HTTP-delegates PR
-  # review GitHub I/O to the operator and holds no GitHub credential. (Keep in
+  # review GitHub I/O to the operator and holds no GitHub credential. bug.5012:
+  # GH_WEBHOOK_SECRET dropped too — webhook HMAC is operator-plane only. (Keep in
   # parity with SCHEDULER_WORKER_KEYS in scripts/setup/lib/reconcile-secrets.sh.)
   SECRET_FILE=$(mktemp)
   cat > "$SECRET_FILE" <<SECEOF
@@ -1814,7 +1815,6 @@ DATABASE_URL=${OPERATOR_DATABASE_SERVICE_URL:-postgresql://${APP_DB_SERVICE_USER
 SCHEDULER_API_TOKEN=${SCHEDULER_API_TOKEN:-}
 INTERNAL_OPS_TOKEN=${INTERNAL_OPS_TOKEN:-}
 COGNI_NODE_DBS=${COGNI_NODE_DBS:-}
-GH_WEBHOOK_SECRET=${GH_WEBHOOK_SECRET:-}
 SECEOF
   kubectl -n "${K8S_NS}" create secret generic scheduler-worker-secrets \
     --from-env-file="$SECRET_FILE" --dry-run=client -o yaml | kubectl apply -f -
@@ -1824,24 +1824,27 @@ SECEOF
   log_info "[$(date -u +%H:%M:%S)] k8s secrets applied"
   emit_deployment_event "infra_deployment.k8s_secrets_complete" "success" "k8s secrets applied"
 
-  # ── Sync GitHub App webhook secret (source: external) ───────────────────────
-  # GH_WEBHOOK_SECRET is agent-generated but must byte-match the GitHub App's
-  # webhook secret (the value lives on GitHub's side too). Push the provisioned
-  # value to the App via the App's own key so BOTH copies converge — otherwise
-  # every inbound webhook fails HMAC verification silently and this very step
-  # (re-writing the pod Secret each deploy) is the BREAKING path, not the
-  # healing one. Fail-soft: a sync failure warns but never aborts the deploy.
-  # See docs/spec/secrets-management.md (source: external).
+  # ── Sync GitHub App webhook secret (source: agent + syncTo) ─────────────────
+  # bug.5012: ONE GitHub App signs all webhooks for ONE receiver (the operator
+  # pod), so exactly ONE value can be correct env-wide — the one the operator
+  # verifies with (ESO ← cogni/<env>/operator/GH_WEBHOOK_SECRET). In OpenBao
+  # SSoT mode source THAT value for the App PATCH, never the ambient env copy
+  # (reconcile last-wins pushed a scheduler-worker copy to the App → ~4 weeks of
+  # silent webhook 401s, prod 2026-08-11), and fail closed on a missing value.
   # Runs ON THE VM (inside the remote heredoc) — REPO_ROOT is a runner-only var
   # and is UNBOUND here under `set -u`; the script is scp'd to /tmp alongside
   # ensure-temporal-namespace.sh (see upload block). A bare $REPO_ROOT ref aborts
   # the whole deploy before Phase 7 → zero app layer (regression #1482, candidate-a
   # 2026-06-04). Invoke the uploaded /tmp copy instead.
+  if [[ "${OPENBAO_RUNTIME_SSOT:-false}" == "true" ]]; then
+    GH_WEBHOOK_SECRET="$(openbao_get_field operator GH_WEBHOOK_SECRET)"
+    [[ -n "$GH_WEBHOOK_SECRET" ]] || log_fatal "GH_WEBHOOK_SECRET absent from OpenBao cogni/${DEPLOY_ENVIRONMENT}/operator — refusing to push an unverifiable App webhook secret"
+  fi
   if GH_REVIEW_APP_ID="${GH_REVIEW_APP_ID:-}" \
      GH_REVIEW_APP_PRIVATE_KEY_BASE64="${GH_REVIEW_APP_PRIVATE_KEY_BASE64:-}" \
      GH_WEBHOOK_SECRET="${GH_WEBHOOK_SECRET:-}" \
      bash /tmp/sync-app-webhook-secret.sh; then
-    log_info "  GitHub App webhook secret synced (pod ↔ App)"
+    log_info "  GitHub App webhook secret synced (operator plane ↔ App)"
   elif [[ "${OPENBAO_RUNTIME_SSOT:-false}" == "true" ]]; then
     log_error "  GitHub App webhook secret sync FAILED in OpenBao SSoT mode — refusing a silent webhook mismatch"
     exit 1

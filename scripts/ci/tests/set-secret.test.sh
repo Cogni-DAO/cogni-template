@@ -65,10 +65,11 @@ run_case "happy path writes through to bao" "hunter2" 0 \
   "cogni/candidate-a/node-template|OPENROUTER_API_KEY|hunter2" \
   candidate-a node-template OPENROUTER_API_KEY
 
-# Case 2 — preview env accepted.
+# Case 2 — preview env accepted. (SCHEDULER_API_TOKEN, not GH_WEBHOOK_SECRET:
+# the worker holds no GitHub credential — bug.5000/bug.5012.)
 run_case "preview env accepted" "v" 0 \
-  "cogni/preview/scheduler-worker|GH_WEBHOOK_SECRET|v" \
-  preview scheduler-worker GH_WEBHOOK_SECRET
+  "cogni/preview/scheduler-worker|SCHEDULER_API_TOKEN|v" \
+  preview scheduler-worker SCHEDULER_API_TOKEN
 
 # Case 3 — _shared namespace accepted.
 run_case "_shared namespace accepted" "shared-val" 0 \

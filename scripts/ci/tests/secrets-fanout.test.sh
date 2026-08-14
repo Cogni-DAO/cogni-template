@@ -159,6 +159,26 @@ seed_node_app_secrets node-template
 r=0; [[ "$(val_for node-template AUTH_SECRET)" == "PRESERVED-EXISTING" ]] || r=1
 assert "$r" "existing OpenBao value preserved on re-run"
 
+# 8b. inheritFrom single-owner convergence (bug.5012): GH_WEBHOOK_SECRET is a
+#     single-App dual-plane key — ONE GitHub App, ONE receiver (operator), so it
+#     must NEVER be minted distinct per node. Fresh env (owner unseeded): every
+#     node gets the SAME passthrough bootstrap value. Owner seeded: every other
+#     node inherits the operator bank's value, not the .env copy.
+bao_get_field() { printf ''; }
+GH_WEBHOOK_SECRET="one-app-one-secret"; export GH_WEBHOOK_SECRET
+: >"$SEED_LOG"
+seed_node_app_secrets node-template
+seed_node_app_secrets poly
+r=0; [[ "$(val_for node-template GH_WEBHOOK_SECRET)" == "one-app-one-secret" \
+   && "$(val_for poly GH_WEBHOOK_SECRET)" == "one-app-one-secret" ]] || r=1
+assert "$r" "GH_WEBHOOK_SECRET one value env-wide on fresh provision (never distinct per node)"
+bao_get_field() { if [[ "$1" == "operator" && "$2" == "GH_WEBHOOK_SECRET" ]]; then printf 'operator-canonical'; else printf ''; fi; }
+: >"$SEED_LOG"
+seed_node_app_secrets poly
+r=0; [[ "$(val_for poly GH_WEBHOOK_SECRET)" == "operator-canonical" ]] || r=1
+assert "$r" "GH_WEBHOOK_SECRET inherits the operator OpenBao value (inheritFrom: operator)"
+bao_get_field() { printf ''; }
+
 # 9. Drift guard: every NODE_BASELINE_KEY is classifiable — in the catalog, or
 #    one of the two composed DSNs. Catches a baseline key added without a catalog
 #    entry (would silently passthrough → shared secret leak).
