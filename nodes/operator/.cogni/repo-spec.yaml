@@ -60,6 +60,15 @@ governance:
   signal_contract: "0x590FC79B9c925C377fA63F4AaF54cdbF4Ee273A1"
   chain_id: "8453"
   base_url: "https://proposal.cognidao.org"
+  # VALIDATION-ONLY (candidate-a flight, NEVER MERGE): boop throwaway Base
+  # contracts so the R3 finalize-fold + R4 claim can be proven live (#2011 HOLD).
+  token_contract: "0x5a82e8fe817eB1E2F9f96b863c10aae454433455"
+  emissions_holder: "0xf2845EFd80d580D357604Bf4C917e99E47D06207"
+
+distributions:
+  status: active
+  claim_contract_pattern: "1inch.cumulative-merkle-drop.v1"
+  distributor_address: "0x7d5f7a74cD0c1aF9bD1204bA3F56eE6a379FB16c"
 
 payments:
   status: active
