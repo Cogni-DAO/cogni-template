@@ -40,11 +40,11 @@ import {
   extractScopeId,
   parseRepoSpec,
 } from "@cogni/repo-spec";
+import { createDistributionConfigHttpClient } from "../adapters/distribution-config-http.js";
 import {
   GitHubAppTokenProvider,
   GitHubSourceAdapter,
 } from "../adapters/ingestion/index.js";
-import { createDistributionConfigHttpClient } from "../adapters/distribution-config-http.js";
 import { createSharedTokenNodePrincipalResolver } from "../adapters/node-principal.js";
 import { createReviewHttpClient } from "../adapters/review-http.js";
 import {

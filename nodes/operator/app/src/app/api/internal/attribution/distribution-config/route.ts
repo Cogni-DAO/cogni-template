@@ -61,9 +61,10 @@ export const GET = wrapRouteHandlerWithLogging(
     }
 
     try {
-      const result = await resolveNodeDistributionConfigResolver().resolveForNode(
-        parsed.data.nodeId
-      );
+      const result =
+        await resolveNodeDistributionConfigResolver().resolveForNode(
+          parsed.data.nodeId
+        );
       ctx.log.info(
         {
           event: "attribution.distribution_config_resolved",
@@ -87,7 +88,10 @@ export const GET = wrapRouteHandlerWithLogging(
           },
           "transient failure reading node repo-spec for distribution config"
         );
-        return NextResponse.json({ error: "spec_unavailable" }, { status: 503 });
+        return NextResponse.json(
+          { error: "spec_unavailable" },
+          { status: 503 }
+        );
       }
       throw err;
     }
