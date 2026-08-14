@@ -32,6 +32,7 @@ CATALOG_FILE="$REPO_ROOT/infra/secrets-catalog.yaml"
 # Passthrough (.env) values — same across nodes by contract.
 LITELLM_MASTER_KEY="sk-cogni-shared-master"
 OPENROUTER_API_KEY="sk-or-shared"
+GH_WEBHOOK_SECRET="webhook-shared"           # service: _shared — single App plane (bug.5012)
 # External integration passthrough values (human source) — prove routing.
 GH_OAUTH_CLIENT_ID="gh-oauth-id"          # appliesTo: web   → every node
 TAVILY_API_KEY="tvly-shared"              # appliesTo: llm   → every node
@@ -39,7 +40,7 @@ PRIVY_APP_ID="privy-app-id"               # appliesTo: payments → poly only
 PRIVY_USER_WALLETS_APP_ID="privy-uw-id"   # service: poly       → poly only
 export DEPLOY_ENV DOMAIN VM_IP POSTGRES_ROOT_PASSWORD APP_DB_USER APP_DB_PASSWORD \
   APP_DB_SERVICE_USER APP_DB_SERVICE_PASSWORD CATALOG_FILE \
-  LITELLM_MASTER_KEY OPENROUTER_API_KEY \
+  LITELLM_MASTER_KEY OPENROUTER_API_KEY GH_WEBHOOK_SECRET \
   GH_OAUTH_CLIENT_ID TAVILY_API_KEY PRIVY_APP_ID PRIVY_USER_WALLETS_APP_ID
 # poly drives the payment/custody-gated path.
 PAYMENT_NODES="poly"; export PAYMENT_NODES
@@ -124,6 +125,13 @@ assert "$r" "PRIVY_USER_WALLETS_APP_ID reaches poly"
 r=0; [[ "$(val_for node-template LITELLM_MASTER_KEY)" == "sk-cogni-shared-master" \
    && "$(val_for poly LITELLM_MASTER_KEY)" == "sk-cogni-shared-master" ]] || r=1
 assert "$r" "LITELLM_MASTER_KEY shared value across nodes"
+
+# 6b. GH_WEBHOOK_SECRET single-App-plane (bug.5012): ONE GitHub App signs all
+#     webhooks for ONE receiver (operator) — the fan-out must pass ONE value
+#     through, never mint a distinct per-node copy.
+r=0; [[ "$(val_for node-template GH_WEBHOOK_SECRET)" == "webhook-shared" \
+   && "$(val_for poly GH_WEBHOOK_SECRET)" == "webhook-shared" ]] || r=1
+assert "$r" "GH_WEBHOOK_SECRET one shared value across nodes (single App plane)"
 
 # 7. human passthrough identical across nodes.
 r=0; [[ "$(val_for node-template OPENROUTER_API_KEY)" == "$(val_for poly OPENROUTER_API_KEY)" ]] || r=1
