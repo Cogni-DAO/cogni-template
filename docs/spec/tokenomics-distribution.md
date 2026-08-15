@@ -17,7 +17,7 @@ tags: [governance, tokenomics, distribution, attribution, walk]
 
 > `tokenomics.md` answers "how big is the pool + what do the numbers mean." **This doc answers "how does a signed epoch ledger become tokens in a contributor's wallet."** It is the mechanism spec for Walk (first on-chain claims) — deploy, activate, publish, claim — and the authorization model that makes it scale.
 
-## The one sentence that must stay true
+## Goal
 
 **A DAO with a governance token, distributing per epoch via a Merkle distributor, driven by a single approver signature per epoch and authorized ONCE — never a per-epoch vote, never a human moving tokens, always a contributor pull.**
 
@@ -40,7 +40,7 @@ tags: [governance, tokenomics, distribution, attribution, walk]
 
 Steps 1,2,3,5 are built and correct today. **Step 4's authorization is the load-bearing design decision below.**
 
-## Authorization model (the core spec) — one-time, never per-epoch
+## Invariants
 
 Per `tokenomics.md` ("Root rotation authority"): **Walk = "Safe/manual or equivalent trusted governance execution publishes roots and funding." Run = Governor/Timelock.** The per-epoch governance decision is the **off-chain finalize signature** (step 2). The on-chain publish (step 4) is a _mechanical consequence_ of that signature, gated by an authorization the DAO grants **once**.
 
@@ -53,6 +53,8 @@ Per `tokenomics.md` ("Root rotation authority"): **Walk = "Safe/manual or equiva
 | DAO_OWNS_DISTRIBUTOR       | The ONE per-node CumulativeMerkleDistributor is owned by the DAO; only the DAO (or its authorized executor) can `setMerkleRoot`.                                                                                                                                                                                                                                                                                              |
 | CONSERVATION               | minted == claimable == Σ(leaves); one cumulative root supersedes prior roots (SINGLE_CLAIM_COVERS_ALL).                                                                                                                                                                                                                                                                                                                       |
 | PULL_NOT_PUSH              | Tokens are never pushed to wallets. Contributors claim what they're owed. (Push-to-wallet may be an opt-in node policy, vNext.)                                                                                                                                                                                                                                                                                               |
+
+## Design
 
 ### Walk mechanism (default — scoped EXECUTE via IPermissionCondition)
 
@@ -77,6 +79,8 @@ A security review (story.5005) mapped double-spend/replay at every layer. Summar
 The publish gap is the same residual-trust the condition documents: it constrains SHAPE, not VALUES or REPLAY. The Walk guard is a UI/route check (bypassable by a raw `execute`); only the `EmissionsExecutor` closes it on-chain. Until then, mitigate with a Safe m-of-n executor.
 
 > Remediation note: tokens minted by an erroneous re-publish sit in the distributor with no matching claim leaf. They are recoverable only by a future epoch's cumulative root absorbing them, or (while the DAO owns the distributor) a sweep — never by the claim path.
+
+## Non-Goals
 
 ### NOT acceptable (both fail the multi-member bar)
 

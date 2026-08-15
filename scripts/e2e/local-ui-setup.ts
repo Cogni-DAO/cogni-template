@@ -1,14 +1,21 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
-//
-// LOCAL UI SETUP — stand up the distribution e2e so a HUMAN (admin) can sign in
-// the browser against a local anvil Base-fork. Deploys the ONE cumulative
-// distributor on the fork, transfers ownership to the DAO, writes an off-tree
-// AUGMENTED repo-spec (distributions active) for the host ledger worker, and
-// prints what to do next. The scripted headless proof lives in
-// finalize-mint-claim.ts; THIS leaves the fork + spec ready for the app.
-//
-//   pnpm tsx scripts/e2e/local-ui-setup.ts   (anvil fork must already be running)
+
+/**
+ * Module: `@scripts/e2e/local-ui-setup`
+ * Purpose: Stand up the distribution e2e so a HUMAN admin can sign in the browser.
+ *   Deploys the ONE cumulative distributor on a local anvil Base-fork, transfers
+ *   ownership to the DAO, writes an off-tree AUGMENTED repo-spec (distributions active)
+ *   for the host ledger worker, and prints what to do next.
+ * Scope: Orchestration only; does not run the headless proof (that is
+ *   finalize-mint-claim.ts); leaves the fork + spec ready for the app.
+ * Invariants: FORK_ONLY_WRITES (all txs → 127.0.0.1:8545); the augmented spec is off-tree.
+ * Side-effects: IO (fork txs, writes the off-tree repo-spec).
+ * Links: scripts/e2e/finalize-mint-claim.ts, scripts/e2e/README.md
+ * @internal
+ *
+ *   pnpm tsx scripts/e2e/local-ui-setup.ts   (anvil fork must already be running)
+ */
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";

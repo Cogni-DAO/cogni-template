@@ -3,14 +3,12 @@
 
 /**
  * Module: `@scripts/e2e/complete-distribution-on-fork`
- * Purpose: Complete an ALREADY-FINALIZED epoch's distribution on an anvil Base-fork —
- *   deploy the distributor, DAO-impersonated `mint(delta)` + `setMerkleRoot(root)`, and
+ * Purpose: Complete an ALREADY-FINALIZED epoch's distribution on an anvil Base-fork.
+ *   Deploys the distributor, DAO-impersonated `mint(delta)` + `setMerkleRoot(root)`, and
  *   claimant-impersonated `claim` — reading the REAL persisted manifest + leaves that a
  *   REAL approver signature produced (unlike finalize-mint-claim.ts, which scripts the
- *   signature itself). Companion to the toks2 rig: the human signs in the app against
- *   real chain-state; this closes the on-chain half where the product's deploy/execute
- *   surfaces do not exist yet (R2 deploy UI + execute surface — tracked gaps).
- * Scope: Orchestration only; no product code modified; all writes target the fork.
+ *   signature itself).
+ * Scope: Orchestration only; does not modify product code; all writes target the fork.
  * Invariants:
  *   - FORK_ONLY_WRITES: every on-chain write targets http://127.0.0.1:8545 (guard-0 style).
  *   - MANIFEST_IS_AUTHORITY: root/amounts/leaves come from epoch_distribution_manifests

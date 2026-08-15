@@ -3,9 +3,9 @@
 
 /**
  * Module: `@cogni/contracts/distribution-publish-condition/abi`
- * Purpose: ABI for the Cogni-authored `DistributionPublishCondition` — the scoped
- *   Aragon OSx `IPermissionCondition` that restricts a node executor's EXECUTE grant
- *   to the publish action set only.
+ * Purpose: ABI for the Cogni-authored scoped `DistributionPublishCondition` contract.
+ *   The Aragon OSx `IPermissionCondition` restricts a node executor's EXECUTE grant to
+ *   the publish action set only.
  * Scope: ABI constant only; does not include bytecode or addresses.
  * Invariants: ABI must match the compiled artifact from
  *   `src/distribution-publish-condition/DistributionPublishCondition.sol` at the pinned

@@ -3,14 +3,14 @@
 
 /**
  * Module: `@scripts/e2e/verify-publish-condition-on-fork`
- * Purpose: THROWAWAY fork proof for the rebuilt `DistributionPublishCondition` (Aragon
- *   `PermissionCondition` base). Proves, on an anvil Base-fork (no real gas), that the
- *   condition (a) answers ERC-165 `supportsInterface(isGranted.selector)` with true, (b)
- *   is ACCEPTED by `DAO.grantWithCondition` — the exact call that reverted on mainnet with
+ * Purpose: Throwaway fork proof for the rebuilt `DistributionPublishCondition`.
+ *   Proves, on an anvil Base-fork (no real gas), that the condition (a) answers ERC-165
+ *   `supportsInterface(isGranted.selector)` with true, (b) is ACCEPTED by
+ *   `DAO.grantWithCondition` — the exact call that reverted on mainnet with
  *   `ConditionInterfaceNotSupported` (0xa6a7dbbd) against the old hand-rolled artifact —
  *   and (c) gates `DAO.execute`: the in-scope publish shape succeeds, an out-of-scope
  *   action reverts.
- * Scope: Verification only; no product code touched; every write targets the local fork.
+ * Scope: Verification only; does not touch product code; every write targets the fork.
  * Invariants: FORK_ONLY_WRITES (all txs → 127.0.0.1:8545). Not committed; not a product path.
  * Side-effects: IO (fork txs).
  * Links: packages/cogni-contracts/src/distribution-publish-condition/{abi,bytecode}.ts,

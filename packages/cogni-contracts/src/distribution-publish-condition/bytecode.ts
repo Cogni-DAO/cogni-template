@@ -3,9 +3,8 @@
 
 /**
  * Module: `@cogni/contracts/distribution-publish-condition/bytecode`
- * Purpose: Deployment (creation) bytecode for the Cogni-authored
- *   `DistributionPublishCondition` — deployed once per node before the scoped
- *   `grantWithCondition` authorize step.
+ * Purpose: Deployment (creation) bytecode for the `DistributionPublishCondition`.
+ *   Deployed once per node before the scoped `grantWithCondition` authorize step.
  * Scope: Bytecode constant only; does not include ABI or addresses.
  * Invariants: Bytecode must be the artifact compiled from
  *   `src/distribution-publish-condition/DistributionPublishCondition.sol` at the pinned
