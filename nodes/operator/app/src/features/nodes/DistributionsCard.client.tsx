@@ -30,7 +30,7 @@
 "use client";
 
 import { getTransactionExplorerUrl } from "@cogni/node-shared";
-import { Check, CircleDashed, ExternalLink, Loader2 } from "lucide-react";
+import { ExternalLink, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
   type ReactElement,
@@ -41,6 +41,10 @@ import {
 import { useAccount, useChainId, useSwitchChain } from "wagmi";
 
 import { Button, SectionCard, WalletConnectButton } from "@/components";
+import {
+  StepRow,
+  type StepState,
+} from "@/features/governance/components/LifecycleStepper";
 import { useAuthorizePublishing } from "@/features/governance/hooks/useAuthorizePublishing";
 import { useHasExecutePermission } from "@/features/governance/hooks/useExecuteDistribution";
 import { useDeployDistributor } from "@/features/nodes/useDeployDistributor";
@@ -114,9 +118,6 @@ export function DistributionsCard({
     </SectionCard>
   );
 }
-
-/** Step display state — drives the numbered badge + label styling. */
-type StepState = "done" | "current" | "pending";
 
 /**
  * The three-step guided setup. Reads the wallet's on-chain publish authority so step 3 can skip when
@@ -232,72 +233,6 @@ function SetupSequence({
         walletReady={isConnected && onCorrectChain}
         onAuthorized={refetchPermission}
       />
-    </div>
-  );
-}
-
-/** A numbered/step-state badge: green check (done), filled number (current), dashed (pending). */
-function StepBadge({
-  n,
-  state,
-}: {
-  n: number;
-  state: StepState;
-}): ReactElement {
-  if (state === "done") {
-    return (
-      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
-        <Check className="size-3.5" />
-      </span>
-    );
-  }
-  if (state === "current") {
-    return (
-      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary font-medium text-primary-foreground text-xs">
-        {n}
-      </span>
-    );
-  }
-  return (
-    <span className="flex size-6 shrink-0 items-center justify-center rounded-full text-muted-foreground">
-      <CircleDashed className="size-5" />
-    </span>
-  );
-}
-
-/** Shared step shell: badge + title + (collapsed when pending/done) body. */
-function StepRow({
-  n,
-  state,
-  title,
-  children,
-}: {
-  n: number;
-  state: StepState;
-  title: string;
-  children?: ReactNode;
-}): ReactElement {
-  return (
-    <div
-      className={
-        state === "current"
-          ? "rounded-lg border border-border bg-muted/30 p-4"
-          : "rounded-lg border border-border/50 p-4"
-      }
-    >
-      <div className="flex items-center gap-3">
-        <StepBadge n={n} state={state} />
-        <p
-          className={
-            state === "pending"
-              ? "font-medium text-muted-foreground text-sm"
-              : "font-medium text-sm"
-          }
-        >
-          {title}
-        </p>
-      </div>
-      {children ? <div className="mt-3 space-y-3 pl-9">{children}</div> : null}
     </div>
   );
 }
