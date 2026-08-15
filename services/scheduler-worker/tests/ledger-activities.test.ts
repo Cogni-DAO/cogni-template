@@ -1872,6 +1872,67 @@ describe("finalizeEpoch — per-node distribution config (bug.5020)", () => {
     expect(result.statementId).toBe("stmt-1");
   });
 
+  it("FREEZE (bug.5022): an epoch that already has a manifest is preserved — never re-folded/overwritten", async () => {
+    const FROZEN_ROOT =
+      "0xaaaa000000000000000000000000000000000000000000000000000000000000";
+    const { store } = await makeFinalizeStore({
+      // A manifest ALREADY exists for epoch 7n (it was built + possibly published on a
+      // prior finalize). A re-finalize must NOT re-fold and overwrite it.
+      getDistributionManifestForEpoch: vi.fn().mockResolvedValue({
+        id: "manifest-7",
+        nodeId: NODE_ID,
+        scopeId: SCOPE_ID,
+        epochId: 7n,
+        distributionId: "epoch-7",
+        statementHash: "0xstatement",
+        merkleRoot: FROZEN_ROOT,
+        chainId: 8453,
+        tokenAddress: THROWAWAY_TOKEN,
+        distributionAmount: 12000000000000000000000n,
+        totalAllocated: 12000000000000000000000n,
+        distributorAddress: THROWAWAY_DIST,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }),
+      getDistributionLeavesForEpoch: vi.fn().mockResolvedValue([
+        {
+          index: 0,
+          claimantKey: "user:user-1",
+          account: "0x1111111111111111111111111111111111111111",
+          amount: 12000000000000000000000n,
+          leafHash: "0xleaf",
+          proof: [],
+        },
+      ]),
+    });
+    // Config resolves to a valid throwaway target — proving the freeze short-circuits
+    // BEFORE any (re)build, not merely because the fold was inactive.
+    const client = makeConfigClient(async () => ({
+      distribution: {
+        chainId: 8453,
+        tokenAddress: THROWAWAY_TOKEN,
+        emissionsHolderAddress: THROWAWAY_DAO,
+        distributorAddress: THROWAWAY_DIST,
+      },
+    }));
+    const activities = activitiesWith(store, {
+      distributionConfigClient: client,
+      deploymentEnvironment: "candidate-a",
+    });
+
+    const result = await runFinalize(activities);
+
+    // The manifest is preserved: no overwrite, no new mint.
+    expect(store.upsertDistributionManifest).not.toHaveBeenCalled();
+    expect(result.statementId).toBe("stmt-1"); // off-chain finalize untouched
+    expect(result.cumulativeDistribution).not.toBeNull();
+    const dist = result.cumulativeDistribution as NonNullable<
+      typeof result.cumulativeDistribution
+    >;
+    expect(dist.merkleRoot).toBe(FROZEN_ROOT); // root unchanged
+    expect(dist.mintDelta).toBe("0"); // nothing new to publish
+  });
+
   it("GUARD: non-production worker refuses the PRODUCTION DAO → no manifest, finalize stands", async () => {
     const { store } = await makeFinalizeStore();
     const client = makeConfigClient(async () => ({

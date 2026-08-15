@@ -519,6 +519,41 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       readonly receipt_ids: readonly string[];
     }>;
   }): Promise<FinalizeEpochOutput["cumulativeDistribution"]> {
+    // FREEZE (bug.5022): once an epoch's manifest is persisted it is IMMUTABLE. A repair /
+    // re-finalize must never re-fold and OVERWRITE it — a re-fold that picks up a newly
+    // wallet-linked contributor produces a NEW merkle root for an epoch that may already be
+    // published on-chain, which the client-side "already-live root" guard no longer
+    // recognizes → a second DAO.mint(delta) re-opens the double-mint that stranded tokens on
+    // Base. The first finalize builds the manifest; every later call preserves it. Late
+    // resolutions flow into the NEXT epoch's cumulative fold (never a retro-overwrite).
+    const existingManifest = await attributionStore.getDistributionManifestForEpoch(
+      args.epochId
+    );
+    if (existingManifest) {
+      const frozenLeaves =
+        await attributionStore.getDistributionLeavesForEpoch(args.epochId);
+      logger.info(
+        {
+          epochId: args.epochId.toString(),
+          nodeId,
+          merkleRoot: `${existingManifest.merkleRoot.slice(0, 12)}...`,
+          leafCount: frozenLeaves.length,
+        },
+        "Cumulative distribution FROZEN — manifest already persisted; preserving without re-fold (bug.5022)"
+      );
+      return {
+        distributionId: existingManifest.distributionId,
+        merkleRoot: existingManifest.merkleRoot,
+        // No new mint on a preserved manifest — this repair emits nothing to publish.
+        mintDelta: "0",
+        cumulativeTotal: existingManifest.distributionAmount.toString(),
+        leafCount: frozenLeaves.length,
+        tokenAddress: existingManifest.tokenAddress,
+        chainId: existingManifest.chainId,
+        distributorAddress: existingManifest.distributorAddress,
+      };
+    }
+
     // bug.5020: resolve the finalizing node's governance from ITS OWN repo-spec via the
     // operator gateway — the worker bakes no node's governance identity. The wallet
     // resolver is DB-backed (not spec-derived) and stays from deps, gated on a token.

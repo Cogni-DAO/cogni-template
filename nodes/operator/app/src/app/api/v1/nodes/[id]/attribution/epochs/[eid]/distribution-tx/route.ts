@@ -29,18 +29,70 @@
  * @public
  */
 
+import { CHAINS } from "@cogni/node-shared";
 import { NextResponse } from "next/server";
+import { type Address, createPublicClient, http } from "viem";
+import { base, sepolia } from "viem/chains";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { resolveNodeAndAuthorize } from "@/app/_lib/node-rbac";
 import { getContainer, resolveServiceDb } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { nodeIdOrSlug } from "@/features/nodes/node-lookup";
 import { nodes } from "@/shared/db/nodes";
+import { serverEnv } from "@/shared/env";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 const ROUTE_ID = "nodes.attribution.distribution-tx";
+
+// Map a NODE's chain id to its viem chain object (mirrors activate-distributions).
+// Chain ids come from the shared CHAINS registry (never hardcode — no-restricted-syntax).
+const VIEM_CHAINS_BY_ID: Record<number, typeof base | typeof sepolia> = {
+  [CHAINS.BASE.chainId]: base,
+  [CHAINS.SEPOLIA.chainId]: sepolia,
+};
+
+// Minimal ABI to read the cumulative distributor's live merkle root.
+const MERKLE_ROOT_ABI = [
+  {
+    type: "function",
+    name: "merkleRoot",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "bytes32" }],
+  },
+] as const;
+
+/**
+ * Read the distributor's live on-chain merkle root, or null when it can't be read
+ * (unsupported chain, no RPC, or an RPC error). bug.5022: this is the SERVER-SIDE
+ * publish backstop — the client-only guard missed the re-fold-changed-root case. Reads
+ * are best-effort: a failure falls back to null (the route still serves; the fold FREEZE
+ * is the load-bearing money guard, this is defense-in-depth against a stale/non-UI caller).
+ */
+async function readLiveMerkleRoot(
+  chainId: number | null,
+  distributorAddress: string
+): Promise<string | null> {
+  const viemChain = chainId == null ? null : VIEM_CHAINS_BY_ID[chainId];
+  const rpcUrl = serverEnv().EVM_RPC_URL;
+  if (!viemChain || !rpcUrl) return null;
+  try {
+    const client = createPublicClient({
+      chain: viemChain,
+      transport: http(rpcUrl),
+    });
+    const root = await client.readContract({
+      address: distributorAddress as Address,
+      abi: MERKLE_ROOT_ABI,
+      functionName: "merkleRoot",
+    });
+    return typeof root === "string" ? root : null;
+  } catch {
+    return null;
+  }
+}
 
 /** DTO the ExecuteDistributionPanel consumes to build the createProposal actions. */
 interface DistributionTxDto {
@@ -159,6 +211,36 @@ export const GET = wrapRouteHandlerWithLogging<{
       );
     }
 
+    // bug.5022 SERVER-SIDE PUBLISH GUARD: read the distributor's LIVE merkle root and
+    // refuse to serve a mint payload for a root that is already on-chain. The prior fix
+    // was client-only (a stale/non-UI caller or a race could re-submit and double-mint);
+    // this closes it server-side. Best-effort: an unreadable root falls back to null and
+    // the route still serves (the fold FREEZE is the load-bearing guard — see ledger.ts).
+    const alreadyExecutedRoot = await readLiveMerkleRoot(
+      manifest.chainId,
+      manifest.distributorAddress
+    );
+    if (
+      alreadyExecutedRoot !== null &&
+      alreadyExecutedRoot.toLowerCase() === manifest.merkleRoot.toLowerCase()
+    ) {
+      ctx.log.info(
+        {
+          event: "node.distribution_tx.already_published",
+          routeId: ROUTE_ID,
+          nodeId: node.id,
+          slug: node.slug,
+          epochId: manifest.epochId.toString(),
+          merkleRoot: `${manifest.merkleRoot.slice(0, 12)}...`,
+        },
+        "distribution-tx: refused — epoch root already live on-chain (already_published)"
+      );
+      return NextResponse.json(
+        { error: "already_published", merkleRoot: manifest.merkleRoot },
+        { status: 409 }
+      );
+    }
+
     const dto: DistributionTxDto = {
       epochId: manifest.epochId.toString(),
       merkleRoot: manifest.merkleRoot,
@@ -168,7 +250,7 @@ export const GET = wrapRouteHandlerWithLogging<{
       daoAddress: node.daoAddress,
       pluginAddress: node.pluginAddress,
       chainId: manifest.chainId,
-      alreadyExecutedRoot: null,
+      alreadyExecutedRoot,
     };
 
     ctx.log.info(
