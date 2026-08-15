@@ -42,6 +42,7 @@ import { encodeFunctionData, keccak256, parseAbi, toBytes } from "viem";
 import {
   useAccount,
   useChainId,
+  useReadContract,
   useSwitchChain,
   useWaitForTransactionReceipt,
   useWriteContract,
@@ -69,6 +70,10 @@ import { getChainName } from "@/features/governance/lib/proposal-utils";
 
 /** Minimal GovernanceERC20 mint ABI (DAO holds MINT_PERMISSION on the token). */
 const TOKEN_MINT_ABI = parseAbi(["function mint(address to, uint256 amount)"]);
+/** Distributor view for the publish idempotency guard (is this root already live?). */
+const DISTRIBUTOR_MERKLE_ROOT_ABI = parseAbi([
+  "function merkleRoot() view returns (bytes32)",
+]);
 
 /** Deterministic per-epoch callId for DAO.execute — cosmetic (uniqueness only). */
 function publishCallId(epochId: string): `0x${string}` {
@@ -93,11 +98,7 @@ export function ExecuteDistributionPanel({
     <Card className="border-border/50 bg-card/50">
       <CardHeader>
         <CardTitle>Publish distribution</CardTitle>
-        <CardDescription>
-          Mint this epoch&apos;s tokens into the distributor and publish the new
-          claim root — one transaction, no vote. (One-time setup happens on the
-          node page.)
-        </CardDescription>
+        <CardDescription>Publish this epoch&apos;s claim root on-chain.</CardDescription>
       </CardHeader>
       <CardContent>
         {isLoading ? (
@@ -299,6 +300,22 @@ function PublishStep({
   const { isLoading: isConfirming, isSuccess: isConfirmed } =
     useWaitForTransactionReceipt({ hash: txHash });
 
+  // IDEMPOTENCY GUARD (bug: a re-publish re-minted the delta into the distributor). Read the
+  // distributor's LIVE merkle root; if it already equals this epoch's root, the epoch is already
+  // published — minting again would strand tokens with no matching claim. Never emit the tx.
+  const { data: onChainRoot } = useReadContract({
+    abi: DISTRIBUTOR_MERKLE_ROOT_ABI,
+    address: payload.distributorAddress,
+    functionName: "merkleRoot",
+    chainId: payload.chainId,
+  });
+  const alreadyPublished =
+    typeof onChainRoot === "string" &&
+    onChainRoot.toLowerCase() === payload.merkleRoot.toLowerCase();
+  // A zero delta means there is nothing new to mint — publishing would only re-set the root.
+  const nothingToMint = mintDelta === 0n;
+  const published = alreadyPublished || isConfirmed;
+
   const explorerUrl = txHash
     ? getTransactionExplorerUrl(payload.chainId, txHash)
     : null;
@@ -333,17 +350,25 @@ function PublishStep({
     });
   }, [actions, address, payload.daoAddress, payload.epochId, writeContract]);
 
+  // Already live on-chain (this session or a prior one) → terminal state, no button.
+  if (published) {
+    return (
+      <Alert>
+        <AlertTitle>Published</AlertTitle>
+        <AlertDescription>
+          This epoch&apos;s claim root is live on {chainName}.{" "}
+          {explorerUrl && <TxLink url={explorerUrl}>View transaction</TxLink>}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-border bg-muted/30 p-4">
-        <p className="font-medium text-sm">Publish distribution</p>
-        <p className="mt-1 text-muted-foreground text-sm">
-          Mints this epoch&apos;s tokens into the distributor and publishes the
-          new claim root — one transaction, no vote.
-        </p>
-      </div>
-
-      <Button onClick={onPublish} disabled={isPending || isConfirming}>
+      <Button
+        onClick={onPublish}
+        disabled={isPending || isConfirming || nothingToMint}
+      >
         {isPending
           ? "Confirm in wallet…"
           : isConfirming
@@ -351,20 +376,16 @@ function PublishStep({
             : "Publish distribution"}
       </Button>
 
+      {nothingToMint ? (
+        <p className="text-muted-foreground text-sm">
+          Nothing to mint for this epoch (zero delta).
+        </p>
+      ) : null}
+
       {explorerUrl && (isPending || isConfirming) && (
         <p className="text-muted-foreground text-sm">
           <TxLink url={explorerUrl}>View transaction</TxLink>
         </p>
-      )}
-
-      {isConfirmed && (
-        <Alert>
-          <AlertTitle>Distribution published</AlertTitle>
-          <AlertDescription>
-            The mint + new claim root are live on {chainName}.{" "}
-            {explorerUrl && <TxLink url={explorerUrl}>View transaction</TxLink>}
-          </AlertDescription>
-        </Alert>
       )}
 
       <WriteErrorAlert error={writeError} title="Publish failed" />
