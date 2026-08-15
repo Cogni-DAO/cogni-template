@@ -178,10 +178,13 @@ function PublishBody({
   const isCorrectChain = chainId === payload.chainId;
   const chainName = getChainName(payload.chainId);
 
-  // SETUP_GATES_PUBLISH: does the connected wallet already hold EXECUTE_PERMISSION on the DAO?
+  // SETUP_GATES_PUBLISH: does the connected wallet already hold scoped EXECUTE_PERMISSION on the
+  // DAO? Probed with token + distributor so the scoped condition evaluates a real publish shape.
   const { hasPermission, isLoading: isPermLoading } = useHasExecutePermission({
     daoAddress: payload.daoAddress,
     wallet: address,
+    tokenAddress: payload.tokenAddress,
+    distributorAddress: payload.distributorAddress,
     chainId: payload.chainId,
   });
 

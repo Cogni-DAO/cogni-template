@@ -158,8 +158,10 @@ function SetupSequence({
   const distributorDeployed = distributorAddress !== null;
 
   // Step 3 gate: does the connected wallet already hold scoped EXECUTE_PERMISSION on the DAO?
+  // Probed with token + distributor so the SCOPED condition evaluates a real publish shape
+  // (empty "0x" would make the condition deny a live grant → button falsely reappears).
   const { hasPermission, refetch: refetchPermission } = useHasExecutePermission(
-    { daoAddress, wallet: address, chainId }
+    { daoAddress, wallet: address, tokenAddress, distributorAddress, chainId }
   );
   const authorized = hasPermission === true;
 

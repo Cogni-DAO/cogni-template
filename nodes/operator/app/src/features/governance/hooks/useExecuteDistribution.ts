@@ -29,12 +29,72 @@
  */
 
 import { useQuery } from "@tanstack/react-query";
+import { encodeFunctionData } from "viem";
 import { useReadContract } from "wagmi";
 
 import {
   DAO_ABI,
   EXECUTE_PERMISSION_ID,
 } from "@/features/governance/lib/proposal-abis";
+
+/** Minimal ABIs to build a REPRESENTATIVE publish payload for the permission probe. */
+const MINT_ABI = [
+  {
+    type: "function",
+    name: "mint",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "address" }, { type: "uint256" }],
+    outputs: [],
+  },
+] as const;
+const SET_MERKLE_ROOT_ABI = [
+  {
+    type: "function",
+    name: "setMerkleRoot",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "bytes32" }],
+    outputs: [],
+  },
+] as const;
+const ZERO_ROOT =
+  "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
+const PROBE_CALL_ID =
+  "0x0000000000000000000000000000000000000000000000000000000000000001" as const;
+
+/**
+ * A SCOPED EXECUTE grant (via `DistributionPublishCondition`) only reads as `hasPermission`
+ * when the probe `_data` is a well-formed publish call — `DAO.execute([mint(distributor,*),
+ * setMerkleRoot(*)])`. Probing with empty `"0x"` makes the condition DENY (empty ≠ publish
+ * shape), so a live grant would falsely read `false`. This builds a representative (amount 0,
+ * root 0) publish payload so the condition returns true for an authorized wallet.
+ */
+function buildPublishProbeData(
+  token: `0x${string}`,
+  distributor: `0x${string}`
+): `0x${string}` {
+  const mintData = encodeFunctionData({
+    abi: MINT_ABI,
+    functionName: "mint",
+    args: [distributor, 0n],
+  });
+  const rootData = encodeFunctionData({
+    abi: SET_MERKLE_ROOT_ABI,
+    functionName: "setMerkleRoot",
+    args: [ZERO_ROOT],
+  });
+  return encodeFunctionData({
+    abi: DAO_ABI,
+    functionName: "execute",
+    args: [
+      PROBE_CALL_ID,
+      [
+        { to: token, value: 0n, data: mintData },
+        { to: distributor, value: 0n, data: rootData },
+      ],
+      0n,
+    ],
+  });
+}
 
 export interface ExecuteDistributionPayload {
   readonly epochId: string;
@@ -139,28 +199,43 @@ export interface UseHasExecutePermission {
 }
 
 /**
- * Read `DAO.hasPermission(_where=DAO, _who=wallet, EXECUTE_PERMISSION, "0x")` on chain.
- * Gates the publish surface: false ⇒ show the one-time authorize step, true ⇒ show the
- * per-epoch direct execute. Disabled (undefined) until DAO + wallet + chain are all present.
+ * Read `DAO.hasPermission(_where=DAO, _who=wallet, EXECUTE_PERMISSION, <publish probe>)` on
+ * chain. The grant is SCOPED via `DistributionPublishCondition`, so the probe `_data` must be
+ * a representative publish call (`execute([mint(distributor,0), setMerkleRoot(0)])`) or the
+ * condition denies it — see `buildPublishProbeData`. Gates the publish surface: false ⇒ show
+ * the one-time authorize step, true ⇒ show the per-epoch direct execute. Disabled (undefined)
+ * until DAO + wallet + token + distributor are all present.
  */
 export function useHasExecutePermission(params: {
   daoAddress: `0x${string}` | undefined;
   wallet: `0x${string}` | undefined;
+  tokenAddress: `0x${string}` | undefined | null;
+  distributorAddress: `0x${string}` | undefined | null;
   chainId: number | undefined;
 }): UseHasExecutePermission {
-  const { daoAddress, wallet, chainId } = params;
-  const enabled = Boolean(daoAddress) && Boolean(wallet);
+  const { daoAddress, wallet, tokenAddress, distributorAddress, chainId } =
+    params;
+  const enabled =
+    Boolean(daoAddress) &&
+    Boolean(wallet) &&
+    Boolean(tokenAddress) &&
+    Boolean(distributorAddress);
+
+  const probeData =
+    tokenAddress && distributorAddress
+      ? buildPublishProbeData(tokenAddress, distributorAddress)
+      : "0x";
 
   const { data, isLoading, error, refetch } = useReadContract({
     abi: DAO_ABI,
     address: daoAddress,
     functionName: "hasPermission",
-    // _where=DAO, _who=wallet, _permissionId=EXECUTE_PERMISSION, _data="0x"
+    // _where=DAO, _who=wallet, _permissionId=EXECUTE_PERMISSION, _data=<publish probe>
     args: [
       daoAddress ?? "0x0000000000000000000000000000000000000000",
       wallet ?? "0x0000000000000000000000000000000000000000",
       EXECUTE_PERMISSION_ID,
-      "0x",
+      probeData,
     ],
     chainId,
     query: { enabled },
