@@ -19,14 +19,14 @@ tags: [identity, architecture, governance]
 
 ## Key References
 
-|          |                                                                      |                                          |
-| -------- | -------------------------------------------------------------------- | ---------------------------------------- |
-| **Spec** | [Node vs Operator Contract](./node-operator-contract.md)             | Node/Operator boundaries, scope_id intro |
-| **Spec** | [Attribution Ledger](./attribution-ledger.md)                        | Ledger scoping by (node_id, scope_id)    |
-| **Spec** | [User Identity + Account Bindings](./decentralized-user-identity.md) | user_id, user_bindings, identity_events  |
-| **Spec** | [Accounts Design](./accounts-design.md)                              | billing_account_id, credit ledger        |
-| **Spec** | [DAO Enforcement](./dao-enforcement.md)                              | dao_address, payment rails               |
-| **Spec** | [Tokenomics: Distribution Lifecycle](./tokenomics-distribution.md)    | distribution executor authority + recipient (actor_id) resolution |
+|          |                                                                      |                                                                   |
+| -------- | -------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| **Spec** | [Node vs Operator Contract](./node-operator-contract.md)             | Node/Operator boundaries, scope_id intro                          |
+| **Spec** | [Attribution Ledger](./attribution-ledger.md)                        | Ledger scoping by (node_id, scope_id)                             |
+| **Spec** | [User Identity + Account Bindings](./decentralized-user-identity.md) | user_id, user_bindings, identity_events                           |
+| **Spec** | [Accounts Design](./accounts-design.md)                              | billing_account_id, credit ledger                                 |
+| **Spec** | [DAO Enforcement](./dao-enforcement.md)                              | dao_address, payment rails                                        |
+| **Spec** | [Tokenomics: Distribution Lifecycle](./tokenomics-distribution.md)   | distribution executor authority + recipient (actor_id) resolution |
 
 ## Design
 
@@ -167,11 +167,11 @@ lifecycle: [tokenomics-distribution.md](./tokenomics-distribution.md).
 
 **Authority — three distinct roles, do NOT conflate:**
 
-| Role | Identity | Authorizes | Plane |
-| ---- | -------- | ---------- | ----- |
-| **Approver** | wallet(s) in `activity_ledger.approvers` (bound to `scope_id`) | WHAT is owed — signs the per-epoch EIP-712 statement (`SIGNATURE_BINDS_SOURCES`) | off-chain governance truth |
-| **Distribution executor** | a wallet / Safe / `EmissionsExecutor` granted a SCOPED authority on `dao_address` — EXECUTE-via-`IPermissionCondition`, granted ONCE at activation | the on-chain PUBLISH (`mint` + `setMerkleRoot`) and nothing else | on-chain |
-| **RBAC node-admin** | OpenFGA principal (`user:`/`agent:`) with `node.flight` etc. | operational (flight / secrets / promote) | off-chain operational |
+| Role                      | Identity                                                                                                                                           | Authorizes                                                                       | Plane                      |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- | -------------------------- |
+| **Approver**              | wallet(s) in `activity_ledger.approvers` (bound to `scope_id`)                                                                                     | WHAT is owed — signs the per-epoch EIP-712 statement (`SIGNATURE_BINDS_SOURCES`) | off-chain governance truth |
+| **Distribution executor** | a wallet / Safe / `EmissionsExecutor` granted a SCOPED authority on `dao_address` — EXECUTE-via-`IPermissionCondition`, granted ONCE at activation | the on-chain PUBLISH (`mint` + `setMerkleRoot`) and nothing else                 | on-chain                   |
+| **RBAC node-admin**       | OpenFGA principal (`user:`/`agent:`) with `node.flight` etc.                                                                                       | operational (flight / secrets / promote)                                         | off-chain operational      |
 
 The DAO (`dao_address`) is the on-chain root; the executor is a scoped, revocable DAO
 delegation, NOT the DAO. An `agent` actor CAN hold the executor role (e.g. a Privy agent
@@ -185,7 +185,7 @@ user (the `subjectId = user:{user_id}` delegation), **who owns the earned tokens
 delegation policy that must be explicit** — the agent's own `actor_bindings` wallet, or the
 delegating user's — never an implicit default. This is exactly why the claimant model is
 `actor_id`-keyed (economic subject), not `user_id`-keyed: it must be able to express
-*agent-earns / user-owns*.
+_agent-earns / user-owns_.
 
 > **OPEN (design point, raised 2026-08-15):** the on-behalf-of earnings-ownership policy —
 > agent-wallet vs delegating-user-wallet, and whether it is scoped per-agent, per-grant, or
