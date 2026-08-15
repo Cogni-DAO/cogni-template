@@ -34,7 +34,7 @@ src/
 ├── observability/   # Logger factory (sole pino importer), redaction, metrics
 ├── main.ts          # Entry: env() → probeNodeReachability() → startSchedulerWorker() + optional ledger
 ├── worker.ts        # Per-node Temporal Workers (one per canonical nodeId + legacy drain queue)
-├── ledger-worker.ts # Temporal Worker for ledger-tasks: workflowsPath → @cogni/temporal-workflows/ledger
+├── ledger-worker.ts # Temporal Worker per node on ledger-tasks-<nodeId> (bug.5023: NO shared queue)
 └── health.ts        # HTTP readiness probe
 ```
 
@@ -44,7 +44,8 @@ src/
 
 - **WORKER_IS_DUMB**: scheduler-worker is a thin composition root. It wires activity implementations with concrete deps and starts Temporal workers. Domain-specific logic lives in packages.
 - **SHARED_COMPUTE_HOLDS_NO_DB_CREDS** (task.0280): scheduler path holds zero DB credentials. Runs/grants flow through each node's internal HTTP API. Only the optional ledger path reads `DATABASE_URL`.
-- **QUEUE_PER_NODE_ISOLATION** (task.0280): one Temporal Worker per canonical (UUID) nodeId in `COGNI_NODE_ENDPOINTS`; a flapping node grows its own queue without starving siblings.
+- **QUEUE_PER_NODE_ISOLATION** (task.0280 · bug.5023): EVERY queue is per-node `${prefix}-${nodeId}` — for BOTH `scheduler-tasks` AND `ledger-tasks` (finalize + CollectEpoch). One Worker per canonical (UUID) nodeId in `COGNI_NODE_ENDPOINTS`; a flapping node grows its own queue without starving siblings. **Submitter (finalize route / schedule) and poller (worker) MUST use the same `${prefix}-${nodeId}`** — a mismatch = a wrong-scope worker steals the task → "epoch not found" + forced re-sign (bug.5023). There is **no shared queue and no legacy drain on ledger.** Moving a schedule's queue only takes effect if drift-detection compares `taskQueue` (see `scheduler-core/syncGovernanceSchedules`), else the deployed schedule silently keeps firing on the old queue.
+  - ⚠️ **Changing a queue/worker is an INTEGRATION change. Unit-green does NOT prove pickup.** Prove it on a running Temporal — the stack test (`pnpm test:stack:dev`) or by finalizing a real epoch on candidate-a and reading Loki for the pickup — BEFORE you call it done.
 - **activities/ import ports only** — never adapters/, bootstrap/, or @cogni/db-client
 - **bootstrap/container.ts is the only place** that instantiates concrete adapters
 - **observability/logger.ts is the only file** that imports pino directly
