@@ -303,7 +303,7 @@ describe("syncGovernanceSchedules", () => {
       deps = makeMockDeps({ isOperatorNode: true });
     });
 
-    it("uses the FLAT `governance:ledger_ingest` id running CollectEpochWorkflow on the ledger-tasks queue", async () => {
+    it("uses the FLAT `governance:ledger_ingest` id running CollectEpochWorkflow on the PER-NODE ledger queue (bug.5023)", async () => {
       const config = makeConfig(
         [
           {
@@ -325,7 +325,9 @@ describe("syncGovernanceSchedules", () => {
           scheduleId: "governance:ledger_ingest",
           nodeId: NODE_ID,
           workflowType: "CollectEpochWorkflow",
-          taskQueueOverride: "ledger-tasks",
+          // bug.5023: the operator's CollectEpoch runs on its OWN per-node ledger queue
+          // (the shared `ledger-tasks` queue is purged); the schedule id stays flat.
+          taskQueueOverride: `ledger-tasks-${NODE_ID}`,
           graphId: "ledger:ingest",
           executionGrantId: GRANT_ID,
           // LedgerIngestRunV1 envelope — NOT the { route, payload } dispatch shape.

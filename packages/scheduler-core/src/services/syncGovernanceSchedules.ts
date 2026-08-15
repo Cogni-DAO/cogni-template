@@ -328,7 +328,10 @@ export async function syncGovernanceSchedules(
           }),
       };
       workflowType = COLLECT_EPOCH_WORKFLOW_TYPE;
-      taskQueueOverride = LEDGER_TASK_QUEUE;
+      // bug.5023: the shared `ledger-tasks` queue is purged — the operator's
+      // CollectEpochWorkflow runs on its OWN per-node queue, matching the per-node
+      // ledger worker (ledger-worker.ts) and the finalize dispatch (finalize route).
+      taskQueueOverride = `${LEDGER_TASK_QUEUE}-${deps.nodeId}`;
       graphId = LEDGER_INGEST_GRAPH_ID;
       grantId = governanceGrantId;
     } else if (isLedgerIngest && !isOperator) {
