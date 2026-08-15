@@ -47,19 +47,29 @@ Per `tokenomics.md` ("Root rotation authority"): **Walk = "Safe/manual or equiva
 | Rule | Constraint |
 | --- | --- |
 | ONE_TIME_AUTHORIZATION | The DAO authorizes distributions with ONE governance action (at activation). No subsequent epoch requires a DAO vote. A design that puts a tokenholder vote on the per-epoch publish path is WRONG. |
+| MULTI_MEMBER_BY_DEFAULT | **Assume every DAO is a real multi-member DAO** — they start somewhere (often 1 member) but WILL grow. The one-time authorization must therefore be **SCOPED**: the executor may publish distributions and NOTHING else. An *unconditional* EXECUTE grant (executor gains arbitrary DAO authority — treasury, re-permissioning) is NOT acceptable even for a 1-member node, because the design must hold as membership grows. |
 | SIGNATURE_IS_THE_AUTHORITY | The per-epoch authority to publish is the approver's finalize EIP-712 signature over the allocation set — already produced in step 2. On-chain publish verifies/derives from it; it does not re-decide it. |
 | DAO_IS_MINTER | The DAO holds MINT_PERMISSION on its GovernanceERC20 and mints `delta` per epoch into the distributor. Never pre-minted, never a human-moved float. |
 | DAO_OWNS_DISTRIBUTOR | The ONE per-node CumulativeMerkleDistributor is owned by the DAO; only the DAO (or its authorized executor) can `setMerkleRoot`. |
 | CONSERVATION | minted == claimable == Σ(leaves); one cumulative root supersedes prior roots (SINGLE_CLAIM_COVERS_ALL). |
 | PULL_NOT_PUSH | Tokens are never pushed to wallets. Contributors claim what they're owed. (Push-to-wallet may be an opt-in node policy, vNext.) |
 
-### Walk MVP mechanism (ship this)
-At **activation**, the DAO performs ONE governance action granting a **scoped executor** the standing authority to `mint(delta)` the token + `setMerkleRoot(root)` on the distributor — a Safe, or a granted role/permission (e.g. EXECUTE on the DAO's mint+setRoot actions). Thereafter each epoch's publish (step 4) is **one direct executor transaction** built from the manifest — no proposal, no vote. This is "trusted governance execution" per spec.
+### Walk mechanism (default — scoped EXECUTE via IPermissionCondition)
+At **activation**, the DAO performs ONE governance action: `grantWithCondition(where=DAO, who=executor, EXECUTE_PERMISSION, condition=DistributionPublishCondition)`. The condition is a tiny on-chain contract (`DistributionPublishCondition(token, distributor)`, deployed once per node) whose `isGranted` decodes the `DAO.execute` calldata and returns true **only** when the action set is exactly `[token.mint(distributor, *), distributor.setMerkleRoot(*)]` — nothing else, no third action, no other target. Thereafter each epoch's publish is **one direct `DAO.execute([mint, setRoot])`** by the executor — no proposal, no vote. The executor may be a Safe (m-of-n) or an agent wallet (Privy); **scope is enforced on-chain**, so even a compromised executor key can only publish, never drain the treasury or re-permission. This is the spec's "trusted governance execution", made multi-member-safe.
+Verified feasible: OSx `PermissionManager._auth` forwards the full `execute` calldata to a bound `IPermissionCondition.isGranted`; `grantWithCondition` is authorized by `ROOT_PERMISSION` (held by the DAO itself). See story.5005 design spike.
 
-### Run mechanism (north star)
-A minimal **`EmissionsExecutor`** contract the DAO authorizes once (grants MINT + distributor ownership). It exposes `publishDistribution(epochId, delta, root, approverSig)` that: (1) verifies `approverSig` against the DAO-pinned approver set, (2) enforces the budget cap on-chain (`totalMinted + delta ≤ policySupply`), (3) mints + setMerkleRoot. Submission is then **permissionless** — the finalize signature IS the authorization, so an agent/keeper (or the contributor) can trigger publish. No trusted EOA, no vote. This is what lets the whole loop run via API + an external-agent-controlled wallet (e.g. Privy).
+### Run mechanism (north star — permissionless)
+A minimal **`EmissionsExecutor`** contract the DAO authorizes once (grants MINT + distributor `setMerkleRoot` authority). It exposes `publishDistribution(epochId, delta, root, approverSig)` that: (1) verifies `approverSig` against the DAO-pinned approver set, (2) enforces the budget cap on-chain (`totalMinted + delta ≤ policySupply`), (3) enforces epoch monotonicity (replay guard), (4) mints + setMerkleRoot. Submission is then **permissionless** — the finalize signature IS the authorization, so an agent/keeper (or the contributor) can trigger publish with no special key at all. This is what lets the whole loop run via API + an external-agent-controlled wallet (e.g. Privy), and it removes the trusted executor entirely.
 
-**Dead-end (do NOT pursue):** submitting an Aragon TokenVoting *proposal per epoch*. It only appears to work when one owner holds ~100% of supply (auto early-execution). It does not generalize — a real DAO would vote every epoch. Reference branch: `toks2-e2e-rig` (kept, not pursued).
+### NOT acceptable (both fail the multi-member bar)
+- **Per-epoch tokenholder vote** (Aragon `createProposal` per epoch). Only *appears* to work when one owner holds ~100% (auto early-execution); a grown DAO would vote every epoch. Dead-end.
+- **Unconditional EXECUTE grant** to a Safe/EOA — gives the executor arbitrary DAO authority (treasury, re-permissioning), not just publishing. Even for a 1-member node this is wrong, because membership grows. The condition (above) is what makes the grant safe.
+Both are preserved only as reference on branch `toks2-e2e-rig` — not pursued.
+
+## Recipient (claimant) resolution — `actor_id`, not `user_id`
+
+The claimant a manifest leaf pays is an **economic subject** (`actor_id`, kind = user | agent | system | org), resolved to a wallet via `actor_bindings`. Agents are first-class DAO participants — an `agent` actor earns and can hold tokens. When an agent works **on-behalf-of** a user (`subjectId = user:{user_id}`), *who owns the earned tokens* (the agent's own wallet vs the delegating user's) is an **explicit delegation policy**, never an implicit default. See [identity-model.md § Distribution Authority + Recipient](./identity-model.md#distribution-authority--recipient).
+> OPEN: the resolver is user-centric today (`user:{user_id}` / `identity:{provider}:{externalId}`); `agent:{actor_id}` + subjectId-delegated routing is forward work.
 
 ## Activation (one guided flow, git-authoritative)
 

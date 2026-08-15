@@ -26,6 +26,7 @@ tags: [identity, architecture, governance]
 | **Spec** | [User Identity + Account Bindings](./decentralized-user-identity.md) | user_id, user_bindings, identity_events  |
 | **Spec** | [Accounts Design](./accounts-design.md)                              | billing_account_id, credit ledger        |
 | **Spec** | [DAO Enforcement](./dao-enforcement.md)                              | dao_address, payment rails               |
+| **Spec** | [Tokenomics: Distribution Lifecycle](./tokenomics-distribution.md)    | distribution executor authority + recipient (actor_id) resolution |
 
 ## Design
 
@@ -156,6 +157,42 @@ grant issues that identity server-side.
 **Subject binding:** `subjectId` never comes from a request body, tool args, or
 `RunnableConfig.configurable`. It is attached only by trusted server launchers
 after validating a session or execution grant.
+
+## Distribution Authority + Recipient
+
+Token distribution adds two identity concerns beyond the six primitives — one on the
+**authority** side (who may publish on-chain), one on the **recipient** side (who receives
+the tokens). Neither is a new identity KEY; both compose existing primitives. Mechanism +
+lifecycle: [tokenomics-distribution.md](./tokenomics-distribution.md).
+
+**Authority — three distinct roles, do NOT conflate:**
+
+| Role | Identity | Authorizes | Plane |
+| ---- | -------- | ---------- | ----- |
+| **Approver** | wallet(s) in `activity_ledger.approvers` (bound to `scope_id`) | WHAT is owed — signs the per-epoch EIP-712 statement (`SIGNATURE_BINDS_SOURCES`) | off-chain governance truth |
+| **Distribution executor** | a wallet / Safe / `EmissionsExecutor` granted a SCOPED authority on `dao_address` — EXECUTE-via-`IPermissionCondition`, granted ONCE at activation | the on-chain PUBLISH (`mint` + `setMerkleRoot`) and nothing else | on-chain |
+| **RBAC node-admin** | OpenFGA principal (`user:`/`agent:`) with `node.flight` etc. | operational (flight / secrets / promote) | off-chain operational |
+
+The DAO (`dao_address`) is the on-chain root; the executor is a scoped, revocable DAO
+delegation, NOT the DAO. An `agent` actor CAN hold the executor role (e.g. a Privy agent
+wallet) precisely because the on-chain condition caps it to publishing — the scope is what
+makes agent custody safe.
+
+**Recipient — the claimant is an `actor_id` (economic subject), not `user_id` directly.**
+Agents are first-class DAO participants: an `agent` actor earns, is attributed, and can hold
+tokens, resolved to a wallet via `actor_bindings`. When an agent works **on-behalf-of** a
+user (the `subjectId = user:{user_id}` delegation), **who owns the earned tokens is a
+delegation policy that must be explicit** — the agent's own `actor_bindings` wallet, or the
+delegating user's — never an implicit default. This is exactly why the claimant model is
+`actor_id`-keyed (economic subject), not `user_id`-keyed: it must be able to express
+*agent-earns / user-owns*.
+
+> **OPEN (design point, raised 2026-08-15):** the on-behalf-of earnings-ownership policy —
+> agent-wallet vs delegating-user-wallet, and whether it is scoped per-agent, per-grant, or
+> per-node — is not yet settled. Today the claimant→wallet resolver is user-centric
+> (`user:{user_id}` / `identity:{provider}:{externalId}`); extending it to `agent:{actor_id}`
+> with `subjectId`-delegated routing is forward work. Track in
+> [tokenomics-distribution.md](./tokenomics-distribution.md) + the story.5005 lineage.
 
 ## AI Agent Node Developer Identity
 
