@@ -23,6 +23,7 @@ You are a senior DevOps architect. AI agents are the primary committers in this 
 - `scripts/setup/provision-test-vm.sh` — single-command VM provisioning
 - `infra/provision/` — OpenTofu modules (Cherry Servers, k3s)
 - `infra/k8s/` — Kustomize bases, overlays, Argo ApplicationSets, catalog
+- **Provisioning artifacts & env root creds — DO NOT grep the repo/disk blind for these; they are not in git and never will be.** A `provision-env.yml` run uploads `<env>-init-artifacts` (kubeconfig, VM SSH key, OpenBao root+unseal, age key) as a GHA artifact with **1-day retention** — expired ~24h later, so `gh run download` is a dead end after a day. The **only** durable, validated copies live laptop-local at `~/dev/cogni-template/.local/provision-creds/<env>/` (gitignored, chmod 600) — that dir's `README.md` is the custody SSoT — its per-env status table carries the **current** VM IP, and each `<env>-kubeconfig.yaml` `server:` URL is the second live source. To find _which_ run provisioned an env: `gh run list --workflow=provision-env.yml`. Full custody + recovery contract (Gotcha 14: a clean decrypt is NOT proof of valid custody) lives in the [`provision-env`](../provision-env/SKILL.md) skill — read it, don't re-derive it here. **Never trust a VM IP hardcoded in a skill/doc; read it from that `README.md` status table or the kubeconfig `server:`.**
 
 ## Core principles
 
@@ -44,8 +45,12 @@ The old shared candidate-a shape is retired. Cogni monorepo and `cogni-poly`
 are separate candidate-a targets and must not share VM aliases, DNS records, or
 provisioning assumptions.
 
-- `84.32.9.111` is **Cogni monorepo candidate-a** (apex `cogni-candidate-a.vm.cognidao.org` /
-  `test.cognidao.org`). Per-node `<node>-test` records are **catalog-driven** — auto-upserted to
+- **Cogni monorepo candidate-a** = apex `cogni-candidate-a.vm.cognidao.org` / `test.cognidao.org`.
+  ⚠️ The VM IP is **not stable** — it is replaced on every reprovision (`84.32.9.111` here was the
+  2026-06-01 VM; as of the 2026-08-06 fleet reprovision it is `84.32.149.0`). **Never quote a VM IP
+  from this doc — read the live value from `~/dev/cogni-template/.local/provision-creds/README.md` (status table)
+  or the `candidate-a-kubeconfig.yaml` `server:` URL.**
+  Per-node `<node>-test` records are **catalog-driven** — auto-upserted to
   this IP on flight by `reconcile-node-dns.sh` (ci-cd.md Axiom 21 `DNS_IS_RECONCILED_PER_ENV`),
   never hand-maintained. Don't enumerate/edit them by hand; see the `dns-ops` skill.
 - `5.199.173.155` is **cogni-poly candidate-a only**. Cloudflare records
