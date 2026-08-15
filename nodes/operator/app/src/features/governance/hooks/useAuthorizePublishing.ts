@@ -170,6 +170,12 @@ export function useAuthorizePublishing(
         true, // _tryEarlyExecution
       ],
       account: wallet,
+      // EXPLICIT GAS — do NOT let the wallet gas-estimate this tx. createProposal with
+      // _tryEarlyExecution executes the grant in the SAME tx (a nested DAO.execute); many
+      // wallets' estimators mis-predict that nested call as "likely to fail" and then refuse
+      // to broadcast even when the user confirms (the tx never reaches the chain, UI hangs).
+      // The call is proven to succeed on a Base fork; a fixed generous limit lets it submit.
+      gas: 3_000_000n,
     });
   }, [phase, deployReceipt, conditionAddress, dao, wallet, plugin, writeContract]);
 
