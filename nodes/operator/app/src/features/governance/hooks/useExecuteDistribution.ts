@@ -3,25 +3,38 @@
 
 /**
  * Module: `@features/governance/hooks/useExecuteDistribution`
- * Purpose: React hook fetching the EXECUTE payload for a finalized epoch — the mint delta, new
- *   merkle root, distributor/token/DAO/plugin addresses, and chain — so the owner's wallet can
- *   build ONE Aragon TokenVoting proposal (mint delta + setMerkleRoot) that EarlyExecution runs
- *   atomically. Read-only: the write is the caller's wagmi useWriteContract.
- * Scope: Client-side data fetch for the ExecuteDistributionPanel on the finalized-epoch gov view.
- *   Hits the AUTHED per-node route (owner session OR node.flight) — not a public route — so it must
- *   run same-origin with the owner's session cookie. Does not perform DB access or write txs.
+ * Purpose: React hooks powering the two-state distribution PUBLISH surface.
+ *   - `useExecuteDistribution` fetches the publish payload for a finalized epoch — the mint delta,
+ *     new merkle root, distributor/token/DAO/plugin addresses, and chain — so the owner's wallet can
+ *     build the mint + setMerkleRoot actions. Read-only: the write is the caller's wagmi hook.
+ *   - `useHasExecutePermission` reads `DAO.hasPermission(DAO, wallet, EXECUTE_PERMISSION, "0x")` on
+ *     chain so the panel knows whether the wallet already holds standing publish authority. If NOT,
+ *     the UI shows the ONE-TIME authorize step (a governance proposal granting EXECUTE_PERMISSION);
+ *     if YES, it shows the PER-EPOCH direct `DAO.execute([mint,setRoot])` publish (no vote).
+ * Scope: Client-side. The payload fetch hits the AUTHED per-node route (owner session OR node.flight)
+ *   same-origin with the session cookie; the permission read is a pure on-chain view call. Neither
+ *   performs DB access or write txs.
  * Invariants:
  *   - ALL_MATH_BIGINT: mintDelta arrives as a decimal string; callers BigInt() it before display/tx.
  *   - READ_ONLY_SERVES_R3: the payload is exactly what R3 persisted; the hook never mutates state.
  *   - CALMLY_NULL_ON_NOT_READY: 404 (epoch/node) and 409 (not finalized / no manifest / no
  *     distributor) resolve to a typed not-ready reason rather than throwing, so the panel can
  *     render a quiet "not ready yet" state.
- * Side-effects: IO (HTTP GET to the authed distribution-tx route).
- * Links: nodes/operator/app/src/app/api/v1/nodes/[id]/attribution/epochs/[eid]/distribution-tx/route.ts
+ *   - PERMISSION_GATES_UI: hasPermission is `undefined` until read (never throws for "not ready"),
+ *     so the panel can hold both steps behind a loading state and re-read after the authorize tx.
+ * Side-effects: IO (HTTP GET to the authed distribution-tx route; on-chain hasPermission read).
+ * Links: nodes/operator/app/src/app/api/v1/nodes/[id]/attribution/epochs/[eid]/distribution-tx/route.ts,
+ *   nodes/operator/app/src/features/governance/lib/proposal-abis.ts
  * @public
  */
 
 import { useQuery } from "@tanstack/react-query";
+import { useReadContract } from "wagmi";
+
+import {
+  DAO_ABI,
+  EXECUTE_PERMISSION_ID,
+} from "@/features/governance/lib/proposal-abis";
 
 export interface ExecuteDistributionPayload {
   readonly epochId: string;
@@ -108,6 +121,53 @@ export function useExecuteDistribution(
   return {
     payload: data?.payload ?? null,
     notReady: data?.notReady ?? null,
+    isLoading,
+    error: error as Error | null,
+    refetch: () => {
+      void refetch();
+    },
+  };
+}
+
+export interface UseHasExecutePermission {
+  /** True once the wallet holds EXECUTE_PERMISSION on the DAO. `undefined` until read. */
+  readonly hasPermission: boolean | undefined;
+  readonly isLoading: boolean;
+  readonly error: Error | null;
+  /** Re-read after the authorize tx confirms so the UI advances to Publish. */
+  readonly refetch: () => void;
+}
+
+/**
+ * Read `DAO.hasPermission(_where=DAO, _who=wallet, EXECUTE_PERMISSION, "0x")` on chain.
+ * Gates the publish surface: false ⇒ show the one-time authorize step, true ⇒ show the
+ * per-epoch direct execute. Disabled (undefined) until DAO + wallet + chain are all present.
+ */
+export function useHasExecutePermission(params: {
+  daoAddress: `0x${string}` | undefined;
+  wallet: `0x${string}` | undefined;
+  chainId: number | undefined;
+}): UseHasExecutePermission {
+  const { daoAddress, wallet, chainId } = params;
+  const enabled = Boolean(daoAddress) && Boolean(wallet);
+
+  const { data, isLoading, error, refetch } = useReadContract({
+    abi: DAO_ABI,
+    address: daoAddress,
+    functionName: "hasPermission",
+    // _where=DAO, _who=wallet, _permissionId=EXECUTE_PERMISSION, _data="0x"
+    args: [
+      daoAddress ?? "0x0000000000000000000000000000000000000000",
+      wallet ?? "0x0000000000000000000000000000000000000000",
+      EXECUTE_PERMISSION_ID,
+      "0x",
+    ],
+    chainId,
+    query: { enabled },
+  });
+
+  return {
+    hasPermission: data as boolean | undefined,
     isLoading,
     error: error as Error | null,
     refetch: () => {
