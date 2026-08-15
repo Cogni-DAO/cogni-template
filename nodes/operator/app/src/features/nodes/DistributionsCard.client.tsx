@@ -232,13 +232,6 @@ function SetupSequence({
         walletReady={isConnected && onCorrectChain}
         onAuthorized={refetchPermission}
       />
-
-      {currentStep === null ? (
-        <p className="text-emerald-600 text-sm dark:text-emerald-500">
-          Setup complete — publish each finalized epoch from its distribution
-          page (one transaction, no vote).
-        </p>
-      ) : null}
     </div>
   );
 }
