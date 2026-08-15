@@ -115,6 +115,7 @@ function loadRepoSpecIdentity(): {
   chainId: number;
   tokenAddress: string | null;
   distributorAddress: string | null;
+  emissionsHolderAddress: string | null;
   configuredSources: string[];
   excludedLogins: string[];
   sourceRefs: string[];
@@ -146,6 +147,11 @@ function loadRepoSpecIdentity(): {
   // root build is skipped until activation (off-chain finalize still runs).
   const distributionConfig = extractDaoTokenDistributionConfig(spec);
   const tokenAddress = distributionConfig?.tokenAddress ?? null;
+  // The DAO that mints + owns the distributor (governance.emissions_holder). Baked
+  // alongside the token so the fold's bug.5020 execute-guard can assert the governance
+  // target on the baked-fallback path (no operator gateway) instead of trusting a null.
+  const emissionsHolderAddress =
+    distributionConfig?.emissionsHolderAddress ?? null;
   // The ONE per-node cumulative distributor recorded at R2 activation. Read
   // directly from repo-spec (NOT gated on distributions.status) so the FIRST
   // epoch — which has no prior/current manifest — can still resolve the contract
@@ -170,6 +176,7 @@ function loadRepoSpecIdentity(): {
     chainId: extractChainId(spec),
     tokenAddress,
     distributorAddress,
+    emissionsHolderAddress,
     configuredSources: ledgerConfig
       ? Object.keys(ledgerConfig.activitySources)
       : [],
@@ -196,6 +203,12 @@ export interface AttributionContainer {
    * recorded. Terminal fallback for ledger.ts finalize distributor resolution.
    */
   distributorAddress: string | null;
+  /**
+   * DAO that mints + owns the distributor (governance.emissions_holder), baked from
+   * repo-spec; null until distributions activated. Lets the fold's bug.5020 execute-guard
+   * assert the governance target on the baked-fallback path (no operator gateway).
+   */
+  emissionsHolderAddress: string | null;
   /** Claimant key → contributor wallet resolver (R3 cumulative root build). */
   walletResolver: ClaimantWalletResolver | null;
   /**
@@ -274,6 +287,7 @@ export function createAttributionContainer(
     chainId,
     tokenAddress,
     distributorAddress,
+    emissionsHolderAddress,
     configuredSources,
     excludedLogins,
     sourceRefs,
@@ -383,6 +397,7 @@ export function createAttributionContainer(
     chainId,
     tokenAddress,
     distributorAddress,
+    emissionsHolderAddress,
     walletResolver,
     distributionConfigClient,
     deploymentEnvironment: config.DEPLOY_ENVIRONMENT,

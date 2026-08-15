@@ -51,12 +51,27 @@ export function NodeTokenomicsPanel({
   const chainId = config?.chainId;
   const epochsCompleted = config?.epochsCompleted ?? 0;
 
-  const { totalSupply, distributorBalance, isLoading } = useNodeTokenomics({
+  const {
+    totalSupply,
+    distributorBalance,
+    isLoading,
+    error: readError,
+  } = useNodeTokenomics({
     token,
     distributor,
     viewer: null,
     chainId,
   });
+
+  // Honest three-way display: a value, a pending read ("…"), a FAILED read
+  // ("unavailable" — NOT "—"), so an on-chain read error never masquerades as a
+  // genuine zero (the "token is on-chain but shows —" false-empty bug).
+  const display = (v: bigint | undefined): string => {
+    if (v !== undefined) return formatTokenAmount(v);
+    if (isLoading) return "…";
+    if (readError) return "unavailable";
+    return "—";
+  };
 
   const tokenLink =
     token && chainId ? getAddressExplorerUrl(chainId, token) : null;
@@ -94,41 +109,29 @@ export function NodeTokenomicsPanel({
             Total token supply
           </div>
           <div className="mt-2 font-bold text-4xl tabular-nums tracking-tight sm:text-5xl">
-            {totalSupply === undefined
-              ? isLoading
-                ? "…"
-                : "—"
-              : formatTokenAmount(totalSupply)}
+            {display(totalSupply)}
           </div>
           <p className="mt-1 text-muted-foreground text-sm">
             On-chain ERC20 totalSupply of this node&apos;s governance token
           </p>
+          {readError && totalSupply === undefined ? (
+            <p className="mt-2 text-destructive text-xs">
+              Couldn&apos;t read on-chain state (RPC error). This is a read
+              failure, not a zero balance — retry shortly.
+            </p>
+          ) : null}
         </div>
 
         {/* Distributor split + epochs */}
         <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Stat
             label="In distributor"
-            value={
-              distributor === null
-                ? "—"
-                : distributorBalance === undefined
-                  ? isLoading
-                    ? "…"
-                    : "—"
-                  : formatTokenAmount(distributorBalance)
-            }
+            value={distributor === null ? "—" : display(distributorBalance)}
             hint="Tokens held by the distributor awaiting claims"
           />
           <Stat
             label="Held elsewhere"
-            value={
-              heldElsewhere === undefined
-                ? isLoading
-                  ? "…"
-                  : "—"
-                : formatTokenAmount(heldElsewhere)
-            }
+            value={display(heldElsewhere)}
             hint="Supply outside the distributor (wallets, emissions holder)"
           />
           <Stat

@@ -1605,6 +1605,7 @@ describe("finalizeEpoch — per-node distribution config (bug.5020)", () => {
   const THROWAWAY_DIST = "0x3333333333333333333333333333333333333333";
   const BAKED_TOKEN = "0x4444444444444444444444444444444444444444";
   const BAKED_DIST = "0x5555555555555555555555555555555555555555";
+  const BAKED_DAO = "0x6666666666666666666666666666666666666666"; // non-prod baked holder
   const PROD_COGNI_DAO = "0xF61c3fafD4D34b4568e7a500d92b28Ac175e83C6";
 
   /** Wallet resolver that maps every claimant key to one contributor wallet. */
@@ -1717,6 +1718,7 @@ describe("finalizeEpoch — per-node distribution config (bug.5020)", () => {
       deploymentEnvironment?: string;
       tokenAddress?: string | null;
       distributorAddress?: string | null;
+      emissionsHolderAddress?: string | null;
       withWalletResolver?: boolean;
     }
   ) {
@@ -1730,6 +1732,7 @@ describe("finalizeEpoch — per-node distribution config (bug.5020)", () => {
       chainId: 8453,
       tokenAddress: opts.tokenAddress ?? null,
       distributorAddress: opts.distributorAddress ?? null,
+      emissionsHolderAddress: opts.emissionsHolderAddress ?? null,
       walletResolver: (opts.withWalletResolver === false
         ? null
         : walletResolver) as Parameters<
@@ -1815,6 +1818,9 @@ describe("finalizeEpoch — per-node distribution config (bug.5020)", () => {
       deploymentEnvironment: "candidate-a",
       tokenAddress: BAKED_TOKEN,
       distributorAddress: BAKED_DIST,
+      // The real container bakes the emissions holder from the worker's OWN repo-spec, so the
+      // baked-fallback path carries a checkable (non-prod) governance target.
+      emissionsHolderAddress: BAKED_DAO,
     });
 
     const result = await runFinalize(activities);
@@ -1823,6 +1829,46 @@ describe("finalizeEpoch — per-node distribution config (bug.5020)", () => {
     const manifest = vi.mocked(store.upsertDistributionManifest).mock
       .calls[0]?.[0];
     expect(manifest.tokenAddress.toLowerCase()).toBe(BAKED_TOKEN.toLowerCase());
+    expect(result.statementId).toBe("stmt-1");
+  });
+
+  it("GUARD (baked): transient fallback to a baked PROD DAO holder → refused, finalize stands", async () => {
+    const { store } = await makeFinalizeStore();
+    const client = makeConfigClient(async () => {
+      throw new RunHttpClientError("gateway 503", 503, true);
+    });
+    const activities = activitiesWith(store, {
+      distributionConfigClient: client,
+      deploymentEnvironment: "candidate-a", // non-production
+      tokenAddress: BAKED_TOKEN,
+      distributorAddress: BAKED_DIST,
+      emissionsHolderAddress: PROD_COGNI_DAO, // baked spec somehow carries prod governance
+    });
+
+    const result = await runFinalize(activities);
+
+    expect(store.upsertDistributionManifest).not.toHaveBeenCalled();
+    expect(result.cumulativeDistribution).toBeNull();
+    expect(result.statementId).toBe("stmt-1");
+  });
+
+  it("GUARD (unknown): non-prod baked fallback with NO known holder → fail-closed, finalize stands", async () => {
+    const { store } = await makeFinalizeStore();
+    const client = makeConfigClient(async () => {
+      throw new RunHttpClientError("gateway 503", 503, true);
+    });
+    const activities = activitiesWith(store, {
+      distributionConfigClient: client,
+      deploymentEnvironment: "candidate-a",
+      tokenAddress: BAKED_TOKEN,
+      distributorAddress: BAKED_DIST,
+      // emissionsHolderAddress omitted → null: cannot prove the target is not prod.
+    });
+
+    const result = await runFinalize(activities);
+
+    expect(store.upsertDistributionManifest).not.toHaveBeenCalled();
+    expect(result.cumulativeDistribution).toBeNull();
     expect(result.statementId).toBe("stmt-1");
   });
 

@@ -122,7 +122,7 @@ export function useAuthorizePublishing(
     error: grantError,
     reset: resetGrant,
   } = useWriteContract();
-  const { isSuccess: grantConfirmed, error: grantReceiptError } =
+  const { data: grantReceipt, error: grantReceiptError } =
     useWaitForTransactionReceipt({ hash: grantTx });
 
   const authorize = useCallback(() => {
@@ -143,7 +143,12 @@ export function useAuthorizePublishing(
   // (msg.sender=DAO) inside the proposal: DAO.grantWithCondition(_where=DAO, _who=wallet,
   // EXECUTE_PERMISSION, _condition=condition), wrapped in createProposal(Yes, tryEarlyExecution).
   useEffect(() => {
-    if (phase !== "deploying" || !conditionAddress) return;
+    if (phase !== "deploying" || !deployReceipt) return;
+    // A mined-but-REVERTED condition deploy resolves without throwing — never advance it.
+    if (deployReceipt.status !== "success" || !conditionAddress) {
+      setPhase("error");
+      return;
+    }
     setPhase("granting");
     const grantData = encodeFunctionData({
       abi: DAO_ABI,
@@ -166,12 +171,15 @@ export function useAuthorizePublishing(
       ],
       account: wallet,
     });
-  }, [phase, conditionAddress, dao, wallet, plugin, writeContract]);
+  }, [phase, deployReceipt, conditionAddress, dao, wallet, plugin, writeContract]);
 
   // Grant proposal confirmed → done (EarlyExecution auto-executed the scoped grant).
+  // A mined-but-REVERTED grant (e.g. EarlyExecution failed) must NOT read as success —
+  // the caller re-reads hasPermission, but the phase must not lie in the meantime.
   useEffect(() => {
-    if (phase === "granting" && grantConfirmed) setPhase("done");
-  }, [phase, grantConfirmed]);
+    if (phase !== "granting" || !grantReceipt) return;
+    setPhase(grantReceipt.status === "success" ? "done" : "error");
+  }, [phase, grantReceipt]);
 
   // Surface wallet/receipt errors into the coarse phase.
   useEffect(() => {

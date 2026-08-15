@@ -108,7 +108,7 @@ export function useDeployDistributor(
     error: transferError,
     reset: resetTransfer,
   } = useWriteContract();
-  const { isSuccess: transferConfirmed, error: transferReceiptError } =
+  const { data: transferReceipt, error: transferReceiptError } =
     useWaitForTransactionReceipt({ hash: transferTx });
 
   const deploy = useCallback(() => {
@@ -132,6 +132,12 @@ export function useDeployDistributor(
   // Deploy confirmed → capture the distributor address, then transferOwnership(DAO).
   useEffect(() => {
     if (phase !== "deploying" || !deployReceipt) return;
+    // A mined-but-REVERTED deploy still yields a receipt — never treat it as success.
+    if (deployReceipt.status !== "success") {
+      setError("Distributor deploy transaction reverted on-chain.");
+      setPhase("error");
+      return;
+    }
     const deployed = deployReceipt.contractAddress;
     if (!deployed) {
       setError("Deploy receipt had no contract address.");
@@ -151,7 +157,14 @@ export function useDeployDistributor(
 
   // transferOwnership confirmed → POST the address; the route re-verifies on-chain.
   useEffect(() => {
-    if (phase !== "transferring" || !transferConfirmed || !distributorAddress) {
+    if (phase !== "transferring" || !transferReceipt || !distributorAddress) {
+      return;
+    }
+    // A mined-but-REVERTED transferOwnership must not advance to record — the DAO
+    // would not actually own the distributor.
+    if (transferReceipt.status !== "success") {
+      setError("transferOwnership transaction reverted on-chain.");
+      setPhase("error");
       return;
     }
     setPhase("recording");
@@ -208,7 +221,7 @@ export function useDeployDistributor(
         setPhase("done");
       }
     })();
-  }, [phase, transferConfirmed, distributorAddress, nodeId, deployTx]);
+  }, [phase, transferReceipt, distributorAddress, nodeId, deployTx]);
 
   // Surface wallet/receipt errors into the coarse phase.
   useEffect(() => {

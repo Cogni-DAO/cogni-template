@@ -32,7 +32,12 @@
 import { getTransactionExplorerUrl } from "@cogni/node-shared";
 import { Check, CircleDashed, ExternalLink, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type ReactElement, type ReactNode, useState } from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  useEffect,
+  useState,
+} from "react";
 import { useAccount, useChainId, useSwitchChain } from "wagmi";
 
 import { Button, SectionCard, WalletConnectButton } from "@/components";
@@ -461,9 +466,11 @@ function DeployStep({
     : null;
 
   // Refresh once the PR is recorded so the git-authoritative page read reflects it.
-  if (phase === "done" && prUrl) {
-    queueMicrotask(() => router.refresh());
-  }
+  // MUST be an effect, not a render-body call — a render-body router.refresh() re-fires
+  // on every re-render while phase stays "done" (a refresh loop).
+  useEffect(() => {
+    if (phase === "done" && prUrl) router.refresh();
+  }, [phase, prUrl, router]);
 
   if (state === "done") {
     const shown = distributorAddress ?? recordedDistributorAddress;
@@ -637,9 +644,10 @@ function AuthorizeStepBody({
   );
 
   // Re-read the on-chain permission the moment the grant confirms so the sequence advances.
-  if (phase === "done") {
-    queueMicrotask(onAuthorized);
-  }
+  // Effect, not render-body — otherwise onAuthorized re-fires every re-render at phase "done".
+  useEffect(() => {
+    if (phase === "done") onAuthorized();
+  }, [phase, onAuthorized]);
 
   const busy = phase === "deploying" || phase === "granting";
   const explorerTx = grantTx ?? deployTx;

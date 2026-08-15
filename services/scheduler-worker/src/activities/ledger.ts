@@ -108,6 +108,13 @@ export interface AttributionActivityDeps {
    */
   readonly walletResolver: ClaimantWalletResolver | null;
   /**
+   * DAO that mints + owns the distributor (governance.emissions_holder), baked from
+   * repo-spec for the worker's OWN node; null until distributions activated. Used by
+   * the bug.5020 execute-guard to assert the governance target on the baked-fallback
+   * path (when the operator gateway is absent), instead of trusting an unknown null.
+   */
+  readonly emissionsHolderAddress?: string | null;
+  /**
    * bug.5020 — per-node distribution-config gateway. At finalize the fold resolves
    * the FINALIZING node's token/distributor/emissions-holder from ITS OWN repo-spec
    * (SPECS_GIT_AUTHORITATIVE) via the operator, so the worker bakes no node's
@@ -383,6 +390,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     chainId,
     tokenAddress,
     distributorAddress: repoSpecDistributorAddress,
+    emissionsHolderAddress: repoSpecEmissionsHolderAddress,
     walletResolver,
     distributionConfigClient,
     deploymentEnvironment,
@@ -410,6 +418,17 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
         `[bug.5020 execute-guard] refusing to build a distribution against the PRODUCTION Cogni DAO ${emissionsHolderAddress} from a non-production worker (DEPLOY_ENVIRONMENT=${deploymentEnvironment ?? "<unset>"}, epoch ${epochId.toString()})`
       );
     }
+    // NULL-BLIND FAIL-CLOSED: this guard only runs AFTER the tokenAddress gate, i.e. we are
+    // about to build a real distribution. On a non-prod worker a null emissionsHolder means the
+    // baked-fallback path (the gateway didn't authoritatively give us the DAO) — we CANNOT prove
+    // the governance target is not prod, so we refuse rather than trust a baked identity. The
+    // legitimate non-prod path (operator's own spec) no-ops earlier on a null tokenAddress and
+    // never reaches here; the authoritative gateway path always supplies a non-null holder.
+    if (emissionsHolderAddress === null) {
+      throw new Error(
+        `[bug.5020 execute-guard] refusing to build a distribution with an UNKNOWN emissions holder (baked-fallback path) from a non-production worker (DEPLOY_ENVIRONMENT=${deploymentEnvironment ?? "<unset>"}, epoch ${epochId.toString()}) — cannot prove the governance target is not the production DAO`
+      );
+    }
   }
 
   /**
@@ -429,10 +448,11 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     const baked = {
       tokenAddress,
       distributorAddress: repoSpecDistributorAddress,
-      // Baked deps do not carry the emissions holder; the guard cannot assert the DAO
-      // on the fallback path, but the operator's own baked spec is not distributions-
-      // active (tokenAddress null) so the fold no-ops before reaching the guard.
-      emissionsHolderAddress: null as string | null,
+      // Baked from the worker's OWN repo-spec (governance.emissions_holder) alongside the
+      // token, so the bug.5020 execute-guard can assert the governance target even on this
+      // fallback path (no operator gateway). Null only when distributions aren't activated,
+      // in which case tokenAddress is also null and the fold no-ops before the guard.
+      emissionsHolderAddress: repoSpecEmissionsHolderAddress ?? null,
     };
     if (!distributionConfigClient) {
       return baked;

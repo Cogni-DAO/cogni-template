@@ -167,7 +167,12 @@ export function useNodeTokenomics(params: {
     totalSupply: totalSupply as bigint | undefined,
     distributorBalance: distributorBalance as bigint | undefined,
     viewerBalance: viewerBalance as bigint | undefined,
-    isLoading: isSupplyLoading || isDistLoading || isViewerLoading,
+    // Only an ENABLED-but-pending read counts as loading; a DISABLED read (null
+    // distributor/viewer) reports pending in wagmi and must not wedge the UI on "…".
+    isLoading:
+      (hasToken && isSupplyLoading) ||
+      (hasToken && Boolean(distributor) && isDistLoading) ||
+      (hasToken && Boolean(viewer) && isViewerLoading),
     error: (supplyError ?? distError ?? viewerError ?? null) as Error | null,
     refetch: () => {
       void refetchSupply();
