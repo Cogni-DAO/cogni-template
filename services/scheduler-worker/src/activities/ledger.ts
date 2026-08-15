@@ -526,9 +526,8 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     // recognizes → a second DAO.mint(delta) re-opens the double-mint that stranded tokens on
     // Base. The first finalize builds the manifest; every later call preserves it. Late
     // resolutions flow into the NEXT epoch's cumulative fold (never a retro-overwrite).
-    const existingManifest = await attributionStore.getDistributionManifestForEpoch(
-      args.epochId
-    );
+    const existingManifest =
+      await attributionStore.getDistributionManifestForEpoch(args.epochId);
     if (existingManifest) {
       const frozenLeaves =
         await attributionStore.getDistributionLeavesForEpoch(args.epochId);
