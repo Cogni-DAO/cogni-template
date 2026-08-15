@@ -25,8 +25,8 @@ import {
   type PriorCumulativeBalance,
 } from "@cogni/aragon-osx";
 import {
-  applyReceiptWeightOverrides,
   type AttributionStore,
+  applyReceiptWeightOverrides,
   buildEIP712TypedData,
   buildReceiptWeightOverrideSnapshots,
   claimantKey,
@@ -689,7 +689,10 @@ export async function runFinalizeEpoch(
     );
   }
 
-  const poolTotal = poolComponents.reduce((sum, c) => sum + c.amountCredits, 0n);
+  const poolTotal = poolComponents.reduce(
+    (sum, c) => sum + c.amountCredits,
+    0n
+  );
 
   // 5. Load locked claimants + receipt weights + overrides → explode to claimant allocations
   const lockedClaimants = await attributionStore.loadLockedClaimants(epochId);

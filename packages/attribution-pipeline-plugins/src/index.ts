@@ -16,6 +16,18 @@
  * @public
  */
 
+// Finalize-in-process (story.5007) — runtime-agnostic epoch finalization + R3 fold
+export {
+  type FinalizeDistributionConfigResolver,
+  FinalizeEpochError,
+  type FinalizeEpochErrorCode,
+  type FinalizeEpochInput,
+  type FinalizeEpochOutput,
+  type FinalizeLogger,
+  isFinalizeEpochError,
+  type RunFinalizeEpochDeps,
+  runFinalizeEpoch,
+} from "./finalize/run-finalize-epoch";
 export { createEchoAdapter } from "./plugins/echo/adapter";
 // Echo plugin
 export {
@@ -51,19 +63,6 @@ export {
   WEIGHT_SUM_ALLOCATOR,
   WeightSumOutputSchema,
 } from "./plugins/weight-sum/descriptor";
-
-// Finalize-in-process (story.5007) — runtime-agnostic epoch finalization + R3 fold
-export {
-  type FinalizeDistributionConfigResolver,
-  FinalizeEpochError,
-  type FinalizeEpochErrorCode,
-  type FinalizeEpochInput,
-  type FinalizeEpochOutput,
-  type FinalizeLogger,
-  isFinalizeEpochError,
-  runFinalizeEpoch,
-  type RunFinalizeEpochDeps,
-} from "./finalize/run-finalize-epoch";
 
 // Profiles
 export { COGNI_V0_PROFILE } from "./profiles/cogni-v0.0";

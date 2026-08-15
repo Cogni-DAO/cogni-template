@@ -332,7 +332,6 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     logger,
   } = deps;
 
-
   function toEvaluationPayloadMap(
     evaluations: ReadonlyArray<{
       readonly evaluationRef: string;

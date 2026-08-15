@@ -30,8 +30,8 @@ import {
   type FinalizeEpochInput,
   type FinalizeEpochOutput,
   type FinalizeLogger,
-  runFinalizeEpoch,
   type RunFinalizeEpochDeps,
+  runFinalizeEpoch,
 } from "@cogni/attribution-pipeline-plugins";
 import {
   type AuthorizationPort,
