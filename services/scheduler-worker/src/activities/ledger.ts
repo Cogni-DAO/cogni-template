@@ -3,8 +3,8 @@
 
 /**
  * Module: `@cogni/scheduler-worker-service/activities/ledger`
- * Purpose: Temporal Activities for the full ledger pipeline — ingestion, selection, allocation, pool, epoch transition, and finalization.
- * Scope: Plain async functions that perform I/O (DB, GitHub API, EIP-712 verification). Called by CollectEpochWorkflow and FinalizeEpochWorkflow. Does not contain deterministic orchestration logic.
+ * Purpose: Temporal Activities for the ledger collect pipeline — ingestion, selection, allocation, pool, and epoch transition. Finalization runs IN-PROCESS in the node app (story.5007), NOT here.
+ * Scope: Plain async functions that perform I/O (DB, GitHub API). Called by CollectEpochWorkflow. Does not contain deterministic orchestration logic.
  * Invariants:
  *   - NO_DOMAIN_LOGIC_HERE: this file must never contain selection policies, allocation formulas, enrichment logic, or source-specific branching (e.g. `if eventType === "pr_merged"`). It loads data, dispatches to contracts/plugins, and writes results.
  *   - Per RECEIPT_IDEMPOTENT: All activities idempotent via PK constraints or upsert
@@ -18,15 +18,12 @@
  *   - Per USER_PROJECTIONS_RECOMPUTABLE: upsertUserProjections persists recomputable user projections only
  *   - Per CONFIG_LOCKED_AT_REVIEW: transitionEpochForWindow pins allocationAlgoRef + weightConfigHash when closing stale epoch
  *   - Per EVALUATION_FINAL_ATOMIC: transitionEpochForWindow passes evaluations to store.transitionEpochForWindow for atomic close + create
- *   - Per EPOCH_FINALIZE_IDEMPOTENT: finalizeEpoch returns existing statement if already finalized
- *   - Per FINALIZE_CLAIMANT_AWARE: finalizeEpoch loads locked claimant rows from epoch_receipt_claimants, dispatches the pinned allocator, explodes to claimant allocations, and stores claimant metadata in attribution statement lines
- *   - Per FINALIZE_BUILDS_CUMULATIVE_ROOT (R3): on a successful finalize, finalizeEpoch resolves this epoch's claimant deltas to wallets, folds them onto the prior persisted cumulative manifest, and persists the new cumulative merkle root + per-epoch mint delta. The admin's SINGLE finalize signature drives this — there is no second signing flow. The DAO.mint(delta) + distributor.setMerkleRoot(root) transaction is BUILT from the persisted cumulative manifest (root + delta + distributorAddress); this activity never sends an on-chain tx.
- * Side-effects: IO (database, GitHub API, viem EIP-712 verification)
- * Links: docs/spec/attribution-ledger.md, docs/spec/temporal-patterns.md, packages/aragon-osx/src/epoch-distribution-service.ts
+ *   - FINALIZE_IS_IN_PROCESS (story.5007): epoch finalization + the R3 cumulative fold no longer run here — they run synchronously in the operator app's finalize route via `runFinalizeEpoch` (@cogni/attribution-pipeline-plugins). This module holds NO distribution/wallet/config deps.
+ * Side-effects: IO (database, GitHub API)
+ * Links: docs/spec/attribution-ledger.md, docs/spec/temporal-patterns.md, packages/attribution-pipeline-plugins/src/finalize/run-finalize-epoch.ts
  * @internal
  */
 
-import type { ClaimantWalletResolver } from "@cogni/aragon-osx";
 import type {
   CloseIngestionWithEvaluationsParams,
   UnselectedReceipt,
@@ -43,19 +40,13 @@ import {
   dispatchSelectionPolicy,
   resolveProfile,
 } from "@cogni/attribution-pipeline-contracts";
-import {
-  type DefaultRegistries,
-  type FinalizeEpochInput,
-  type FinalizeEpochOutput,
-  runFinalizeEpoch,
-} from "@cogni/attribution-pipeline-plugins";
+import type { DefaultRegistries } from "@cogni/attribution-pipeline-plugins";
 import type { ActivityEvent } from "@cogni/ingestion-core";
 
 import type { Logger } from "../observability/logger.js";
 import type {
   AttributionStore,
   DataSourceRegistration,
-  DistributionConfigHttpClient,
 } from "../ports/index.js";
 
 /**
@@ -67,50 +58,6 @@ export interface AttributionActivityDeps {
   readonly registries: DefaultRegistries;
   readonly nodeId: string;
   readonly scopeId: string;
-  readonly chainId: number;
-  /**
-   * The DAO's GovernanceERC20 token address (settlement token). Read from
-   * repo-spec at bootstrap. Required to build the cumulative distribution
-   * manifest at finalize; null until the node activates distributions.
-   */
-  readonly tokenAddress: string | null;
-  /**
-   * The ONE per-node cumulative distributor recorded in repo-spec at R2
-   * activation. Terminal fallback for distributor resolution at finalize: the
-   * FIRST epoch has no prior/current manifest, so this repo-spec-sourced address
-   * is what makes the first manifest carry a distributor. Null until R2 records
-   * it (off-chain finalize still runs).
-   */
-  readonly distributorAddress: string | null;
-  /**
-   * Read-only resolver: attribution claimant key → contributor wallet. Used at
-   * finalize to map this epoch's claimant credit lines onto EVM wallets for the
-   * cumulative root. Null disables cumulative-root building (off-chain ledger
-   * still finalizes).
-   */
-  readonly walletResolver: ClaimantWalletResolver | null;
-  /**
-   * DAO that mints + owns the distributor (governance.emissions_holder), baked from
-   * repo-spec for the worker's OWN node; null until distributions activated. Used by
-   * the bug.5020 execute-guard to assert the governance target on the baked-fallback
-   * path (when the operator gateway is absent), instead of trusting an unknown null.
-   */
-  readonly emissionsHolderAddress?: string | null;
-  /**
-   * bug.5020 — per-node distribution-config gateway. At finalize the fold resolves
-   * the FINALIZING node's token/distributor/emissions-holder from ITS OWN repo-spec
-   * (SPECS_GIT_AUTHORITATIVE) via the operator, so the worker bakes no node's
-   * governance identity. Null (or a transient failure) falls back to the baked
-   * `tokenAddress`/`distributorAddress` above for the worker's OWN node only —
-   * prod operator continuity until this seam is universally deployed.
-   */
-  readonly distributionConfigClient?: DistributionConfigHttpClient | null;
-  /**
-   * Deploy environment for the bug.5020 execute-guard. Any value other than
-   * `"production"` (including undefined) is treated as non-production, fail-closed:
-   * the fold refuses to build a distribution against the production Cogni DAO.
-   */
-  readonly deploymentEnvironment?: string;
   readonly logger: Logger;
 }
 
@@ -322,13 +269,6 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     registries,
     nodeId,
     scopeId,
-    chainId,
-    tokenAddress,
-    distributorAddress: repoSpecDistributorAddress,
-    emissionsHolderAddress: repoSpecEmissionsHolderAddress,
-    walletResolver,
-    distributionConfigClient,
-    deploymentEnvironment,
     logger,
   } = deps;
 
@@ -1082,35 +1022,6 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
 
   /**
    * Compound activity: atomically finalize an epoch with signature verification.
-   * Thin wrapper over the runtime-agnostic `runFinalizeEpoch` (story.5007) — the SAME
-   * logic runs synchronously in the operator app's finalize route in-process. This
-   * activity stays DORMANT until the in-process route cutover is candidate-proven; keep,
-   * do not delete (rollback path). EPOCH_FINALIZE_IDEMPOTENT + FREEZE (bug.5022) +
-   * FINALIZE_BUILDS_CUMULATIVE_ROOT (R3) + the bug.5020 execute-guard live in the
-   * extracted module.
-   */
-  async function finalizeEpoch(
-    input: FinalizeEpochInput
-  ): Promise<FinalizeEpochOutput> {
-    return runFinalizeEpoch(
-      {
-        attributionStore,
-        registries,
-        nodeId,
-        scopeId,
-        chainId,
-        tokenAddress,
-        distributorAddress: repoSpecDistributorAddress,
-        emissionsHolderAddress: repoSpecEmissionsHolderAddress,
-        walletResolver,
-        distributionConfigClient,
-        deploymentEnvironment,
-        logger,
-      },
-      input
-    );
-  }
-
   /**
    * Resolve stream IDs for a source by querying the adapter's self-declared streams.
    */
@@ -1154,7 +1065,6 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     ensurePoolComponents,
     findStaleOpenEpoch,
     transitionEpochForWindow,
-    finalizeEpoch,
     resolveStreams,
   };
 }

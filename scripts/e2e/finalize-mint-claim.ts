@@ -4,7 +4,7 @@
 /**
  * Module: `@scripts/e2e/finalize-mint-claim`
  * Purpose: Local-dev harness proving the full token-distribution DoD — admin signs an epoch, the DAO mints the per-epoch delta into the cumulative distributor, and contributors claim — against an anvil Base-fork with hard prod-safety guards.
- * Scope: Orchestration only (spawns anvil + the real host ledger worker, drives FinalizeEpochWorkflow via Temporal, reads the persisted manifest, mints + claims on the fork, asserts conservation); every finalize/fold call is real. Does not modify product code and does not touch any prod system (fork + local DB only).
+ * Scope: Orchestration only (spawns anvil, finalizes IN-PROCESS via the SAME runFinalizeEpoch the operator route calls, reads the persisted manifest, mints + claims on the fork, asserts conservation); every finalize/fold call is real. Does not modify product code and does not touch any prod system (fork + local DB only).
  * Invariants:
  * - WRITES_TO_FORK_ONLY: on-chain writes target 127.0.0.1:8545
  * - RPC_FORK_SOURCE_ONLY: real EVM_RPC_URL never a client target
@@ -24,12 +24,12 @@
 // WHAT IT DRIVES (full step discipline — all REAL product code, nothing faked):
 //   seed review epoch (db:seed) → link ALICE/BEN wallets → deploy the vendored
 //   1inch CumulativeMerkleDrop on an anvil Base-fork → transferOwnership(DAO) →
-//   activate distributions in an OFF-TREE repo-spec → start the REAL host ledger
-//   worker → compute finalAllocationSetHash with the SAME pure ledger functions
-//   the app's /sign-data route uses → SIGN the EIP-712 with an anvil approver key
-//   → start FinalizeEpochWorkflow directly on ledger-tasks (skips the app + SIWE)
-//   → the worker verifies recover(sig)∈approvers[] and runs R3
-//   buildAndPersistCumulativeDistribution → read the REAL persisted manifest →
+//   activate distributions (token/distributor/DAO) → compute finalAllocationSetHash
+//   with the SAME pure ledger functions the app's /sign-data route uses → SIGN the
+//   EIP-712 with an anvil approver key → finalize IN-PROCESS via runFinalizeEpoch
+//   (the SAME fn the operator's POST /finalize route calls — no worker, no Temporal):
+//   verifies recover(sig)∈approvers[] and runs R3 buildAndPersistCumulativeDistribution
+//   → read the REAL persisted manifest →
 //   DAO-impersonate mint(delta) + setMerkleRoot(root) on the fork → each linked
 //   claimant claims (cumulative − claimed) → conservation asserts.
 //
@@ -58,7 +58,16 @@ import {
   explodeToClaimants,
   toReviewSubjectOverrides,
 } from "@cogni/attribution-ledger";
-import { DrizzleAttributionAdapter } from "@cogni/db-client";
+// story.5007: finalize runs IN-PROCESS via the SAME fn the operator route calls —
+// runFinalizeEpoch. No Temporal, no ledger-worker (that path is deleted).
+import {
+  createDefaultRegistries,
+  runFinalizeEpoch,
+} from "@cogni/attribution-pipeline-plugins";
+import {
+  DrizzleAttributionAdapter,
+  DrizzleClaimantWalletResolver,
+} from "@cogni/db-client";
 import { createServiceDbClient } from "@cogni/db-client/service";
 import {
   extractChainId,
@@ -66,7 +75,6 @@ import {
   extractScopeId,
   parseRepoSpec,
 } from "@cogni/repo-spec";
-import { Client, Connection } from "@temporalio/client";
 import { sql } from "drizzle-orm";
 import {
   createPublicClient,
@@ -93,7 +101,6 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "..", "..");
 const RPC = "http://127.0.0.1:8545"; // anvil fork — the ONLY on-chain write target
 const TOKEN_BASE_UNITS = 10n ** 18n; // 1 credit → 1 whole token (matches ledger.ts)
-const LEDGER_TASK_QUEUE = "ledger-tasks";
 
 // Off-tree augmented repo-spec (distributions activated). NEVER edit the tracked
 // .cogni/repo-spec.yaml — the host worker chdir's here to read this instead.
@@ -239,27 +246,6 @@ function writeAugmentedSpec(distributorAddress: string): {
   return { nodeId, scopeId, chainId };
 }
 
-// ── stop the dockerized scheduler-worker (else it races us for ledger-tasks) ───
-function stopDockerSchedulerWorker(): Promise<void> {
-  return new Promise((resolve) => {
-    const p = spawn(
-      "docker",
-      [
-        "compose",
-        "--env-file",
-        ".env.local",
-        "-f",
-        "infra/compose/runtime/docker-compose.dev.yml",
-        "stop",
-        "scheduler-worker",
-      ],
-      { cwd: REPO_ROOT, stdio: "inherit" }
-    );
-    p.on("close", () => resolve());
-    p.on("error", () => resolve()); // best-effort — compose may not manage it
-  });
-}
-
 // ── spawn anvil forking Base ───────────────────────────────────────────────────
 async function spawnAnvil(forkUrl: string): Promise<ChildProcess> {
   const anvil = spawn(
@@ -285,49 +271,6 @@ async function spawnAnvil(forkUrl: string): Promise<ChildProcess> {
     }
   }
   throw new Error("anvil did not come up on 127.0.0.1:8545 within 60s");
-}
-
-// ── spawn the REAL host ledger worker (augmented spec cwd) ─────────────────────
-function spawnHostWorker(): Promise<ChildProcess> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("pnpm", ["tsx", "scripts/e2e/ledger-worker-host.ts"], {
-      cwd: REPO_ROOT,
-      env: {
-        ...process.env,
-        HARNESS_SPEC_DIR: SPEC_DIR,
-        // The worker's createAttributionContainer reads config.DATABASE_URL —
-        // it must be the BYPASSRLS service role (else RLS hides epoch_selection
-        // and the allocator finds no receipts). Prod feeds the service URL here.
-        DATABASE_URL:
-          process.env.DATABASE_SERVICE_URL ?? process.env.DATABASE_URL ?? "",
-        // The ledger worker never touches EVM; pin it away from real Base anyway.
-        EVM_RPC_URL: RPC,
-        APP_ENV: "development",
-      },
-      stdio: ["ignore", "pipe", "inherit"],
-    });
-    let settled = false;
-    child.stdout?.on("data", (buf: Buffer) => {
-      const s = buf.toString();
-      process.stdout.write(s);
-      if (!settled && s.includes("HARNESS_LEDGER_WORKER_READY")) {
-        settled = true;
-        resolve(child);
-      }
-    });
-    child.on("exit", (code) => {
-      if (!settled) {
-        settled = true;
-        reject(new Error(`host worker exited early (code ${code})`));
-      }
-    });
-    setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        reject(new Error("host worker did not report READY within 90s"));
-      }
-    }, 90_000);
-  });
 }
 
 /**
@@ -414,9 +357,6 @@ async function main(): Promise<void> {
   const databaseUrl =
     process.env.DATABASE_SERVICE_URL ?? process.env.DATABASE_URL ?? "";
   const forkUrl = process.env.EVM_RPC_URL ?? "";
-  const temporalAddress = process.env.TEMPORAL_ADDRESS ?? "localhost:7233";
-  const temporalNamespace =
-    process.env.TEMPORAL_NAMESPACE ?? "cogni-production";
 
   log("======================================================================");
   log(
@@ -549,17 +489,40 @@ async function main(): Promise<void> {
     );
 
     // ── STEP 3: activate distributions off-tree + start host worker ───────────
-    log(
-      "\nSTEP 3 — write off-tree augmented repo-spec + start host ledger worker"
-    );
+    log("\nSTEP 3 — activate distributions (chain id + identity) + build finalize deps");
     const ids = writeAugmentedSpec(distributor);
     ok(
       ids.nodeId === nodeId && ids.scopeId === scopeId,
       `augmented spec identity matches tracked spec (chain ${ids.chainId})`
     );
-    await stopDockerSchedulerWorker();
-    children.push(await spawnHostWorker());
-    ok(true, "host ledger worker polling ledger-tasks (distributions ACTIVE)");
+    // story.5007: finalize runs IN-PROCESS with the SAME deps the operator app's
+    // buildFinalizeEpochDeps assembles for its route — store + registries + wallet
+    // resolver + activated token/distributor/DAO. No ledger-worker, no Temporal.
+    // `distributionConfigClient: null` mirrors the operator resolving its OWN node
+    // (the fold falls back to the baked/own governance, non-prod DAO here).
+    const finalizeLogger = {
+      info: (o: object, m?: string) =>
+        process.stdout.write(`      [finalize] ${m ?? ""} ${JSON.stringify(o)}\n`),
+      warn: (o: object, m?: string) =>
+        process.stdout.write(`      [finalize:warn] ${m ?? ""} ${JSON.stringify(o)}\n`),
+      error: (o: object, m?: string) =>
+        process.stderr.write(`      [finalize:error] ${m ?? ""} ${JSON.stringify(o)}\n`),
+    };
+    const finalizeDeps = {
+      attributionStore: store,
+      registries: createDefaultRegistries(),
+      nodeId,
+      scopeId,
+      chainId: ids.chainId,
+      tokenAddress: TOKEN,
+      distributorAddress: distributor,
+      emissionsHolderAddress: DAO,
+      walletResolver: new DrizzleClaimantWalletResolver(db),
+      distributionConfigClient: null,
+      deploymentEnvironment: undefined,
+      logger: finalizeLogger,
+    };
+    ok(true, "finalize deps built (in-process, no worker) — distributions ACTIVE");
 
     // ── STEP 4: compute the hash the worker will recompute + SIGN (no SIWE) ────
     log(
@@ -606,43 +569,26 @@ async function main(): Promise<void> {
       `signed EIP-712 (hash ${finalAllocationSetHash.slice(0, 14)}…, pool ${poolTotal})`
     );
 
-    // ── STEP 5: start FinalizeEpochWorkflow directly on ledger-tasks ───────────
+    // ── STEP 5: finalize IN-PROCESS — the SAME runFinalizeEpoch the route calls ─
     log(
-      "\nSTEP 5 — start FinalizeEpochWorkflow via Temporal (worker verifies the sig + runs R3)"
+      "\nSTEP 5 — finalize IN-PROCESS via runFinalizeEpoch (verify sig + R3 fold; no worker)"
     );
-    const connection = await Connection.connect({ address: temporalAddress });
-    const client = new Client({ connection, namespace: temporalNamespace });
-    const workflowId = `ledger-finalize-${scopeId}-${epochId.toString()}`;
-    const handle = await client.workflow.start("FinalizeEpochWorkflow", {
-      taskQueue: LEDGER_TASK_QUEUE,
-      workflowId,
-      args: [
-        {
-          epochId: epochId.toString(),
-          signature,
-          signerAddress: APPROVER.address,
-        },
-      ],
-    });
     let workflowMintDelta: bigint | null = null;
     try {
-      const result = (await handle.result()) as {
-        cumulativeDistribution?: {
-          mintDelta?: string;
-          merkleRoot?: string;
-        } | null;
-      };
-      if (result?.cumulativeDistribution?.mintDelta) {
+      const result = await runFinalizeEpoch(finalizeDeps, {
+        epochId: epochId.toString(),
+        signature,
+        signerAddress: APPROVER.address,
+      });
+      if (result.cumulativeDistribution?.mintDelta) {
         workflowMintDelta = BigInt(result.cumulativeDistribution.mintDelta);
       }
-      ok(true, `FinalizeEpochWorkflow completed (workflowId ${workflowId})`);
+      ok(true, `runFinalizeEpoch completed (statement ${result.statementId})`);
     } catch (e) {
       throw new Error(
-        `FinalizeEpochWorkflow FAILED — most likely the finalAllocationSetHash/sig did not match ` +
-          `what the worker recomputed, or distributions were not activated. Underlying: ${(e as Error).message}`
+        `runFinalizeEpoch FAILED — most likely the finalAllocationSetHash/sig did not match ` +
+          `the recomputed hash, or distributions were not activated. Underlying: ${(e as Error).message}`
       );
-    } finally {
-      await connection.close();
     }
     const finalized = await store.getEpoch(epochId);
     ok(
@@ -735,43 +681,22 @@ async function main(): Promise<void> {
       "already_published: distributor LIVE root == manifest root → distribution-tx returns 409 (no 2nd mint payload served)"
     );
 
-    // (b) FREEZE: re-run FinalizeEpochWorkflow for the SAME (now-published) epoch — the fold
-    // must PRESERVE the manifest (mintDelta 0), never re-fold/overwrite it. This is the vector
-    // Derek hit operationally; the freeze closes it at the source.
+    // (b) FREEZE: re-run runFinalizeEpoch IN-PROCESS for the SAME (now-published) epoch — the
+    // fold must PRESERVE the manifest (mintDelta 0), never re-fold/overwrite it. This is the
+    // vector Derek hit operationally; the freeze closes it at the source.
     const frozenBefore = {
       root: manifest.merkleRoot,
       amount: manifest.distributionAmount,
       leaves: leafFingerprint(leaves),
     };
-    const refoldConn = await Connection.connect({ address: temporalAddress });
-    const refoldClient = new Client({
-      connection: refoldConn,
-      namespace: temporalNamespace,
+    const refoldResult = await runFinalizeEpoch(finalizeDeps, {
+      epochId: epochId.toString(),
+      signature,
+      signerAddress: APPROVER.address,
     });
-    let refoldMintDelta: string | null = null;
-    try {
-      const refoldHandle = await refoldClient.workflow.start(
-        "FinalizeEpochWorkflow",
-        {
-          taskQueue: LEDGER_TASK_QUEUE,
-          workflowId: `ledger-finalize-${scopeId}-${epochId.toString()}-refold`,
-          args: [
-            {
-              epochId: epochId.toString(),
-              signature,
-              signerAddress: APPROVER.address,
-            },
-          ],
-        }
-      );
-      const refoldResult = (await refoldHandle.result()) as {
-        cumulativeDistribution?: { mintDelta?: string } | null;
-      };
-      refoldMintDelta = refoldResult?.cumulativeDistribution?.mintDelta ?? null;
-    } finally {
-      await refoldConn.close();
-    }
-    // The FinalizeEpochWorkflow result does not surface a distribution mintDelta (STEP 5's
+    const refoldMintDelta: string | null =
+      refoldResult.cumulativeDistribution?.mintDelta ?? null;
+    // The re-finalize preserves the frozen manifest (mintDelta 0). STEP 5's
     // read is null too → conservation falls back to manifest.distributionAmount). The
     // DEFINITIVE freeze proof is the manifest being byte-identical below + the worker's
     // "Cumulative distribution FROZEN … preserving without re-fold (bug.5022)" log line.

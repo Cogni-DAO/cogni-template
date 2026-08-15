@@ -12,6 +12,5 @@
  */
 
 export { CollectEpochWorkflow } from "./workflows/collect-epoch.workflow.js";
-export { FinalizeEpochWorkflow } from "./workflows/finalize-epoch.workflow.js";
 export { CollectSourcesWorkflow } from "./workflows/stages/collect-sources.workflow.js";
 export { EnrichAndAllocateWorkflow } from "./workflows/stages/enrich-and-allocate.workflow.js";

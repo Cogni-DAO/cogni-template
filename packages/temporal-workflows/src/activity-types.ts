@@ -380,16 +380,6 @@ export interface LedgerActivities {
     totalProposedUnits: string;
   }>;
 
-  finalizeEpoch(input: {
-    epochId: string;
-    signature: string;
-    signerAddress: string;
-  }): Promise<{
-    statementId: string;
-    poolTotalCredits: string;
-    finalAllocationSetHash: string;
-    statementLineCount: number;
-  }>;
 }
 
 // ---------------------------------------------------------------------------
