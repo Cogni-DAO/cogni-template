@@ -177,7 +177,15 @@ export function useAuthorizePublishing(
       // The call is proven to succeed on a Base fork; a fixed generous limit lets it submit.
       gas: 3_000_000n,
     });
-  }, [phase, deployReceipt, conditionAddress, dao, wallet, plugin, writeContract]);
+  }, [
+    phase,
+    deployReceipt,
+    conditionAddress,
+    dao,
+    wallet,
+    plugin,
+    writeContract,
+  ]);
 
   // Grant proposal confirmed → done (EarlyExecution auto-executed the scoped grant).
   // A mined-but-REVERTED grant (e.g. EarlyExecution failed) must NOT read as success —

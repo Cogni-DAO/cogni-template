@@ -36,7 +36,7 @@ export function StepBadge({
 }): ReactElement {
   if (state === "done") {
     return (
-      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
         <Check className="size-3.5" />
       </span>
     );

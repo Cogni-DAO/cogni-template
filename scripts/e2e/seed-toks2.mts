@@ -35,12 +35,7 @@ import { sql } from "drizzle-orm";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "..", "..");
-const SPEC_PATH = path.join(
-  REPO_ROOT,
-  ".harness",
-  ".cogni",
-  "repo-spec.yaml"
-);
+const SPEC_PATH = path.join(REPO_ROOT, ".harness", ".cogni", "repo-spec.yaml");
 
 const REPO_REF = "cogni-test-org/toks2";
 const APPROVER_WALLET = "0x070075F1389Ae1182aBac722B36CA12285d0c949";
@@ -197,7 +192,9 @@ async function main(): Promise<void> {
       periodEnd,
       weightConfig: WEIGHT_CONFIG,
     });
-    console.log(`  created epoch ${epoch.id} [${periodStartIso.slice(0, 10)} → ${periodEndIso.slice(0, 10)}]`);
+    console.log(
+      `  created epoch ${epoch.id} [${periodStartIso.slice(0, 10)} → ${periodEndIso.slice(0, 10)}]`
+    );
 
     await store.insertIngestionReceipts(
       events.map((e) => ({
@@ -283,7 +280,9 @@ async function main(): Promise<void> {
     }));
     for (const p of claimantParams) await store.upsertDraftClaimants(p);
     const locked = await store.lockClaimantsForEpoch(epoch.id);
-    console.log(`  locked ${locked} receipt claimants (all → user:${OWNER.userId})`);
+    console.log(
+      `  locked ${locked} receipt claimants (all → user:${OWNER.userId})`
+    );
 
     // echo evaluation (mirrors seed.mts buildEchoEvaluation).
     const payloadJson: Record<string, unknown> = {

@@ -55,7 +55,11 @@ async function main() {
   await rpc("anvil_impersonateAccount", [HOLDER]);
   await rpc("anvil_setBalance", [DAO, "0x56BC75E2D63100000"]);
   await rpc("anvil_impersonateAccount", [DAO]);
-  const holder = createWalletClient({ account: HOLDER, chain: base, transport });
+  const holder = createWalletClient({
+    account: HOLDER,
+    chain: base,
+    transport,
+  });
 
   console.log("Deploying CumulativeMerkleDrop(token) on the fork…");
   const deployHash = await holder.deployContract({
@@ -63,8 +67,9 @@ async function main() {
     bytecode: CUMULATIVE_MERKLE_DISTRIBUTOR_BYTECODE as `0x${string}`,
     args: [TOKEN],
   });
-  const distributor = (await pub.waitForTransactionReceipt({ hash: deployHash }))
-    .contractAddress as `0x${string}`;
+  const distributor = (
+    await pub.waitForTransactionReceipt({ hash: deployHash })
+  ).contractAddress as `0x${string}`;
   await pub.waitForTransactionReceipt({
     hash: await holder.writeContract({
       address: distributor,
@@ -77,7 +82,10 @@ async function main() {
 
   // Off-tree augmented repo-spec: distributions active + this distributor. The
   // host ledger worker chdir's here; the tracked .cogni/repo-spec.yaml is untouched.
-  const raw = readFileSync(path.join(REPO_ROOT, ".cogni", "repo-spec.yaml"), "utf8");
+  const raw = readFileSync(
+    path.join(REPO_ROOT, ".cogni", "repo-spec.yaml"),
+    "utf8"
+  );
   let out = raw.replace(
     /(^governance:[\s\S]*?\n {2}chain_id:.*\n)/m,
     (m) =>
@@ -86,14 +94,18 @@ async function main() {
   out += `\n# LOCAL-UI: activate distributions for the human-sign proof.\ndistributions:\n  status: active\n  distributor_address: "${distributor}"\n`;
   mkdirSync(path.join(SPEC_DIR, ".cogni"), { recursive: true });
   writeFileSync(path.join(SPEC_DIR, ".cogni", "repo-spec.yaml"), out, "utf8");
-  console.log(`  augmented repo-spec → ${path.join(SPEC_DIR, ".cogni", "repo-spec.yaml")}`);
+  console.log(
+    `  augmented repo-spec → ${path.join(SPEC_DIR, ".cogni", "repo-spec.yaml")}`
+  );
 
   writeFileSync(
     path.join(SPEC_DIR, "distributor.txt"),
     `${distributor}\n`,
     "utf8"
   );
-  console.log("\nSETUP OK. distributor recorded. Next: reset an epoch to review,");
+  console.log(
+    "\nSETUP OK. distributor recorded. Next: reset an epoch to review,"
+  );
   console.log("pin the admin wallet as approver, start the host worker + app.");
 }
 

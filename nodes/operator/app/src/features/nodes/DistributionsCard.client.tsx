@@ -32,12 +32,7 @@
 import { getTransactionExplorerUrl } from "@cogni/node-shared";
 import { ExternalLink, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import {
-  type ReactElement,
-  type ReactNode,
-  useEffect,
-  useState,
-} from "react";
+import { type ReactElement, type ReactNode, useEffect, useState } from "react";
 import { useAccount, useChainId, useSwitchChain } from "wagmi";
 
 import { Button, SectionCard, WalletConnectButton } from "@/components";
@@ -463,7 +458,7 @@ function DeployStep({
             </p>
           ) : null}
           {phase === "done" && recordError ? (
-            <p className="text-amber-600 text-sm dark:text-amber-500">
+            <p className="text-muted-foreground text-sm">
               ✅ Deployed on-chain + ownership transferred to the DAO.
               Git-record pending (the operator App can&apos;t write from this
               environment):{" "}
@@ -601,7 +596,7 @@ function AuthorizeStepBody({
       </p>
 
       {!pluginAddress ? (
-        <p className="text-amber-600 text-sm dark:text-amber-500">
+        <p className="text-muted-foreground text-sm">
           This node is missing its voting-plugin address; authorize can&apos;t
           run yet.
         </p>
@@ -714,7 +709,7 @@ function ActivateOnlyRow({
         token, DAO, and chain.
       </p>
       {activated ? (
-        <p className="text-emerald-600 text-sm dark:text-emerald-500">
+        <p className="text-primary text-sm">
           Distributions activated.
         </p>
       ) : null}

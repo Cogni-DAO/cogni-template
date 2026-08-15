@@ -75,7 +75,10 @@ function main() {
     (distributor
       ? `  distributor_address: "${distributor}" # RIG: deployed on Base by the owner (moment 1)\n`
       : "");
-  out = out.replace(/^distributions:\n {2}status: pending_activation\n/m, distBlock);
+  out = out.replace(
+    /^distributions:\n {2}status: pending_activation\n/m,
+    distBlock
+  );
 
   // Validate: parses + all identities match ground truth.
   const spec = parseRepoSpec(out);
@@ -100,7 +103,9 @@ function main() {
 
   mkdirSync(path.join(SPEC_DIR, ".cogni"), { recursive: true });
   writeFileSync(path.join(SPEC_DIR, ".cogni", "repo-spec.yaml"), out, "utf8");
-  console.log(`augmented spec → ${path.join(SPEC_DIR, ".cogni", "repo-spec.yaml")}`);
+  console.log(
+    `augmented spec → ${path.join(SPEC_DIR, ".cogni", "repo-spec.yaml")}`
+  );
   console.log(`  node ${nodeId} scope ${scopeId} chain ${chainId}`);
   console.log(`  token ${dist.tokenAddress}`);
   console.log(`  emissions_holder ${dist.emissionsHolderAddress}`);

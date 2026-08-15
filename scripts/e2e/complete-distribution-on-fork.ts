@@ -24,12 +24,12 @@
 
 import postgres from "postgres";
 import {
+  type Address,
   createPublicClient,
   createWalletClient,
+  type Hex,
   http,
   parseAbi,
-  type Address,
-  type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
@@ -59,12 +59,18 @@ async function main() {
   const root = m.merkle_root as Hex;
   const token = m.token_address as Address;
   const mintDelta = BigInt(m.distribution_amount);
-  console.log(`manifest: root=${root} token=${token} mint=${mintDelta} leaves=${leaves.length}`);
+  console.log(
+    `manifest: root=${root} token=${token} mint=${mintDelta} leaves=${leaves.length}`
+  );
 
   const pub = createPublicClient({ chain: base, transport: http(RPC) });
   if ((await pub.getChainId()) !== 8453) throw new Error("fork is not Base");
   const deployer = privateKeyToAccount(ANVIL0);
-  const wallet = createWalletClient({ account: deployer, chain: base, transport: http(RPC) });
+  const wallet = createWalletClient({
+    account: deployer,
+    chain: base,
+    transport: http(RPC),
+  });
 
   // токs2 governance from the augmented spec's known values (DAO = emissions holder).
   const DAO = "0x7DeD1C96c6D27427F37F88418B2c3EB2c31eA7A5" as Address;
@@ -94,7 +100,11 @@ async function main() {
     }).then((r) => r.json());
   await rpc("anvil_impersonateAccount", [DAO]);
   await rpc("anvil_setBalance", [DAO, "0x8AC7230489E80000"]);
-  const daoWallet = createWalletClient({ account: DAO, chain: base, transport: http(RPC) });
+  const daoWallet = createWalletClient({
+    account: DAO,
+    chain: base,
+    transport: http(RPC),
+  });
   const mintHash = await daoWallet.writeContract({
     address: token,
     abi: parseAbi(["function mint(address to, uint256 amount)"]),
@@ -109,19 +119,36 @@ async function main() {
     args: [root],
   });
   await pub.waitForTransactionReceipt({ hash: rootHash });
-  console.log(`DAO minted ${mintDelta} → distributor; root set (${mintHash.slice(0, 14)}…, ${rootHash.slice(0, 14)}…)`);
+  console.log(
+    `DAO minted ${mintDelta} → distributor; root set (${mintHash.slice(0, 14)}…, ${rootHash.slice(0, 14)}…)`
+  );
 
   // 3 — each claimant claims (impersonated; product claim path uses the same call).
-  const erc20 = parseAbi(["function balanceOf(address) view returns (uint256)"]);
+  const erc20 = parseAbi([
+    "function balanceOf(address) view returns (uint256)",
+  ]);
   let claimedTotal = 0n;
   for (const leaf of leaves) {
     const account = leaf.account as Address;
     const amount = BigInt(leaf.amount);
-    const proof = (typeof leaf.proof_json === "string" ? JSON.parse(leaf.proof_json || "[]") : (leaf.proof_json ?? [])) as Hex[];
+    const proof = (
+      typeof leaf.proof_json === "string"
+        ? JSON.parse(leaf.proof_json || "[]")
+        : (leaf.proof_json ?? [])
+    ) as Hex[];
     await rpc("anvil_impersonateAccount", [account]);
     await rpc("anvil_setBalance", [account, "0x8AC7230489E80000"]);
-    const claimant = createWalletClient({ account, chain: base, transport: http(RPC) });
-    const before = await pub.readContract({ address: token, abi: erc20, functionName: "balanceOf", args: [account] });
+    const claimant = createWalletClient({
+      account,
+      chain: base,
+      transport: http(RPC),
+    });
+    const before = await pub.readContract({
+      address: token,
+      abi: erc20,
+      functionName: "balanceOf",
+      args: [account],
+    });
     const claimHash = await claimant.writeContract({
       address: distributor,
       abi: CUMULATIVE_MERKLE_DISTRIBUTOR_ABI,
@@ -129,18 +156,34 @@ async function main() {
       args: [account, amount, root, proof],
     });
     await pub.waitForTransactionReceipt({ hash: claimHash });
-    const after = await pub.readContract({ address: token, abi: erc20, functionName: "balanceOf", args: [account] });
+    const after = await pub.readContract({
+      address: token,
+      abi: erc20,
+      functionName: "balanceOf",
+      args: [account],
+    });
     const got = after - before;
     claimedTotal += got;
     console.log(`claimed ${account}: +${got} (tx ${claimHash.slice(0, 14)}…)`);
-    if (got !== amount) throw new Error(`claim mismatch: got ${got}, leaf ${amount}`);
+    if (got !== amount)
+      throw new Error(`claim mismatch: got ${got}, leaf ${amount}`);
   }
 
   // 4 — conservation.
-  const drained = await pub.readContract({ address: token, abi: erc20, functionName: "balanceOf", args: [distributor] });
-  if (claimedTotal !== mintDelta) throw new Error(`conservation broken: claimed ${claimedTotal} != minted ${mintDelta}`);
+  const drained = await pub.readContract({
+    address: token,
+    abi: erc20,
+    functionName: "balanceOf",
+    args: [distributor],
+  });
+  if (claimedTotal !== mintDelta)
+    throw new Error(
+      `conservation broken: claimed ${claimedTotal} != minted ${mintDelta}`
+    );
   if (drained !== 0n) throw new Error(`distributor not drained: ${drained}`);
-  console.log(`\nPASS — epoch ${EPOCH_ID}: minted == claimed == ${mintDelta}; distributor drained; root ${root.slice(0, 16)}…`);
+  console.log(
+    `\nPASS — epoch ${EPOCH_ID}: minted == claimed == ${mintDelta}; distributor drained; root ${root.slice(0, 16)}…`
+  );
   await sql.end();
 }
 

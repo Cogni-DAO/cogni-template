@@ -98,7 +98,9 @@ export function ExecuteDistributionPanel({
     <Card className="border-border/50 bg-card/50">
       <CardHeader>
         <CardTitle>Publish distribution</CardTitle>
-        <CardDescription>Publish this epoch&apos;s claim root on-chain.</CardDescription>
+        <CardDescription>
+          Publish this epoch&apos;s claim root on-chain.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         {isLoading ? (
