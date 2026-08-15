@@ -529,8 +529,9 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     const existingManifest =
       await attributionStore.getDistributionManifestForEpoch(args.epochId);
     if (existingManifest) {
-      const frozenLeaves =
-        await attributionStore.getDistributionLeavesForEpoch(args.epochId);
+      const frozenLeaves = await attributionStore.getDistributionLeavesForEpoch(
+        args.epochId
+      );
       logger.info(
         {
           epochId: args.epochId.toString(),
