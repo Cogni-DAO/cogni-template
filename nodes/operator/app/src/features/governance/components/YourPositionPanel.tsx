@@ -9,14 +9,16 @@
  *   balance of the node token, broken into EARNED-VIA-CONTRIBUTIONS (cumulative attribution allocation)
  *   vs the REST (formation / other), plus the existing claim affordance for CLAIMABLE-NOW. Makes the
  *   distinction unmistakable: total holdings ≠ earned-via-attribution ≠ claimable-now.
- * Scope: Client component. Sources the viewer's cumulative claim leaf via useCumulativeClaim (react-query
- *   dedupes with the embedded claim panel) and the viewer's on-chain token balance via useNodeTokenomics.
+ * Scope: Client component. Sources the node's token/chain from repo-spec via useNodeTokenomicsConfig
+ *   (so the on-chain wallet balance reads even with NO claim leaf), the viewer's earned-via-attribution
+ *   allocation from useCumulativeClaim, and the viewer's on-chain token balance via useNodeTokenomics.
  *   Reuses CumulativeClaimPanel AS-IS for the claim UX (no claim-math changes). Does not perform DB access.
  * Invariants:
+ *   - CONFIG_NOT_MANIFEST: the node token whose balance we read comes from repo-spec, never the claim leaf.
  *   - ALL_MATH_BIGINT: balances/allocations stay bigint; formatted only at display.
  *   - EARNED_IS_SUBSET: earned-via-attribution (cumulativeAmount) ≤ total holdings; "other" = holdings − earned, clamped ≥ 0.
  *   - CLAIM_UNCHANGED: the Claim affordance is the untouched CumulativeClaimPanel; this panel only frames it.
- * Side-effects: blockchain read (viewer balance via useNodeTokenomics; claim state via useCumulativeClaim).
+ * Side-effects: IO (config fetch); blockchain read (viewer balance via useNodeTokenomics; claim state via useCumulativeClaim).
  * Links: nodes/operator/app/src/features/governance/components/CumulativeClaimPanel.tsx, nodes/operator/app/src/features/governance/hooks/useCumulativeClaim.ts
  * @public
  */
@@ -27,7 +29,10 @@ import { useAccount } from "wagmi";
 import { SectionCard } from "@/components";
 import { CumulativeClaimPanel } from "@/features/governance/components/CumulativeClaimPanel";
 import { useCumulativeClaim } from "@/features/governance/hooks/useCumulativeClaim";
-import { useNodeTokenomics } from "@/features/governance/hooks/useNodeTokenomics";
+import {
+  useNodeTokenomics,
+  useNodeTokenomicsConfig,
+} from "@/features/governance/hooks/useNodeTokenomics";
 import { formatTokenAmount } from "@/features/governance/lib/format-token-amount";
 
 export function YourPositionPanel(): ReactElement {
@@ -55,13 +60,16 @@ function ConnectedPosition({
 }): ReactElement {
   const { claim, cumulativeClaimed, claimable } = useCumulativeClaim(account);
 
-  const token = (claim?.tokenAddress ?? null) as `0x${string}` | null;
-  const distributor = (claim?.distributor ?? null) as `0x${string}` | null;
-  const chainId = claim?.chainId;
+  // CONFIG_NOT_MANIFEST: read the node token from repo-spec so the on-chain wallet
+  // balance resolves even when this viewer has no claim leaf (e.g. a pure formation
+  // holder, or a freshly seeded node with zero finalized epochs).
+  const { data: config } = useNodeTokenomicsConfig();
+  const token = config?.tokenAddress ?? null;
+  const chainId = config?.chainId;
 
   const { viewerBalance, isLoading } = useNodeTokenomics({
     token,
-    distributor,
+    distributor: null,
     viewer: account,
     chainId,
   });

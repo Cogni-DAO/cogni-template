@@ -3,24 +3,27 @@
 
 /**
  * Module: `@features/governance/hooks/useNodeTokenomics`
- * Purpose: React hook reading a node's on-chain token facts for the Ownership page — the governance
- *   token total supply, the distributor's current (undistributed/in-flight) token balance, and a
- *   connected viewer's FULL wallet balance of the node token — so the UI can honestly separate
- *   TOTAL HOLDINGS from EARNED-VIA-ATTRIBUTION from CLAIMABLE-NOW.
- * Scope: Client-side on-chain reads (wagmi useReadContract) against the ERC20 governance token and the
- *   distributor address. Token/distributor/chain are sourced from the caller-supplied cumulative claim
- *   leaf (LatestDistributionClaimDto) — this hook does not fetch off-chain data or the claim itself.
- *   Does not perform DB access or write transactions.
+ * Purpose: React hooks for the Ownership page's tokenomics reads. `useNodeTokenomicsConfig` fetches THIS
+ *   NODE'S own token / distributor / chain identity from repo-spec (via the public tokenomics route) —
+ *   manifest-independent, so tokenomics render even with zero finalized epochs. `useNodeTokenomics` then
+ *   reads the on-chain facts (governance token total supply, the distributor's current undistributed
+ *   balance, and a connected viewer's FULL wallet balance) so the UI honestly separates TOTAL HOLDINGS
+ *   from EARNED-VIA-ATTRIBUTION from CLAIMABLE-NOW.
+ * Scope: Client-side. Config comes from `GET /api/v1/public/attribution/tokenomics` (react-query);
+ *   on-chain reads use wagmi useReadContract against the ERC20 governance token + distributor address.
+ *   Does NOT read the claim manifest or perform DB access / write transactions.
  * Invariants:
+ *   - CONFIG_NOT_MANIFEST: token/distributor/chain source is repo-spec, never a claim leaf.
  *   - ALL_MATH_BIGINT: totalSupply, distributor balance, and viewer balance stay bigint; formatted only at display.
  *   - READ_ONLY: pure on-chain reads; never mutates chain or DB state.
  *   - CALMLY_DISABLED: reads are gated on token/distributor/viewer presence; undefined until read (never throws for "not ready").
  *   - PUBLIC_NO_SECRETS: all inputs are public on-chain addresses + the connected wallet.
- * Side-effects: blockchain read (totalSupply, balanceOf).
- * Links: nodes/operator/app/src/features/governance/hooks/useCumulativeClaim.ts, packages/cogni-contracts/src/cumulative-merkle-distributor/abi.ts
+ * Side-effects: IO (config fetch); blockchain read (totalSupply, balanceOf).
+ * Links: nodes/operator/app/src/app/api/v1/public/attribution/tokenomics/route.ts, packages/cogni-contracts/src/cumulative-merkle-distributor/abi.ts
  * @public
  */
 
+import { type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { useReadContract } from "wagmi";
 
 /**
@@ -44,6 +47,50 @@ const ERC20_READ_ABI = [
     outputs: [{ name: "", type: "uint256" }],
   },
 ] as const;
+
+/**
+ * THIS NODE'S own tokenomics identity, from repo-spec — independent of any distribution
+ * manifest. Present the moment the DAO is formed + a distributor deployed.
+ */
+export interface NodeTokenomicsConfigDto {
+  /** Governance ERC20 token address; null until on-chain. */
+  readonly tokenAddress: `0x${string}` | null;
+  /** Cumulative Merkle distributor address; null until deployed. */
+  readonly distributorAddress: `0x${string}` | null;
+  /** EVM chain id. */
+  readonly chainId: number;
+  /** Count of finalized attribution epochs. */
+  readonly epochsCompleted: number;
+}
+
+async function fetchTokenomicsConfig(): Promise<NodeTokenomicsConfigDto> {
+  const res = await fetch("/api/v1/public/attribution/tokenomics", {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText}: ${body}`);
+  }
+  return res.json() as Promise<NodeTokenomicsConfigDto>;
+}
+
+/**
+ * Fetch the node's token / distributor / chain / epoch-count from its OWN repo-spec.
+ * MANIFEST-INDEPENDENT — resolves even on a freshly seeded node with zero finalized epochs.
+ */
+export function useNodeTokenomicsConfig(): UseQueryResult<
+  NodeTokenomicsConfigDto,
+  Error
+> {
+  return useQuery({
+    queryKey: ["governance", "tokenomics-config"],
+    queryFn: fetchTokenomicsConfig,
+    staleTime: 60_000,
+  });
+}
 
 export interface NodeTokenomicsState {
   /** ERC20 totalSupply of the node governance token, in base units. undefined until read. */

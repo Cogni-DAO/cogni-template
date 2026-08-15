@@ -7,8 +7,10 @@
  *   (token supply, distributor + its undistributed balance, distributed-via-attribution, epochs, contract
  *   links) from YOUR POSITION (full on-chain wallet balance, split into earned-via-contributions vs the
  *   rest, plus the claim affordance), then the attribution ownership distribution table.
- * Scope: Renders on-chain reads (via useNodeTokenomics/useCumulativeClaim through child panels) and
- *   attribution data (via useHoldings). Does not perform server-side logic or direct DB access.
+ * Scope: Renders on-chain reads (via the child panels' useNodeTokenomics/useCumulativeClaim) and
+ *   attribution data (via useHoldings). The child panels source the node's token/distributor/chain from
+ *   repo-spec (public tokenomics route), NOT a claim manifest — so tokenomics render with zero epochs.
+ *   Does not perform server-side logic or direct DB access.
  * Invariants:
  *   - ALL_MATH_BIGINT: token amounts stay bigint; formatted only at display.
  *   - THREE_NUMBER_MODEL: total holdings ≠ earned-via-attribution ≠ claimable-now — all three are shown, labeled plainly.
@@ -23,7 +25,6 @@
 import { Coins, TrendingUp, Users } from "lucide-react";
 import type { ReactElement } from "react";
 import { useMemo } from "react";
-import { useAccount } from "wagmi";
 
 import {
   Card,
@@ -38,20 +39,11 @@ import {
 import { HoldingRow } from "@/features/governance/components/HoldingCard";
 import { NodeTokenomicsPanel } from "@/features/governance/components/NodeTokenomicsPanel";
 import { YourPositionPanel } from "@/features/governance/components/YourPositionPanel";
-import { useCumulativeClaim } from "@/features/governance/hooks/useCumulativeClaim";
 import { useHoldings } from "@/features/governance/hooks/useHoldings";
 import { buildPieChartData } from "@/features/governance/lib/build-pie-data";
 
 export function HoldingsView(): ReactElement {
   const { data, isLoading, error } = useHoldings();
-
-  // Source the node's token/distributor/chain from the connected viewer's latest
-  // cumulative claim leaf (react-query dedupes with the claim panel's own read).
-  const { address } = useAccount();
-  const { claim } = useCumulativeClaim(address);
-  const token = (claim?.tokenAddress ?? null) as `0x${string}` | null;
-  const distributor = (claim?.distributor ?? null) as `0x${string}` | null;
-  const chainId = claim?.chainId;
 
   const { chartData, chartConfig, legendEntries } = useMemo(() => {
     if (!data?.holdings.length)
@@ -111,13 +103,7 @@ export function HoldingsView(): ReactElement {
         </p>
       </div>
 
-      <NodeTokenomicsPanel
-        token={token}
-        distributor={distributor}
-        chainId={chainId}
-        distributedCredits={totalCredits}
-        epochsCompleted={data.epochsCompleted}
-      />
+      <NodeTokenomicsPanel distributedCredits={totalCredits} />
 
       <YourPositionPanel />
 
