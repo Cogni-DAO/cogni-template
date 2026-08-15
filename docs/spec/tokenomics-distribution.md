@@ -86,6 +86,26 @@ Activation is ONE owner-driven flow (not two buttons), recorded git-authoritativ
 
 The on-chain deploy is irreversible truth; a failed git-record is a retryable follow-up, never a masked deploy failure (`RECORD_FAILURE_IS_NON_FATAL`).
 
+## Local rig vs production — what is REAL vs SIMULATED (read this before trusting a local "proof")
+
+The finalize→publish→claim loop can be exercised end-to-end in local dev, but the local rig
+replaces the parts of the production plane that need hosted credentials with seeded / off-tree
+substitutes. **The MECHANISM is real; the DATA and the git/App plumbing around it are simulated.**
+A future agent must not read a green local run as a green production run. What each side does:
+
+| Concern | PRODUCTION (hosted) | LOCAL RIG (this repo, `scripts/e2e/*` + `.harness/`) |
+| --- | --- | --- |
+| Chain / wallet / money | Real Base 8453, owner wallet, real gas | **SAME — real Base, real wallet, real gas.** NOT simulated. Governance is `toks2` (throwaway DAO `0x7DeD…`), never the prod Cogni DAO `0xF61c…`. |
+| DAO / token / distributor | Deployed per node at activation | **SAME — real toks2 contracts on Base**, pre-deployed. |
+| Contracts / fold math / merkle proofs / claim | Vendored `CumulativeMerkleDistributor` + scoped condition; fold builds the cumulative root | **SAME code path — no forks.** The one exception is fork-verification (`verify-publish-condition-on-fork.ts`) which runs on an anvil Base fork (no gas) purely to prove `grantWithCondition`. |
+| repo-spec write-back (activate + record distributor) | operator **GitHub App** commits `distributions.status: active` + `distributor_address` to the node repo (a PR) | **NO App creds locally.** The write-back POST fails; `RECORD_FAILURE_IS_NON_FATAL` keeps the on-chain deploy truthful, and the spec is instead read off-tree from `.harness/.cogni/repo-spec.yaml` (`COGNI_REPO_PATH`/`HARNESS_SPEC_DIR` in `.env.local`). **This is the single biggest divergence.** |
+| per-node distribution-config gateway (fold reads the finalizing node's governance) | worker calls the operator gateway (App-read of the node repo) → `emissionsHolderAddress` authoritative | **No App-read locally** → `distributionConfigClient` is null (no `COGNI_NODE_ENDPOINTS`) → the fold uses the **baked** identity from `.harness`. The container now bakes `governance.emissions_holder` too, so the bug.5020 execute-guard still asserts on this path. |
+| attribution receipts (what an epoch pays) | real GitHub PR-merge receipts via webhooks | **Fabricated** — `seed-toks2.mts` inserts 3 `pr_merged` receipts, all attributed to the owner wallet. Allocations are synthetic. |
+| worker DB role | `app_service` (BYPASSRLS) via `DATABASE_SERVICE_URL` | SAME role, but **manually exported** (`DATABASE_URL=$DATABASE_SERVICE_URL`); on `app_user` the fold sees no selections ("no claimant allocations"). |
+| epoch reseed | epochs advance monotonically from live activity | **`TRUNCATE epochs` with `session_replication_role=replica`** to bypass the finalize-freeze trigger — a superuser hack, never a production op. Reseeds can leave **non-monotonic epoch ids** that don't line up with the on-chain published root — a live-DB footgun, not a product behavior. |
+
+**Net for a future agent:** a local run proves the *contracts + fold + claim mechanism* on real Base. It does NOT prove the *activation/record git-plane* (App write-back) or the *gateway fold-resolution* — those are stubbed by `.harness`. To prove those, run on candidate-a where the operator App is installed. Never put this rig config in `.context/` — it lives in `.env.local` + `.harness/` (git-ignored) and is documented here.
+
 ## What is proven (2026-08-15)
 
 First real distribution shipped on Base for `toks2`: deploy `0xb8a2…7ceb` → finalize epoch 17 → fold (root `0x17bcc008…`, 12000e18, 1 leaf) → publish (mint+setRoot) → claim. Conservation held; distributor drained. The publish used the dead-end proposal mechanism (single-owner) — the loop is proven; the authorization model is what this spec replaces.
@@ -96,7 +116,8 @@ First real distribution shipped on Base for `toks2`: deploy `0xb8a2…7ceb` → 
 | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
 | deploy + activate | `features/nodes/DistributionsCard.client.tsx`, `useDeployDistributor.ts`, `api/v1/nodes/[id]/activate-distributions/route.ts`                           | DAO_OWNS_DISTRIBUTOR, ONE_TIME_AUTHORIZATION, RECORD_FAILURE_IS_NON_FATAL |
 | fold              | `services/scheduler-worker/src/activities/ledger.ts` (`buildAndPersistCumulativeDistribution`), `packages/aragon-osx/src/epoch-distribution-service.ts` | fold-never-undoes-finalize, CONSERVATION                                  |
-| publish           | (story.5005) execute/publish surface + executor                                                                                                         | ONE_TIME_AUTHORIZATION, SIGNATURE_IS_THE_AUTHORITY                        |
+| authorize (1-time) | `features/governance/hooks/useAuthorizePublishing.ts`, `packages/cogni-contracts/src/distribution-publish-condition/` (scoped condition, fork-verified), `lib/proposal-abis.ts` | ONE_TIME_AUTHORIZATION, MULTI_MEMBER_BY_DEFAULT (scoped grant) |
+| publish (per-epoch) | `features/governance/components/ExecuteDistributionPanel.tsx`, `useExecuteDistribution.ts` (direct `DAO.execute`, NO vote)                              | SIGNATURE_IS_THE_AUTHORITY, no per-epoch vote                             |
 | claim             | `features/governance/components/CumulativeClaimPanel.tsx`, `useCumulativeClaim.ts`, `api/v1/public/attribution/distribution/latest`                     | PULL_NOT_PUSH, SINGLE_CLAIM_COVERS_ALL                                    |
 | ownership page    | `app/(app)/gov/holdings/`                                                                                                                               | show NODE tokenomics + viewer's FULL position, not just distributed       |
 
