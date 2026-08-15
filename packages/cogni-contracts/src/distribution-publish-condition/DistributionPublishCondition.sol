@@ -2,31 +2,9 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 pragma solidity ^0.8.17;
 
-/**
- * @dev Aragon OSx permission-condition interface. Standalone, INLINED (not imported
- * from the aragon packages) so this file compiles with no external deps. Matches OSx v1.3
- * `IPermissionCondition`: the DAO's `PermissionManager._auth` forwards the FULL
- * `execute` calldata (as `_data`) to the bound condition's `isGranted`.
- */
-interface IPermissionCondition {
-    function isGranted(
-        address _where,
-        address _who,
-        bytes32 _permissionId,
-        bytes calldata _data
-    ) external view returns (bool);
-}
-
-/**
- * @dev The OSx `Action` struct, INLINED. `DAO.execute` takes an `Action[]`; each
- * action is a `{to, value, data}` low-level call the DAO makes as msg.sender.
- * The layout MUST match OSx exactly so `abi.decode` reads it correctly.
- */
-struct Action {
-    address to;
-    uint256 value;
-    bytes data;
-}
+import {PermissionCondition} from "@aragon/osx-commons-contracts/src/permission/condition/PermissionCondition.sol";
+import {IPermissionCondition} from "@aragon/osx-commons-contracts/src/permission/condition/IPermissionCondition.sol";
+import {Action} from "@aragon/osx-commons-contracts/src/executors/IExecutor.sol";
 
 /**
  * @title DistributionPublishCondition
@@ -35,9 +13,21 @@ struct Action {
  *   Thereafter the executor may call `DAO.execute` ONLY for the exact publish action
  *   set `[token.mint(distributor, *), distributor.setMerkleRoot(*)]` — nothing else.
  *   A compromised executor key can publish, never drain the treasury or re-permission.
- * @dev Pure view; no state, no reentrancy surface. `token` + `distributor` are immutable.
+ * @dev Extends Aragon's `PermissionCondition` abstract base — the BEST-PRACTICE way to
+ *   author an OSx condition. The base derives from `ERC165` and implements
+ *   `supportsInterface`, so `condition.supportsInterface(type(IPermissionCondition).interfaceId)`
+ *   returns true — the exact ERC-165 check `PermissionManager.grantWithCondition` performs
+ *   before accepting the condition (a hand-rolled interface that omitted this reverted with
+ *   `ConditionInterfaceNotSupported` / `0xa6a7dbbd`). Pure view; no state, no reentrancy
+ *   surface. `token` + `distributor` are immutable.
+ *
+ * Source of the OSx pieces (Aragon osx-commons-contracts 1.4.0):
+ *   - PermissionCondition   from .../permission/condition/PermissionCondition.sol
+ *   - IPermissionCondition  from same package; interfaceId == isGranted.selector
+ *   - Action                from .../executors/IExecutor.sol
+ *     (the {to, value, data} struct DAO.execute consumes; moved out of IDAO in 1.4).
  */
-contract DistributionPublishCondition is IPermissionCondition {
+contract DistributionPublishCondition is PermissionCondition {
     /// @notice The node's GovernanceERC20 — the ONLY allowed `mint` target (action[0].to).
     address public immutable token;
     /// @notice The node's CumulativeMerkleDistributor — mint recipient AND `setMerkleRoot` target.
@@ -60,13 +50,14 @@ contract DistributionPublishCondition is IPermissionCondition {
      * @dev `_where`/`_who`/`_permissionId` are unused: OSx already routed this condition to
      *   the (where=DAO, who=executor, EXECUTE_PERMISSION) grant, so the ONLY thing left to
      *   verify is the SHAPE of the requested execution. We inspect `_data` and nothing else.
+     *   Overrides the `IPermissionCondition.isGranted` the base declares.
      */
     function isGranted(
         address, /* _where */
         address, /* _who */
         bytes32, /* _permissionId */
         bytes calldata _data
-    ) external view override returns (bool) {
+    ) public view override returns (bool) {
         // `_data` is the full calldata of:
         //   DAO.execute(bytes32 _callId, Action[] _actions, uint256 _allowFailureMap)
         // Strip the 4-byte function selector, then decode the three args. `abi.decode`

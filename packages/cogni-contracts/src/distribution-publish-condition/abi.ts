@@ -18,9 +18,17 @@
 /**
  * `DistributionPublishCondition` ABI.
  *
- * AUTHORED by Cogni (unlike the vendored 1inch distributor). Standalone contract that
- * implements Aragon OSx `IPermissionCondition`: bound via
- * `grantWithCondition(where=DAO, who=executor, EXECUTE_PERMISSION, condition)`, its
+ * AUTHORED by Cogni (unlike the vendored 1inch distributor). The contract extends
+ * Aragon's `PermissionCondition` abstract base (osx-commons-contracts 1.4.0), the
+ * best-practice way to author an OSx condition. Because the base derives from
+ * `ERC165`, the ABI includes `supportsInterface(bytes4)` and `protocolVersion()` in
+ * ADDITION to `isGranted` + the two immutables — and
+ * `supportsInterface(type(IPermissionCondition).interfaceId)` (interfaceId
+ * `0x2675fdd0` == `isGranted` selector) returns true, which is exactly the ERC-165
+ * check `PermissionManager.grantWithCondition` performs before accepting the condition.
+ * (The previous hand-rolled version omitted `supportsInterface` and reverted
+ * `grantWithCondition` with `ConditionInterfaceNotSupported` / `0xa6a7dbbd`.)
+ *
  * `isGranted` decodes the `DAO.execute` calldata and returns true ONLY when the action
  * set is exactly `[token.mint(distributor, *), distributor.setMerkleRoot(*)]` — nothing
  * else, no third action, no other target. Two immutables set at deploy:
@@ -28,8 +36,9 @@
  *
  * Source:    packages/cogni-contracts/src/distribution-publish-condition/
  *              DistributionPublishCondition.sol
- * Compiler:  solc 0.8.24+commit.e11b9ed9, optimizer enabled (200 runs).
- * Deps:      none — `IPermissionCondition` + `Action` are inlined in the source.
+ * Compiler:  solc 0.8.17+commit.8df45f5f, optimizer enabled (200 runs), standard-JSON.
+ * Deps:      @aragon/osx-commons-contracts@1.4.0 (PermissionCondition, IPermissionCondition,
+ *              Action from executors/IExecutor.sol) + its @openzeppelin/contracts peer (ERC165).
  *
  * Constructor: (address _token, address _distributor) — both immutable.
  */
@@ -58,6 +67,20 @@ export const DISTRIBUTION_PUBLISH_CONDITION_ABI = [
       { name: "", type: "bytes32", internalType: "bytes32" },
       { name: "_data", type: "bytes", internalType: "bytes" },
     ],
+    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "protocolVersion",
+    inputs: [],
+    outputs: [{ name: "", type: "uint8[3]", internalType: "uint8[3]" }],
+    stateMutability: "pure",
+  },
+  {
+    type: "function",
+    name: "supportsInterface",
+    inputs: [{ name: "_interfaceId", type: "bytes4", internalType: "bytes4" }],
     outputs: [{ name: "", type: "bool", internalType: "bool" }],
     stateMutability: "view",
   },
