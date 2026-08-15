@@ -35,9 +35,13 @@ interface SignDataResponse {
   };
 }
 
-/** Response from the finalize endpoint. */
+/**
+ * Response from the finalize endpoint. Finalize is now synchronous + in-process
+ * (story.5007): a 200 means the epoch is finalized on this node's own DB and the R3
+ * cumulative manifest (if distributions are active) is persisted — no workflow to poll.
+ */
 interface FinalizeResponse {
-  readonly workflowId: string;
+  readonly statementId: string;
 }
 
 // ── State machine ────────────────────────────────────────────────────────────
@@ -53,7 +57,7 @@ export type SignEpochPhase =
 export interface SignEpochState {
   readonly phase: SignEpochPhase;
   readonly isInFlight: boolean;
-  readonly workflowId: string | null;
+  readonly statementId: string | null;
   readonly errorMessage: string | null;
 }
 
@@ -62,14 +66,14 @@ type InternalState =
   | { phase: "FETCHING_DATA" }
   | { phase: "AWAITING_SIGNATURE" }
   | { phase: "SUBMITTING" }
-  | { phase: "SUCCESS"; workflowId: string }
+  | { phase: "SUCCESS"; statementId: string }
   | { phase: "ERROR"; message: string };
 
 type Action =
   | { type: "START_FETCH" }
   | { type: "DATA_FETCHED" }
   | { type: "SIGNATURE_RECEIVED" }
-  | { type: "FINALIZE_SUCCESS"; workflowId: string }
+  | { type: "FINALIZE_SUCCESS"; statementId: string }
   | { type: "FAIL"; message: string }
   | { type: "RESET" };
 
@@ -82,7 +86,7 @@ function reducer(state: InternalState, action: Action): InternalState {
     case "SIGNATURE_RECEIVED":
       return { phase: "SUBMITTING" };
     case "FINALIZE_SUCCESS":
-      return { phase: "SUCCESS", workflowId: action.workflowId };
+      return { phase: "SUCCESS", statementId: action.statementId };
     case "FAIL":
       return { phase: "ERROR", message: action.message };
     case "RESET":
@@ -106,21 +110,21 @@ function derivePublicState(internal: InternalState): SignEpochState {
       return {
         phase: internal.phase,
         isInFlight,
-        workflowId: null,
+        statementId: null,
         errorMessage: null,
       };
     case "SUCCESS":
       return {
         phase: "SUCCESS",
         isInFlight: false,
-        workflowId: internal.workflowId,
+        statementId: internal.statementId,
         errorMessage: null,
       };
     case "ERROR":
       return {
         phase: "ERROR",
         isInFlight: false,
-        workflowId: null,
+        statementId: null,
         errorMessage: internal.message,
       };
   }
@@ -193,7 +197,7 @@ export function useSignEpoch(epochId: string): UseSignEpochReturn {
       dispatch({ type: "SIGNATURE_RECEIVED" });
       const result = await postFinalize(epochId, signature);
 
-      dispatch({ type: "FINALIZE_SUCCESS", workflowId: result.workflowId });
+      dispatch({ type: "FINALIZE_SUCCESS", statementId: result.statementId });
       void queryClient.invalidateQueries({ queryKey: ["governance"] });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Signing failed";

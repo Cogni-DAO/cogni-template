@@ -56,6 +56,40 @@ const TOKEN_BASE_UNITS = 10n ** 18n;
 const PROD_COGNI_DAO_ADDRESS =
   "0xF61c3fafD4D34b4568e7a500d92b28Ac175e83C6".toLowerCase();
 
+/**
+ * Codes for CLIENT/REQUEST-STATE finalize failures — the caller can fix these (wrong
+ * epoch state, unknown signer, invalid signature). The finalize route maps them to HTTP
+ * 422, keeping them OUT of the 500 "internal" alarm bucket (FAULT_PARTY_BEFORE_BUCKET,
+ * error-handling.md). Genuine server faults (data-integrity mismatch, DB failure) throw
+ * a plain Error → 500, so `internal` stays the alarm, not the dump.
+ */
+export type FinalizeEpochErrorCode =
+  | "epoch_not_found"
+  | "epoch_not_in_review"
+  | "config_not_locked"
+  | "no_approvers"
+  | "signer_not_approver"
+  | "no_pool_components"
+  | "missing_base_issuance"
+  | "no_locked_claimants"
+  | "no_claimant_allocations"
+  | "signature_invalid";
+
+/** A finalize failure the caller can fix (bad request state / signer / signature). */
+export class FinalizeEpochError extends Error {
+  readonly code: FinalizeEpochErrorCode;
+  constructor(code: FinalizeEpochErrorCode, message: string) {
+    super(message);
+    this.name = "FinalizeEpochError";
+    this.code = code;
+  }
+}
+
+/** Type guard — the route uses this to translate to HTTP 422 (never string-matches). */
+export function isFinalizeEpochError(err: unknown): err is FinalizeEpochError {
+  return err instanceof FinalizeEpochError;
+}
+
 /** Structural logger — pino-compatible, avoids a pino dep in this neutral package. */
 export interface FinalizeLogger {
   info(obj: object, msg?: string): void;
@@ -120,9 +154,10 @@ export interface RunFinalizeEpochDeps {
   readonly distributionConfigClient?: FinalizeDistributionConfigResolver | null;
   /**
    * Deploy environment for the bug.5020 execute-guard. Any value other than
-   * `"production"` (including undefined) is non-production, fail-closed.
+   * `"production"` (including undefined) is non-production, fail-closed. Explicitly
+   * `| undefined` so callers under `exactOptionalPropertyTypes` can pass an optional env.
    */
-  readonly deploymentEnvironment?: string;
+  readonly deploymentEnvironment?: string | undefined;
   readonly logger: FinalizeLogger;
 }
 
@@ -514,7 +549,10 @@ export async function runFinalizeEpoch(
   // 1. Load epoch — verify exists and is review (or finalized for idempotency)
   const epoch = await attributionStore.getEpoch(epochId);
   if (!epoch) {
-    throw new Error(`finalizeEpoch: epoch ${input.epochId} not found`);
+    throw new FinalizeEpochError(
+      "epoch_not_found",
+      `finalizeEpoch: epoch ${input.epochId} not found`
+    );
   }
 
   // EPOCH_FINALIZE_IDEMPOTENT: already finalized → repair via atomic method
@@ -595,28 +633,32 @@ export async function runFinalizeEpoch(
   }
 
   if (epoch.status !== "review") {
-    throw new Error(
+    throw new FinalizeEpochError(
+      "epoch_not_in_review",
       `finalizeEpoch: epoch ${input.epochId} is '${epoch.status}', expected 'review'`
     );
   }
 
   // 2. CONFIG_LOCKED_AT_REVIEW: verify config is locked
   if (!epoch.allocationAlgoRef || !epoch.weightConfigHash) {
-    throw new Error(
+    throw new FinalizeEpochError(
+      "config_not_locked",
       `finalizeEpoch: epoch ${input.epochId} missing allocation_algo_ref or weight_config_hash (CONFIG_LOCKED_AT_REVIEW violated)`
     );
   }
 
   // 3. Verify signer is in pinned approvers (APPROVERS_PINNED_AT_REVIEW)
   if (!epoch.approvers || epoch.approvers.length === 0) {
-    throw new Error(
+    throw new FinalizeEpochError(
+      "no_approvers",
       `finalizeEpoch: epoch ${input.epochId} has no pinned approvers (APPROVERS_PINNED_AT_REVIEW violated)`
     );
   }
   const signerLower = input.signerAddress.toLowerCase();
   const approversLower = epoch.approvers.map((a) => a.toLowerCase());
   if (!approversLower.includes(signerLower)) {
-    throw new Error(
+    throw new FinalizeEpochError(
+      "signer_not_approver",
       `finalizeEpoch: signer ${input.signerAddress} not in approvers`
     );
   }
@@ -632,7 +674,8 @@ export async function runFinalizeEpoch(
   const poolComponents =
     await attributionStore.getPoolComponentsForEpoch(epochId);
   if (poolComponents.length === 0) {
-    throw new Error(
+    throw new FinalizeEpochError(
+      "no_pool_components",
       `finalizeEpoch: epoch ${input.epochId} has no pool components (POOL_REQUIRES_BASE)`
     );
   }
@@ -640,7 +683,8 @@ export async function runFinalizeEpoch(
     (c) => c.componentId === "base_issuance"
   );
   if (!hasBaseIssuance) {
-    throw new Error(
+    throw new FinalizeEpochError(
+      "missing_base_issuance",
       `finalizeEpoch: epoch ${input.epochId} missing base_issuance component (POOL_REQUIRES_BASE)`
     );
   }
@@ -650,7 +694,8 @@ export async function runFinalizeEpoch(
   // 5. Load locked claimants + receipt weights + overrides → explode to claimant allocations
   const lockedClaimants = await attributionStore.loadLockedClaimants(epochId);
   if (lockedClaimants.length === 0) {
-    throw new Error(
+    throw new FinalizeEpochError(
+      "no_locked_claimants",
       `finalizeEpoch: epoch ${input.epochId} has no locked claimant rows`
     );
   }
@@ -680,7 +725,8 @@ export async function runFinalizeEpoch(
     overrides
   );
   if (finalClaimantAllocations.length === 0) {
-    throw new Error(
+    throw new FinalizeEpochError(
+      "no_claimant_allocations",
       `finalizeEpoch: epoch ${input.epochId} has no claimant allocations`
     );
   }
@@ -722,7 +768,8 @@ export async function runFinalizeEpoch(
     signature: input.signature as `0x${string}`,
   });
   if (!isValid) {
-    throw new Error(
+    throw new FinalizeEpochError(
+      "signature_invalid",
       `finalizeEpoch: signature verification failed for signer ${input.signerAddress}`
     );
   }

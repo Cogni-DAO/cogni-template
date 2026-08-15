@@ -4,47 +4,26 @@
 /**
  * Module: `@app/api/v1/attribution/epochs/[id]/finalize/route`
  * Purpose: SIWE + approver-gated endpoint for finalizing an epoch (review → finalized) with EIP-712 signature.
- * Scope: Auth-protected POST endpoint. Starts FinalizeEpochWorkflow via Temporal. Returns 202 + workflowId (WRITES_VIA_TEMPORAL). Does not perform finalization logic directly — delegates to workflow.
- * Invariants: WRITE_ROUTES_APPROVER_GATED, WRITES_VIA_TEMPORAL, EPOCH_FINALIZE_IDEMPOTENT.
- * Side-effects: IO (HTTP response, Temporal workflow start, Temporal task queue describe)
- * Links: docs/spec/attribution-ledger.md, contracts/attribution.finalize-epoch.v1.contract
+ * Scope: Auth-protected POST endpoint. Finalizes IN-PROCESS on this node's own DB (story.5007 finalize-in-process) — no Temporal round-trip, no ledger-tasks queue. Returns 200 + the statement + R3 cumulative distribution. Delegates all logic to `finalizeEpochInProcess` (bootstrap) → `runFinalizeEpoch`.
+ * Invariants: WRITE_ROUTES_APPROVER_GATED, FINALIZE_IN_PROCESS, EPOCH_FINALIZE_IDEMPOTENT (a re-POST repairs; fold FREEZE preserves a published manifest).
+ * Side-effects: IO (HTTP response, service-DB finalize transaction, viem EIP-712 verify, in-process distribution-config read).
+ * Links: docs/spec/attribution-ledger.md, contracts/attribution.finalize-epoch.v1.contract, bootstrap/container#finalizeEpochInProcess
  * @public
  */
 
+import { isFinalizeEpochError } from "@cogni/attribution-pipeline-plugins";
 import {
   FinalizeEpochInputSchema,
   finalizeEpochOperation,
 } from "@cogni/node-contracts";
-import {
-  Client,
-  Connection,
-  WorkflowExecutionAlreadyStartedError,
-} from "@temporalio/client";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { checkApprover } from "@/app/api/v1/attribution/_lib/approver-guard";
-import { getContainer } from "@/bootstrap/container";
+import { finalizeEpochInProcess, getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
-import { getNodeId, getScopeId } from "@/shared/config";
-import { serverEnv } from "@/shared/env/server-env";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-/**
- * Task-queue BASE for ledger workflows — must match ledger-worker.ts. Finalize is
- * dispatched to this node's PER-NODE queue `${base}-${nodeId}` (bug.5023): a single
- * shared `ledger-tasks` queue let a wrong-scope worker steal another node's finalize →
- * getEpoch (scope-gated) returns null → "epoch not found" terminal fail + forced re-sign.
- * Mirrors the scheduler-tasks QUEUE_PER_NODE_ISOLATION convention (worker.ts::nodeTaskQueueName).
- */
-const LEDGER_TASK_QUEUE_BASE = "ledger-tasks";
-
-/**
- * temporal.api.enums.v1.TaskQueueType.TASK_QUEUE_TYPE_WORKFLOW = 1
- * From @temporalio/proto (transitive dep, not re-exported by @temporalio/client).
- */
-const TASK_QUEUE_TYPE_WORKFLOW = 1;
 
 export const POST = wrapRouteHandlerWithLogging<{
   params: Promise<{ id: string }>;
@@ -93,90 +72,46 @@ export const POST = wrapRouteHandlerWithLogging<{
       );
     }
 
-    // Start FinalizeEpochWorkflow via Temporal
-    const env = serverEnv();
-    const scopeId = getScopeId();
-    // bug.5023: dispatch to THIS node's own ledger queue so no wrong-scope worker can
-    // steal the finalize. The shared `ledger-tasks` queue is purged (per-node only).
-    const ledgerTaskQueue = `${LEDGER_TASK_QUEUE_BASE}-${getNodeId()}`;
-
-    const workflowId = `ledger-finalize-${scopeId}-${epochId.toString()}`;
-
-    // TODO: Replace per-request connection with a singleton/connection manager
-    // to avoid connection overhead on every finalize call.
-    const connection = await Connection.connect({
-      address: env.TEMPORAL_ADDRESS,
-    });
-    const client = new Client({
-      connection,
-      namespace: env.TEMPORAL_NAMESPACE,
-    });
-
+    // FINALIZE_IN_PROCESS (story.5007): finalize synchronously on this node's own DB —
+    // sign-verify → atomic off-chain finalize → R3 cumulative fold — instead of dispatching
+    // a Temporal FinalizeEpochWorkflow. Idempotent: a re-POST on an already-finalized epoch
+    // repairs; the fold FREEZE (bug.5022) preserves a published manifest.
     try {
-      // Defense-in-depth: verify THIS node's ledger queue has active pollers before submitting
-      const taskQueueDesc = await connection.workflowService.describeTaskQueue({
-        namespace: env.TEMPORAL_NAMESPACE,
-        taskQueue: { name: ledgerTaskQueue },
-        taskQueueType: TASK_QUEUE_TYPE_WORKFLOW,
-      });
-      const pollersCount = taskQueueDesc.pollers?.length ?? 0;
+      const result = await finalizeEpochInProcess(
+        { epochId: epochId.toString(), signature, signerAddress },
+        ctx.log
+      );
 
-      if (pollersCount === 0) {
-        ctx.log.warn(
-          { workflowId, taskQueue: ledgerTaskQueue, pollersCount: 0 },
-          "ledger.finalize_no_pollers"
-        );
-        return NextResponse.json(
-          {
-            error: `No workers polling ${ledgerTaskQueue}. Finalize worker may be down.`,
-          },
-          { status: 503 }
-        );
-      }
-
-      let created = true;
-
-      try {
-        await client.workflow.start("FinalizeEpochWorkflow", {
-          taskQueue: ledgerTaskQueue,
-          workflowId,
-          args: [
-            {
-              epochId: epochId.toString(),
-              signature,
-              signerAddress,
-            },
-          ],
-        });
-      } catch (err) {
-        // EPOCH_FINALIZE_IDEMPOTENT: already running or completed → return same workflowId
-        if (!(err instanceof WorkflowExecutionAlreadyStartedError)) {
-          throw err;
-        }
-        created = false;
-        ctx.log.info(
-          { workflowId },
-          "Finalize workflow already running — returning existing ID"
-        );
-      }
-
+      // Deterministic terminal (observability.md): exactly one of completed / rejected.
       ctx.log.info(
         {
           epochId: id,
-          workflowId,
-          taskQueue: ledgerTaskQueue,
-          pollersCount,
-          created,
+          statementId: result.statementId,
+          statementLineCount: result.statementLineCount,
+          published: result.cumulativeDistribution !== null,
         },
-        "ledger.finalize_submitted"
+        "ledger.finalize_completed"
       );
 
-      return NextResponse.json(
-        finalizeEpochOperation.output.parse({ workflowId, created }),
-        { status: 202 }
-      );
-    } finally {
-      await connection.close();
+      return NextResponse.json(finalizeEpochOperation.output.parse(result), {
+        status: 200,
+      });
+    } catch (err) {
+      // FAULT_PARTY_BEFORE_BUCKET (error-handling.md): a client-fault finalize failure
+      // (wrong epoch state / unknown signer / invalid signature) is a typed FinalizeEpochError
+      // → HTTP 422 with its stable `code`. It must NOT collapse into the 500 alarm bucket.
+      // Anything else (data-integrity mismatch, DB fault) is rethrown → the wrapper's 500.
+      if (isFinalizeEpochError(err)) {
+        ctx.log.warn(
+          { epochId: id, code: err.code, reason: err.message },
+          "ledger.finalize_rejected"
+        );
+        return NextResponse.json(
+          { error: err.message, code: err.code },
+          { status: 422 }
+        );
+      }
+      throw err;
     }
   }
 );

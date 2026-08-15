@@ -55,9 +55,12 @@ export {
 // Finalize-in-process (story.5007) — runtime-agnostic epoch finalization + R3 fold
 export {
   type FinalizeDistributionConfigResolver,
+  FinalizeEpochError,
+  type FinalizeEpochErrorCode,
   type FinalizeEpochInput,
   type FinalizeEpochOutput,
   type FinalizeLogger,
+  isFinalizeEpochError,
   runFinalizeEpoch,
   type RunFinalizeEpochDeps,
 } from "./finalize/run-finalize-epoch";

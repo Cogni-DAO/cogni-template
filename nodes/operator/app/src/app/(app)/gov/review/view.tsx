@@ -199,7 +199,7 @@ function ReviewEpochSection({
         {state.phase === "SUCCESS" && (
           <div className="flex items-center gap-2 text-sm text-success">
             <CheckCircle2 className="h-4 w-4" />
-            <span>Finalization started (workflow: {state.workflowId})</span>
+            <span>Epoch finalized (statement: {state.statementId})</span>
           </div>
         )}
 
