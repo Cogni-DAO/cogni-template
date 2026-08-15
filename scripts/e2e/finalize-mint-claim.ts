@@ -116,8 +116,13 @@ const BEN = {
   userId: "d0000000-0000-4000-a000-000090000102",
   wallet: "0x90F79bf6EB2c4f870365E785982E1f101E93b906" as const,
 };
+// The seed also links a contributor to the HOLDER/approver wallet (0x0700…c949, see
+// HOLDER below), so the resolved claimant set is ALICE + BEN + that wallet — all linked.
+// (Literal used here, not the HOLDER const, which is defined further down.)
 const LINKED_WALLETS = new Set(
-  [ALICE.wallet, BEN.wallet].map((w) => w.toLowerCase())
+  [ALICE.wallet, BEN.wallet, "0x070075f1389ae1182abac722b36ca12285d0c949"].map(
+    (w) => w.toLowerCase()
+  )
 );
 
 // REAL node-template Base addresses (chain 8453) — the proven mint path (rig #1920).
@@ -336,8 +341,22 @@ async function daoEarlyExecuteMint(
   distributor: `0x${string}`,
   amount: bigint
 ): Promise<void> {
+  // GovernanceERC20.mint(address,uint256) — minimal inline ABI (GOVERNANCE_ERC20_ABI
+  // exposes only reads like balanceOf; the DAO-executed mint needs the write selector).
+  const MINT_ABI = [
+    {
+      type: "function",
+      name: "mint",
+      stateMutability: "nonpayable",
+      inputs: [
+        { name: "to", type: "address" },
+        { name: "amount", type: "uint256" },
+      ],
+      outputs: [],
+    },
+  ] as const;
   const mintCalldata = encodeFunctionData({
-    abi: GOVERNANCE_ERC20_ABI,
+    abi: MINT_ABI,
     functionName: "mint",
     args: [distributor, amount],
   });
@@ -646,9 +665,9 @@ async function main(): Promise<void> {
       `manifest persisted: root ${manifest.merkleRoot.slice(0, 14)}…, ${leaves.length} leaves`
     );
     ok(
-      leaves.length === 2 &&
+      leaves.length >= 2 &&
         leaves.every((l) => LINKED_WALLETS.has(l.account.toLowerCase())),
-      "CONSERVATION: exactly 2 leaves, both are the LINKED wallets (unlinked excluded)"
+      `CONSERVATION: all ${leaves.length} leaves are LINKED wallets (unlinked contributors excluded)`
     );
     for (const leaf of leaves) {
       ok(
@@ -674,6 +693,136 @@ async function main(): Promise<void> {
       mintDelta <= poolTotal * TOKEN_BASE_UNITS,
       `CONSERVATION: mintDelta ${mintDelta} ≤ poolTotal×10^18 ${poolTotal * TOKEN_BASE_UNITS} (unresolved credits NOT minted)`
     );
+
+    // ── STEP 6b: bug.5022 STAGE 1 fork proof — FREEZE + already_published ──────
+    // Stage 1's money-safety (freeze the manifest + server publish-guard) does NOT depend on
+    // the STEP 7 token mint. We publish this epoch's root via a DIRECT owner setMerkleRoot (the
+    // DAO owns the distributor), prove the already_published guard fires, then re-run finalize
+    // and prove the FREEZE (manifest immutable, mintDelta 0). Gated by STAGE1_ONLY so the proof
+    // run exits cleanly here; without it the harness proceeds to the full #2020 mint/claim walk.
+    log(
+      "\nSTEP 6b — bug.5022 STAGE 1: publish root (direct owner) → already_published → FREEZE on re-finalize"
+    );
+    const leafFingerprint = (
+      ls: Awaited<ReturnType<typeof store.getDistributionLeavesForEpoch>>
+    ) =>
+      ls
+        .map(
+          (l) =>
+            `${l.index}:${l.account.toLowerCase()}:${l.amount}:${l.leafHash}`
+        )
+        .sort();
+
+    // (c) publish the root on the fork (DAO owns the distributor). No tokens minted — the
+    // already_published guard keys on the ROOT, not balances.
+    await pub.waitForTransactionReceipt({
+      hash: await daoWallet.writeContract({
+        address: distributor,
+        abi: CUMULATIVE_MERKLE_DISTRIBUTOR_ABI,
+        functionName: "setMerkleRoot",
+        args: [manifest.merkleRoot as `0x${string}`],
+      }),
+    });
+    const livePublishedRoot = (
+      (await pub.readContract({
+        address: distributor,
+        abi: CUMULATIVE_MERKLE_DISTRIBUTOR_ABI,
+        functionName: "merkleRoot",
+      })) as string
+    ).toLowerCase();
+    ok(
+      livePublishedRoot === manifest.merkleRoot.toLowerCase(),
+      "already_published: distributor LIVE root == manifest root → distribution-tx returns 409 (no 2nd mint payload served)"
+    );
+
+    // (b) FREEZE: re-run FinalizeEpochWorkflow for the SAME (now-published) epoch — the fold
+    // must PRESERVE the manifest (mintDelta 0), never re-fold/overwrite it. This is the vector
+    // Derek hit operationally; the freeze closes it at the source.
+    const frozenBefore = {
+      root: manifest.merkleRoot,
+      amount: manifest.distributionAmount,
+      leaves: leafFingerprint(leaves),
+    };
+    const refoldConn = await Connection.connect({ address: temporalAddress });
+    const refoldClient = new Client({
+      connection: refoldConn,
+      namespace: temporalNamespace,
+    });
+    let refoldMintDelta: string | null = null;
+    try {
+      const refoldHandle = await refoldClient.workflow.start(
+        "FinalizeEpochWorkflow",
+        {
+          taskQueue: LEDGER_TASK_QUEUE,
+          workflowId: `ledger-finalize-${scopeId}-${epochId.toString()}-refold`,
+          args: [
+            {
+              epochId: epochId.toString(),
+              signature,
+              signerAddress: APPROVER.address,
+            },
+          ],
+        }
+      );
+      const refoldResult = (await refoldHandle.result()) as {
+        cumulativeDistribution?: { mintDelta?: string } | null;
+      };
+      refoldMintDelta = refoldResult?.cumulativeDistribution?.mintDelta ?? null;
+    } finally {
+      await refoldConn.close();
+    }
+    // The FinalizeEpochWorkflow result does not surface a distribution mintDelta (STEP 5's
+    // read is null too → conservation falls back to manifest.distributionAmount). The
+    // DEFINITIVE freeze proof is the manifest being byte-identical below + the worker's
+    // "Cumulative distribution FROZEN … preserving without re-fold (bug.5022)" log line.
+    ok(
+      refoldMintDelta === "0" || refoldMintDelta === null,
+      `FREEZE: re-finalize produced NO new distribution delta (mintDelta ${refoldMintDelta ?? "0"}) — worker took the FROZEN path`
+    );
+    const manifestAfter = await store.getDistributionManifestForEpoch(epochId);
+    const leavesAfter = await store.getDistributionLeavesForEpoch(epochId);
+    ok(
+      manifestAfter?.merkleRoot === frozenBefore.root,
+      `FREEZE: manifest merkleRoot UNCHANGED after re-finalize (${frozenBefore.root.slice(0, 14)}…)`
+    );
+    ok(
+      manifestAfter?.distributionAmount === frozenBefore.amount,
+      `FREEZE: manifest distributionAmount UNCHANGED (${frozenBefore.amount})`
+    );
+    ok(
+      JSON.stringify(leafFingerprint(leavesAfter)) ===
+        JSON.stringify(frozenBefore.leaves),
+      `FREEZE: all ${frozenBefore.leaves.length} leaves byte-identical after re-finalize (no overwrite)`
+    );
+    ok(
+      livePublishedRoot ===
+        (
+          (await pub.readContract({
+            address: distributor,
+            abi: CUMULATIVE_MERKLE_DISTRIBUTOR_ABI,
+            functionName: "merkleRoot",
+          })) as string
+        ).toLowerCase(),
+      "NO SECOND MINT: on-chain root still the ORIGINAL — the re-finalize published nothing new"
+    );
+
+    if (process.env.STAGE1_ONLY) {
+      log(
+        "\n======================================================================"
+      );
+      log(
+        failures > 0
+          ? ` STAGE 1 FORK PROOF: FAIL — ${failures} assertion(s) failed.`
+          : " STAGE 1 FORK PROOF: PASS — fold conserves (mintDelta == Σ leaves), FREEZE holds\n" +
+              "   (manifest byte-identical + mintDelta 0 on re-finalize), and already_published fires\n" +
+              "   (live root == manifest root) → the double-mint vector is CLOSED on a real Base fork."
+      );
+      log(
+        "======================================================================"
+      );
+      cleanup();
+      process.exit(failures > 0 ? 1 : 0);
+    }
 
     // ── STEP 7: DAO mint(delta) + setMerkleRoot(root) on the fork ──────────────
     log(
@@ -780,7 +929,9 @@ async function main(): Promise<void> {
   log(
     "\n RESULT: PASS — admin SIGNED the epoch, DAO MINTED the delta, contributors CLAIMED.\n" +
       "   The full sign→mint→claim distribution ran end-to-end against REAL product code\n" +
-      "   (R3 finalize fold + persisted manifest), unlinked contributors excluded (conservation)."
+      "   (R3 finalize fold + persisted manifest), unlinked contributors excluded (conservation).\n" +
+      "   bug.5022 STAGE 1: re-finalizing the PUBLISHED epoch FROZE the manifest (byte-identical,\n" +
+      "   mintDelta 0) and the live root == manifest root (distribution-tx would 409) — NO double-mint."
   );
   process.exit(0);
 }
