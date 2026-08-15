@@ -5,53 +5,56 @@ work_item_id: "story.5005"
 status: active
 created: 2026-08-15
 updated: 2026-08-15
-branch: "toks2-e2e-rig"
-last_commit: "c8f47e59b5"
+branch: "fix/distribution-double-mint-stage1"
+last_commit: "c2482c1e23"
 ---
 
-# Handoff: land the distribution feature — CI green → flight operator → validate → promote
+# Handoff: distribution feature — PHASED rollout (we are EARLY, not near done)
 
 ## Mission
 
-Pickup: the per-node cumulative distribution feature (finalize→fold→publish→claim; one-time **scoped** authorize, no-vote per-epoch publish) is **built, proven e2e on real Base, and open as PR #2020**. Your job is the **baseline delivery loop**, which the previous agent over-thought and got wrong: get **[#2020](https://github.com/cogni-dao/cogni/pull/2020)** CI-green, **flight the OPERATOR node to candidate-a via the STANDARD flow**, run **`/validate-candidate`**, then hand Derek a merge-ready scorecard so he approves merge → promote. Real epochs close **Sunday** and run on the **operator** node.
+Pickup: own the token-distribution feature — contributors earn credits per epoch → claim real DAO tokens on Base (one-time scoped authorize, no per-epoch vote, double-mint-safe). **Read the framing first: this is a PHASED rollout and we are at the beginning.** The feature is NOT "the loop works on operator" — it is **"every node spawned from node-template can distribute."** toks2 proving the loop ≠ the feature proven: toks2 is the operator codebase in a costume. The feature is only proven when a **fresh node-template node** distributes (Phase 2, untouched).
 
 ## Goal
 
-- **#2020 all-green**, then **operator flighted to candidate-a** (NOT toks2 — that was the throwaway rig) and **`/validate-candidate`** passes with a real operator epoch exercising sign→publish→claim through the product UI, conservation holding.
-- Candidate-a proof: the standard flight lane (through prod operator `cognidao.org`) shows the workflow run + deployed lane + `/version` SHA matching this branch's build; `/validate-candidate` scorecard posted.
-- **Derek approves merge → promote** (his rule: NEVER merge to main without him). Promoted operator runs Sunday's epochs.
+End state = the distribution loop lives on **operator (prod)** AND **node-template → all forks**, each proven on its OWN governance with a real epoch. E2E signal per node: owner signs an epoch → DAO mints the delta into the distributor + sets the root on Base → contributor claims; conservation holds; a re-publish is refused (409 + fold freeze). Candidate-a proof for Phase 1 = the standard `/validate-candidate` scorecard showing the build deploys + serves the distribution routes/pages + `/version` matches the flighted SHA (deploy-health, NOT the mint loop — candidate operator has no distributor).
 
 ## Start By Reading
 
-- `docs/spec/tokenomics-distribution.md` — the whole mechanism: Goal/Invariants/Design, **"Local rig vs production"** (the App-gateway is the biggest divergence), **"Idempotency & replay"**, and the operator-vs-node-template rollout notes.
-- PR **#2020** body — the landing plan + proven-e2e summary.
-- `test-expert` skill § "Tokenomics distribution e2e" — the walk harness `pnpm test:walk:dev` (fork-based sign→fold→mint→claim).
-- Recall the flight SSoT: `GET /api/v1/knowledge/cicd-e2e-required-sequence` — **do this first**, don't assert the flight payload from memory.
+- `docs/spec/tokenomics-distribution.md` — canonical mechanism (lifecycle, invariants, idempotency/replay, local-rig-vs-prod, operator↔node-template landing plan).
+- PRs **#2020** (feature) + **#2021** (double-mint fix, stacked) + the validation scorecard on #2021.
+- `test-expert` skill § the walk harness (`pnpm test:walk:dev`).
+- bug.5022 (double-mint — fixed by #2021) · bug.5023 (finalize queue-stealing — filed, Phase-1 blocker).
+- Recall `cicd-e2e-required-sequence` before flighting — don't assert the flight payload from memory.
 
-## Current State
+## Current State — Phase 0 done, that's all
 
-- Branch `toks2-e2e-rig` @ `c8f47e59b5`, pushed. **PR #2020 → `main`.** Worktree = `/Users/derek/dev/cogni-template/.claude/worktrees/agent-adf6ac46c826d893e`.
-- **Rebased on real `origin/main`** (`23797d0`) — local `main` was stale, so the diff is **73 files (the real feature)**, not the 134 it first looked like. Backup tag `toks2-rig-backup`.
-- **CI** (as of last push): `static` ✅, `component` ✅, all `build (*)` ✅, `manifest` ✅. `unit` failed on **format:check** → fixed + pushed in `c8f47e`; **confirm it's green now**. **`Cogni Git PR Review` FAILS** (operator AI reviewer) — read its output and address.
-- **PROVEN e2e**: toks2 epoch 19 on real Base — sign→fold→publish→claim, conservation held (minted 12k == claimed 12k). That was the **rig**; production validates on **operator**.
-- **Why the prev agent stalled on flight:** `.env.cogni` **does not exist in this worktree**. Get it from Derek's workspace root (`reference_cogni_api_keys`: it holds `COGNI_API_KEY_{TEST,PREVIEW,PROD}`). There is **no special "test key"** — flighting uses the standard operator key + flock-leader's operator-bridge RBAC.
+- **PRs (stacked):** `#2020 toks2-e2e-rig → main` (feature R1–R4) · `#2021 fix/distribution-double-mint-stage1 → toks2-e2e-rig` (fix). **#2021's HEAD `c2482c1e` = the complete code.** #2020 alone is unsafe (no fix) — never ship it without #2021. Both CI-green.
+- **Proven (Phase 0 — mechanism runs):** full loop sign→publish→claim on real Base (toks2 epoch 25, on-chain verified, conservation held) + double-mint closed at both layers (HTTP 409 proven A/B; fold-freeze unit passes). This proves the CODE RUNS. **Nothing about generality or the fleet.**
+- **NOT proven:** operator's OWN distribution (operator has no distributor on Base) · node-template generality (a fresh node) · any fork.
+- **Local rig live:** worktree `.claude/worktrees/agent-adf6ac46c826d893e`, freeze branch checked out, app+worker on toks2, `.env.cogni` symlinked, `pnpm test:walk:dev`.
 
-## Design / Implementation Target (the corrections — do NOT repeat these mistakes)
+## Phased Plan (the actual feature)
 
-1. **Flight = STANDARD flow through the prod operator + `/validate-candidate`.** Not a bespoke "test key," not manual curl-from-memory. flock-leader already has `can_flight` RBAC.
-2. **Flight OPERATOR** (Sunday's epochs run there — `/gov/*` is self-scoped). node-template + forks are **follow-on**, not Sunday-blocking.
-3. **NO new OpenFGA relations** (verified: the diff adds none; routes gate on existing `node.ownerUserId` session OR the existing `node.flight` relation). **No FGA re-bootstrap** — that risk was a phantom.
-4. **node-wizard = OPERATOR-ONLY.** `DistributionsCard` + deploy/activate/authorize + `nodes/[id]` + activate route + cross-node config gateway are the operator control plane. Only the **per-epoch `/gov` surfaces (sign/publish/claim) + shared packages + worker** land in **node-template**.
-5. **Must not regress:** the proven e2e mechanism (fold conservation, scoped-condition authorize, publish idempotency guard). Don't re-introduce toks2 into any production path.
+**PHASE 1 — SHIP OPERATOR (do now).** Pipeline: **candidate-a → merge → preview → prod** (candidate-a is the merge GATE).
+1. Flight **#2021's HEAD** to candidate-a → `/validate-candidate`. Scope honestly: deploy-health only, NOT the mint loop. Say so in the scorecard.
+2. Retarget **#2021 base → main**, merge it, **close #2020** (one clean merge of the whole thing). Derek approves every merge.
+3. Promote **preview → prod**.
+4. **Operator's OWN distribution setup on Base** — deploy operator's distributor + authorize (node-wizard flow, Derek's wallet). NEVER DONE. Verify operator's governance is operator's own (NOT toks2, NOT prod `0xF61c…`).
+5. Real operator epoch → sign→publish→claim = first PRODUCTION distribution.
+
+**PHASE 2 — NODE-TEMPLATE (the real generality proof; NOT started).**
+- Port into the node-template repo: shared packages (cogni-contracts, aragon-osx, node-contracts, db-client, repo-spec), the scheduler-worker fold, and the per-node `/gov` UI (sign/publish/claim). **NOT** the operator-only node-wizard/gateway.
+- Prove on a FRESH node spawned from node-template (its own DAO/token/distributor, its own epoch). **This is where the feature is actually proven.**
+
+**PHASE 3 — FORKS (not started).** fork-sync to blue/habitat/poly; each proves its own per-node governance + setup.
 
 ## Next Actions / Risks
 
-- [ ] **Confirm `unit` green** post-`c8f47e` (was a format:check failure). `gh pr checks 2020`.
-- [ ] **Fix `Cogni Git PR Review`** failure — `gh` the check's detail / operator review output.
-- [ ] **Get `.env.cogni`** into the worktree (Derek's workspace root) → recall `cicd-e2e-required-sequence` → **flight operator to candidate-a** → **`/validate-candidate`**.
-- [ ] Post the validation scorecard → Derek approves **merge → promote**.
-- [ ] **Follow-on (not Sunday):** reconcile the mechanism into **node-template** (authoritative for forks; `fork-sync` overlays blue/habitat/poly). Discipline: author shared code in node-template.
-- 🔴 **RED LINE:** toks2 is throwaway rig; production governance is the **operator's own** DAO — never sign/route against a prod DAO `0xF61c…` or leave toks2 in a shipped path.
-- ⚠️ **green-local ≠ green-gateway:** the local rig faked the operator App-gateway with baked config (`.harness`). On real operator the App must be installed or the fold falls back to baked identity.
-- ⚠️ **Publish replay:** the shipped Walk guard is a UI/route check (bypassable by a raw `DAO.execute`); mandate a Safe m-of-n executor until the on-chain `EmissionsExecutor` (Run) lands. (A rig re-publish stranded 12k on the toks2 distributor — moot for prod.)
-- **Do NOT merge to main.** Derek approves every merge + promote.
+- [ ] Phase 1 step 1: flight #2021 HEAD → candidate-a → `/validate-candidate` (deploy-health scorecard).
+- [ ] Phase 1 step 2–3: Derek-approved merge (#2021→main, close #2020) → promote preview → prod.
+- [ ] **Before any real operator epoch: resolve bug.5023** — a wrong-scope worker steals finalize tasks off the shared `ledger-tasks` queue → "epoch not found" terminal fail + forced re-sign. Confirm prod isolates worker/queue per node.
+- [ ] Phase 1 step 4: operator distributor setup on Base (Derek's wallet).
+- 🔴 **RED LINE:** every node signs/publishes against its OWN throwaway/prod-appropriate governance — never toks2 in a prod path, never the prod DAO `0xF61c…` on a non-prod node.
+- ⚠️ **candidate-a ≠ money proof** — it has no distributor; the mint loop is only ever proven per-node with a real setup.
+- **Do NOT merge/promote/sign without Derek.** dev1 stepping back.
