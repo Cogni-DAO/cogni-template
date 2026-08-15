@@ -63,6 +63,21 @@ Verified feasible: OSx `PermissionManager._auth` forwards the full `execute` cal
 
 A minimal **`EmissionsExecutor`** contract the DAO authorizes once (grants MINT + distributor `setMerkleRoot` authority). It exposes `publishDistribution(epochId, delta, root, approverSig)` that: (1) verifies `approverSig` against the DAO-pinned approver set, (2) enforces the budget cap on-chain (`totalMinted + delta ≤ policySupply`), (3) enforces epoch monotonicity (replay guard), (4) mints + setMerkleRoot. Submission is then **permissionless** — the finalize signature IS the authorization, so an agent/keeper (or the contributor) can trigger publish with no special key at all. This is what lets the whole loop run via API + an external-agent-controlled wallet (e.g. Privy), and it removes the trusted executor entirely.
 
+### Idempotency & replay safety (per-layer)
+
+A security review (story.5005) mapped double-spend/replay at every layer. Summary:
+
+| operation | idempotent? | guard |
+| --- | --- | --- |
+| **finalize** (re-sign an epoch) | ✅ yes | repair branch returns the existing statement; pool/lines come from the persisted statement, never recomputed — no double-pool. |
+| **fold** (re-run the build) | ✅ yes | `priorCumulative` reads the PRIOR epoch's persisted manifest (not the current), delta re-applied by upsert; builder asserts `cumulativeTotal == priorTotal + delta`. Same manifest, never a doubled delta. |
+| **claim** | ✅ yes (on-chain) | 1inch `cumulativeClaimed[account]` — double-claim reverts `NothingToClaim`; stale-root claim reverts `MerkleRootWasUpdated`. On-chain state is the guard, not off-chain intent. |
+| **publish** (mint + setRoot) | ⚠️ **was NOT** — now Walk-guarded | The scoped condition allows ANY mint amount + ANY root (shape-only). A re-publish of an already-live root **re-minted the delta** (12000 tokens stranded on Base, 2026-08-15). **Walk guard (shipped):** the publish surface reads the distributor's live `merkleRoot()`; if it already equals this epoch's root → terminal "Published" state, no tx (also disabled at zero delta). **Class elimination (Run):** the `EmissionsExecutor` binds the amount to the approver signature + enforces epoch monotonicity on-chain, so double-mint is impossible even if every off-chain guard regresses. |
+
+The publish gap is the same residual-trust the condition documents: it constrains SHAPE, not VALUES or REPLAY. The Walk guard is a UI/route check (bypassable by a raw `execute`); only the `EmissionsExecutor` closes it on-chain. Until then, mitigate with a Safe m-of-n executor.
+
+> Remediation note: tokens minted by an erroneous re-publish sit in the distributor with no matching claim leaf. They are recoverable only by a future epoch's cumulative root absorbing them, or (while the DAO owns the distributor) a sweep — never by the claim path.
+
 ### NOT acceptable (both fail the multi-member bar)
 
 - **Per-epoch tokenholder vote** (Aragon `createProposal` per epoch). Only _appears_ to work when one owner holds ~100% (auto early-execution); a grown DAO would vote every epoch. Dead-end.
