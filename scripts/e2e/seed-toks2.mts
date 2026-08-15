@@ -95,13 +95,22 @@ async function main(): Promise<void> {
   const db = createServiceDbClient(dbUrl);
   const store = new DrizzleAttributionAdapter(db, SCOPE_ID);
 
+  // SEED_INCREMENT=1: add ANOTHER review epoch ON TOP of the existing chain (for testing a
+  // second publish+claim that folds onto the prior manifest — cumulative grows, mint delta =
+  // this epoch's new allocation). Uses a distinct (current-week) period so it's a new epoch.
+  const INCREMENT = process.env.SEED_INCREMENT === "1";
   try {
     const existing = await store.listEpochs(NODE_ID);
-    if (existing.length > 0) {
+    if (existing.length > 0 && !INCREMENT) {
       console.log(
         `epochs already exist for toks2: ${existing.map((e) => `${e.id}=${e.status}`).join(", ")} — refusing to reseed.`
       );
       return;
+    }
+    if (INCREMENT) {
+      console.log(
+        `SEED_INCREMENT: adding a review epoch onto existing [${existing.map((e) => `${e.id}=${e.status}`).join(", ")}]`
+      );
     }
 
     // linked owner user + github binding (wallet_address = approver/claimant).
@@ -151,8 +160,9 @@ async function main(): Promise<void> {
       .onConflictDoNothing();
     console.log(`  linked owner user ${OWNER.userId} → wallet ${OWNER.wallet}`);
 
-    // one review epoch, last full week, pool 12000 credits.
-    const asOf = new Date(Date.now() - 7 * 86_400_000);
+    // one review epoch, pool 12000 credits. Baseline seeds the LAST full week; an increment
+    // seeds the CURRENT week so it lands as a distinct, later epoch on top of the baseline.
+    const asOf = new Date(Date.now() - (INCREMENT ? 0 : 7 * 86_400_000));
     const { periodStartIso, periodEndIso } = computeEpochWindowV1({
       asOfIso: asOf.toISOString(),
       epochLengthDays: 7,
