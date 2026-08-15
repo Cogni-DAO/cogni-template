@@ -17,8 +17,10 @@ import path from "node:path";
 import { CHAIN_ID } from "@cogni/node-shared";
 import {
   type DaoConfig,
+  extractChainId,
   extractDaoConfig,
   extractDaoTreasuryAddress,
+  extractDistributorAddress,
   extractGovernanceConfig,
   extractKnowledgeConfig,
   extractLedgerApprovers,
@@ -188,6 +190,43 @@ export function getDaoConfig(): DaoConfig | null {
   const spec = loadRepoSpec();
   cachedDaoConfig = extractDaoConfig(spec);
   return cachedDaoConfig;
+}
+
+/**
+ * The node's own on-chain tokenomics identity, sourced from repo-spec — NOT from any
+ * distribution manifest. Token supply and the distributor exist the moment the DAO is
+ * formed + a distributor is deployed, INDEPENDENT of whether any epoch has been
+ * finalized. This is what the Ownership page reads so tokenomics render on a freshly
+ * seeded node (zero epochs) exactly as they do after distributions.
+ */
+export interface NodeTokenomicsConfig {
+  /** Governance ERC20 token (governance.token_contract); null until on-chain. */
+  readonly tokenAddress: string | null;
+  /** Cumulative Merkle distributor (distributions.distributor_address); null until deployed. */
+  readonly distributorAddress: string | null;
+  /** EVM chain id (governance.chain_id). */
+  readonly chainId: number;
+  /** `distributions.status: active` in the node's own repo-spec (setup step-1 complete). */
+  readonly distributionsActive: boolean;
+}
+
+let cachedNodeTokenomicsConfig: NodeTokenomicsConfig | null = null;
+
+/**
+ * The node's token / distributor / chain from repo-spec (governance.token_contract,
+ * distributions.distributor_address, governance.chain_id). Manifest-independent.
+ */
+export function getNodeTokenomicsConfig(): NodeTokenomicsConfig {
+  if (cachedNodeTokenomicsConfig) return cachedNodeTokenomicsConfig;
+
+  const spec = loadRepoSpec();
+  cachedNodeTokenomicsConfig = {
+    tokenAddress: spec.governance?.token_contract ?? null,
+    distributorAddress: extractDistributorAddress(spec) ?? null,
+    chainId: extractChainId(spec),
+    distributionsActive: spec.distributions?.status === "active",
+  };
+  return cachedNodeTokenomicsConfig;
 }
 
 let cachedLedgerApprovers: string[] | null = null;

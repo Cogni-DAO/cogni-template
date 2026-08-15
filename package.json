@@ -152,6 +152,7 @@
     "test:stack:multi": "dotenv -e .env.test -- vitest run --config nodes/operator/app/vitest.stack-multi.config.mts",
     "test:lint": "vitest run tests/lint",
     "test:arch": "vitest run tests/arch",
+    "test:walk:dev": "dotenv -e .env.local -- tsx scripts/e2e/finalize-mint-claim.ts",
     "e2e": "dotenv -e .env -- playwright test --project=staging-full",
     "e2e:smoke": "dotenv -e .env -- playwright test --project=smoke",
     "e2e:prod": "pnpm e2e:smoke",

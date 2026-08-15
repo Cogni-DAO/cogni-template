@@ -35,6 +35,7 @@ export * from "./ai.threads.v1.contract";
 export * from "./analytics.summary.v1.contract";
 // ── Attribution ─────────────────────────────────────────────────────────────
 export * from "./attribution.collect-trigger.v1.contract";
+export * from "./attribution.distribution-config.internal.v1.contract";
 export * from "./attribution.epoch-activity.v1.contract";
 export * from "./attribution.epoch-claimants.v1.contract";
 export * from "./attribution.epoch-contributors.v1.contract";

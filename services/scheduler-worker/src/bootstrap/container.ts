@@ -20,20 +20,27 @@
 import fs from "node:fs";
 import path from "node:path";
 
+import type { ClaimantWalletResolver } from "@cogni/aragon-osx";
 import { createValidatedAttributionStore } from "@cogni/attribution-ledger";
 import {
   createDefaultRegistries,
   type DefaultRegistries,
 } from "@cogni/attribution-pipeline-plugins";
-import { DrizzleAttributionAdapter } from "@cogni/db-client";
+import {
+  DrizzleAttributionAdapter,
+  DrizzleClaimantWalletResolver,
+} from "@cogni/db-client";
 import { createServiceDbClient } from "@cogni/db-client/service";
 import {
   extractChainId,
+  extractDaoTokenDistributionConfig,
+  extractDistributorAddress,
   extractLedgerConfig,
   extractNodeId,
   extractScopeId,
   parseRepoSpec,
 } from "@cogni/repo-spec";
+import { createDistributionConfigHttpClient } from "../adapters/distribution-config-http.js";
 import {
   GitHubAppTokenProvider,
   GitHubSourceAdapter,
@@ -50,6 +57,7 @@ import type { Logger } from "../observability/logger.js";
 import type {
   AttributionStore,
   DataSourceRegistration,
+  DistributionConfigHttpClient,
   ExecutionGrantHttpValidator,
   GraphRunHttpWriter,
   NodePrincipalResolver,
@@ -105,6 +113,9 @@ function loadRepoSpecIdentity(): {
   nodeId: string;
   scopeId: string;
   chainId: number;
+  tokenAddress: string | null;
+  distributorAddress: string | null;
+  emissionsHolderAddress: string | null;
   configuredSources: string[];
   excludedLogins: string[];
   sourceRefs: string[];
@@ -131,6 +142,21 @@ function loadRepoSpecIdentity(): {
 
   const spec = parseRepoSpec(content);
   const ledgerConfig = extractLedgerConfig(spec);
+  // GovernanceERC20 token address — present only once the node has activated
+  // distributions (distributions.status: active). Null otherwise; the cumulative
+  // root build is skipped until activation (off-chain finalize still runs).
+  const distributionConfig = extractDaoTokenDistributionConfig(spec);
+  const tokenAddress = distributionConfig?.tokenAddress ?? null;
+  // The DAO that mints + owns the distributor (governance.emissions_holder). Baked
+  // alongside the token so the fold's bug.5020 execute-guard can assert the governance
+  // target on the baked-fallback path (no operator gateway) instead of trusting a null.
+  const emissionsHolderAddress =
+    distributionConfig?.emissionsHolderAddress ?? null;
+  // The ONE per-node cumulative distributor recorded at R2 activation. Read
+  // directly from repo-spec (NOT gated on distributions.status) so the FIRST
+  // epoch — which has no prior/current manifest — can still resolve the contract
+  // in ledger.ts's finalize fallback chain. Null until R2 records it.
+  const distributorAddress = extractDistributorAddress(spec) ?? null;
   // Collect excluded logins from all activity sources
   const excludedLogins = ledgerConfig
     ? Object.values(ledgerConfig.activitySources).flatMap(
@@ -148,6 +174,9 @@ function loadRepoSpecIdentity(): {
     nodeId: extractNodeId(spec),
     scopeId: extractScopeId(spec),
     chainId: extractChainId(spec),
+    tokenAddress,
+    distributorAddress,
+    emissionsHolderAddress,
     configuredSources: ledgerConfig
       ? Object.keys(ledgerConfig.activitySources)
       : [],
@@ -167,6 +196,30 @@ export interface AttributionContainer {
   nodeId: string;
   scopeId: string;
   chainId: number;
+  /** GovernanceERC20 token address from repo-spec; null until distributions activated. */
+  tokenAddress: string | null;
+  /**
+   * The ONE per-node cumulative distributor recorded at R2 activation; null until
+   * recorded. Terminal fallback for ledger.ts finalize distributor resolution.
+   */
+  distributorAddress: string | null;
+  /**
+   * DAO that mints + owns the distributor (governance.emissions_holder), baked from
+   * repo-spec; null until distributions activated. Lets the fold's bug.5020 execute-guard
+   * assert the governance target on the baked-fallback path (no operator gateway).
+   */
+  emissionsHolderAddress: string | null;
+  /** Claimant key → contributor wallet resolver (R3 cumulative root build). */
+  walletResolver: ClaimantWalletResolver | null;
+  /**
+   * Per-node distribution-config gateway (bug.5020). At finalize the fold resolves the
+   * finalizing node's token/distributor/emissions-holder from ITS OWN repo-spec via the
+   * operator — the worker bakes no node's governance. Null when the worker lacks endpoints
+   * (falls back to the baked identity above for its own node — prod operator continuity).
+   */
+  distributionConfigClient: DistributionConfigHttpClient | null;
+  /** Deploy environment for the bug.5020 execute-guard; non-`production` ⇒ fail-closed. */
+  deploymentEnvironment: string | undefined;
   logger: Logger;
 }
 
@@ -232,6 +285,9 @@ export function createAttributionContainer(
     nodeId,
     scopeId,
     chainId,
+    tokenAddress,
+    distributorAddress,
+    emissionsHolderAddress,
     configuredSources,
     excludedLogins,
     sourceRefs,
@@ -251,6 +307,26 @@ export function createAttributionContainer(
   const attributionStore = createValidatedAttributionStore(
     new DrizzleAttributionAdapter(db, scopeId)
   );
+
+  // R3: read-only claimant→wallet resolver, used at finalize to fold this epoch's
+  // deltas into the cumulative root. Built only when distributions are active
+  // (tokenAddress present); otherwise null and the cumulative build is skipped.
+  const walletResolver: ClaimantWalletResolver | null = tokenAddress
+    ? new DrizzleClaimantWalletResolver(db)
+    : null;
+
+  // bug.5020: the fold resolves the finalizing node's governance from ITS OWN repo-spec
+  // via the operator gateway (worker holds no GitHub cred, bug.5000). Built when node
+  // endpoints are present; the fold falls back to the baked identity above only for the
+  // worker's own node (prod operator continuity) when this is null or transiently fails.
+  const distributionConfigClient: DistributionConfigHttpClient | null =
+    config.COGNI_NODE_ENDPOINTS
+      ? createDistributionConfigHttpClient({
+          nodeEndpoints: parseNodeEndpoints(config.COGNI_NODE_ENDPOINTS),
+          schedulerApiToken: config.SCHEDULER_API_TOKEN,
+          logger: attributionLogger,
+        })
+      : null;
 
   // Build source registrations (CAPABILITY_REQUIRED: at least one of poll/webhook)
   const registrations = new Map<string, DataSourceRegistration>();
@@ -319,6 +395,12 @@ export function createAttributionContainer(
     nodeId,
     scopeId,
     chainId,
+    tokenAddress,
+    distributorAddress,
+    emissionsHolderAddress,
+    walletResolver,
+    distributionConfigClient,
+    deploymentEnvironment: config.DEPLOY_ENVIRONMENT,
     logger: attributionLogger,
   };
 }

@@ -24,6 +24,7 @@ export {
   getNodeId,
   getNodeMission,
   getNodeName,
+  getNodeTokenomicsConfig,
   getOperatorWalletConfig,
   getPaymentConfig,
   getScopeId,
@@ -32,4 +33,5 @@ export {
   isDaoAdmin,
   isLedgerApprover,
   type KnowledgeConfig,
+  type NodeTokenomicsConfig,
 } from "./repoSpec.server";

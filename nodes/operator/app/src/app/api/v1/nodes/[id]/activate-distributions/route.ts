@@ -22,8 +22,12 @@
  *   - GH_APP_INSTALL_REQUIRED, NODE_SOVEREIGNTY (PR only; never force-push to node main).
  *   - SINGLE_HOME: targets the node's OWN repo (`NODE_MINT_OWNER`/slug), writes ONLY
  *     `.cogni/repo-spec.yaml`.
- *   - NO_BESPOKE_CONTRACTS: pins Uniswap MerkleDistributor v1 claim pattern; does not deploy a
- *     custom distributor.
+ *   - VENDORED_DISTRIBUTOR: pins the Uniswap MerkleDistributor v1 claim pattern. The optional
+ *     `distributorAddress` (deployed by the OWNER'S wallet from the vendored
+ *     `CumulativeMerkleDistributor`, then transferred to the DAO) is VERIFIED on-chain
+ *     (owner()==daoAddress AND token()==tokenAddress) before it is recorded — the operator never
+ *     deploys a contract and never pins an unverified/foreign distributor.
+ *   - DISTRIBUTOR_OPTIONAL: absent `distributorAddress` keeps the metadata-only readiness path.
  *   - OWNER_OR_DEVELOPER: node owner session OR `node.flight` authorizes activation.
  *   - NON_LINEAR_ACTIVATION: does not depend on payment activation and can run for already-active
  *     existing DAOs with a node repo.
@@ -36,6 +40,7 @@
  * @public
  */
 
+import { CUMULATIVE_MERKLE_DISTRIBUTOR_ABI } from "@cogni/cogni-contracts";
 import { CHAINS } from "@cogni/node-shared";
 import { NextResponse } from "next/server";
 import { type Address, createPublicClient, getAddress, http } from "viem";
@@ -79,6 +84,13 @@ const ActivateDistributionsInput = z.object({
   // Optional: the emissions holder is the DAO unconditionally. If supplied it
   // must equal the DAO; otherwise it defaults to node.daoAddress.
   emissionsHolderAddress: z.string().optional(),
+  // Optional DEPLOY path: a CumulativeMerkleDistributor the owner's wallet just
+  // deployed + transferred to the DAO. When present it is VERIFIED on-chain
+  // (owner()==DAO, token()==node token) and pinned into the spec. Absent keeps
+  // the metadata-only activation working unchanged.
+  distributorAddress: z.string().optional(),
+  // Deploy tx hash (surfaced in the PR body only). Not persisted to the spec.
+  deployTx: z.string().optional(),
 });
 
 interface RouteParams {
@@ -233,6 +245,20 @@ async function handleActivateDistributions(
   // The emissions holder is the DAO unconditionally (the DAO is the minter). If
   // the caller supplied one it must equal the DAO; otherwise default to the DAO.
   const emissionsHolderAddress = daoAddress;
+  // Optional DEPLOY path: a distributor the wallet just deployed + transferred to
+  // the DAO. Checksum it here; on-chain owner()/token() verification runs below.
+  const distributorAddress = parsed.data.distributorAddress
+    ? checksummedAddress(parsed.data.distributorAddress)
+    : null;
+  if (parsed.data.distributorAddress && !distributorAddress) {
+    return NextResponse.json(
+      {
+        error: "invalid distributor address",
+        distributorAddress: parsed.data.distributorAddress,
+      },
+      { status: 400 }
+    );
+  }
   if (!tokenAddress) {
     return NextResponse.json(
       {
@@ -354,6 +380,69 @@ async function handleActivateDistributions(
         { status: 409 }
       );
     }
+
+    // DEPLOY path: when the wallet supplied a freshly-deployed distributor, verify
+    // the on-chain invariants that make it trustworthy before pinning it into the
+    // spec: (1) ownership was transferred to the DAO (owner()==node.daoAddress),
+    // and (2) it distributes THIS node's token (token()==node.tokenAddress). A
+    // mismatch is a 409 — the spec must never pin an unverified/foreign distributor.
+    if (distributorAddress) {
+      const distCode = await client.getBytecode({
+        address: distributorAddress,
+      });
+      if (!distCode || distCode === "0x") {
+        return NextResponse.json(
+          { error: "distributor contract missing", distributorAddress },
+          { status: 409 }
+        );
+      }
+      const [distOwner, distToken] = await Promise.all([
+        client.readContract({
+          abi: CUMULATIVE_MERKLE_DISTRIBUTOR_ABI,
+          address: distributorAddress,
+          functionName: "owner",
+        }),
+        client.readContract({
+          abi: CUMULATIVE_MERKLE_DISTRIBUTOR_ABI,
+          address: distributorAddress,
+          functionName: "token",
+        }),
+      ]);
+      const ownerMatches =
+        typeof distOwner === "string" &&
+        distOwner.toLowerCase() === daoAddress.toLowerCase();
+      const tokenMatches =
+        typeof distToken === "string" &&
+        distToken.toLowerCase() === tokenAddress.toLowerCase();
+      ctx.log.info(
+        {
+          event: "node.distribution_activation.distributor_verified",
+          reqId: ctx.reqId,
+          routeId: ctx.routeId,
+          nodeId: node.id,
+          slug: node.slug,
+          distributorAddress,
+          ownerMatches,
+          tokenMatches,
+        },
+        "activate-distributions: distributor verification result"
+      );
+      if (!ownerMatches || !tokenMatches) {
+        return NextResponse.json(
+          {
+            error: "distributor verification failed",
+            reason:
+              "the distributor must be owned by the node DAO (owner()==daoAddress) and distribute the node token (token()==tokenAddress)",
+            distributorAddress,
+            expectedOwner: daoAddress,
+            actualOwner: distOwner,
+            expectedToken: tokenAddress,
+            actualToken: distToken,
+          },
+          { status: 409 }
+        );
+      }
+    }
   } catch (err) {
     const reason = err instanceof Error ? err.message : "unknown";
     ctx.log.error(
@@ -386,6 +475,8 @@ async function handleActivateDistributions(
       slug: node.slug,
       tokenAddress,
       emissionsHolderAddress,
+      ...(distributorAddress ? { distributorAddress } : {}),
+      ...(parsed.data.deployTx ? { deployTx: parsed.data.deployTx } : {}),
     });
   } catch (err) {
     const status = (err as { status?: number })?.status;

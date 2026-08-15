@@ -28,6 +28,7 @@ import {
 } from "@/components";
 import { EpochCountdown } from "@/features/governance/components/EpochCountdown";
 import { EpochDetail } from "@/features/governance/components/EpochDetail";
+import { ExecuteDistributionPanel } from "@/features/governance/components/ExecuteDistributionPanel";
 import { useEpochsPage } from "@/features/governance/hooks/useEpochsPage";
 import { buildPieChartData } from "@/features/governance/lib/build-pie-data";
 import type { EpochView } from "@/features/governance/types";
@@ -146,8 +147,11 @@ function CurrentEpochSection({
 
 function PastEpochsSection({
   epochs,
+  nodeId,
 }: {
   readonly epochs: readonly EpochView[];
+  /** Operator's own node id — addresses the finalized-epoch execute route. */
+  readonly nodeId: string;
 }): ReactElement {
   if (epochs.length === 0) {
     return (
@@ -189,7 +193,20 @@ function PastEpochsSection({
                   "text-right",
                   "text-right",
                 ]}
-                expandedContent={<EpochDetail epoch={epoch} />}
+                expandedContent={
+                  <div className="space-y-4">
+                    <EpochDetail epoch={epoch} />
+                    {/* Finalized epochs surface the owner EXECUTE control. The panel
+                        self-gates on manifest + distributor via the authed route, so
+                        it quietly shows "not ready" until R3 has recorded them. */}
+                    {epoch.status === "finalized" && (
+                      <ExecuteDistributionPanel
+                        nodeId={nodeId}
+                        epochId={epoch.id}
+                      />
+                    )}
+                  </div>
+                }
                 cells={[
                   <span key="id" className="font-bold text-foreground/60">
                     {epoch.id}
@@ -217,7 +234,12 @@ function PastEpochsSection({
   );
 }
 
-export function CurrentEpochView(): ReactElement {
+export function CurrentEpochView({
+  nodeId,
+}: {
+  /** Operator's own node id (from repo-spec) — addresses the per-epoch execute route. */
+  readonly nodeId: string;
+}): ReactElement {
   const { data, isLoading, error } = useEpochsPage();
 
   if (error) {
@@ -270,7 +292,7 @@ export function CurrentEpochView(): ReactElement {
               Previous epochs with signed credit distributions
             </p>
           </div>
-          <PastEpochsSection epochs={data.pastEpochs} />
+          <PastEpochsSection epochs={data.pastEpochs} nodeId={nodeId} />
         </div>
       )}
     </div>

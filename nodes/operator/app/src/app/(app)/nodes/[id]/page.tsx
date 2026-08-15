@@ -23,6 +23,7 @@ import { createNodeRepoWriter } from "@/bootstrap/capabilities/node-repo-write";
 import {
   getContainer,
   resolveAppDb,
+  resolveNodeDistributionConfigResolver,
   resolveServiceDb,
 } from "@/bootstrap/container";
 import { PageContainer } from "@/components";
@@ -36,6 +37,7 @@ import { ResetDaoDangerZone } from "@/features/nodes/ResetDaoDangerZone.client";
 import { NodeWizard } from "@/features/nodes/wizard/NodeWizard.client";
 import type { WizardNode } from "@/features/nodes/wizard/types";
 import { getServerSessionUser } from "@/lib/auth/server";
+import { getNodeId, getNodeTokenomicsConfig } from "@/shared/config";
 import { type NodeStatus, nodes } from "@/shared/db/nodes";
 import { serverEnv } from "@/shared/env";
 import {
@@ -160,6 +162,36 @@ export default async function NodeDashboardPage({
       paymentActivation = null;
     }
   }
+  // Distribution SETUP state (git-authoritative): is the node activated for distributions, and has a
+  // distributor already been deployed + recorded? The node-page setup sequence uses these to show
+  // step state and to skip completed steps. Best-effort — a spec-read hiccup must not break the page,
+  // and the client still drives the live flow from the wallet + in-session deploy state.
+  let distributionsActive = false;
+  let recordedDistributorAddress: string | null = null;
+  if (node.daoAddress != null && showDevelopers) {
+    // OWN-NODE SHORTCUT: when the viewed node IS the app's own node (this operator/node
+    // instance), read its setup state from the local repo-spec directly — the operator
+    // gateway (App-read of a foreign repo) is the wrong source for your own node and is
+    // unavailable off-plane (local dev / no App install). For OTHER nodes, use the gateway.
+    if (node.id === getNodeId()) {
+      const own = getNodeTokenomicsConfig();
+      distributionsActive = own.distributionsActive;
+      recordedDistributorAddress = own.distributorAddress;
+    } else {
+      try {
+        const resolved =
+          await resolveNodeDistributionConfigResolver().resolveForNode(node.id);
+        distributionsActive = resolved.distribution !== null;
+        recordedDistributorAddress =
+          resolved.distribution?.distributorAddress ?? null;
+      } catch {
+        // Transient spec-read failure (registry/App-read): treat as "unknown", let the client drive.
+        distributionsActive = false;
+        recordedDistributorAddress = null;
+      }
+    }
+  }
+
   const statusLabel =
     paymentActivation?.productionMatchesSource === true
       ? NODE_STATUS_DISPLAY.active.label
@@ -216,6 +248,12 @@ export default async function NodeDashboardPage({
           nodeId={node.id}
           slug={node.slug}
           repoSpecUrl={repoSpecUrl}
+          tokenAddress={node.tokenAddress}
+          daoAddress={node.daoAddress}
+          pluginAddress={node.pluginAddress}
+          chainId={node.chainId}
+          distributionsActive={distributionsActive}
+          recordedDistributorAddress={recordedDistributorAddress}
         />
       ) : null}
 

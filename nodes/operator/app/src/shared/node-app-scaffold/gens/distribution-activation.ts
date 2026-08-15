@@ -30,6 +30,12 @@ export interface RenderDistributionActivationInput {
   readonly tokenAddress: string;
   /** DAO-controlled holder/vault containing minted inventory for epoch distributions. */
   readonly emissionsHolderAddress: string;
+  /**
+   * DEPLOYED CumulativeMerkleDistributor address (owned by the DAO, `token()` == the node token).
+   * Optional: when present, `distributions.distributor_address` is written so claims can read it.
+   * Absent ⇒ metadata-only activation (readiness recorded, no distributor pinned yet).
+   */
+  readonly distributorAddress?: string;
 }
 
 const DISTRIBUTIONS_BLOCK = `distributions:
@@ -44,6 +50,7 @@ const DISTRIBUTIONS_BLOCK = `distributions:
  *   2. Upsert `governance.emissions_holder`.
  *   3. Upsert `distributions.status: active`.
  *   4. Upsert `distributions.claim_contract_pattern: uniswap.merkle-distributor.v1`.
+ *   5. When a distributor is supplied, upsert `distributions.distributor_address`.
  */
 export function renderDistributionActivationSpec(
   current: string,
@@ -52,7 +59,7 @@ export function renderDistributionActivationSpec(
   let out = current.replace(/\s*$/, "\n");
 
   out = upsertGovernanceDistributionFields(out, input);
-  out = upsertDistributionsBlock(out);
+  out = upsertDistributionsBlock(out, input.distributorAddress);
 
   return out.replace(/\n*$/, "\n");
 }
@@ -87,12 +94,20 @@ export function hasDistributionActivationSpec(
   const distributions = asRecord(root?.distributions);
   if (!root || !governance || !distributions) return false;
 
+  // When a distributor is requested, the spec must already pin THAT exact
+  // address for the guard to short-circuit (an already-active metadata-only spec
+  // still needs the distributor splice).
+  const distributorMatches =
+    input.distributorAddress === undefined ||
+    sameAddress(distributions.distributor_address, input.distributorAddress);
+
   return (
     distributions.status === "active" &&
     distributions.claim_contract_pattern ===
       DISTRIBUTION_CLAIM_CONTRACT_PATTERN &&
     sameAddress(governance.token_contract, input.tokenAddress) &&
-    sameAddress(governance.emissions_holder, input.emissionsHolderAddress)
+    sameAddress(governance.emissions_holder, input.emissionsHolderAddress) &&
+    distributorMatches
   );
 }
 
@@ -134,11 +149,17 @@ function upsertGovernanceDistributionFields(
   return spec.replace(re, `${leading}${body}`);
 }
 
-function upsertDistributionsBlock(spec: string): string {
+function upsertDistributionsBlock(
+  spec: string,
+  distributorAddress?: string
+): string {
+  const distributorLine = distributorAddress
+    ? `\n  distributor_address: "${distributorAddress}"`
+    : "";
   const re = topLevelBlockRegex("distributions");
   const match = re.exec(spec);
   if (!match) {
-    return `${spec.replace(/\n*$/, "\n")}\n${DISTRIBUTIONS_BLOCK}\n`;
+    return `${spec.replace(/\n*$/, "\n")}\n${DISTRIBUTIONS_BLOCK}${distributorLine}\n`;
   }
 
   const leading = match[1] ?? "";
@@ -149,6 +170,15 @@ function upsertDistributionsBlock(spec: string): string {
     "claim_contract_pattern",
     DISTRIBUTION_CLAIM_CONTRACT_PATTERN
   );
+  // Only pin the distributor when one was deployed; a bare quoted address keeps
+  // the value readable by the claim path (yaml string, checksummed 0x…).
+  if (distributorAddress) {
+    body = upsertDistributionField(
+      body,
+      "distributor_address",
+      `"${distributorAddress}"`
+    );
+  }
   return spec.replace(re, `${leading}${body}`);
 }
 

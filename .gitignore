@@ -120,3 +120,4 @@ docs/research/fixtures/market-cache/
 __pycache__/
 *.pyc
 task5002-import-mapping-*.json
+.harness/

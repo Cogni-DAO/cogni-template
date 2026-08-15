@@ -43,31 +43,52 @@ import {
 import { useCumulativeClaim } from "@/features/governance/hooks/useCumulativeClaim";
 import { getChainName } from "@/features/governance/lib/proposal-utils";
 
-export function CumulativeClaimPanel() {
+export function CumulativeClaimPanel({
+  bare = false,
+}: {
+  /**
+   * Render without the outer Card chrome (header/border) — for embedding inside an existing
+   * SectionCard (e.g. YourPositionPanel) so the claim UX reads as a flat section, not a card-in-card.
+   */
+  bare?: boolean;
+} = {}) {
   const { address, isConnected } = useAccount();
+
+  const body =
+    !isConnected || !address ? (
+      <div className="space-y-2">
+        <p className="text-muted-foreground text-sm">
+          Connect your wallet to check what you can claim.
+        </p>
+        <WalletConnectButton />
+      </div>
+    ) : (
+      <ConnectedClaim account={address} />
+    );
+
+  if (bare) {
+    return (
+      <div className="space-y-3 border-border/50 border-t pt-4">
+        <div>
+          <p className="font-semibold text-sm">Claim your tokens</p>
+          <p className="text-muted-foreground text-sm">
+            A single claim releases every unclaimed epoch you&apos;ve earned.
+          </p>
+        </div>
+        {body}
+      </div>
+    );
+  }
 
   return (
     <Card className="border-border/50 bg-card/50">
       <CardHeader>
         <CardTitle>Claim your tokens</CardTitle>
         <CardDescription>
-          A single claim releases every unclaimed epoch you&apos;ve earned. The
-          contract pays out your cumulative allocation minus whatever
-          you&apos;ve already claimed.
+          A single claim releases every unclaimed epoch you&apos;ve earned.
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        {!isConnected || !address ? (
-          <div className="space-y-2">
-            <p className="text-muted-foreground text-sm">
-              Connect your wallet to check what you can claim.
-            </p>
-            <WalletConnectButton />
-          </div>
-        ) : (
-          <ConnectedClaim account={address} />
-        )}
-      </CardContent>
+      <CardContent>{body}</CardContent>
     </Card>
   );
 }
