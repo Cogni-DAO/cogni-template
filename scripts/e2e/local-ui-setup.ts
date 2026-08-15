@@ -23,7 +23,7 @@ import {
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "..", "..");
 const RPC = "http://127.0.0.1:8545";
-const SPEC_DIR = path.join(REPO_ROOT, ".context", "harness-run");
+const SPEC_DIR = path.join(REPO_ROOT, ".harness");
 
 // Proven node-template Base addresses (rig #1920) — throwaway contracts on the
 // fork; the real Cogni DAO is NEVER touched.

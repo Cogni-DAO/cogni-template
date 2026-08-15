@@ -4,10 +4,10 @@
 
 // TOKS2 RIG — build the OFF-TREE augmented repo-spec for the localhost tokenomics
 // e2e (real Base mainnet, toks2 node). Reads the verbatim toks2 spec fetched from
-// GitHub (.context/harness-run/toks2-repo-spec.orig.yaml), injects
+// GitHub (.harness/toks2-repo-spec.orig.yaml), injects
 // governance.emissions_holder (= the toks2 DAO), flips distributions.status to
 // active, and (when known) records the deployed distributor address from
-// .context/harness-run/distributor.txt. The tracked .cogni/repo-spec.yaml is
+// .harness/distributor.txt. The tracked .cogni/repo-spec.yaml is
 // NEVER touched — app + host ledger worker point at this dir instead.
 //
 //   pnpm tsx scripts/e2e/toks2-augment-spec.mts            # no distributor yet
@@ -28,7 +28,7 @@ import {
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "..", "..");
-const SPEC_DIR = path.join(REPO_ROOT, ".context", "harness-run");
+const SPEC_DIR = path.join(REPO_ROOT, ".harness");
 
 // TOKS2 ground truth (verified on-chain, Base 8453).
 const TOKS2 = {

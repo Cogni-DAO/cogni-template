@@ -4,7 +4,7 @@
 
 // TOKS2 RIG SEED — one REVIEW-status epoch for the toks2 node (localhost e2e).
 // Mirrors scripts/db/seed.mts::seedReviewEpoch exactly, but:
-//   - node/scope come from the AUGMENTED toks2 spec (.context/harness-run)
+//   - node/scope come from the AUGMENTED toks2 spec (.harness)
 //   - 3 pr_merged receipts, ALL by the LINKED owner contributor whose users row
 //     carries wallet 0x070075F1…c949 → every locked claimant resolves to that wallet
 //   - approvers = [0x070075F1…c949] (same wallet signs on /gov/review)
@@ -37,8 +37,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "..", "..");
 const SPEC_PATH = path.join(
   REPO_ROOT,
-  ".context",
-  "harness-run",
+  ".harness",
   ".cogni",
   "repo-spec.yaml"
 );
