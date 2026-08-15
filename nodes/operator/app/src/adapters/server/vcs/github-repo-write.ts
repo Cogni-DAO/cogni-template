@@ -174,6 +174,14 @@ export interface DistributionActivationInput {
   readonly slug: string;
   readonly tokenAddress: string;
   readonly emissionsHolderAddress: string;
+  /**
+   * DEPLOYED CumulativeMerkleDistributor address (DAO-owned, `token()` == node token). Optional:
+   * when present the activation PR also writes `distributions.distributor_address` so claims can
+   * read the on-chain contract; absent keeps the metadata-only readiness path.
+   */
+  readonly distributorAddress?: string;
+  /** Deploy tx hash for the distributor (surfaced in the PR body only; not persisted to the spec). */
+  readonly deployTx?: string;
 }
 
 export interface DistributionActivationStatus {
@@ -2065,15 +2073,28 @@ export class GitHubRepoWriter implements DeployPlanePort {
     const octokit = await this.getOctokit(owner, repo);
     const branch = `cogni-operator/activate-distributions-${slug}`;
     const title = `feat(distributions): activate ${slug} token distributions`;
+    // When a distributor was deployed + verified (DAO owner, matching token()),
+    // pin it into the spec + surface it in the PR body; otherwise stay
+    // metadata-only.
+    const distributorLines = input.distributorAddress
+      ? `- \`distributions.distributor_address\` = \`${input.distributorAddress}\`` +
+        (input.deployTx ? ` (deploy tx \`${input.deployTx}\`)` : "") +
+        "\n"
+      : "";
+    const distributorSummary = input.distributorAddress
+      ? "This records verified distribution readiness AND pins the DAO-owned CumulativeMerkleDistributor. "
+      : "This only records verified distribution readiness. ";
     const body =
       `Activates \`${slug}\`'s token distribution lifecycle. Writes the verified ` +
       "GovernanceERC20 token + DAO-controlled emissions holder into `.cogni/repo-spec.yaml`:\n\n" +
       `- \`governance.token_contract\` = \`${input.tokenAddress}\`\n` +
       `- \`governance.emissions_holder\` = \`${input.emissionsHolderAddress}\`\n` +
       "- `distributions.status: active`\n" +
-      "- `distributions.claim_contract_pattern: uniswap.merkle-distributor.v1`\n\n" +
-      "This only records verified distribution readiness. Per-epoch claims still use the OSS " +
-      "MerkleDistributor path and require a separately funded epoch distributor.\n\n" +
+      "- `distributions.claim_contract_pattern: uniswap.merkle-distributor.v1`\n" +
+      distributorLines +
+      "\n" +
+      distributorSummary +
+      "Per-epoch claims use the OSS MerkleDistributor path (cumulative root set by the DAO).\n\n" +
       "_Authored automatically by cogni-operator on distribution activation._";
 
     const currentSpec = await this.fetchFileText({
@@ -2090,16 +2111,17 @@ export class GitHubRepoWriter implements DeployPlanePort {
       );
     }
 
-    const nextSpec = renderDistributionActivationSpec(currentSpec, {
+    const specInput = {
       tokenAddress: input.tokenAddress,
       emissionsHolderAddress: input.emissionsHolderAddress,
-    });
+      ...(input.distributorAddress
+        ? { distributorAddress: input.distributorAddress }
+        : {}),
+    };
+    const nextSpec = renderDistributionActivationSpec(currentSpec, specInput);
     if (
       nextSpec === currentSpec ||
-      hasDistributionActivationSpec(currentSpec, {
-        tokenAddress: input.tokenAddress,
-        emissionsHolderAddress: input.emissionsHolderAddress,
-      })
+      hasDistributionActivationSpec(currentSpec, specInput)
     ) {
       return { status: "no_changes" };
     }
@@ -2118,10 +2140,7 @@ export class GitHubRepoWriter implements DeployPlanePort {
       if (
         pendingSpec === nextSpec ||
         (pendingSpec !== null &&
-          hasDistributionActivationSpec(pendingSpec, {
-            tokenAddress: input.tokenAddress,
-            emissionsHolderAddress: input.emissionsHolderAddress,
-          }))
+          hasDistributionActivationSpec(pendingSpec, specInput))
       ) {
         await this.updatePrBody(
           octokit,
