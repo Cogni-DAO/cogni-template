@@ -31,13 +31,12 @@ import type {
  * domain expertise) is delivered live from the knowledge hub on top of this.
  */
 export const SESSION_BOOTSTRAP_INVARIANTS: readonly string[] = [
-  "ONE work item + ONE node per session (CI-gated). Claim, heartbeat, and link your PR at /api/v1/work/items/{id}; coordination.nextAction is authoritative.",
-  "Cite before you act. Ladder: skills/guides → this hub (/api/v1/knowledge?domain=) → our code (node-template, operator) → external OSS. Recall merged + your own open branch; refine in place over adding new. Uncited action is the exception you justify.",
-  "Ship via PR: same-repo branch → CI green (gh pr checks) → flight to candidate → merge. The operator is the deploy plane (flight, logs, secrets); code, work, and knowledge live in the node repo + hub.",
-  "Done = before→after behavior proven live, NOT a SHA deployed. Capture the BROKEN signal, flight, then read the FIXED behavior back from Loki at that SHA. 'Request reached the build' is deploy proof, not function. /validate-candidate is the merge gate; reprove prod-facing changes in preview/prod.",
-  "Drive to done autonomously — you hold durable authority (flight/merge/promote) and hours of runway. Interrupt a human ONLY for the irreversible, outward-facing, or out-of-scope — and only after you've earned it (validated), never for approval you already hold. A pending question usually means lost work.",
-  "When you must ask, respect the human's minutes: one scorecard (state → the single decision → a clickable link) — never a wall of text, never a request to merge or promote something unvalidated or unreviewed.",
-  "Your <slug>-agent-orientation is the operating map: recall it first, refine it as the node changes.",
+  "ONE work item + ONE node per session — it is your plan and your checklist. Claim it, then write the definition of done as an ordered checklist in `outcome` BEFORE you act; heartbeat; link your PR. You are not done until every box is checked and proven; coordination.nextAction is authoritative and may add boxes.",
+  "Cite before you act. Recall first — your <slug>-agent-orientation, then skills/guides → this hub (/api/v1/knowledge?domain=) → our code (node-template, operator) → external OSS; merged + your own open branch. Refine in place over adding new. Every checklist step names the skill/guide/entry it follows; an uncited step is the exception you justify.",
+  "Follow the CICD checklist exactly — recall it, never improvise the mechanism: branch → CI green (gh pr checks) → flight to candidate THROUGH the operator (POST /api/v1/vcs/flight — never a personal `gh` dispatch) → /validate-candidate → operator merge (POST /api/v1/vcs/merge) → promote. NEVER enter the merge queue or enable auto-merge before validate passes.",
+  "Done = before→after behavior proven on the live candidate, NOT a SHA deployed. Capture the BROKEN signal, flight, then read the FIXED behavior back from Loki at that SHA. 'Request reached the build' is deploy proof, not function. The /validate-candidate scorecard is the merge gate; reprove prod-facing changes in preview/prod.",
+  "Persist what outlives the session in the durable substrate, never a doc that rots: plan + status → the work item; durable strategy/why → operator Dolt, linked to the item (specRefs / cite edge). Specs hold contracts + invariants only — never a rollout plan.",
+  "Drive autonomously; interrupt a human only for the irreversible, outward-facing, or out-of-scope — never for approval you already hold, never to merge/promote something unvalidated. When you ask: one scorecard → the single decision → a clickable link.",
 ];
 
 const COGNITION_ENTRY_TYPES: ReadonlySet<string> = new Set([
