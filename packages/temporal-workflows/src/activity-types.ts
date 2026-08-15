@@ -379,7 +379,6 @@ export interface LedgerActivities {
     totalAllocations: number;
     totalProposedUnits: string;
   }>;
-
 }
 
 // ---------------------------------------------------------------------------

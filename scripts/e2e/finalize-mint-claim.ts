@@ -489,7 +489,9 @@ async function main(): Promise<void> {
     );
 
     // ── STEP 3: activate distributions off-tree + start host worker ───────────
-    log("\nSTEP 3 — activate distributions (chain id + identity) + build finalize deps");
+    log(
+      "\nSTEP 3 — activate distributions (chain id + identity) + build finalize deps"
+    );
     const ids = writeAugmentedSpec(distributor);
     ok(
       ids.nodeId === nodeId && ids.scopeId === scopeId,
@@ -502,11 +504,17 @@ async function main(): Promise<void> {
     // (the fold falls back to the baked/own governance, non-prod DAO here).
     const finalizeLogger = {
       info: (o: object, m?: string) =>
-        process.stdout.write(`      [finalize] ${m ?? ""} ${JSON.stringify(o)}\n`),
+        process.stdout.write(
+          `      [finalize] ${m ?? ""} ${JSON.stringify(o)}\n`
+        ),
       warn: (o: object, m?: string) =>
-        process.stdout.write(`      [finalize:warn] ${m ?? ""} ${JSON.stringify(o)}\n`),
+        process.stdout.write(
+          `      [finalize:warn] ${m ?? ""} ${JSON.stringify(o)}\n`
+        ),
       error: (o: object, m?: string) =>
-        process.stderr.write(`      [finalize:error] ${m ?? ""} ${JSON.stringify(o)}\n`),
+        process.stderr.write(
+          `      [finalize:error] ${m ?? ""} ${JSON.stringify(o)}\n`
+        ),
     };
     const finalizeDeps = {
       attributionStore: store,
@@ -522,7 +530,10 @@ async function main(): Promise<void> {
       deploymentEnvironment: undefined,
       logger: finalizeLogger,
     };
-    ok(true, "finalize deps built (in-process, no worker) — distributions ACTIVE");
+    ok(
+      true,
+      "finalize deps built (in-process, no worker) — distributions ACTIVE"
+    );
 
     // ── STEP 4: compute the hash the worker will recompute + SIGN (no SIWE) ────
     log(

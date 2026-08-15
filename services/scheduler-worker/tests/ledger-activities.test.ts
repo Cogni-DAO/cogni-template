@@ -15,10 +15,7 @@ import type {
   IngestionCursor,
   UnselectedReceipt,
 } from "@cogni/attribution-ledger";
-import {
-  computeApproverSetHash,
-  computeEpochWindowV1,
-} from "@cogni/attribution-ledger";
+import { computeEpochWindowV1 } from "@cogni/attribution-ledger";
 import { createDefaultRegistries } from "@cogni/attribution-pipeline-plugins";
 import type {
   ActivityEvent,
