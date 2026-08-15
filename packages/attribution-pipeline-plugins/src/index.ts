@@ -52,6 +52,16 @@ export {
   WeightSumOutputSchema,
 } from "./plugins/weight-sum/descriptor";
 
+// Finalize-in-process (story.5007) — runtime-agnostic epoch finalization + R3 fold
+export {
+  type FinalizeDistributionConfigResolver,
+  type FinalizeEpochInput,
+  type FinalizeEpochOutput,
+  type FinalizeLogger,
+  runFinalizeEpoch,
+  type RunFinalizeEpochDeps,
+} from "./finalize/run-finalize-epoch";
+
 // Profiles
 export { COGNI_V0_PROFILE } from "./profiles/cogni-v0.0";
 

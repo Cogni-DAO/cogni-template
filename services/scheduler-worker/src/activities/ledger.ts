@@ -26,30 +26,16 @@
  * @internal
  */
 
-import {
-  buildCumulativeEpochDistribution,
-  type ClaimantWalletResolver,
-  type FinalizedEpochStatement,
-  type HexAddress,
-  type PriorCumulativeBalance,
-} from "@cogni/aragon-osx";
+import type { ClaimantWalletResolver } from "@cogni/aragon-osx";
 import type {
   CloseIngestionWithEvaluationsParams,
   UnselectedReceipt,
 } from "@cogni/attribution-ledger";
 import {
-  applyReceiptWeightOverrides,
-  buildEIP712TypedData,
-  buildReceiptWeightOverrideSnapshots,
-  claimantKey,
   computeApproverSetHash,
-  computeAttributionStatementLines,
-  computeFinalClaimantAllocationSetHash,
   computeWeightConfigHash,
   estimatePoolComponentsV0,
-  explodeToClaimants,
   sha256OfCanonicalJson,
-  toReviewSubjectOverrides,
   validateWeightConfig,
 } from "@cogni/attribution-ledger";
 import {
@@ -57,10 +43,13 @@ import {
   dispatchSelectionPolicy,
   resolveProfile,
 } from "@cogni/attribution-pipeline-contracts";
-import type { DefaultRegistries } from "@cogni/attribution-pipeline-plugins";
+import {
+  type DefaultRegistries,
+  type FinalizeEpochInput,
+  type FinalizeEpochOutput,
+  runFinalizeEpoch,
+} from "@cogni/attribution-pipeline-plugins";
 import type { ActivityEvent } from "@cogni/ingestion-core";
-
-import { verifyTypedData } from "viem";
 
 import type { Logger } from "../observability/logger.js";
 import type {
@@ -68,13 +57,6 @@ import type {
   DataSourceRegistration,
   DistributionConfigHttpClient,
 } from "../ports/index.js";
-
-/**
- * 18-decimal base-unit scale for the GovernanceERC20. The per-epoch mint delta
- * maps 1 signed credit → 1 whole token (× 10^18 base units), matching the V0
- * Walk mapping previously in features/governance/publish-epoch/build-distribution.
- */
-const TOKEN_BASE_UNITS = 10n ** 18n;
 
 /**
  * Dependencies injected into ledger activities at worker creation.
@@ -131,16 +113,6 @@ export interface AttributionActivityDeps {
   readonly deploymentEnvironment?: string;
   readonly logger: Logger;
 }
-
-/**
- * The PRODUCTION Cogni DAO / emissions-holder address. The bug.5020 execute-guard
- * refuses to build any distribution against this address on a non-production worker,
- * so a candidate/preview deploy can never mint into or set a root for production
- * governance — defense-in-depth behind the per-node-spec seam (which is the actual
- * fix: a non-activated node resolves to `distribution: null` and the fold no-ops).
- */
-const PROD_COGNI_DAO_ADDRESS =
-  "0xF61c3fafD4D34b4568e7a500d92b28Ac175e83C6".toLowerCase();
 
 /**
  * Input for ensureEpochForWindow activity.
@@ -340,43 +312,6 @@ export interface TransitionEpochForWindowOutput {
 }
 
 /**
- * Input for finalizeEpoch compound activity.
- */
-export interface FinalizeEpochInput {
-  readonly epochId: string; // bigint serialized
-  readonly signature: string; // EIP-712 hex
-  readonly signerAddress: string; // from SIWE session
-}
-
-/**
- * Output from finalizeEpoch compound activity.
- */
-export interface FinalizeEpochOutput {
-  readonly statementId: string;
-  readonly poolTotalCredits: string; // bigint serialized
-  readonly finalAllocationSetHash: string;
-  readonly statementLineCount: number;
-  /**
-   * Cumulative distribution produced by the SAME finalize signature (R3).
-   * Null when distributions are not activated (no tokenAddress/resolver) or no
-   * wallet-resolved cumulative balance remains. When present, the per-epoch
-   * on-chain action is: DAO.mint(mintDelta) into the existing distributor +
-   * distributor.setMerkleRoot(merkleRoot). This activity BUILDS, never sends it.
-   */
-  readonly cumulativeDistribution: {
-    readonly distributionId: string;
-    readonly merkleRoot: string;
-    readonly mintDelta: string; // bigint serialized — DAO mints exactly this
-    readonly cumulativeTotal: string; // bigint serialized — total supply to date
-    readonly leafCount: number;
-    readonly tokenAddress: string;
-    readonly chainId: number;
-    /** Existing per-node distributor (null until R2 activation records it). */
-    readonly distributorAddress: string | null;
-  } | null;
-}
-
-/**
  * Creates ledger activity functions with injected dependencies.
  * Follows the same DI pattern as createActivities() in activities/index.ts.
  */
@@ -397,328 +332,6 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     logger,
   } = deps;
 
-  /**
-   * bug.5020 execute-guard: fail-closed refusal to build a distribution against the
-   * PRODUCTION Cogni DAO from a non-production worker. `deploymentEnvironment` other
-   * than `"production"` (incl. undefined) is non-prod. Thrown inside the fold, which
-   * both finalize call sites already wrap in try/catch — so a guard trip leaves the
-   * off-chain statement finalized and simply skips the on-chain manifest (safe no-op),
-   * loudly logged.
-   */
-  function assertNotProdGovernanceOnNonProd(
-    emissionsHolderAddress: string | null,
-    epochId: bigint
-  ): void {
-    if (deploymentEnvironment === "production") return;
-    if (
-      emissionsHolderAddress &&
-      emissionsHolderAddress.toLowerCase() === PROD_COGNI_DAO_ADDRESS
-    ) {
-      throw new Error(
-        `[bug.5020 execute-guard] refusing to build a distribution against the PRODUCTION Cogni DAO ${emissionsHolderAddress} from a non-production worker (DEPLOY_ENVIRONMENT=${deploymentEnvironment ?? "<unset>"}, epoch ${epochId.toString()})`
-      );
-    }
-    // NULL-BLIND FAIL-CLOSED: this guard only runs AFTER the tokenAddress gate, i.e. we are
-    // about to build a real distribution. On a non-prod worker a null emissionsHolder means the
-    // baked-fallback path (the gateway didn't authoritatively give us the DAO) — we CANNOT prove
-    // the governance target is not prod, so we refuse rather than trust a baked identity. The
-    // legitimate non-prod path (operator's own spec) no-ops earlier on a null tokenAddress and
-    // never reaches here; the authoritative gateway path always supplies a non-null holder.
-    if (emissionsHolderAddress === null) {
-      throw new Error(
-        `[bug.5020 execute-guard] refusing to build a distribution with an UNKNOWN emissions holder (baked-fallback path) from a non-production worker (DEPLOY_ENVIRONMENT=${deploymentEnvironment ?? "<unset>"}, epoch ${epochId.toString()}) — cannot prove the governance target is not the production DAO`
-      );
-    }
-  }
-
-  /**
-   * Resolve the effective per-node distribution config for THIS worker's node at fold
-   * time (bug.5020). Order: (1) the per-node gateway (authoritative — the finalizing
-   * node's own repo-spec); (2) on a transient gateway failure, the baked worker config
-   * (prod operator continuity — a network blip must never skip a real distribution);
-   * (3) when the gateway is unwired (null client), the baked config. A gateway that
-   * authoritatively reports `distribution: null` (not activated) returns nulls here —
-   * NOT the baked fallback — so a non-activated node correctly no-ops.
-   */
-  async function resolveEffectiveDistributionConfig(epochId: bigint): Promise<{
-    readonly tokenAddress: string | null;
-    readonly distributorAddress: string | null;
-    readonly emissionsHolderAddress: string | null;
-  }> {
-    const baked = {
-      tokenAddress,
-      distributorAddress: repoSpecDistributorAddress,
-      // Baked from the worker's OWN repo-spec (governance.emissions_holder) alongside the
-      // token, so the bug.5020 execute-guard can assert the governance target even on this
-      // fallback path (no operator gateway). Null only when distributions aren't activated,
-      // in which case tokenAddress is also null and the fold no-ops before the guard.
-      emissionsHolderAddress: repoSpecEmissionsHolderAddress ?? null,
-    };
-    if (!distributionConfigClient) {
-      return baked;
-    }
-    try {
-      const resolved = await distributionConfigClient.resolveForNode(nodeId);
-      if (resolved.distribution) {
-        return {
-          tokenAddress: resolved.distribution.tokenAddress,
-          distributorAddress: resolved.distribution.distributorAddress,
-          emissionsHolderAddress: resolved.distribution.emissionsHolderAddress,
-        };
-      }
-      // Authoritative "not activated" — do NOT fall back to baked config.
-      logger.info(
-        {
-          epochId: epochId.toString(),
-          nodeId,
-          reason: resolved.reason,
-        },
-        "Per-node distribution config inactive — cumulative fold will no-op"
-      );
-      return {
-        tokenAddress: null,
-        distributorAddress: null,
-        emissionsHolderAddress: null,
-      };
-    } catch (err) {
-      // TRANSIENT_IS_ERROR_NOT_NULL: the gateway threw (5xx/503/network). Never undo
-      // the off-chain finalize; fall back to the baked worker config for our own node.
-      logger.warn(
-        {
-          epochId: epochId.toString(),
-          nodeId,
-          err: err instanceof Error ? err.message : String(err),
-        },
-        "Per-node distribution config fetch failed — falling back to baked worker config (prod operator continuity)"
-      );
-      return baked;
-    }
-  }
-
-  /**
-   * R3 — build + persist the cumulative distribution from a just-finalized epoch.
-   *
-   * Resolves this epoch's claimant credit lines to wallets, folds them onto the
-   * prior persisted cumulative manifest (the most-recent finalized epoch's leaves
-   * already carry per-account cumulative balances), and persists the new
-   * cumulative merkle root + per-epoch mint delta. Returns the manifest summary
-   * the finalize output exposes so callers can BUILD the
-   * DAO.mint(delta)+setMerkleRoot(root) transaction. Never sends an on-chain tx.
-   *
-   * No-ops (returns null) when distributions are not activated (no tokenAddress
-   * or resolver) or no wallet-resolved cumulative balance remains — the
-   * off-chain ledger finalize already succeeded and must not be undone.
-   */
-  async function buildAndPersistCumulativeDistribution(args: {
-    readonly epochId: bigint;
-    readonly statementId: string;
-    readonly finalAllocationSetHash: string;
-    readonly statementLines: ReadonlyArray<{
-      readonly claimant_key: string;
-      readonly credit_amount: string;
-      readonly receipt_ids: readonly string[];
-    }>;
-  }): Promise<FinalizeEpochOutput["cumulativeDistribution"]> {
-    // FREEZE (bug.5022): once an epoch's manifest is persisted it is IMMUTABLE. A repair /
-    // re-finalize must never re-fold and OVERWRITE it — a re-fold that picks up a newly
-    // wallet-linked contributor produces a NEW merkle root for an epoch that may already be
-    // published on-chain, which the client-side "already-live root" guard no longer
-    // recognizes → a second DAO.mint(delta) re-opens the double-mint that stranded tokens on
-    // Base. The first finalize builds the manifest; every later call preserves it. Late
-    // resolutions flow into the NEXT epoch's cumulative fold (never a retro-overwrite).
-    const existingManifest =
-      await attributionStore.getDistributionManifestForEpoch(args.epochId);
-    if (existingManifest) {
-      const frozenLeaves = await attributionStore.getDistributionLeavesForEpoch(
-        args.epochId
-      );
-      logger.info(
-        {
-          epochId: args.epochId.toString(),
-          nodeId,
-          merkleRoot: `${existingManifest.merkleRoot.slice(0, 12)}...`,
-          leafCount: frozenLeaves.length,
-        },
-        "Cumulative distribution FROZEN — manifest already persisted; preserving without re-fold (bug.5022)"
-      );
-      return {
-        distributionId: existingManifest.distributionId,
-        merkleRoot: existingManifest.merkleRoot,
-        // No new mint on a preserved manifest — this repair emits nothing to publish.
-        mintDelta: "0",
-        cumulativeTotal: existingManifest.distributionAmount.toString(),
-        leafCount: frozenLeaves.length,
-        tokenAddress: existingManifest.tokenAddress,
-        chainId: existingManifest.chainId,
-        distributorAddress: existingManifest.distributorAddress,
-      };
-    }
-
-    // bug.5020: resolve the finalizing node's governance from ITS OWN repo-spec via the
-    // operator gateway — the worker bakes no node's governance identity. The wallet
-    // resolver is DB-backed (not spec-derived) and stays from deps, gated on a token.
-    const effective = await resolveEffectiveDistributionConfig(args.epochId);
-    const effectiveTokenAddress = effective.tokenAddress;
-    const effectiveDistributorAddress = effective.distributorAddress;
-
-    if (!effectiveTokenAddress || !walletResolver) {
-      logger.info(
-        { epochId: args.epochId.toString(), nodeId },
-        "Cumulative distribution skipped — distributions not activated (no tokenAddress/walletResolver)"
-      );
-      return null;
-    }
-
-    // bug.5020 execute-guard (defense-in-depth): a non-production worker must never build
-    // a distribution against the production Cogni DAO, even via a baked-spec fallback.
-    assertNotProdGovernanceOnNonProd(
-      effective.emissionsHolderAddress,
-      args.epochId
-    );
-
-    // Prior cumulative balances = the most-recent persisted cumulative manifest's
-    // per-account leaf amounts (each cumulative leaf carries the account's
-    // cumulative-to-date). We find the highest epoch id BEFORE this one that has a
-    // persisted manifest. No new store method: enumerate epochs and read manifests.
-    const allEpochs = await attributionStore.listEpochs(nodeId);
-    const priorEpochIds = allEpochs
-      .map((e) => e.id)
-      .filter((id) => id < args.epochId)
-      .sort((a, b) => (a > b ? -1 : a < b ? 1 : 0)); // descending
-
-    let priorManifest: Awaited<
-      ReturnType<typeof attributionStore.getDistributionManifestForEpoch>
-    > = null;
-    let priorLeaves: Awaited<
-      ReturnType<typeof attributionStore.getDistributionLeavesForEpoch>
-    > = [];
-    for (const priorEpochId of priorEpochIds) {
-      const manifest =
-        await attributionStore.getDistributionManifestForEpoch(priorEpochId);
-      if (manifest) {
-        priorManifest = manifest;
-        priorLeaves =
-          await attributionStore.getDistributionLeavesForEpoch(priorEpochId);
-        break;
-      }
-    }
-
-    const priorCumulative: PriorCumulativeBalance[] = priorLeaves.map(
-      (leaf) => ({
-        account: leaf.account as HexAddress,
-        cumulativeAmount: leaf.amount,
-      })
-    );
-
-    const distributorAddress =
-      priorManifest?.distributorAddress ??
-      (await attributionStore.getDistributionManifestForEpoch(args.epochId))
-        ?.distributorAddress ??
-      // R2↔R3 seam: the FIRST epoch has no prior/current manifest, so fall back to
-      // the ONE per-node distributor R2 recorded in the finalizing node's repo-spec at
-      // activation (resolved per-node via the gateway; baked worker value as fallback).
-      effectiveDistributorAddress ??
-      null;
-
-    // The per-epoch mint delta is THIS epoch's poolTotal in base units
-    // (poolTotalCredits × 10^18), mapped 1 credit → 1 whole token.
-    const poolTotalCredits = args.statementLines.reduce(
-      (sum, line) => sum + BigInt(line.credit_amount),
-      0n
-    );
-    const mintDelta = poolTotalCredits * TOKEN_BASE_UNITS;
-
-    const finalized: FinalizedEpochStatement = {
-      distributionId: `epoch-${args.epochId.toString()}`,
-      nodeId,
-      scopeId,
-      statementHash: args.finalAllocationSetHash,
-      chainId,
-      tokenAddress: effectiveTokenAddress as HexAddress,
-      lines: args.statementLines.map((line) => ({
-        claimantKey: line.claimant_key,
-        creditAmount: BigInt(line.credit_amount),
-        receiptIds: line.receipt_ids,
-      })),
-    };
-
-    if (mintDelta <= 0n && priorCumulative.length === 0) {
-      logger.info(
-        { epochId: args.epochId.toString() },
-        "Cumulative distribution skipped — zero mint delta and no prior cumulative balance"
-      );
-      return null;
-    }
-
-    const { distribution, blockers, unresolvedClaimantKeys } =
-      await buildCumulativeEpochDistribution(
-        finalized,
-        mintDelta,
-        priorCumulative,
-        walletResolver
-      );
-
-    if (!distribution) {
-      logger.warn(
-        {
-          epochId: args.epochId.toString(),
-          blockers: blockers.map((b) => b.code),
-          unresolvedClaimantKeys,
-        },
-        "Cumulative distribution not built — no wallet-resolved cumulative balance"
-      );
-      return null;
-    }
-
-    // Persist the cumulative manifest (header + cumulative leaves). The
-    // distributionAmount column holds the cumulative supply distributed to date;
-    // totalAllocated holds the same (every leaf is wallet-backed). The
-    // distributorAddress carries forward from the prior manifest (R2 records it).
-    await attributionStore.upsertDistributionManifest({
-      nodeId: distribution.nodeId,
-      scopeId: distribution.scopeId,
-      epochId: args.epochId,
-      distributionId: distribution.distributionId,
-      statementHash: distribution.statementHash,
-      merkleRoot: distribution.merkleRoot,
-      chainId: distribution.chainId,
-      tokenAddress: distribution.tokenAddress,
-      distributionAmount: distribution.cumulativeTotal,
-      totalAllocated: distribution.cumulativeTotal,
-      distributorAddress,
-      leaves: distribution.leaves.map((leaf) => ({
-        index: leaf.index,
-        claimantKey: leaf.claimantKey,
-        account: leaf.account,
-        amount: leaf.cumulativeAmount,
-        leafHash: leaf.leafHash,
-        proof: [...leaf.proof],
-      })),
-    });
-
-    logger.info(
-      {
-        epochId: args.epochId.toString(),
-        merkleRoot: `${distribution.merkleRoot.slice(0, 12)}...`,
-        mintDelta: distribution.mintDelta.toString(),
-        cumulativeTotal: distribution.cumulativeTotal.toString(),
-        leafCount: distribution.leaves.length,
-        unresolvedClaimantKeys,
-      },
-      "Cumulative distribution built + persisted from finalize signature"
-    );
-
-    return {
-      distributionId: distribution.distributionId,
-      merkleRoot: distribution.merkleRoot,
-      mintDelta: distribution.mintDelta.toString(),
-      cumulativeTotal: distribution.cumulativeTotal.toString(),
-      leafCount: distribution.leaves.length,
-      tokenAddress: distribution.tokenAddress,
-      chainId: distribution.chainId,
-      distributorAddress,
-    };
-  }
 
   function toEvaluationPayloadMap(
     evaluations: ReadonlyArray<{
@@ -1470,323 +1083,33 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
 
   /**
    * Compound activity: atomically finalize an epoch with signature verification.
-   * EPOCH_FINALIZE_IDEMPOTENT: returns existing statement if already finalized.
-   * CONFIG_LOCKED_AT_REVIEW: verifies allocation_algo_ref and weight_config_hash are set.
+   * Thin wrapper over the runtime-agnostic `runFinalizeEpoch` (story.5007) — the SAME
+   * logic runs synchronously in the operator app's finalize route in-process. This
+   * activity stays DORMANT until the in-process route cutover is candidate-proven; keep,
+   * do not delete (rollback path). EPOCH_FINALIZE_IDEMPOTENT + FREEZE (bug.5022) +
+   * FINALIZE_BUILDS_CUMULATIVE_ROOT (R3) + the bug.5020 execute-guard live in the
+   * extracted module.
    */
   async function finalizeEpoch(
     input: FinalizeEpochInput
   ): Promise<FinalizeEpochOutput> {
-    const epochId = BigInt(input.epochId);
-
-    logger.info(
-      { epochId: input.epochId, signerAddress: input.signerAddress },
-      "Finalizing epoch"
-    );
-
-    // 1. Load epoch — verify exists and is review (or finalized for idempotency)
-    const epoch = await attributionStore.getEpoch(epochId);
-    if (!epoch) {
-      throw new Error(`finalizeEpoch: epoch ${input.epochId} not found`);
-    }
-
-    // EPOCH_FINALIZE_IDEMPOTENT: already finalized → repair via atomic method
-    if (epoch.status === "finalized") {
-      logger.info(
-        { epochId: input.epochId },
-        "Epoch already finalized — repairing via finalizeEpochAtomic"
-      );
-      const existing = await attributionStore.getStatementForEpoch(epochId);
-      if (!existing) {
-        throw new Error(
-          `finalizeEpoch: epoch ${input.epochId} is finalized but no statement found`
-        );
-      }
-
-      // Repair: ensure this signer's signature exists via atomic method
-      await attributionStore.finalizeEpochAtomic({
-        epochId,
-        poolTotal: existing.poolTotalCredits,
-        finalClaimantAllocations: await attributionStore
-          .getFinalClaimantAllocationsForEpoch(epochId)
-          .then((allocations) =>
-            allocations.map((allocation) => ({
-              nodeId: allocation.nodeId,
-              epochId: allocation.epochId,
-              claimantKey: allocation.claimantKey,
-              claimant: allocation.claimant,
-              finalUnits: allocation.finalUnits,
-              receiptIds: allocation.receiptIds,
-            }))
-          ),
-        statement: {
-          nodeId,
-          finalAllocationSetHash: existing.finalAllocationSetHash,
-          poolTotalCredits: existing.poolTotalCredits,
-          statementLines: existing.statementLines,
-        },
-        signature: {
-          nodeId,
-          signerWallet: input.signerAddress,
-          signature: input.signature,
-          signedAt: new Date(),
-        },
-        expectedFinalAllocationSetHash: existing.finalAllocationSetHash,
-      });
-
-      // R3: re-build the cumulative manifest on repair too — heals a missing or
-      // stale cumulative root from an earlier finalize that predated this path.
-      let repairCumulative: FinalizeEpochOutput["cumulativeDistribution"] =
-        null;
-      try {
-        repairCumulative = await buildAndPersistCumulativeDistribution({
-          epochId,
-          statementId: existing.id,
-          finalAllocationSetHash: existing.finalAllocationSetHash,
-          statementLines: existing.statementLines.map((line) => ({
-            claimant_key: line.claimant_key,
-            credit_amount: line.credit_amount,
-            receipt_ids: [...line.receipt_ids],
-          })),
-        });
-      } catch (err) {
-        logger.error(
-          {
-            epochId: input.epochId,
-            err: err instanceof Error ? err.message : String(err),
-          },
-          "Cumulative distribution repair failed — epoch stays finalized"
-        );
-      }
-
-      return {
-        statementId: existing.id,
-        poolTotalCredits: existing.poolTotalCredits.toString(),
-        finalAllocationSetHash: existing.finalAllocationSetHash,
-        statementLineCount: existing.statementLines.length,
-        cumulativeDistribution: repairCumulative,
-      };
-    }
-
-    if (epoch.status !== "review") {
-      throw new Error(
-        `finalizeEpoch: epoch ${input.epochId} is '${epoch.status}', expected 'review'`
-      );
-    }
-
-    // 2. CONFIG_LOCKED_AT_REVIEW: verify config is locked
-    if (!epoch.allocationAlgoRef || !epoch.weightConfigHash) {
-      throw new Error(
-        `finalizeEpoch: epoch ${input.epochId} missing allocation_algo_ref or weight_config_hash (CONFIG_LOCKED_AT_REVIEW violated)`
-      );
-    }
-
-    // 3. Verify signer is in pinned approvers (APPROVERS_PINNED_AT_REVIEW)
-    if (!epoch.approvers || epoch.approvers.length === 0) {
-      throw new Error(
-        `finalizeEpoch: epoch ${input.epochId} has no pinned approvers (APPROVERS_PINNED_AT_REVIEW violated)`
-      );
-    }
-    const signerLower = input.signerAddress.toLowerCase();
-    const approversLower = epoch.approvers.map((a) => a.toLowerCase());
-    if (!approversLower.includes(signerLower)) {
-      throw new Error(
-        `finalizeEpoch: signer ${input.signerAddress} not in approvers`
-      );
-    }
-    // Self-consistent integrity check: recompute hash from pinned list
-    const pinnedApproverSetHash = await computeApproverSetHash(epoch.approvers);
-    if (epoch.approverSetHash !== pinnedApproverSetHash) {
-      throw new Error(
-        `finalizeEpoch: approver set hash integrity failure — stored hash ${epoch.approverSetHash} does not match recomputed ${pinnedApproverSetHash}`
-      );
-    }
-
-    // 4. Load pool components → pool_total = SUM(amount_credits)
-    const poolComponents =
-      await attributionStore.getPoolComponentsForEpoch(epochId);
-    if (poolComponents.length === 0) {
-      throw new Error(
-        `finalizeEpoch: epoch ${input.epochId} has no pool components (POOL_REQUIRES_BASE)`
-      );
-    }
-    const hasBaseIssuance = poolComponents.some(
-      (c) => c.componentId === "base_issuance"
-    );
-    if (!hasBaseIssuance) {
-      throw new Error(
-        `finalizeEpoch: epoch ${input.epochId} missing base_issuance component (POOL_REQUIRES_BASE)`
-      );
-    }
-
-    const poolTotal = poolComponents.reduce(
-      (sum, c) => sum + c.amountCredits,
-      0n
-    );
-
-    // 5. Load locked claimants + receipt weights + overrides → explode to claimant allocations
-    const lockedClaimants = await attributionStore.loadLockedClaimants(epochId);
-    if (lockedClaimants.length === 0) {
-      throw new Error(
-        `finalizeEpoch: epoch ${input.epochId} has no locked claimant rows`
-      );
-    }
-
-    const [selections, overrideRecords] = await Promise.all([
-      attributionStore.getSelectedReceiptsForAllocation(epochId),
-      attributionStore.getReviewSubjectOverridesForEpoch(epochId),
-    ]);
-    const rawWeights = await dispatchAllocator(
-      registries.allocators,
-      epoch.allocationAlgoRef,
+    return runFinalizeEpoch(
       {
-        receipts: selections,
-        weightConfig: epoch.weightConfig,
-        evaluations: toEvaluationPayloadMap(
-          await attributionStore.getEvaluationsForEpoch(epochId, "locked")
-        ),
-        profileConfig: null,
-      }
-    );
-    const overrides = toReviewSubjectOverrides(overrideRecords);
-    const receiptWeights = applyReceiptWeightOverrides(rawWeights, overrides);
-
-    const finalClaimantAllocations = explodeToClaimants(
-      receiptWeights,
-      lockedClaimants,
-      overrides
-    );
-    if (finalClaimantAllocations.length === 0) {
-      throw new Error(
-        `finalizeEpoch: epoch ${input.epochId} has no claimant allocations`
-      );
-    }
-
-    // Build override audit trail for statement persistence
-    const reviewOverrideSnapshots = buildReceiptWeightOverrideSnapshots(
-      rawWeights,
-      lockedClaimants,
-      overrides
-    );
-
-    // 6. Compute statement lines from final allocations
-    const statementLines = computeAttributionStatementLines(
-      finalClaimantAllocations,
-      poolTotal
-    );
-
-    // 7. Compute allocation set hash (deterministic)
-    const finalAllocationSetHash = await computeFinalClaimantAllocationSetHash(
-      finalClaimantAllocations
-    );
-
-    // 8. Build EIP-712 typed data and verify signature
-    const typedData = buildEIP712TypedData({
-      nodeId,
-      scopeId,
-      epochId: input.epochId,
-      finalAllocationSetHash,
-      poolTotalCredits: poolTotal.toString(),
-      chainId,
-    });
-
-    const isValid = await verifyTypedData({
-      address: input.signerAddress as `0x${string}`,
-      domain: typedData.domain,
-      types: typedData.types,
-      primaryType: typedData.primaryType,
-      message: typedData.message,
-      signature: input.signature as `0x${string}`,
-    });
-    if (!isValid) {
-      throw new Error(
-        `finalizeEpoch: signature verification failed for signer ${input.signerAddress}`
-      );
-    }
-
-    // 9. Atomic finalize — epoch transition + statement + signature in one transaction
-    const { epoch: finalizedEpoch, statement } =
-      await attributionStore.finalizeEpochAtomic({
-        epochId,
-        poolTotal,
-        finalClaimantAllocations: finalClaimantAllocations.map(
-          (allocation) => ({
-            nodeId,
-            epochId,
-            claimantKey: claimantKey(allocation.claimant),
-            claimant: allocation.claimant,
-            finalUnits: allocation.finalUnits,
-            receiptIds: [...(allocation.receiptIds ?? [])],
-          })
-        ),
-        statement: {
-          nodeId,
-          finalAllocationSetHash,
-          poolTotalCredits: poolTotal,
-          statementLines: statementLines.map((line) => ({
-            claimant_key: line.claimantKey,
-            claimant: line.claimant,
-            final_units: line.finalUnits.toString(),
-            pool_share: line.poolShare,
-            credit_amount: line.creditAmount.toString(),
-            receipt_ids: [...line.receiptIds],
-          })),
-          reviewOverrides:
-            reviewOverrideSnapshots.length > 0 ? reviewOverrideSnapshots : null,
-        },
-        signature: {
-          nodeId,
-          signerWallet: input.signerAddress,
-          signature: input.signature,
-          signedAt: new Date(),
-        },
-        expectedFinalAllocationSetHash: finalAllocationSetHash,
-      });
-
-    logger.info(
-      {
-        epochId: input.epochId,
-        statementId: statement.id,
-        poolTotalCredits: poolTotal.toString(),
-        finalAllocationSetHash: `${finalAllocationSetHash.slice(0, 12)}...`,
-        statementLineCount: statementLines.length,
-        status: finalizedEpoch.status,
+        attributionStore,
+        registries,
+        nodeId,
+        scopeId,
+        chainId,
+        tokenAddress,
+        distributorAddress: repoSpecDistributorAddress,
+        emissionsHolderAddress: repoSpecEmissionsHolderAddress,
+        walletResolver,
+        distributionConfigClient,
+        deploymentEnvironment,
+        logger,
       },
-      "Epoch finalized"
+      input
     );
-
-    // R3: the SAME finalize signature drives the cumulative root + mint delta.
-    // Built/persisted after the atomic off-chain finalize so a build failure
-    // never undoes the signed statement; the off-chain ledger is authoritative.
-    let cumulativeDistribution: FinalizeEpochOutput["cumulativeDistribution"] =
-      null;
-    try {
-      cumulativeDistribution = await buildAndPersistCumulativeDistribution({
-        epochId,
-        statementId: statement.id,
-        finalAllocationSetHash,
-        statementLines: statementLines.map((line) => ({
-          claimant_key: line.claimantKey,
-          credit_amount: line.creditAmount.toString(),
-          receipt_ids: [...line.receiptIds],
-        })),
-      });
-    } catch (err) {
-      logger.error(
-        {
-          epochId: input.epochId,
-          err: err instanceof Error ? err.message : String(err),
-        },
-        "Cumulative distribution build failed AFTER finalize — epoch stays finalized; retry/repair on next finalize call"
-      );
-    }
-
-    return {
-      statementId: statement.id,
-      poolTotalCredits: poolTotal.toString(),
-      finalAllocationSetHash,
-      statementLineCount: statementLines.length,
-      cumulativeDistribution,
-    };
   }
 
   /**
