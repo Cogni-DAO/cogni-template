@@ -85,9 +85,8 @@ export function DistributionsCard({
     >
       <p className="text-muted-foreground text-sm">
         A one-time setup so <span className="font-medium">{slug}</span> can pay
-        contributors in its DAO token. Three steps: activate, deploy the claim
-        distributor, then authorize your wallet to publish. After setup, each
-        epoch publishes in a single transaction with no vote.
+        contributors in its DAO token. After setup, each epoch publishes in a
+        single transaction with no vote.
       </p>
 
       {tokenAddress && daoAddress && chainId != null ? (

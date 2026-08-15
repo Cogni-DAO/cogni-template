@@ -112,9 +112,7 @@ export function HoldingsView(): ReactElement {
           Attribution ownership distribution
         </h2>
         <p className="mb-3 text-muted-foreground text-sm">
-          How the distributed-via-attribution tokens are split across
-          contributors. This is a subset of total supply — it excludes formation
-          / genesis holdings.
+          A subset of total supply — excludes formation / genesis holdings.
         </p>
 
         <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">

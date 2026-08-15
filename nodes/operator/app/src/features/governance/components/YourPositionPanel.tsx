@@ -58,7 +58,7 @@ function ConnectedPosition({
 }: {
   account: `0x${string}`;
 }): ReactElement {
-  const { claim, cumulativeClaimed, claimable } = useCumulativeClaim(account);
+  const { claim } = useCumulativeClaim(account);
 
   // CONFIG_NOT_MANIFEST: read the node token from repo-spec so the on-chain wallet
   // balance resolves even when this viewer has no claim leaf (e.g. a pure formation
@@ -108,18 +108,6 @@ function ConnectedPosition({
           hint="Holdings not earned via attribution (genesis, transfers)"
         />
       </div>
-
-      <p className="text-muted-foreground text-xs">
-        Claimable now:{" "}
-        <span className="font-medium text-foreground">
-          {claimable === undefined ? "…" : formatTokenAmount(claimable)}
-        </span>{" "}
-        — the unclaimed slice of your earned allocation
-        {cumulativeClaimed !== undefined && (
-          <> ({formatTokenAmount(cumulativeClaimed)} already claimed)</>
-        )}
-        .
-      </p>
     </div>
   );
 }

@@ -51,9 +51,7 @@ export function CumulativeClaimPanel() {
       <CardHeader>
         <CardTitle>Claim your tokens</CardTitle>
         <CardDescription>
-          A single claim releases every unclaimed epoch you&apos;ve earned. The
-          contract pays out your cumulative allocation minus whatever
-          you&apos;ve already claimed.
+          A single claim releases every unclaimed epoch you&apos;ve earned.
         </CardDescription>
       </CardHeader>
       <CardContent>
