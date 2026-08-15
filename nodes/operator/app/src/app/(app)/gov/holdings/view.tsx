@@ -14,7 +14,7 @@
  * Invariants:
  *   - ALL_MATH_BIGINT: token amounts stay bigint; formatted only at display.
  *   - THREE_NUMBER_MODEL: total holdings ≠ earned-via-attribution ≠ claimable-now — all three are shown, labeled plainly.
- *   - CLAIM_UNCHANGED: the Claim affordance is the untouched CumulativeClaimPanel, embedded via YourPositionPanel.
+ *   - CLAIM_UNCHANGED: the Claim affordance is CumulativeClaimPanel (embedded bare via YourPositionPanel) — chrome only; no claim-math changes.
  * Side-effects: IO (useHoldings), blockchain read (via child panels)
  * Links: docs/spec/epoch-ledger.md, src/features/governance/types.ts
  * @public

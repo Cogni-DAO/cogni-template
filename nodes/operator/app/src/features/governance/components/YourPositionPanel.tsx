@@ -12,7 +12,7 @@
  * Scope: Client component. Sources the node's token/chain from repo-spec via useNodeTokenomicsConfig
  *   (so the on-chain wallet balance reads even with NO claim leaf), the viewer's earned-via-attribution
  *   allocation from useCumulativeClaim, and the viewer's on-chain token balance via useNodeTokenomics.
- *   Reuses CumulativeClaimPanel AS-IS for the claim UX (no claim-math changes). Does not perform DB access.
+ *   Reuses CumulativeClaimPanel for the claim UX (embedded `bare` — chrome only; no claim-math changes). Does not perform DB access.
  * Invariants:
  *   - CONFIG_NOT_MANIFEST: the node token whose balance we read comes from repo-spec, never the claim leaf.
  *   - ALL_MATH_BIGINT: balances/allocations stay bigint; formatted only at display.
@@ -47,8 +47,8 @@ export function YourPositionPanel(): ReactElement {
       ) : (
         <ConnectedPosition account={address} />
       )}
-      {/* Claim affordance — reused unchanged. */}
-      <CumulativeClaimPanel />
+      {/* Claim affordance — embedded bare (no nested Card) so it reads as a flat section. */}
+      <CumulativeClaimPanel bare />
     </SectionCard>
   );
 }
