@@ -1298,9 +1298,7 @@ export function resolveNodeDistributionConfigResolver(): NodeDistributionConfigR
  *   never bakes a foreign governance identity. A transient read → runFinalizeEpoch falls
  *   back to the baked tokenomics below (own node only).
  */
-export function buildFinalizeEpochDeps(
-  logger: FinalizeLogger
-): RunFinalizeEpochDeps {
+function buildFinalizeEpochDeps(logger: FinalizeLogger): RunFinalizeEpochDeps {
   const serviceDb = getServiceDb();
   const tokenomics = getNodeTokenomicsConfig();
   const { excludedLogins, sourceRefs } = getLedgerSelectionConfig();
