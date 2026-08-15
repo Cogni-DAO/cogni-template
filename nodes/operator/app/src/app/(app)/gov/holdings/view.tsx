@@ -3,10 +3,17 @@
 
 /**
  * Module: `@app/(app)/gov/holdings/view`
- * Purpose: Client component displaying cumulative credit holdings with pie chart and compact table.
- * Scope: Renders holdings data fetched via useHoldings hook. Does not perform server-side logic or direct DB access.
- * Invariants: BigInt credits displayed via Number() for presentation only. No credit math in UI.
- * Side-effects: IO (via useHoldings hook)
+ * Purpose: Client component for the Ownership page — accurately separates THIS NODE'S TOKENOMICS
+ *   (token supply, distributor + its undistributed balance, distributed-via-attribution, epochs, contract
+ *   links) from YOUR POSITION (full on-chain wallet balance, split into earned-via-contributions vs the
+ *   rest, plus the claim affordance), then the attribution ownership distribution table.
+ * Scope: Renders on-chain reads (via useNodeTokenomics/useCumulativeClaim through child panels) and
+ *   attribution data (via useHoldings). Does not perform server-side logic or direct DB access.
+ * Invariants:
+ *   - ALL_MATH_BIGINT: token amounts stay bigint; formatted only at display.
+ *   - THREE_NUMBER_MODEL: total holdings ≠ earned-via-attribution ≠ claimable-now — all three are shown, labeled plainly.
+ *   - CLAIM_UNCHANGED: the Claim affordance is the untouched CumulativeClaimPanel, embedded via YourPositionPanel.
+ * Side-effects: IO (useHoldings), blockchain read (via child panels)
  * Links: docs/spec/epoch-ledger.md, src/features/governance/types.ts
  * @public
  */
@@ -16,6 +23,7 @@
 import { Coins, TrendingUp, Users } from "lucide-react";
 import type { ReactElement } from "react";
 import { useMemo } from "react";
+import { useAccount } from "wagmi";
 
 import {
   Card,
@@ -27,13 +35,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components";
-import { CumulativeClaimPanel } from "@/features/governance/components/CumulativeClaimPanel";
 import { HoldingRow } from "@/features/governance/components/HoldingCard";
+import { NodeTokenomicsPanel } from "@/features/governance/components/NodeTokenomicsPanel";
+import { YourPositionPanel } from "@/features/governance/components/YourPositionPanel";
+import { useCumulativeClaim } from "@/features/governance/hooks/useCumulativeClaim";
 import { useHoldings } from "@/features/governance/hooks/useHoldings";
 import { buildPieChartData } from "@/features/governance/lib/build-pie-data";
 
 export function HoldingsView(): ReactElement {
   const { data, isLoading, error } = useHoldings();
+
+  // Source the node's token/distributor/chain from the connected viewer's latest
+  // cumulative claim leaf (react-query dedupes with the claim panel's own read).
+  const { address } = useAccount();
+  const { claim } = useCumulativeClaim(address);
+  const token = (claim?.tokenAddress ?? null) as `0x${string}` | null;
+  const distributor = (claim?.distributor ?? null) as `0x${string}` | null;
+  const chainId = claim?.chainId;
 
   const { chartData, chartConfig, legendEntries } = useMemo(() => {
     if (!data?.holdings.length)
@@ -77,6 +95,11 @@ export function HoldingsView(): ReactElement {
     );
   }
 
+  // Attribution credits are a raw COUNT (e.g. "12000"), not token base units — the
+  // per-epoch token allocation is a proportional share of each epoch's distribution
+  // amount, so there's no fixed credits→tokens multiplier. Keep this figure in its
+  // true unit (credits) and let the token-scale numbers (supply, balances) stand on
+  // their own 18-decimal footing.
   const totalCredits = Number(data.totalCreditsIssued);
 
   return (
@@ -84,58 +107,76 @@ export function HoldingsView(): ReactElement {
       <div>
         <h1 className="mb-1 font-bold text-3xl tracking-tight">Ownership</h1>
         <p className="text-muted-foreground">
-          Credit attribution and ownership distribution
+          This node&apos;s tokenomics and your token position
         </p>
       </div>
 
-      <CumulativeClaimPanel />
+      <NodeTokenomicsPanel
+        token={token}
+        distributor={distributor}
+        chainId={chainId}
+        distributedCredits={totalCredits}
+        epochsCompleted={data.epochsCompleted}
+      />
 
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-        <Card className="border-border/50 bg-card/50">
-          <CardContent className="flex items-center gap-4 p-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15">
-              <Coins className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <div className="font-bold text-2xl">
-                {totalCredits.toLocaleString()}
-              </div>
-              <div className="text-muted-foreground text-xs">
-                Total Credits Issued
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-border/50 bg-card/50">
-          <CardContent className="flex items-center gap-4 p-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/15">
-              <Users className="h-5 w-5 text-accent" />
-            </div>
-            <div>
-              <div className="font-bold text-2xl">{data.totalContributors}</div>
-              <div className="text-muted-foreground text-xs">
-                Total Contributors
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="border-border/50 bg-card/50">
-          <CardContent className="flex items-center gap-4 p-4">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/15">
-              <TrendingUp className="h-5 w-5 text-success" />
-            </div>
-            <div>
-              <div className="font-bold text-2xl">{data.epochsCompleted}</div>
-              <div className="text-muted-foreground text-xs">
-                Epochs Completed
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <YourPositionPanel />
 
       <div>
-        <h2 className="mb-3 font-semibold text-lg">Ownership Distribution</h2>
+        <h2 className="mb-3 font-semibold text-lg">
+          Attribution ownership distribution
+        </h2>
+        <p className="mb-3 text-muted-foreground text-sm">
+          How the distributed-via-attribution tokens are split across
+          contributors. This is a subset of total supply — it excludes formation
+          / genesis holdings.
+        </p>
+
+        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <Card className="border-border/50 bg-card/50">
+            <CardContent className="flex items-center gap-4 p-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/15">
+                <Coins className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <div className="font-bold text-2xl">
+                  {totalCredits.toLocaleString()}
+                </div>
+                <div className="text-muted-foreground text-xs">
+                  Distributed via attribution
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-border/50 bg-card/50">
+            <CardContent className="flex items-center gap-4 p-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/15">
+                <Users className="h-5 w-5 text-accent" />
+              </div>
+              <div>
+                <div className="font-bold text-2xl">
+                  {data.totalContributors}
+                </div>
+                <div className="text-muted-foreground text-xs">
+                  Total Contributors
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="border-border/50 bg-card/50">
+            <CardContent className="flex items-center gap-4 p-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-success/15">
+                <TrendingUp className="h-5 w-5 text-success" />
+              </div>
+              <div>
+                <div className="font-bold text-2xl">{data.epochsCompleted}</div>
+                <div className="text-muted-foreground text-xs">
+                  Epochs Completed
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
         {data.holdings.length === 0 ? (
           <div className="rounded-lg border bg-card p-12 text-center">
             <p className="text-muted-foreground">No holdings data</p>
