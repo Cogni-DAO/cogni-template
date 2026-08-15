@@ -6,55 +6,52 @@ status: active
 created: 2026-08-15
 updated: 2026-08-15
 branch: "toks2-e2e-rig"
-last_commit: "57a0683c37"
+last_commit: "c8f47e59b5"
 ---
 
-# Handoff: multi-member-safe per-epoch distribution PUBLISH (no per-epoch vote)
+# Handoff: land the distribution feature — CI green → flight operator → validate → promote
 
 ## Mission
 
-Pickup: you own getting a **working, Aragon-best-practices, fork-verified** distribution publish path for a node — so a node owner completes **deploy → finalize → publish → claim** in-app, where the per-epoch **publish is ONE direct `DAO.execute` (no vote)**, authorized **ONCE** via a scoped Aragon permission condition. The full loop was already proven once on real Base (toks2 epoch 17: deploy→finalize→fold→execute→claim, conservation held) — but via the **dead-end per-epoch-proposal** mechanism, which is scrapped (`docs/spec/tokenomics-distribution.md` § NOT acceptable). You are replacing that with the real multi-member-safe mechanism. **This is product (reaches every node via node-template), NOT a throwaway demo — Derek was explicit.**
+Pickup: the per-node cumulative distribution feature (finalize→fold→publish→claim; one-time **scoped** authorize, no-vote per-epoch publish) is **built, proven e2e on real Base, and open as PR #2020**. Your job is the **baseline delivery loop**, which the previous agent over-thought and got wrong: get **[#2020](https://github.com/cogni-dao/cogni/pull/2020)** CI-green, **flight the OPERATOR node to candidate-a via the STANDARD flow**, run **`/validate-candidate`**, then hand Derek a merge-ready scorecard so he approves merge → promote. Real epochs close **Sunday** and run on the **operator** node.
 
 ## Goal
 
-- Owner runs **one-time setup** (activate → deploy distributor → authorize publishing) on the node page, then **per epoch**: sign → **publish (one direct tx, no vote)** → contributor claims. On toks2, steps 1+2 are already done; only **Authorize publishing** remains.
-- **E2E validation signal (local, real Base):** owner authorizes (deploy scoped condition + `grantWithCondition`, auto-executes) → `DAO.hasPermission(dao, owner, EXECUTE_PERMISSION)` == true → sign epoch 18 → publish (`DAO.execute([mint,setRoot])`) mints + sets root on Base → claim pays the leaf; conservation holds (`minted == Σ claimed`, distributor drains). Basescan links for authorize/publish/claim.
-- **Pre-gas gate (non-negotiable):** the scoped condition must be **fork-verified** (anvil Base-fork: `grantWithCondition` does NOT revert + positive/negative `execute` checks) BEFORE Derek deploys real gas. Do NOT hand Derek a tx on "trust me."
+- **#2020 all-green**, then **operator flighted to candidate-a** (NOT toks2 — that was the throwaway rig) and **`/validate-candidate`** passes with a real operator epoch exercising sign→publish→claim through the product UI, conservation holding.
+- Candidate-a proof: the standard flight lane (through prod operator `cognidao.org`) shows the workflow run + deployed lane + `/version` SHA matching this branch's build; `/validate-candidate` scorecard posted.
+- **Derek approves merge → promote** (his rule: NEVER merge to main without him). Promoted operator runs Sunday's epochs.
 
 ## Start By Reading
 
-- `docs/spec/tokenomics-distribution.md` — the lifecycle + authorization model (Walk = scoped `IPermissionCondition`; Run = permissionless `EmissionsExecutor`; both the per-epoch-vote AND the unconditional-grant are NOT acceptable).
-- `docs/spec/identity-model.md` § **Distribution Authority + Recipient** — approver vs executor vs node-admin; recipient is `actor_id` (agent-earns/user-owns is an OPEN policy).
-- `docs/spec/tokenomics.md` "Root rotation authority" (Walk = trusted governance execution; Run = Governor/Timelock).
-- Contract (being rebuilt): `packages/cogni-contracts/src/distribution-publish-condition/` — must **extend Aragon's `PermissionCondition` base** (NOT hand-roll `IPermissionCondition` — that was the bug).
-- Fold: `services/scheduler-worker/src/activities/ledger.ts` (`buildAndPersistCumulativeDistribution`) + `packages/aragon-osx/src/epoch-distribution-service.ts`.
-- UI: `nodes/operator/app/src/features/nodes/DistributionsCard.client.tsx` (setup sequence), `.../governance/hooks/useAuthorizePublishing.ts` (grantWithCondition), `.../components/ExecuteDistributionPanel.tsx` (publish-only).
+- `docs/spec/tokenomics-distribution.md` — the whole mechanism: Goal/Invariants/Design, **"Local rig vs production"** (the App-gateway is the biggest divergence), **"Idempotency & replay"**, and the operator-vs-node-template rollout notes.
+- PR **#2020** body — the landing plan + proven-e2e summary.
+- `test-expert` skill § "Tokenomics distribution e2e" — the walk harness `pnpm test:walk:dev` (fork-based sign→fold→mint→claim).
+- Recall the flight SSoT: `GET /api/v1/knowledge/cicd-e2e-required-sequence` — **do this first**, don't assert the flight payload from memory.
 
 ## Current State
 
-- **Branch** `toks2-e2e-rig` @ `57a0683c37`, pushed. Worktree = `/Users/derek/dev/cogni-template/.claude/worktrees/agent-adf6ac46c826d893e`. **Do NOT merge to main without Derek's explicit approval** (hard rule).
-- **Design review fixes SHIPPED** (`57a0683c`): setup (activate→deploy→authorize) unified on the node page; publish-only on `/gov/epoch`; Ownership tokenomics source from **node config not a manifest** (new `GET /api/v1/public/attribution/tokenomics`) + hero'd at top. tsc clean.
-- **BUG being fixed:** the hand-rolled condition lacked ERC-165 `supportsInterface` → Aragon `grantWithCondition` reverted `0xa6a7dbbd` (ConditionInterfaceNotSupported). Confirmed by simulation: **plain `grant` proposal simulates OK; `grantWithCondition` reverts**. A background agent is rebuilding the condition to extend Aragon's `PermissionCondition` base + **fork-verifying** it. Await its result — do NOT trust it unverified.
-- **Local stack (restart-stable):** app `pnpm --filter operator dev` reads `COGNI_REPO_PATH` from `.env.local` → `.harness/.cogni/repo-spec.yaml` (moved OUT of `.context` — Derek hates `.context`). Worker: source `.env.local`, `export DATABASE_URL=$DATABASE_SERVICE_URL` (app_service/BYPASSRLS — else "no claimant allocations"), `HARNESS_SPEC_DIR=.harness`, `pnpm tsx scripts/e2e/ledger-worker-host.ts`. DB truncate needs postgres superuser + `SET session_replication_role=replica` (finalize-freeze trigger). Seed: `scripts/e2e/seed-toks2.mts` (needs `DATABASE_SERVICE_URL`). Fresh **epoch 18 in review**.
+- Branch `toks2-e2e-rig` @ `c8f47e59b5`, pushed. **PR #2020 → `main`.** Worktree = `/Users/derek/dev/cogni-template/.claude/worktrees/agent-adf6ac46c826d893e`.
+- **Rebased on real `origin/main`** (`23797d0`) — local `main` was stale, so the diff is **73 files (the real feature)**, not the 134 it first looked like. Backup tag `toks2-rig-backup`.
+- **CI** (as of last push): `static` ✅, `component` ✅, all `build (*)` ✅, `manifest` ✅. `unit` failed on **format:check** → fixed + pushed in `c8f47e`; **confirm it's green now**. **`Cogni Git PR Review` FAILS** (operator AI reviewer) — read its output and address.
+- **PROVEN e2e**: toks2 epoch 19 on real Base — sign→fold→publish→claim, conservation held (minted 12k == claimed 12k). That was the **rig**; production validates on **operator**.
+- **Why the prev agent stalled on flight:** `.env.cogni` **does not exist in this worktree**. Get it from Derek's workspace root (`reference_cogni_api_keys`: it holds `COGNI_API_KEY_{TEST,PREVIEW,PROD}`). There is **no special "test key"** — flighting uses the standard operator key + flock-leader's operator-bridge RBAC.
 
-## Ground truth (toks2 — throwaway governance, Base 8453)
+## Design / Implementation Target (the corrections — do NOT repeat these mistakes)
 
-`node_id cf909432-5324-4bff-bb2d-7806f545eeda` · DAO `0x7DeD1C96c6D27427F37F88418B2c3EB2c31eA7A5` (Aragon OSx **1.4** TokenVoting) · token `0x2A6D69Fc6fA5bD7EDe8257979099B65cf1177A8F` (212k supply, owner holds all) · distributor `0xb8a23fc6eb0848c94158c701afc7f64d9f327ceb` (DAO-owned) · plugin `0xb39c4a7e5a23005dfe3ca12c0b67d82f2302a360` · owner=executor=approver=claimant `0x070075F1389Ae1182aBac722B36CA12285d0c949`. `EXECUTE_PERMISSION_ID = keccak256(toBytes("EXECUTE_PERMISSION"))`.
-
-## Design / Implementation Target
-
-1. **Scoped condition, the Aragon way:** `DistributionPublishCondition is PermissionCondition` (Aragon base supplies the ERC-165 the DAO checks). `isGranted` allows ONLY `[token.mint(distributor,*), distributor.setMerkleRoot(*)]`, value==0, else false; fail-closed on malformed calldata. Compile with `@aragon/osx-commons-contracts` (osx-1.4-compatible) resolved; re-vendor abi+bytecode.
-2. **Authorization is ONE-TIME + on the SETUP surface** (`DistributionsCard`), never per-epoch, never under the epoch dropdown. Publish (`ExecuteDistributionPanel`) is publish-only.
-3. **Must not regress:** the fold (`fold-failure-never-undoes-finalize`, conservation), the ownership tokenomics reading from config, the local stack persistence (`.env.local`, `.harness`, app_service worker).
-4. **Fix the disjoint setup UX:** consistent presentation (labeled Basescan links for the distributor/condition, not raw plaintext), plain-English step copy (activate = git record; deploy = the claim vault; authorize = one-time publish permission). Honest labels — a proposal is a proposal, publish is a direct execute.
-5. **Honest residual (document, don't hide):** the scoped condition removes the per-epoch vote + caps the executor to publish-shaped actions, but does NOT bind the mint _amount_/_root_ to the finalize signature — a compromised executor could over-mint/mis-root. Full closure = the **`EmissionsExecutor`** (Run north-star: verifies the approver sig on-chain, permissionless submit, enables the agent-wallet/API loop). A is the correct real step, not a throwaway.
-6. **Recipient (forward work):** the claimant is `actor_id` (agent-earns/user-owns via on-behalf-of) — see identity-model.md; not in this story's critical path but keep the model actor-keyed.
+1. **Flight = STANDARD flow through the prod operator + `/validate-candidate`.** Not a bespoke "test key," not manual curl-from-memory. flock-leader already has `can_flight` RBAC.
+2. **Flight OPERATOR** (Sunday's epochs run there — `/gov/*` is self-scoped). node-template + forks are **follow-on**, not Sunday-blocking.
+3. **NO new OpenFGA relations** (verified: the diff adds none; routes gate on existing `node.ownerUserId` session OR the existing `node.flight` relation). **No FGA re-bootstrap** — that risk was a phantom.
+4. **node-wizard = OPERATOR-ONLY.** `DistributionsCard` + deploy/activate/authorize + `nodes/[id]` + activate route + cross-node config gateway are the operator control plane. Only the **per-epoch `/gov` surfaces (sign/publish/claim) + shared packages + worker** land in **node-template**.
+5. **Must not regress:** the proven e2e mechanism (fold conservation, scoped-condition authorize, publish idempotency guard). Don't re-introduce toks2 into any production path.
 
 ## Next Actions / Risks
 
-- [ ] **Await the condition-rebuild agent → it must return FORK-VERIFIED** (grantWithCondition NOT reverting + positive/negative execute). Paste raw fork output; never claim success unverified.
-- [ ] Then hand Derek ONE clean flow: node page → Authorize publishing (deploy condition + grant, his wallet) → `/gov/review` sign epoch 18 → `/gov/epoch` publish → `/gov/holdings` claim. Verify each on-chain (hasPermission true; distributor minted; claim balance; conservation).
-- [ ] Fix the setup UX consistency (target #4) once the mechanism is fork-proven — don't polish a broken flow.
-- 🔴 **RED LINE:** toks2 only (throwaway governance). Never a node whose spec carries the prod DAO `0xF61c3faf…`. Verify the governance block before any signature.
-- **Human-gated:** every wallet tx is Derek's (deploy condition, authorize grant, sign, publish, claim). He is "barely here for support — just enough to catch you off the rails." Stay grounded: verify against live state (fork + on-chain reads), cite specs, one clean path — no endless forks.
-- **Do NOT merge to main.** Derek approves every merge.
+- [ ] **Confirm `unit` green** post-`c8f47e` (was a format:check failure). `gh pr checks 2020`.
+- [ ] **Fix `Cogni Git PR Review`** failure — `gh` the check's detail / operator review output.
+- [ ] **Get `.env.cogni`** into the worktree (Derek's workspace root) → recall `cicd-e2e-required-sequence` → **flight operator to candidate-a** → **`/validate-candidate`**.
+- [ ] Post the validation scorecard → Derek approves **merge → promote**.
+- [ ] **Follow-on (not Sunday):** reconcile the mechanism into **node-template** (authoritative for forks; `fork-sync` overlays blue/habitat/poly). Discipline: author shared code in node-template.
+- 🔴 **RED LINE:** toks2 is throwaway rig; production governance is the **operator's own** DAO — never sign/route against a prod DAO `0xF61c…` or leave toks2 in a shipped path.
+- ⚠️ **green-local ≠ green-gateway:** the local rig faked the operator App-gateway with baked config (`.harness`). On real operator the App must be installed or the fold falls back to baked identity.
+- ⚠️ **Publish replay:** the shipped Walk guard is a UI/route check (bypassable by a raw `DAO.execute`); mandate a Safe m-of-n executor until the on-chain `EmissionsExecutor` (Run) lands. (A rig re-publish stranded 12k on the toks2 distributor — moot for prod.)
+- **Do NOT merge to main.** Derek approves every merge + promote.
