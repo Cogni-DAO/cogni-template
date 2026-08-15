@@ -37,6 +37,7 @@ End state = the distribution loop lives on **operator (prod)** AND **node-templa
 ## Phased Plan (the actual feature)
 
 **PHASE 1 — SHIP OPERATOR (do now).** Pipeline: **candidate-a → merge → preview → prod** (candidate-a is the merge GATE).
+
 1. Flight **#2021's HEAD** to candidate-a → `/validate-candidate`. Scope honestly: deploy-health only, NOT the mint loop. Say so in the scorecard.
 2. Retarget **#2021 base → main**, merge it, **close #2020** (one clean merge of the whole thing). Derek approves every merge.
 3. Promote **preview → prod**.
@@ -44,6 +45,7 @@ End state = the distribution loop lives on **operator (prod)** AND **node-templa
 5. Real operator epoch → sign→publish→claim = first PRODUCTION distribution.
 
 **PHASE 2 — NODE-TEMPLATE (the real generality proof; NOT started).**
+
 - Port into the node-template repo: shared packages (cogni-contracts, aragon-osx, node-contracts, db-client, repo-spec), the scheduler-worker fold, and the per-node `/gov` UI (sign/publish/claim). **NOT** the operator-only node-wizard/gateway.
 - Prove on a FRESH node spawned from node-template (its own DAO/token/distributor, its own epoch). **This is where the feature is actually proven.**
 
