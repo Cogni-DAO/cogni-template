@@ -25,14 +25,20 @@ import { getSessionUser } from "@/app/_lib/auth/session";
 import { checkApprover } from "@/app/api/v1/attribution/_lib/approver-guard";
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
-import { getScopeId } from "@/shared/config";
+import { getNodeId, getScopeId } from "@/shared/config";
 import { serverEnv } from "@/shared/env/server-env";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-/** Task queue for ledger workflows — must match ledger-worker.ts */
-const LEDGER_TASK_QUEUE = "ledger-tasks";
+/**
+ * Task-queue BASE for ledger workflows — must match ledger-worker.ts. Finalize is
+ * dispatched to this node's PER-NODE queue `${base}-${nodeId}` (bug.5023): a single
+ * shared `ledger-tasks` queue let a wrong-scope worker steal another node's finalize →
+ * getEpoch (scope-gated) returns null → "epoch not found" terminal fail + forced re-sign.
+ * Mirrors the scheduler-tasks QUEUE_PER_NODE_ISOLATION convention (worker.ts::nodeTaskQueueName).
+ */
+const LEDGER_TASK_QUEUE_BASE = "ledger-tasks";
 
 /**
  * temporal.api.enums.v1.TaskQueueType.TASK_QUEUE_TYPE_WORKFLOW = 1
@@ -90,6 +96,9 @@ export const POST = wrapRouteHandlerWithLogging<{
     // Start FinalizeEpochWorkflow via Temporal
     const env = serverEnv();
     const scopeId = getScopeId();
+    // bug.5023: dispatch to THIS node's own ledger queue so no wrong-scope worker can
+    // steal the finalize. The shared `ledger-tasks` queue is purged (per-node only).
+    const ledgerTaskQueue = `${LEDGER_TASK_QUEUE_BASE}-${getNodeId()}`;
 
     const workflowId = `ledger-finalize-${scopeId}-${epochId.toString()}`;
 
@@ -104,23 +113,22 @@ export const POST = wrapRouteHandlerWithLogging<{
     });
 
     try {
-      // Defense-in-depth: verify ledger-tasks queue has active pollers before submitting
+      // Defense-in-depth: verify THIS node's ledger queue has active pollers before submitting
       const taskQueueDesc = await connection.workflowService.describeTaskQueue({
         namespace: env.TEMPORAL_NAMESPACE,
-        taskQueue: { name: LEDGER_TASK_QUEUE },
+        taskQueue: { name: ledgerTaskQueue },
         taskQueueType: TASK_QUEUE_TYPE_WORKFLOW,
       });
       const pollersCount = taskQueueDesc.pollers?.length ?? 0;
 
       if (pollersCount === 0) {
         ctx.log.warn(
-          { workflowId, taskQueue: LEDGER_TASK_QUEUE, pollersCount: 0 },
+          { workflowId, taskQueue: ledgerTaskQueue, pollersCount: 0 },
           "ledger.finalize_no_pollers"
         );
         return NextResponse.json(
           {
-            error:
-              "No workers polling ledger-tasks queue. Finalize worker may be down.",
+            error: `No workers polling ${ledgerTaskQueue}. Finalize worker may be down.`,
           },
           { status: 503 }
         );
@@ -130,7 +138,7 @@ export const POST = wrapRouteHandlerWithLogging<{
 
       try {
         await client.workflow.start("FinalizeEpochWorkflow", {
-          taskQueue: LEDGER_TASK_QUEUE,
+          taskQueue: ledgerTaskQueue,
           workflowId,
           args: [
             {
@@ -156,7 +164,7 @@ export const POST = wrapRouteHandlerWithLogging<{
         {
           epochId: id,
           workflowId,
-          taskQueue: LEDGER_TASK_QUEUE,
+          taskQueue: ledgerTaskQueue,
           pollersCount,
           created,
         },

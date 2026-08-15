@@ -303,7 +303,7 @@ describe("syncGovernanceSchedules", () => {
       deps = makeMockDeps({ isOperatorNode: true });
     });
 
-    it("uses the FLAT `governance:ledger_ingest` id running CollectEpochWorkflow on the ledger-tasks queue", async () => {
+    it("uses the FLAT `governance:ledger_ingest` id running CollectEpochWorkflow on the PER-NODE ledger queue (bug.5023)", async () => {
       const config = makeConfig(
         [
           {
@@ -325,7 +325,9 @@ describe("syncGovernanceSchedules", () => {
           scheduleId: "governance:ledger_ingest",
           nodeId: NODE_ID,
           workflowType: "CollectEpochWorkflow",
-          taskQueueOverride: "ledger-tasks",
+          // bug.5023: the operator's CollectEpoch runs on its OWN per-node ledger queue
+          // (the shared `ledger-tasks` queue is purged); the schedule id stays flat.
+          taskQueueOverride: `ledger-tasks-${NODE_ID}`,
           graphId: "ledger:ingest",
           executionGrantId: GRANT_ID,
           // LedgerIngestRunV1 envelope — NOT the { route, payload } dispatch shape.
@@ -340,6 +342,61 @@ describe("syncGovernanceSchedules", () => {
           },
           overlapPolicy: "skip",
           catchupWindowMs: 0,
+        })
+      );
+    });
+
+    it("MIGRATES an already-deployed CollectEpoch schedule from the shared `ledger-tasks` queue to the per-node queue (bug.5023 queue drift)", async () => {
+      // The deployed operator schedule sits on the OLD shared `ledger-tasks` queue with
+      // otherwise-matching config. The per-node queue migration MUST be detected as drift
+      // and updated — else the schedule keeps firing on a queue no worker polls after the
+      // ledger worker moves to `ledger-tasks-<nodeId>` (silent CollectEpoch outage).
+      const legacyQueueDesc: ScheduleDescription = {
+        scheduleId: "governance:ledger_ingest",
+        nextRunAtIso: "2026-02-15T06:00:00Z",
+        lastRunAtIso: null,
+        isPaused: false,
+        cron: "0 0 * * *",
+        timezone: "UTC",
+        input: {
+          version: 1,
+          scopeId: LEDGER.scopeId,
+          scopeKey: LEDGER.scopeKey,
+          epochLengthDays: LEDGER.epochLengthDays,
+          activitySources: LEDGER.activitySources,
+          baseIssuanceCredits: LEDGER.baseIssuanceCredits,
+          approvers: LEDGER.approvers,
+        },
+        dbScheduleId: null,
+        taskQueue: "ledger-tasks", // OLD shared queue — the drift to detect
+      };
+      deps.scheduleControl.createSchedule = vi
+        .fn()
+        .mockRejectedValue(
+          new ScheduleControlConflictError("governance:ledger_ingest")
+        );
+      deps.scheduleControl.describeSchedule = vi
+        .fn()
+        .mockResolvedValue(legacyQueueDesc);
+
+      const config = makeConfig(
+        [
+          {
+            charter: "LEDGER_INGEST",
+            cron: "0 0 * * *",
+            entrypoint: "LEDGER_INGEST",
+          },
+        ],
+        { ledger: LEDGER }
+      );
+
+      const result = await syncGovernanceSchedules(config, deps);
+
+      expect(result.updated).toEqual(["governance:ledger_ingest"]);
+      expect(deps.scheduleControl.updateSchedule).toHaveBeenCalledWith(
+        "governance:ledger_ingest",
+        expect.objectContaining({
+          taskQueueOverride: `ledger-tasks-${NODE_ID}`,
         })
       );
     });

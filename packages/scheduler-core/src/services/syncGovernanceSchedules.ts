@@ -237,11 +237,21 @@ function scheduleConfigChanged(
   desc: ScheduleDescription,
   _cron: string,
   timezone: string,
-  input: JsonValue
+  input: JsonValue,
+  desiredTaskQueue: string | undefined
 ): boolean {
+  // bug.5023: a queue migration (e.g. shared `ledger-tasks` → per-node
+  // `ledger-tasks-<nodeId>`) must count as drift, or the schedule keeps firing on the
+  // old, now-unpolled queue. Only compare when we asked for a specific queue AND the
+  // adapter could read the current one (older adapters/mocks omit it → skip, no false drift).
+  const taskQueueChanged =
+    desiredTaskQueue !== undefined &&
+    typeof desc.taskQueue === "string" &&
+    desc.taskQueue !== desiredTaskQueue;
   return (
     (desc.timezone !== null && desc.timezone !== timezone) ||
-    !isDeepStrictEqual(desc.input, input)
+    !isDeepStrictEqual(desc.input, input) ||
+    taskQueueChanged
   );
 }
 
@@ -328,7 +338,10 @@ export async function syncGovernanceSchedules(
           }),
       };
       workflowType = COLLECT_EPOCH_WORKFLOW_TYPE;
-      taskQueueOverride = LEDGER_TASK_QUEUE;
+      // bug.5023: the shared `ledger-tasks` queue is purged — the operator's
+      // CollectEpochWorkflow runs on its OWN per-node queue, matching the per-node
+      // ledger worker (ledger-worker.ts) and the finalize dispatch (finalize route).
+      taskQueueOverride = `${LEDGER_TASK_QUEUE}-${deps.nodeId}`;
       graphId = LEDGER_INGEST_GRAPH_ID;
       grantId = governanceGrantId;
     } else if (isLedgerIngest && !isOperator) {
@@ -412,7 +425,8 @@ export async function syncGovernanceSchedules(
           desc,
           schedule.cron,
           schedule.timezone,
-          desiredInput
+          desiredInput,
+          taskQueueOverride
         );
         const linkDrift = desc.dbScheduleId !== dbScheduleId;
 

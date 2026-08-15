@@ -126,7 +126,7 @@ async function main(): Promise<void> {
       namespace: config.TEMPORAL_NAMESPACE,
       taskQueue: config.TEMPORAL_TASK_QUEUE,
       ledgerEnabled: true,
-      ledgerTaskQueue: "ledger-tasks",
+      ledgerTaskQueue: `ledger-tasks-${ledgerContainer.nodeId}`,
       nodeId: ledgerContainer.nodeId,
       scopeId: ledgerContainer.scopeId,
       chainId: ledgerContainer.chainId,

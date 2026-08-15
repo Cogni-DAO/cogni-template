@@ -42,11 +42,17 @@ export async function startAttributionWorker(
 ): Promise<{ shutdown: () => Promise<void> }> {
   const { env, logger, container } = config;
 
+  // bug.5023: poll THIS node's own ledger queue, never the shared `ledger-tasks` (purged).
+  // Each ledger worker is single-node (its own DB + scope from its repo-spec), so a shared
+  // queue let a wrong-scope worker steal another node's finalize → "epoch not found" +
+  // forced re-sign. Mirrors scheduler-tasks QUEUE_PER_NODE_ISOLATION.
+  const ledgerTaskQueue = `${LEDGER_TASK_QUEUE}-${container.nodeId}`;
+
   logger.info(
     {
       temporalAddress: env.TEMPORAL_ADDRESS,
       namespace: env.TEMPORAL_NAMESPACE,
-      taskQueue: LEDGER_TASK_QUEUE,
+      taskQueue: ledgerTaskQueue,
       nodeId: container.nodeId,
       scopeId: container.scopeId,
     },
@@ -85,13 +91,13 @@ export async function startAttributionWorker(
   const worker = await Worker.create({
     connection,
     namespace: env.TEMPORAL_NAMESPACE,
-    taskQueue: LEDGER_TASK_QUEUE,
+    taskQueue: ledgerTaskQueue,
     workflowsPath: require.resolve("@cogni/temporal-workflows/ledger"),
     activities,
   });
 
   logger.info(
-    { namespace: env.TEMPORAL_NAMESPACE, taskQueue: LEDGER_TASK_QUEUE },
+    { namespace: env.TEMPORAL_NAMESPACE, taskQueue: ledgerTaskQueue },
     "Ledger Worker created"
   );
 
