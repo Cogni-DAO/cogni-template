@@ -72,7 +72,7 @@ let pass = true;
 function check(name: string, ok: boolean, detail = "") {
   if (!ok) pass = false;
   console.log(
-    `${ok ? "PASS" : "FAIL"}  ${name}${detail ? "  —  " + detail : ""}`
+    `${ok ? "PASS" : "FAIL"}  ${name}${detail ? `  —  ${detail}` : ""}`
   );
 }
 
@@ -203,7 +203,7 @@ async function main() {
     transport: http(RPC),
   });
 
-  const ROOT = ("0x" + "11".repeat(32)) as Hex;
+  const ROOT = `0x${"11".repeat(32)}` as Hex;
   const mintData = encodeFunctionData({
     abi: TOKEN_ABI,
     functionName: "mint",
@@ -226,7 +226,7 @@ async function main() {
       address: DAO,
       abi: DAO_ABI,
       functionName: "execute",
-      args: [("0x" + "00".repeat(32)) as Hex, publishActions, 0n],
+      args: [`0x${"00".repeat(32)}` as Hex, publishActions, 0n],
     });
     const r = await pub.waitForTransactionReceipt({ hash: h });
     execOk = r.status === "success";
@@ -270,7 +270,7 @@ async function main() {
       address: DAO,
       abi: DAO_ABI,
       functionName: "execute",
-      args: [("0x" + "01".repeat(32)) as Hex, badActions, 0n],
+      args: [`0x${"01".repeat(32)}` as Hex, badActions, 0n],
     });
     const r = await pub.waitForTransactionReceipt({ hash: h });
     // If it somehow mined, it must NOT be success.

@@ -709,9 +709,7 @@ function ActivateOnlyRow({
         token, DAO, and chain.
       </p>
       {activated ? (
-        <p className="text-primary text-sm">
-          Distributions activated.
-        </p>
+        <p className="text-primary text-sm">Distributions activated.</p>
       ) : null}
       {prUrl ? (
         <ExternalLinkRow href={prUrl}>Activation PR opened</ExternalLinkRow>
