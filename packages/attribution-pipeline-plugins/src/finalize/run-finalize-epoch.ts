@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/attribution-pipeline-plugins/finalize/run-finalize-epoch`
  * Purpose: Runtime-agnostic epoch finalization — sign-verify → atomic off-chain finalize → R3 cumulative fold. Extracted from scheduler-worker/activities/ledger.ts so it runs identically in a Temporal activity OR synchronously in a node's own HTTP route (story.5007 finalize-in-process).
- * Scope: One pure-DI async function + its fold/guard closures. Performs I/O only through the injected `AttributionStore` and (optional) distribution-config resolver + wallet resolver. No Temporal, no framework, no env, no Node built-ins (platform:neutral).
+ * Scope: One pure-DI async function + its fold/guard closures. Performs I/O only through the injected `AttributionStore` and (optional) distribution-config resolver + wallet resolver. Does not send on-chain transactions, dispatch Temporal, read env/repo-spec, or import framework or Node built-ins (platform:neutral) — it only BUILDS + persists the manifest.
  * Invariants:
  *   - EPOCH_FINALIZE_IDEMPOTENT: already-finalized epoch → repair via finalizeEpochAtomic, returns existing statement.
  *   - FINALIZE_CLAIMANT_AWARE: loads locked claimant rows, dispatches the pinned allocator, explodes to claimant allocations.

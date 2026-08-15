@@ -3,11 +3,11 @@
 
 /**
  * Module: `@cogni/attribution-pipeline-plugins/tests/run-finalize-epoch`
- * Purpose: Unit tests for runFinalizeEpoch — the runtime-agnostic epoch finalize + R3
- *   cumulative fold (story.5007). Covers the happy path, the bug.5020 per-node
- *   distribution-config seam (active/inactive/transient), the execute-guard, and the
- *   bug.5022 FREEZE. Lives here (not scheduler-worker) so `vi.mock("viem")` intercepts
- *   the SAME viem module runFinalizeEpoch imports.
+ * Purpose: Unit tests for runFinalizeEpoch — the runtime-agnostic epoch finalize + R3 cumulative fold (story.5007).
+ * Scope: Drives runFinalizeEpoch with a mocked AttributionStore + resolver. Covers the happy path, the bug.5020 per-node distribution-config seam (active/inactive/transient), the execute-guard, and the bug.5022 FREEZE. Lives here (not scheduler-worker) so `vi.mock("viem")` intercepts the SAME viem module runFinalizeEpoch imports.
+ * Invariants: EPOCH_FINALIZE_IDEMPOTENT, FINALIZE_BUILDS_CUMULATIVE_ROOT, FREEZE (bug.5022), bug.5020 execute-guard.
+ * Side-effects: none
+ * Links: packages/attribution-pipeline-plugins/src/finalize/run-finalize-epoch.ts
  * @internal
  */
 
