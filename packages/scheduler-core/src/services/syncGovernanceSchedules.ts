@@ -237,11 +237,21 @@ function scheduleConfigChanged(
   desc: ScheduleDescription,
   _cron: string,
   timezone: string,
-  input: JsonValue
+  input: JsonValue,
+  desiredTaskQueue: string | undefined
 ): boolean {
+  // bug.5023: a queue migration (e.g. shared `ledger-tasks` → per-node
+  // `ledger-tasks-<nodeId>`) must count as drift, or the schedule keeps firing on the
+  // old, now-unpolled queue. Only compare when we asked for a specific queue AND the
+  // adapter could read the current one (older adapters/mocks omit it → skip, no false drift).
+  const taskQueueChanged =
+    desiredTaskQueue !== undefined &&
+    typeof desc.taskQueue === "string" &&
+    desc.taskQueue !== desiredTaskQueue;
   return (
     (desc.timezone !== null && desc.timezone !== timezone) ||
-    !isDeepStrictEqual(desc.input, input)
+    !isDeepStrictEqual(desc.input, input) ||
+    taskQueueChanged
   );
 }
 
@@ -415,7 +425,8 @@ export async function syncGovernanceSchedules(
           desc,
           schedule.cron,
           schedule.timezone,
-          desiredInput
+          desiredInput,
+          taskQueueOverride
         );
         const linkDrift = desc.dbScheduleId !== dbScheduleId;
 

@@ -83,6 +83,13 @@ export interface ScheduleDescription {
   readonly input: JsonValue | null;
   /** DB schedule UUID from workflow args, null if Temporal-only (legacy) */
   readonly dbScheduleId: string | null;
+  /**
+   * Current task queue of the schedule's startWorkflow action, null/absent when the
+   * adapter can't read it. Enables queue-migration drift detection (bug.5023): moving
+   * a schedule to a per-node queue must be seen as changed, or the schedule keeps firing
+   * on the old (now unpolled) queue.
+   */
+  readonly taskQueue?: string | null;
 }
 
 /**

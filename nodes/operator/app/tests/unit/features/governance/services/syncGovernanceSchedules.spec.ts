@@ -346,6 +346,55 @@ describe("syncGovernanceSchedules", () => {
       );
     });
 
+    it("MIGRATES an already-deployed CollectEpoch schedule from the shared `ledger-tasks` queue to the per-node queue (bug.5023 queue drift)", async () => {
+      // The deployed operator schedule sits on the OLD shared `ledger-tasks` queue with
+      // otherwise-matching config. The per-node queue migration MUST be detected as drift
+      // and updated — else the schedule keeps firing on a queue no worker polls after the
+      // ledger worker moves to `ledger-tasks-<nodeId>` (silent CollectEpoch outage).
+      const legacyQueueDesc: ScheduleDescription = {
+        scheduleId: "governance:ledger_ingest",
+        nextRunAtIso: "2026-02-15T06:00:00Z",
+        lastRunAtIso: null,
+        isPaused: false,
+        cron: "0 0 * * *",
+        timezone: "UTC",
+        input: {
+          version: 1,
+          scopeId: LEDGER.scopeId,
+          scopeKey: LEDGER.scopeKey,
+          epochLengthDays: LEDGER.epochLengthDays,
+          activitySources: LEDGER.activitySources,
+          baseIssuanceCredits: LEDGER.baseIssuanceCredits,
+          approvers: LEDGER.approvers,
+        },
+        dbScheduleId: null,
+        taskQueue: "ledger-tasks", // OLD shared queue — the drift to detect
+      };
+      deps.scheduleControl.createSchedule = vi
+        .fn()
+        .mockRejectedValue(
+          new ScheduleControlConflictError("governance:ledger_ingest")
+        );
+      deps.scheduleControl.describeSchedule = vi
+        .fn()
+        .mockResolvedValue(legacyQueueDesc);
+
+      const config = makeConfig(
+        [{ charter: "LEDGER_INGEST", cron: "0 0 * * *", entrypoint: "LEDGER_INGEST" }],
+        { ledger: LEDGER }
+      );
+
+      const result = await syncGovernanceSchedules(config, deps);
+
+      expect(result.updated).toEqual(["governance:ledger_ingest"]);
+      expect(deps.scheduleControl.updateSchedule).toHaveBeenCalledWith(
+        "governance:ledger_ingest",
+        expect.objectContaining({
+          taskQueueOverride: `ledger-tasks-${NODE_ID}`,
+        })
+      );
+    });
+
     it("does NOT dispatch NodeTaskWorkflow(/collect) — no node-collect grant, no /collect route", async () => {
       const config = makeConfig(
         [
