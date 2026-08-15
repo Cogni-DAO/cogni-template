@@ -380,7 +380,13 @@ describe("syncGovernanceSchedules", () => {
         .mockResolvedValue(legacyQueueDesc);
 
       const config = makeConfig(
-        [{ charter: "LEDGER_INGEST", cron: "0 0 * * *", entrypoint: "LEDGER_INGEST" }],
+        [
+          {
+            charter: "LEDGER_INGEST",
+            cron: "0 0 * * *",
+            entrypoint: "LEDGER_INGEST",
+          },
+        ],
         { ledger: LEDGER }
       );
 

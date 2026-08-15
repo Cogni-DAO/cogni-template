@@ -343,8 +343,7 @@ export class TemporalScheduleControlAdapter implements ScheduleControlPort {
       // bug.5023: expose the action's task queue so a queue migration (e.g. shared
       // `ledger-tasks` → per-node `ledger-tasks-<nodeId>`) is detected as drift.
       const actionTaskQueue: string | null =
-        action.type === "startWorkflow" &&
-        typeof action.taskQueue === "string"
+        action.type === "startWorkflow" && typeof action.taskQueue === "string"
           ? action.taskQueue
           : null;
 
