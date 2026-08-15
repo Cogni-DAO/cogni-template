@@ -66,6 +66,7 @@ import type { Logger } from "../observability/logger.js";
 import type {
   AttributionStore,
   DataSourceRegistration,
+  DistributionConfigHttpClient,
 } from "../ports/index.js";
 
 /**
@@ -106,8 +107,33 @@ export interface AttributionActivityDeps {
    * still finalizes).
    */
   readonly walletResolver: ClaimantWalletResolver | null;
+  /**
+   * bug.5020 — per-node distribution-config gateway. At finalize the fold resolves
+   * the FINALIZING node's token/distributor/emissions-holder from ITS OWN repo-spec
+   * (SPECS_GIT_AUTHORITATIVE) via the operator, so the worker bakes no node's
+   * governance identity. Null (or a transient failure) falls back to the baked
+   * `tokenAddress`/`distributorAddress` above for the worker's OWN node only —
+   * prod operator continuity until this seam is universally deployed.
+   */
+  readonly distributionConfigClient?: DistributionConfigHttpClient | null;
+  /**
+   * Deploy environment for the bug.5020 execute-guard. Any value other than
+   * `"production"` (including undefined) is treated as non-production, fail-closed:
+   * the fold refuses to build a distribution against the production Cogni DAO.
+   */
+  readonly deploymentEnvironment?: string;
   readonly logger: Logger;
 }
+
+/**
+ * The PRODUCTION Cogni DAO / emissions-holder address. The bug.5020 execute-guard
+ * refuses to build any distribution against this address on a non-production worker,
+ * so a candidate/preview deploy can never mint into or set a root for production
+ * governance — defense-in-depth behind the per-node-spec seam (which is the actual
+ * fix: a non-activated node resolves to `distribution: null` and the fold no-ops).
+ */
+const PROD_COGNI_DAO_ADDRESS =
+  "0xF61c3fafD4D34b4568e7a500d92b28Ac175e83C6".toLowerCase();
 
 /**
  * Input for ensureEpochForWindow activity.
@@ -358,8 +384,96 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     tokenAddress,
     distributorAddress: repoSpecDistributorAddress,
     walletResolver,
+    distributionConfigClient,
+    deploymentEnvironment,
     logger,
   } = deps;
+
+  /**
+   * bug.5020 execute-guard: fail-closed refusal to build a distribution against the
+   * PRODUCTION Cogni DAO from a non-production worker. `deploymentEnvironment` other
+   * than `"production"` (incl. undefined) is non-prod. Thrown inside the fold, which
+   * both finalize call sites already wrap in try/catch — so a guard trip leaves the
+   * off-chain statement finalized and simply skips the on-chain manifest (safe no-op),
+   * loudly logged.
+   */
+  function assertNotProdGovernanceOnNonProd(
+    emissionsHolderAddress: string | null,
+    epochId: bigint
+  ): void {
+    if (deploymentEnvironment === "production") return;
+    if (
+      emissionsHolderAddress &&
+      emissionsHolderAddress.toLowerCase() === PROD_COGNI_DAO_ADDRESS
+    ) {
+      throw new Error(
+        `[bug.5020 execute-guard] refusing to build a distribution against the PRODUCTION Cogni DAO ${emissionsHolderAddress} from a non-production worker (DEPLOY_ENVIRONMENT=${deploymentEnvironment ?? "<unset>"}, epoch ${epochId.toString()})`
+      );
+    }
+  }
+
+  /**
+   * Resolve the effective per-node distribution config for THIS worker's node at fold
+   * time (bug.5020). Order: (1) the per-node gateway (authoritative — the finalizing
+   * node's own repo-spec); (2) on a transient gateway failure, the baked worker config
+   * (prod operator continuity — a network blip must never skip a real distribution);
+   * (3) when the gateway is unwired (null client), the baked config. A gateway that
+   * authoritatively reports `distribution: null` (not activated) returns nulls here —
+   * NOT the baked fallback — so a non-activated node correctly no-ops.
+   */
+  async function resolveEffectiveDistributionConfig(epochId: bigint): Promise<{
+    readonly tokenAddress: string | null;
+    readonly distributorAddress: string | null;
+    readonly emissionsHolderAddress: string | null;
+  }> {
+    const baked = {
+      tokenAddress,
+      distributorAddress: repoSpecDistributorAddress,
+      // Baked deps do not carry the emissions holder; the guard cannot assert the DAO
+      // on the fallback path, but the operator's own baked spec is not distributions-
+      // active (tokenAddress null) so the fold no-ops before reaching the guard.
+      emissionsHolderAddress: null as string | null,
+    };
+    if (!distributionConfigClient) {
+      return baked;
+    }
+    try {
+      const resolved = await distributionConfigClient.resolveForNode(nodeId);
+      if (resolved.distribution) {
+        return {
+          tokenAddress: resolved.distribution.tokenAddress,
+          distributorAddress: resolved.distribution.distributorAddress,
+          emissionsHolderAddress: resolved.distribution.emissionsHolderAddress,
+        };
+      }
+      // Authoritative "not activated" — do NOT fall back to baked config.
+      logger.info(
+        {
+          epochId: epochId.toString(),
+          nodeId,
+          reason: resolved.reason,
+        },
+        "Per-node distribution config inactive — cumulative fold will no-op"
+      );
+      return {
+        tokenAddress: null,
+        distributorAddress: null,
+        emissionsHolderAddress: null,
+      };
+    } catch (err) {
+      // TRANSIENT_IS_ERROR_NOT_NULL: the gateway threw (5xx/503/network). Never undo
+      // the off-chain finalize; fall back to the baked worker config for our own node.
+      logger.warn(
+        {
+          epochId: epochId.toString(),
+          nodeId,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "Per-node distribution config fetch failed — falling back to baked worker config (prod operator continuity)"
+      );
+      return baked;
+    }
+  }
 
   /**
    * R3 — build + persist the cumulative distribution from a just-finalized epoch.
@@ -385,13 +499,27 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       readonly receipt_ids: readonly string[];
     }>;
   }): Promise<FinalizeEpochOutput["cumulativeDistribution"]> {
-    if (!tokenAddress || !walletResolver) {
+    // bug.5020: resolve the finalizing node's governance from ITS OWN repo-spec via the
+    // operator gateway — the worker bakes no node's governance identity. The wallet
+    // resolver is DB-backed (not spec-derived) and stays from deps, gated on a token.
+    const effective = await resolveEffectiveDistributionConfig(args.epochId);
+    const effectiveTokenAddress = effective.tokenAddress;
+    const effectiveDistributorAddress = effective.distributorAddress;
+
+    if (!effectiveTokenAddress || !walletResolver) {
       logger.info(
-        { epochId: args.epochId.toString() },
+        { epochId: args.epochId.toString(), nodeId },
         "Cumulative distribution skipped — distributions not activated (no tokenAddress/walletResolver)"
       );
       return null;
     }
+
+    // bug.5020 execute-guard (defense-in-depth): a non-production worker must never build
+    // a distribution against the production Cogni DAO, even via a baked-spec fallback.
+    assertNotProdGovernanceOnNonProd(
+      effective.emissionsHolderAddress,
+      args.epochId
+    );
 
     // Prior cumulative balances = the most-recent persisted cumulative manifest's
     // per-account leaf amounts (each cumulative leaf carries the account's
@@ -432,8 +560,9 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       (await attributionStore.getDistributionManifestForEpoch(args.epochId))
         ?.distributorAddress ??
       // R2↔R3 seam: the FIRST epoch has no prior/current manifest, so fall back to
-      // the ONE per-node distributor R2 recorded in repo-spec at activation.
-      repoSpecDistributorAddress ??
+      // the ONE per-node distributor R2 recorded in the finalizing node's repo-spec at
+      // activation (resolved per-node via the gateway; baked worker value as fallback).
+      effectiveDistributorAddress ??
       null;
 
     // The per-epoch mint delta is THIS epoch's poolTotal in base units
@@ -450,7 +579,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
       scopeId,
       statementHash: args.finalAllocationSetHash,
       chainId,
-      tokenAddress: tokenAddress as HexAddress,
+      tokenAddress: effectiveTokenAddress as HexAddress,
       lines: args.statementLines.map((line) => ({
         claimantKey: line.claimant_key,
         creditAmount: BigInt(line.credit_amount),

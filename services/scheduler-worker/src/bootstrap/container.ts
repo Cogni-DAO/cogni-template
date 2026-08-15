@@ -40,6 +40,7 @@ import {
   extractScopeId,
   parseRepoSpec,
 } from "@cogni/repo-spec";
+import { createDistributionConfigHttpClient } from "../adapters/distribution-config-http.js";
 import {
   GitHubAppTokenProvider,
   GitHubSourceAdapter,
@@ -56,6 +57,7 @@ import type { Logger } from "../observability/logger.js";
 import type {
   AttributionStore,
   DataSourceRegistration,
+  DistributionConfigHttpClient,
   ExecutionGrantHttpValidator,
   GraphRunHttpWriter,
   NodePrincipalResolver,
@@ -196,6 +198,15 @@ export interface AttributionContainer {
   distributorAddress: string | null;
   /** Claimant key → contributor wallet resolver (R3 cumulative root build). */
   walletResolver: ClaimantWalletResolver | null;
+  /**
+   * Per-node distribution-config gateway (bug.5020). At finalize the fold resolves the
+   * finalizing node's token/distributor/emissions-holder from ITS OWN repo-spec via the
+   * operator — the worker bakes no node's governance. Null when the worker lacks endpoints
+   * (falls back to the baked identity above for its own node — prod operator continuity).
+   */
+  distributionConfigClient: DistributionConfigHttpClient | null;
+  /** Deploy environment for the bug.5020 execute-guard; non-`production` ⇒ fail-closed. */
+  deploymentEnvironment: string | undefined;
   logger: Logger;
 }
 
@@ -290,6 +301,19 @@ export function createAttributionContainer(
     ? new DrizzleClaimantWalletResolver(db)
     : null;
 
+  // bug.5020: the fold resolves the finalizing node's governance from ITS OWN repo-spec
+  // via the operator gateway (worker holds no GitHub cred, bug.5000). Built when node
+  // endpoints are present; the fold falls back to the baked identity above only for the
+  // worker's own node (prod operator continuity) when this is null or transiently fails.
+  const distributionConfigClient: DistributionConfigHttpClient | null =
+    config.COGNI_NODE_ENDPOINTS
+      ? createDistributionConfigHttpClient({
+          nodeEndpoints: parseNodeEndpoints(config.COGNI_NODE_ENDPOINTS),
+          schedulerApiToken: config.SCHEDULER_API_TOKEN,
+          logger: attributionLogger,
+        })
+      : null;
+
   // Build source registrations (CAPABILITY_REQUIRED: at least one of poll/webhook)
   const registrations = new Map<string, DataSourceRegistration>();
 
@@ -360,6 +384,8 @@ export function createAttributionContainer(
     tokenAddress,
     distributorAddress,
     walletResolver,
+    distributionConfigClient,
+    deploymentEnvironment: config.DEPLOY_ENVIRONMENT,
     logger: attributionLogger,
   };
 }
