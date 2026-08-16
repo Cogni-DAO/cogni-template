@@ -6,6 +6,9 @@
  * Purpose: Owner-wallet state machine that deploys the vendored `CumulativeMerkleDistributor(token)`,
  *   transfers its ownership to the node DAO, then POSTs the verified distributor address to the
  *   activation route (which re-verifies on-chain before pinning it into the node repo-spec).
+ *   Also exports `useDistributorOnChain` — the READ-side chain truth for an already-known
+ *   distributor address (`owner()==DAO`, `token()==token`), so the setup stepper derives the
+ *   deploy step from ground truth instead of session state (story.5004).
  * Scope: Client-side wagmi wiring for `DistributionsCard.client`. Does NOT deploy from the server and
  *   does NOT hold any secret — the connected wallet signs every transaction.
  * Invariants:
@@ -33,6 +36,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   useAccount,
   useDeployContract,
+  useReadContracts,
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
@@ -263,4 +267,73 @@ export function useDeployDistributor(
     deploy,
     reset,
   };
+}
+
+/** Chain-read verdict for a known distributor address. */
+export interface DistributorOnChainState {
+  /**
+   * `idle` = no address to check; `loading` = reads in flight; `verified` = owner()==DAO AND
+   * token()==node token; `mismatch` = reads succeeded but the invariants DON'T hold (redeploy —
+   * never record/authorize against it); `unavailable` = reads failed (RPC hiccup) → make no claim.
+   */
+  readonly status: "idle" | "loading" | "verified" | "mismatch" | "unavailable";
+  readonly owner: `0x${string}` | null;
+  readonly token: `0x${string}` | null;
+}
+
+/**
+ * READ-side plane-1 ground truth: verify an already-known distributor address on-chain
+ * (`owner()==DAO`, `token()==token`). Pure view calls — no wallet, no writes. The setup stepper
+ * uses this so a refreshed page re-derives "deployed" from the chain, not from session state.
+ */
+export function useDistributorOnChain(params: {
+  distributorAddress: `0x${string}` | null;
+  daoAddress: `0x${string}`;
+  tokenAddress: `0x${string}`;
+  chainId: number;
+}): DistributorOnChainState {
+  const { distributorAddress, daoAddress, tokenAddress, chainId } = params;
+  const enabled = distributorAddress !== null;
+  const address =
+    distributorAddress ?? "0x0000000000000000000000000000000000000000";
+
+  const { data, isLoading, error } = useReadContracts({
+    contracts: [
+      {
+        abi: CUMULATIVE_MERKLE_DISTRIBUTOR_ABI,
+        address,
+        functionName: "owner",
+        chainId,
+      },
+      {
+        abi: CUMULATIVE_MERKLE_DISTRIBUTOR_ABI,
+        address,
+        functionName: "token",
+        chainId,
+      },
+    ],
+    query: { enabled },
+  });
+
+  if (!enabled) return { status: "idle", owner: null, token: null };
+  if (isLoading) return { status: "loading", owner: null, token: null };
+
+  const ownerResult = data?.[0];
+  const tokenResult = data?.[1];
+  const owner =
+    ownerResult?.status === "success" && typeof ownerResult.result === "string"
+      ? (ownerResult.result as `0x${string}`)
+      : null;
+  const token =
+    tokenResult?.status === "success" && typeof tokenResult.result === "string"
+      ? (tokenResult.result as `0x${string}`)
+      : null;
+
+  if (error || owner === null || token === null) {
+    return { status: "unavailable", owner, token };
+  }
+  const verified =
+    owner.toLowerCase() === daoAddress.toLowerCase() &&
+    token.toLowerCase() === tokenAddress.toLowerCase();
+  return { status: verified ? "verified" : "mismatch", owner, token };
 }

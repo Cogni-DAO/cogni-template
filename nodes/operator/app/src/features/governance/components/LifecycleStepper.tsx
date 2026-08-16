@@ -11,7 +11,8 @@
  *   passed in by the caller (which owns the domain state that derives it).
  * Invariants:
  *   - PRESENTATIONAL_ONLY: no hooks, no side-effects — state is a prop, never derived here.
- *   - STATE_DRIVEN_STYLING: `done` → green check; `current` → filled number + emphasized shell;
+ *   - STATE_DRIVEN_STYLING: `done` → green check; `awaiting` → amber clock (complete here, external
+ *     settlement pending — e.g. an open PR to merge); `current` → filled number + emphasized shell;
  *     `pending` → dashed badge + muted title + collapsed body.
  * Side-effects: none.
  * Links: nodes/operator/app/src/features/nodes/DistributionsCard.client.tsx (original home / first consumer)
@@ -20,13 +21,17 @@
 
 "use client";
 
-import { Check, CircleDashed } from "lucide-react";
+import { Check, CircleDashed, Clock } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 
-/** Step display state — drives the numbered badge + label styling. */
-export type StepState = "done" | "current" | "pending";
+/**
+ * Step display state — drives the numbered badge + label styling. `awaiting` = the action here is
+ * complete but an EXTERNAL settlement is pending (e.g. a git-record PR is open — merge to persist):
+ * honest amber, never a green check, never collapsed back to pending.
+ */
+export type StepState = "done" | "awaiting" | "current" | "pending";
 
-/** A numbered/step-state badge: green check (done), filled number (current), dashed (pending). */
+/** A numbered/step-state badge: green check (done), amber clock (awaiting), filled number (current), dashed (pending). */
 export function StepBadge({
   n,
   state,
@@ -38,6 +43,13 @@ export function StepBadge({
     return (
       <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
         <Check className="size-3.5" />
+      </span>
+    );
+  }
+  if (state === "awaiting") {
+    return (
+      <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-warning/20 text-warning">
+        <Clock className="size-3.5" />
       </span>
     );
   }
