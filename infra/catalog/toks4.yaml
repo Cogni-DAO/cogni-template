@@ -1,0 +1,20 @@
+name: toks4
+type: node
+port: 3200
+node_port: 31700
+dockerfile: nodes/toks4/app/Dockerfile
+image_tag_suffix: "-toks4"
+migrator_tag_suffix: "-toks4-migrate"
+source_repo: https://github.com/cogni-dao/toks4.git
+image_repository: ghcr.io/cogni-dao/toks4
+source_sha: c4fee69e01a79e433fa7a458e5fc8af57acc525a
+candidate_a_branch: deploy/candidate-a-toks4
+preview_branch: deploy/preview-toks4
+production_branch: deploy/production-toks4
+# task.5017 — per-env node-set (deploy ⊆ provisioned). A wizard birth enters all
+# NODE_FORMATION_ENVS; this list is the catalog twin so render-node-appset.sh
+# renders exactly the births appset.ts generates. Trimming a node's reach is a
+# later catalog edit (drop an env here) once its envs are provisioned.
+envs: [candidate-a, preview, production]
+path_prefix: nodes/toks4/
+node_id: 72aa130b-f0ad-495a-a061-9ee1f9c9525d
