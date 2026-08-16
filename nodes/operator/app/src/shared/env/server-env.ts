@@ -364,6 +364,12 @@ export const serverSchema = z.object({
   POSTHOG_API_KEY: optionalString,
   POSTHOG_HOST: optionalUrl,
   POSTHOG_PROJECT_ID: optionalString,
+
+  // Fleet identity attestations (task.5024): base64-encoded 32-byte Ed25519 seed.
+  // The app derives the signing keypair from the seed; the public key is served
+  // at /.well-known/jwks.json. Optional — POST /api/v1/identity/attestations
+  // returns 503 attestation_unavailable when unset (fail-closed, never HMAC).
+  IDENTITY_ATTESTATION_PRIVATE_KEY: optionalString,
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {
