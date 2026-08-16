@@ -16,3 +16,4 @@ resources:
   - candidate-a-operator-applicationset.yaml
   - candidate-a-poly-applicationset.yaml
   - candidate-a-scheduler-worker-applicationset.yaml
+  - candidate-a-toks4-applicationset.yaml
