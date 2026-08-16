@@ -73,6 +73,17 @@ seeded()  { grep -qE "^$1\|$2\|" "$SEED_LOG"; }
 : >"$SEED_LOG"
 seed_node_app_secrets node-template
 seed_node_app_secrets poly
+seed_node_app_secrets operator
+
+# Identity-attestation signing material is generated into the operator bank
+# only. Relying nodes receive public JWKS, never either private seed.
+r=0
+for k in IDENTITY_ATTESTATION_PRIVATE_KEY IDENTITY_ATTESTATION_PREVIOUS_PRIVATE_KEY; do
+  seeded operator "$k" || r=1
+  seeded node-template "$k" && r=1
+  seeded poly "$k" && r=1
+done
+assert "$r" "identity attestation keys auto-materialize only to operator"
 
 # 1. AUTH_SECRET distinct per node (the headline isolation invariant).
 nt_auth=$(val_for node-template AUTH_SECRET); cn_auth=$(val_for poly AUTH_SECRET)

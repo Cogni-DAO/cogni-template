@@ -23,7 +23,11 @@ import {
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const envState = vi.hoisted(() => ({
-  current: {} as { IDENTITY_ATTESTATION_PRIVATE_KEY?: string },
+  current: {} as {
+    APP_BASE_URL?: string;
+    IDENTITY_ATTESTATION_PRIVATE_KEY?: string;
+    IDENTITY_ATTESTATION_PREVIOUS_PRIVATE_KEY?: string;
+  },
 }));
 
 const dbState = vi.hoisted(() => ({
@@ -31,6 +35,7 @@ const dbState = vi.hoisted(() => ({
     | { externalId: string; providerLogin: string | null }
     | undefined,
   walletAddress: null as string | null,
+  nodeExists: true,
 }));
 
 const mockGetServerSessionUser = vi.hoisted(() => vi.fn());
@@ -53,6 +58,7 @@ vi.mock("@/lib/auth/server", () => ({
 
 vi.mock("@/bootstrap/container", () => ({
   resolveAppDb: () => ({}),
+  resolveServiceDb: () => mockNodeDb,
   getContainer: () => ({
     config: { unhandledErrorPolicy: "rethrow" },
     log: mockLog,
@@ -83,14 +89,34 @@ const mockTx = {
   },
 };
 
+const NODE_ID = "22222222-2222-4222-8222-222222222222";
+const USER_ID = "11111111-1111-4111-8111-111111111111";
+const NONCE = "node_generated_nonce_0123456789abcdef";
+
+const mockNodeDb = {
+  select: () => ({
+    from: () => ({
+      where: () => ({
+        limit: () =>
+          dbState.nodeExists ? [{ id: NODE_ID, slug: "node-template" }] : [],
+      }),
+    }),
+  }),
+};
+
 import { GET as jwksGET } from "@/app/.well-known/jwks.json/route";
 import { POST } from "@/app/api/v1/identity/attestations/route";
 
 const ISSUER = "https://operator.test";
 
-function postRequest(): Request {
-  return new Request(`${ISSUER}/api/v1/identity/attestations`, {
+function postRequest(
+  body: Record<string, unknown> = { nodeId: NODE_ID, nonce: NONCE },
+  origin = "https://untrusted-host.example"
+): Request {
+  return new Request(`${origin}/api/v1/identity/attestations`, {
     method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
   });
 }
 
@@ -100,12 +126,16 @@ function freshSeed(): string {
 
 describe("POST /api/v1/identity/attestations", () => {
   beforeEach(() => {
-    envState.current = { IDENTITY_ATTESTATION_PRIVATE_KEY: freshSeed() };
+    envState.current = {
+      APP_BASE_URL: ISSUER,
+      IDENTITY_ATTESTATION_PRIVATE_KEY: freshSeed(),
+    };
     dbState.githubBinding = { externalId: "12345", providerLogin: "octocat" };
     dbState.walletAddress = "0xAbCdEf0123456789aBcDeF0123456789ABCDEF01";
+    dbState.nodeExists = true;
     mockGetServerSessionUser.mockReset();
     mockGetServerSessionUser.mockResolvedValue({
-      id: "user-1",
+      id: USER_ID,
       walletAddress: null,
       displayName: null,
       avatarColor: null,
@@ -137,9 +167,16 @@ describe("POST /api/v1/identity/attestations", () => {
     const { payload } = await jwtVerify(
       body.attestation,
       createLocalJWKSet(jwksDoc),
-      { issuer: ISSUER }
+      {
+        issuer: ISSUER,
+        audience: `urn:cogni:node:${NODE_ID}`,
+      }
     );
-    expect(payload.sub).toBe("user-1");
+    expect(payload.type).toBe("identity.attestation.v1");
+    expect(payload.sub).toBe(USER_ID);
+    expect(payload.aud).toBe(`urn:cogni:node:${NODE_ID}`);
+    expect(payload.nodeId).toBe(NODE_ID);
+    expect(payload.nonce).toBe(NONCE);
     expect(payload.wallet).toBe("0xabcdef0123456789abcdef0123456789abcdef01");
     expect(payload.github).toEqual({ id: "12345", login: "octocat" });
     expect(payload.jti).toBeDefined();
@@ -150,7 +187,7 @@ describe("POST /api/v1/identity/attestations", () => {
   it("lowercases the wallet claim even when only the session carries it", async () => {
     dbState.walletAddress = null;
     mockGetServerSessionUser.mockResolvedValue({
-      id: "user-1",
+      id: USER_ID,
       walletAddress: "0xFFEE0123456789ABCDEF0123456789ABCDEF0001",
       displayName: null,
       avatarColor: null,
@@ -162,7 +199,7 @@ describe("POST /api/v1/identity/attestations", () => {
     const { payload } = await jwtVerify(
       body.attestation,
       createLocalJWKSet((await (await jwksGET()).json()) as JSONWebKeySet),
-      { issuer: ISSUER }
+      { issuer: ISSUER, audience: `urn:cogni:node:${NODE_ID}` }
     );
     expect(payload.wallet).toBe("0xffee0123456789abcdef0123456789abcdef0001");
   });
@@ -183,8 +220,62 @@ describe("POST /api/v1/identity/attestations", () => {
     expect(await response.json()).toEqual({ error: "no_github_binding" });
   });
 
+  it("preserves a nullable GitHub login in the signed v1 claims", async () => {
+    dbState.githubBinding = { externalId: "12345", providerLogin: null };
+
+    const response = await POST(postRequest());
+    expect(response.status).toBe(201);
+    const body = await response.json();
+    const { payload } = await jwtVerify(
+      body.attestation,
+      createLocalJWKSet((await (await jwksGET()).json()) as JSONWebKeySet),
+      { issuer: ISSUER, audience: `urn:cogni:node:${NODE_ID}` }
+    );
+    expect(payload.github).toEqual({ id: "12345", login: null });
+  });
+
+  it("rejects caller-supplied audiences and malformed nonces", async () => {
+    const withAudience = await POST(
+      postRequest({
+        nodeId: NODE_ID,
+        nonce: NONCE,
+        audience: "https://attacker.example",
+      })
+    );
+    expect(withAudience.status).toBe(400);
+
+    const weakNonce = await POST(
+      postRequest({ nodeId: NODE_ID, nonce: "short" })
+    );
+    expect(weakNonce.status).toBe(400);
+  });
+
+  it("returns 404 unknown_node rather than signing for an unregistered node", async () => {
+    dbState.nodeExists = false;
+
+    const response = await POST(postRequest());
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: "unknown_node" });
+  });
+
+  it("uses configured APP_BASE_URL as issuer, never request host headers", async () => {
+    const request = postRequest(undefined, "https://attacker.example");
+    request.headers.set("x-forwarded-host", "forwarded-attacker.example");
+    request.headers.set("x-forwarded-proto", "https");
+
+    const response = await POST(request);
+    expect(response.status).toBe(201);
+    const body = await response.json();
+    const { payload } = await jwtVerify(
+      body.attestation,
+      createLocalJWKSet((await (await jwksGET()).json()) as JSONWebKeySet),
+      { issuer: ISSUER, audience: `urn:cogni:node:${NODE_ID}` }
+    );
+    expect(payload.iss).toBe(ISSUER);
+  });
+
   it("returns 503 attestation_unavailable when the signing key is unset", async () => {
-    envState.current = {};
+    envState.current = { APP_BASE_URL: ISSUER };
 
     const response = await POST(postRequest());
     expect(response.status).toBe(503);
@@ -192,7 +283,18 @@ describe("POST /api/v1/identity/attestations", () => {
   });
 
   it("returns 503 attestation_unavailable when the signing key is malformed", async () => {
-    envState.current = { IDENTITY_ATTESTATION_PRIVATE_KEY: "not-a-seed" };
+    envState.current = {
+      APP_BASE_URL: ISSUER,
+      IDENTITY_ATTESTATION_PRIVATE_KEY: "not-a-seed",
+    };
+
+    const response = await POST(postRequest());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "attestation_unavailable" });
+  });
+
+  it("returns 503 when the canonical issuer config is absent", async () => {
+    envState.current = { IDENTITY_ATTESTATION_PRIVATE_KEY: freshSeed() };
 
     const response = await POST(postRequest());
     expect(response.status).toBe(503);
@@ -225,5 +327,60 @@ describe("GET /.well-known/jwks.json", () => {
     const first = (await (await jwksGET()).json()) as JSONWebKeySet;
     const second = (await (await jwksGET()).json()) as JSONWebKeySet;
     expect(first.keys[0]?.kid).toBe(second.keys[0]?.kid);
+  });
+
+  it("publishes current then previous keys during rotation overlap", async () => {
+    envState.current = {
+      IDENTITY_ATTESTATION_PRIVATE_KEY: freshSeed(),
+      IDENTITY_ATTESTATION_PREVIOUS_PRIVATE_KEY: freshSeed(),
+    };
+
+    const jwks = (await (await jwksGET()).json()) as JSONWebKeySet;
+    expect(jwks.keys).toHaveLength(2);
+    expect(jwks.keys[0]?.kid).not.toBe(jwks.keys[1]?.kid);
+  });
+
+  it("keeps the current JWKS key when the previous slot is malformed", async () => {
+    envState.current = {
+      IDENTITY_ATTESTATION_PRIVATE_KEY: freshSeed(),
+      IDENTITY_ATTESTATION_PREVIOUS_PRIVATE_KEY: "not-base64",
+    };
+
+    const jwks = (await (await jwksGET()).json()) as JSONWebKeySet;
+    expect(jwks.keys).toHaveLength(1);
+  });
+
+  it("keeps a pre-rotation token verifiable from the previous-key slot", async () => {
+    const previous = freshSeed();
+    envState.current = {
+      APP_BASE_URL: ISSUER,
+      IDENTITY_ATTESTATION_PRIVATE_KEY: previous,
+    };
+    dbState.githubBinding = { externalId: "12345", providerLogin: "octocat" };
+    dbState.walletAddress = "0xAbCdEf0123456789aBcDeF0123456789ABCDEF01";
+    dbState.nodeExists = true;
+    mockGetServerSessionUser.mockResolvedValue({
+      id: USER_ID,
+      walletAddress: null,
+      displayName: null,
+      avatarColor: null,
+    });
+
+    const issued = await POST(postRequest());
+    expect(issued.status).toBe(201);
+    const { attestation } = await issued.json();
+
+    envState.current = {
+      APP_BASE_URL: ISSUER,
+      IDENTITY_ATTESTATION_PRIVATE_KEY: freshSeed(),
+      IDENTITY_ATTESTATION_PREVIOUS_PRIVATE_KEY: previous,
+    };
+    const rotatedJwks = (await (await jwksGET()).json()) as JSONWebKeySet;
+    const { payload } = await jwtVerify(
+      attestation,
+      createLocalJWKSet(rotatedJwks),
+      { issuer: ISSUER, audience: `urn:cogni:node:${NODE_ID}` }
+    );
+    expect(payload.nonce).toBe(NONCE);
   });
 });
