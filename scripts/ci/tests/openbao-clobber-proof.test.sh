@@ -81,6 +81,17 @@ case "$sub" in
             exit 2
           fi
           if [[ ! -d "$d" ]]; then
+            if [[ "${BAO_ABSENT_STYLE:-}" == "404" ]]; then
+              # Real-world FRESH-path shape (bug.5037): empty-body HTTP 404 —
+              # no "not found" wording at all.
+              {
+                echo "Error writing data to $path: Error making API request."
+                echo
+                echo "URL: PATCH http://127.0.0.1:8200/v1/$path"
+                echo "Code: 404. Raw Message:"
+              } >&2
+              exit 2
+            fi
             # Positive "does not exist" — the ONLY case a put is safe.
             echo "No value found at $path" >&2
             exit 2
@@ -128,7 +139,7 @@ set_secret() {
   # shellcheck disable=SC2034  # OUT is consumed by check()'s eval'd conditions.
   OUT=$(printf '%s' "$val" | env \
     PATH="$TMPROOT/bin:$PATH" \
-    BAO_STORE="$STORE" BAO_FAULT="$fault" \
+    BAO_STORE="$STORE" BAO_FAULT="$fault" BAO_ABSENT_STYLE="${ABSENT_STYLE:-}" \
     BAO_ADDR="http://127.0.0.1:8200" BAO_TOKEN="test-token" \
     REPO_ROOT="$REPO_ROOT" \
     bash "$TARGET" "$envn" "$svc" "$key" 2>&1) || RC=$?
@@ -161,6 +172,14 @@ check "(b) SIBLINGS INTACT after transient failure (no clobber)" \
   "[[ \"\$(cat \"$(path_dir node-template)/SIBLING_ONE\" 2>/dev/null)\" == seed-value-1 && \"\$(cat \"$(path_dir node-template)/SECOND_KEY\" 2>/dev/null)\" == second-value ]]"
 check "(b) refuses with an explanatory 'refusing to put' message" \
   "printf '%s' \"\$OUT\" | grep -qi 'refusing to put'"
+
+# ── (d) fresh-path empty-body 404 → treated as absent → put (bug.5037) ───────
+# A never-written path on a fresh node/env fails `kv patch` with `Code: 404` and
+# an EMPTY raw message (no "not found" text). That is unambiguous absence.
+ABSENT_STYLE=404 set_secret "" candidate-a toks4 FIRST_KEY fresh-value
+check "(d) empty-body 404 absent → create succeeds (exit 0)" "[[ $RC -eq 0 ]]"
+check "(d) key written on create" \
+  "[[ \"\$(cat \"$(path_dir toks4)/FIRST_KEY\" 2>/dev/null)\" == fresh-value ]]"
 
 echo
 echo "openbao-clobber-proof.test.sh — pass: $pass, fail: $fail"

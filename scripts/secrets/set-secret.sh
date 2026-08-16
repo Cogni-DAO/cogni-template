@@ -146,7 +146,10 @@ if [[ $patch_rc -eq 0 ]]; then
   exit 0
 fi
 
-if printf '%s' "$patch_out" | grep -qiE 'no value found|does not exist|not found'; then
+# A kv patch on a never-written KV v2 path returns `Code: 404` with an EMPTY raw
+# message (no "not found" text) — unambiguous absence on a FRESH node/env, so put
+# cannot clobber siblings (mirrors provision seed_kv fix a54f24809b).
+if printf '%s' "$patch_out" | grep -qiE 'no value found|does not exist|not found|code: 404'; then
   # Genuinely absent — safe to create; no siblings to clobber.
   printf '%s' "$value" | BAO_ADDR="$BAO_ADDR" BAO_TOKEN="$BAO_TOKEN" \
     bao kv put "$bao_path" "${key}=-"

@@ -1416,7 +1416,10 @@ patch_operator_openfga_config() {
   # Positive "the secret does not exist" is the ONLY case where a `put` (create) is
   # safe: there are no sibling keys to clobber. Match the phrasings OpenBao/Vault
   # `kv patch` emits for a missing path. Anything else is treated as transient.
-  if printf '%s' "$patch_out" | grep -qiE 'no value found|does not exist|not found'; then
+  # A kv patch on a never-written KV v2 path returns `Code: 404` with an EMPTY raw
+  # message (no "not found" text) — unambiguous absence on a FRESH node/env, so put
+  # cannot clobber siblings (mirrors provision seed_kv fix a54f24809b).
+  if printf '%s' "$patch_out" | grep -qiE 'no value found|does not exist|not found|code: 404'; then
     log_warn "operator bucket ${path} absent — creating it with a fresh put"
     timeout 20 kubectl exec -n openbao openbao-0 -- env BAO_ADDR=http://127.0.0.1:8200 BAO_TOKEN="${tok}" \
       bao kv put "$path" \
