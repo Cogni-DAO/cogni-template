@@ -4,12 +4,12 @@
 /**
  * Module: `@shared/identity/attestation-keys`
  * Purpose: Ed25519 key handling for operator-signed identity attestations —
- *   derives the signing keypair from the IDENTITY_ATTESTATION_PRIVATE_KEY seed
- *   and exposes the public half as a JWKS document.
+ *   derives signing keypairs from current/previous private seeds and exposes
+ *   only their public halves as a rotation-safe JWKS document.
  * Scope: Pure key material transforms (seed → KeyObject → public JWK + kid).
  *   Does not read env, sign tokens, or touch the database.
  * Invariants:
- *   - SEED_IS_32_BYTES: the env value is a base64-encoded 32-byte Ed25519 seed
+ *   - SEED_IS_32_BYTES: each env value is a canonical base64-encoded 32-byte Ed25519 seed
  *     (catalog `generate: { kind: base64, bytes: 32 }`); anything else throws
  *     so callers fail closed (503 attestation_unavailable).
  *   - KID_IS_RFC7638_THUMBPRINT: kid derives from the public JWK thumbprint —
@@ -46,10 +46,22 @@ export interface AttestationJwk extends JWK {
  * failure to 503 attestation_unavailable rather than signing with garbage.
  */
 export function importAttestationSigningKey(base64Seed: string): KeyObject {
-  const seed = Buffer.from(base64Seed, "base64");
-  if (seed.length !== ED25519_SEED_BYTES) {
+  const normalized = base64Seed.trim();
+  if (
+    !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized) ||
+    normalized.length % 4 !== 0
+  ) {
     throw new Error(
-      `IDENTITY_ATTESTATION_PRIVATE_KEY must be a base64-encoded ${ED25519_SEED_BYTES}-byte Ed25519 seed (got ${seed.length} bytes)`
+      `identity attestation private key must be canonical base64 for a ${ED25519_SEED_BYTES}-byte Ed25519 seed`
+    );
+  }
+  const seed = Buffer.from(normalized, "base64");
+  if (
+    seed.length !== ED25519_SEED_BYTES ||
+    seed.toString("base64") !== normalized
+  ) {
+    throw new Error(
+      `identity attestation private key must be a canonical base64-encoded ${ED25519_SEED_BYTES}-byte Ed25519 seed (got ${seed.length} bytes)`
     );
   }
   return createPrivateKey({
@@ -60,17 +72,25 @@ export function importAttestationSigningKey(base64Seed: string): KeyObject {
 }
 
 /**
- * Export the JWKS document for the signing key's public half. v0 serves the
- * current key only; the array shape allows appending previous keys on rotation.
+ * Export a deduplicated JWKS containing the public halves of the current key
+ * followed by any previous key retained for verifier-cache overlap.
  */
 export async function attestationPublicJwks(
-  signingKey: KeyObject
+  signingKeys: readonly KeyObject[]
 ): Promise<{ keys: AttestationJwk[] }> {
-  const publicJwk = await exportJWK(createPublicKey(signingKey));
-  const kid = await calculateJwkThumbprint(publicJwk);
-  return {
-    keys: [{ ...publicJwk, kid, alg: ATTESTATION_ALG, use: "sig" }],
-  };
+  const keys = await Promise.all(
+    signingKeys.map(async (signingKey) => {
+      const publicJwk = await exportJWK(createPublicKey(signingKey));
+      const kid = await calculateJwkThumbprint(publicJwk);
+      return {
+        ...publicJwk,
+        kid,
+        alg: ATTESTATION_ALG,
+        use: "sig" as const,
+      } satisfies AttestationJwk;
+    })
+  );
+  return { keys: [...new Map(keys.map((key) => [key.kid, key])).values()] };
 }
 
 /** kid of the signing key's public half (RFC 7638 thumbprint). */
