@@ -17,7 +17,7 @@
 import { CUMULATIVE_MERKLE_DISTRIBUTOR_ABI } from "@cogni/cogni-contracts";
 import type { LatestDistributionClaimDto } from "@cogni/node-contracts";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useReadContract } from "wagmi";
 
 /** Endpoint variant: latest cumulative manifest, or a specific epoch's manifest. */
@@ -120,6 +120,11 @@ export function useCumulativeClaim(
     return remaining > 0n ? remaining : 0n;
   }, [claim, cumulativeClaimed]);
 
+  // Stable identity — consumers hang effects off this (e.g. refetch-on-confirm).
+  const refetchClaimed = useCallback(() => {
+    void refetch();
+  }, [refetch]);
+
   return {
     claim: claim ?? null,
     cumulativeClaimed,
@@ -127,8 +132,6 @@ export function useCumulativeClaim(
     isLoading,
     isClaimedLoading,
     error: error as Error | null,
-    refetchClaimed: () => {
-      void refetch();
-    },
+    refetchClaimed,
   };
 }

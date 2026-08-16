@@ -32,7 +32,7 @@ export const GET = wrapPublicRoute(
     staleWhileRevalidateSeconds: 300,
   },
   async (_ctx, _request) => {
-    const { tokenAddress, distributorAddress, chainId } =
+    const { tokenAddress, distributorAddress, chainId, distributionsActive } =
       getNodeTokenomicsConfig();
 
     const store = getContainer().attributionStore;
@@ -45,6 +45,9 @@ export const GET = wrapPublicRoute(
       tokenAddress,
       distributorAddress,
       chainId,
+      // `distributions.status === "active"` in the node's own repo-spec — the
+      // Ownership page's ground truth for the not-activated state (story.5003).
+      distributionsActive,
       epochsCompleted,
     });
   }

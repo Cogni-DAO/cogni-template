@@ -162,8 +162,13 @@ export function HoldingsView(): ReactElement {
         </div>
 
         {data.holdings.length === 0 ? (
+          // HONEST_EMPTY (story.5003): name the proven cause, never a bare "no data".
           <div className="rounded-lg border bg-card p-12 text-center">
-            <p className="text-muted-foreground">No holdings data</p>
+            <p className="text-muted-foreground">
+              {data.epochsCompleted === 0
+                ? "No attribution epochs have been finalized yet — contributor holdings appear after the first epoch completes."
+                : "No contributor holdings recorded in finalized epochs yet."}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
