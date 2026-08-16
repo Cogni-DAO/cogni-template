@@ -259,7 +259,7 @@ describe("extractDaoTokenDistributionConfig", () => {
       chainId: TEST_CHAIN_ID,
       tokenAddress: "0x2222222222222222222222222222222222222222",
       emissionsHolderAddress: "0x3333333333333333333333333333333333333333",
-      claimContractPattern: "uniswap.merkle-distributor.v1",
+      claimContractPattern: "1inch.cumulative-merkle-drop.v1",
     });
   });
 
