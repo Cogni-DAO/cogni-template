@@ -1,0 +1,20 @@
+name: toks3
+type: node
+port: 3200
+node_port: 31700
+dockerfile: nodes/toks3/app/Dockerfile
+image_tag_suffix: "-toks3"
+migrator_tag_suffix: "-toks3-migrate"
+source_repo: https://github.com/cogni-dao/toks3.git
+image_repository: ghcr.io/cogni-dao/toks3
+source_sha: b0a8e941cadb45fe551da595d1e22f97e5e07635
+candidate_a_branch: deploy/candidate-a-toks3
+preview_branch: deploy/preview-toks3
+production_branch: deploy/production-toks3
+# task.5017 — per-env node-set (deploy ⊆ provisioned). A wizard birth enters all
+# NODE_FORMATION_ENVS; this list is the catalog twin so render-node-appset.sh
+# renders exactly the births appset.ts generates. Trimming a node's reach is a
+# later catalog edit (drop an env here) once its envs are provisioned.
+envs: [candidate-a, preview, production]
+path_prefix: nodes/toks3/
+node_id: 2bbccec7-e6e7-48a9-be1e-bca8c58f503c
