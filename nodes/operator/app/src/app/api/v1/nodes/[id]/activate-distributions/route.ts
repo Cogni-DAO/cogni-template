@@ -22,7 +22,8 @@
  *   - GH_APP_INSTALL_REQUIRED, NODE_SOVEREIGNTY (PR only; never force-push to node main).
  *   - SINGLE_HOME: targets the node's OWN repo (`NODE_MINT_OWNER`/slug), writes ONLY
  *     `.cogni/repo-spec.yaml`.
- *   - VENDORED_DISTRIBUTOR: pins the Uniswap MerkleDistributor v1 claim pattern. The optional
+ *   - VENDORED_DISTRIBUTOR: pins the 1inch CumulativeMerkleDrop v1 claim pattern (the contract the
+ *     deploy path actually vendors + verifies). The optional
  *     `distributorAddress` (deployed by the OWNER'S wallet from the vendored
  *     `CumulativeMerkleDistributor`, then transferred to the DAO) is VERIFIED on-chain
  *     (owner()==daoAddress AND token()==tokenAddress) before it is recorded — the operator never

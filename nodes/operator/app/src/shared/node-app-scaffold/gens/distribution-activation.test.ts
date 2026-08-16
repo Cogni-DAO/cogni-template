@@ -69,6 +69,46 @@ describe("renderDistributionActivationSpec", () => {
     );
   });
 
+  // bug.5031 regression: the recorded claim pattern MUST name the distributor the
+  // activation flow actually deploys + claims against — the vendored 1inch
+  // CumulativeMerkleDrop — never the legacy non-cumulative uniswap pattern (which
+  // does not match the deployed bytecode / `merkleRoot()` guard / cumulative fold).
+  it("pins the vendored 1inch cumulative pattern, not the legacy uniswap one", () => {
+    expect(DISTRIBUTION_CLAIM_CONTRACT_PATTERN).toBe(
+      "1inch.cumulative-merkle-drop.v1"
+    );
+    expect(DISTRIBUTION_CLAIM_CONTRACT_PATTERN).not.toBe(
+      "uniswap.merkle-distributor.v1"
+    );
+    const parsed = parseYaml(activated) as Record<string, unknown>;
+    const distributions = parsed.distributions as Record<string, unknown>;
+    expect(distributions.claim_contract_pattern).toBe(
+      "1inch.cumulative-merkle-drop.v1"
+    );
+  });
+
+  // bug.5031 regression: when the deploy path supplies a verified distributor, its
+  // address MUST land in the spec (`distributions.distributor_address`) so the node
+  // can resolve the distributor to publish/claim — it was silently dropped before.
+  it("records distributor_address when the deploy path supplies one", () => {
+    const DISTRIBUTOR = "0x6666666666666666666666666666666666666666";
+    const withDistributor = renderDistributionActivationSpec(PENDING_SPEC, {
+      tokenAddress: TOKEN,
+      emissionsHolderAddress: EMISSIONS_HOLDER,
+      distributorAddress: DISTRIBUTOR,
+    });
+    const parsed = parseYaml(withDistributor) as Record<string, unknown>;
+    const distributions = parsed.distributions as Record<string, unknown>;
+    expect(distributions.distributor_address).toBe(DISTRIBUTOR);
+    expect(
+      hasDistributionActivationSpec(withDistributor, {
+        tokenAddress: TOKEN,
+        emissionsHolderAddress: EMISSIONS_HOLDER,
+        distributorAddress: DISTRIBUTOR,
+      })
+    ).toBe(true);
+  });
+
   it("preserves existing governance identity and comments", () => {
     expect(activated).toContain("# Node Template - repo-spec");
     expect(activated).toContain(

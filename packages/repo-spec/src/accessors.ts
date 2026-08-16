@@ -453,9 +453,13 @@ export function extractDaoTokenDistributionConfig(
     chainId,
     tokenAddress,
     emissionsHolderAddress,
+    // Default to the vendored distributor the activation flow actually deploys +
+    // claims against (1inch CumulativeMerkleDrop) — NOT the legacy non-cumulative
+    // uniswap pattern. An absent pattern on an active spec is a pre-fix activation
+    // record; the live claim/guard path is cumulative regardless (bug.5031).
     claimContractPattern:
       spec.distributions.claim_contract_pattern ??
-      "uniswap.merkle-distributor.v1",
+      "1inch.cumulative-merkle-drop.v1",
     ...(spec.distributions.distributor_address
       ? { distributorAddress: spec.distributions.distributor_address }
       : {}),
