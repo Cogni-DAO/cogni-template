@@ -5,15 +5,25 @@
 
 /**
  * Module: `@features/governance/components/CumulativeClaimPanel`
- * Purpose: Wallet-connected panel on /gov/holdings letting the connected wallet claim its CUMULATIVE DAO tokens (all unclaimed epochs at once).
- * Scope: Client component. Connect wallet → useCumulativeClaim (latest manifest leaf + on-chain cumulativeClaimed) → call CumulativeMerkleDrop.claim() via wagmi. Does not perform DB access.
+ * Purpose: Claim surface on /gov/holdings rendering the FIRST-CLASS distribution states (story.5003)
+ *   — not-activated, activated-but-unpublished, no-allocation-for-this-wallet, root-pending,
+ *   claimable (CTA), and fully-claimed — never a silent "no tokens" when a more specific truth is
+ *   readable. The connected wallet claims its CUMULATIVE DAO tokens (all unclaimed epochs at once).
+ * Scope: Client component. useClaimSurface derives ONE honest state from repo-spec config + the
+ *   latest-manifest leaf + on-chain merkleRoot()/cumulativeClaimed; this component only renders it
+ *   and (in the claimable state) submits CumulativeMerkleDrop.claim() via wagmi. No DB access.
  * Invariants:
- *   - CUMULATIVE_MODEL: claim(account, cumulativeAmount, root, proof) pays cumulativeAmount − cumulativeClaimed. A single claim covers ALL unclaimed epochs.
- *   - HONEST_STATE: after a claim tx confirms, re-read cumulativeClaimed so claimable reflects 0 until the next root.
+ *   - HONEST_EMPTY: every "empty" rendering names its proven cause (see claim-surface-state.ts).
+ *   - ROOT_GATED_CTA: the claim button only renders when the leaf root equals the live on-chain
+ *     merkleRoot() — a mismatched claim reverts MerkleRootWasUpdated.
+ *   - CUMULATIVE_MODEL: claim(account, cumulativeAmount, root, proof) pays cumulativeAmount −
+ *     cumulativeClaimed. A single claim covers ALL unclaimed epochs.
+ *   - HONEST_STATE: after a claim tx confirms, re-read cumulativeClaimed so the surface collapses
+ *     to fully-claimed until the next root.
  *   - ALL_MATH_BIGINT: amounts stay bigint; formatted only at display.
- *   - PUBLIC_NO_SECRETS: all inputs come from the public latest-distribution route + the connected wallet.
- * Side-effects: blockchain read (cumulativeClaimed via hook), blockchain write (claim tx via wallet signing).
- * Links: nodes/operator/app/src/features/governance/hooks/useCumulativeClaim.ts, packages/cogni-contracts/src/cumulative-merkle-distributor/abi.ts
+ *   - PUBLIC_NO_SECRETS: all inputs come from public routes + chain reads + the connected wallet.
+ * Side-effects: blockchain read (via useClaimSurface), blockchain write (claim tx via wallet signing).
+ * Links: nodes/operator/app/src/features/governance/hooks/useClaimSurface.ts, nodes/operator/app/src/features/governance/lib/claim-surface-state.ts
  * @public
  */
 
@@ -40,7 +50,8 @@ import {
   CardTitle,
   WalletConnectButton,
 } from "@/components";
-import { useCumulativeClaim } from "@/features/governance/hooks/useCumulativeClaim";
+import { useClaimSurface } from "@/features/governance/hooks/useClaimSurface";
+import type { ClaimSurfaceState } from "@/features/governance/lib/claim-surface-state";
 import { getChainName } from "@/features/governance/lib/proposal-utils";
 
 export function CumulativeClaimPanel({
@@ -52,19 +63,17 @@ export function CumulativeClaimPanel({
    */
   bare?: boolean;
 } = {}) {
-  const { address, isConnected } = useAccount();
+  const { address } = useAccount();
+  const surface = useClaimSurface(address);
 
-  const body =
-    !isConnected || !address ? (
-      <div className="space-y-2">
-        <p className="text-muted-foreground text-sm">
-          Connect your wallet to check what you can claim.
-        </p>
-        <WalletConnectButton />
-      </div>
-    ) : (
-      <ConnectedClaim account={address} />
-    );
+  const body = (
+    <ClaimSurfaceBody
+      state={surface.state}
+      account={address}
+      distributor={surface.distributor}
+      refetchClaimed={surface.refetchClaimed}
+    />
+  );
 
   if (bare) {
     return (
@@ -93,16 +102,158 @@ export function CumulativeClaimPanel({
   );
 }
 
-function ConnectedClaim({ account }: { account: `0x${string}` }) {
-  const {
-    claim,
-    cumulativeClaimed,
-    claimable,
-    isLoading,
-    isClaimedLoading,
-    error,
-    refetchClaimed,
-  } = useCumulativeClaim(account);
+/** Render exactly ONE first-class state (HONEST_EMPTY — see claim-surface-state.ts). */
+function ClaimSurfaceBody({
+  state,
+  account,
+  distributor,
+  refetchClaimed,
+}: {
+  state: ClaimSurfaceState;
+  account: `0x${string}` | undefined;
+  distributor: `0x${string}` | null;
+  refetchClaimed: () => void;
+}) {
+  switch (state.kind) {
+    case "loading":
+      return (
+        <p className="text-muted-foreground text-sm">
+          Checking distribution state&hellip;
+        </p>
+      );
+
+    case "error":
+      return (
+        <Alert variant="destructive">
+          <AlertTitle>Couldn&apos;t load your claim</AlertTitle>
+          <AlertDescription>{state.error.message}</AlertDescription>
+        </Alert>
+      );
+
+    case "chain_unavailable":
+      return (
+        <Alert variant="destructive">
+          <AlertTitle>
+            Couldn&apos;t read on-chain distribution state
+          </AlertTitle>
+          <AlertDescription>
+            The distributor contract couldn&apos;t be read right now, so your
+            claim state can&apos;t be shown honestly. Refresh to retry.
+          </AlertDescription>
+        </Alert>
+      );
+
+    case "not_activated":
+      return (
+        <Alert>
+          <AlertTitle>Distributions not activated</AlertTitle>
+          <AlertDescription>
+            This node hasn&apos;t activated token distributions yet.
+            Contributions are still recorded — tokens become claimable after the
+            node owner activates distributions.
+          </AlertDescription>
+        </Alert>
+      );
+
+    case "wallet_disconnected":
+      return (
+        <div className="space-y-2">
+          <p className="text-muted-foreground text-sm">
+            Connect your wallet to check what you can claim.
+          </p>
+          <WalletConnectButton />
+        </div>
+      );
+
+    case "not_published":
+      return (
+        <Alert>
+          <AlertTitle>
+            Distributions activated — nothing published yet
+          </AlertTitle>
+          <AlertDescription>
+            {state.pendingAllocation !== null
+              ? `You have ${formatAmount(state.pendingAllocation)} allocated, awaiting the first on-chain publish. Nothing is claimable until the distribution root is published.`
+              : "The first distribution hasn't been published on-chain yet. Check back after the next epoch publishes."}
+          </AlertDescription>
+        </Alert>
+      );
+
+    case "no_allocation":
+      return (
+        <Alert>
+          <AlertTitle>No allocation for this wallet</AlertTitle>
+          <AlertDescription>
+            This wallet has no allocation in the current distribution. If you
+            contributed with a different wallet, connect that one.
+          </AlertDescription>
+        </Alert>
+      );
+
+    case "root_pending":
+      return (
+        <Alert>
+          <AlertTitle>Distribution update pending</AlertTitle>
+          <AlertDescription>
+            Your allocation of {formatAmount(state.cumulativeAmount)}
+            {state.cumulativeClaimed !== null
+              ? ` (${formatAmount(state.cumulativeClaimed)} already claimed)`
+              : ""}{" "}
+            targets a distribution root that isn&apos;t live on-chain yet.
+            Claiming resumes once the new root is published.
+          </AlertDescription>
+        </Alert>
+      );
+
+    case "fully_claimed":
+      return (
+        <div className="space-y-5">
+          <AllocationSummary
+            cumulativeAmount={state.cumulativeAmount}
+            cumulativeClaimed={state.cumulativeClaimed}
+            claimable={0n}
+            chainName=""
+          />
+          <Alert>
+            <AlertTitle>
+              You&apos;ve claimed everything —{" "}
+              {formatAmount(state.cumulativeClaimed)} held
+            </AlertTitle>
+            <AlertDescription>
+              Your full cumulative allocation has been claimed to your wallet.
+              New tokens become claimable when the next cumulative root is
+              published.
+            </AlertDescription>
+          </Alert>
+        </div>
+      );
+
+    case "claimable":
+      if (!account || !distributor) return null; // unreachable: claimable requires both
+      return (
+        <ClaimAction
+          state={state}
+          account={account}
+          distributor={distributor}
+          refetchClaimed={refetchClaimed}
+        />
+      );
+  }
+}
+
+/** The claimable state: allocation summary + chain switch + the claim CTA + tx feedback. */
+function ClaimAction({
+  state,
+  account,
+  distributor,
+  refetchClaimed,
+}: {
+  state: Extract<ClaimSurfaceState, { kind: "claimable" }>;
+  account: `0x${string}`;
+  distributor: `0x${string}`;
+  refetchClaimed: () => void;
+}) {
+  const { claim, cumulativeAmount, cumulativeClaimed, claimable } = state;
 
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
@@ -115,20 +266,20 @@ function ConnectedClaim({ account }: { account: `0x${string}` }) {
   const { isLoading: isConfirming, isSuccess: isConfirmed } =
     useWaitForTransactionReceipt({ hash: txHash });
 
-  // HONEST_STATE: re-read cumulativeClaimed once the claim tx confirms so
-  // claimable collapses to 0 until the next cumulative root is published.
+  // HONEST_STATE: re-read cumulativeClaimed once the claim tx confirms so the
+  // surface collapses to fully-claimed until the next cumulative root.
   useEffect(() => {
     if (isConfirmed) refetchClaimed();
   }, [isConfirmed, refetchClaimed]);
 
-  const distributor = (claim?.distributor ?? null) as `0x${string}` | null;
-  const isCorrectChain = claim ? chainId === claim.chainId : true;
-  const chainName = claim ? getChainName(claim.chainId) : "";
-  const explorerUrl =
-    txHash && claim ? getTransactionExplorerUrl(claim.chainId, txHash) : null;
+  const isCorrectChain = chainId === claim.chainId;
+  const chainName = getChainName(claim.chainId);
+  const explorerUrl = txHash
+    ? getTransactionExplorerUrl(claim.chainId, txHash)
+    : null;
 
   const onClaim = useCallback(() => {
-    if (!claim || !distributor || !isCorrectChain) return;
+    if (!isCorrectChain) return;
     writeContract({
       abi: CUMULATIVE_MERKLE_DISTRIBUTOR_ABI,
       address: distributor,
@@ -144,38 +295,6 @@ function ConnectedClaim({ account }: { account: `0x${string}` }) {
     });
   }, [claim, distributor, isCorrectChain, writeContract, account]);
 
-  if (isLoading) {
-    return (
-      <p className="text-muted-foreground text-sm">
-        Checking your allocation&hellip;
-      </p>
-    );
-  }
-
-  if (error) {
-    return (
-      <Alert variant="destructive">
-        <AlertTitle>Couldn&apos;t load your claim</AlertTitle>
-        <AlertDescription>{error.message}</AlertDescription>
-      </Alert>
-    );
-  }
-
-  // No leaf for this wallet in the latest manifest → no allocation.
-  if (!claim) {
-    return (
-      <Alert>
-        <AlertTitle>No allocation for this wallet</AlertTitle>
-        <AlertDescription>
-          This wallet has no cumulative token allocation yet. If you contributed
-          with a different wallet, connect that one.
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
-  const cumulativeAmount = BigInt(claim.amount);
-
   return (
     <div className="space-y-5">
       <AllocationSummary
@@ -185,28 +304,7 @@ function ConnectedClaim({ account }: { account: `0x${string}` }) {
         chainName={chainName}
       />
 
-      {/* Distributor not yet recorded (R2 repo-spec distributorAddress). */}
-      {!distributor ? (
-        <Alert>
-          <AlertTitle>Claiming not open yet</AlertTitle>
-          <AlertDescription>
-            The distribution contract for this node hasn&apos;t been recorded
-            yet. Check back once tokens are on-chain.
-          </AlertDescription>
-        </Alert>
-      ) : isClaimedLoading || claimable === undefined ? (
-        <p className="text-muted-foreground text-sm">
-          Reading on-chain claim state&hellip;
-        </p>
-      ) : claimable === 0n ? (
-        <Alert>
-          <AlertTitle>Nothing to claim right now</AlertTitle>
-          <AlertDescription>
-            You&apos;ve claimed everything allocated to you so far. New tokens
-            become claimable when the next cumulative root is published.
-          </AlertDescription>
-        </Alert>
-      ) : !isCorrectChain ? (
+      {!isCorrectChain ? (
         <Button
           variant="outline"
           onClick={() => switchChain?.({ chainId: claim.chainId })}

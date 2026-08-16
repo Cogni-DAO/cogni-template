@@ -59,6 +59,8 @@ export interface NodeTokenomicsConfigDto {
   readonly distributorAddress: `0x${string}` | null;
   /** EVM chain id. */
   readonly chainId: number;
+  /** repo-spec `distributions.status === "active"` (node has activated distributions). */
+  readonly distributionsActive: boolean;
   /** Count of finalized attribution epochs. */
   readonly epochsCompleted: number;
 }

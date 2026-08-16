@@ -67,6 +67,7 @@ vi.mock("@/shared/config", async (importOriginal) => {
       tokenAddress: TEST_TOKEN,
       distributorAddress: TEST_DISTRIBUTOR,
       chainId: 8453,
+      distributionsActive: true,
     })),
   };
 });
@@ -128,6 +129,9 @@ describe("GET /api/v1/public/attribution/tokenomics", () => {
     expect(body.tokenAddress).toBe(TEST_TOKEN);
     expect(body.distributorAddress).toBe(TEST_DISTRIBUTOR);
     expect(body.chainId).toBe(8453);
+    // story.5003: activation status rides the public config — the Ownership
+    // page's ground truth for the not-activated state.
+    expect(body.distributionsActive).toBe(true);
     // PUBLIC_READS_FINALIZED_ONLY: only the two finalized epochs count.
     expect(body.epochsCompleted).toBe(2);
   });
