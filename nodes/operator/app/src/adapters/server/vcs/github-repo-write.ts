@@ -2090,11 +2090,11 @@ export class GitHubRepoWriter implements DeployPlanePort {
       `- \`governance.token_contract\` = \`${input.tokenAddress}\`\n` +
       `- \`governance.emissions_holder\` = \`${input.emissionsHolderAddress}\`\n` +
       "- `distributions.status: active`\n" +
-      "- `distributions.claim_contract_pattern: uniswap.merkle-distributor.v1`\n" +
+      "- `distributions.claim_contract_pattern: 1inch.cumulative-merkle-drop.v1`\n" +
       distributorLines +
       "\n" +
       distributorSummary +
-      "Per-epoch claims use the OSS MerkleDistributor path (cumulative root set by the DAO).\n\n" +
+      "Per-epoch claims use the vendored 1inch CumulativeMerkleDrop path (cumulative root set by the DAO).\n\n" +
       "_Authored automatically by cogni-operator on distribution activation._";
 
     const currentSpec = await this.fetchFileText({

@@ -5,12 +5,13 @@
  * Module: `@shared/node-app-scaffold/gens/distribution-activation`
  * Purpose: Pure splice of token-distribution activation config into an EXISTING node repo-spec YAML:
  *   `governance.token_contract`, `governance.emissions_holder`, and `distributions.status: active`
- *   with the stock Uniswap MerkleDistributor claim pattern pinned.
+ *   with the vendored 1inch CumulativeMerkleDrop claim pattern pinned.
  * Scope: Pure string transform over the current `.cogni/repo-spec.yaml` text. No IO, no env, no
  *   YAML round-trip; comments and top-level ordering survive. The route reads the current file and
  *   persists this result through a node-repo PR.
  * Invariants:
- *   - OSS_CLAIM_PATH: pins `uniswap.merkle-distributor.v1`; no bespoke distributor contract.
+ *   - OSS_CLAIM_PATH: pins `1inch.cumulative-merkle-drop.v1` (the vendored distributor); no bespoke
+ *     distributor contract.
  *   - NON_LINEAR_ACTIVATION: operates on an existing node repo-spec; does not require replaying
  *     formation or payments activation.
  *   - SINGLE_HOME: writes ONLY to the node's own `.cogni/repo-spec.yaml`.
@@ -22,8 +23,16 @@
 
 import { parse as parseYaml } from "yaml";
 
+// The claim pattern MUST name the distributor the node actually deploys +
+// claims against. Activation deploys the vendored 1inch CumulativeMerkleDrop
+// (`CUMULATIVE_MERKLE_DISTRIBUTOR_BYTECODE`), the on-chain guard reads its
+// `merkleRoot()`, and the live R3/R4 pipeline builds a
+// `1inch.cumulative-merkle-drop.v1` cumulative manifest — so the record must be
+// `1inch.cumulative-merkle-drop.v1`, not the legacy non-cumulative
+// `uniswap.merkle-distributor.v1`. ONE canonical OSS distributor pattern
+// (bug.5031): record follows code.
 export const DISTRIBUTION_CLAIM_CONTRACT_PATTERN =
-  "uniswap.merkle-distributor.v1" as const;
+  "1inch.cumulative-merkle-drop.v1" as const;
 
 export interface RenderDistributionActivationInput {
   /** Aragon GovernanceERC20 token used for contributor distributions. */
@@ -49,7 +58,7 @@ const DISTRIBUTIONS_BLOCK = `distributions:
  *   1. Upsert `governance.token_contract`.
  *   2. Upsert `governance.emissions_holder`.
  *   3. Upsert `distributions.status: active`.
- *   4. Upsert `distributions.claim_contract_pattern: uniswap.merkle-distributor.v1`.
+ *   4. Upsert `distributions.claim_contract_pattern: 1inch.cumulative-merkle-drop.v1`.
  *   5. When a distributor is supplied, upsert `distributions.distributor_address`.
  */
 export function renderDistributionActivationSpec(

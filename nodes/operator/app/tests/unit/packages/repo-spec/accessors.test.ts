@@ -228,11 +228,37 @@ describe("extractDaoTokenDistributionConfig", () => {
       },
     });
 
+    // bug.5031: an active spec with no explicit pattern defaults to the vendored
+    // distributor the activation flow deploys (1inch CumulativeMerkleDrop) — NOT
+    // the legacy non-cumulative uniswap pattern.
     expect(extractDaoTokenDistributionConfig(spec, TEST_CHAIN_ID)).toEqual({
       chainId: TEST_CHAIN_ID,
       tokenAddress: "0x2222222222222222222222222222222222222222",
       emissionsHolderAddress: "0x3333333333333333333333333333333333333333",
-      claimContractPattern: "uniswap.merkle-distributor.v1",
+      claimContractPattern: "1inch.cumulative-merkle-drop.v1",
+    });
+  });
+
+  it("passes through the recorded claim pattern and distributor address", () => {
+    const spec = buildSpec({
+      distributions: {
+        status: "active",
+        claim_contract_pattern: "1inch.cumulative-merkle-drop.v1",
+        distributor_address: "0x6666666666666666666666666666666666666666",
+      },
+      governance: {
+        chain_id: String(TEST_CHAIN_ID),
+        token_contract: "0x2222222222222222222222222222222222222222",
+        emissions_holder: "0x3333333333333333333333333333333333333333",
+      },
+    });
+
+    expect(extractDaoTokenDistributionConfig(spec, TEST_CHAIN_ID)).toEqual({
+      chainId: TEST_CHAIN_ID,
+      tokenAddress: "0x2222222222222222222222222222222222222222",
+      emissionsHolderAddress: "0x3333333333333333333333333333333333333333",
+      claimContractPattern: "1inch.cumulative-merkle-drop.v1",
+      distributorAddress: "0x6666666666666666666666666666666666666666",
     });
   });
 
