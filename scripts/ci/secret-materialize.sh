@@ -201,7 +201,10 @@ flush_batch() {
   if [[ $rc -eq 0 ]]; then
     return 0
   fi
-  if printf '%s' "$out" | grep -qiE 'no value found|does not exist|not found'; then
+  # A kv patch on a never-written KV v2 path returns `Code: 404` with an EMPTY raw
+  # message (no "not found" text) — unambiguous absence on a FRESH node/env, so put
+  # cannot clobber siblings (mirrors provision seed_kv fix a54f24809b).
+  if printf '%s' "$out" | grep -qiE 'no value found|does not exist|not found|code: 404'; then
     # Genuinely absent — safe to create; no siblings to clobber.
     printf '%s' "$json" | bao_exec "-i" "kv put 'cogni/${DEPLOY_ENVIRONMENT}/${TARGET_NODE}' -" >/dev/null
     return $?
