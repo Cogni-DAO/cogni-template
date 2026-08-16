@@ -42,7 +42,13 @@ import { getTransactionExplorerUrl } from "@cogni/node-shared";
 import { useQuery } from "@tanstack/react-query";
 import { ExternalLink, Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { type ReactElement, type ReactNode, useEffect, useState } from "react";
+import {
+  type ReactElement,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useState,
+} from "react";
 import { useAccount, useChainId, useSwitchChain } from "wagmi";
 
 import { Button, SectionCard, WalletConnectButton } from "@/components";
@@ -175,6 +181,12 @@ export function DistributionsCard({
     refetchInterval: (query) =>
       query.state.data?.activationPr?.state === "open" ? 30_000 : false,
   });
+  // STABLE identity — children hold this in effect deps; an inline closure would re-fire those
+  // effects every render (react-query's refetch itself is stable across renders).
+  const { refetch } = recordQuery;
+  const refetchRecord = useCallback(() => {
+    void refetch();
+  }, [refetch]);
 
   return (
     <SectionCard
@@ -205,7 +217,7 @@ export function DistributionsCard({
               : null
           }
           record={recordQuery.data ?? null}
-          refetchRecord={() => void recordQuery.refetch()}
+          refetchRecord={refetchRecord}
         />
       ) : (
         <ActivateOnlyRow
@@ -214,7 +226,7 @@ export function DistributionsCard({
           repoSpecUrl={repoSpecUrl}
           distributionsActive={distributionsActive}
           record={recordQuery.data ?? null}
-          refetchRecord={() => void recordQuery.refetch()}
+          refetchRecord={refetchRecord}
         />
       )}
     </SectionCard>
