@@ -15,7 +15,7 @@
  *     + epoch_distribution_leaves — never recomputed here.
  *   - CONSERVATION: mint == Σ(claimed); distributor drains to zero.
  * Side-effects: IO (fork txs, DB reads)
- * Links: scripts/e2e/finalize-mint-claim.ts, scripts/e2e/ledger-worker-host.ts
+ * Links: scripts/e2e/finalize-mint-claim.ts
  * @internal
  *
  *   EPOCH_ID=14 DATABASE_URL=postgresql://… pnpm tsx scripts/e2e/complete-distribution-on-fork.ts

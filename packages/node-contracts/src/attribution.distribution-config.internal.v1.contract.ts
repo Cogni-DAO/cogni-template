@@ -19,7 +19,7 @@
  *   - All consumers use z.infer types.
  * Side-effects: none
  * Links: /api/internal/attribution/distribution-config route,
- *   services/scheduler-worker/src/adapters/distribution-config-http.ts,
+ *   nodes/operator/app/src/features/nodes/node-distribution-config.ts (in-process resolver),
  *   packages/repo-spec/src/accessors.ts (extractDaoTokenDistributionConfig), bug.5020
  * @internal
  */

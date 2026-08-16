@@ -19,11 +19,13 @@ import {
   type DaoConfig,
   extractChainId,
   extractDaoConfig,
+  extractDaoTokenDistributionConfig,
   extractDaoTreasuryAddress,
   extractDistributorAddress,
   extractGovernanceConfig,
   extractKnowledgeConfig,
   extractLedgerApprovers,
+  extractLedgerConfig,
   extractNodeBrandColor,
   extractNodeBrandIcon,
   extractNodeHook,
@@ -227,6 +229,56 @@ export function getNodeTokenomicsConfig(): NodeTokenomicsConfig {
     distributionsActive: spec.distributions?.status === "active",
   };
   return cachedNodeTokenomicsConfig;
+}
+
+let cachedEmissionsHolder: string | null | undefined;
+
+/**
+ * DAO that mints + owns the distributor (governance.emissions_holder), from the node's
+ * OWN repo-spec. Null until distributions are activated. Feeds the finalize fold's
+ * bug.5020 execute-guard on the baked-fallback path (mirrors the worker container's
+ * `emissionsHolderAddress`).
+ */
+export function getEmissionsHolderAddress(): string | null {
+  if (cachedEmissionsHolder !== undefined) return cachedEmissionsHolder;
+  const spec = loadRepoSpec();
+  cachedEmissionsHolder =
+    extractDaoTokenDistributionConfig(spec)?.emissionsHolderAddress ?? null;
+  return cachedEmissionsHolder;
+}
+
+let cachedLedgerSelectionConfig: {
+  readonly excludedLogins: string[];
+  readonly sourceRefs: string[];
+} | null = null;
+
+/**
+ * Selection-time config for the attribution registries — excluded logins + the
+ * per-source repo allowlist, aggregated across all `activity_sources`. Empty when no
+ * ledger config (fail-open: no filtering). Mirrors the worker container's
+ * `excludedLogins`/`sourceRefs` derivation so in-process finalize builds identical
+ * registries.
+ */
+export function getLedgerSelectionConfig(): {
+  readonly excludedLogins: string[];
+  readonly sourceRefs: string[];
+} {
+  if (cachedLedgerSelectionConfig) return cachedLedgerSelectionConfig;
+  const spec = loadRepoSpec();
+  const ledgerConfig = extractLedgerConfig(spec);
+  cachedLedgerSelectionConfig = {
+    excludedLogins: ledgerConfig
+      ? Object.values(ledgerConfig.activitySources).flatMap(
+          (s) => s.excludedLogins ?? []
+        )
+      : [],
+    sourceRefs: ledgerConfig
+      ? Object.values(ledgerConfig.activitySources).flatMap(
+          (s) => s.sourceRefs ?? []
+        )
+      : [],
+  };
+  return cachedLedgerSelectionConfig;
 }
 
 let cachedLedgerApprovers: string[] | null = null;

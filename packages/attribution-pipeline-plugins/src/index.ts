@@ -16,6 +16,18 @@
  * @public
  */
 
+// Finalize-in-process (story.5007) — runtime-agnostic epoch finalization + R3 fold
+export {
+  type FinalizeDistributionConfigResolver,
+  FinalizeEpochError,
+  type FinalizeEpochErrorCode,
+  type FinalizeEpochInput,
+  type FinalizeEpochOutput,
+  type FinalizeLogger,
+  isFinalizeEpochError,
+  type RunFinalizeEpochDeps,
+  runFinalizeEpoch,
+} from "./finalize/run-finalize-epoch";
 export { createEchoAdapter } from "./plugins/echo/adapter";
 // Echo plugin
 export {

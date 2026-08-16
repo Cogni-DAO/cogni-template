@@ -52,7 +52,6 @@ export {
   formatThreshold,
 } from "./domain/review.js";
 export type { AttributionIngestRunV1 } from "./workflows/collect-epoch.workflow.js";
-export type { FinalizeEpochWorkflowInput } from "./workflows/finalize-epoch.workflow.js";
 // Workflow input/output types
 export {
   DEFAULT_GOAL_STEP_GRAPH_ID,
