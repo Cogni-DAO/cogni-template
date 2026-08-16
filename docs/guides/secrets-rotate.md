@@ -40,6 +40,34 @@ single-sourced in the hub, not restated here (a git snapshot drifts):
 > Recall **`node-self-serve-secrets`** — `GET /api/v1/knowledge/node-self-serve-secrets`.
 > Code of record: `nodes/operator/app/src/app/api/v1/nodes/[id]/secrets/route.ts`.
 
+## Preflight your auth — then read a failure as a STOP, not a detour
+
+Nearly every "I'm blocked rotating X" story is a **credential problem wearing a
+mechanics costume**. Answer "am I allowed to rotate here?" _before_ you write —
+the API tells you in one call, and its error codes are the whole decision tree:
+
+```bash
+# Preflight: is my key live for this env? (200 = key valid + you're in this env)
+curl -fsS -H "Authorization: Bearer $COGNI_API_KEY_<ENV>" https://<operator-host>/api/v1/nodes/<id>
+```
+
+Then attempt THE PATH (below). If the self-serve POST returns:
+
+| Response                 | What it means                                                                  | The ONLY correct next move                                                              |
+| ------------------------ | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| **401**                  | Your `COGNI_API_KEY_<ENV>` is **expired** (env `AUTH_SECRET`-rotation pattern) | Ask a human to refresh it in `.env.cogni`. **STOP.**                                    |
+| **403 `authz_denied`**   | You lack `secrets_manager` on this env (a fresh agent key has none)            | `POST /nodes/{id}/access-requests {role:"secrets_manager"}` → owner approves. **STOP.** |
+| **404 `node_not_found`** | Node isn't in that env's registry                                              | Wrong env/host, or node not provisioned there. **STOP.**                                |
+| **403 `key_reserved`**   | Substrate-owned value — not yours to rotate                                    | See "Substrate-owned values" below. **STOP.**                                           |
+
+> 🚧 **401/403/404 is terminal _for you_ — it is NOT a cue to fall back to the
+> break-glass kube path.** `pnpm secrets:set`, kubeconfigs, `.local/` init
+> artifacts, and OpenBao root tokens are **operator-admin custody, not a dev
+> lane** — reaching for them means hunting stale artifacts on reprovisioned
+> infra (the exact rabbit hole this warning exists to stop). A 30-second human
+> key-refresh or `secrets_manager` grant unblocks the self-serve path. Escalate;
+> don't spelunk.
+
 ## Routine rotation of a human value = self-serve API (THE PATH)
 
 The default for rotating a vendor/human secret in the operator's own env. A node
