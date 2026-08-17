@@ -100,7 +100,7 @@ export {
   type PoolComponentId,
   validatePoolComponentId,
 } from "./pool";
-export { sameReceiptSemanticContent } from "./receipt-content";
+export { sameReceiptEconomicContent } from "./receipt-content";
 // Rules
 export { computeStatementItems } from "./rules";
 // Signing

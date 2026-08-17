@@ -34,7 +34,7 @@ import {
   buildGitHubPrMergedContextV1,
   buildGitHubReviewContextV1,
   GITHUB_ADAPTER_VERSION,
-  hashReceiptContent,
+  hashReceiptEconomicContent,
 } from "@cogni/ingestion-core";
 
 import type { GitHubClient } from "./octokit-client.js";
@@ -83,6 +83,7 @@ interface PrNode {
   baseRefName: string;
   headRefName: string;
   mergeCommit: { oid: string } | null;
+  mergedBy: { id: string } | null;
   additions: number;
   deletions: number;
   changedFiles: number;
@@ -118,6 +119,7 @@ interface IssueNode {
 
 interface RepoConnectionResponse<T> {
   repository: {
+    id: string;
     pullRequests?: { pageInfo: PageInfo; nodes: T[] };
     issues?: { pageInfo: PageInfo; nodes: T[] };
   };
@@ -144,6 +146,7 @@ const silentLogger: LoggerLike = {
 const MERGED_PRS_QUERY = /* GraphQL */ `
   query CollectMergedPRs($owner: String!, $name: String!, $cursor: String) {
     repository(owner: $owner, name: $name) {
+      id
       pullRequests(first: 100, after: $cursor, states: MERGED, orderBy: { field: UPDATED_AT, direction: DESC }) {
         pageInfo { hasNextPage endCursor }
         nodes {
@@ -157,6 +160,7 @@ const MERGED_PRS_QUERY = /* GraphQL */ `
           baseRefName
           headRefName
           mergeCommit { oid }
+          mergedBy { id }
           additions
           deletions
           changedFiles
@@ -171,6 +175,7 @@ const MERGED_PRS_QUERY = /* GraphQL */ `
 const REVIEWS_QUERY = /* GraphQL */ `
   query CollectReviews($owner: String!, $name: String!, $cursor: String) {
     repository(owner: $owner, name: $name) {
+      id
       pullRequests(first: 100, after: $cursor, states: MERGED, orderBy: { field: UPDATED_AT, direction: DESC }) {
         pageInfo { hasNextPage endCursor }
         nodes {
@@ -197,6 +202,7 @@ const REVIEWS_QUERY = /* GraphQL */ `
 const CLOSED_ISSUES_QUERY = /* GraphQL */ `
   query CollectClosedIssues($owner: String!, $name: String!, $cursor: String) {
     repository(owner: $owner, name: $name) {
+      id
       issues(first: 100, after: $cursor, states: CLOSED, orderBy: { field: UPDATED_AT, direction: DESC }) {
         pageInfo { hasNextPage endCursor }
         nodes {
@@ -400,7 +406,12 @@ export class GitHubSourceAdapter implements PollAdapter {
         const mergedAt = new Date(pr.mergedAt);
         if (mergedAt <= since || mergedAt > until) continue;
 
-        const event = await this.normalizePr(owner, repoName, pr);
+        const event = await this.normalizePr(
+          owner,
+          repoName,
+          response.repository.id,
+          pr
+        );
         if (event) events.push(event);
       }
 
@@ -416,6 +427,7 @@ export class GitHubSourceAdapter implements PollAdapter {
   private async normalizePr(
     owner: string,
     repoName: string,
+    providerRepoId: string,
     pr: PrNode
   ): Promise<ActivityEvent | null> {
     if (
@@ -429,24 +441,35 @@ export class GitHubSourceAdapter implements PollAdapter {
       return null;
     }
 
+    if (
+      !pr.mergedBy?.id ||
+      !pr.mergeCommit?.oid ||
+      pr.commits.nodes.length === 0
+    ) {
+      throw new Error(
+        `Merged PR #${pr.number} in ${owner}/${repoName} is missing immutable merge identity`
+      );
+    }
     const id = buildEventId("github", "pr", `${owner}/${repoName}`, pr.number);
     const authorId = String(pr.author.databaseId);
     const eventTime = new Date(pr.mergedAt);
     const metadata = buildGitHubPrMergedContextV1({
+      providerRepoId,
       repo: `${owner}/${repoName}`,
       prNumber: pr.number,
       title: pr.title,
       body: pr.body,
       baseBranch: pr.baseRefName,
       branch: pr.headRefName,
-      mergeCommitSha: pr.mergeCommit?.oid ?? null,
+      mergeCommitSha: pr.mergeCommit.oid,
+      mergedById: pr.mergedBy.id,
       commitShas: pr.commits.nodes.map((c) => c.commit.oid),
       labels: pr.labels.nodes.map((l) => l.name),
       additions: pr.additions,
       deletions: pr.deletions,
       changedFiles: pr.changedFiles,
     });
-    const payloadHash = await hashReceiptContent({
+    const payloadHash = await hashReceiptEconomicContent({
       receiptId: id,
       source: "github",
       eventType: "pr_merged",
@@ -518,6 +541,7 @@ export class GitHubSourceAdapter implements PollAdapter {
           const event = await this.normalizeReview(
             owner,
             repoName,
+            response.repository.id,
             pr.number,
             review,
             pr.baseRefName,
@@ -539,6 +563,7 @@ export class GitHubSourceAdapter implements PollAdapter {
   private async normalizeReview(
     owner: string,
     repoName: string,
+    providerRepoId: string,
     prNumber: number,
     review: ReviewNode,
     prBaseBranch: string,
@@ -566,13 +591,14 @@ export class GitHubSourceAdapter implements PollAdapter {
     const eventTime = new Date(review.submittedAt);
     const artifactUrl = `https://github.com/${owner}/${repoName}/pull/${prNumber}#pullrequestreview-${review.databaseId}`;
     const metadata = buildGitHubReviewContextV1({
+      providerRepoId,
       repo: `${owner}/${repoName}`,
       prNumber,
       prBaseBranch,
       prMergeCommitSha,
       state: review.state,
     });
-    const payloadHash = await hashReceiptContent({
+    const payloadHash = await hashReceiptEconomicContent({
       receiptId: id,
       source: "github",
       eventType: "review_submitted",
@@ -636,7 +662,12 @@ export class GitHubSourceAdapter implements PollAdapter {
         const closedAt = new Date(issue.closedAt);
         if (closedAt <= since || closedAt > until) continue;
 
-        const event = await this.normalizeIssue(owner, repoName, issue);
+        const event = await this.normalizeIssue(
+          owner,
+          repoName,
+          response.repository.id,
+          issue
+        );
         if (event) events.push(event);
       }
 
@@ -652,6 +683,7 @@ export class GitHubSourceAdapter implements PollAdapter {
   private async normalizeIssue(
     owner: string,
     repoName: string,
+    providerRepoId: string,
     issue: IssueNode
   ): Promise<ActivityEvent | null> {
     if (
@@ -674,12 +706,13 @@ export class GitHubSourceAdapter implements PollAdapter {
     const authorId = String(issue.author.databaseId);
     const eventTime = new Date(issue.closedAt);
     const metadata = buildGitHubIssueContextV1({
+      providerRepoId,
       repo: `${owner}/${repoName}`,
       issueNumber: issue.number,
       title: issue.title,
       action: "closed",
     });
-    const payloadHash = await hashReceiptContent({
+    const payloadHash = await hashReceiptEconomicContent({
       receiptId: id,
       source: "github",
       eventType: "issue_closed",

@@ -70,7 +70,7 @@ import {
   EpochNotOpenError,
   type EpochStatus,
   ReceiptContentConflictError,
-  sameReceiptSemanticContent,
+  sameReceiptEconomicContent,
 } from "@cogni/attribution-ledger";
 import {
   epochDistributionLeaves,
@@ -1047,7 +1047,7 @@ export class DrizzleAttributionAdapter implements AttributionStore {
           key(incoming.nodeId, incoming.receiptId)
         );
         const sameContent =
-          stored !== undefined && sameReceiptSemanticContent(stored, incoming);
+          stored !== undefined && sameReceiptEconomicContent(stored, incoming);
         if (sameContent) duplicateCount += 1;
         else conflictIds.push(incoming.receiptId);
       }

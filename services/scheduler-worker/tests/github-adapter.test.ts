@@ -180,11 +180,13 @@ describe("GitHubSourceAdapter", () => {
       expect(result.events[0]?.source).toBe("github");
       expect(result.events[0]?.metadata).toMatchObject({
         schemaVersion: 1,
+        providerRepoId: "github-repo-node-id",
         repo: "cogni-dao/cogni-template",
         prNumber: 1,
         action: "closed",
         baseBranch: "staging",
         branch: "feature/test",
+        mergedById: "github-user-node-merger",
         commitShas: ["commit-sha-1"],
       });
     });
@@ -372,6 +374,7 @@ describe("GitHubSourceAdapter", () => {
       expect(result.events[0]?.eventType).toBe("review_submitted");
       expect(result.events[0]?.metadata).toMatchObject({
         schemaVersion: 1,
+        providerRepoId: "github-repo-node-id",
         repo: "cogni-dao/cogni-template",
         prNumber: 42,
         prBaseBranch: "staging",
@@ -451,6 +454,7 @@ describe("GitHubSourceAdapter", () => {
       expect(result.events[0]?.eventType).toBe("issue_closed");
       expect(result.events[0]?.metadata).toMatchObject({
         schemaVersion: 1,
+        providerRepoId: "github-repo-node-id",
         repo: "cogni-dao/cogni-template",
         issueNumber: 99,
         action: "closed",

@@ -26,6 +26,7 @@ function validPrReceipt() {
     artifactUrl: "https://github.com/cogni-dao/cogni/pull/42",
     metadata: {
       schemaVersion: 1,
+      providerRepoId: "github-repo-node-id",
       repo: "cogni-dao/cogni",
       prNumber: 42,
       title: "Ship canonical receipts",
@@ -33,6 +34,7 @@ function validPrReceipt() {
       baseBranch: "main",
       branch: "feat/receipts",
       mergeCommitSha: "merge-sha",
+      mergedById: "github-user-node-merger",
       commitShas: ["commit-sha"],
       labels: ["attribution"],
       additions: 10,

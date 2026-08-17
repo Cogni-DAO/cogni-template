@@ -26,7 +26,7 @@ import {
   buildGitHubPrMergedContextV1,
   buildGitHubReviewContextV1,
   GITHUB_ADAPTER_VERSION,
-  hashReceiptContent,
+  hashReceiptEconomicContent,
   RECEIPT_CONTEXT_SCHEMA_VERSION,
 } from "@cogni/ingestion-core";
 import { verify } from "@octokit/webhooks-methods";
@@ -66,7 +66,7 @@ async function finalizeReceiptEvent(
 ): Promise<ActivityEvent> {
   return {
     ...event,
-    payloadHash: await hashReceiptContent({
+    payloadHash: await hashReceiptEconomicContent({
       receiptId: event.id,
       source: event.source,
       eventType: event.eventType,
@@ -96,6 +96,12 @@ function extractActor(
 function repoFullName(payload: Record<string, unknown>): string | null {
   const repo = payload.repository as Record<string, unknown> | undefined;
   return (repo?.full_name as string) ?? null;
+}
+
+function providerRepoId(payload: Record<string, unknown>): string | null {
+  const repo = payload.repository as Record<string, unknown> | undefined;
+  const nodeId = repo?.node_id;
+  return typeof nodeId === "string" && nodeId.length > 0 ? nodeId : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -170,7 +176,8 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     if (!pr) return [];
 
     const fullName = repoFullName(payload);
-    if (!fullName) return [];
+    const repoId = providerRepoId(payload);
+    if (!fullName || !repoId) return [];
 
     const actor = extractActor(pr.user as Record<string, unknown>);
     if (!actor) return [];
@@ -204,6 +211,7 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
       : [];
     const commonMetadata = {
       schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
+      providerRepoId: repoId,
       repo: fullName,
       prNumber,
       title: pr.title as string,
@@ -227,20 +235,36 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
       }
       const [owner, repo] = fullName.split("/");
       if (!owner || !repo) return [];
+      const mergedBy = pr.merged_by as Record<string, unknown> | undefined;
+      const mergedById = mergedBy?.node_id;
+      const mergeCommitSha = pr.merge_commit_sha;
+      if (
+        typeof mergedById !== "string" ||
+        mergedById.length === 0 ||
+        typeof mergeCommitSha !== "string" ||
+        mergeCommitSha.length === 0
+      ) {
+        throw new Error("Merged PR receipt requires immutable merge identity");
+      }
       const commitShas = await this.hydrateMergedPr({
         installationId,
         owner,
         repo,
         prNumber,
       });
+      if (commitShas.length === 0) {
+        throw new Error("Merged PR receipt requires at least one commit SHA");
+      }
       metadata = buildGitHubPrMergedContextV1({
+        providerRepoId: repoId,
         repo: fullName,
         prNumber,
         title: pr.title as string,
         body: (pr.body as string | null) ?? "",
         baseBranch: base?.ref as string,
         branch: head?.ref as string,
-        mergeCommitSha: (pr.merge_commit_sha as string | null) ?? null,
+        mergeCommitSha,
+        mergedById,
         commitShas,
         labels,
         additions: (pr.additions as number | undefined) ?? 0,
@@ -280,7 +304,8 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     if (!pr) return [];
 
     const fullName = repoFullName(payload);
-    if (!fullName) return [];
+    const repoId = providerRepoId(payload);
+    if (!fullName || !repoId) return [];
 
     const actor = extractActor(review.user as Record<string, unknown>);
     if (!actor) return [];
@@ -303,6 +328,7 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
         platformLogin: actor.login,
         artifactUrl: review.html_url as string,
         metadata: buildGitHubReviewContextV1({
+          providerRepoId: repoId,
           repo: fullName,
           prNumber,
           prBaseBranch: base?.ref as string,
@@ -327,7 +353,8 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     if (!issue) return [];
 
     const fullName = repoFullName(payload);
-    if (!fullName) return [];
+    const repoId = providerRepoId(payload);
+    if (!fullName || !repoId) return [];
 
     const actor = extractActor(issue.user as Record<string, unknown>);
     if (!actor) return [];
@@ -358,6 +385,7 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
         platformLogin: actor.login,
         artifactUrl: issue.html_url as string,
         metadata: buildGitHubIssueContextV1({
+          providerRepoId: repoId,
           repo: fullName,
           issueNumber,
           title: issue.title as string,
@@ -385,7 +413,8 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     if (!issue) return [];
 
     const fullName = repoFullName(payload);
-    if (!fullName) return [];
+    const repoId = providerRepoId(payload);
+    if (!fullName || !repoId) return [];
 
     const actor = extractActor(comment.user as Record<string, unknown>);
     if (!actor) return [];
@@ -406,6 +435,7 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
         artifactUrl: comment.html_url as string,
         metadata: {
           schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
+          providerRepoId: repoId,
           issueNumber: issue.number as number,
           repo: fullName,
         },
@@ -422,7 +452,8 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     payload: Record<string, unknown>
   ): Promise<ActivityEvent[]> {
     const fullName = repoFullName(payload);
-    if (!fullName) return [];
+    const repoId = providerRepoId(payload);
+    if (!fullName || !repoId) return [];
 
     const sender = payload.sender as Record<string, unknown> | undefined;
     const actor = extractActor(sender);
@@ -456,6 +487,7 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
         artifactUrl: `https://github.com/${fullName}/commit/${after}`,
         metadata: {
           schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
+          providerRepoId: repoId,
           ref,
           after,
           commitCount,

@@ -9,7 +9,7 @@
  *   (delegates to the injected ReceiptDelivery) or hold mutable state.
  * Invariants:
  * - WEBHOOK_VERIFY_BEFORE_NORMALIZE: verify() is always called before normalize()
- * - RECEIPT_IDEMPOTENT: deterministic same-content retries are counted no-ops; conflicts fail loud
+ * - RECEIPT_IDEMPOTENT: deterministic same-economic-content retries are counted no-ops; conflicts fail loud
  * - WEBHOOK_RECEIPT_APPEND_EXEMPT: Receipt insertion bypasses WRITES_VIA_TEMPORAL (safe per RECEIPT_IDEMPOTENT + RECEIPT_APPEND_ONLY)
  * - NODE_WRITES_OWN_LEDGER: only the operator's OWN repos write to the operator's local store;
  *   receipts for a FOREIGN owning node are DELIVERED over HTTP so that node persists them in its
@@ -21,7 +21,7 @@
  */
 
 import type { InsertReceiptParams } from "@cogni/attribution-ledger";
-import { hashReceiptContent } from "@cogni/ingestion-core";
+import { hashReceiptEconomicContent } from "@cogni/ingestion-core";
 import { internalDeliverReceiptsOperation } from "@cogni/node-contracts";
 import type {
   AttributionStore,
@@ -156,7 +156,7 @@ export async function receiveWebhook(
     })),
   });
   for (const receipt of validatedEnvelope.receipts) {
-    const expectedHash = await hashReceiptContent({
+    const expectedHash = await hashReceiptEconomicContent({
       receiptId: receipt.receiptId,
       source: receipt.source,
       eventType: receipt.eventType,
@@ -167,7 +167,7 @@ export async function receiveWebhook(
     });
     if (expectedHash !== receipt.payloadHash) {
       throw new Error(
-        `Receipt ${receipt.receiptId} payloadHash does not match canonical content`
+        `Receipt ${receipt.receiptId} payloadHash does not match canonical economic content`
       );
     }
   }

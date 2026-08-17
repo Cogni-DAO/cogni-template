@@ -268,10 +268,13 @@ describe("DrizzleAttributionAdapter (Component)", () => {
       expect(ids).toContain("github:pr:test/repo:2");
     });
 
-    it("RECEIPT_IDEMPOTENT: re-inserting same receipt is a no-op", async () => {
+    it("RECEIPT_IDEMPOTENT: mutable replay enrichment is a duplicate no-op", async () => {
       const event = makeIngestionReceipt({
         receiptId: "github:pr:test/repo:1",
         platformUserId: "111",
+        platformLogin: "renamed-user",
+        artifactUrl: "https://github.com/renamed/repo/pull/1",
+        metadata: { title: "Edited after merge", labels: ["later-label"] },
         eventTime: new Date("2026-01-06T10:00:00Z"),
         producer: "github:poll",
         retrievedAt: new Date("2026-01-07T10:00:00Z"),
@@ -291,7 +294,7 @@ describe("DrizzleAttributionAdapter (Component)", () => {
       expect(matching).toHaveLength(1);
     });
 
-    it("RECEIPT_CONFLICT_LOUD: same ID with different attribution context is rejected", async () => {
+    it("RECEIPT_CONFLICT_LOUD: same ID with different economic hash is rejected", async () => {
       const receiptId = "github:pr:test/repo:context-conflict";
       const original = makeIngestionReceipt({
         receiptId,

@@ -12,9 +12,9 @@
  *   - INTERNAL_API_SHARED_SECRET: Requires Bearer SCHEDULER_API_TOKEN
  *   - NODE_WRITES_OWN_LEDGER: envelope `nodeId` MUST equal this node's own node_id; the node stamps
  *     its own node_id on each receipt. A node never persists a foreign ledger.
- *   - RECEIPT_IDEMPOTENT: same-content retry is a counted no-op; differing content for the same
+ *   - RECEIPT_IDEMPOTENT: same-economic-content retry is a counted no-op; differing economic content for the same
  *     deterministic ID is a 409 and the attempted batch is rolled back.
- *   - RECEIPT_HASH_SELF_VERIFYING: payloadHash is recomputed over canonical v1 attribution context.
+ *   - RECEIPT_HASH_SELF_VERIFYING: payloadHash is recomputed over immutable v1 economic context.
  * Side-effects: IO (writes ingestion_receipts via AttributionStore)
  * Links: attribution.receipts.internal.v1.contract, task.0280, story.5023
  * @internal
@@ -25,7 +25,7 @@ import {
   isReceiptContentConflictError,
   type ReceiptInsertResult,
 } from "@cogni/attribution-ledger";
-import { hashReceiptContent } from "@cogni/ingestion-core";
+import { hashReceiptEconomicContent } from "@cogni/ingestion-core";
 import {
   type InternalDeliverReceiptsInput,
   internalDeliverReceiptsOperation,
@@ -86,12 +86,12 @@ export const POST = wrapRouteHandlerWithLogging(
       );
     }
 
-    // Idempotency-Key is honored by semantic duplicate classification at the
+    // Idempotency-Key is honored by economic-content duplicate classification at the
     // DB boundary; surface it in structured logs for delivery tracing.
     const idempotencyKey = request.headers.get("idempotency-key");
 
     for (const receipt of data.receipts) {
-      const expectedHash = await hashReceiptContent({
+      const expectedHash = await hashReceiptEconomicContent({
         receiptId: receipt.receiptId,
         source: receipt.source,
         eventType: receipt.eventType,
@@ -107,7 +107,7 @@ export const POST = wrapRouteHandlerWithLogging(
         );
         return NextResponse.json(
           {
-            error: "payloadHash does not match canonical receipt content",
+            error: "payloadHash does not match canonical economic content",
             receiptId: receipt.receiptId,
           },
           { status: 400 }

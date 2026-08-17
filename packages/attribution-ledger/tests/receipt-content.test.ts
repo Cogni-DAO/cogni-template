@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/attribution-ledger/tests/receipt-content`
  * Purpose: Adversarial duplicate-vs-conflict classification for deterministic receipt IDs.
- * Scope: Pure semantic equality. Does not exercise database transaction behavior; component tests cover that seam.
+ * Scope: Pure economic-content equality. Does not exercise database transaction behavior; component tests cover that seam.
  * Invariants: PROVENANCE_MAY_DIFFER, ATTRIBUTION_CONTEXT_MUST_MATCH.
  * Side-effects: none
  * Links: story.5023
@@ -12,7 +12,7 @@
  */
 
 import type { InsertReceiptParams } from "@cogni/attribution-ledger";
-import { sameReceiptSemanticContent } from "@cogni/attribution-ledger";
+import { sameReceiptEconomicContent } from "@cogni/attribution-ledger";
 import { describe, expect, it } from "vitest";
 
 function receipt(
@@ -40,28 +40,40 @@ function receipt(
   };
 }
 
-describe("sameReceiptSemanticContent", () => {
-  it("classifies same ID/content from webhook and poll as a duplicate", () => {
+describe("sameReceiptEconomicContent", () => {
+  it("classifies mutable poll enrichment as the same economic receipt", () => {
     const webhook = receipt();
     const poll = receipt({
       producer: "github:poll",
       retrievedAt: new Date("2026-08-17T00:00:00.000Z"),
       platformLogin: "renamed-human",
+      artifactUrl: "https://github.com/cogni-dao/renamed-node/pull/42",
+      metadata: {
+        schemaVersion: 1,
+        providerRepoId: "github-repo-node-id",
+        repo: "cogni-dao/renamed-node",
+        title: "Edited after merge",
+        body: "Edited body",
+        labels: ["later-label"],
+        state: "dismissed",
+      },
     });
-    expect(sameReceiptSemanticContent(webhook, poll)).toBe(true);
+    expect(sameReceiptEconomicContent(webhook, poll)).toBe(true);
   });
 
-  it("classifies same ID with different attribution context as a conflict", () => {
+  it("classifies a different economic hash as a conflict", () => {
     const full = receipt();
-    const lowerFidelity = receipt({
+    const differentEconomicContent = receipt({
       metadata: {
         schemaVersion: 1,
         repo: "cogni-dao/node",
-        title: "",
+        additions: 999,
       },
       payloadHash: "b".repeat(64),
       producer: "github:poll",
     });
-    expect(sameReceiptSemanticContent(full, lowerFidelity)).toBe(false);
+    expect(sameReceiptEconomicContent(full, differentEconomicContent)).toBe(
+      false
+    );
   });
 });

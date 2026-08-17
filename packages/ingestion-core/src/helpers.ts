@@ -14,7 +14,11 @@
  * @public
  */
 
-import { RECEIPT_CONTEXT_SCHEMA_VERSION, type ReceiptContent } from "./model";
+import {
+  RECEIPT_CONTEXT_SCHEMA_VERSION,
+  type ReceiptContent,
+  type ReceiptEconomicContent,
+} from "./model";
 
 /**
  * Build a deterministic event ID from source, type, and scope parts.
@@ -82,25 +86,79 @@ export async function hashCanonicalPayload(
 }
 
 /**
- * Hash normalized attribution content, not delivery provenance. Consequently
- * webhook and poll may differ in producer/retrievedAt while proving the same
- * semantic receipt. The context schema version is included to prevent a future
- * shape from being mistaken for v1 content.
+ * Project a receipt snapshot onto immutable economic identity. Mutable GitHub
+ * presentation/enrichment is intentionally absent so a later polling replay
+ * does not conflict with the webhook snapshot captured at event time.
  */
-export async function hashReceiptContent(
+export function toReceiptEconomicContent(
   content: ReceiptContent
-): Promise<string> {
-  return hashCanonicalPayload({
+): ReceiptEconomicContent {
+  const metadata = content.metadata;
+  let economicContext: Record<string, unknown>;
+  switch (content.eventType) {
+    case "pr_merged":
+      economicContext = {
+        providerRepoId: metadata.providerRepoId,
+        prNumber: metadata.prNumber,
+        baseBranch: metadata.baseBranch,
+        mergedById: metadata.mergedById,
+        mergeCommitSha: metadata.mergeCommitSha,
+        commitShas: metadata.commitShas,
+        additions: metadata.additions,
+        deletions: metadata.deletions,
+        changedFiles: metadata.changedFiles,
+      };
+      break;
+    case "pr_opened":
+    case "pr_closed":
+      economicContext = {
+        providerRepoId: metadata.providerRepoId,
+        prNumber: metadata.prNumber,
+      };
+      break;
+    case "review_submitted":
+      economicContext = {
+        providerRepoId: metadata.providerRepoId,
+        prNumber: metadata.prNumber,
+      };
+      break;
+    case "issue_opened":
+    case "issue_closed":
+    case "comment_created":
+      economicContext = {
+        providerRepoId: metadata.providerRepoId,
+        issueNumber: metadata.issueNumber,
+      };
+      break;
+    case "commit_pushed":
+      economicContext = {
+        providerRepoId: metadata.providerRepoId,
+        ref: metadata.ref,
+        after: metadata.after,
+        commitCount: metadata.commitCount,
+      };
+      break;
+    case "cogni_signal":
+      economicContext = { txHash: metadata.txHash };
+      break;
+  }
+
+  return {
     schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
-    receiptId: content.receiptId,
     source: content.source,
     eventType: content.eventType,
     platformUserId: content.platformUserId,
-    artifactUrl: content.artifactUrl,
-    metadata: content.metadata,
+    economicContext,
     eventTime:
       content.eventTime instanceof Date
         ? content.eventTime.toISOString()
         : new Date(content.eventTime).toISOString(),
-  });
+  };
+}
+
+/** SHA-256 of immutable economic receipt identity, excluding mutable snapshots. */
+export async function hashReceiptEconomicContent(
+  content: ReceiptContent
+): Promise<string> {
+  return hashCanonicalPayload({ ...toReceiptEconomicContent(content) });
 }

@@ -17,7 +17,7 @@ import {
   buildEventId,
   canonicalJson,
   hashCanonicalPayload,
-  hashReceiptContent,
+  hashReceiptEconomicContent,
 } from "../src/helpers";
 
 describe("buildEventId", () => {
@@ -82,7 +82,7 @@ describe("canonicalJson", () => {
   });
 });
 
-describe("hashReceiptContent", () => {
+describe("hashReceiptEconomicContent", () => {
   const content = {
     receiptId: "github:pr:owner/repo:42",
     source: "github" as const,
@@ -91,35 +91,63 @@ describe("hashReceiptContent", () => {
     artifactUrl: "https://github.com/owner/repo/pull/42",
     metadata: {
       schemaVersion: 1,
+      providerRepoId: "github-repo-node-id",
       repo: "owner/repo",
+      prNumber: 42,
+      baseBranch: "main",
+      mergedById: "github-user-node-merger",
+      mergeCommitSha: "merge-sha",
+      commitShas: ["one", "two"],
+      additions: 10,
+      deletions: 2,
+      changedFiles: 3,
       title: "Ship it",
       labels: ["one", "two"],
     },
     eventTime: new Date("2026-01-15T00:00:00Z"),
   };
 
-  it("covers nested attribution context independent of object key order", async () => {
+  it("covers economic context independent of metadata key order", async () => {
     const reordered = {
       ...content,
       metadata: {
-        labels: ["one", "two"],
-        title: "Ship it",
-        repo: "owner/repo",
+        ...content.metadata,
+        commitShas: ["one", "two"],
+        providerRepoId: "github-repo-node-id",
         schemaVersion: 1,
       },
     };
-    await expect(hashReceiptContent(content)).resolves.toBe(
-      await hashReceiptContent(reordered)
+    await expect(hashReceiptEconomicContent(content)).resolves.toBe(
+      await hashReceiptEconomicContent(reordered)
     );
   });
 
-  it("changes when attribution context changes", async () => {
-    const lowerFidelity = {
+  it("does not change when mutable presentation changes", async () => {
+    const laterSnapshot = {
       ...content,
-      metadata: { ...content.metadata, title: "" },
+      platformLogin: "renamed-human",
+      artifactUrl: "https://github.com/renamed/repo/pull/42",
+      metadata: {
+        ...content.metadata,
+        repo: "renamed/repo",
+        title: "Edited after merge",
+        body: "Edited body",
+        branch: "renamed-branch",
+        labels: ["later-label"],
+      },
     };
-    await expect(hashReceiptContent(content)).resolves.not.toBe(
-      await hashReceiptContent(lowerFidelity)
+    await expect(hashReceiptEconomicContent(content)).resolves.toBe(
+      await hashReceiptEconomicContent(laterSnapshot)
+    );
+  });
+
+  it("changes when immutable economic context changes", async () => {
+    const conflicting = {
+      ...content,
+      metadata: { ...content.metadata, additions: 11 },
+    };
+    await expect(hashReceiptEconomicContent(content)).resolves.not.toBe(
+      await hashReceiptEconomicContent(conflicting)
     );
   });
 });

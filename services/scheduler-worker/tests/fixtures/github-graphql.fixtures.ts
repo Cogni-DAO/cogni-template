@@ -23,6 +23,7 @@ export function makePrNode(overrides: {
   authorLogin?: string;
   authorDatabaseId?: number;
   authorTypename?: string;
+  mergedById?: string;
   repo?: string;
 }) {
   const repoFull = overrides.repo ?? "cogni-dao/cogni-template";
@@ -43,6 +44,7 @@ export function makePrNode(overrides: {
     mergeCommit: {
       oid: overrides.mergeCommitOid ?? `merge-sha-${overrides.number}`,
     },
+    mergedBy: { id: overrides.mergedById ?? "github-user-node-merger" },
     additions: 10,
     deletions: 5,
     changedFiles: 2,
@@ -135,6 +137,7 @@ export function wrapRepoResponse<T>(
 ) {
   return {
     repository: {
+      id: "github-repo-node-id",
       [connectionKey]: {
         pageInfo: { hasNextPage, endCursor },
         nodes,

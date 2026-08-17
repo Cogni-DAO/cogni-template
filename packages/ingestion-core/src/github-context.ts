@@ -14,13 +14,15 @@
 import { RECEIPT_CONTEXT_SCHEMA_VERSION } from "./model";
 
 export interface GitHubPrMergedContextV1Input {
+  readonly providerRepoId: string;
   readonly repo: string;
   readonly prNumber: number;
   readonly title: string;
   readonly body: string;
   readonly baseBranch: string;
   readonly branch: string;
-  readonly mergeCommitSha: string | null;
+  readonly mergeCommitSha: string;
+  readonly mergedById: string;
   readonly commitShas: readonly string[];
   readonly labels: readonly string[];
   readonly additions: number;
@@ -33,6 +35,7 @@ export function buildGitHubPrMergedContextV1(
 ): Record<string, unknown> {
   return {
     schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
+    providerRepoId: input.providerRepoId,
     repo: input.repo,
     prNumber: input.prNumber,
     title: input.title,
@@ -40,6 +43,7 @@ export function buildGitHubPrMergedContextV1(
     baseBranch: input.baseBranch,
     branch: input.branch,
     mergeCommitSha: input.mergeCommitSha,
+    mergedById: input.mergedById,
     commitShas: [...input.commitShas],
     // GitHub does not promise identical connection/webhook ordering for labels.
     // Label order carries no attribution meaning, so normalize it here.
@@ -52,6 +56,7 @@ export function buildGitHubPrMergedContextV1(
 }
 
 export interface GitHubReviewContextV1Input {
+  readonly providerRepoId: string;
   readonly repo: string;
   readonly prNumber: number;
   readonly prBaseBranch: string;
@@ -64,6 +69,7 @@ export function buildGitHubReviewContextV1(
 ): Record<string, unknown> {
   return {
     schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
+    providerRepoId: input.providerRepoId,
     repo: input.repo,
     prNumber: input.prNumber,
     prBaseBranch: input.prBaseBranch,
@@ -73,6 +79,7 @@ export function buildGitHubReviewContextV1(
 }
 
 export interface GitHubIssueContextV1Input {
+  readonly providerRepoId: string;
   readonly repo: string;
   readonly issueNumber: number;
   readonly title: string;
@@ -84,6 +91,7 @@ export function buildGitHubIssueContextV1(
 ): Record<string, unknown> {
   return {
     schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
+    providerRepoId: input.providerRepoId,
     repo: input.repo,
     issueNumber: input.issueNumber,
     title: input.title,

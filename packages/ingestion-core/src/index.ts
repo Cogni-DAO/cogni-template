@@ -26,7 +26,8 @@ export {
   buildEventId,
   canonicalJson,
   hashCanonicalPayload,
-  hashReceiptContent,
+  hashReceiptEconomicContent,
+  toReceiptEconomicContent,
 } from "./helpers";
 // Model types
 export type {
@@ -34,6 +35,7 @@ export type {
   CollectParams,
   CollectResult,
   ReceiptContent,
+  ReceiptEconomicContent,
   ReceiptEventType,
   ReceiptProducer,
   ReceiptSource,

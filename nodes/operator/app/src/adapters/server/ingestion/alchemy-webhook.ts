@@ -20,7 +20,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { ActivityEvent, WebhookNormalizer } from "@cogni/ingestion-core";
 import {
   buildEventId,
-  hashReceiptContent,
+  hashReceiptEconomicContent,
   RECEIPT_CONTEXT_SCHEMA_VERSION,
 } from "@cogni/ingestion-core";
 
@@ -116,7 +116,7 @@ export class AlchemyWebhookNormalizer implements WebhookNormalizer {
         webhookId: payload.id ?? null,
         webhookType: payload.type ?? null,
       };
-      const payloadHash = await hashReceiptContent({
+      const payloadHash = await hashReceiptEconomicContent({
         receiptId: id,
         source: "alchemy",
         eventType: "cogni_signal",

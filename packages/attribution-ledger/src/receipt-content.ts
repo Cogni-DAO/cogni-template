@@ -3,29 +3,22 @@
 
 /**
  * Module: `@cogni/attribution-ledger/receipt-content`
- * Purpose: Compare append-only receipt content while excluding delivery provenance.
+ * Purpose: Compare immutable economic receipt identity while excluding mutable snapshots and delivery provenance.
  * Scope: Pure equality only. Does not persist or mutate receipts.
- * Invariants: producer, producerVersion, retrievedAt, and platformLogin do not change semantic identity.
+ * Invariants: presentation/enrichment and delivery provenance do not change economic identity.
  * Side-effects: none
  * Links: story.5023
  * @public
  */
 
-import { canonicalJsonStringify } from "./hashing";
 import type { IngestionReceipt, InsertReceiptParams } from "./store";
 
 type ReceiptContentComparable = Pick<
   IngestionReceipt | InsertReceiptParams,
-  | "source"
-  | "eventType"
-  | "platformUserId"
-  | "artifactUrl"
-  | "metadata"
-  | "payloadHash"
-  | "eventTime"
+  "source" | "eventType" | "platformUserId" | "payloadHash" | "eventTime"
 >;
 
-export function sameReceiptSemanticContent(
+export function sameReceiptEconomicContent(
   stored: ReceiptContentComparable,
   incoming: ReceiptContentComparable
 ): boolean {
@@ -33,10 +26,7 @@ export function sameReceiptSemanticContent(
     stored.source === incoming.source &&
     stored.eventType === incoming.eventType &&
     stored.platformUserId === incoming.platformUserId &&
-    (stored.artifactUrl ?? null) === (incoming.artifactUrl ?? null) &&
     stored.eventTime.getTime() === incoming.eventTime.getTime() &&
-    stored.payloadHash === incoming.payloadHash &&
-    canonicalJsonStringify(stored.metadata ?? null) ===
-      canonicalJsonStringify(incoming.metadata ?? null)
+    stored.payloadHash === incoming.payloadHash
   );
 }

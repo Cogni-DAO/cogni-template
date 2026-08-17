@@ -14,7 +14,7 @@
 import { ReceiptContentConflictError } from "@cogni/attribution-ledger";
 import {
   buildGitHubPrMergedContextV1,
-  hashReceiptContent,
+  hashReceiptEconomicContent,
 } from "@cogni/ingestion-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -46,6 +46,7 @@ import { POST } from "@/app/api/internal/attribution/receipts/route";
 
 async function validEnvelope() {
   const metadata = buildGitHubPrMergedContextV1({
+    providerRepoId: "github-repo-node-id",
     repo: "cogni-dao/node",
     prNumber: 42,
     title: "Human contribution",
@@ -53,6 +54,7 @@ async function validEnvelope() {
     baseBranch: "main",
     branch: "feat/human",
     mergeCommitSha: "merge-sha",
+    mergedById: "github-user-node-merger",
     commitShas: ["commit-sha"],
     labels: [],
     additions: 4,
@@ -78,7 +80,7 @@ async function validEnvelope() {
     receipts: [
       {
         ...receipt,
-        payloadHash: await hashReceiptContent({
+        payloadHash: await hashReceiptEconomicContent({
           receiptId: receipt.receiptId,
           source: receipt.source,
           eventType: receipt.eventType,

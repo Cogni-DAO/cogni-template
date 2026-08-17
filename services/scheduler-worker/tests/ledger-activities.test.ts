@@ -22,7 +22,7 @@ import {
   buildGitHubPrMergedContextV1,
   type CollectResult,
   type DataSourceRegistration,
-  hashReceiptContent,
+  hashReceiptEconomicContent,
 } from "@cogni/ingestion-core";
 import { describe, expect, it, vi } from "vitest";
 
@@ -177,6 +177,7 @@ const EVENT_ID = "github:pr:test/repo:1";
 const EVENT_ARTIFACT_URL = "https://github.com/test/repo/pull/1";
 const EVENT_TIME = new Date("2026-02-20T12:00:00Z");
 const EVENT_METADATA = buildGitHubPrMergedContextV1({
+  providerRepoId: "github-repo-node-id",
   repo: "test/repo",
   prNumber: 1,
   title: "Test PR",
@@ -184,13 +185,14 @@ const EVENT_METADATA = buildGitHubPrMergedContextV1({
   baseBranch: "main",
   branch: "feature/test",
   mergeCommitSha: "merge-sha",
+  mergedById: "github-user-node-merger",
   commitShas: ["commit-sha"],
   labels: [],
   additions: 1,
   deletions: 0,
   changedFiles: 1,
 });
-const EVENT_PAYLOAD_HASH = await hashReceiptContent({
+const EVENT_PAYLOAD_HASH = await hashReceiptEconomicContent({
   receiptId: EVENT_ID,
   source: "github",
   eventType: "pr_merged",

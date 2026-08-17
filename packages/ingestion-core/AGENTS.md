@@ -47,7 +47,7 @@ Pure domain types, port interface, and helpers for activity ingestion source ada
   - `StreamDefinition`, `StreamCursor`, `CollectParams`, `CollectResult` — Adapter I/O types
   - `buildEventId()` — Deterministic event ID construction
   - `canonicalJson()` — Recursively sorted-key JSON for deterministic serialization
-  - `hashCanonicalPayload()` / `hashReceiptContent()` — SHA-256 via Web Crypto; receipt hash excludes delivery provenance
+  - `hashCanonicalPayload()` / `hashReceiptEconomicContent()` — SHA-256 via Web Crypto; receipt hash excludes mutable snapshots and delivery provenance
   - Receipt source/event/producer vocabularies + canonical GitHub v1 context builders
 
 ## Ports

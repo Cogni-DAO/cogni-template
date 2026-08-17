@@ -14,8 +14,8 @@
  *   - NODE_WRITES_OWN_LEDGER: the envelope `nodeId` MUST equal the receiving node's own node_id;
  *     receipt rows carry no node_id on the wire — the node stamps its own. A node never persists
  *     a foreign ledger.
- *   - RECEIPT_IDEMPOTENT: same-ID/same-content retry is a visible duplicate no-op;
- *     same-ID/different-content is a visible conflict and never silently wins.
+ *   - RECEIPT_IDEMPOTENT: same-ID/same-economic-content retry is a visible duplicate no-op;
+ *     same-ID/different-economic-content is a visible conflict and never silently wins.
  *   - RECEIPT_CONTEXT_V1_STRICT: source/event/producer are bounded and known events require their
  *     complete versioned attribution context.
  *   - All consumers use z.infer types; Date fields are ISO-8601 strings on the wire.
@@ -42,14 +42,16 @@ const githubRepo = z.string().regex(/^[^/\s]+\/[^/\s]+$/);
 const nullableSha = z.string().min(1).nullable();
 
 const prMergedContextV1 = contextV1.extend({
+  providerRepoId: z.string().min(1),
   repo: githubRepo,
   prNumber: z.number().int().positive(),
   title: z.string().min(1),
   body: z.string(),
   baseBranch: z.string().min(1),
   branch: z.string().min(1),
-  mergeCommitSha: nullableSha,
-  commitShas: z.array(z.string().min(1)),
+  mergeCommitSha: z.string().min(1),
+  mergedById: z.string().min(1),
+  commitShas: z.array(z.string().min(1)).min(1),
   labels: z.array(z.string()),
   additions: z.number().int().nonnegative(),
   deletions: z.number().int().nonnegative(),
@@ -58,6 +60,7 @@ const prMergedContextV1 = contextV1.extend({
 });
 
 const prLifecycleContextV1 = contextV1.extend({
+  providerRepoId: z.string().min(1),
   repo: githubRepo,
   prNumber: z.number().int().positive(),
   title: z.string().min(1),
@@ -69,6 +72,7 @@ const prLifecycleContextV1 = contextV1.extend({
 });
 
 const reviewContextV1 = contextV1.extend({
+  providerRepoId: z.string().min(1),
   repo: githubRepo,
   prNumber: z.number().int().positive(),
   prBaseBranch: z.string().min(1),
@@ -77,6 +81,7 @@ const reviewContextV1 = contextV1.extend({
 });
 
 const issueContextV1 = contextV1.extend({
+  providerRepoId: z.string().min(1),
   repo: githubRepo,
   issueNumber: z.number().int().positive(),
   title: z.string().min(1),
@@ -84,11 +89,13 @@ const issueContextV1 = contextV1.extend({
 });
 
 const commentContextV1 = contextV1.extend({
+  providerRepoId: z.string().min(1),
   repo: githubRepo,
   issueNumber: z.number().int().positive(),
 });
 
 const commitPushedContextV1 = contextV1.extend({
+  providerRepoId: z.string().min(1),
   repo: githubRepo,
   ref: z.string().min(1),
   after: z.string().min(1),
@@ -133,6 +140,7 @@ export const InternalReceiptSchema = z
     platformLogin: z.string().nullish(),
     artifactUrl: z.string().nullish(),
     metadata: z.record(z.string(), z.unknown()),
+    /** SHA-256 of immutable economic content; mutable display snapshot fields are excluded. */
     payloadHash: z.string().regex(/^[0-9a-f]{64}$/),
     producer: ReceiptProducerSchema,
     producerVersion: z.string().regex(/^\d+\.\d+\.\d+(?:[-+].+)?$/),
@@ -236,7 +244,7 @@ export const internalDeliverReceiptsOperation = {
   id: "attribution.receipts.internal.v1",
   summary: "Deliver ingestion receipts (operator gateway -> owning node app)",
   description:
-    "Internal endpoint the operator calls to persist normalized activity receipts in the owning node's OWN ledger. Bearer SCHEDULER_API_TOKEN. Same-content retries are no-ops; conflicting content is rejected.",
+    "Internal endpoint the operator calls to persist normalized activity receipts in the owning node's OWN ledger. Bearer SCHEDULER_API_TOKEN. Same-economic-content retries are no-ops; conflicting economic content is rejected.",
   input: InternalDeliverReceiptsInputSchema,
   output: z.union([
     InternalDeliverReceiptsOutputSchema,

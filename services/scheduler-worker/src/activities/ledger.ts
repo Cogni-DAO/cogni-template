@@ -41,7 +41,10 @@ import {
   resolveProfile,
 } from "@cogni/attribution-pipeline-contracts";
 import type { DefaultRegistries } from "@cogni/attribution-pipeline-plugins";
-import { type ActivityEvent, hashReceiptContent } from "@cogni/ingestion-core";
+import {
+  type ActivityEvent,
+  hashReceiptEconomicContent,
+} from "@cogni/ingestion-core";
 import { InternalReceiptSchema } from "@cogni/node-contracts";
 
 import type { Logger } from "../observability/logger.js";
@@ -487,7 +490,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
           eventTime: new Date(event.eventTime).toISOString(),
           retrievedAt: retrievedAt.toISOString(),
         });
-        const expectedHash = await hashReceiptContent({
+        const expectedHash = await hashReceiptEconomicContent({
           receiptId: validated.receiptId,
           source: validated.source,
           eventType: validated.eventType,
@@ -498,7 +501,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
         });
         if (expectedHash !== validated.payloadHash) {
           throw new Error(
-            `Receipt ${validated.receiptId} payloadHash does not match canonical content`
+            `Receipt ${validated.receiptId} payloadHash does not match canonical economic content`
           );
         }
         return {

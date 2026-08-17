@@ -8,7 +8,7 @@
  * Invariants:
  * - ActivityEvent is purpose-neutral: no epoch, user, node, receipt, or payout fields.
  * - Adapter-side type only — mapping to DB tables (which add node_id) is the workflow/store's job.
- * - payloadHash is PROVENANCE_REQUIRED (SHA-256 of canonical payload).
+ * - payloadHash is SHA-256 of canonical immutable economic content.
  * Side-effects: none
  * Links: docs/spec/attribution-ledger.md#source-adapter-interface
  * @public
@@ -85,7 +85,7 @@ export type ReceiptProducer = (typeof RECEIPT_PRODUCERS)[number];
 /** Version of the normalized metadata/context contract persisted on receipts. */
 export const RECEIPT_CONTEXT_SCHEMA_VERSION = 1 as const;
 
-/** Attribution-relevant content covered by payloadHash (provenance excluded). */
+/** Full receipt snapshot presented to the canonical economic hash projector. */
 export interface ReceiptContent {
   readonly receiptId: string;
   readonly source: ReceiptSource;
@@ -94,6 +94,19 @@ export interface ReceiptContent {
   readonly artifactUrl: string | null;
   readonly metadata: Record<string, unknown>;
   readonly eventTime: Date | string;
+}
+
+/**
+ * Immutable identity/economic facts covered by payloadHash. Mutable display
+ * snapshots (login, URLs, titles, bodies, labels, review state) are excluded.
+ */
+export interface ReceiptEconomicContent {
+  readonly schemaVersion: typeof RECEIPT_CONTEXT_SCHEMA_VERSION;
+  readonly source: ReceiptSource;
+  readonly eventType: ReceiptEventType;
+  readonly platformUserId: string;
+  readonly economicContext: Record<string, unknown>;
+  readonly eventTime: string;
 }
 
 /** Definition of a collectible stream within a source adapter. */

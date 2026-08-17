@@ -71,7 +71,7 @@ export class AllocationNotFoundError extends Error {
 }
 
 /**
- * A deterministic receipt ID already exists with different semantic content.
+ * A deterministic receipt ID already exists with different economic content.
  * The append-only ledger never picks a winner; the whole attempted batch rolls
  * back and callers must surface the conflict.
  */

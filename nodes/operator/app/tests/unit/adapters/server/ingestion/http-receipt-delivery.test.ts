@@ -13,7 +13,7 @@
 
 import {
   buildGitHubPrMergedContextV1,
-  hashReceiptContent,
+  hashReceiptEconomicContent,
 } from "@cogni/ingestion-core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -30,6 +30,7 @@ afterEach(() => {
 describe("HttpReceiptDelivery", () => {
   it("treats receiver content conflict as permanent", async () => {
     const metadata = buildGitHubPrMergedContextV1({
+      providerRepoId: "github-repo-node-id",
       repo: "cogni-dao/node",
       prNumber: 42,
       title: "Contribution",
@@ -37,6 +38,7 @@ describe("HttpReceiptDelivery", () => {
       baseBranch: "main",
       branch: "feat/context",
       mergeCommitSha: "merge-sha",
+      mergedById: "github-user-node-merger",
       commitShas: ["commit-sha"],
       labels: [],
       additions: 1,
@@ -46,7 +48,7 @@ describe("HttpReceiptDelivery", () => {
     const eventTime = new Date("2026-08-16T20:00:00.000Z");
     const receiptId = "github:pr:cogni-dao/node:42";
     const artifactUrl = "https://github.com/cogni-dao/node/pull/42";
-    const payloadHash = await hashReceiptContent({
+    const payloadHash = await hashReceiptEconomicContent({
       receiptId,
       source: "github",
       eventType: "pr_merged",
