@@ -11,7 +11,10 @@ export interface IdentityAttestationNode {
 
 export interface IdentityAttestationSubject {
   readonly walletAddress: string | null;
-  readonly github: { readonly id: string; readonly login: string | null } | null;
+  readonly github: {
+    readonly id: string;
+    readonly login: string | null;
+  } | null;
 }
 
 export interface IdentityAttestationRepositoryPort {

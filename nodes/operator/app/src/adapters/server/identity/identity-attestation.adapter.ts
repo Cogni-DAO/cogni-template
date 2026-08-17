@@ -5,7 +5,7 @@
 
 import type { KeyObject } from "node:crypto";
 
-import { withTenantScope, type Database } from "@cogni/db-client";
+import { type Database, withTenantScope } from "@cogni/db-client";
 import { type UserId, userActor } from "@cogni/ids";
 import { and, eq } from "drizzle-orm";
 import { SignJWT } from "jose";
