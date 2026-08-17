@@ -34,6 +34,7 @@ import {
   computeAttributionStatementLines,
   computeFinalClaimantAllocationSetHash,
   explodeToClaimants,
+  parseEIP712DeploymentEnvironment,
   toReviewSubjectOverrides,
 } from "@cogni/attribution-ledger";
 import { dispatchAllocator } from "@cogni/attribution-pipeline-contracts";
@@ -153,9 +154,10 @@ export interface RunFinalizeEpochDeps {
    */
   readonly distributionConfigClient?: FinalizeDistributionConfigResolver | null;
   /**
-   * Deploy environment for the bug.5020 execute-guard. Any value other than
-   * `"production"` (including undefined) is non-production, fail-closed. Explicitly
-   * `| undefined` so callers under `exactOptionalPropertyTypes` can pass an optional env.
+   * Server-injected deploy environment for EIP-712 v2 and the bug.5020 execute
+   * guard. Missing/unsupported values abort finalization before any mutation.
+   * Explicitly `| undefined` keeps misconfiguration representable so the
+   * runtime guard—not a client/default—owns the fail-closed decision.
    */
   readonly deploymentEnvironment?: string | undefined;
   readonly logger: FinalizeLogger;
@@ -229,9 +231,15 @@ export async function runFinalizeEpoch(
     emissionsHolderAddress: repoSpecEmissionsHolderAddress,
     walletResolver,
     distributionConfigClient,
-    deploymentEnvironment,
+    deploymentEnvironment: unvalidatedDeploymentEnvironment,
     logger,
   } = deps;
+
+  // SIGNATURE_DEPLOYMENT_BOUND: this is server-injected runtime config, never
+  // finalize request input. Missing/unknown values abort before any mutation.
+  const deploymentEnvironment = parseEIP712DeploymentEnvironment(
+    unvalidatedDeploymentEnvironment
+  );
 
   /**
    * bug.5020 execute-guard: fail-closed refusal to build a distribution against the
@@ -757,6 +765,7 @@ export async function runFinalizeEpoch(
     nodeId,
     scopeId,
     epochId: input.epochId,
+    deploymentEnvironment,
     finalAllocationSetHash,
     poolTotalCredits: poolTotal.toString(),
     chainId,

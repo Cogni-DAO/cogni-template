@@ -7,6 +7,7 @@
  * Scope: Pure functions. Does not perform network I/O or hold secrets. Does not import viem — returns plain objects matching viem's expected shape.
  * Invariants:
  * - SIGNATURE_SCOPE_BOUND: Typed data includes node_id + scope_id + epoch_id + allocation_set_hash + pool_total_credits + chainId.
+ * - SIGNATURE_DEPLOYMENT_BOUND: Typed data includes the server-validated deployment environment so signatures cannot replay across environments.
  * - APPROVERS_PINNED_AT_REVIEW: computeApproverSetHash produces a deterministic SHA-256 from sorted, lowercased addresses.
  * - EIP712_DETERMINISTIC: Same inputs → identical typed data object (no timestamps, no randomness).
  * Side-effects: none
@@ -59,7 +60,40 @@ export function buildCanonicalMessage(params: CanonicalMessageParams): string {
  * chainId must be passed in — this package cannot import from src/shared/web3.
  */
 export const EIP712_DOMAIN_NAME = "Cogni Attribution" as const;
-export const EIP712_DOMAIN_VERSION = "1" as const;
+export const EIP712_DOMAIN_VERSION = "2" as const;
+
+/**
+ * Environments allowed to mint EIP-712 attribution statements. Production-like
+ * deployments use candidate-a/preview/production; local/test keep development
+ * and automated tests isolated without inventing a second configuration seam.
+ */
+export const EIP712_DEPLOYMENT_ENVIRONMENTS = [
+  "local",
+  "test",
+  "candidate-a",
+  "preview",
+  "production",
+] as const;
+
+export type EIP712DeploymentEnvironment =
+  (typeof EIP712_DEPLOYMENT_ENVIRONMENTS)[number];
+
+/** Fail closed at the server authority boundary on missing/unknown config. */
+export function parseEIP712DeploymentEnvironment(
+  value: string | undefined
+): EIP712DeploymentEnvironment {
+  if (
+    value !== undefined &&
+    (EIP712_DEPLOYMENT_ENVIRONMENTS as readonly string[]).includes(value)
+  ) {
+    return value as EIP712DeploymentEnvironment;
+  }
+  throw new Error(
+    `DEPLOY_ENVIRONMENT must be one of ${EIP712_DEPLOYMENT_ENVIRONMENTS.join(
+      ", "
+    )}; received ${value === undefined ? "<unset>" : JSON.stringify(value)}`
+  );
+}
 
 /** EIP-712 types for the AttributionStatement primary type. */
 export const ATTRIBUTION_STATEMENT_TYPES = {
@@ -67,6 +101,7 @@ export const ATTRIBUTION_STATEMENT_TYPES = {
     { name: "nodeId", type: "string" },
     { name: "scopeId", type: "string" },
     { name: "epochId", type: "string" },
+    { name: "deploymentEnvironment", type: "string" },
     { name: "finalAllocationSetHash", type: "string" },
     { name: "poolTotalCredits", type: "string" },
   ],
@@ -84,6 +119,7 @@ export interface EIP712TypedData {
     readonly nodeId: string;
     readonly scopeId: string;
     readonly epochId: string;
+    readonly deploymentEnvironment: EIP712DeploymentEnvironment;
     readonly finalAllocationSetHash: string;
     readonly poolTotalCredits: string;
   };
@@ -91,12 +127,14 @@ export interface EIP712TypedData {
 
 export interface EIP712TypedDataParams extends CanonicalMessageParams {
   readonly chainId: number;
+  readonly deploymentEnvironment: EIP712DeploymentEnvironment;
 }
 
 /**
  * Build EIP-712 typed data for payout statement signing.
  * Returns a plain object matching viem's `SignTypedDataParameters` shape.
  * SIGNATURE_SCOPE_BOUND: includes nodeId, scopeId, epochId, finalAllocationSetHash, poolTotalCredits, chainId.
+ * SIGNATURE_DEPLOYMENT_BOUND: includes deploymentEnvironment in the wallet-visible message.
  * EIP712_DETERMINISTIC: same inputs → identical output.
  */
 export function buildEIP712TypedData(
@@ -114,6 +152,7 @@ export function buildEIP712TypedData(
       nodeId: params.nodeId,
       scopeId: params.scopeId,
       epochId: params.epochId,
+      deploymentEnvironment: params.deploymentEnvironment,
       finalAllocationSetHash: params.finalAllocationSetHash,
       poolTotalCredits: params.poolTotalCredits,
     },

@@ -16,10 +16,12 @@ import {
   buildEIP712TypedData,
   computeFinalClaimantAllocationSetHash,
   computeReceiptWeights,
+  type EIP712DeploymentEnvironment,
   explodeToClaimants,
+  parseEIP712DeploymentEnvironment,
   toReviewSubjectOverrides,
 } from "@cogni/attribution-ledger";
-import { signDataOperation } from "@cogni/node-contracts";
+import { signDataV2Operation } from "@cogni/node-contracts";
 import { CHAIN_ID } from "@cogni/node-shared";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
@@ -27,6 +29,7 @@ import { checkApprover } from "@/app/api/v1/attribution/_lib/approver-guard";
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { getNodeId, getScopeId } from "@/shared/config";
+import { serverEnv } from "@/shared/env/server";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -105,10 +108,27 @@ export const GET = wrapRouteHandlerWithLogging<{
     const finalAllocationSetHash =
       await computeFinalClaimantAllocationSetHash(claimantAllocations);
 
+    let deploymentEnvironment: EIP712DeploymentEnvironment;
+    try {
+      deploymentEnvironment = parseEIP712DeploymentEnvironment(
+        serverEnv().DEPLOY_ENVIRONMENT
+      );
+    } catch (error) {
+      ctx.log.error({ error }, "ledger.sign-data_environment_invalid");
+      return NextResponse.json(
+        {
+          error: "Epoch signing is unavailable: deployment environment invalid",
+          code: "signing_environment_invalid",
+        },
+        { status: 503 }
+      );
+    }
+
     const typedData = buildEIP712TypedData({
       nodeId: getNodeId(),
       scopeId: getScopeId(),
       epochId: id,
+      deploymentEnvironment,
       finalAllocationSetHash,
       poolTotalCredits: poolTotal.toString(),
       chainId: CHAIN_ID,
@@ -117,11 +137,12 @@ export const GET = wrapRouteHandlerWithLogging<{
     ctx.log.info(
       {
         epochId: id,
+        deploymentEnvironment,
         finalAllocationSetHash: `${finalAllocationSetHash.slice(0, 12)}...`,
       },
       "ledger.sign-data_success"
     );
 
-    return NextResponse.json(signDataOperation.output.parse(typedData));
+    return NextResponse.json(signDataV2Operation.output.parse(typedData));
   }
 );

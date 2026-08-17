@@ -179,7 +179,7 @@ function ReviewEpochSection({
       />
 
       {/* Sign & Finalize action */}
-      <div className="flex items-center gap-3 rounded-lg border bg-card p-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-4">
         {state.phase === "IDLE" && (
           <Button onClick={handleSign}>
             <FileSignature className="mr-2 h-4 w-4" />
@@ -211,6 +211,11 @@ function ReviewEpochSection({
             </Button>
           </div>
         )}
+
+        <p className="w-full text-muted-foreground text-xs">
+          Verify the deployment environment shown in your wallet. This signature
+          cannot be reused in another environment.
+        </p>
       </div>
     </div>
   );
