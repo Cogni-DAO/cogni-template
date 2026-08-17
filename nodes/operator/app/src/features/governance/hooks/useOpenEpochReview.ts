@@ -68,7 +68,10 @@ export function useEpochReviewReadiness(
     if (!Number.isFinite(periodEndMs)) return;
 
     const remainingMs = Math.max(0, periodEndMs - Date.now());
-    const timer = window.setTimeout(() => setBoundaryReached(true), remainingMs);
+    const timer = window.setTimeout(
+      () => setBoundaryReached(true),
+      remainingMs
+    );
     return () => window.clearTimeout(timer);
   }, [periodEnd, status]);
 

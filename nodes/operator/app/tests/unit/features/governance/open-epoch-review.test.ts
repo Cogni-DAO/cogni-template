@@ -57,9 +57,7 @@ describe("useEpochReviewReadiness", () => {
     vi.useFakeTimers();
     vi.setSystemTime(END_MS - 1_000);
 
-    const { result } = renderHook(() =>
-      useEpochReviewReadiness("open", END)
-    );
+    const { result } = renderHook(() => useEpochReviewReadiness("open", END));
 
     expect(result.current).toBe(false);
     act(() => vi.advanceTimersByTime(999));
@@ -72,9 +70,7 @@ describe("useEpochReviewReadiness", () => {
     vi.useFakeTimers();
     vi.setSystemTime(END_MS + 1_000);
 
-    const review = renderHook(() =>
-      useEpochReviewReadiness("review", END)
-    );
+    const review = renderHook(() => useEpochReviewReadiness("review", END));
     const finalized = renderHook(() =>
       useEpochReviewReadiness("finalized", END)
     );

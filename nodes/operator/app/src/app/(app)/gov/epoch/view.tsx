@@ -33,8 +33,8 @@ import { EpochReviewAction } from "@/features/governance/components/EpochReviewA
 import { ExecuteDistributionPanel } from "@/features/governance/components/ExecuteDistributionPanel";
 import { useEpochsPage } from "@/features/governance/hooks/useEpochsPage";
 import {
-  useOpenEpochReview,
   useEpochReviewReadiness,
+  useOpenEpochReview,
 } from "@/features/governance/hooks/useOpenEpochReview";
 import { buildPieChartData } from "@/features/governance/lib/build-pie-data";
 import type { EpochView } from "@/features/governance/types";
