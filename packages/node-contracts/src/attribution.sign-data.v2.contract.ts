@@ -5,7 +5,7 @@
  * Module: `@contracts/attribution.sign-data.v2.contract`
  * Purpose: Defines the deployment-bound EIP-712 sign-data wire format.
  * Scope: Zod schemas and types only. The server derives deploymentEnvironment;
- * clients may display and sign it but never choose it.
+ * clients may display and sign it. Does not let clients choose the environment.
  * Invariants: SIGNATURE_SCOPE_BOUND, SIGNATURE_DEPLOYMENT_BOUND.
  * Side-effects: none
  * Links: docs/spec/attribution-ledger.md
