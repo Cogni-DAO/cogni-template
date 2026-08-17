@@ -47,13 +47,25 @@ function makePrPayload(overrides?: Record<string, unknown>) {
       created_at: "2026-01-14T09:00:00Z",
       updated_at: "2026-01-15T10:30:00Z",
       title: "Add feature X",
+      body: "Full PR body",
       html_url: "https://github.com/test/repo/pull/42",
+      base: { ref: "main" },
+      head: { ref: "feature-x" },
+      merge_commit_sha: "merge-sha",
+      labels: [{ name: "feature" }, { name: "ready" }],
       additions: 100,
       deletions: 20,
       changed_files: 5,
       user: { id: 12345, login: "testuser", type: "User" },
+      merged_by: {
+        id: 54321,
+        node_id: "github-user-node-merger",
+        login: "merger",
+        type: "User",
+      },
     },
-    repository: { full_name: "test/repo" },
+    repository: { full_name: "test/repo", node_id: "github-repo-node-id" },
+    installation: { id: 123 },
     sender: { id: 12345, login: "testuser", type: "User" },
     ...overrides,
   };
@@ -71,7 +83,7 @@ function makeIssuePayload(overrides?: Record<string, unknown>) {
       html_url: "https://github.com/test/repo/issues/7",
       user: { id: 67890, login: "issueuser", type: "User" },
     },
-    repository: { full_name: "test/repo" },
+    repository: { full_name: "test/repo", node_id: "github-repo-node-id" },
     ...overrides,
   };
 }
@@ -89,8 +101,10 @@ function makeReviewPayload(overrides?: Record<string, unknown>) {
     pull_request: {
       number: 42,
       html_url: "https://github.com/test/repo/pull/42",
+      base: { ref: "main" },
+      merge_commit_sha: "merge-sha",
     },
-    repository: { full_name: "test/repo" },
+    repository: { full_name: "test/repo", node_id: "github-repo-node-id" },
     ...overrides,
   };
 }
@@ -107,7 +121,7 @@ function makeCommentPayload(overrides?: Record<string, unknown>) {
     issue: {
       number: 7,
     },
-    repository: { full_name: "test/repo" },
+    repository: { full_name: "test/repo", node_id: "github-repo-node-id" },
     ...overrides,
   };
 }
@@ -120,7 +134,7 @@ function makePushPayload(overrides?: Record<string, unknown>) {
     head_commit: {
       timestamp: "2026-01-15T14:00:00Z",
     },
-    repository: { full_name: "test/repo" },
+    repository: { full_name: "test/repo", node_id: "github-repo-node-id" },
     sender: { id: 12345, login: "testuser", type: "User" },
     ...overrides,
   };
@@ -131,7 +145,10 @@ function makePushPayload(overrides?: Record<string, unknown>) {
 // ---------------------------------------------------------------------------
 
 describe("GitHubWebhookNormalizer", () => {
-  const normalizer = new GitHubWebhookNormalizer();
+  const normalizer = new GitHubWebhookNormalizer(async () => [
+    "commit-one",
+    "commit-two",
+  ]);
 
   // -----------------------------------------------------------------------
   // verify()
@@ -203,7 +220,7 @@ describe("GitHubWebhookNormalizer", () => {
       expect(events).toHaveLength(1);
 
       const e = events[0];
-      expect(e.id).toBe("github:pr:test/repo:42");
+      expect(e.id).toBe("github:pr:github-repo-node-id:42");
       expect(e.source).toBe("github");
       expect(e.eventType).toBe("pr_merged");
       expect(e.platformUserId).toBe("12345");
@@ -212,13 +229,47 @@ describe("GitHubWebhookNormalizer", () => {
       expect(e.payloadHash).toBeTruthy();
       expect(e.eventTime).toEqual(new Date("2026-01-15T10:30:00Z"));
       expect(e.metadata).toMatchObject({
+        schemaVersion: 1,
+        providerRepoId: "github-repo-node-id",
         title: "Add feature X",
+        body: "Full PR body",
+        baseBranch: "main",
+        branch: "feature-x",
+        mergeCommitSha: "merge-sha",
+        mergedById: "github-user-node-merger",
+        commitShas: ["commit-one", "commit-two"],
+        labels: ["feature", "ready"],
+        prNumber: 42,
         repo: "test/repo",
         action: "closed",
         additions: 100,
         deletions: 20,
         changedFiles: 5,
       });
+    });
+
+    it("keeps canonical identity stable when the repository display name changes", async () => {
+      const original = makePrPayload();
+      const renamed = makePrPayload();
+      renamed.repository = {
+        full_name: "renamed/repo",
+        node_id: "github-repo-node-id",
+      };
+      renamed.pull_request.title = "Edited after rename";
+      renamed.pull_request.html_url = "https://github.com/renamed/repo/pull/42";
+
+      const first = await normalizer.normalize(
+        makeHeaders("pull_request", ""),
+        original
+      );
+      const second = await normalizer.normalize(
+        makeHeaders("pull_request", ""),
+        renamed
+      );
+
+      expect(second[0]?.id).toBe(first[0]?.id);
+      expect(second[0]?.payloadHash).toBe(first[0]?.payloadHash);
+      expect(second[0]?.metadata.repo).not.toBe(first[0]?.metadata.repo);
     });
 
     it("produces pr_opened event for opened PR", async () => {
@@ -230,7 +281,7 @@ describe("GitHubWebhookNormalizer", () => {
       const events = await normalizer.normalize(headers, payload);
       expect(events).toHaveLength(1);
       expect(events[0].eventType).toBe("pr_opened");
-      expect(events[0].id).toBe("github:pr:test/repo:42:opened");
+      expect(events[0].id).toBe("github:pr:github-repo-node-id:42:opened");
     });
 
     it("produces pr_closed event for unmerged closed PR", async () => {
@@ -242,7 +293,7 @@ describe("GitHubWebhookNormalizer", () => {
       const events = await normalizer.normalize(headers, payload);
       expect(events).toHaveLength(1);
       expect(events[0].eventType).toBe("pr_closed");
-      expect(events[0].id).toBe("github:pr:test/repo:42:closed");
+      expect(events[0].id).toBe("github:pr:github-repo-node-id:42:closed");
     });
 
     it("skips bot authors", async () => {
@@ -272,12 +323,16 @@ describe("GitHubWebhookNormalizer", () => {
       expect(events).toHaveLength(1);
 
       const e = events[0];
-      expect(e.id).toBe("github:review:test/repo:42:999");
+      expect(e.id).toBe("github:review:github-repo-node-id:42:999");
       expect(e.eventType).toBe("review_submitted");
       expect(e.platformUserId).toBe("11111");
       expect(e.platformLogin).toBe("reviewer");
       expect(e.metadata).toMatchObject({
+        schemaVersion: 1,
+        providerRepoId: "github-repo-node-id",
         prNumber: 42,
+        prBaseBranch: "main",
+        prMergeCommitSha: "merge-sha",
         state: "approved",
         repo: "test/repo",
       });
@@ -318,11 +373,14 @@ describe("GitHubWebhookNormalizer", () => {
       expect(events).toHaveLength(1);
 
       const e = events[0];
-      expect(e.id).toBe("github:issue:test/repo:7");
+      expect(e.id).toBe("github:issue:github-repo-node-id:7");
       expect(e.eventType).toBe("issue_closed");
       expect(e.platformUserId).toBe("67890");
       expect(e.platformLogin).toBe("issueuser");
       expect(e.eventTime).toEqual(new Date("2026-01-15T11:00:00Z"));
+      expect(e.metadata).toMatchObject({
+        providerRepoId: "github-repo-node-id",
+      });
     });
 
     it("produces issue_opened event", async () => {
@@ -333,7 +391,7 @@ describe("GitHubWebhookNormalizer", () => {
       const events = await normalizer.normalize(headers, payload);
       expect(events).toHaveLength(1);
       expect(events[0].eventType).toBe("issue_opened");
-      expect(events[0].id).toBe("github:issue:test/repo:7:opened");
+      expect(events[0].id).toBe("github:issue:github-repo-node-id:7:opened");
     });
 
     it("skips bot authors on issues", async () => {
@@ -363,10 +421,11 @@ describe("GitHubWebhookNormalizer", () => {
       expect(events).toHaveLength(1);
 
       const e = events[0];
-      expect(e.id).toBe("github:comment:test/repo:555");
+      expect(e.id).toBe("github:comment:github-repo-node-id:555");
       expect(e.eventType).toBe("comment_created");
       expect(e.platformUserId).toBe("12345");
       expect(e.metadata).toMatchObject({
+        providerRepoId: "github-repo-node-id",
         issueNumber: 7,
         repo: "test/repo",
       });
@@ -386,7 +445,7 @@ describe("GitHubWebhookNormalizer", () => {
   // -----------------------------------------------------------------------
 
   describe("normalize() — push", () => {
-    it("produces push event", async () => {
+    it("produces canonical commit_pushed event", async () => {
       const payload = makePushPayload();
       const headers = makeHeaders("push", "");
 
@@ -394,10 +453,12 @@ describe("GitHubWebhookNormalizer", () => {
       expect(events).toHaveLength(1);
 
       const e = events[0];
-      expect(e.id).toBe("github:push:test/repo:abc123def456");
-      expect(e.eventType).toBe("push");
+      expect(e.id).toBe("github:push:github-repo-node-id:abc123def456");
+      expect(e.eventType).toBe("commit_pushed");
       expect(e.platformUserId).toBe("12345");
       expect(e.metadata).toMatchObject({
+        schemaVersion: 1,
+        providerRepoId: "github-repo-node-id",
         ref: "refs/heads/main",
         after: "abc123def456",
         commitCount: 1,

@@ -15,11 +15,19 @@
  * @internal
  */
 
-import type { ActivityEvent, WebhookNormalizer } from "@cogni/ingestion-core";
+import type {
+  ActivityEvent,
+  ReceiptEventType,
+  WebhookNormalizer,
+} from "@cogni/ingestion-core";
 import {
-  buildEventId,
+  buildCanonicalReceiptId,
+  buildGitHubIssueContextV1,
+  buildGitHubPrMergedContextV1,
+  buildGitHubReviewContextV1,
   GITHUB_ADAPTER_VERSION,
-  hashCanonicalPayload,
+  hashReceiptEconomicContent,
+  RECEIPT_CONTEXT_SCHEMA_VERSION,
 } from "@cogni/ingestion-core";
 import { verify } from "@octokit/webhooks-methods";
 
@@ -33,6 +41,41 @@ interface GitHubUser {
   id: number;
   login: string;
   type: string;
+}
+
+export interface GitHubMergedPrHydrationInput {
+  readonly installationId: number;
+  readonly owner: string;
+  readonly repo: string;
+  readonly prNumber: number;
+}
+
+/** GitHub App-backed enrichment required because webhooks omit commit SHAs. */
+export type GitHubMergedPrHydrator = (
+  input: GitHubMergedPrHydrationInput
+) => Promise<readonly string[]>;
+
+type ReceiptEventDraft = Omit<ActivityEvent, "payloadHash"> & {
+  readonly source: "github";
+  readonly eventType: ReceiptEventType;
+  readonly metadata: Record<string, unknown>;
+};
+
+async function finalizeReceiptEvent(
+  event: ReceiptEventDraft
+): Promise<ActivityEvent> {
+  return {
+    ...event,
+    payloadHash: await hashReceiptEconomicContent({
+      receiptId: event.id,
+      source: event.source,
+      eventType: event.eventType,
+      platformUserId: event.platformUserId,
+      artifactUrl: event.artifactUrl,
+      metadata: event.metadata,
+      eventTime: event.eventTime,
+    }),
+  };
 }
 
 /**
@@ -55,6 +98,12 @@ function repoFullName(payload: Record<string, unknown>): string | null {
   return (repo?.full_name as string) ?? null;
 }
 
+function providerRepoId(payload: Record<string, unknown>): string | null {
+  const repo = payload.repository as Record<string, unknown> | undefined;
+  const nodeId = repo?.node_id;
+  return typeof nodeId === "string" && nodeId.length > 0 ? nodeId : null;
+}
+
 // ---------------------------------------------------------------------------
 // Normalizer
 // ---------------------------------------------------------------------------
@@ -65,6 +114,8 @@ function repoFullName(payload: Record<string, unknown>): string | null {
  * Uses @octokit/webhooks-methods for HMAC-SHA256 signature verification.
  */
 export class GitHubWebhookNormalizer implements WebhookNormalizer {
+  constructor(private readonly hydrateMergedPr?: GitHubMergedPrHydrator) {}
+
   readonly supportedEvents = [
     "pull_request",
     "pull_request_review",
@@ -125,7 +176,8 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     if (!pr) return [];
 
     const fullName = repoFullName(payload);
-    if (!fullName) return [];
+    const repoId = providerRepoId(payload);
+    if (!fullName || !repoId) return [];
 
     const actor = extractActor(pr.user as Record<string, unknown>);
     if (!actor) return [];
@@ -134,54 +186,106 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     const isMerged = action === "closed" && pr.merged === true;
 
     // Determine the canonical event type and timestamp
-    const eventType = isMerged ? "pr_merged" : `pr_${action}`;
+    if (!isMerged && action !== "opened" && action !== "closed") return [];
+    const eventType: ReceiptEventType = isMerged
+      ? "pr_merged"
+      : action === "opened"
+        ? "pr_opened"
+        : "pr_closed";
     const eventTime = isMerged
       ? (pr.merged_at as string)
       : ((pr.updated_at as string) ?? (pr.created_at as string));
 
     if (!eventTime) return [];
 
-    const id = isMerged
-      ? buildEventId("github", "pr", fullName, prNumber)
-      : buildEventId("github", "pr", fullName, prNumber, action);
-
-    const payloadHash = await hashCanonicalPayload({
-      authorId: actor.id,
-      id,
-      eventTime,
+    const id = buildCanonicalReceiptId({
+      source: "github",
+      eventType,
+      metadata: { providerRepoId: repoId, prNumber },
     });
 
     const base = pr.base as Record<string, unknown> | undefined;
+    const head = pr.head as Record<string, unknown> | undefined;
+    const labels = Array.isArray(pr.labels)
+      ? pr.labels
+          .map((label) => (label as Record<string, unknown>).name)
+          .filter((name): name is string => typeof name === "string")
+      : [];
+    const commonMetadata = {
+      schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
+      providerRepoId: repoId,
+      repo: fullName,
+      prNumber,
+      title: pr.title as string,
+      body: (pr.body as string | null) ?? "",
+      baseBranch: base?.ref as string,
+      branch: head?.ref as string,
+      labels,
+      action: action as "opened" | "closed",
+    };
+
+    let metadata: Record<string, unknown> = commonMetadata;
+    if (isMerged) {
+      const installation = payload.installation as
+        | Record<string, unknown>
+        | undefined;
+      const installationId = installation?.id;
+      if (typeof installationId !== "number" || !this.hydrateMergedPr) {
+        throw new Error(
+          "Merged PR receipt requires GitHub App installation hydration"
+        );
+      }
+      const [owner, repo] = fullName.split("/");
+      if (!owner || !repo) return [];
+      const mergedBy = pr.merged_by as Record<string, unknown> | undefined;
+      const mergedById = mergedBy?.node_id;
+      const mergeCommitSha = pr.merge_commit_sha;
+      if (
+        typeof mergedById !== "string" ||
+        mergedById.length === 0 ||
+        typeof mergeCommitSha !== "string" ||
+        mergeCommitSha.length === 0
+      ) {
+        throw new Error("Merged PR receipt requires immutable merge identity");
+      }
+      const commitShas = await this.hydrateMergedPr({
+        installationId,
+        owner,
+        repo,
+        prNumber,
+      });
+      if (commitShas.length === 0) {
+        throw new Error("Merged PR receipt requires at least one commit SHA");
+      }
+      metadata = buildGitHubPrMergedContextV1({
+        providerRepoId: repoId,
+        repo: fullName,
+        prNumber,
+        title: pr.title as string,
+        body: (pr.body as string | null) ?? "",
+        baseBranch: base?.ref as string,
+        branch: head?.ref as string,
+        mergeCommitSha,
+        mergedById,
+        commitShas,
+        labels,
+        additions: (pr.additions as number | undefined) ?? 0,
+        deletions: (pr.deletions as number | undefined) ?? 0,
+        changedFiles: (pr.changed_files as number | undefined) ?? 0,
+      });
+    }
 
     return [
-      {
+      await finalizeReceiptEvent({
         id,
         source: "github",
         eventType,
         platformUserId: actor.id,
         platformLogin: actor.login,
         artifactUrl: pr.html_url as string,
-        metadata: {
-          title: pr.title as string,
-          baseBranch: (base?.ref as string) ?? null,
-          mergeCommitSha: isMerged
-            ? ((pr.merge_commit_sha as string) ?? null)
-            : null,
-          repo: fullName,
-          action,
-          ...(pr.additions != null
-            ? { additions: pr.additions as number }
-            : {}),
-          ...(pr.deletions != null
-            ? { deletions: pr.deletions as number }
-            : {}),
-          ...(pr.changed_files != null
-            ? { changedFiles: pr.changed_files as number }
-            : {}),
-        },
-        payloadHash,
+        metadata,
         eventTime: new Date(eventTime),
-      },
+      }),
     ];
   }
 
@@ -202,7 +306,8 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     if (!pr) return [];
 
     const fullName = repoFullName(payload);
-    if (!fullName) return [];
+    const repoId = providerRepoId(payload);
+    if (!fullName || !repoId) return [];
 
     const actor = extractActor(review.user as Record<string, unknown>);
     if (!actor) return [];
@@ -212,34 +317,34 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     const submittedAt = review.submitted_at as string;
     if (!submittedAt) return [];
 
-    const id = buildEventId("github", "review", fullName, prNumber, reviewId);
-
-    const payloadHash = await hashCanonicalPayload({
-      authorId: actor.id,
-      id,
+    const base = pr.base as Record<string, unknown> | undefined;
+    const metadata = buildGitHubReviewContextV1({
+      providerRepoId: repoId,
+      repo: fullName,
+      prNumber,
+      reviewId,
+      prBaseBranch: base?.ref as string,
+      prMergeCommitSha:
+        (pr.merge_commit_sha as string | null | undefined) ?? null,
       state: review.state as string,
-      submittedAt,
+    });
+    const id = buildCanonicalReceiptId({
+      source: "github",
+      eventType: "review_submitted",
+      metadata,
     });
 
-    const base = pr.base as Record<string, unknown> | undefined;
-
     return [
-      {
+      await finalizeReceiptEvent({
         id,
         source: "github",
         eventType: "review_submitted",
         platformUserId: actor.id,
         platformLogin: actor.login,
         artifactUrl: review.html_url as string,
-        metadata: {
-          prNumber,
-          prBaseBranch: (base?.ref as string) ?? null,
-          state: review.state as string,
-          repo: fullName,
-        },
-        payloadHash,
+        metadata,
         eventTime: new Date(submittedAt),
-      },
+      }),
     ];
   }
 
@@ -255,7 +360,8 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     if (!issue) return [];
 
     const fullName = repoFullName(payload);
-    if (!fullName) return [];
+    const repoId = providerRepoId(payload);
+    if (!fullName || !repoId) return [];
 
     const actor = extractActor(issue.user as Record<string, unknown>);
     if (!actor) return [];
@@ -263,39 +369,40 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     const issueNumber = issue.number as number;
     const isClosed = action === "closed";
 
-    const eventType = isClosed ? "issue_closed" : `issue_${action}`;
+    if (!isClosed && action !== "opened") return [];
+    const eventType: ReceiptEventType = isClosed
+      ? "issue_closed"
+      : "issue_opened";
     const eventTime = isClosed
       ? (issue.closed_at as string)
       : ((issue.updated_at as string) ?? (issue.created_at as string));
 
     if (!eventTime) return [];
 
-    const id = isClosed
-      ? buildEventId("github", "issue", fullName, issueNumber)
-      : buildEventId("github", "issue", fullName, issueNumber, action);
-
-    const payloadHash = await hashCanonicalPayload({
-      authorId: actor.id,
-      id,
-      eventTime,
+    const metadata = buildGitHubIssueContextV1({
+      providerRepoId: repoId,
+      repo: fullName,
+      issueNumber,
+      title: issue.title as string,
+      action: isClosed ? "closed" : "opened",
+    });
+    const id = buildCanonicalReceiptId({
+      source: "github",
+      eventType,
+      metadata,
     });
 
     return [
-      {
+      await finalizeReceiptEvent({
         id,
         source: "github",
         eventType,
         platformUserId: actor.id,
         platformLogin: actor.login,
         artifactUrl: issue.html_url as string,
-        metadata: {
-          title: issue.title as string,
-          repo: fullName,
-          action,
-        },
-        payloadHash,
+        metadata,
         eventTime: new Date(eventTime),
-      },
+      }),
     ];
   }
 
@@ -316,7 +423,8 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     if (!issue) return [];
 
     const fullName = repoFullName(payload);
-    if (!fullName) return [];
+    const repoId = providerRepoId(payload);
+    if (!fullName || !repoId) return [];
 
     const actor = extractActor(comment.user as Record<string, unknown>);
     if (!actor) return [];
@@ -325,29 +433,30 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     const createdAt = comment.created_at as string;
     if (!createdAt) return [];
 
-    const id = buildEventId("github", "comment", fullName, commentId);
-
-    const payloadHash = await hashCanonicalPayload({
-      authorId: actor.id,
-      id,
-      createdAt,
+    const metadata = {
+      schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
+      providerRepoId: repoId,
+      commentId,
+      issueNumber: issue.number as number,
+      repo: fullName,
+    };
+    const id = buildCanonicalReceiptId({
+      source: "github",
+      eventType: "comment_created",
+      metadata,
     });
 
     return [
-      {
+      await finalizeReceiptEvent({
         id,
         source: "github",
         eventType: "comment_created",
         platformUserId: actor.id,
         platformLogin: actor.login,
         artifactUrl: comment.html_url as string,
-        metadata: {
-          issueNumber: issue.number as number,
-          repo: fullName,
-        },
-        payloadHash,
+        metadata,
         eventTime: new Date(createdAt),
-      },
+      }),
     ];
   }
 
@@ -359,7 +468,8 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     payload: Record<string, unknown>
   ): Promise<ActivityEvent[]> {
     const fullName = repoFullName(payload);
-    if (!fullName) return [];
+    const repoId = providerRepoId(payload);
+    if (!fullName || !repoId) return [];
 
     const sender = payload.sender as Record<string, unknown> | undefined;
     const actor = extractActor(sender);
@@ -375,37 +485,36 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     if (!after || after === "0000000000000000000000000000000000000000")
       return [];
 
-    const id = buildEventId("github", "push", fullName, after);
-
-    const payloadHash = await hashCanonicalPayload({
-      authorId: actor.id,
-      id,
-      after,
-    });
-
     const headCommit = payload.head_commit as
       | Record<string, unknown>
       | undefined;
     const eventTime = headCommit?.timestamp as string | undefined;
     if (!eventTime) return [];
+    const metadata = {
+      schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
+      providerRepoId: repoId,
+      ref,
+      after,
+      commitCount,
+      repo: fullName,
+    };
+    const id = buildCanonicalReceiptId({
+      source: "github",
+      eventType: "commit_pushed",
+      metadata,
+    });
 
     return [
-      {
+      await finalizeReceiptEvent({
         id,
         source: "github",
-        eventType: "push",
+        eventType: "commit_pushed",
         platformUserId: actor.id,
         platformLogin: actor.login,
         artifactUrl: `https://github.com/${fullName}/commit/${after}`,
-        metadata: {
-          ref,
-          after,
-          commitCount,
-          repo: fullName,
-        },
-        payloadHash,
+        metadata,
         eventTime: new Date(eventTime),
-      },
+      }),
     ];
   }
 }

@@ -41,7 +41,11 @@ import {
   resolveProfile,
 } from "@cogni/attribution-pipeline-contracts";
 import type { DefaultRegistries } from "@cogni/attribution-pipeline-plugins";
-import type { ActivityEvent } from "@cogni/ingestion-core";
+import {
+  type ActivityEvent,
+  hashReceiptEconomicContent,
+} from "@cogni/ingestion-core";
+import { InternalReceiptSchema } from "@cogni/node-contracts";
 
 import type { Logger } from "../observability/logger.js";
 import type {
@@ -469,24 +473,55 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
 
     logger.info({ count: events.length }, "Inserting ingestion receipts");
 
-    await attributionStore.insertIngestionReceipts(
-      events.map((e) => ({
-        receiptId: e.id,
-        nodeId,
-        source: e.source,
-        eventType: e.eventType,
-        platformUserId: e.platformUserId,
-        platformLogin: e.platformLogin ?? null,
-        artifactUrl: e.artifactUrl ?? null,
-        metadata: e.metadata ?? null,
-        payloadHash: e.payloadHash,
-        producer: e.source,
-        producerVersion,
-        // eventTime crosses Temporal serialization boundary as ISO string, not Date
-        eventTime: new Date(e.eventTime),
-        retrievedAt: new Date(),
-      }))
+    const retrievedAt = new Date();
+    const receipts = await Promise.all(
+      events.map(async (event) => {
+        const validated = InternalReceiptSchema.parse({
+          receiptId: event.id,
+          source: event.source,
+          eventType: event.eventType,
+          platformUserId: event.platformUserId,
+          platformLogin: event.platformLogin ?? null,
+          artifactUrl: event.artifactUrl ?? null,
+          metadata: event.metadata,
+          payloadHash: event.payloadHash,
+          producer: `${event.source}:poll`,
+          producerVersion,
+          eventTime: new Date(event.eventTime).toISOString(),
+          retrievedAt: retrievedAt.toISOString(),
+        });
+        const expectedHash = await hashReceiptEconomicContent({
+          receiptId: validated.receiptId,
+          source: validated.source,
+          eventType: validated.eventType,
+          platformUserId: validated.platformUserId,
+          artifactUrl: validated.artifactUrl ?? null,
+          metadata: validated.metadata,
+          eventTime: validated.eventTime,
+        });
+        if (expectedHash !== validated.payloadHash) {
+          throw new Error(
+            `Receipt ${validated.receiptId} payloadHash does not match canonical economic content`
+          );
+        }
+        return {
+          receiptId: validated.receiptId,
+          nodeId,
+          source: validated.source,
+          eventType: validated.eventType,
+          platformUserId: validated.platformUserId,
+          platformLogin: validated.platformLogin ?? null,
+          artifactUrl: validated.artifactUrl ?? null,
+          metadata: validated.metadata,
+          payloadHash: validated.payloadHash,
+          producer: validated.producer,
+          producerVersion: validated.producerVersion,
+          eventTime: new Date(validated.eventTime),
+          retrievedAt,
+        };
+      })
     );
+    await attributionStore.insertIngestionReceipts(receipts);
 
     logger.info({ count: events.length }, "Receipts inserted");
   }

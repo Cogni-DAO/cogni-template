@@ -9,7 +9,7 @@
  *   (delegates to the injected ReceiptDelivery) or hold mutable state.
  * Invariants:
  * - WEBHOOK_VERIFY_BEFORE_NORMALIZE: verify() is always called before normalize()
- * - RECEIPT_IDEMPOTENT: Events use deterministic IDs, inserted with ON CONFLICT DO NOTHING
+ * - RECEIPT_IDEMPOTENT: deterministic same-economic-content retries are counted no-ops; conflicts fail loud
  * - WEBHOOK_RECEIPT_APPEND_EXEMPT: Receipt insertion bypasses WRITES_VIA_TEMPORAL (safe per RECEIPT_IDEMPOTENT + RECEIPT_APPEND_ONLY)
  * - NODE_WRITES_OWN_LEDGER: only the operator's OWN repos write to the operator's local store;
  *   receipts for a FOREIGN owning node are DELIVERED over HTTP so that node persists them in its
@@ -21,6 +21,8 @@
  */
 
 import type { InsertReceiptParams } from "@cogni/attribution-ledger";
+import { hashReceiptEconomicContent } from "@cogni/ingestion-core";
+import { internalDeliverReceiptsOperation } from "@cogni/node-contracts";
 import type {
   AttributionStore,
   DataSourceRegistration,
@@ -49,7 +51,7 @@ export interface WebhookReceiverDeps {
  * Result from processing a webhook.
  *
  * `receipts` summarizes the normalized ActivityEvents persisted on this call
- * (idempotent via ON CONFLICT DO NOTHING). Surfaced so the route can emit
+ * (idempotent via strict duplicate-vs-conflict classification). Surfaced so the route can emit
  * ingestion telemetry — without it, attribution ingestion was unobservable
  * (the route only logged the raw normalized count, never which contributors /
  * event types actually reached the ledger).
@@ -132,10 +134,48 @@ export async function receiveWebhook(
     retrievedAt,
   }));
 
+  // Apply the same strict v1 boundary to the operator's local-write path as
+  // remote delivery. Otherwise operator-owned repos could still persist an
+  // under-filled receipt while spawned nodes correctly reject it.
+  const validatedEnvelope = internalDeliverReceiptsOperation.input.parse({
+    nodeId,
+    source,
+    receipts: receipts.map((receipt) => ({
+      receiptId: receipt.receiptId,
+      source: receipt.source,
+      eventType: receipt.eventType,
+      platformUserId: receipt.platformUserId,
+      platformLogin: receipt.platformLogin ?? null,
+      artifactUrl: receipt.artifactUrl ?? null,
+      metadata: receipt.metadata,
+      payloadHash: receipt.payloadHash,
+      producer: receipt.producer,
+      producerVersion: receipt.producerVersion,
+      eventTime: receipt.eventTime.toISOString(),
+      retrievedAt: receipt.retrievedAt.toISOString(),
+    })),
+  });
+  for (const receipt of validatedEnvelope.receipts) {
+    const expectedHash = await hashReceiptEconomicContent({
+      receiptId: receipt.receiptId,
+      source: receipt.source,
+      eventType: receipt.eventType,
+      platformUserId: receipt.platformUserId,
+      artifactUrl: receipt.artifactUrl ?? null,
+      metadata: receipt.metadata,
+      eventTime: receipt.eventTime,
+    });
+    if (expectedHash !== receipt.payloadHash) {
+      throw new Error(
+        `Receipt ${receipt.receiptId} payloadHash does not match canonical economic content`
+      );
+    }
+  }
+
   // 5. Route receipts to the owning node's ledger.
-  //   - OWN node (operator repos): local store write, UNCHANGED (no-regression path).
+  //   - OWN node (operator repos): strict local store write.
   //   - FOREIGN node (#1924 source_refs owner): deliver over HTTP so the node writes its OWN ledger
-  //     (NODE_WRITES_OWN_LEDGER). ON CONFLICT DO NOTHING keyed on (node_id, receipt_id) both ways.
+  //     (NODE_WRITES_OWN_LEDGER). Both paths expose duplicate-vs-conflict outcomes.
   if (nodeId === operatorNodeId) {
     await attributionStore.insertIngestionReceipts(receipts);
   } else {

@@ -19,7 +19,8 @@
  *     dispatch; the per-node principal is the hardening — task.5033).
  *   - Idempotency-Key: `${nodeId}/${firstReceiptId}` — repeat delivery is a no-op on the node
  *     (RECEIPT_IDEMPOTENT: ON CONFLICT DO NOTHING keyed by (node_id, receipt_id)).
- *   - 4xx (except transient 404/408/409/429) → permanent; 5xx/network → retryable. Throws on non-2xx.
+ *   - 4xx (except transient 404/408/429) → permanent; receipt-content 409 is permanent;
+ *     5xx/network → retryable. Throws on non-2xx.
  * Side-effects: IO (HTTP)
  * Links: packages/node-contracts/src/attribution.receipts.internal.v1.contract.ts,
  *   services/scheduler-worker/src/adapters/run-http.ts,
@@ -30,8 +31,8 @@
 
 import type { InsertReceiptParams } from "@cogni/attribution-ledger";
 import {
-  type InternalDeliverReceiptsInput,
   type InternalReceipt,
+  InternalReceiptSchema,
   internalDeliverReceiptsOperation,
 } from "@cogni/node-contracts";
 import type { ReceiptDelivery } from "@/ports";
@@ -70,10 +71,11 @@ export class ReceiptDeliveryError extends Error {
 /**
  * HTTP status codes that are retryable — the request may succeed on a later attempt. Mirrors
  * run-http.ts: transient 404 (deploy-time race before the node-app has the receipts route),
- * 408/429 (transient by definition), 409 (idempotency-in-progress). Everything else in the 4xx
- * range (400/401/403/422) is a structural failure and stays non-retryable. 5xx/network → retryable.
+ * 408/429 (transient by definition). A 409 from this endpoint is a deterministic
+ * receipt-content conflict, not idempotency-in-progress, and must stay permanent.
+ * Everything else in the 4xx range is structural. 5xx/network → retryable.
  */
-const RETRYABLE_TRANSIENT_4XX = new Set([404, 408, 409, 429]);
+const RETRYABLE_TRANSIENT_4XX = new Set([404, 408, 429]);
 function isRetryableStatus(status: number): boolean {
   if (status >= 500) return true;
   return RETRYABLE_TRANSIENT_4XX.has(status);
@@ -116,7 +118,7 @@ async function readErrorText(response: Response): Promise<string> {
  * own per NODE_WRITES_OWN_LEDGER).
  */
 function toWireReceipt(r: InsertReceiptParams): InternalReceipt {
-  return {
+  return InternalReceiptSchema.parse({
     receiptId: r.receiptId,
     source: r.source,
     eventType: r.eventType,
@@ -129,7 +131,7 @@ function toWireReceipt(r: InsertReceiptParams): InternalReceipt {
     producerVersion: r.producerVersion,
     eventTime: r.eventTime.toISOString(),
     retrievedAt: r.retrievedAt.toISOString(),
-  };
+  });
 }
 
 export function createHttpReceiptDelivery(
@@ -144,14 +146,11 @@ export function createHttpReceiptDelivery(
       const base = await resolveNodeUrl(resolveUrl, nodeId);
       const url = `${base}/api/internal/attribution/receipts`;
 
-      const body: InternalDeliverReceiptsInput = {
+      const body = internalDeliverReceiptsOperation.input.parse({
         nodeId,
         source,
         receipts: receipts.map(toWireReceipt),
-      };
-      // Validate against the frozen contract before we hit the wire — a shape drift should
-      // surface here (permanent) rather than as an opaque 400 from the receiving node.
-      internalDeliverReceiptsOperation.input.parse(body);
+      });
 
       const idempotencyKey = `${nodeId}/${receipts[0]?.receiptId ?? ""}`;
 
@@ -205,6 +204,38 @@ export function createHttpReceiptDelivery(
           retryable
         );
       }
+
+      let output: unknown;
+      try {
+        output = await response.json();
+      } catch (error) {
+        throw new ReceiptDeliveryError(
+          `POST ${url} returned invalid JSON: ${String(error)}`,
+          response.status,
+          false
+        );
+      }
+      const parsedOutput =
+        internalDeliverReceiptsOperation.output.safeParse(output);
+      if (!parsedOutput.success || !parsedOutput.data.ok) {
+        throw new ReceiptDeliveryError(
+          `POST ${url} returned invalid success envelope`,
+          response.status,
+          false
+        );
+      }
+      logger.info(
+        {
+          event: "attribution.receipt_delivery_succeeded",
+          nodeId,
+          source,
+          received: parsedOutput.data.received,
+          inserted: parsedOutput.data.inserted,
+          duplicates: parsedOutput.data.duplicates,
+          conflicts: parsedOutput.data.conflicts,
+        },
+        "attribution receipt delivery succeeded"
+      );
     },
   };
 }

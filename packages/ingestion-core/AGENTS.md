@@ -45,9 +45,12 @@ Pure domain types, port interface, and helpers for activity ingestion source ada
   - `SourceAdapter` — Deprecated type alias for backward compatibility
   - `ActivityEvent` — Purpose-neutral raw activity event (no epoch/user/node fields)
   - `StreamDefinition`, `StreamCursor`, `CollectParams`, `CollectResult` — Adapter I/O types
-  - `buildEventId()` — Deterministic event ID construction
-  - `canonicalJson()` — Sorted-key JSON for deterministic serialization
-  - `hashCanonicalPayload()` — SHA-256 via Web Crypto
+  - `buildEventId()` / `buildCanonicalReceiptId()` — Deterministic provider-object event identity; mutable repo names are excluded from durable receipt IDs
+  - `canonicalJson()` — Recursively sorted-key JSON for deterministic serialization
+  - `ReceiptEconomicCoreV1` / `ReceiptDisplaySnapshotV1` — immutable hash-covered facts separated from refreshable presentation
+  - `hashCanonicalPayload()` / `hashReceiptEconomicContent()` — SHA-256 via Web Crypto; receipt hash binds canonical event identity and excludes mutable snapshots/provenance
+  - Receipt source/event/producer vocabularies + canonical GitHub v1 context builders
+  - `GITHUB_PULL_REQUEST_COMMITS_QUERY` / `parseGitHubPullRequestCommitsPage()` — shared, unbounded cursor contract for lossless webhook/poll PR commit collection
 
 ## Ports
 

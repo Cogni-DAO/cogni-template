@@ -69,7 +69,9 @@ export {
   isEpochNotInReviewError,
   isEpochNotOpenError,
   isPoolComponentMissingError,
+  isReceiptContentConflictError,
   PoolComponentMissingError,
+  ReceiptContentConflictError,
 } from "./errors";
 
 // Hashing
@@ -90,7 +92,6 @@ export type {
   StatementLineItem,
 } from "./model";
 export { EPOCH_STATUSES } from "./model";
-
 // Pool estimation (pure, deterministic)
 export {
   estimatePoolComponentsV0,
@@ -99,10 +100,9 @@ export {
   type PoolComponentId,
   validatePoolComponentId,
 } from "./pool";
-
+export { sameReceiptEconomicContent } from "./receipt-content";
 // Rules
 export { computeStatementItems } from "./rules";
-
 // Signing
 export {
   ATTRIBUTION_STATEMENT_TYPES,
@@ -115,7 +115,6 @@ export {
   type EIP712TypedData,
   type EIP712TypedDataParams,
 } from "./signing";
-
 // Store port interface + types
 export type {
   AttributionEpoch,
@@ -156,6 +155,7 @@ export type {
   PoolStore,
   ProjectionStore,
   ReceiptClaimantsRecord,
+  ReceiptInsertResult,
   ReceiptStore,
   ReviewSubjectOverrideRecord,
   SelectedReceiptWithMetadata,

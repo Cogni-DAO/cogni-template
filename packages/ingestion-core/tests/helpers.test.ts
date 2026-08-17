@@ -14,9 +14,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildCanonicalReceiptId,
   buildEventId,
   canonicalJson,
   hashCanonicalPayload,
+  hashReceiptEconomicContent,
 } from "../src/helpers";
 
 describe("buildEventId", () => {
@@ -72,6 +74,97 @@ describe("canonicalJson", () => {
 
   it("handles empty object", () => {
     expect(canonicalJson({})).toBe("{}");
+  });
+
+  it("recursively sorts nested context while preserving array order", () => {
+    expect(canonicalJson({ z: { b: 2, a: 1 }, commits: ["b", "a"] })).toBe(
+      '{"commits":["b","a"],"z":{"a":1,"b":2}}'
+    );
+  });
+});
+
+describe("hashReceiptEconomicContent", () => {
+  const content = {
+    receiptId: "github:pr:github-repo-node-id:42",
+    source: "github" as const,
+    eventType: "pr_merged" as const,
+    platformUserId: "12345",
+    artifactUrl: "https://github.com/owner/repo/pull/42",
+    metadata: {
+      schemaVersion: 1,
+      providerRepoId: "github-repo-node-id",
+      repo: "owner/repo",
+      prNumber: 42,
+      baseBranch: "main",
+      mergedById: "github-user-node-merger",
+      mergeCommitSha: "merge-sha",
+      commitShas: ["one", "two"],
+      additions: 10,
+      deletions: 2,
+      changedFiles: 3,
+      title: "Ship it",
+      labels: ["one", "two"],
+    },
+    eventTime: new Date("2026-01-15T00:00:00Z"),
+  };
+
+  it("covers economic context independent of metadata key order", async () => {
+    const reordered = {
+      ...content,
+      metadata: {
+        ...content.metadata,
+        commitShas: ["one", "two"],
+        providerRepoId: "github-repo-node-id",
+        schemaVersion: 1,
+      },
+    };
+    await expect(hashReceiptEconomicContent(content)).resolves.toBe(
+      await hashReceiptEconomicContent(reordered)
+    );
+  });
+
+  it("does not change when mutable presentation changes", async () => {
+    const laterSnapshot = {
+      ...content,
+      platformLogin: "renamed-human",
+      artifactUrl: "https://github.com/renamed/repo/pull/42",
+      metadata: {
+        ...content.metadata,
+        repo: "renamed/repo",
+        title: "Edited after merge",
+        body: "Edited body",
+        branch: "renamed-branch",
+        labels: ["later-label"],
+      },
+    };
+    await expect(hashReceiptEconomicContent(content)).resolves.toBe(
+      await hashReceiptEconomicContent(laterSnapshot)
+    );
+  });
+
+  it("changes when immutable economic context changes", async () => {
+    const conflicting = {
+      ...content,
+      metadata: { ...content.metadata, additions: 11 },
+    };
+    await expect(hashReceiptEconomicContent(content)).resolves.not.toBe(
+      await hashReceiptEconomicContent(conflicting)
+    );
+  });
+
+  it("rejects a mutable owner/repo receipt ID", async () => {
+    await expect(
+      hashReceiptEconomicContent({
+        ...content,
+        receiptId: "github:pr:owner/repo:42",
+      })
+    ).rejects.toThrow("does not match canonical event identity");
+  });
+
+  it("derives identity from the provider repository object", () => {
+    expect(buildCanonicalReceiptId(content)).toBe(
+      "github:pr:github-repo-node-id:42"
+    );
   });
 });
 
