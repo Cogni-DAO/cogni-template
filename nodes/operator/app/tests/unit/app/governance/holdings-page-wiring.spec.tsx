@@ -75,9 +75,7 @@ describe("Ownership page composition", () => {
   it("keeps the token distribution model visible with no token and zero finalized epochs", () => {
     render(<HoldingsView />);
 
-    expect(
-      screen.getByRole("heading", { name: "This node's token issuance" })
-    ).toBeInTheDocument();
+    expect(screen.getByText("This node's token issuance")).toBeVisible();
     expect(screen.getByText("Finalize")).toBeInTheDocument();
     expect(screen.getByText("Publish")).toBeInTheDocument();
     expect(screen.getByText("Claim")).toBeInTheDocument();
