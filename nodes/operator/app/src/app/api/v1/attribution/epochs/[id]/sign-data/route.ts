@@ -16,6 +16,7 @@ import {
   buildEIP712TypedData,
   computeFinalClaimantAllocationSetHash,
   computeReceiptWeights,
+  type EIP712DeploymentEnvironment,
   explodeToClaimants,
   parseEIP712DeploymentEnvironment,
   toReviewSubjectOverrides,
@@ -107,7 +108,7 @@ export const GET = wrapRouteHandlerWithLogging<{
     const finalAllocationSetHash =
       await computeFinalClaimantAllocationSetHash(claimantAllocations);
 
-    let deploymentEnvironment;
+    let deploymentEnvironment: EIP712DeploymentEnvironment;
     try {
       deploymentEnvironment = parseEIP712DeploymentEnvironment(
         serverEnv().DEPLOY_ENVIRONMENT

@@ -172,30 +172,30 @@ describe("finalizeEpoch validation: EIP-712 signature", () => {
     expect(isValid).toBe(false);
   });
 
-  it.each(["preview", "production"] as const)(
-    "candidate-a signature fails verification in %s",
-    async (deploymentEnvironment) => {
-      const typedData = buildEIP712TypedData(TYPED_DATA_PARAMS);
-      const signature = await approverAccount.signTypedData({
-        domain: typedData.domain,
-        types: typedData.types,
-        primaryType: typedData.primaryType,
-        message: typedData.message,
-      });
-      const replayTarget = buildEIP712TypedData({
-        ...TYPED_DATA_PARAMS,
-        deploymentEnvironment,
-      });
+  it.each([
+    "preview",
+    "production",
+  ] as const)("candidate-a signature fails verification in %s", async (deploymentEnvironment) => {
+    const typedData = buildEIP712TypedData(TYPED_DATA_PARAMS);
+    const signature = await approverAccount.signTypedData({
+      domain: typedData.domain,
+      types: typedData.types,
+      primaryType: typedData.primaryType,
+      message: typedData.message,
+    });
+    const replayTarget = buildEIP712TypedData({
+      ...TYPED_DATA_PARAMS,
+      deploymentEnvironment,
+    });
 
-      const isValid = await verifyTypedData({
-        address: approverAccount.address,
-        domain: replayTarget.domain,
-        types: replayTarget.types,
-        primaryType: replayTarget.primaryType,
-        message: replayTarget.message,
-        signature,
-      });
-      expect(isValid).toBe(false);
-    }
-  );
+    const isValid = await verifyTypedData({
+      address: approverAccount.address,
+      domain: replayTarget.domain,
+      types: replayTarget.types,
+      primaryType: replayTarget.primaryType,
+      message: replayTarget.message,
+      signature,
+    });
+    expect(isValid).toBe(false);
+  });
 });

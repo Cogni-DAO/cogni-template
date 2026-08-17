@@ -275,33 +275,33 @@ describe("EIP-712 sign/verify round-trip", () => {
     expect(valid).toBe(false);
   });
 
-  it.each(["preview", "production"] as const)(
-    "candidate-a signature cannot replay in %s",
-    async (deploymentEnvironment) => {
-      const signature = await account.signTypedData({
-        domain: typedData.domain,
-        types: typedData.types,
-        primaryType: typedData.primaryType,
-        message: typedData.message,
-      });
-      const replayTarget = buildEIP712TypedData({
-        ...typedData.message,
-        chainId: typedData.domain.chainId,
-        deploymentEnvironment,
-      });
+  it.each([
+    "preview",
+    "production",
+  ] as const)("candidate-a signature cannot replay in %s", async (deploymentEnvironment) => {
+    const signature = await account.signTypedData({
+      domain: typedData.domain,
+      types: typedData.types,
+      primaryType: typedData.primaryType,
+      message: typedData.message,
+    });
+    const replayTarget = buildEIP712TypedData({
+      ...typedData.message,
+      chainId: typedData.domain.chainId,
+      deploymentEnvironment,
+    });
 
-      await expect(
-        verifyTypedData({
-          address: account.address,
-          domain: replayTarget.domain,
-          types: replayTarget.types,
-          primaryType: replayTarget.primaryType,
-          message: replayTarget.message,
-          signature,
-        })
-      ).resolves.toBe(false);
-    }
-  );
+    await expect(
+      verifyTypedData({
+        address: account.address,
+        domain: replayTarget.domain,
+        types: replayTarget.types,
+        primaryType: replayTarget.primaryType,
+        message: replayTarget.message,
+        signature,
+      })
+    ).resolves.toBe(false);
+  });
 
   it("v1 signature cannot replay against v2 typed data", async () => {
     const legacyTypes = {
