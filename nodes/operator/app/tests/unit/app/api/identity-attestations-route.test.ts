@@ -102,7 +102,7 @@ const mockNodeDb = {
           dbState.nodeExists
             ? [
                 {
-                  id: NODE_ID,
+                  nodeId: NODE_ID,
                   slug: "node-template",
                   deployEnvs: ["production"],
                   activityEnv: "production",
