@@ -8,6 +8,7 @@
  *   tokens, access environment/framework state, or persist nonces.
  * Invariants:
  *   - NODE_ID_DERIVES_AUDIENCE: callers send a registered node UUID, never an arbitrary audience.
+ *   - TARGET_ORIGIN_BOUND: the exact relying deployment origin is carried in the request and signed claims.
  *   - NONCE_IS_ONE_TIME_AT_RP: the opaque nonce is minted and consumed once by the relying node.
  *   - GITHUB_LOGIN_NULLABLE: GitHub's stable provider id is authoritative; login is display metadata.
  * Side-effects: none
@@ -19,8 +20,30 @@ import { z } from "zod";
 
 export const IDENTITY_ATTESTATION_V1 = "identity.attestation.v1" as const;
 export const IDENTITY_ATTESTATION_AUDIENCE_PREFIX = "urn:cogni:node:";
+/** Shared issuer/verifier lifetime contract. RP nonces outlive this window. */
+export const IDENTITY_ATTESTATION_TTL_SECONDS = 10 * 60;
 
 export const IdentityAttestationNodeIdSchema = z.string().uuid();
+
+/** Canonical HTTPS origin of the exact relying-node deployment. */
+export const IdentityAttestationTargetOriginSchema = z
+  .string()
+  .url()
+  .refine(
+    (value) => {
+      const url = new URL(value);
+      return (
+        url.protocol === "https:" &&
+        url.origin === value &&
+        url.pathname === "/" &&
+        !url.search &&
+        !url.hash &&
+        !url.username &&
+        !url.password
+      );
+    },
+    { message: "targetOrigin must be a canonical HTTPS origin" }
+  );
 
 /** Opaque, URL-safe challenge minted by the node RP and consumed exactly once there. */
 export const IdentityAttestationNonceSchema = z
@@ -43,6 +66,7 @@ export const IdentityAttestationRequestSchema = z
   .object({
     nodeId: IdentityAttestationNodeIdSchema,
     nonce: IdentityAttestationNonceSchema,
+    targetOrigin: IdentityAttestationTargetOriginSchema,
   })
   .strict();
 
@@ -59,6 +83,7 @@ export const IdentityAttestationClaimsSchema = z
     aud: IdentityAttestationAudienceSchema,
     nodeId: IdentityAttestationNodeIdSchema,
     nonce: IdentityAttestationNonceSchema,
+    targetOrigin: IdentityAttestationTargetOriginSchema,
     wallet: z.string().regex(/^0x[0-9a-f]{40}$/),
     github: IdentityAttestationGithubSchema,
     iat: z.number().int().nonnegative(),

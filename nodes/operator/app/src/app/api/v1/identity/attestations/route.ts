@@ -36,6 +36,7 @@ import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { getServerSessionUser } from "@/lib/auth/server";
 import { serverEnv } from "@/shared/env";
 import { importAttestationSigningKey } from "@/shared/identity/attestation-keys";
+import { baseDomain } from "@/shared/node-registry/resolve";
 import { logRequestWarn } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
@@ -61,7 +62,8 @@ export const POST = wrapRouteHandlerWithLogging(
   async (ctx, request, sessionUser) => {
     const env = serverEnv();
     const issuer = canonicalIssuer(env.APP_BASE_URL);
-    if (!env.IDENTITY_ATTESTATION_PRIVATE_KEY || !issuer) {
+    const domain = baseDomain(env);
+    if (!env.IDENTITY_ATTESTATION_PRIVATE_KEY || !issuer || !domain) {
       return NextResponse.json(
         { error: "attestation_unavailable" },
         { status: 503 }
@@ -96,6 +98,7 @@ export const POST = wrapRouteHandlerWithLogging(
       const issued = await issueIdentityAttestation({
         sessionUser,
         issuer,
+        domain,
         signingKey,
         request: parsed.data,
       });
@@ -107,7 +110,14 @@ export const POST = wrapRouteHandlerWithLogging(
       if (error instanceof AttestationPreconditionError) {
         return NextResponse.json(
           { error: error.code },
-          { status: error.code === "unknown_node" ? 404 : 409 }
+          {
+            status:
+              error.code === "unknown_node"
+                ? 404
+                : error.code === "invalid_target_origin"
+                  ? 400
+                  : 409,
+          }
         );
       }
       throw error;

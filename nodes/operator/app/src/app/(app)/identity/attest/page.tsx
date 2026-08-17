@@ -4,7 +4,7 @@
 /**
  * Module: `@app/(app)/identity/attest`
  * Purpose: Authenticated operator broker for a node-initiated GitHub binding import.
- * Scope: Validates node_id + nonce, delegates canonical return validation and
+ * Scope: Validates node_id + nonce + target_origin, delegates canonical return validation and
  *   issuance, then redirects the browser with the JWT in the fragment.
  * Invariants: Proxy/session auth required; never redirects an invalid return_to.
  * Side-effects: IO (session + attestation issuance)
@@ -48,6 +48,7 @@ export default async function IdentityAttestationBrokerPage({
   const request = IdentityAttestationRequestSchema.safeParse({
     nodeId: one(query.node_id),
     nonce: one(query.nonce),
+    targetOrigin: one(query.target_origin),
   });
   const returnTo = one(query.return_to);
   if (!request.success || !returnTo) {
@@ -61,6 +62,7 @@ export default async function IdentityAttestationBrokerPage({
       callbackUrl: `/identity/attest?${new URLSearchParams({
         node_id: request.data.nodeId,
         nonce: request.data.nonce,
+        target_origin: request.data.targetOrigin,
         return_to: returnTo,
       })}`,
     });

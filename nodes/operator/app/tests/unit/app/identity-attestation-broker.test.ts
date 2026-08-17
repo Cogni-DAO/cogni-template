@@ -41,13 +41,19 @@ const SESSION = {
   displayName: null,
   avatarColor: null,
 };
-const REQUEST = { nodeId: NODE_ID, nonce: NONCE };
+const REQUEST = {
+  nodeId: NODE_ID,
+  nonce: NONCE,
+  targetOrigin: "https://node-template.cognidao.org",
+};
 
 beforeEach(() => {
   vi.clearAllMocks();
   mockResolveNodeRef.mockResolvedValue({
     nodeId: NODE_ID,
     slug: "node-template",
+    deployEnvs: ["production"],
+    activityEnv: "production",
   });
   mockIssue.mockResolvedValue({ attestation: "signed.jwt", expiresIn: 600 });
 });
@@ -90,6 +96,7 @@ describe("issueBrowserIdentityAttestation", () => {
       expect.objectContaining({
         request: REQUEST,
         issuer: "https://cognidao.org",
+        domain: "cognidao.org",
       })
     );
     expect(result.redirectUrl).toBe(
@@ -103,6 +110,65 @@ describe("issueBrowserIdentityAttestation", () => {
         sessionUser: SESSION,
         request: REQUEST,
         returnTo: "https://evil.example/profile",
+      })
+    ).rejects.toMatchObject<AttestationBrokerError>({
+      code: "invalid_return_to",
+    });
+    expect(mockIssue).not.toHaveBeenCalled();
+  });
+
+  it("accepts candidate toks4 when candidate-a is registered", async () => {
+    mockResolveNodeRef.mockResolvedValue({
+      nodeId: NODE_ID,
+      slug: "toks4",
+      deployEnvs: ["candidate-a", "production"],
+      activityEnv: "production",
+    });
+
+    const result = await issueBrowserIdentityAttestation({
+      sessionUser: SESSION,
+      request: {
+        ...REQUEST,
+        targetOrigin: "https://toks4-test.cognidao.org",
+      },
+      returnTo: "https://toks4-test.cognidao.org/profile",
+    });
+
+    expect(result.redirectUrl).toBe(
+      "https://toks4-test.cognidao.org/profile#attestation=signed.jwt"
+    );
+    expect(mockIssue).toHaveBeenCalledOnce();
+  });
+
+  it("rejects a canonical env origin not registered for that node", async () => {
+    mockResolveNodeRef.mockResolvedValue({
+      nodeId: NODE_ID,
+      slug: "toks4",
+      deployEnvs: ["production"],
+      activityEnv: "production",
+    });
+
+    await expect(
+      issueBrowserIdentityAttestation({
+        sessionUser: SESSION,
+        request: {
+          ...REQUEST,
+          targetOrigin: "https://toks4-test.cognidao.org",
+        },
+        returnTo: "https://toks4-test.cognidao.org/profile",
+      })
+    ).rejects.toMatchObject<AttestationBrokerError>({
+      code: "invalid_return_to",
+    });
+    expect(mockIssue).not.toHaveBeenCalled();
+  });
+
+  it("rejects when return_to and the signed target origin disagree", async () => {
+    await expect(
+      issueBrowserIdentityAttestation({
+        sessionUser: SESSION,
+        request: REQUEST,
+        returnTo: "https://node-template-test.cognidao.org/profile",
       })
     ).rejects.toMatchObject<AttestationBrokerError>({
       code: "invalid_return_to",

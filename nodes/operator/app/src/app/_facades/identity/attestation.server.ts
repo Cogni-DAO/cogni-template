@@ -18,6 +18,8 @@
  *     on provider+external_id).
  *   - EXACT_NODE_AUDIENCE: aud is derived from a registered node UUID; callers
  *     never supply an audience string and a token cannot be replayed at a peer.
+ *   - EXACT_DEPLOYMENT_ORIGIN: targetOrigin must be one canonical origin
+ *     derived from the node registry's deployEnvs and is signed into the JWT.
  *   - NONCE_BOUND: the node-minted nonce is signed; the relying node consumes it once.
  *   - TTL_600S: exp = iat + 600.
  *   - PRECONDITIONS_FAIL_CLOSED: missing wallet / github binding / registered
@@ -33,6 +35,7 @@ import { randomUUID } from "node:crypto";
 import { withTenantScope } from "@cogni/db-client";
 import { type UserId, userActor } from "@cogni/ids";
 import {
+  IDENTITY_ATTESTATION_TTL_SECONDS,
   IDENTITY_ATTESTATION_V1,
   IdentityAttestationClaimsSchema,
   type IdentityAttestationRequest,
@@ -48,12 +51,12 @@ import {
   ATTESTATION_ALG,
   attestationKeyId,
 } from "@/shared/identity/attestation-keys";
-
-export const ATTESTATION_TTL_SECONDS = 600;
+import { hostForEnv, rootDomain } from "@/shared/node-registry/deploy-hosts";
 
 export type AttestationPreconditionCode =
   | "no_github_binding"
   | "no_wallet"
+  | "invalid_target_origin"
   | "unknown_node";
 
 /** Missing wallet, github binding, or registered target node. */
@@ -76,13 +79,28 @@ export interface IssuedAttestation {
 export async function issueIdentityAttestation(params: {
   sessionUser: SessionUser;
   issuer: string;
+  domain: string;
   signingKey: KeyObject;
   request: IdentityAttestationRequest;
 }): Promise<IssuedAttestation> {
-  const { sessionUser, issuer, signingKey, request } = params;
+  const { sessionUser, issuer, domain, signingKey, request } = params;
   const targetNode = await resolveNodeRef(resolveServiceDb(), request.nodeId);
   if (!targetNode || targetNode.nodeId !== request.nodeId) {
     throw new AttestationPreconditionError("unknown_node");
+  }
+
+  const deployRootDomain = rootDomain(domain);
+  const registeredOrigins = targetNode.deployEnvs.map(
+    (deployEnv) =>
+      `https://${hostForEnv(
+        targetNode.slug,
+        targetNode.slug === "operator",
+        deployEnv,
+        deployRootDomain
+      )}`
+  );
+  if (!registeredOrigins.includes(request.targetOrigin)) {
+    throw new AttestationPreconditionError("invalid_target_origin");
   }
 
   const db = resolveAppDb();
@@ -124,15 +142,16 @@ export async function issueIdentityAttestation(params: {
     aud: identityAttestationAudience(targetNode.nodeId),
     nodeId: targetNode.nodeId,
     nonce: request.nonce,
+    targetOrigin: request.targetOrigin,
     wallet: wallet.toLowerCase(),
     github: { id: binding.externalId, login: binding.providerLogin },
     iat,
-    exp: iat + ATTESTATION_TTL_SECONDS,
+    exp: iat + IDENTITY_ATTESTATION_TTL_SECONDS,
     jti: randomUUID(),
   });
   const attestation = await new SignJWT(claims)
     .setProtectedHeader({ alg: ATTESTATION_ALG, typ: "JWT", kid })
     .sign(signingKey);
 
-  return { attestation, expiresIn: ATTESTATION_TTL_SECONDS };
+  return { attestation, expiresIn: IDENTITY_ATTESTATION_TTL_SECONDS };
 }
