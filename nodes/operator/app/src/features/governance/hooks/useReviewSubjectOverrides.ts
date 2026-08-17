@@ -28,6 +28,9 @@ interface UseReviewSubjectOverridesReturn {
   /** Map of subjectRef → override for O(1) lookup. */
   readonly overridesByRef: ReadonlyMap<string, ReviewSubjectOverrideView>;
   readonly isLoading: boolean;
+  /** Initial snapshot failure. Finalization must remain unavailable until retry succeeds. */
+  readonly loadError: Error | null;
+  readonly retryLoad: () => void;
   /** Save (upsert) an override for a subject. */
   readonly saveOverride: (
     subjectRef: string,
@@ -37,6 +40,9 @@ interface UseReviewSubjectOverridesReturn {
   /** Remove an override for a subject. */
   readonly removeOverride: (subjectRef: string) => Promise<void>;
   readonly isSaving: boolean;
+  /** Most recent save/remove failure; the row remains retryable. */
+  readonly mutationError: Error | null;
+  readonly clearMutationError: () => void;
 }
 
 function overridesQueryKey(epochId: string): readonly string[] {
@@ -49,7 +55,7 @@ export function useReviewSubjectOverrides(
   const queryClient = useQueryClient();
   const qk = overridesQueryKey(epochId);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error, refetch } = useQuery({
     queryKey: qk,
     queryFn: async (): Promise<ReviewSubjectOverrideView[]> => {
       const res = await fetch(
@@ -138,23 +144,39 @@ export function useReviewSubjectOverrides(
 
   const saveOverride = useCallback(
     async (subjectRef: string, overrideUnits: string, reason?: string) => {
+      upsertMutation.reset();
+      deleteMutation.reset();
       await upsertMutation.mutateAsync({ subjectRef, overrideUnits, reason });
     },
-    [upsertMutation.mutateAsync]
+    [upsertMutation, deleteMutation]
   );
 
   const removeOverride = useCallback(
     async (subjectRef: string) => {
+      upsertMutation.reset();
+      deleteMutation.reset();
       await deleteMutation.mutateAsync(subjectRef);
     },
-    [deleteMutation.mutateAsync]
+    [upsertMutation, deleteMutation]
   );
+
+  const clearMutationError = useCallback(() => {
+    upsertMutation.reset();
+    deleteMutation.reset();
+  }, [upsertMutation, deleteMutation]);
 
   return {
     overridesByRef,
     isLoading,
+    loadError: error as Error | null,
+    retryLoad: () => {
+      void refetch();
+    },
     saveOverride,
     removeOverride,
     isSaving: upsertMutation.isPending || deleteMutation.isPending,
+    mutationError: (upsertMutation.error ??
+      deleteMutation.error) as Error | null,
+    clearMutationError,
   };
 }

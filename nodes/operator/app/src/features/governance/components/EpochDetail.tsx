@@ -5,7 +5,7 @@
  * Module: `@features/governance/components/EpochDetail`
  * Purpose: Reusable epoch detail view — pie chart of contributor shares + expandable contributions table.
  * Scope: Works for both open (current) and finalized (historical) epochs. Does not perform data fetching or server-side logic.
- * Invariants: BigInt units displayed via Number() for presentation only. No credit math in UI.
+ * Invariants: Credit/unit strings stay BigInt-safe through sorting and integer formatting.
  * Side-effects: none
  * Links: src/features/governance/types.ts
  * @public
@@ -30,6 +30,24 @@ import type { EpochContributor, EpochView } from "@/features/governance/types";
 
 import { ContributionRow } from "./ContributionRow";
 
+function compareContributorsByUnits(
+  left: EpochContributor,
+  right: EpochContributor
+): number {
+  const leftUnits = BigInt(left.units);
+  const rightUnits = BigInt(right.units);
+  return leftUnits === rightUnits ? 0 : leftUnits > rightUnits ? -1 : 1;
+}
+
+function formatCredits(value: string | null): string | null {
+  if (value === null) return null;
+  try {
+    return BigInt(value).toLocaleString();
+  } catch {
+    return value;
+  }
+}
+
 export interface EpochDetailProps {
   readonly epoch: EpochView;
   /** Hide the header row (pie chart + epoch stats). Useful when shown inline under a parent. */
@@ -46,14 +64,11 @@ export function EpochDetail({
   renderExpandedRows,
 }: EpochDetailProps): ReactElement {
   const sorted = useMemo(
-    () =>
-      [...epoch.contributors].sort((a, b) => Number(b.units) - Number(a.units)),
+    () => [...epoch.contributors].sort(compareContributorsByUnits),
     [epoch.contributors]
   );
 
-  const credits = epoch.poolTotalCredits
-    ? Number(epoch.poolTotalCredits)
-    : null;
+  const credits = formatCredits(epoch.poolTotalCredits);
 
   const { chartData, chartConfig, legendEntries } = useMemo(
     () =>
@@ -105,9 +120,7 @@ export function EpochDetail({
               </span>
               {credits != null && (
                 <span className="text-muted-foreground">
-                  <span className="font-medium text-foreground">
-                    {credits.toLocaleString()}
-                  </span>{" "}
+                  <span className="font-medium text-foreground">{credits}</span>{" "}
                   credits
                 </span>
               )}
@@ -122,7 +135,7 @@ export function EpochDetail({
       )}
 
       <div className="rounded-lg border">
-        <Table>
+        <Table className="min-w-2xl">
           <TableHeader>
             <TableRow>
               <TableHead className="w-8" />

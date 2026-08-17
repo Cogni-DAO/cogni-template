@@ -38,7 +38,7 @@ const GOV_TABS = [
   },
   {
     href: "/gov/review",
-    label: "Review",
+    label: "Finish Epoch",
     icon: FileSignature,
     match: "prefix" as const,
   },

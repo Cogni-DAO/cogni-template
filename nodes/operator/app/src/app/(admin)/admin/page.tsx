@@ -28,9 +28,9 @@ import { getServerSessionUser } from "@/lib/auth/server";
 
 const PRIMARY_ACTION = {
   href: "/gov/review",
-  title: "Epoch Review & Sign",
+  title: "Finish Epoch",
   description:
-    "Review pending epoch ledgers, adjust per-contribution weights, and sign to finalize. EIP-712 typed-data flow.",
+    "Open review, inspect attribution, sign, publish, and confirm claims in one guided workspace.",
   icon: FileSignature,
 } as const;
 

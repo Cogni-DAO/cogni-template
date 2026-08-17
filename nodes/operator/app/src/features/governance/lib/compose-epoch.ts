@@ -86,6 +86,7 @@ export interface EpochDto {
   readonly periodEnd: string;
   readonly weightConfig: Record<string, number>;
   readonly poolTotalCredits: string | null;
+  readonly approvers?: readonly string[] | null;
 }
 
 /** Minimal projection shape expected from the epoch-user-projections API. */
@@ -344,6 +345,7 @@ export function composeEpochView(
     periodStart: epoch.periodStart,
     periodEnd: epoch.periodEnd,
     poolTotalCredits: epoch.poolTotalCredits,
+    approvers: epoch.approvers ?? null,
     contributors,
     unresolvedCount,
     unresolvedActivities,
@@ -423,6 +425,7 @@ export function composeEpochViewFromClaimants(
     periodStart: epoch.periodStart,
     periodEnd: epoch.periodEnd,
     poolTotalCredits: claimants.poolTotalCredits,
+    approvers: epoch.approvers ?? null,
     contributors,
     unresolvedCount,
     unresolvedActivities,

@@ -31,6 +31,7 @@ export function toEpochDto(e: AttributionEpoch) {
     periodEnd: e.periodEnd.toISOString(),
     weightConfig: e.weightConfig,
     poolTotalCredits: e.poolTotalCredits?.toString() ?? null,
+    approvers: e.approvers,
     openedAt: e.openedAt.toISOString(),
     closedAt: e.closedAt?.toISOString() ?? null,
     createdAt: e.createdAt.toISOString(),

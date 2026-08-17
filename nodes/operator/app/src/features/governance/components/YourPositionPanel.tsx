@@ -5,10 +5,9 @@
 
 /**
  * Module: `@features/governance/components/YourPositionPanel`
- * Purpose: "Your position" section of the Ownership page — the connected viewer's FULL on-chain wallet
- *   balance of the node token, broken into EARNED-VIA-CONTRIBUTIONS (cumulative attribution allocation)
- *   vs the REST (formation / other), plus the existing claim affordance for CLAIMABLE-NOW. Makes the
- *   distinction unmistakable: total holdings ≠ earned-via-attribution ≠ claimable-now.
+ * Purpose: "Your position" section of the Ownership page — the connected viewer's current on-chain
+ *   wallet balance shown independently from lifetime attribution allocation and the existing
+ *   claimable-now affordance. Fungible token provenance is never inferred by subtraction.
  * Scope: Client component. Sources the node's token/chain from repo-spec via useNodeTokenomicsConfig
  *   (so the on-chain wallet balance reads even with NO claim leaf), the viewer's earned-via-attribution
  *   allocation from useCumulativeClaim, and the viewer's on-chain token balance via useNodeTokenomics.
@@ -16,7 +15,8 @@
  * Invariants:
  *   - CONFIG_NOT_MANIFEST: the node token whose balance we read comes from repo-spec, never the claim leaf.
  *   - ALL_MATH_BIGINT: balances/allocations stay bigint; formatted only at display.
- *   - EARNED_IS_SUBSET: earned-via-attribution (cumulativeAmount) ≤ total holdings; "other" = holdings − earned, clamped ≥ 0.
+ *   - BALANCE_IS_NOT_PROVENANCE: current wallet balance and lifetime allocation are independent facts;
+ *     transfers mean neither may be subtracted from the other to infer where tokens came from.
  *   - CLAIM_UNCHANGED: the Claim affordance is the untouched CumulativeClaimPanel; this panel only frames it.
  * Side-effects: IO (config fetch); blockchain read (viewer balance via useNodeTokenomics; claim state via useCumulativeClaim).
  * Links: nodes/operator/app/src/features/governance/components/CumulativeClaimPanel.tsx, nodes/operator/app/src/features/governance/hooks/useCumulativeClaim.ts
@@ -58,56 +58,73 @@ function ConnectedPosition({
 }: {
   account: `0x${string}`;
 }): ReactElement {
-  const { claim } = useCumulativeClaim(account);
+  const {
+    claim,
+    isLoading: isAllocationLoading,
+    error: allocationError,
+  } = useCumulativeClaim(account);
 
   // CONFIG_NOT_MANIFEST: read the node token from repo-spec so the on-chain wallet
   // balance resolves even when this viewer has no claim leaf (e.g. a pure formation
   // holder, or a freshly seeded node with zero finalized epochs).
-  const { data: config } = useNodeTokenomicsConfig();
+  const { data: config, isLoading: isConfigLoading } =
+    useNodeTokenomicsConfig();
   const token = config?.tokenAddress ?? null;
   const chainId = config?.chainId;
 
-  const { viewerBalance, isLoading } = useNodeTokenomics({
+  const {
+    viewerBalance,
+    isLoading: isBalanceLoading,
+    error: balanceError,
+  } = useNodeTokenomics({
     token,
     distributor: null,
     viewer: account,
     chainId,
   });
 
-  // earned-via-attribution = cumulative allocation (claimed + still-claimable).
-  const earned = claim ? BigInt(claim.amount) : 0n;
-  // total holdings = full on-chain wallet balance of the node token.
-  const total = viewerBalance;
-  // the rest = holdings − earned (formation/genesis/other), clamped ≥ 0.
-  const other =
-    total === undefined ? undefined : total > earned ? total - earned : 0n;
+  const balanceValue = (() => {
+    if (viewerBalance !== undefined) return formatTokenAmount(viewerBalance);
+    if (isBalanceLoading || isConfigLoading) return "…";
+    if (balanceError) return "unavailable";
+    if (!token) return "No token configured";
+    return "unavailable";
+  })();
+
+  const lifetimeAllocationValue = (() => {
+    if (claim) return formatTokenAmount(BigInt(claim.amount));
+    if (isAllocationLoading) return "…";
+    if (allocationError) return "unavailable";
+    return "No allocation yet";
+  })();
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+        <p className="font-semibold text-sm">Two independent facts</p>
+        <p className="mt-1 text-muted-foreground text-sm">
+          Your wallet balance changes with claims and transfers. Lifetime
+          attribution records what this node allocated to you over time; it is
+          not a breakdown of the tokens currently in your wallet.
+        </p>
+      </div>
+      <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <PositionStat
-          label="Total holdings"
-          value={
-            total === undefined
-              ? isLoading
-                ? "…"
-                : "—"
-              : formatTokenAmount(total)
-          }
-          hint="Your full on-chain balance of this node's token"
+          label="Current wallet balance"
+          value={balanceValue}
+          hint="Live balanceOf for the connected wallet"
           emphasis
         />
         <PositionStat
-          label="Earned via contributions"
-          value={formatTokenAmount(earned)}
-          hint="Cumulative attribution allocation (claimed + claimable)"
+          label="Lifetime attribution allocation"
+          value={lifetimeAllocationValue}
+          hint="Cumulative allocation across published and pending claim data"
         />
-        <PositionStat
-          label="Formation / other"
-          value={other === undefined ? "…" : formatTokenAmount(other)}
-          hint="Holdings not earned via attribution (genesis, transfers)"
-        />
-      </div>
+      </dl>
+      <p className="text-muted-foreground text-xs">
+        Claimable now is shown below only when the allocation root matches the
+        distributor&apos;s live on-chain root.
+      </p>
     </div>
   );
 }
@@ -131,8 +148,8 @@ function PositionStat({
           : "rounded-lg border border-border/50 p-4"
       }
     >
-      <div className="text-muted-foreground text-xs">{label}</div>
-      <div className="mt-1 font-bold text-xl tracking-tight">{value}</div>
+      <dt className="text-muted-foreground text-xs">{label}</dt>
+      <dd className="mt-1 font-bold text-xl tracking-tight">{value}</dd>
       <p className="mt-1 text-muted-foreground text-xs">{hint}</p>
     </div>
   );

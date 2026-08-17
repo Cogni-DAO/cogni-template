@@ -5,18 +5,17 @@
 
 /**
  * Module: `@features/governance/components/ExecuteDistributionPanel`
- * Purpose: Node-owner PER-EPOCH PUBLISH surface on the finalized-epoch governance view. Publishing is
- *   a SINGLE clean action — once the node is set up, each epoch publishes in one transaction with NO
- *   vote: the wallet calls the DAO DIRECTLY, `DAO.execute(callId, [mint, setMerkleRoot], 0)`. There is
- *   no authorize step here anymore — the one-time SCOPED grant ("Authorize publishing") lives in the
- *   node-page distribution SETUP sequence (`DistributionsCard`). This panel only PUBLISHES.
+ * Purpose: Scoped-publisher PER-EPOCH PUBLISH surface on the finalized-epoch governance view.
+ *   A replay-safe setup may publish in one direct DAO.execute transaction with no per-epoch vote.
+ *   Legacy shape-only permission conditions are visible but fail closed because they can replay mint.
  * Scope: Client component. Fetch the publish payload (useExecuteDistribution) + read hasPermission
  *   (useHasExecutePermission) → wagmi useWriteContract. Connect-wallet + chain(chainId) gating, mint +
  *   root preview, tx hash + explorer link, success state. Does NOT perform DB access; the fold/worker
  *   NEVER sends these txs — this surface serves what R3 built and the wallet publishes.
  * Invariants:
- *   - PUBLISH_IS_DIRECT_EXECUTE: per-epoch publish is DAO.execute([mint,setRoot],0) — a direct call,
- *     one transaction, no vote; labeled as such. Never called a "proposal".
+ *   - PUBLISH_IS_DIRECT_EXECUTE: when replay-safe, per-epoch publish is one direct
+ *     DAO.execute([mint,setRoot],0) call with no proposal or vote.
+ *   - REPLAY_SAFETY_REQUIRED: a legacy shape-only condition never exposes the write action.
  *   - SETUP_GATES_PUBLISH: read DAO.hasPermission(DAO, wallet, EXECUTE_PERMISSION, "0x"). NOT granted ⇒
  *     do NOT offer authorize here; show a quiet "finish distribution setup on the node page" notice.
  *     Granted ⇒ the single "Publish distribution" button. The authorize governance step lives on the
@@ -37,7 +36,7 @@
 import { CUMULATIVE_MERKLE_DISTRIBUTOR_ABI } from "@cogni/cogni-contracts";
 import { getTransactionExplorerUrl } from "@cogni/node-shared";
 import Link from "next/link";
-import { type ReactNode, useCallback, useMemo } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef } from "react";
 import { encodeFunctionData, keccak256, parseAbi, toBytes } from "viem";
 import {
   useAccount,
@@ -70,7 +69,7 @@ import { getChainName } from "@/features/governance/lib/proposal-utils";
 
 /** Minimal GovernanceERC20 mint ABI (DAO holds MINT_PERMISSION on the token). */
 const TOKEN_MINT_ABI = parseAbi(["function mint(address to, uint256 amount)"]);
-/** Distributor view for the publish idempotency guard (is this root already live?). */
+/** Distributor view for a client preflight; atomic replay safety must still come from chain code. */
 const DISTRIBUTOR_MERKLE_ROOT_ABI = parseAbi([
   "function merkleRoot() view returns (bytes32)",
 ]);
@@ -83,23 +82,25 @@ function publishCallId(epochId: string): `0x${string}` {
 export function ExecuteDistributionPanel({
   nodeId,
   epochId,
+  onPublished,
 }: {
   /** Node UUID or slug — the authed execute-payload route resolves either. */
   nodeId: string;
   /** Finalized epoch id (decimal string). */
   epochId: string;
+  /** Refresh the page-level lifecycle evidence after a publish receipt confirms. */
+  onPublished?: () => void;
 }) {
-  const { payload, notReady, isLoading, error } = useExecuteDistribution(
-    nodeId,
-    epochId
-  );
+  const { payload, notReady, isLoading, error, refetch } =
+    useExecuteDistribution(nodeId, epochId);
 
   return (
     <Card className="border-border/50 bg-card/50">
       <CardHeader>
         <CardTitle>Publish distribution</CardTitle>
         <CardDescription>
-          Publish this epoch&apos;s claim root on-chain.
+          A scoped publisher sends one direct DAO transaction. There is no
+          proposal or vote for each epoch.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -115,7 +116,12 @@ export function ExecuteDistributionPanel({
         ) : notReady || !payload ? (
           <NotReadyNotice reason={notReady} />
         ) : (
-          <PublishBody nodeId={nodeId} payload={payload} />
+          <PublishBody
+            nodeId={nodeId}
+            payload={payload}
+            refreshPayload={refetch}
+            {...(onPublished ? { onPublished } : {})}
+          />
         )}
       </CardContent>
     </Card>
@@ -138,11 +144,23 @@ function NotReadyNotice({ reason }: { reason: string | null }) {
     },
     node_missing_governance: {
       title: "Governance not configured",
-      body: "This node is missing its DAO or voting-plugin address.",
+      body: "This node is missing its DAO address.",
     },
     negative_mint_delta: {
       title: "Nothing to mint",
       body: "This epoch's cumulative total does not increase over the prior distribution.",
+    },
+    superseded_manifest: {
+      title: "Superseded by a newer epoch",
+      body: "This historical cumulative root cannot be published directly. Finish the newest folded epoch instead.",
+    },
+    already_published: {
+      title: "Published",
+      body: "This epoch's cumulative claim root is already live on-chain.",
+    },
+    publication_state_unknown: {
+      title: "Publication status unavailable",
+      body: "The live distributor root could not be reconciled safely. Retry after chain data is available.",
     },
   };
   const { title, body } = copy[reason ?? ""] ?? {
@@ -166,9 +184,13 @@ function NotReadyNotice({ reason }: { reason: string | null }) {
 function PublishBody({
   nodeId,
   payload,
+  onPublished,
+  refreshPayload,
 }: {
   nodeId: string;
   payload: ExecuteDistributionPayload;
+  onPublished?: () => void;
+  refreshPayload: () => void;
 }) {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -191,6 +213,27 @@ function PublishBody({
     chainId: payload.chainId,
   });
 
+  if (payload.executionSafety !== "replay_safe") {
+    return (
+      <div className="space-y-4">
+        <DistributionSummary
+          mintDelta={mintDelta}
+          merkleRoot={payload.merkleRoot}
+          chainName={chainName}
+        />
+        <Alert role="alert">
+          <AlertTitle>Replay-safe publishing is required</AlertTitle>
+          <AlertDescription>
+            This node&apos;s current scoped permission validates the transaction
+            shape but cannot prevent the same mint from being replayed. Direct
+            publishing remains disabled until an atomic on-chain replay guard is
+            installed.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
+
   if (!isConnected || !address) {
     return (
       <div className="space-y-4">
@@ -201,7 +244,7 @@ function PublishBody({
         />
         <div className="space-y-2">
           <p className="text-muted-foreground text-sm">
-            Connect the node owner wallet to publish this distribution.
+            Connect the scoped publisher wallet to publish this distribution.
           </p>
           <WalletConnectButton />
         </div>
@@ -247,6 +290,8 @@ function PublishBody({
           mintDelta={mintDelta}
           address={address}
           chainName={chainName}
+          refreshPayload={refreshPayload}
+          {...(onPublished ? { onPublished } : {})}
         />
       ) : (
         <SetupNeededNotice nodeId={nodeId} />
@@ -272,6 +317,8 @@ function SetupNeededNotice({ nodeId }: { nodeId: string }) {
         >
           on the node page →
         </Link>
+        . Once replay-safe setup is installed, each epoch publishes directly
+        without a proposal or vote.
       </AlertDescription>
     </Alert>
   );
@@ -287,11 +334,15 @@ function PublishStep({
   mintDelta,
   address,
   chainName,
+  onPublished,
+  refreshPayload,
 }: {
   payload: ExecuteDistributionPayload;
   mintDelta: bigint;
   address: `0x${string}`;
   chainName: string;
+  onPublished?: () => void;
+  refreshPayload: () => void;
 }) {
   const {
     writeContract,
@@ -305,7 +356,12 @@ function PublishStep({
   // IDEMPOTENCY GUARD (bug: a re-publish re-minted the delta into the distributor). Read the
   // distributor's LIVE merkle root; if it already equals this epoch's root, the epoch is already
   // published — minting again would strand tokens with no matching claim. Never emit the tx.
-  const { data: onChainRoot } = useReadContract({
+  const {
+    data: onChainRoot,
+    isLoading: isRootLoading,
+    error: rootError,
+    refetch: refetchRoot,
+  } = useReadContract({
     abi: DISTRIBUTOR_MERKLE_ROOT_ABI,
     address: payload.distributorAddress,
     functionName: "merkleRoot",
@@ -317,6 +373,14 @@ function PublishStep({
   // A zero delta means there is nothing new to mint — publishing would only re-set the root.
   const nothingToMint = mintDelta === 0n;
   const published = alreadyPublished || isConfirmed;
+  const notifiedTxHash = useRef<`0x${string}` | null>(null);
+
+  useEffect(() => {
+    if (isConfirmed && txHash && notifiedTxHash.current !== txHash) {
+      notifiedTxHash.current = txHash;
+      onPublished?.();
+    }
+  }, [isConfirmed, onPublished, txHash]);
 
   const explorerUrl = txHash
     ? getTransactionExplorerUrl(payload.chainId, txHash)
@@ -352,8 +416,8 @@ function PublishStep({
     });
   }, [actions, address, payload.daoAddress, payload.epochId, writeContract]);
 
-  // Already live on-chain (this session or a prior one) → terminal state, no button.
-  if (published) {
+  // A confirmed write is terminal even if the follow-up read is still settling.
+  if (isConfirmed) {
     return (
       <Alert>
         <AlertTitle>Published</AlertTitle>
@@ -365,9 +429,71 @@ function PublishStep({
     );
   }
 
+  if (rootError) {
+    return (
+      <Alert variant="destructive" role="alert">
+        <AlertTitle>Couldn&apos;t verify the live claim root</AlertTitle>
+        <AlertDescription>
+          Publishing is blocked until the distributor can be read safely. Retry
+          after chain data is available.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (isRootLoading || typeof onChainRoot !== "string") {
+    return (
+      <output className="text-muted-foreground text-sm" aria-live="polite">
+        Verifying the live claim root before publishing&hellip;
+      </output>
+    );
+  }
+
+  // Already live on-chain from another caller → terminal state, no button.
+  if (published) {
+    return (
+      <Alert>
+        <AlertTitle>Published</AlertTitle>
+        <AlertDescription>
+          This epoch&apos;s claim root is live on {chainName}.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  const snapshotRoot = payload.alreadyExecutedRoot;
+  if (
+    snapshotRoot === null ||
+    onChainRoot.toLowerCase() !== snapshotRoot.toLowerCase()
+  ) {
+    return (
+      <Alert variant="destructive" role="alert">
+        <AlertTitle>Publication state changed</AlertTitle>
+        <AlertDescription className="space-y-3">
+          <p>
+            The live root changed after this mint delta was prepared. Refresh
+            the payload before publishing so funding is calculated from current
+            chain state.
+          </p>
+          <Button
+            variant="outline"
+            className="min-h-11 w-full sm:w-auto"
+            onClick={() => {
+              refreshPayload();
+              void refetchRoot();
+            }}
+          >
+            Refresh publication state
+          </Button>
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
   return (
     <div className="space-y-4">
       <Button
+        className="min-h-11 w-full sm:w-auto"
         onClick={onPublish}
         disabled={isPending || isConfirming || nothingToMint}
       >

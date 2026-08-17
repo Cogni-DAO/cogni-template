@@ -25,7 +25,7 @@ interface EpochCountdownProps {
   readonly periodEnd: string;
   readonly status: EpochView["status"];
   readonly contributorCount: number;
-  readonly totalPoints: number;
+  readonly totalPoints: string;
 }
 
 function useCountdown(periodStart: string, periodEnd: string) {

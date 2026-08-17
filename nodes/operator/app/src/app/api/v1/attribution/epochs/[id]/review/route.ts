@@ -61,6 +61,15 @@ export const POST = wrapRouteHandlerWithLogging<{
     if (!existing) {
       return NextResponse.json({ error: "Epoch not found" }, { status: 404 });
     }
+    if (existing.periodEnd.getTime() > Date.now()) {
+      return NextResponse.json(
+        {
+          error: "epoch_period_active",
+          periodEnd: existing.periodEnd.toISOString(),
+        },
+        { status: 409 }
+      );
+    }
 
     // Validate and lock config at review
     validateWeightConfig(existing.weightConfig);

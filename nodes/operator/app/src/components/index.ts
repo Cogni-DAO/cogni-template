@@ -117,6 +117,12 @@ export {
 } from "./kit/data-display/GitHubIdentity";
 export { GithubButton } from "./kit/data-display/GithubButton";
 export {
+  LifecycleProgress,
+  type LifecycleProgressProps,
+  type LifecycleProgressState,
+  type LifecycleProgressStep,
+} from "./kit/data-display/LifecycleProgress";
+export {
   PieChart,
   type PieChartDatum,
 } from "./kit/data-display/PieChart";

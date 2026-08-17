@@ -4,20 +4,17 @@
 /**
  * Module: `@app/(app)/gov/epoch/page`
  * Purpose: Server entrypoint for the current epoch governance page.
- * Scope: Server component only; delegates all client behavior to CurrentEpochView. Does not perform data fetching.
- * Invariants: Auth enforced by (app) layout guard. Resolves the operator's own node id
- *   server-side (getNodeId) and passes it to the client view so the finalized-epoch
- *   ExecuteDistributionPanel can address the authed per-node distribution-tx route.
- * Side-effects: none (server render only; reads repo-spec node id)
- * Links: src/features/governance/types.ts, src/shared/config/repoSpec.server.ts
+ * Scope: Read-only server entrypoint; delegates lifecycle rendering to CurrentEpochView.
+ * Invariants: Auth enforced by (app) layout guard. All epoch mutations live in /gov/review.
+ * Side-effects: none
+ * Links: src/features/governance/types.ts, docs/spec/tokenomics-distribution.md
  * @public
  */
 
 import type { ReactElement } from "react";
 
-import { getNodeId } from "@/shared/config/repoSpec.server";
 import { CurrentEpochView } from "./view";
 
 export default function CurrentEpochPage(): ReactElement {
-  return <CurrentEpochView nodeId={getNodeId()} />;
+  return <CurrentEpochView />;
 }

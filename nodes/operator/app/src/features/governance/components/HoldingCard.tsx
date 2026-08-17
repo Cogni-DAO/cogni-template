@@ -3,9 +3,9 @@
 
 /**
  * Module: `@features/governance/components/HoldingCard`
- * Purpose: Table row for a single holder in the holdings view — rank, avatar, credits, ownership%.
+ * Purpose: Table row for one attribution recipient — rank, identity, credits, credit share, epochs.
  * Scope: Governance feature component. Renders as TableRow for use inside shadcn Table. Does not perform data fetching or server-side logic.
- * Invariants: BigInt credits displayed via Number() for presentation only.
+ * Invariants: Credit counts stay bigint-backed through the display seam.
  * Side-effects: none
  * Links: src/features/governance/types.ts
  * @public
@@ -16,6 +16,7 @@
 import type { ReactElement } from "react";
 
 import { Badge, TableCell, TableRow } from "@/components";
+import { formatCreditAmount } from "@/features/governance/lib/tokenomics-visuals";
 import type { HoldingView } from "@/features/governance/types";
 
 interface HoldingRowProps {
@@ -24,8 +25,6 @@ interface HoldingRowProps {
 }
 
 export function HoldingRow({ holding, rank }: HoldingRowProps): ReactElement {
-  const credits = Number(holding.totalCredits);
-
   return (
     <TableRow>
       <TableCell className="w-10 text-center text-muted-foreground text-xs">
@@ -47,7 +46,7 @@ export function HoldingRow({ holding, rank }: HoldingRowProps): ReactElement {
         </div>
       </TableCell>
       <TableCell className="text-right font-mono text-xs">
-        {credits.toLocaleString()}
+        {formatCreditAmount(holding.totalCredits)}
       </TableCell>
       <TableCell className="text-right font-medium text-sm">
         {holding.ownershipPercent}%

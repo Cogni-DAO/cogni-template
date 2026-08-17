@@ -5,17 +5,17 @@
 
 /**
  * Module: `@features/governance/components/NodeTokenomicsPanel`
- * Purpose: "This node's tokenomics" VISUAL HERO of the Ownership page — the node's total token supply
- *   (on-chain totalSupply), how much of it sits in the distributor vs. is held elsewhere (on-chain
- *   distributor balance), the token + distributor contract links (Basescan), and epochs completed.
- *   Renders whenever the node HAS a token, whether or not any distribution has ever executed.
+ * Purpose: Visual token-issuance model for the Ownership page — the invariant finalize→mint→claim
+ *   flow plus an exact current totalSupply split between the distributor and wallets/elsewhere.
+ *   The static model remains visible before a token is configured, without fabricated figures.
  * Scope: Client component. Sources token/distributor/chain from repo-spec via useNodeTokenomicsConfig
  *   (the public tokenomics route) — NOT from a claim manifest — then reads on-chain facts (totalSupply,
- *   distributor balance) via useNodeTokenomics. Attribution totals (distributed credits) are passed in
+ *   distributor balance) via useNodeTokenomics. Attribution totals (finalized credits) are passed in
  *   from the page's existing useHoldings fetch. Does not perform DB access or write transactions.
  * Invariants:
  *   - CONFIG_NOT_MANIFEST: token/distributor/chain come from repo-spec, never a claim leaf.
- *   - RENDERS_WITH_ZERO_EPOCHS: the hero renders on a node with a token even before any distribution.
+ *   - RENDERS_WITH_ZERO_EPOCHS: the model renders before any distribution.
+ *   - ISSUED_IS_NOT_POLICY_CAP: totalSupply is labeled as current issuance, never planned supply.
  *   - ALL_MATH_BIGINT: amounts stay bigint; formatted only at display via formatTokenAmount.
  *   - READ_ONLY: pure reads; never mutates chain/DB state.
  * Side-effects: IO (config fetch); blockchain read (via useNodeTokenomics).
@@ -27,7 +27,14 @@ import { getAddressExplorerUrl } from "@cogni/node-shared";
 import { Coins } from "lucide-react";
 import type { ReactElement } from "react";
 
-import { SectionCard } from "@/components";
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Progress,
+  SectionCard,
+} from "@/components";
+import { DistributionModelFlow } from "@/features/governance/components/DistributionModelFlow";
 import {
   useNodeTokenomics,
   useNodeTokenomicsConfig,
@@ -36,15 +43,23 @@ import {
   formatTokenAmount,
   shortenAddress,
 } from "@/features/governance/lib/format-token-amount";
+import {
+  buildIssuanceSplit,
+  formatCreditAmount,
+  type IssuanceSplit,
+} from "@/features/governance/lib/tokenomics-visuals";
 
 export function NodeTokenomicsPanel({
-  distributedCredits,
+  finalizedCredits,
 }: {
-  /** Total credits distributed via attribution to date (raw credit count). */
-  distributedCredits: number;
+  /** Total credits finalized via attribution to date (raw credit count). */
+  finalizedCredits: string;
 }): ReactElement {
-  const { data: config, isLoading: isConfigLoading } =
-    useNodeTokenomicsConfig();
+  const {
+    data: config,
+    isLoading: isConfigLoading,
+    error: configError,
+  } = useNodeTokenomicsConfig();
 
   const token = config?.tokenAddress ?? null;
   const distributor = config?.distributorAddress ?? null;
@@ -77,42 +92,48 @@ export function NodeTokenomicsPanel({
     token && chainId ? getAddressExplorerUrl(chainId, token) : null;
   const distributorLink =
     distributor && chainId ? getAddressExplorerUrl(chainId, distributor) : null;
-
-  // "Held elsewhere" = totalSupply − distributor balance, clamped ≥ 0. The distributor
-  // holds tokens awaiting claims; everything else lives in wallets / the emissions holder.
-  const heldElsewhere =
-    totalSupply === undefined || distributorBalance === undefined
-      ? undefined
-      : totalSupply > distributorBalance
-        ? totalSupply - distributorBalance
-        : 0n;
+  const issuanceSplit = buildIssuanceSplit(totalSupply, distributorBalance);
 
   if (!token) {
     return (
-      <SectionCard title="This node's tokenomics">
-        <p className="text-muted-foreground text-sm">
-          {isConfigLoading
-            ? "Loading tokenomics…"
-            : "This node has no governance token configured yet. Once a DAO token is set in the node's governance config, its supply and distributor appear here."}
-        </p>
+      <SectionCard title="This node's token issuance">
+        <DistributionModelFlow />
+        <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+          <p className="font-semibold text-sm">
+            {isConfigLoading
+              ? "Loading token configuration…"
+              : configError
+                ? "Token configuration unavailable"
+                : "No token configured yet"}
+          </p>
+          <p className="mt-1 text-muted-foreground text-sm">
+            {isConfigLoading
+              ? "Checking this node's governance configuration."
+              : configError
+                ? "The node configuration could not be read, so no supply figures are assumed. Refresh to retry."
+                : "The flow above explains the distribution model, but this node has no governance token address to read. No supply figures are assumed."}
+          </p>
+        </div>
       </SectionCard>
     );
   }
 
   return (
-    <SectionCard title="This node's tokenomics">
+    <SectionCard title="This node's token issuance">
       <div className="space-y-6">
-        {/* HERO: total supply */}
+        <DistributionModelFlow />
+
+        {/* HERO: current issued supply, never the unpersisted policy cap. */}
         <div className="rounded-xl border border-primary/30 bg-gradient-to-br from-primary/10 to-primary/5 p-6">
           <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wide">
             <Coins className="h-4 w-4 text-primary" />
-            Total token supply
+            Current issued supply
           </div>
           <div className="mt-2 font-bold text-4xl tabular-nums tracking-tight sm:text-5xl">
             {display(totalSupply)}
           </div>
           <p className="mt-1 text-muted-foreground text-sm">
-            On-chain ERC20 totalSupply of this node&apos;s governance token
+            Live on-chain ERC20 totalSupply — not a planned policy cap
           </p>
           {readError && totalSupply === undefined ? (
             <p className="mt-2 text-destructive text-xs">
@@ -122,22 +143,48 @@ export function NodeTokenomicsPanel({
           ) : null}
         </div>
 
-        {/* Distributor split + epochs */}
-        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {distributor === null ? (
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+            <p className="font-semibold text-sm">Distributor not configured</p>
+            <p className="mt-1 text-muted-foreground text-sm">
+              There is no recorded distributor address, so the current supply
+              cannot be split into awaiting-claim and elsewhere balances.
+            </p>
+          </div>
+        ) : issuanceSplit?.kind === "available" ? (
+          <IssuanceGraphic split={issuanceSplit} />
+        ) : issuanceSplit?.kind === "inconsistent" ? (
+          <Alert variant="destructive">
+            <AlertTitle>Supply split temporarily unavailable</AlertTitle>
+            <AlertDescription>
+              The distributor balance read higher than total supply. These
+              separate chain reads may be from different blocks; refresh before
+              relying on the split.
+            </AlertDescription>
+          </Alert>
+        ) : readError ? (
+          <Alert variant="destructive">
+            <AlertTitle>Couldn&apos;t read the current supply split</AlertTitle>
+            <AlertDescription>
+              This is an RPC read failure, not a zero distributor balance.
+            </AlertDescription>
+          </Alert>
+        ) : (
+          <p className="text-muted-foreground text-sm">
+            Reading current distributor and wallet balances…
+          </p>
+        )}
+
+        <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <Stat
-            label="In distributor"
-            value={distributor === null ? "—" : display(distributorBalance)}
-            hint="Tokens held by the distributor awaiting claims"
-          />
-          <Stat
-            label="Held elsewhere"
-            value={display(heldElsewhere)}
-            hint="Supply outside the distributor (wallets, emissions holder)"
-          />
-          <Stat
-            label="Epochs completed"
+            label="Finalized epochs"
             value={epochsCompleted.toLocaleString()}
-            hint={`Finalized attribution epochs · ${distributedCredits.toLocaleString()} credits distributed`}
+            hint="Epochs with signed, frozen attribution"
+          />
+          <Stat
+            label="Finalized attribution credits"
+            value={formatCreditAmount(finalizedCredits)}
+            hint="Off-chain credits — not an ERC20 token balance"
           />
         </dl>
 
@@ -158,6 +205,52 @@ export function NodeTokenomicsPanel({
         </div>
       </div>
     </SectionCard>
+  );
+}
+
+function IssuanceGraphic({
+  split,
+}: {
+  split: Extract<IssuanceSplit, { kind: "available" }>;
+}): ReactElement {
+  const total = formatTokenAmount(split.totalSupply);
+  const distributor = formatTokenAmount(split.distributorBalance);
+  const elsewhere = formatTokenAmount(split.walletsElsewhereBalance);
+
+  return (
+    <div className="space-y-4 rounded-lg border border-border/60 p-4">
+      <div>
+        <div className="flex flex-col justify-between gap-1 sm:flex-row sm:items-end">
+          <div>
+            <p className="font-semibold text-sm">Where issued tokens are now</p>
+            <p className="text-muted-foreground text-xs">
+              An exact split of current supply, not lifetime issuance history
+            </p>
+          </div>
+          <p className="font-mono text-muted-foreground text-xs">
+            {total} total
+          </p>
+        </div>
+        <Progress
+          value={split.distributorPercent}
+          aria-label={`${split.distributorPercent.toLocaleString()} percent in the distributor awaiting claims; ${split.walletsElsewherePercent.toLocaleString()} percent in wallets or elsewhere`}
+          className="mt-3"
+        />
+      </div>
+
+      <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Stat
+          label="Awaiting claims in distributor"
+          value={distributor}
+          hint={`${split.distributorPercent.toLocaleString()}% of issued supply`}
+        />
+        <Stat
+          label="In wallets / elsewhere"
+          value={elsewhere}
+          hint={`${split.walletsElsewherePercent.toLocaleString()}% of issued supply`}
+        />
+      </dl>
+    </div>
   );
 }
 
