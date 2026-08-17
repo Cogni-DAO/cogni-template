@@ -4,12 +4,12 @@
 /**
  * Module: `@app/_facades/identity/attestation-broker.server`
  * Purpose: Completes the authenticated browser leg of identity.attestation.v1.
- * Scope: Resolves the registered node's canonical origin, validates return_to,
+ * Scope: Resolves the registered node's canonical origins from deploy_envs, validates return_to,
  *   resolves configured signing custody, and delegates JWT issuance.
  * Invariants:
  *   - NO_OPEN_REDIRECT: return_to must be exactly the registered node's
- *     canonical `/profile` URL in this operator environment.
- *   - SAME_REQUEST_BINDING: the exact nodeId + nonce validated by the shared
+ *     canonical `/profile` URL in one of its registered deploy environments.
+ *   - SAME_REQUEST_BINDING: the exact nodeId + nonce + registered targetOrigin validated by the shared
  *     contract are passed unchanged to the issuer.
  *   - FRAGMENT_ONLY: the signed token is returned in a URL fragment, never a
  *     query string or cross-origin fetch response.
@@ -29,7 +29,8 @@ import { resolveServiceDb } from "@/bootstrap/container";
 import { resolveNodeRef } from "@/features/nodes/node-lookup";
 import { serverEnv } from "@/shared/env";
 import { importAttestationSigningKey } from "@/shared/identity/attestation-keys";
-import { baseDomain, hostForNode } from "@/shared/node-registry/resolve";
+import { hostForEnv, rootDomain } from "@/shared/node-registry/deploy-hosts";
+import { baseDomain } from "@/shared/node-registry/resolve";
 
 export type AttestationBrokerErrorCode =
   | "attestation_unavailable"
@@ -97,14 +98,22 @@ export async function issueBrowserIdentityAttestation(params: {
     throw new AttestationBrokerError("unknown_node");
   }
 
-  const targetOrigin = `https://${hostForNode(
-    targetNode.slug,
-    targetNode.slug === "operator",
-    domain
-  )}`;
+  const deployRootDomain = rootDomain(domain);
+  const registeredOrigins = targetNode.deployEnvs.map(
+    (deployEnv) =>
+      `https://${hostForEnv(
+        targetNode.slug,
+        targetNode.slug === "operator",
+        deployEnv,
+        deployRootDomain
+      )}`
+  );
+  if (!registeredOrigins.includes(params.request.targetOrigin)) {
+    throw new AttestationBrokerError("invalid_return_to");
+  }
   const safeReturnTo = validateAttestationReturnTo(
     params.returnTo,
-    targetOrigin
+    params.request.targetOrigin
   );
   if (!safeReturnTo) {
     throw new AttestationBrokerError("invalid_return_to");
@@ -123,6 +132,7 @@ export async function issueBrowserIdentityAttestation(params: {
     const issued = await issueIdentityAttestation({
       sessionUser: params.sessionUser,
       issuer,
+      domain,
       signingKey,
       request: params.request,
     });
