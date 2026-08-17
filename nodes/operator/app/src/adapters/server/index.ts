@@ -97,6 +97,10 @@ export {
 } from "./deploy/probe-deploy.adapter";
 export { DrizzleGovernanceStatusAdapter } from "./governance/drizzle-governance-status.adapter";
 export {
+  DrizzleIdentityAttestationRepository,
+  JoseIdentityAttestationSigner,
+} from "./identity/identity-attestation.adapter";
+export {
   ALCHEMY_ADAPTER_VERSION,
   AlchemyWebhookNormalizer,
 } from "./ingestion/alchemy-webhook";
