@@ -5,15 +5,13 @@
  * Module: `@features/governance/hooks/useExecuteDistribution`
  * Purpose: React hooks powering the two-state distribution PUBLISH surface.
  *   - `useExecuteDistribution` fetches the publish payload for a finalized epoch — the mint delta,
- *     new merkle root, distributor/token/DAO/plugin addresses, and chain — so the owner's wallet can
+ *     new merkle root, distributor/token/DAO addresses, and chain — so a scoped publisher wallet can
  *     build the mint + setMerkleRoot actions. Read-only: the write is the caller's wagmi hook.
- *   - `useHasExecutePermission` reads `DAO.hasPermission(DAO, wallet, EXECUTE_PERMISSION, "0x")` on
- *     chain so the panel knows whether the wallet already holds standing publish authority. If NOT,
- *     the UI shows the ONE-TIME authorize step (a governance proposal granting EXECUTE_PERMISSION);
- *     if YES, it shows the PER-EPOCH direct `DAO.execute([mint,setRoot])` publish (no vote).
- * Scope: Client-side. The payload fetch hits the AUTHED per-node route (owner session OR node.flight)
- *   same-origin with the session cookie; the permission read is a pure on-chain view call. Neither
- *   performs DB access or write txs.
+ *   - `useHasExecutePermission` reads the scoped DAO EXECUTE permission using a representative publish
+ *     call. If absent, the UI points to one-time setup; if present, the per-epoch write is one direct
+ *     `DAO.execute([mint,setRoot])` transaction with no proposal or vote.
+ * Scope: Client-side. The payload fetch hits the SIWE-authenticated per-node read route same-origin;
+ *   the permission read is a pure on-chain view call. Neither performs DB access or write txs.
  * Invariants:
  *   - ALL_MATH_BIGINT: mintDelta arrives as a decimal string; callers BigInt() it before display/tx.
  *   - READ_ONLY_SERVES_R3: the payload is exactly what R3 persisted; the hook never mutates state.
@@ -104,8 +102,9 @@ export interface ExecuteDistributionPayload {
   readonly distributorAddress: `0x${string}`;
   readonly tokenAddress: `0x${string}`;
   readonly daoAddress: `0x${string}`;
-  readonly pluginAddress: `0x${string}`;
   readonly chainId: number;
+  /** Direct publish is enabled only once an on-chain guard proves atomic replay protection. */
+  readonly executionSafety: "legacy_shape_only" | "replay_safe";
   readonly alreadyExecutedRoot: `0x${string}` | null;
 }
 
@@ -117,7 +116,10 @@ export type NotReadyReason =
   | "no_distribution_manifest"
   | "distributor_not_recorded"
   | "node_missing_governance"
-  | "negative_mint_delta";
+  | "negative_mint_delta"
+  | "superseded_manifest"
+  | "already_published"
+  | "publication_state_unknown";
 
 interface ExecuteDistributionResult {
   readonly payload: ExecuteDistributionPayload | null;
@@ -139,7 +141,7 @@ async function fetchExecutePayload(
     }
   );
 
-  if (res.status === 404 || res.status === 409) {
+  if (res.status === 404 || res.status === 409 || res.status === 503) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     return { payload: null, notReady: (body.error ?? null) as NotReadyReason };
   }

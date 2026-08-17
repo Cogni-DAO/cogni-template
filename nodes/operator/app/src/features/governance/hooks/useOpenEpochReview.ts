@@ -63,6 +63,9 @@ export function useEpochReviewReadiness(
   const [boundaryReached, setBoundaryReached] = useState(false);
 
   useEffect(() => {
+    // A workspace can advance to a different epoch without unmounting this hook. Never carry the
+    // previous epoch's reached boundary into a new period or non-open status.
+    setBoundaryReached(false);
     if (status !== "open") return;
     const periodEndMs = Date.parse(periodEnd);
     if (!Number.isFinite(periodEndMs)) return;

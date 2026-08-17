@@ -111,9 +111,6 @@ export const PATCH = wrapRouteHandlerWithLogging<{
   },
   async (ctx, request, sessionUser, context) => {
     try {
-      const denied = checkApprover(ctx, sessionUser?.walletAddress);
-      if (denied) return denied;
-
       if (!context) throw new Error("context required for dynamic routes");
       const { id } = await context.params;
       const epochId = parseEpochId(id);
@@ -141,6 +138,9 @@ export const PATCH = wrapRouteHandlerWithLogging<{
       if (!epoch) {
         return NextResponse.json({ error: "Epoch not found" }, { status: 404 });
       }
+
+      const denied = checkApprover(ctx, sessionUser?.walletAddress, epoch);
+      if (denied) return denied;
 
       if (epoch.status !== "review") {
         return NextResponse.json(
@@ -292,9 +292,6 @@ export const DELETE = wrapRouteHandlerWithLogging<{
   },
   async (ctx, request, sessionUser, context) => {
     try {
-      const denied = checkApprover(ctx, sessionUser?.walletAddress);
-      if (denied) return denied;
-
       if (!context) throw new Error("context required for dynamic routes");
       const { id } = await context.params;
       const epochId = parseEpochId(id);
@@ -322,6 +319,9 @@ export const DELETE = wrapRouteHandlerWithLogging<{
       if (!epoch) {
         return NextResponse.json({ error: "Epoch not found" }, { status: 404 });
       }
+
+      const denied = checkApprover(ctx, sessionUser?.walletAddress, epoch);
+      if (denied) return denied;
 
       if (epoch.status !== "review") {
         return NextResponse.json(

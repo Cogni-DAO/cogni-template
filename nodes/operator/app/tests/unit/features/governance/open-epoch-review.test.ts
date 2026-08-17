@@ -78,6 +78,23 @@ describe("useEpochReviewReadiness", () => {
     expect(review.result.current).toBe(false);
     expect(finalized.result.current).toBe(false);
   });
+
+  it("resets a reached boundary when the workspace advances to a later epoch", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(END_MS + 1_000);
+    const nextEnd = "2026-08-24T00:00:00.000Z";
+
+    const { result, rerender } = renderHook(
+      ({ periodEnd }) => useEpochReviewReadiness("open", periodEnd),
+      { initialProps: { periodEnd: END } }
+    );
+    act(() => vi.advanceTimersByTime(0));
+    expect(result.current).toBe(true);
+
+    rerender({ periodEnd: nextEnd });
+
+    expect(result.current).toBe(false);
+  });
 });
 
 describe("useOpenEpochReview", () => {

@@ -3,10 +3,11 @@
 
 /**
  * Module: `@app/(app)/gov/review/page`
- * Purpose: Server entrypoint for the epoch review admin page with wallet context.
- * Scope: Server component. Passes the SIWE wallet to the client view, which compares it with each epoch's pinned authority. Does not perform data fetching or mutations.
- * Invariants: REVIEW_AUTHORITY_IS_EPOCH_PINNED; write routes independently enforce authorization. Auth enforced by (app) layout guard.
- * Side-effects: IO (auth session read)
+ * Purpose: Server entrypoint for the viewable-to-all Finish Epoch workspace.
+ * Scope: Passes node identity plus current-policy wallet context. Epoch-pinned and on-chain publish
+ *   authority are resolved per action in the client; server routes remain authoritative.
+ * Invariants: ACTIONS_GATED_NOT_STATE, REVIEW_AUTHORITY_IS_EPOCH_PINNED.
+ * Side-effects: IO (auth session + config reads)
  * Links: src/app/api/v1/attribution/_lib/approver-guard.ts
  * @public
  */
@@ -14,12 +15,20 @@
 import type { ReactElement } from "react";
 
 import { getServerSessionUser } from "@/lib/auth/server";
+import { getLedgerApprovers, getNodeId } from "@/shared/config";
 
 import { ReviewView } from "./view";
 
 export default async function ReviewPage(): Promise<ReactElement> {
   const user = await getServerSessionUser();
+  const walletAddress = user?.walletAddress?.toLowerCase() ?? null;
+  const isCurrentApprover =
+    walletAddress !== null && getLedgerApprovers().includes(walletAddress);
   return (
-    <ReviewView walletAddress={user?.walletAddress?.toLowerCase() ?? null} />
+    <ReviewView
+      nodeId={getNodeId()}
+      walletAddress={walletAddress}
+      isCurrentApprover={isCurrentApprover}
+    />
   );
 }

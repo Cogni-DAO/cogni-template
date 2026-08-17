@@ -36,13 +36,13 @@ Governance feature slice — schedule sync, governance status dashboard, claiman
 ## Public Surface
 
 - **Exports (services):** `syncGovernanceSchedules()`, `GovernanceScheduleSyncDeps`, `GovernanceScheduleSyncResult`, `governanceScheduleId()`, `getGovernanceStatus()`, `GovernanceStatusResult`, `dispatchSignalExecution()`, `handleSignal()`, `SignalHandlerDeps`
-- **Exports (hooks):** `useGovernanceStatus()`, `useCurrentEpoch()`, `useEpochHistory()`, `useHoldings()`, `useReviewEpochs()`, `useSignEpoch()`, `useReviewSubjectOverrides()`, `useOpenEpochReview()`, `useEpochReviewReadiness()`
-- **Exports (components):** `ContributorCard`, `ContributionRow`, `EpochCard`, `EpochCountdown`, `EpochDetail`, `EpochReviewAction`, `HoldingCard`, `SourceBadge`
-- **Exports (lib):** `composeEpochView()`, `composeEpochViewFromClaimants()`, `applyOverridesToEpochView()`, `composeHoldings()`
+- **Exports (hooks):** `useGovernanceStatus()`, `useCurrentEpoch()`, `useEpochHistory()`, `useEpochsPage()`, `useHoldings()`, `useReviewEpochs()`, `useSignEpoch()`, `useReviewSubjectOverrides()`, `useOpenEpochReview()`, `useEpochReviewReadiness()`, `useExecuteDistribution()`, `useHasExecutePermission()`
+- **Exports (components):** `ContributorCard`, `ContributionRow`, `EpochCard`, `EpochCountdown`, `EpochDetail`, `EpochLifecycleProgress`, `EpochReviewAction`, `ExecuteDistributionPanel`, `HoldingCard`, `SourceBadge`
+- **Exports (lib):** `composeEpochView()`, `composeEpochViewFromClaimants()`, `applyOverridesToEpochView()`, `composeHoldings()`, `deriveEpochLifecycle()`, `selectFinishEpoch()`
 - **Exports (types):** `EpochView`, `EpochContributor`, `IngestionReceipt`, `HoldingView`, `CurrentEpochData`, `EpochHistoryData`, `HoldingsData`, `SignEpochState`, `SignEpochPhase`, `ReviewSubjectOverrideView`, `EpochDetailProps`, `Signal`, `ActionResult`, `RepoRef`
 - **Exports (signal):** `parseCogniAction()`, `parseRepoRef()`, `COGNI_TOPIC0`, `resolveAction()`, `mergeChange()`, `grantCollaborator()`, `revokeCollaborator()`
-- **Routes (app pages):** `/gov` (system), `/gov/epoch` (current), `/gov/history` (finalized), `/gov/holdings` (aggregated), `/gov/review` (approver admin — inline editing + EIP-712 sign & finalize)
-- **Routes (API — in `src/app/api/v1/attribution/`):** `GET /epochs`, `GET /epochs/:id/user-projections`, `GET /epochs/:id/statement`, `GET /epochs/:id/claimants`, `GET /epochs/:id/activity`, `GET /epochs/:id/sign-data`, `GET|PATCH|DELETE /epochs/:id/review-subject-overrides`
+- **Routes (app pages):** `/gov` (ownership redirect), `/gov/epoch` (read-only current + history lifecycle), `/gov/holdings` (aggregated + claim), `/gov/review` (viewable Finish Epoch workspace; actions individually gated)
+- **Routes (API — in `src/app/api/v1/attribution/`):** `GET /epochs`, `GET /distribution-lifecycle`, `GET /epochs/:id/user-projections`, `GET /epochs/:id/statement`, `GET /epochs/:id/claimants`, `GET /epochs/:id/activity`, `GET /epochs/:id/sign-data`, `GET|PATCH|DELETE /epochs/:id/review-subject-overrides`
 - **CLI:** `pnpm governance:schedules:sync`, `pnpm db:seed`, `pnpm dev:setup`
 - **Env/Config keys:** `.cogni/repo-spec.yaml` → `governance.schedules`, `governance` (signal contract, chain_id, etc.)
 
@@ -53,7 +53,7 @@ Governance feature slice — schedule sync, governance status dashboard, claiman
 
 ## Responsibilities
 
-- This directory **does**: Sync governance schedules; provide epoch UI hooks, view-model composition, and presentational components; pause removed schedules (PRUNE_IS_PAUSE); decode and execute on-chain CogniAction signals (merge PR, grant/revoke collaborator)
+- This directory **does**: Sync governance schedules; provide epoch UI hooks, view-model composition, and presentational components; fail closed when review snapshots or publication evidence cannot be verified; pause removed schedules (PRUNE_IS_PAUSE); decode and execute on-chain CogniAction signals (merge PR, grant/revoke collaborator)
 - This directory **does not**: Execute workflows, manage tenant-facing schedule CRUD, access DB directly, perform credit math (ALL_MATH_BIGINT stays server-side), verify webhooks (that's the adapter's job)
 
 ## Usage
