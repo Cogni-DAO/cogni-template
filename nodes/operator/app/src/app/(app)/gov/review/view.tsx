@@ -57,11 +57,11 @@ export function ReviewView({ isApprover }: ReviewViewProps): ReactElement {
 
   if (!isApprover) {
     return (
-      <div className="bg-card flex flex-col items-center justify-center gap-4 rounded-lg border p-12 text-center">
-        <Lock className="text-muted-foreground h-10 w-10" />
+      <div className="flex flex-col items-center justify-center gap-4 rounded-lg border bg-card p-12 text-center">
+        <Lock className="h-10 w-10 text-muted-foreground" />
         <div>
-          <h2 className="text-lg font-semibold">Not Authorized</h2>
-          <p className="text-muted-foreground mt-1 text-sm">
+          <h2 className="font-semibold text-lg">Not Authorized</h2>
+          <p className="mt-1 text-muted-foreground text-sm">
             Only ledger approvers can access the epoch review page. Connect an
             approver wallet via SIWE to proceed.
           </p>
@@ -72,8 +72,8 @@ export function ReviewView({ isApprover }: ReviewViewProps): ReactElement {
 
   if (error) {
     return (
-      <div className="border-destructive bg-destructive/10 rounded-lg border p-6">
-        <h2 className="text-destructive text-lg font-semibold">
+      <div className="rounded-lg border border-destructive bg-destructive/10 p-6">
+        <h2 className="font-semibold text-destructive text-lg">
           Error loading review data
         </h2>
         <p className="text-muted-foreground text-sm">
@@ -86,8 +86,8 @@ export function ReviewView({ isApprover }: ReviewViewProps): ReactElement {
   if (isLoading || !reviewEpochs) {
     return (
       <div className="animate-pulse space-y-6">
-        <div className="bg-muted h-8 w-64 rounded-md" />
-        <div className="bg-muted h-64 rounded-lg" />
+        <div className="h-8 w-64 rounded-md bg-muted" />
+        <div className="h-64 rounded-lg bg-muted" />
       </div>
     );
   }
@@ -95,18 +95,18 @@ export function ReviewView({ isApprover }: ReviewViewProps): ReactElement {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="mb-1 text-3xl font-bold tracking-tight">Epoch Review</h1>
+        <h1 className="mb-1 font-bold text-3xl tracking-tight">Epoch Review</h1>
         <p className="text-muted-foreground text-sm">
           Review contributions, adjust weights, and sign to finalize.
         </p>
       </div>
 
       {reviewEpochs.length === 0 ? (
-        <div className="bg-card rounded-lg border p-12 text-center">
+        <div className="rounded-lg border bg-card p-12 text-center">
           <p className="text-muted-foreground">
             No epochs currently in review.
           </p>
-          <p className="text-muted-foreground mt-2 text-sm">
+          <p className="mt-2 text-muted-foreground text-sm">
             Epochs will appear here when they transition from open to review.
           </p>
         </div>
@@ -161,8 +161,8 @@ function ReviewEpochSection({
   return (
     <div className="space-y-4">
       {activeOverrideCount > 0 && (
-        <div className="border-warning/30 bg-warning/5 flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-          <Pencil className="text-warning h-3.5 w-3.5" />
+        <div className="flex items-center gap-2 rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-sm">
+          <Pencil className="h-3.5 w-3.5 text-warning" />
           <span className="text-warning">
             {activeOverrideCount} active weight{" "}
             {activeOverrideCount === 1 ? "override" : "overrides"}
@@ -179,7 +179,7 @@ function ReviewEpochSection({
       />
 
       {/* Sign & Finalize action */}
-      <div className="bg-card flex flex-wrap items-center gap-3 rounded-lg border p-4">
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border bg-card p-4">
         {state.phase === "IDLE" && (
           <Button onClick={handleSign}>
             <FileSignature className="mr-2 h-4 w-4" />
@@ -197,7 +197,7 @@ function ReviewEpochSection({
         )}
 
         {state.phase === "SUCCESS" && (
-          <div className="text-success flex items-center gap-2 text-sm">
+          <div className="flex items-center gap-2 text-sm text-success">
             <CheckCircle2 className="h-4 w-4" />
             <span>Epoch finalized (statement: {state.statementId})</span>
           </div>
@@ -212,7 +212,7 @@ function ReviewEpochSection({
           </div>
         )}
 
-        <p className="text-muted-foreground w-full text-xs">
+        <p className="w-full text-muted-foreground text-xs">
           Verify the deployment environment shown in your wallet. This signature
           cannot be reused in another environment.
         </p>
@@ -288,7 +288,7 @@ function ReviewReceiptRow({
         <TableCell colSpan={6} className="p-2">
           <div className="space-y-2">
             <div className="flex min-w-0 items-center gap-2 text-sm">
-              <Icon className="text-muted-foreground h-3.5 w-3.5" />
+              <Icon className="h-3.5 w-3.5 text-muted-foreground" />
               <SourceBadge source={receipt.source as "github" | "discord"} />
               <span className="text-muted-foreground text-xs">
                 {TYPE_LABELS[receipt.eventType] ?? receipt.eventType}
@@ -296,7 +296,7 @@ function ReviewReceiptRow({
               {title && (
                 <>
                   <span className="text-muted-foreground/40">·</span>
-                  <span className="text-foreground/80 truncate text-xs">
+                  <span className="truncate text-foreground/80 text-xs">
                     {title}
                   </span>
                 </>
@@ -306,7 +306,7 @@ function ReviewReceiptRow({
               <div className="flex-1">
                 <label
                   htmlFor={`override-units-${receipt.receiptId}`}
-                  className="text-muted-foreground mb-1 block text-xs"
+                  className="mb-1 block text-muted-foreground text-xs"
                 >
                   Override weight (units)
                 </label>
@@ -325,7 +325,7 @@ function ReviewReceiptRow({
               <div className="flex-2">
                 <label
                   htmlFor={`override-reason-${receipt.receiptId}`}
-                  className="text-muted-foreground mb-1 block text-xs"
+                  className="mb-1 block text-muted-foreground text-xs"
                 >
                   Reason (optional)
                 </label>
@@ -385,13 +385,13 @@ function ReviewReceiptRow({
       <TableCell className="w-8 px-2" />
       {/* # column — type icon */}
       <TableCell className="w-10 text-center">
-        <Icon className="text-muted-foreground mx-auto h-3.5 w-3.5" />
+        <Icon className="mx-auto h-3.5 w-3.5 text-muted-foreground" />
       </TableCell>
       {/* Contributor column — source + type + title + override badge */}
       <TableCell>
         <div className="flex min-w-0 items-center gap-2 text-sm">
           <SourceBadge source={receipt.source as "github" | "discord"} />
-          <span className="text-muted-foreground shrink-0 text-xs">
+          <span className="shrink-0 text-muted-foreground text-xs">
             {TYPE_LABELS[receipt.eventType] ?? receipt.eventType}
           </span>
           {title && (
@@ -402,14 +402,14 @@ function ReviewReceiptRow({
                   href={receipt.artifactUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="group text-foreground/80 hover:text-foreground flex min-w-0 items-center gap-1 text-xs"
+                  className="group flex min-w-0 items-center gap-1 text-foreground/80 text-xs hover:text-foreground"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <span className="truncate">{title}</span>
-                  <ExternalLink className="text-muted-foreground h-3 w-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+                  <ExternalLink className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                 </a>
               ) : (
-                <span className="text-foreground/80 truncate text-xs">
+                <span className="truncate text-foreground/80 text-xs">
                   {title}
                 </span>
               )}
@@ -436,7 +436,7 @@ function ReviewReceiptRow({
               <span className="text-warning">{override.overrideUnits}</span>
             </span>
           ) : score != null ? (
-            <span className="text-muted-foreground font-mono text-xs">
+            <span className="font-mono text-muted-foreground text-xs">
               {score}
             </span>
           ) : null}
@@ -457,7 +457,7 @@ function ReviewReceiptRow({
               <Button
                 size="sm"
                 variant="ghost"
-                className="text-muted-foreground hover:text-destructive h-6 px-1.5"
+                className="h-6 px-1.5 text-muted-foreground hover:text-destructive"
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleRemove();
