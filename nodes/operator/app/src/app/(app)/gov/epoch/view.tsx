@@ -13,11 +13,22 @@
 
 "use client";
 
-import { CheckCircle, Clock, Eye } from "lucide-react";
+import {
+  ArrowRight,
+  CheckCircle,
+  Clock,
+  Eye,
+  Loader2,
+  ShieldCheck,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
 import type { ReactElement } from "react";
 import { useMemo } from "react";
 import {
+  Alert,
+  AlertDescription,
   Badge,
+  Button,
   ExpandableTableRow,
   PieChart,
   Table,
@@ -30,6 +41,10 @@ import { EpochCountdown } from "@/features/governance/components/EpochCountdown"
 import { EpochDetail } from "@/features/governance/components/EpochDetail";
 import { ExecuteDistributionPanel } from "@/features/governance/components/ExecuteDistributionPanel";
 import { useEpochsPage } from "@/features/governance/hooks/useEpochsPage";
+import {
+  isEpochReadyForReview,
+  useOpenEpochReview,
+} from "@/features/governance/hooks/useOpenEpochReview";
 import { buildPieChartData } from "@/features/governance/lib/build-pie-data";
 import type { EpochView } from "@/features/governance/types";
 
@@ -73,9 +88,18 @@ function StatusBadge({
 
 function CurrentEpochSection({
   epoch,
+  isApprover,
 }: {
   readonly epoch: EpochView;
+  readonly isApprover: boolean;
 }): ReactElement {
+  const router = useRouter();
+  const openReview = useOpenEpochReview();
+  const reviewReady = isEpochReadyForReview(
+    epoch.status,
+    epoch.periodEnd,
+    Date.now()
+  );
   const sorted = useMemo(
     () =>
       [...epoch.contributors].sort((a, b) => Number(b.units) - Number(a.units)),
@@ -141,6 +165,62 @@ function CurrentEpochSection({
       </div>
 
       <EpochDetail epoch={epoch} hideHeader />
+
+      {(reviewReady || epoch.status === "review") && (
+        <div className="flex flex-col gap-4 rounded-lg border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex gap-3">
+            <ShieldCheck className="mt-0.5 size-5 shrink-0 text-primary" />
+            <div>
+              <p className="font-medium">
+                {epoch.status === "review"
+                  ? "Epoch review is ready"
+                  : "This epoch is ready for review"}
+              </p>
+              <p className="mt-1 text-muted-foreground text-sm">
+                {isApprover
+                  ? "Review the final contribution set, then sign to finalize it."
+                  : "Waiting for a configured ledger approver to continue."}
+              </p>
+            </div>
+          </div>
+
+          {isApprover && (
+            <Button
+              className="min-h-11 shrink-0"
+              disabled={openReview.isPending}
+              onClick={() => {
+                if (epoch.status === "review") {
+                  router.push("/gov/review");
+                  return;
+                }
+                openReview.mutate(epoch.id, {
+                  onSuccess: () => router.push("/gov/review"),
+                });
+              }}
+            >
+              {openReview.isPending ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  Opening review&hellip;
+                </>
+              ) : (
+                <>
+                  {epoch.status === "review"
+                    ? "Continue review"
+                    : "Open for review"}
+                  <ArrowRight className="ml-2 size-4" />
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      )}
+
+      {openReview.error && (
+        <Alert variant="destructive" role="alert">
+          <AlertDescription>{openReview.error.message}</AlertDescription>
+        </Alert>
+      )}
     </div>
   );
 }
@@ -236,9 +316,12 @@ function PastEpochsSection({
 
 export function CurrentEpochView({
   nodeId,
+  isApprover,
 }: {
   /** Operator's own node id (from repo-spec) — addresses the per-epoch execute route. */
   readonly nodeId: string;
+  /** Defense-in-depth visibility gate; the mutation route rechecks the wallet. */
+  readonly isApprover: boolean;
 }): ReactElement {
   const { data, isLoading, error } = useEpochsPage();
 
@@ -272,7 +355,7 @@ export function CurrentEpochView({
   return (
     <div className="space-y-10">
       {data.current ? (
-        <CurrentEpochSection epoch={data.current} />
+        <CurrentEpochSection epoch={data.current} isApprover={isApprover} />
       ) : (
         <div className="rounded-lg border bg-card p-12 text-center">
           <p className="text-muted-foreground">No active epoch</p>

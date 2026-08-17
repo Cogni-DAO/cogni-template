@@ -4,8 +4,9 @@
 /**
  * Module: `@app/(app)/gov/epoch/page`
  * Purpose: Server entrypoint for the current epoch governance page.
- * Scope: Server component only; delegates all client behavior to CurrentEpochView. Does not perform data fetching.
- * Invariants: Auth enforced by (app) layout guard. Resolves the operator's own node id
+ * Scope: Server component only; resolves approver visibility and delegates client behavior to CurrentEpochView.
+ * Invariants: Auth enforced by (app) layout guard. Server-side approver visibility is defense in depth;
+ *   the review mutation route remains authoritative. Resolves the operator's own node id
  *   server-side (getNodeId) and passes it to the client view so the finalized-epoch
  *   ExecuteDistributionPanel can address the authed per-node distribution-tx route.
  * Side-effects: none (server render only; reads repo-spec node id)
@@ -15,9 +16,17 @@
 
 import type { ReactElement } from "react";
 
+import { getServerSessionUser } from "@/lib/auth/server";
+import { getLedgerApprovers } from "@/shared/config";
 import { getNodeId } from "@/shared/config/repoSpec.server";
 import { CurrentEpochView } from "./view";
 
-export default function CurrentEpochPage(): ReactElement {
-  return <CurrentEpochView nodeId={getNodeId()} />;
+export default async function CurrentEpochPage(): Promise<ReactElement> {
+  const user = await getServerSessionUser();
+  const approvers = getLedgerApprovers();
+  const isApprover =
+    !!user?.walletAddress &&
+    approvers.includes(user.walletAddress.toLowerCase());
+
+  return <CurrentEpochView nodeId={getNodeId()} isApprover={isApprover} />;
 }

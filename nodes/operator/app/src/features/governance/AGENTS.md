@@ -36,7 +36,7 @@ Governance feature slice — schedule sync, governance status dashboard, claiman
 ## Public Surface
 
 - **Exports (services):** `syncGovernanceSchedules()`, `GovernanceScheduleSyncDeps`, `GovernanceScheduleSyncResult`, `governanceScheduleId()`, `getGovernanceStatus()`, `GovernanceStatusResult`, `dispatchSignalExecution()`, `handleSignal()`, `SignalHandlerDeps`
-- **Exports (hooks):** `useGovernanceStatus()`, `useCurrentEpoch()`, `useEpochHistory()`, `useHoldings()`, `useReviewEpochs()`, `useSignEpoch()`, `useReviewSubjectOverrides()`
+- **Exports (hooks):** `useGovernanceStatus()`, `useCurrentEpoch()`, `useEpochHistory()`, `useHoldings()`, `useReviewEpochs()`, `useSignEpoch()`, `useReviewSubjectOverrides()`, `useOpenEpochReview()`
 - **Exports (components):** `ContributorCard`, `ContributionRow`, `EpochCard`, `EpochCountdown`, `EpochDetail`, `HoldingCard`, `SourceBadge`
 - **Exports (lib):** `composeEpochView()`, `composeEpochViewFromClaimants()`, `applyOverridesToEpochView()`, `composeHoldings()`
 - **Exports (types):** `EpochView`, `EpochContributor`, `IngestionReceipt`, `HoldingView`, `CurrentEpochData`, `EpochHistoryData`, `HoldingsData`, `SignEpochState`, `SignEpochPhase`, `ReviewSubjectOverrideView`, `EpochDetailProps`, `Signal`, `ActionResult`, `RepoRef`
