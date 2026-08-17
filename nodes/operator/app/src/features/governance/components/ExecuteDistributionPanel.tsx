@@ -119,8 +119,8 @@ export function ExecuteDistributionPanel({
           <PublishBody
             nodeId={nodeId}
             payload={payload}
-            onPublished={onPublished}
             refreshPayload={refetch}
+            {...(onPublished ? { onPublished } : {})}
           />
         )}
       </CardContent>
@@ -290,8 +290,8 @@ function PublishBody({
           mintDelta={mintDelta}
           address={address}
           chainName={chainName}
-          onPublished={onPublished}
           refreshPayload={refreshPayload}
+          {...(onPublished ? { onPublished } : {})}
         />
       ) : (
         <SetupNeededNotice nodeId={nodeId} />
