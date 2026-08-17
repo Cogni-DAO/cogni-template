@@ -6,8 +6,8 @@
  * Purpose: Node env-membership verb (story.5020 W4) — add OR remove ONE environment from a node's
  *   deploy reach by opening an operator-authored PR that edits the OPERATOR monorepo catalog
  *   (`infra/catalog/<slug>.yaml` `envs:` line + the matching overlay / ApplicationSet / appsets
- *   kustomization). Every env is an INDEPENDENT, atomic toggle (ATOMIC_PER_ENV) — candidate-a is no
- *   different from preview/production; removing the last env leaves a valid `envs: []` row.
+ *   kustomization). Individual memberships are independently editable, but the final environment and
+ *   current `activity_env` cannot be removed. Full decommission and authority transfer are separate flows.
  * Scope: Session auth + a single MANAGE_ENVS authz-gate on the resolved node. Resolves the monorepo
  *   owner/repo exactly like `publish` / `activate-payments` (env-scoped, FAIL CLOSED), then delegates the
  *   byte-exact catalog/overlay/appset edit to `GitHubRepoWriter.openNodeEnvPr`.
@@ -34,7 +34,11 @@ import { resolveServiceDb } from "@/bootstrap/container";
 import { nodeIdOrSlug } from "@/features/nodes/node-lookup";
 import { nodes } from "@/shared/db/nodes";
 import { serverEnv } from "@/shared/env";
-import { NODE_FORMATION_ENVS } from "@/shared/node-app-scaffold/gens";
+import {
+  envRemovalViolation,
+  NODE_DEPLOY_ENVS,
+  type NodeFormationEnv,
+} from "@/shared/node-app-scaffold/gens";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,7 +47,7 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-const VALID_ENVS = new Set<string>(NODE_FORMATION_ENVS);
+const VALID_ENVS = new Set<string>(NODE_DEPLOY_ENVS);
 
 export async function POST(request: Request, routeArgs: RouteParams) {
   const sessionUser = await getSessionUser();
@@ -117,6 +121,28 @@ export async function POST(request: Request, routeArgs: RouteParams) {
     return NextResponse.json(payload, { status: gate.status });
   }
 
+  if (!present) {
+    const violation = envRemovalViolation({
+      currentEnvs: node.deployEnvs as NodeFormationEnv[],
+      activityEnv: node.activityEnv as NodeFormationEnv,
+      removeEnv: targetEnv as NodeFormationEnv,
+    });
+    if (violation) {
+      const reason =
+        violation === "final_environment_required"
+          ? "every node must remain deployed in at least one environment; use the decommission lifecycle to remove the node"
+          : "the current activity environment cannot be removed; v1 has no safe cross-environment authority cutover";
+      return NextResponse.json(
+        {
+          error: "node env-membership write rejected",
+          errorCode: violation,
+          reason,
+        },
+        { status: 422 }
+      );
+    }
+  }
+
   // The catalog lives in the OPERATOR monorepo (NOT the node's own repo) — resolve owner/repo from the
   // env-scoped deployment parent exactly like publish/openNodeSubmodulePr does (never derived from the
   // operator app repo or persisted node rows; FAIL CLOSED).
@@ -140,7 +166,7 @@ export async function POST(request: Request, routeArgs: RouteParams) {
       owner,
       repo,
       slug: node.slug,
-      env: targetEnv as (typeof NODE_FORMATION_ENVS)[number],
+      env: targetEnv as (typeof NODE_DEPLOY_ENVS)[number],
       present,
     });
   } catch (err) {

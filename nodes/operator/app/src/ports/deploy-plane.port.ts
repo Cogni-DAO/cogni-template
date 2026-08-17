@@ -149,6 +149,21 @@ export interface CatalogForkTarget {
   readonly slug: string;
 }
 
+/**
+ * Merged catalog intent needed to project one node into every environment's local registry.
+ * The stable values come from git; `ownerWallet` is resolved to a different users.id per DB.
+ */
+export interface CatalogNodeDefinition {
+  readonly nodeId: string;
+  readonly slug: string;
+  readonly repoUrl: string;
+  readonly repoOwner: string;
+  readonly repoName: string;
+  readonly deployEnvs: readonly ("candidate-a" | "preview" | "production")[];
+  readonly activityEnv: "candidate-a" | "preview" | "production";
+  readonly ownerWallet: string;
+}
+
 export interface ResolveNodeRepoInput {
   /** Parent monorepo owner — `NODE_SUBMODULE_PARENT_OWNER`. */
   readonly parentOwner: string;
@@ -182,6 +197,18 @@ export interface DeployPlanePort {
     readonly parentOwner: string;
     readonly parentRepo: string;
   }): Promise<readonly CatalogForkTarget[]>;
+
+  /**
+   * App-read every merged `type:node` catalog row for registry projection. Unlike the
+   * fork-sync target list this includes operator + node-template and fails loud on a
+   * malformed node row: one bad file must never be mistaken for an empty catalog.
+   */
+  listCatalogNodes(input: {
+    readonly parentOwner: string;
+    readonly parentRepo: string;
+    /** Exact deployed operator revision whose catalog is being projected. */
+    readonly sourceRef: string;
+  }): Promise<readonly CatalogNodeDefinition[]>;
 
   /**
    * Tier 2 (optional, customization-preserving): open a cross-fork PR `templateOwner:templateBranch`

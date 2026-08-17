@@ -295,6 +295,13 @@
       "when": 1786683260781,
       "tag": "0041_epoch_distribution_manifest",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1786924271213,
+      "tag": "0042_peaceful_felicia_hardy",
+      "breakpoints": true
     }
   ]
 }

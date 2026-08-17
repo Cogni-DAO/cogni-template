@@ -11,9 +11,10 @@
  * Scope: `parseCatalogEnvs` reads the flow-sequence `envs: [a, b, c]` line; `setCatalogEnvs` re-emits
  *   that single line with a new, canonically-ordered env-set, leaving the rest of the file untouched.
  * Invariants:
- *   - ATOMIC_PER_ENV — the env-set is an independent per-env set; ANY subset is valid, including the
- *     empty set (`envs: []`, the node deployed nowhere). This module is a mechanical line-editor and
- *     does NOT police the env-set — no mandatory env, no candidate-a special-casing.
+ *   - NONEMPTY_DEPLOY_SET — individual membership is independently editable, but at least one
+ *     environment must remain. Full decommission is a separate lifecycle operation.
+ *   - ACTIVITY_AUTHORITY_STAYS_DEPLOYED — the env-membership verb cannot remove the current
+ *     `activity_env`; authority transfer needs a future fenced quiesce/activate protocol.
  *   - ENV_ORDER_CANONICAL — emitted in the fixed `candidate-a < preview < production` order so the
  *     catalog row stays byte-stable against `render-node-appset.sh` / the catalog goldens regardless
  *     of the order the caller supplies.
@@ -23,10 +24,10 @@
  * @public
  */
 
-import { NODE_FORMATION_ENVS, type NodeFormationEnv } from "./envs";
+import { NODE_DEPLOY_ENVS, type NodeFormationEnv } from "./envs";
 
 /** Canonical env order (candidate-a < preview < production) — the order the catalog row is emitted in. */
-const ENV_ORDER = NODE_FORMATION_ENVS;
+const ENV_ORDER = NODE_DEPLOY_ENVS;
 
 /**
  * Matches the catalog row's flow-sequence `envs:` line, e.g. `envs: [candidate-a, preview, production]`.
@@ -36,6 +37,7 @@ const ENV_ORDER = NODE_FORMATION_ENVS;
  * prettier's require-final-newline (bug.5073). Matching only horizontal whitespace leaves `\n` intact.
  */
 const ENVS_LINE_RE = /^envs:\s*\[([^\]]*)\][^\S\r\n]*$/m;
+const ACTIVITY_ENV_LINE_RE = /^activity_env:\s*([^\s#]+)[^\S\r\n]*(?:#.*)?$/m;
 
 /** Read the catalog row's `envs:` flow-sequence into its env-set, in file order. Throws if absent. */
 export function parseCatalogEnvs(catalogYaml: string): NodeFormationEnv[] {
@@ -56,6 +58,35 @@ export function parseCatalogEnvs(catalogYaml: string): NodeFormationEnv[] {
   });
 }
 
+/** Read the singleton `activity_env` from one catalog row. Throws if absent/unknown. */
+export function parseCatalogActivityEnv(catalogYaml: string): NodeFormationEnv {
+  const value = ACTIVITY_ENV_LINE_RE.exec(catalogYaml)?.[1];
+  if (!value || !isNodeFormationEnv(value)) {
+    throw new Error(
+      "catalog row is missing a valid `activity_env: <env>` line."
+    );
+  }
+  return value;
+}
+
+export type EnvRemovalViolation =
+  | "final_environment_required"
+  | "activity_authority_cutover_required";
+
+/** Shared route/planner guard for the two removals the v1 contract cannot safely express. */
+export function envRemovalViolation(input: {
+  readonly currentEnvs: readonly NodeFormationEnv[];
+  readonly activityEnv: NodeFormationEnv;
+  readonly removeEnv: NodeFormationEnv;
+}): EnvRemovalViolation | null {
+  if (!input.currentEnvs.includes(input.removeEnv)) return null;
+  if (input.currentEnvs.length === 1) return "final_environment_required";
+  if (input.activityEnv === input.removeEnv) {
+    return "activity_authority_cutover_required";
+  }
+  return null;
+}
+
 function isNodeFormationEnv(value: string): value is NodeFormationEnv {
   return (ENV_ORDER as readonly string[]).includes(value);
 }
@@ -65,6 +96,11 @@ export function setCatalogEnvs(
   catalogYaml: string,
   envs: readonly NodeFormationEnv[]
 ): string {
+  if (envs.length === 0) {
+    throw new Error(
+      "catalog `envs` must retain at least one environment; use the decommission lifecycle to remove a node entirely."
+    );
+  }
   if (!ENVS_LINE_RE.test(catalogYaml)) {
     throw new Error(
       "catalog row is missing a flow-sequence `envs: [...]` line; cannot edit its env-set."

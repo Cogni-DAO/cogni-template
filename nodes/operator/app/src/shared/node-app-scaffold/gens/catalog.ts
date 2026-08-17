@@ -22,6 +22,8 @@
  * on the template); `nodePort` is the scarce k3s Service NodePort. No `node_id` (schema-forbidden).
  */
 export interface RenderCatalogInput {
+  /** Stable cross-environment owner binding; each env resolves its own users.id from this wallet. */
+  readonly ownerWallet: string;
   readonly sourceRepo?: string;
   readonly imageRepository?: string;
   /** Remote-source node identity, projected from the minted repo-spec (drift-gated). */
@@ -59,7 +61,7 @@ export function renderCatalog(
   slug: string,
   port: number,
   nodePort: number,
-  input: RenderCatalogInput = {}
+  input: RenderCatalogInput
 ): string {
   const sourceShaLine = input.sourceSha
     ? `source_sha: ${input.sourceSha}\n`
@@ -80,11 +82,13 @@ migrator_tag_suffix: "-${slug}-migrate"
 ${sourceLines}candidate_a_branch: deploy/candidate-a-${slug}
 preview_branch: deploy/preview-${slug}
 production_branch: deploy/production-${slug}
-# task.5017 — per-env node-set (deploy ⊆ provisioned). A wizard birth enters all
-# NODE_FORMATION_ENVS; this list is the catalog twin so render-node-appset.sh
-# renders exactly the births appset.ts generates. Trimming a node's reach is a
-# later catalog edit (drop an env here) once its envs are provisioned.
-envs: [candidate-a, preview, production]
+# task.5017/5025 — per-env node-set (deploy ⊆ provisioned). A wizard birth enters
+# candidate-a only; preview/production are explicit post-validation transitions.
+envs: [candidate-a]
+# task.5025 generation 1 — candidate-a is the fixed activity authority; v1 has no cutover verb.
+activity_env: candidate-a
+# Stable binding only; the reconciler resolves an env-local users.id by wallet.
+owner_wallet: "${input.ownerWallet}"
 path_prefix: nodes/${slug}/
 ${nodeIdLine}`;
 }

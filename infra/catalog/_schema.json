@@ -23,6 +23,46 @@
       "then": { "required": ["node_port"] }
     },
     {
+      "$comment": "task.5025 — every node carries the stable wallet binding used to project an env-local users row, plus exactly one activity_env. activity_env is the singleton environment allowed to ingest Git receipts and run epoch schedules.",
+      "if": {
+        "properties": { "type": { "const": "node" } },
+        "required": ["type"]
+      },
+      "then": { "required": ["owner_wallet", "activity_env"] }
+    },
+    {
+      "$comment": "ACTIVITY_ENV_IS_DEPLOYED — JSON Schema cannot use $data references portably, so enumerate the three valid membership implications.",
+      "if": {
+        "properties": { "activity_env": { "const": "candidate-a" } },
+        "required": ["activity_env"]
+      },
+      "then": {
+        "properties": {
+          "envs": { "contains": { "const": "candidate-a" } }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "activity_env": { "const": "preview" } },
+        "required": ["activity_env"]
+      },
+      "then": {
+        "properties": { "envs": { "contains": { "const": "preview" } } }
+      }
+    },
+    {
+      "if": {
+        "properties": { "activity_env": { "const": "production" } },
+        "required": ["activity_env"]
+      },
+      "then": {
+        "properties": {
+          "envs": { "contains": { "const": "production" } }
+        }
+      }
+    },
+    {
       "$comment": "REPO_SPEC_IS_IDENTITY_SSOT — node_id lives in nodes/<name>/.cogni/repo-spec.yaml (the web3-anchored authority). A SUBMODULE node (source_repo set) has an unreadable-from-parent repo-spec at render time, so it carries a drift-gated node_id PROJECTION here (verify-scheduler-endpoints.sh asserts catalog.node_id == repo-spec.node_id). An IN-REPO node must NOT duplicate it — its repo-spec is readable.",
       "if": { "required": ["source_repo"] },
       "then": { "required": ["node_id"] },
@@ -128,13 +168,23 @@
     },
     "envs": {
       "type": "array",
-      "description": "task.5017 — the per-env deploy set: which environments deploy this node. Consumed by scripts/ci/render-node-appset.sh (emits one ApplicationSet per env in this list) and scripts/ci/reconcile-node-substrate.sh (refuses to provision substrate for an env not listed). deploy ⊆ provisioned: an env only deploys nodes it lists. ATOMIC_PER_ENV — any subset is valid and each env is independent (candidate-a is no different from preview/production); no mandatory env. The empty set (`[]`) is valid — the node is deployed nowhere.",
+      "description": "task.5017/5025 — the non-empty per-env deploy set: which environments deploy this node. Consumed by scripts/ci/render-node-appset.sh and scripts/ci/reconcile-node-substrate.sh. deploy ⊆ provisioned: an env only deploys nodes it lists. Individual env membership is independent, but the final environment cannot be removed; full decommission is a separate lifecycle operation.",
       "items": {
         "type": "string",
         "enum": ["candidate-a", "preview", "production"]
       },
-      "minItems": 0,
+      "minItems": 1,
       "uniqueItems": true
+    },
+    "activity_env": {
+      "type": "string",
+      "enum": ["candidate-a", "preview", "production"],
+      "description": "task.5025 — singleton environment that owns activity ingestion and epoch scheduling for this node. Must also be present in envs. V1 wizard births are fixed to candidate-a authority generation 1; changing authority is unsupported until a fenced quiesce/activate protocol exists. Deploying a node in multiple envs never permits multiple activity ledgers."
+    },
+    "owner_wallet": {
+      "type": "string",
+      "pattern": "^0x[0-9a-fA-F]{40}$",
+      "description": "Stable cross-environment owner binding. Each environment resolves or creates its own users.id by this wallet, then projects the OpenFGA node#admin ownership tuple; env-local user IDs are never copied through git."
     },
     "is_primary_host": {
       "type": "boolean",
