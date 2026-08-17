@@ -195,7 +195,7 @@ function PastEpochsSection({
 
   return (
     <div className="rounded-lg border">
-      <Table className="min-w-[640px]">
+      <Table className="min-w-2xl">
         <TableHeader>
           <TableRow>
             <TableHead className="w-8" />

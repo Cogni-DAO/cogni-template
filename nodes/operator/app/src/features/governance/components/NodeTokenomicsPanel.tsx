@@ -98,7 +98,7 @@ export function NodeTokenomicsPanel({
     return (
       <SectionCard title="This node's token issuance">
         <DistributionModelFlow />
-        <div className="rounded-lg border border-dashed p-4">
+        <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
           <p className="font-semibold text-sm">
             {isConfigLoading
               ? "Loading token configuration…"
@@ -144,7 +144,7 @@ export function NodeTokenomicsPanel({
         </div>
 
         {distributor === null ? (
-          <div className="rounded-lg border border-dashed p-4">
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
             <p className="font-semibold text-sm">Distributor not configured</p>
             <p className="mt-1 text-muted-foreground text-sm">
               There is no recorded distributor address, so the current supply

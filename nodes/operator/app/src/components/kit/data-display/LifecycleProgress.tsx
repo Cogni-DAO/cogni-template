@@ -124,7 +124,7 @@ export function LifecycleProgress({
                   step.state === "locked" &&
                     "border-muted-foreground/40 text-muted-foreground",
                   step.state === "unavailable" &&
-                    "border-muted-foreground/40 border-dashed bg-muted/30 text-muted-foreground",
+                    "border-muted-foreground/40 bg-muted/30 text-muted-foreground",
                   step.state === "unknown" &&
                     "border-warning/60 bg-warning/10 text-warning"
                 )}
