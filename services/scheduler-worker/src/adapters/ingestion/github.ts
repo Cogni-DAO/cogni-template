@@ -30,8 +30,11 @@ import type {
 } from "@cogni/ingestion-core";
 import {
   buildEventId,
+  buildGitHubIssueContextV1,
+  buildGitHubPrMergedContextV1,
+  buildGitHubReviewContextV1,
   GITHUB_ADAPTER_VERSION,
-  hashCanonicalPayload,
+  hashReceiptContent,
 } from "@cogni/ingestion-core";
 
 import type { GitHubClient } from "./octokit-client.js";
@@ -428,11 +431,29 @@ export class GitHubSourceAdapter implements PollAdapter {
 
     const id = buildEventId("github", "pr", `${owner}/${repoName}`, pr.number);
     const authorId = String(pr.author.databaseId);
-
-    const payloadHash = await hashCanonicalPayload({
-      authorId,
-      id,
-      mergedAt: pr.mergedAt,
+    const eventTime = new Date(pr.mergedAt);
+    const metadata = buildGitHubPrMergedContextV1({
+      repo: `${owner}/${repoName}`,
+      prNumber: pr.number,
+      title: pr.title,
+      body: pr.body,
+      baseBranch: pr.baseRefName,
+      branch: pr.headRefName,
+      mergeCommitSha: pr.mergeCommit?.oid ?? null,
+      commitShas: pr.commits.nodes.map((c) => c.commit.oid),
+      labels: pr.labels.nodes.map((l) => l.name),
+      additions: pr.additions,
+      deletions: pr.deletions,
+      changedFiles: pr.changedFiles,
+    });
+    const payloadHash = await hashReceiptContent({
+      receiptId: id,
+      source: "github",
+      eventType: "pr_merged",
+      platformUserId: authorId,
+      artifactUrl: pr.url,
+      metadata,
+      eventTime,
     });
 
     return {
@@ -442,21 +463,9 @@ export class GitHubSourceAdapter implements PollAdapter {
       platformUserId: authorId,
       platformLogin: pr.author.login,
       artifactUrl: pr.url,
-      metadata: {
-        title: pr.title,
-        body: pr.body,
-        baseBranch: pr.baseRefName,
-        branch: pr.headRefName,
-        mergeCommitSha: pr.mergeCommit?.oid ?? null,
-        commitShas: pr.commits.nodes.map((c) => c.commit.oid),
-        labels: pr.labels.nodes.map((l) => l.name),
-        additions: pr.additions,
-        deletions: pr.deletions,
-        changedFiles: pr.changedFiles,
-        repo: `${owner}/${repoName}`,
-      },
+      metadata,
       payloadHash,
-      eventTime: new Date(pr.mergedAt),
+      eventTime,
     };
   }
 
@@ -554,12 +563,23 @@ export class GitHubSourceAdapter implements PollAdapter {
       review.databaseId
     );
     const authorId = String(review.author.databaseId);
-
-    const payloadHash = await hashCanonicalPayload({
-      authorId,
-      id,
+    const eventTime = new Date(review.submittedAt);
+    const artifactUrl = `https://github.com/${owner}/${repoName}/pull/${prNumber}#pullrequestreview-${review.databaseId}`;
+    const metadata = buildGitHubReviewContextV1({
+      repo: `${owner}/${repoName}`,
+      prNumber,
+      prBaseBranch,
+      prMergeCommitSha,
       state: review.state,
-      submittedAt: review.submittedAt,
+    });
+    const payloadHash = await hashReceiptContent({
+      receiptId: id,
+      source: "github",
+      eventType: "review_submitted",
+      platformUserId: authorId,
+      artifactUrl,
+      metadata,
+      eventTime,
     });
 
     return {
@@ -568,16 +588,10 @@ export class GitHubSourceAdapter implements PollAdapter {
       eventType: "review_submitted",
       platformUserId: authorId,
       platformLogin: review.author.login,
-      artifactUrl: `https://github.com/${owner}/${repoName}/pull/${prNumber}#pullrequestreview-${review.databaseId}`,
-      metadata: {
-        prNumber,
-        prBaseBranch: prBaseBranch,
-        prMergeCommitSha: prMergeCommitSha,
-        state: review.state,
-        repo: `${owner}/${repoName}`,
-      },
+      artifactUrl,
+      metadata,
       payloadHash,
-      eventTime: new Date(review.submittedAt),
+      eventTime,
     };
   }
 
@@ -658,11 +672,21 @@ export class GitHubSourceAdapter implements PollAdapter {
       issue.number
     );
     const authorId = String(issue.author.databaseId);
-
-    const payloadHash = await hashCanonicalPayload({
-      authorId,
-      closedAt: issue.closedAt,
-      id,
+    const eventTime = new Date(issue.closedAt);
+    const metadata = buildGitHubIssueContextV1({
+      repo: `${owner}/${repoName}`,
+      issueNumber: issue.number,
+      title: issue.title,
+      action: "closed",
+    });
+    const payloadHash = await hashReceiptContent({
+      receiptId: id,
+      source: "github",
+      eventType: "issue_closed",
+      platformUserId: authorId,
+      artifactUrl: issue.url,
+      metadata,
+      eventTime,
     });
 
     return {
@@ -672,12 +696,9 @@ export class GitHubSourceAdapter implements PollAdapter {
       platformUserId: authorId,
       platformLogin: issue.author.login,
       artifactUrl: issue.url,
-      metadata: {
-        title: issue.title,
-        repo: `${owner}/${repoName}`,
-      },
+      metadata,
       payloadHash,
-      eventTime: new Date(issue.closedAt),
+      eventTime,
     };
   }
 

@@ -88,6 +88,7 @@ import type { Logger } from "pino";
 import {
   ALCHEMY_ADAPTER_VERSION,
   AlchemyWebhookNormalizer,
+  createGitHubMergedPrHydrator,
   type Database,
   DrizzleAiTelemetryAdapter,
   DrizzleConnectionBrokerAdapter,
@@ -433,11 +434,19 @@ function getWebhookRegistrations(): ReadonlyMap<
   DataSourceRegistration
 > {
   if (!_webhookRegistrations) {
+    const env = serverEnv();
     const registrations = new Map<string, DataSourceRegistration>();
     registrations.set("github", {
       source: "github",
       version: GITHUB_ADAPTER_VERSION,
-      webhook: new GitHubWebhookNormalizer(),
+      webhook: new GitHubWebhookNormalizer(
+        env.GH_REVIEW_APP_ID && env.GH_REVIEW_APP_PRIVATE_KEY_BASE64
+          ? createGitHubMergedPrHydrator({
+              appId: env.GH_REVIEW_APP_ID,
+              privateKeyBase64: env.GH_REVIEW_APP_PRIVATE_KEY_BASE64,
+            })
+          : undefined
+      ),
     });
     registrations.set("alchemy", {
       source: "alchemy",

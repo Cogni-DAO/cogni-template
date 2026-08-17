@@ -99,6 +99,7 @@ export {
   ALCHEMY_ADAPTER_VERSION,
   AlchemyWebhookNormalizer,
 } from "./ingestion/alchemy-webhook";
+export { createGitHubMergedPrHydrator } from "./ingestion/github-receipt-hydrator";
 export {
   GITHUB_ADAPTER_VERSION,
   GitHubWebhookNormalizer,

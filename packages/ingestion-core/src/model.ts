@@ -51,6 +51,51 @@ export interface ActivityEvent {
   readonly eventTime: Date;
 }
 
+/** Closed vocabulary for receipt transport and durable attribution context v1. */
+export const RECEIPT_SOURCES = ["github", "alchemy"] as const;
+export type ReceiptSource = (typeof RECEIPT_SOURCES)[number];
+
+/**
+ * Canonical normalized event names. Producers must drop unsupported source
+ * actions instead of extending this vocabulary with string interpolation.
+ */
+export const RECEIPT_EVENT_TYPES = [
+  "pr_merged",
+  "pr_opened",
+  "pr_closed",
+  "review_submitted",
+  "issue_opened",
+  "issue_closed",
+  "comment_created",
+  "commit_pushed",
+  "cogni_signal",
+] as const;
+export type ReceiptEventType = (typeof RECEIPT_EVENT_TYPES)[number];
+
+/** First-party producers plus the two explicit controlled-ingress identities. */
+export const RECEIPT_PRODUCERS = [
+  "github:webhook",
+  "github:poll",
+  "alchemy:webhook",
+  "bridge:manual",
+  "replay:backfill",
+] as const;
+export type ReceiptProducer = (typeof RECEIPT_PRODUCERS)[number];
+
+/** Version of the normalized metadata/context contract persisted on receipts. */
+export const RECEIPT_CONTEXT_SCHEMA_VERSION = 1 as const;
+
+/** Attribution-relevant content covered by payloadHash (provenance excluded). */
+export interface ReceiptContent {
+  readonly receiptId: string;
+  readonly source: ReceiptSource;
+  readonly eventType: ReceiptEventType;
+  readonly platformUserId: string;
+  readonly artifactUrl: string | null;
+  readonly metadata: Record<string, unknown>;
+  readonly eventTime: Date | string;
+}
+
 /** Definition of a collectible stream within a source adapter. */
 export interface StreamDefinition {
   /** Stream identifier: "pull_requests", "reviews", "issues", "messages" */

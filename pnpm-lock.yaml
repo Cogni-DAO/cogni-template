@@ -1058,6 +1058,9 @@ importers:
       '@cogni/aragon-osx':
         specifier: workspace:*
         version: link:../aragon-osx
+      '@cogni/ingestion-core':
+        specifier: workspace:*
+        version: link:../ingestion-core
       '@cogni/knowledge-store':
         specifier: workspace:*
         version: link:../knowledge-store

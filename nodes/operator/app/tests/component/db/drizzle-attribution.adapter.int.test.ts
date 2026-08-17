@@ -15,6 +15,7 @@ import {
   EpochNotFoundError,
   EpochNotInReviewError,
   EpochNotOpenError,
+  ReceiptContentConflictError,
 } from "@cogni/attribution-ledger";
 import { DrizzleAttributionAdapter } from "@cogni/db-client";
 import {
@@ -271,9 +272,13 @@ describe("DrizzleAttributionAdapter (Component)", () => {
       const event = makeIngestionReceipt({
         receiptId: "github:pr:test/repo:1",
         platformUserId: "111",
+        eventTime: new Date("2026-01-06T10:00:00Z"),
+        producer: "github:poll",
+        retrievedAt: new Date("2026-01-07T10:00:00Z"),
       });
 
-      await adapter.insertIngestionReceipts([event]);
+      const result = await adapter.insertIngestionReceipts([event]);
+      expect(result).toEqual({ inserted: 0, duplicates: 1, conflicts: 0 });
 
       const results = await adapter.getReceiptsForWindow(
         TEST_NODE_ID,
@@ -284,6 +289,38 @@ describe("DrizzleAttributionAdapter (Component)", () => {
         (e) => e.receiptId === "github:pr:test/repo:1"
       );
       expect(matching).toHaveLength(1);
+    });
+
+    it("RECEIPT_CONFLICT_LOUD: same ID with different attribution context is rejected", async () => {
+      const receiptId = "github:pr:test/repo:context-conflict";
+      const original = makeIngestionReceipt({
+        receiptId,
+        metadata: { schemaVersion: 1, title: "Full context" },
+        payloadHash: "a".repeat(64),
+      });
+      await expect(
+        adapter.insertIngestionReceipts([original])
+      ).resolves.toEqual({ inserted: 1, duplicates: 0, conflicts: 0 });
+
+      await expect(
+        adapter.insertIngestionReceipts([
+          {
+            ...original,
+            metadata: { schemaVersion: 1, title: "Lower fidelity" },
+            payloadHash: "b".repeat(64),
+            producer: "github:poll",
+          },
+        ])
+      ).rejects.toBeInstanceOf(ReceiptContentConflictError);
+
+      const stored = (await adapter.getAllReceipts(TEST_NODE_ID)).find(
+        (receipt) => receipt.receiptId === receiptId
+      );
+      expect(stored?.metadata).toEqual({
+        schemaVersion: 1,
+        title: "Full context",
+      });
+      expect(stored?.payloadHash).toBe("a".repeat(64));
     });
 
     it("RECEIPT_APPEND_ONLY: UPDATE on ingestion_receipts is rejected by trigger", async () => {

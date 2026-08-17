@@ -12,14 +12,20 @@
  *   - INTERNAL_API_SHARED_SECRET: Requires Bearer SCHEDULER_API_TOKEN
  *   - NODE_WRITES_OWN_LEDGER: envelope `nodeId` MUST equal this node's own node_id; the node stamps
  *     its own node_id on each receipt. A node never persists a foreign ledger.
- *   - RECEIPT_IDEMPOTENT: persistence is ON CONFLICT DO NOTHING keyed by (node_id, receipt_id);
- *     repeat delivery (Temporal-style retry / Idempotency-Key) is a no-op.
+ *   - RECEIPT_IDEMPOTENT: same-content retry is a counted no-op; differing content for the same
+ *     deterministic ID is a 409 and the attempted batch is rolled back.
+ *   - RECEIPT_HASH_SELF_VERIFYING: payloadHash is recomputed over canonical v1 attribution context.
  * Side-effects: IO (writes ingestion_receipts via AttributionStore)
  * Links: attribution.receipts.internal.v1.contract, task.0280, story.5023
  * @internal
  */
 
-import type { InsertReceiptParams } from "@cogni/attribution-ledger";
+import {
+  type InsertReceiptParams,
+  isReceiptContentConflictError,
+  type ReceiptInsertResult,
+} from "@cogni/attribution-ledger";
+import { hashReceiptContent } from "@cogni/ingestion-core";
 import {
   type InternalDeliverReceiptsInput,
   internalDeliverReceiptsOperation,
@@ -80,9 +86,34 @@ export const POST = wrapRouteHandlerWithLogging(
       );
     }
 
-    // Idempotency-Key is honored at the DB level (ON CONFLICT DO NOTHING); we
-    // only surface it in the structured log for delivery tracing.
+    // Idempotency-Key is honored by semantic duplicate classification at the
+    // DB boundary; surface it in structured logs for delivery tracing.
     const idempotencyKey = request.headers.get("idempotency-key");
+
+    for (const receipt of data.receipts) {
+      const expectedHash = await hashReceiptContent({
+        receiptId: receipt.receiptId,
+        source: receipt.source,
+        eventType: receipt.eventType,
+        platformUserId: receipt.platformUserId,
+        artifactUrl: receipt.artifactUrl ?? null,
+        metadata: receipt.metadata,
+        eventTime: receipt.eventTime,
+      });
+      if (expectedHash !== receipt.payloadHash) {
+        log.warn(
+          { receiptId: receipt.receiptId },
+          "Rejected receipt with invalid canonical payload hash"
+        );
+        return NextResponse.json(
+          {
+            error: "payloadHash does not match canonical receipt content",
+            receiptId: receipt.receiptId,
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     const mapped: InsertReceiptParams[] = data.receipts.map((receipt) => ({
       receiptId: receipt.receiptId,
@@ -102,7 +133,36 @@ export const POST = wrapRouteHandlerWithLogging(
       retrievedAt: new Date(receipt.retrievedAt),
     }));
 
-    await getContainer().attributionStore.insertIngestionReceipts(mapped);
+    let insertResult: ReceiptInsertResult;
+    try {
+      insertResult =
+        await getContainer().attributionStore.insertIngestionReceipts(mapped);
+    } catch (error) {
+      if (!isReceiptContentConflictError(error)) throw error;
+      log.error(
+        {
+          event: "attribution.receipt_conflict",
+          nodeId,
+          source: data.source,
+          conflictReceiptIds: error.receiptIds,
+          duplicateCount: error.duplicateCount,
+          idempotencyKey,
+        },
+        "Rejected conflicting deterministic receipt content"
+      );
+      return NextResponse.json(
+        {
+          ok: false,
+          nodeId,
+          received: mapped.length,
+          inserted: 0,
+          duplicates: error.duplicateCount,
+          conflicts: error.receiptIds.length,
+          conflictReceiptIds: error.receiptIds,
+        },
+        { status: 409 }
+      );
+    }
 
     log.info(
       {
@@ -110,13 +170,22 @@ export const POST = wrapRouteHandlerWithLogging(
         nodeId,
         source: data.source,
         count: mapped.length,
+        inserted: insertResult.inserted,
+        duplicates: insertResult.duplicates,
         idempotencyKey,
       },
       "Ingested attribution receipts"
     );
 
     return NextResponse.json(
-      { ok: true, nodeId, received: mapped.length },
+      {
+        ok: true,
+        nodeId,
+        received: mapped.length,
+        inserted: insertResult.inserted,
+        duplicates: insertResult.duplicates,
+        conflicts: 0,
+      },
       { status: 200 }
     );
   }

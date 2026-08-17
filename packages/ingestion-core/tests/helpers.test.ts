@@ -17,6 +17,7 @@ import {
   buildEventId,
   canonicalJson,
   hashCanonicalPayload,
+  hashReceiptContent,
 } from "../src/helpers";
 
 describe("buildEventId", () => {
@@ -72,6 +73,54 @@ describe("canonicalJson", () => {
 
   it("handles empty object", () => {
     expect(canonicalJson({})).toBe("{}");
+  });
+
+  it("recursively sorts nested context while preserving array order", () => {
+    expect(canonicalJson({ z: { b: 2, a: 1 }, commits: ["b", "a"] })).toBe(
+      '{"commits":["b","a"],"z":{"a":1,"b":2}}'
+    );
+  });
+});
+
+describe("hashReceiptContent", () => {
+  const content = {
+    receiptId: "github:pr:owner/repo:42",
+    source: "github" as const,
+    eventType: "pr_merged" as const,
+    platformUserId: "12345",
+    artifactUrl: "https://github.com/owner/repo/pull/42",
+    metadata: {
+      schemaVersion: 1,
+      repo: "owner/repo",
+      title: "Ship it",
+      labels: ["one", "two"],
+    },
+    eventTime: new Date("2026-01-15T00:00:00Z"),
+  };
+
+  it("covers nested attribution context independent of object key order", async () => {
+    const reordered = {
+      ...content,
+      metadata: {
+        labels: ["one", "two"],
+        title: "Ship it",
+        repo: "owner/repo",
+        schemaVersion: 1,
+      },
+    };
+    await expect(hashReceiptContent(content)).resolves.toBe(
+      await hashReceiptContent(reordered)
+    );
+  });
+
+  it("changes when attribution context changes", async () => {
+    const lowerFidelity = {
+      ...content,
+      metadata: { ...content.metadata, title: "" },
+    };
+    await expect(hashReceiptContent(content)).resolves.not.toBe(
+      await hashReceiptContent(lowerFidelity)
+    );
   });
 });
 

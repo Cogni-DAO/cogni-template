@@ -17,10 +17,12 @@ import type {
 } from "@cogni/attribution-ledger";
 import { computeEpochWindowV1 } from "@cogni/attribution-ledger";
 import { createDefaultRegistries } from "@cogni/attribution-pipeline-plugins";
-import type {
-  ActivityEvent,
-  CollectResult,
-  DataSourceRegistration,
+import {
+  type ActivityEvent,
+  buildGitHubPrMergedContextV1,
+  type CollectResult,
+  type DataSourceRegistration,
+  hashReceiptContent,
 } from "@cogni/ingestion-core";
 import { describe, expect, it, vi } from "vitest";
 
@@ -171,17 +173,44 @@ function makeEvaluation(
   };
 }
 
-function makeEvent(id = "github:pr:test/repo:1"): ActivityEvent {
+const EVENT_ID = "github:pr:test/repo:1";
+const EVENT_ARTIFACT_URL = "https://github.com/test/repo/pull/1";
+const EVENT_TIME = new Date("2026-02-20T12:00:00Z");
+const EVENT_METADATA = buildGitHubPrMergedContextV1({
+  repo: "test/repo",
+  prNumber: 1,
+  title: "Test PR",
+  body: "",
+  baseBranch: "main",
+  branch: "feature/test",
+  mergeCommitSha: "merge-sha",
+  commitShas: ["commit-sha"],
+  labels: [],
+  additions: 1,
+  deletions: 0,
+  changedFiles: 1,
+});
+const EVENT_PAYLOAD_HASH = await hashReceiptContent({
+  receiptId: EVENT_ID,
+  source: "github",
+  eventType: "pr_merged",
+  platformUserId: "12345",
+  artifactUrl: EVENT_ARTIFACT_URL,
+  metadata: EVENT_METADATA,
+  eventTime: EVENT_TIME,
+});
+
+function makeEvent(): ActivityEvent {
   return {
-    id,
+    id: EVENT_ID,
     source: "github",
     eventType: "pr_merged",
     platformUserId: "12345",
     platformLogin: "testuser",
-    artifactUrl: "https://github.com/test/repo/pull/1",
-    metadata: { title: "Test PR" },
-    payloadHash: "abc123",
-    eventTime: new Date("2026-02-20T12:00:00Z"),
+    artifactUrl: EVENT_ARTIFACT_URL,
+    metadata: EVENT_METADATA,
+    payloadHash: EVENT_PAYLOAD_HASH,
+    eventTime: EVENT_TIME,
   };
 }
 
@@ -643,6 +672,7 @@ describe("insertReceipts", () => {
     const args = vi.mocked(store.insertIngestionReceipts).mock.calls[0][0];
     expect(args[0].nodeId).toBe(NODE_ID);
     expect(args[0].source).toBe("github");
+    expect(args[0].producer).toBe("github:poll");
     expect(args[0].producerVersion).toBe("0.3.0");
   });
 });

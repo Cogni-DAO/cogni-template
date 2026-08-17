@@ -13,15 +13,38 @@
  * @public
  */
 
+export {
+  buildGitHubIssueContextV1,
+  buildGitHubPrMergedContextV1,
+  buildGitHubReviewContextV1,
+  type GitHubIssueContextV1Input,
+  type GitHubPrMergedContextV1Input,
+  type GitHubReviewContextV1Input,
+} from "./github-context";
 // Pure helpers
-export { buildEventId, canonicalJson, hashCanonicalPayload } from "./helpers";
+export {
+  buildEventId,
+  canonicalJson,
+  hashCanonicalPayload,
+  hashReceiptContent,
+} from "./helpers";
 // Model types
 export type {
   ActivityEvent,
   CollectParams,
   CollectResult,
+  ReceiptContent,
+  ReceiptEventType,
+  ReceiptProducer,
+  ReceiptSource,
   StreamCursor,
   StreamDefinition,
+} from "./model";
+export {
+  RECEIPT_CONTEXT_SCHEMA_VERSION,
+  RECEIPT_EVENT_TYPES,
+  RECEIPT_PRODUCERS,
+  RECEIPT_SOURCES,
 } from "./model";
 // Port interfaces
 export type {

@@ -7,12 +7,14 @@
  * Scope: Zero deps beyond Web Crypto (globalThis.crypto). Platform-neutral. Does not perform network I/O or access databases.
  * Invariants:
  * - buildEventId() output is deterministic for the same inputs.
- * - canonicalJson() produces identical output regardless of input key order.
+ * - canonicalJson() recursively sorts object keys and preserves array order.
  * - hashCanonicalPayload() produces identical SHA-256 for identical canonical fields.
  * Side-effects: none
  * Links: docs/spec/attribution-ledger.md (ACTIVITY_IDEMPOTENT, PROVENANCE_REQUIRED)
  * @public
  */
+
+import { RECEIPT_CONTEXT_SCHEMA_VERSION, type ReceiptContent } from "./model";
 
 /**
  * Build a deterministic event ID from source, type, and scope parts.
@@ -43,9 +45,21 @@ export function buildEventId(
  * canonicalJson({ b: 2, a: 1 })
  * // => '{"a":1,"b":2}'
  */
-export function canonicalJson(obj: Record<string, unknown>): string {
-  const sortedKeys = Object.keys(obj).sort();
-  return JSON.stringify(obj, sortedKeys);
+export function canonicalJson(value: unknown): string {
+  return JSON.stringify(canonicalize(value));
+}
+
+function canonicalize(value: unknown): unknown {
+  if (value === null || typeof value !== "object") return value;
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map(canonicalize);
+
+  const object = value as Record<string, unknown>;
+  const sorted: Record<string, unknown> = {};
+  for (const key of Object.keys(object).sort()) {
+    if (object[key] !== undefined) sorted[key] = canonicalize(object[key]);
+  }
+  return sorted;
 }
 
 /**
@@ -65,4 +79,28 @@ export async function hashCanonicalPayload(
   return Array.from(new Uint8Array(buf))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
+}
+
+/**
+ * Hash normalized attribution content, not delivery provenance. Consequently
+ * webhook and poll may differ in producer/retrievedAt while proving the same
+ * semantic receipt. The context schema version is included to prevent a future
+ * shape from being mistaken for v1 content.
+ */
+export async function hashReceiptContent(
+  content: ReceiptContent
+): Promise<string> {
+  return hashCanonicalPayload({
+    schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
+    receiptId: content.receiptId,
+    source: content.source,
+    eventType: content.eventType,
+    platformUserId: content.platformUserId,
+    artifactUrl: content.artifactUrl,
+    metadata: content.metadata,
+    eventTime:
+      content.eventTime instanceof Date
+        ? content.eventTime.toISOString()
+        : new Date(content.eventTime).toISOString(),
+  });
 }

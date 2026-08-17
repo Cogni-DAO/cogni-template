@@ -52,6 +52,7 @@ import type {
   InsertUserProjectionParams,
   PoolComponentInsertResult,
   ReceiptClaimantsRecord,
+  ReceiptInsertResult,
   ReviewSubjectOverrideRecord,
   SelectedReceiptForAllocation,
   SelectedReceiptForAttribution,
@@ -68,6 +69,8 @@ import {
   EpochNotInReviewError,
   EpochNotOpenError,
   type EpochStatus,
+  ReceiptContentConflictError,
+  sameReceiptSemanticContent,
 } from "@cogni/attribution-ledger";
 import {
   epochDistributionLeaves,
@@ -971,28 +974,93 @@ export class DrizzleAttributionAdapter implements AttributionStore {
 
   async insertIngestionReceipts(
     receipts: InsertReceiptParams[]
-  ): Promise<void> {
-    if (receipts.length === 0) return;
-    await this.db
-      .insert(ingestionReceipts)
-      .values(
-        receipts.map((e) => ({
-          nodeId: e.nodeId,
-          receiptId: e.receiptId,
-          source: e.source,
-          eventType: e.eventType,
-          platformUserId: e.platformUserId,
-          platformLogin: e.platformLogin ?? null,
-          artifactUrl: e.artifactUrl ?? null,
-          metadata: e.metadata ?? null,
-          payloadHash: e.payloadHash,
-          producer: e.producer,
-          producerVersion: e.producerVersion,
-          eventTime: e.eventTime,
-          retrievedAt: e.retrievedAt,
-        }))
-      )
-      .onConflictDoNothing();
+  ): Promise<ReceiptInsertResult> {
+    if (receipts.length === 0) {
+      return { inserted: 0, duplicates: 0, conflicts: 0 };
+    }
+
+    return this.db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(ingestionReceipts)
+        .values(
+          receipts.map((e) => ({
+            nodeId: e.nodeId,
+            receiptId: e.receiptId,
+            source: e.source,
+            eventType: e.eventType,
+            platformUserId: e.platformUserId,
+            platformLogin: e.platformLogin ?? null,
+            artifactUrl: e.artifactUrl ?? null,
+            metadata: e.metadata ?? null,
+            payloadHash: e.payloadHash,
+            producer: e.producer,
+            producerVersion: e.producerVersion,
+            eventTime: e.eventTime,
+            retrievedAt: e.retrievedAt,
+          }))
+        )
+        .onConflictDoNothing()
+        .returning({
+          nodeId: ingestionReceipts.nodeId,
+          receiptId: ingestionReceipts.receiptId,
+        });
+
+      const key = (nodeId: string, receiptId: string) =>
+        `${nodeId}\u0000${receiptId}`;
+      // Consume each returned row exactly once. Although the HTTP contract
+      // rejects duplicate IDs inside one envelope, the store remains correct
+      // for direct callers that submit the same key twice in one batch.
+      const insertedKeys = new Set(
+        inserted.map((row) => key(row.nodeId, row.receiptId))
+      );
+      const skipped = receipts.filter((receipt) => {
+        const receiptKey = key(receipt.nodeId, receipt.receiptId);
+        if (!insertedKeys.has(receiptKey)) return true;
+        insertedKeys.delete(receiptKey);
+        return false;
+      });
+      if (skipped.length === 0) {
+        return { inserted: inserted.length, duplicates: 0, conflicts: 0 };
+      }
+
+      const existing = await tx
+        .select()
+        .from(ingestionReceipts)
+        .where(
+          or(
+            ...skipped.map((receipt) =>
+              and(
+                eq(ingestionReceipts.nodeId, receipt.nodeId),
+                eq(ingestionReceipts.receiptId, receipt.receiptId)
+              )
+            )
+          )
+        );
+      const existingByKey = new Map(
+        existing.map((row) => [key(row.nodeId, row.receiptId), row])
+      );
+
+      const conflictIds: string[] = [];
+      let duplicateCount = 0;
+      for (const incoming of skipped) {
+        const stored = existingByKey.get(
+          key(incoming.nodeId, incoming.receiptId)
+        );
+        const sameContent =
+          stored !== undefined && sameReceiptSemanticContent(stored, incoming);
+        if (sameContent) duplicateCount += 1;
+        else conflictIds.push(incoming.receiptId);
+      }
+
+      if (conflictIds.length > 0) {
+        throw new ReceiptContentConflictError(conflictIds, duplicateCount);
+      }
+      return {
+        inserted: inserted.length,
+        duplicates: duplicateCount,
+        conflicts: 0,
+      };
+    });
   }
 
   async getReceiptsForWindow(

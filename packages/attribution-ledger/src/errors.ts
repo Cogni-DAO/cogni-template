@@ -70,6 +70,24 @@ export class AllocationNotFoundError extends Error {
   }
 }
 
+/**
+ * A deterministic receipt ID already exists with different semantic content.
+ * The append-only ledger never picks a winner; the whole attempted batch rolls
+ * back and callers must surface the conflict.
+ */
+export class ReceiptContentConflictError extends Error {
+  public readonly code = "RECEIPT_CONTENT_CONFLICT" as const;
+  constructor(
+    public readonly receiptIds: readonly string[],
+    public readonly duplicateCount: number
+  ) {
+    super(
+      `Receipt content conflict for deterministic id(s): ${receiptIds.join(", ")}`
+    );
+    this.name = "ReceiptContentConflictError";
+  }
+}
+
 // Type guards
 
 export function isEpochNotOpenError(
@@ -106,4 +124,10 @@ export function isAllocationNotFoundError(
   error: unknown
 ): error is AllocationNotFoundError {
   return error instanceof Error && error.name === "AllocationNotFoundError";
+}
+
+export function isReceiptContentConflictError(
+  error: unknown
+): error is ReceiptContentConflictError {
+  return error instanceof Error && error.name === "ReceiptContentConflictError";
 }

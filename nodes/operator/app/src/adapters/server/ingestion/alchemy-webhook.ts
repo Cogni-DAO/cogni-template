@@ -18,7 +18,11 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import type { ActivityEvent, WebhookNormalizer } from "@cogni/ingestion-core";
-import { buildEventId, hashCanonicalPayload } from "@cogni/ingestion-core";
+import {
+  buildEventId,
+  hashReceiptContent,
+  RECEIPT_CONTEXT_SCHEMA_VERSION,
+} from "@cogni/ingestion-core";
 
 export const ALCHEMY_ADAPTER_VERSION = "0.1.0";
 
@@ -35,6 +39,7 @@ interface AlchemyLog {
 interface AlchemyWebhookBody {
   id?: string;
   type?: string;
+  createdAt?: string;
   event?: {
     data?: {
       block?: {
@@ -97,7 +102,29 @@ export class AlchemyWebhookNormalizer implements WebhookNormalizer {
       seenHashes.add(txHash);
 
       const id = buildEventId("alchemy", "cogni_signal", txHash);
-      const payloadHash = await hashCanonicalPayload({ txHash, id });
+      // Alchemy's delivery timestamp is stable across retries. Using wall-clock
+      // normalization time here would turn every retry into a content conflict.
+      const eventTime = new Date(payload.createdAt ?? "");
+      if (Number.isNaN(eventTime.getTime())) {
+        throw new Error(
+          "Alchemy webhook with activity logs requires createdAt"
+        );
+      }
+      const metadata = {
+        schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
+        txHash,
+        webhookId: payload.id ?? null,
+        webhookType: payload.type ?? null,
+      };
+      const payloadHash = await hashReceiptContent({
+        receiptId: id,
+        source: "alchemy",
+        eventType: "cogni_signal",
+        platformUserId: "",
+        artifactUrl: "",
+        metadata,
+        eventTime,
+      });
 
       events.push({
         id,
@@ -106,13 +133,9 @@ export class AlchemyWebhookNormalizer implements WebhookNormalizer {
         // On-chain signals have no platform user — executor address is in metadata
         platformUserId: "",
         artifactUrl: "",
-        metadata: {
-          txHash,
-          webhookId: payload.id ?? null,
-          webhookType: payload.type ?? null,
-        },
+        metadata,
         payloadHash,
-        eventTime: new Date(),
+        eventTime,
       });
     }
 

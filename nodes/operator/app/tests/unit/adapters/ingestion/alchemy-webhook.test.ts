@@ -58,6 +58,7 @@ describe("adapters/ingestion/alchemy-webhook", () => {
       const payload = {
         id: "webhook-1",
         type: "ADDRESS_ACTIVITY",
+        createdAt: "2026-08-16T12:00:00.000Z",
         event: {
           data: {
             block: {
@@ -82,6 +83,7 @@ describe("adapters/ingestion/alchemy-webhook", () => {
       const payload = {
         id: "webhook-2",
         type: "ADDRESS_ACTIVITY",
+        createdAt: "2026-08-16T12:00:00.000Z",
         event: {
           data: {
             block: {
@@ -105,6 +107,7 @@ describe("adapters/ingestion/alchemy-webhook", () => {
 
     it("produces deterministic event IDs", async () => {
       const payload = {
+        createdAt: "2026-08-16T12:00:00.000Z",
         event: {
           data: {
             block: {
@@ -117,6 +120,25 @@ describe("adapters/ingestion/alchemy-webhook", () => {
       const events1 = await normalizer.normalize({}, payload);
       const events2 = await normalizer.normalize({}, payload);
       expect(events1[0].id).toBe(events2[0].id);
+      expect(events1[0].payloadHash).toBe(events2[0].payloadHash);
+      expect(events1[0].eventTime).toEqual(events2[0].eventTime);
+    });
+
+    it("rejects activity logs without a stable source timestamp", async () => {
+      await expect(
+        normalizer.normalize(
+          {},
+          {
+            event: {
+              data: {
+                block: {
+                  logs: [{ transaction: { hash: "0xddd" } }],
+                },
+              },
+            },
+          }
+        )
+      ).rejects.toThrow("requires createdAt");
     });
   });
 });

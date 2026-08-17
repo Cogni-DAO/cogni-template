@@ -178,6 +178,15 @@ describe("GitHubSourceAdapter", () => {
 
       expect(result.events[0]?.eventType).toBe("pr_merged");
       expect(result.events[0]?.source).toBe("github");
+      expect(result.events[0]?.metadata).toMatchObject({
+        schemaVersion: 1,
+        repo: "cogni-dao/cogni-template",
+        prNumber: 1,
+        action: "closed",
+        baseBranch: "staging",
+        branch: "feature/test",
+        commitShas: ["commit-sha-1"],
+      });
     });
 
     it("filters PRs outside the time window (client-side)", async () => {
@@ -361,6 +370,13 @@ describe("GitHubSourceAdapter", () => {
         "github:review:cogni-dao/cogni-template:42:555"
       );
       expect(result.events[0]?.eventType).toBe("review_submitted");
+      expect(result.events[0]?.metadata).toMatchObject({
+        schemaVersion: 1,
+        repo: "cogni-dao/cogni-template",
+        prNumber: 42,
+        prBaseBranch: "staging",
+        prMergeCommitSha: "merge-sha-42",
+      });
     });
 
     it("filters reviews outside the time window", async () => {
@@ -433,6 +449,12 @@ describe("GitHubSourceAdapter", () => {
         "github:issue:cogni-dao/cogni-template:99"
       );
       expect(result.events[0]?.eventType).toBe("issue_closed");
+      expect(result.events[0]?.metadata).toMatchObject({
+        schemaVersion: 1,
+        repo: "cogni-dao/cogni-template",
+        issueNumber: 99,
+        action: "closed",
+      });
     });
   });
 

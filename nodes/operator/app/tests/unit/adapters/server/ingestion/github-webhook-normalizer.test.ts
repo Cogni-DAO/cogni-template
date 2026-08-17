@@ -47,13 +47,19 @@ function makePrPayload(overrides?: Record<string, unknown>) {
       created_at: "2026-01-14T09:00:00Z",
       updated_at: "2026-01-15T10:30:00Z",
       title: "Add feature X",
+      body: "Full PR body",
       html_url: "https://github.com/test/repo/pull/42",
+      base: { ref: "main" },
+      head: { ref: "feature-x" },
+      merge_commit_sha: "merge-sha",
+      labels: [{ name: "feature" }, { name: "ready" }],
       additions: 100,
       deletions: 20,
       changed_files: 5,
       user: { id: 12345, login: "testuser", type: "User" },
     },
     repository: { full_name: "test/repo" },
+    installation: { id: 123 },
     sender: { id: 12345, login: "testuser", type: "User" },
     ...overrides,
   };
@@ -89,6 +95,8 @@ function makeReviewPayload(overrides?: Record<string, unknown>) {
     pull_request: {
       number: 42,
       html_url: "https://github.com/test/repo/pull/42",
+      base: { ref: "main" },
+      merge_commit_sha: "merge-sha",
     },
     repository: { full_name: "test/repo" },
     ...overrides,
@@ -131,7 +139,10 @@ function makePushPayload(overrides?: Record<string, unknown>) {
 // ---------------------------------------------------------------------------
 
 describe("GitHubWebhookNormalizer", () => {
-  const normalizer = new GitHubWebhookNormalizer();
+  const normalizer = new GitHubWebhookNormalizer(async () => [
+    "commit-one",
+    "commit-two",
+  ]);
 
   // -----------------------------------------------------------------------
   // verify()
@@ -212,7 +223,15 @@ describe("GitHubWebhookNormalizer", () => {
       expect(e.payloadHash).toBeTruthy();
       expect(e.eventTime).toEqual(new Date("2026-01-15T10:30:00Z"));
       expect(e.metadata).toMatchObject({
+        schemaVersion: 1,
         title: "Add feature X",
+        body: "Full PR body",
+        baseBranch: "main",
+        branch: "feature-x",
+        mergeCommitSha: "merge-sha",
+        commitShas: ["commit-one", "commit-two"],
+        labels: ["feature", "ready"],
+        prNumber: 42,
         repo: "test/repo",
         action: "closed",
         additions: 100,
@@ -277,7 +296,10 @@ describe("GitHubWebhookNormalizer", () => {
       expect(e.platformUserId).toBe("11111");
       expect(e.platformLogin).toBe("reviewer");
       expect(e.metadata).toMatchObject({
+        schemaVersion: 1,
         prNumber: 42,
+        prBaseBranch: "main",
+        prMergeCommitSha: "merge-sha",
         state: "approved",
         repo: "test/repo",
       });
@@ -386,7 +408,7 @@ describe("GitHubWebhookNormalizer", () => {
   // -----------------------------------------------------------------------
 
   describe("normalize() — push", () => {
-    it("produces push event", async () => {
+    it("produces canonical commit_pushed event", async () => {
       const payload = makePushPayload();
       const headers = makeHeaders("push", "");
 
@@ -395,9 +417,10 @@ describe("GitHubWebhookNormalizer", () => {
 
       const e = events[0];
       expect(e.id).toBe("github:push:test/repo:abc123def456");
-      expect(e.eventType).toBe("push");
+      expect(e.eventType).toBe("commit_pushed");
       expect(e.platformUserId).toBe("12345");
       expect(e.metadata).toMatchObject({
+        schemaVersion: 1,
         ref: "refs/heads/main",
         after: "abc123def456",
         commitCount: 1,
