@@ -7,9 +7,9 @@
  *   operator can schedule `NodeTaskWorkflow(/api/internal/attribution/collect)` INTO each node. The
  *   dispatch payload is only `{ nodeId }`; the NODE self-serves its own ledger config in
  *   `runCollectPass` (NODE_WRITES_OWN_LEDGER), so the operator does NOT read the node's repo-spec.
- * Scope: Service-role (non-RLS) DB read of `nodes` in ('published','active'). NO GitHub App reads,
- *   NO deploy plane, NO monorepo git dependency — a freshly-provisioned env (candidate-a, preview)
- *   dispatches without the operator App being installed on every node's parent repo.
+ * Scope: Service-role (non-RLS) DB read of locally deployed `nodes` in ('published','active') whose
+ *   singleton `activity_env` equals this process's `DEPLOY_ENVIRONMENT`. NO GitHub App reads, NO deploy
+ *   plane, NO monorepo git dependency — a freshly-provisioned env dispatches from its projected registry.
  * Invariants:
  *   - NODE_OWNS_ITS_LEDGER: the operator never reads a node's ledger/cron from git; it dispatches
  *     `{ nodeId }` and the node builds the collect envelope from ITS OWN repo-spec (the node's
@@ -23,6 +23,8 @@
  *   - NO_MONOREPO_GIT_READ: replaces the prior per-node App-read of `.cogni/repo-spec.yaml`, which
  *     404'd on any env where the operator App is not installed on the node's parent repo — the bug
  *     that produced ZERO dispatch schedules (and thus no node epochs) on candidate-a (story.5001).
+ *   - LOCAL_ACTIVITY_AUTHORITY_ONLY: a row schedules only when `DEPLOY_ENVIRONMENT` is in
+ *     `deploy_envs` AND equals `activity_env`. Multi-env deployment never means multi-env scheduling.
  * Side-effects: IO (service-DB read of `nodes`).
  * Links: packages/scheduler-core/src/services/syncGovernanceSchedules.ts,
  *   node-template `app/src/app/api/internal/attribution/collect/route.ts` (the receiver),
@@ -31,9 +33,14 @@
  */
 
 import type { GovernanceScheduleConfig } from "@cogni/scheduler-core";
-import { inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { resolveServiceDb } from "@/bootstrap/container";
 import { nodes } from "@/shared/db/nodes";
+import { serverEnv } from "@/shared/env";
+import {
+  NODE_DEPLOY_ENVS,
+  type NodeFormationEnv,
+} from "@/shared/node-app-scaffold/gens";
 
 /**
  * Statuses a node must be in to receive epoch-collect dispatch. A node is `published` (repo-spec +
@@ -58,15 +65,62 @@ export interface RoutableNodeGovernanceConfig {
   config: GovernanceScheduleConfig;
 }
 
+interface RoutableNodeRegistryRow {
+  readonly id: string;
+  readonly slug: string;
+  readonly deployEnvs: readonly string[];
+  readonly activityEnv: string;
+}
+
+interface ResolveRoutableNodeGovernanceConfigDeps {
+  readonly deployEnvironment?: string | undefined;
+  readonly listRows?:
+    | (() => Promise<readonly RoutableNodeRegistryRow[]>)
+    | undefined;
+}
+
+function requireDeployEnvironment(value: string | undefined): NodeFormationEnv {
+  if (!value || !(NODE_DEPLOY_ENVS as readonly string[]).includes(value)) {
+    throw new Error(
+      `epoch schedule resolution requires DEPLOY_ENVIRONMENT to be one of ${NODE_DEPLOY_ENVS.join(", ")}`
+    );
+  }
+  return value as NodeFormationEnv;
+}
+
+/** Pure authority predicate retained after the SQL filter as a defense against stale/mocked readers. */
+export function isLocalActivityAuthority(
+  row: Pick<RoutableNodeRegistryRow, "deployEnvs" | "activityEnv">,
+  deployEnvironment: NodeFormationEnv
+): boolean {
+  return (
+    row.activityEnv === deployEnvironment &&
+    row.deployEnvs.includes(deployEnvironment)
+  );
+}
+
 /**
  * List every node eligible for epoch-collect routing — service-role (non-RLS) read of `{id, slug}`
  * for nodes in ('published','active').
  */
-async function listRoutableNodes(): Promise<{ id: string; slug: string }[]> {
+async function listRoutableNodes(
+  deployEnvironment: NodeFormationEnv
+): Promise<RoutableNodeRegistryRow[]> {
   return resolveServiceDb()
-    .select({ id: nodes.id, slug: nodes.slug })
+    .select({
+      id: nodes.id,
+      slug: nodes.slug,
+      deployEnvs: nodes.deployEnvs,
+      activityEnv: nodes.activityEnv,
+    })
     .from(nodes)
-    .where(inArray(nodes.status, [...ROUTABLE_NODE_STATUSES]));
+    .where(
+      and(
+        inArray(nodes.status, [...ROUTABLE_NODE_STATUSES]),
+        eq(nodes.activityEnv, deployEnvironment),
+        sql`${deployEnvironment} = ANY(${nodes.deployEnvs})`
+      )
+    );
 }
 
 /**
@@ -76,22 +130,29 @@ async function listRoutableNodes(): Promise<{ id: string; slug: string }[]> {
  * or no receiver route fail-softs at dispatch time (400 / 404), so enumerating every routable node
  * is safe and needs no per-node git-authoritative read.
  */
-export async function resolveRoutableNodeGovernanceConfigs(): Promise<
-  RoutableNodeGovernanceConfig[]
-> {
-  const routable = await listRoutableNodes();
-  return routable.map((node) => ({
-    nodeId: node.id,
-    slug: node.slug,
-    config: {
-      schedules: [
-        {
-          charter: "LEDGER_INGEST",
-          cron: COLLECT_DISPATCH_CRON,
-          timezone: COLLECT_DISPATCH_TIMEZONE,
-          entrypoint: "LEDGER_INGEST",
-        },
-      ],
-    },
-  }));
+export async function resolveRoutableNodeGovernanceConfigs(
+  deps: ResolveRoutableNodeGovernanceConfigDeps = {}
+): Promise<RoutableNodeGovernanceConfig[]> {
+  const deployEnvironment = requireDeployEnvironment(
+    deps.deployEnvironment ?? serverEnv().DEPLOY_ENVIRONMENT
+  );
+  const routable = deps.listRows
+    ? await deps.listRows()
+    : await listRoutableNodes(deployEnvironment);
+  return routable
+    .filter((node) => isLocalActivityAuthority(node, deployEnvironment))
+    .map((node) => ({
+      nodeId: node.id,
+      slug: node.slug,
+      config: {
+        schedules: [
+          {
+            charter: "LEDGER_INGEST",
+            cron: COLLECT_DISPATCH_CRON,
+            timezone: COLLECT_DISPATCH_TIMEZONE,
+            entrypoint: "LEDGER_INGEST",
+          },
+        ],
+      },
+    }));
 }

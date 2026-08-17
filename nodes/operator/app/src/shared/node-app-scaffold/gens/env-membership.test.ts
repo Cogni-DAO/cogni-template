@@ -17,6 +17,8 @@ import { describe, expect, it } from "vitest";
 import {
   addCatalogEnv,
   dropCatalogEnv,
+  envRemovalViolation,
+  parseCatalogActivityEnv,
   parseCatalogEnvs,
   setCatalogEnvs,
 } from "./env-membership";
@@ -35,6 +37,7 @@ preview_branch: deploy/preview-blue
 production_branch: deploy/production-blue
 # task.5017 — per-env node-set comment that must survive verbatim.
 envs: [candidate-a, preview, production]
+activity_env: candidate-a
 path_prefix: nodes/blue/
 `;
 
@@ -89,14 +92,8 @@ describe("setCatalogEnvs", () => {
     expect(restored).toBe(CATALOG);
   });
 
-  it("emits an empty flow-sequence `envs: []` for the empty set (ATOMIC_PER_ENV — deployed nowhere)", () => {
-    const emptied = setCatalogEnvs(CATALOG, []);
-    expect(emptied).toContain("envs: []");
-    // Round-trips: an emptied row parses back to [] and only the envs: line changed.
-    expect(parseCatalogEnvs(emptied)).toEqual([]);
-    const before = CATALOG.split("\n").filter((l) => !l.startsWith("envs:"));
-    const after = emptied.split("\n").filter((l) => !l.startsWith("envs:"));
-    expect(after).toEqual(before);
+  it("rejects an empty deploy set", () => {
+    expect(() => setCatalogEnvs(CATALOG, [])).toThrow(/at least one/);
   });
 
   it("accepts a candidate-a-absent subset (no candidate-a special-casing)", () => {
@@ -114,6 +111,32 @@ describe("setCatalogEnvs", () => {
     const next = setCatalogEnvs(lastLine, ["preview", "production"]);
     expect(next).toBe("name: blue\ntype: node\nenvs: [preview, production]\n");
     expect(next.endsWith("]\n")).toBe(true);
+  });
+});
+
+describe("activity authority removal", () => {
+  it("parses the catalog activity authority", () => {
+    expect(parseCatalogActivityEnv(CATALOG)).toBe("candidate-a");
+  });
+
+  it("rejects the final environment before considering authority transfer", () => {
+    expect(
+      envRemovalViolation({
+        currentEnvs: ["candidate-a"],
+        activityEnv: "candidate-a",
+        removeEnv: "candidate-a",
+      })
+    ).toBe("final_environment_required");
+  });
+
+  it("rejects removing activity authority from a multi-env deployment", () => {
+    expect(
+      envRemovalViolation({
+        currentEnvs: ["candidate-a", "production"],
+        activityEnv: "candidate-a",
+        removeEnv: "candidate-a",
+      })
+    ).toBe("activity_authority_cutover_required");
   });
 });
 

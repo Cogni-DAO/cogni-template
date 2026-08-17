@@ -5,8 +5,7 @@
  * Module: `@shared/node-app-scaffold/gens/env-membership-plan`
  * Purpose: Pin the pure env-delta planner — add-env inserts, remove-env sha:null deletions +
  *   regenerated kustomization, and the ATOMIC_PER_ENV + idempotency invariants. Every env is an
- *   independent toggle (candidate-a is no different from preview/production); removing the last env
- *   yields a valid empty `envs: []` set.
+ *   independent toggle while the non-empty deploy set and singleton activity authority remain valid.
  * Scope: Pure unit tests over hand-built control-plane fixtures (no Octokit).
  * Invariants: ATOMIC_PER_ENV, IDEMPOTENT, DELETE_VIA_SHA_NULL.
  * Side-effects: none
@@ -103,6 +102,7 @@ candidate_a_branch: deploy/candidate-a-${SLUG}
 preview_branch: deploy/preview-${SLUG}
 production_branch: deploy/production-${SLUG}
 envs: [${envs.join(", ")}]
+activity_env: ${envs[0] ?? "candidate-a"}
 path_prefix: nodes/${SLUG}/
 `;
 
@@ -247,58 +247,38 @@ describe("buildEnvDeltaPlan — REMOVE env (partial)", () => {
   });
 });
 
-describe("buildEnvDeltaPlan — ATOMIC_PER_ENV (candidate-a is not special)", () => {
-  it("removing candidate-a is a normal atomic remove (not a decommission) — others survive", () => {
-    const res = buildEnvDeltaPlan({
-      slug: SLUG,
-      env: "candidate-a",
-      present: false,
-      current: baseCurrent(["candidate-a", "preview", "production"]),
-    });
-    expect(res.kind).toBe("remove");
-    if (res.kind === "no_changes") throw new Error("unexpected no_changes");
+describe("buildEnvDeltaPlan — safe removals", () => {
+  it("rejects removing the current activity authority even when other deployments survive", () => {
+    const call = () =>
+      buildEnvDeltaPlan({
+        slug: SLUG,
+        env: "candidate-a",
+        present: false,
+        current: baseCurrent(["candidate-a", "preview", "production"]),
+      });
 
-    // Just candidate-a's env is dropped; preview + production remain.
-    expect(res.nextEnvs).toEqual(["preview", "production"]);
-    // Only candidate-a's overlay + appset are deleted; the catalog row survives.
-    expect(deletes(res.ops).sort()).toEqual(
-      [
-        overlayPath("candidate-a", SLUG),
-        externalSecretPath("candidate-a", SLUG),
-        appsetPath("candidate-a", SLUG),
-      ].sort()
+    expect(call).toThrowError(
+      expect.objectContaining({
+        code: "activity_authority_cutover_required",
+        status: 422,
+      })
     );
-    expect(deletes(res.ops)).not.toContain(CATALOG_PATH(SLUG));
-    const catalogOp = res.ops.find((o) => o.path === CATALOG_PATH(SLUG));
-    if (catalogOp?.op === "upsert") {
-      expect(catalogOp.content).toContain("envs: [preview, production]");
-    }
   });
 
-  it("removing the LAST remaining env yields a valid empty `envs: []` set (deployed nowhere)", () => {
-    const res = buildEnvDeltaPlan({
-      slug: SLUG,
-      env: "candidate-a",
-      present: false,
-      current: baseCurrent(["candidate-a"]),
-    });
-    expect(res.kind).toBe("remove");
-    if (res.kind === "no_changes") throw new Error("unexpected no_changes");
+  it("rejects removing the LAST remaining environment", () => {
+    const call = () =>
+      buildEnvDeltaPlan({
+        slug: SLUG,
+        env: "candidate-a",
+        present: false,
+        current: baseCurrent(["candidate-a"]),
+      });
 
-    expect(res.nextEnvs).toEqual([]);
-    // The catalog row is NOT deleted — the node keeps its row (+ caddy/scheduler), just deploys nowhere.
-    expect(deletes(res.ops)).not.toContain(CATALOG_PATH(SLUG));
-    const catalogOp = res.ops.find((o) => o.path === CATALOG_PATH(SLUG));
-    if (catalogOp?.op === "upsert") {
-      expect(catalogOp.content).toContain("envs: []");
-    }
-    // candidate-a's overlay + appset ARE deleted.
-    expect(deletes(res.ops).sort()).toEqual(
-      [
-        overlayPath("candidate-a", SLUG),
-        externalSecretPath("candidate-a", SLUG),
-        appsetPath("candidate-a", SLUG),
-      ].sort()
+    expect(call).toThrowError(
+      expect.objectContaining({
+        code: "final_environment_required",
+        status: 422,
+      })
     );
   });
 
@@ -312,7 +292,7 @@ describe("buildEnvDeltaPlan — ATOMIC_PER_ENV (candidate-a is not special)", ()
         current: baseCurrent(["candidate-a", "preview"]),
       }).kind
     ).toBe("no_changes");
-    // remove candidate-a when already absent → no_changes
+    // remove candidate-a when already absent → no_changes (no authority mutation is attempted)
     expect(
       buildEnvDeltaPlan({
         slug: SLUG,

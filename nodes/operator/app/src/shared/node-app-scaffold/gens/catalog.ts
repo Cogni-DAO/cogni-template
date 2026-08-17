@@ -85,7 +85,7 @@ production_branch: deploy/production-${slug}
 # task.5017/5025 — per-env node-set (deploy ⊆ provisioned). A wizard birth enters
 # candidate-a only; preview/production are explicit post-validation transitions.
 envs: [candidate-a]
-# task.5025 — exactly one environment ingests Git activity and runs epoch schedules.
+# task.5025 generation 1 — candidate-a is the fixed activity authority; v1 has no cutover verb.
 activity_env: candidate-a
 # Stable binding only; the reconciler resolves an env-local users.id by wallet.
 owner_wallet: "${input.ownerWallet}"

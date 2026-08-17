@@ -13,11 +13,10 @@
  *   `insert/removeFromAppsetsKustomization`) over the current contents the adapter fetches on main. NO IO,
  *   NO env, NO blob SHAs — the adapter resolves those.
  * Invariants:
- *   - ATOMIC_PER_ENV — every env is an INDEPENDENT toggle: candidate-a is no different from
- *     preview/production. Adding an env folds it in; removing an env drops just that env. Removing the
- *     last remaining env yields a valid empty `envs: []` row (the node is simply deployed nowhere) — it
- *     is NOT a special "decommission". A node with `envs:[]` keeps its catalog row + Caddy/scheduler
- *     entries (those are per-node, env-independent, and out of scope here).
+ *   - NONEMPTY_DEPLOY_SET — removing an env drops just that env, but removing the final env is rejected;
+ *     full decommission is a separate lifecycle operation.
+ *   - ACTIVITY_AUTHORITY_STAYS_DEPLOYED — removing the current `activity_env` is rejected. V1 does not
+ *     claim an atomic cross-environment authority transfer; that needs a future fenced protocol.
  *   - IDEMPOTENT — requesting the state that already holds (env already present on add / already absent on
  *     remove) yields an EMPTY op list (`{ kind: "no_changes" }`), so the adapter opens no PR.
  *   - DELETE_VIA_SHA_NULL — file removals are emitted as `{ op: "delete", path }`; the adapter maps these
@@ -35,6 +34,8 @@ import {
 import {
   addCatalogEnv,
   dropCatalogEnv,
+  envRemovalViolation,
+  parseCatalogActivityEnv,
   parseCatalogEnvs,
   setCatalogEnvs,
 } from "./env-membership";
@@ -90,7 +91,7 @@ export type EnvDeltaResult =
   | {
       readonly kind: "add" | "remove";
       readonly ops: readonly EnvPlanOp[];
-      /** The node's env-set AFTER the mutation (may be empty when the last env is removed). */
+      /** The node's non-empty env-set AFTER the mutation. */
       readonly nextEnvs: readonly NodeFormationEnv[];
     };
 
@@ -118,8 +119,7 @@ const TEMPLATE_SLUG = "node-template";
  *   appsets kustomization.
  * - REMOVE (¬present, env present): catalog `envs:` −= env, DELETE the overlay + appset, regenerate that
  *   env's appsets kustomization without the slug. Applies to candidate-a exactly like any other env.
- *   Removing the last env yields `envs: []` (valid — the node is deployed nowhere); the catalog row +
- *   Caddy/scheduler entries are left untouched (per-node, not per-env; out of scope here).
+ *   Removing the final env or the current activity authority is rejected with a typed 422.
  * - Idempotent: the already-holding state returns `{ kind: "no_changes" }`.
  */
 export function buildEnvDeltaPlan(input: {
@@ -143,11 +143,12 @@ export function buildEnvDeltaPlan(input: {
   }
 
   const currentEnvs = parseCatalogEnvs(current.catalog);
+  const activityEnv = parseCatalogActivityEnv(current.catalog);
 
   if (present) {
     return planAdd({ slug, env, currentEnvs, current });
   }
-  return planRemove({ slug, env, currentEnvs, current });
+  return planRemove({ slug, env, currentEnvs, activityEnv, current });
 }
 
 function planAdd(args: {
@@ -230,17 +231,36 @@ function planRemove(args: {
   slug: string;
   env: NodeFormationEnv;
   currentEnvs: NodeFormationEnv[];
+  activityEnv: NodeFormationEnv;
   current: EnvPlanCurrent;
 }): EnvDeltaResult {
-  const { slug, env, currentEnvs, current } = args;
+  const { slug, env, currentEnvs, activityEnv, current } = args;
 
   // Idempotent: already absent → no PR.
   if (!currentEnvs.includes(env)) {
     return { kind: "no_changes" };
   }
 
-  // Atomic remove of exactly this env (candidate-a included) — the surviving set is whatever remains,
-  // possibly empty (the node is then deployed nowhere; still a valid catalog row).
+  const violation = envRemovalViolation({
+    currentEnvs,
+    activityEnv,
+    removeEnv: env,
+  });
+  if (violation === "final_environment_required") {
+    throw new EnvPlanError(
+      violation,
+      `cannot remove '${env}' from '${slug}': every node must remain deployed in at least one environment. Use the decommission lifecycle to remove the node.`,
+      422
+    );
+  }
+  if (violation === "activity_authority_cutover_required") {
+    throw new EnvPlanError(
+      violation,
+      `cannot remove activity authority '${env}' from '${slug}': v1 has no safe cross-environment cutover.`,
+      422
+    );
+  }
+
   const remaining = dropCatalogEnv(currentEnvs, env);
 
   const appsetsKustomization = current.appsetsKustomizationByEnv[env];

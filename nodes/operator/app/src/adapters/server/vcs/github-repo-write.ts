@@ -1822,14 +1822,14 @@ export class GitHubRepoWriter implements DeployPlanePort {
   /**
    * Node env-membership verb (story.5020 W4): add OR remove ONE env from a node's deploy reach by editing
    * the OPERATOR monorepo catalog (owner/repo = the monorepo, exactly like {@link openNodeSubmodulePr}).
-   * Every env is an INDEPENDENT, atomic toggle (ATOMIC_PER_ENV) — candidate-a is no different from
-   * preview/production.
+   * Individual env membership is independently editable while the non-empty deploy set and singleton
+   * activity authority remain valid.
    *
    * - ADD (`present:true`): fold `env` into `infra/catalog/<slug>.yaml`'s `envs:` line, render the per-env
    *   overlay + AppSet, and fold the slug into that env's appsets kustomization.
    * - REMOVE (`present:false`): drop `env` from the catalog `envs:` line, DELETE the overlay + AppSet
-   *   (sha:null), regenerate that env's kustomization without the slug. Applies to candidate-a too;
-   *   removing the last env leaves a valid `envs: []` row (the catalog row + Caddy/scheduler entries stay).
+   *   (sha:null), regenerate that env's kustomization without the slug. Removing the final env or the
+   *   current activity authority fails with 422; decommission/cutover are separate lifecycle operations.
    *
    * Idempotent: the already-holding state opens no PR (`no_changes`). The DNS reverse/forward reconcile is
    * a flag-gated v0 seam (DNS_REVERSE_RECONCILE, default off) — see the `dnsSeam` call below.
@@ -2059,10 +2059,7 @@ export class GitHubRepoWriter implements DeployPlanePort {
     env: NodeFormationEnv,
     nextEnvs: readonly NodeFormationEnv[]
   ): string {
-    const envsList =
-      nextEnvs.length > 0
-        ? `\`[${nextEnvs.join(", ")}]\``
-        : "_(none — deployed nowhere)_";
+    const envsList = `\`[${nextEnvs.join(", ")}]\``;
     const verb = kind === "add" ? "Adds" : "Removes";
     const dir = kind === "add" ? "to" : "from";
     return (
