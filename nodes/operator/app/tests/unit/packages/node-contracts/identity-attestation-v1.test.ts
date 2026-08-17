@@ -6,11 +6,11 @@
 import { createHash } from "node:crypto";
 
 import {
+  IDENTITY_ATTESTATION_V1_PROTOCOL,
+  IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256,
   IdentityAttestationClaimsSchema,
   IdentityAttestationOriginSchema,
   IdentityAttestationRequestSchema,
-  IDENTITY_ATTESTATION_V1_PROTOCOL,
-  IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256,
 } from "@cogni/node-contracts";
 import { describe, expect, it } from "vitest";
 

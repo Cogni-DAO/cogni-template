@@ -106,6 +106,13 @@ export type {
   UpcomingRun,
 } from "./governance-status.port";
 export type {
+  IdentityAttestationJwtClaims,
+  IdentityAttestationNode,
+  IdentityAttestationRepositoryPort,
+  IdentityAttestationSignerPort,
+  IdentityAttestationSubject,
+} from "./identity-attestation.port";
+export type {
   LangfuseReaderPort,
   LangfuseTraceQuery,
   LangfuseTraceSummary,
@@ -154,13 +161,6 @@ export type {
   TemplateQueryResult,
   TemplateSummary,
 } from "./metrics-query.port";
-export type {
-  IdentityAttestationJwtClaims,
-  IdentityAttestationNode,
-  IdentityAttestationRepositoryPort,
-  IdentityAttestationSignerPort,
-  IdentityAttestationSubject,
-} from "./identity-attestation.port";
 export type { ModelCatalogPort } from "./model-catalog.port";
 export type {
   ModelOption,
