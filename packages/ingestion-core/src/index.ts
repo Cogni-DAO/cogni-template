@@ -14,6 +14,12 @@
  */
 
 export {
+  GITHUB_PULL_REQUEST_COMMITS_QUERY,
+  parseGitHubPullRequestCommitsPage,
+  type GitHubPullRequestCommitsPage,
+  type ParsedGitHubPullRequestCommitsPage,
+} from "./github-commit-pagination";
+export {
   buildGitHubIssueContextV1,
   buildGitHubPrMergedContextV1,
   buildGitHubReviewContextV1,

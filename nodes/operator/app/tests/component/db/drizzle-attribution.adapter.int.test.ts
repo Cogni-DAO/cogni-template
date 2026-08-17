@@ -429,7 +429,9 @@ describe("DrizzleAttributionAdapter (Component)", () => {
           sql`UPDATE ingestion_receipts SET source = 'modified' WHERE receipt_id = 'github:pr:test/repo:1' AND node_id = ${TEST_NODE_ID}::uuid`
         )
       ).rejects.toSatisfy((err: unknown) =>
-        /not allowed/i.test(drizzleCause(err))
+        /may only refresh ingestion_receipts\.display_snapshot/i.test(
+          drizzleCause(err)
+        )
       );
     });
 

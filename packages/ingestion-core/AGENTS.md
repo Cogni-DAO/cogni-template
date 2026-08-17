@@ -50,6 +50,7 @@ Pure domain types, port interface, and helpers for activity ingestion source ada
   - `ReceiptEconomicCoreV1` / `ReceiptDisplaySnapshotV1` — immutable hash-covered facts separated from refreshable presentation
   - `hashCanonicalPayload()` / `hashReceiptEconomicContent()` — SHA-256 via Web Crypto; receipt hash binds canonical event identity and excludes mutable snapshots/provenance
   - Receipt source/event/producer vocabularies + canonical GitHub v1 context builders
+  - `GITHUB_PULL_REQUEST_COMMITS_QUERY` / `parseGitHubPullRequestCommitsPage()` — shared, unbounded cursor contract for lossless webhook/poll PR commit collection
 
 ## Ports
 

@@ -34,7 +34,10 @@ import {
   buildGitHubPrMergedContextV1,
   buildGitHubReviewContextV1,
   GITHUB_ADAPTER_VERSION,
+  GITHUB_PULL_REQUEST_COMMITS_QUERY,
+  type GitHubPullRequestCommitsPage,
   hashReceiptEconomicContent,
+  parseGitHubPullRequestCommitsPage,
 } from "@cogni/ingestion-core";
 
 import type { GitHubClient } from "./octokit-client.js";
@@ -746,22 +749,23 @@ export class GitHubSourceAdapter implements PollAdapter {
     return client.graphql<T>(query, variables);
   }
 
-  /** REST pagination is required: nested GraphQL commit connections truncate. */
+  /** Follow the PR commit connection to exhaustion; the REST endpoint caps at 250. */
   private async loadPrCommitShas(
     owner: string,
     repo: string,
     prNumber: number
   ): Promise<string[]> {
-    const client = await this.getClient();
     const commitShas: string[] = [];
-    for (let page = 1; ; page += 1) {
-      const response = await client.request(
-        "GET /repos/{owner}/{repo}/pulls/{pull_number}/commits",
-        { owner, repo, pull_number: prNumber, per_page: 100, page }
+    let cursor: string | null = null;
+    do {
+      const response = await this.executeQuery<GitHubPullRequestCommitsPage>(
+        GITHUB_PULL_REQUEST_COMMITS_QUERY,
+        { owner, name: repo, number: prNumber, cursor }
       );
-      const commits = response.data as ReadonlyArray<{ sha: string }>;
-      commitShas.push(...commits.map((commit) => commit.sha));
-      if (commits.length < 100) return commitShas;
-    }
+      const page = parseGitHubPullRequestCommitsPage(response);
+      commitShas.push(...page.commitShas);
+      cursor = page.nextCursor;
+    } while (cursor !== null);
+    return commitShas;
   }
 }

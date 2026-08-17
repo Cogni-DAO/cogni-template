@@ -19,12 +19,14 @@ import {
 // ---------------------------------------------------------------------------
 
 const mockGraphqlFn = vi.fn();
-const mockRequestFn = vi.fn();
+const mockCommitGraphqlFn = vi.fn();
 
 vi.mock("../src/adapters/ingestion/octokit-client", () => ({
   createGitHubClient: () => ({
-    graphql: mockGraphqlFn,
-    request: mockRequestFn,
+    graphql: (query: string, variables: Record<string, unknown>) =>
+      query.includes("CollectPullRequestCommits")
+        ? mockCommitGraphqlFn(query, variables)
+        : mockGraphqlFn(query, variables),
   }),
 }));
 
@@ -73,9 +75,20 @@ function makeCollectParams(overrides?: Partial<CollectParams>): CollectParams {
 describe("GitHubSourceAdapter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockRequestFn.mockImplementation(
-      (_route: string, params: { pull_number: number }) =>
-        Promise.resolve({ data: [{ sha: `commit-sha-${params.pull_number}` }] })
+    mockCommitGraphqlFn.mockImplementation(
+      (_query: string, variables: { number: number }) =>
+        Promise.resolve({
+          repository: {
+            pullRequest: {
+              commits: {
+                pageInfo: { hasNextPage: false, endCursor: null },
+                nodes: [
+                  { commit: { oid: `commit-sha-${variables.number}` } },
+                ],
+              },
+            },
+          },
+        })
     );
   });
 
@@ -228,13 +241,30 @@ describe("GitHubSourceAdapter", () => {
         { length: 251 },
         (_, index) => `commit-${String(index + 1).padStart(3, "0")}`
       );
-      mockRequestFn.mockImplementation(
-        (_route: string, params: { page: number }) =>
-          Promise.resolve({
-            data: commits
-              .slice((params.page - 1) * 100, params.page * 100)
-              .map((sha) => ({ sha })),
-          })
+      const cursors = [null, "cursor-100", "cursor-200"] as const;
+      mockCommitGraphqlFn.mockImplementation(
+        (_query: string, variables: { cursor: string | null }) => {
+          const pageIndex = cursors.indexOf(
+            variables.cursor as (typeof cursors)[number]
+          );
+          const pageCommits = commits.slice(
+            pageIndex * 100,
+            (pageIndex + 1) * 100
+          );
+          return Promise.resolve({
+            repository: {
+              pullRequest: {
+                commits: {
+                  pageInfo: {
+                    hasNextPage: pageIndex < cursors.length - 1,
+                    endCursor: cursors[pageIndex + 1] ?? null,
+                  },
+                  nodes: pageCommits.map((oid) => ({ commit: { oid } })),
+                },
+              },
+            },
+          });
+        }
       );
       mockGraphqlFn.mockResolvedValueOnce(
         wrapPrResponse([
@@ -246,7 +276,9 @@ describe("GitHubSourceAdapter", () => {
       const commitShas = result.events[0]?.metadata.commitShas as string[];
       expect(commitShas).toHaveLength(251);
       expect(commitShas[250]).toBe("commit-251");
-      expect(mockRequestFn).toHaveBeenCalledTimes(3);
+      expect(
+        mockCommitGraphqlFn.mock.calls.map(([, variables]) => variables.cursor)
+      ).toEqual(cursors);
     });
 
     it("filters PRs outside the time window (client-side)", async () => {

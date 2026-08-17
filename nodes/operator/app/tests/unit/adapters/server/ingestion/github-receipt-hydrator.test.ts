@@ -3,7 +3,7 @@
 
 /**
  * Module: `@tests/unit/adapters/server/ingestion/github-receipt-hydrator`
- * Purpose: Prove merged-PR commit hydration is lossless across GitHub REST pages.
+ * Purpose: Prove merged-PR commit hydration follows the production GraphQL cursor path beyond 250 commits.
  * Scope: Mocked GitHub App client only; no network or database.
  * Invariants: COMMIT_COLLECTION_LOSSLESS.
  * Side-effects: none
@@ -13,10 +13,10 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { request } = vi.hoisted(() => ({ request: vi.fn() }));
+const { graphql } = vi.hoisted(() => ({ graphql: vi.fn() }));
 
 vi.mock("@/adapters/server/review/github-auth", () => ({
-  createInstallationOctokit: () => ({ request }),
+  createInstallationOctokit: () => ({ graphql }),
 }));
 
 import { createGitHubMergedPrHydrator } from "@/adapters/server/ingestion/github-receipt-hydrator";
@@ -31,12 +31,30 @@ describe("createGitHubMergedPrHydrator", () => {
       { length: 251 },
       (_, index) => `commit-${String(index + 1).padStart(3, "0")}`
     );
-    request.mockImplementation((_route: string, params: { page: number }) =>
-      Promise.resolve({
-        data: commits
-          .slice((params.page - 1) * 100, params.page * 100)
-          .map((sha) => ({ sha })),
-      })
+    const cursors = [null, "cursor-100", "cursor-200"] as const;
+    graphql.mockImplementation(
+      (_query: string, variables: { cursor: string | null }) => {
+        const pageIndex = cursors.indexOf(
+          variables.cursor as (typeof cursors)[number]
+        );
+        const pageCommits = commits.slice(
+          pageIndex * 100,
+          (pageIndex + 1) * 100
+        );
+        return Promise.resolve({
+          repository: {
+            pullRequest: {
+              commits: {
+                pageInfo: {
+                  hasNextPage: pageIndex < cursors.length - 1,
+                  endCursor: cursors[pageIndex + 1] ?? null,
+                },
+                nodes: pageCommits.map((oid) => ({ commit: { oid } })),
+              },
+            },
+          },
+        });
+      }
     );
 
     const hydrate = createGitHubMergedPrHydrator({
@@ -52,6 +70,8 @@ describe("createGitHubMergedPrHydrator", () => {
 
     expect(result).toHaveLength(251);
     expect(result[250]).toBe("commit-251");
-    expect(request).toHaveBeenCalledTimes(3);
+    expect(graphql.mock.calls.map(([, variables]) => variables.cursor)).toEqual(
+      cursors
+    );
   });
 });

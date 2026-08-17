@@ -41,7 +41,7 @@ describe("GitHub receipt producer convergence", () => {
       changedFiles: 4,
     } as const;
 
-    // Both producers page GitHub REST to exhaustion. The shared builder must
+    // Both producers page the shared GraphQL cursor connection to exhaustion. The builder must
     // preserve the 251st commit byte-for-byte.
     const webhookContext = buildGitHubPrMergedContextV1(facts);
     const pollContext = buildGitHubPrMergedContextV1({

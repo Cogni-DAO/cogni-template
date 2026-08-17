@@ -611,9 +611,9 @@ interface WebhookNormalizer {
 
 Both paths produce provider-stable event IDs (`github:pr:<providerRepoId>:42`). Repository renames therefore converge on one key. Duplicate delivery is classified transactionally: equal core refreshes display; divergent core is quarantined as a permanent conflict (RECEIPT_IDEMPOTENT).
 
-Merged-PR commit identity is lossless on both paths. Webhook hydration and reconcile polling page the GitHub REST commits endpoint at 100 items per page until exhaustion; nested GraphQL commit connections are not used because they truncate large PRs.
+Merged-PR commit identity is lossless on both paths. Webhook hydration and reconcile polling share the `PullRequest.commits` GraphQL query + page parser and follow its cursor connection at 100 items per page until `hasNextPage` is false. The REST pull-commits endpoint is not used because GitHub caps that endpoint at 250 commits; a single nested `commits(first: 250)` query is also forbidden because it truncates large PRs.
 
-Poll adapters live in `services/scheduler-worker/src/adapters/ingestion/` and webhook normalizers in `src/adapters/server/ingestion/` (ADAPTERS_NOT_IN_CORE). They use official OSS clients: `@octokit/graphql` for GitHub poll, `@octokit/webhooks-methods` for GitHub webhook verification.
+Poll adapters live in `services/scheduler-worker/src/adapters/ingestion/` and webhook normalizers in `src/adapters/server/ingestion/` (ADAPTERS_NOT_IN_CORE). They use official OSS clients: `@octokit/core` GraphQL for GitHub polling and hydration, and `@octokit/webhooks-methods` for webhook verification.
 
 **Forward path:** Singer (MIT/Apache) taps will replace bespoke TypeScript adapters for new data sources. Contract: `tap → stdout JSON stream → map to IngestionReceipt`. Temporal orchestrates tap execution and persists Singer `state.json` to Postgres. V0 TypeScript adapters (GitHub) remain until Singer equivalents are proven. Both write to the same `ingestion_receipts` table — downstream pipelines don't know the difference. See [data-ingestion-pipelines spec](./data-ingestion-pipelines.md).
 
