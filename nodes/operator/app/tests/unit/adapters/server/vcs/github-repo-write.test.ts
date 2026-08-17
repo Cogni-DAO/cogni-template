@@ -1334,8 +1334,10 @@ describe("GitHubRepoWriter.listCatalogNodes", () => {
     Buffer.from(value, "utf-8").toString("base64");
 
   it("App-reads external and in-repo node identity for registry projection", async () => {
+    const sourceRef = "0123456789012345678901234567890123456789";
     routeHandlers = {
       "GET /repos/{owner}/{repo}/contents/{path}": (params) => {
+        expect(params.ref).toBe(sourceRef);
         if (params.path === "infra/catalog") {
           return [
             { name: "atlas.yaml", type: "file" },
@@ -1381,6 +1383,7 @@ governance:
       makeWriter().listCatalogNodes({
         parentOwner: "Cogni-DAO",
         parentRepo: "cogni",
+        sourceRef,
       })
     ).resolves.toEqual([
       {
@@ -1407,8 +1410,10 @@ governance:
   });
 
   it("fails loud when activity_env is outside the deploy set", async () => {
+    const sourceRef = "0123456789012345678901234567890123456789";
     routeHandlers = {
       "GET /repos/{owner}/{repo}/contents/{path}": (params) => {
+        expect(params.ref).toBe(sourceRef);
         if (params.path === "infra/catalog") {
           return [{ name: "atlas.yaml", type: "file" }];
         }
@@ -1432,6 +1437,7 @@ owner_wallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949"
       makeWriter().listCatalogNodes({
         parentOwner: "Cogni-DAO",
         parentRepo: "cogni",
+        sourceRef,
       })
     ).rejects.toThrow(/activity_env must be present in envs/);
   });

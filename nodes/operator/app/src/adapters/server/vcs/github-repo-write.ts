@@ -1301,8 +1301,9 @@ export class GitHubRepoWriter implements DeployPlanePort {
   async listCatalogNodes(input: {
     parentOwner: string;
     parentRepo: string;
+    sourceRef: string;
   }): Promise<readonly CatalogNodeDefinition[]> {
-    const { parentOwner, parentRepo } = input;
+    const { parentOwner, parentRepo, sourceRef } = input;
     const octokit = await this.getOctokit(parentOwner, parentRepo);
     let entries: Array<{ name: string; type: string }>;
     try {
@@ -1312,7 +1313,7 @@ export class GitHubRepoWriter implements DeployPlanePort {
           owner: parentOwner,
           repo: parentRepo,
           path: "infra/catalog",
-          ref: "main",
+          ref: sourceRef,
         }
       );
       entries = Array.isArray(data)
@@ -1322,7 +1323,7 @@ export class GitHubRepoWriter implements DeployPlanePort {
       if ((error as { status?: number })?.status === 404) {
         throw deployPlaneError(
           "catalog_missing",
-          `${parentOwner}/${parentRepo} has no infra/catalog directory on main`,
+          `${parentOwner}/${parentRepo} has no infra/catalog directory at ${sourceRef}`,
           404
         );
       }
@@ -1337,12 +1338,12 @@ export class GitHubRepoWriter implements DeployPlanePort {
         owner: parentOwner,
         repo: parentRepo,
         path: `infra/catalog/${entry.name}`,
-        ref: "main",
+        ref: sourceRef,
       });
       if (!text) {
         throw deployPlaneError(
           "catalog_read_failed",
-          `infra/catalog/${entry.name} disappeared while reading main`,
+          `infra/catalog/${entry.name} disappeared while reading ${sourceRef}`,
           409
         );
       }
@@ -1377,7 +1378,7 @@ export class GitHubRepoWriter implements DeployPlanePort {
           owner: parentOwner,
           repo: parentRepo,
           path: specPath,
-          ref: "main",
+          ref: sourceRef,
         });
         if (!specText) {
           throw deployPlaneError(

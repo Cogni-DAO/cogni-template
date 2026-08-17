@@ -3,11 +3,12 @@
 
 /**
  * Module: `@bootstrap/jobs/reconcileCatalogNodeRegistry.job`
- * Purpose: Reconcile merged git catalog intent into this environment's node registry and OpenFGA store.
- * Scope: Acquires a single-writer lock, App-reads the env-local parent catalog, delegates DB projection,
+ * Purpose: Reconcile deployed git catalog intent into this environment's node registry and OpenFGA store.
+ * Scope: Acquires a single-writer lock, App-reads the exact deployed parent revision, delegates DB projection,
  *   then ensures node-admin ownership relations. Does not schedule epochs or deliver webhooks.
  * Invariants:
- *   - APP_READS_MERGED_GIT: runtime disk contents are never treated as registry intent.
+ *   - APP_READS_DEPLOYED_GIT: runtime disk contents are never treated as registry intent; candidate
+ *     and production project the exact source revision their running image reports.
  *   - ENV_LOCAL_PROJECTION: each environment writes only its own Postgres and OpenFGA stores.
  *   - OWNER_PROJECTION_REQUIRED: missing/unavailable authorization fails the reconcile loudly.
  *   - SINGLE_WRITER: a reserved PostgreSQL connection holds the advisory lock for the whole run.
@@ -37,6 +38,7 @@ export async function runCatalogNodeRegistryReconcileJob(): Promise<CatalogNodeR
   const { log, authorization } = container;
   const parentOwner = env.NODE_SUBMODULE_PARENT_OWNER;
   const parentRepo = env.NODE_SUBMODULE_PARENT_REPO;
+  const sourceRef = env.APP_BUILD_SHA ?? "main";
 
   if (!parentOwner || !parentRepo) {
     throw new Error(
@@ -62,12 +64,18 @@ export async function runCatalogNodeRegistryReconcileJob(): Promise<CatalogNodeR
 
   try {
     log.info(
-      { parentOwner, parentRepo, deployEnvironment: env.DEPLOY_ENVIRONMENT },
+      {
+        parentOwner,
+        parentRepo,
+        sourceRef,
+        deployEnvironment: env.DEPLOY_ENVIRONMENT,
+      },
       "Starting catalog node registry reconcile"
     );
     const definitions = await createOperatorDeployPlane(env).listCatalogNodes({
       parentOwner,
       parentRepo,
+      sourceRef,
     });
     const registry = new DrizzleCatalogNodeRegistryAdapter(serviceDb);
     const projection = await registry.reconcile(definitions);
@@ -85,7 +93,10 @@ export async function runCatalogNodeRegistryReconcileJob(): Promise<CatalogNodeR
     log.info(summary, "Catalog node registry reconcile complete");
     return summary;
   } catch (error) {
-    log.error({ error }, "Catalog node registry reconcile failed");
+    log.error(
+      { error, err: String(error), sourceRef },
+      "Catalog node registry reconcile failed"
+    );
     throw error;
   } finally {
     await reservedConn`SELECT pg_advisory_unlock(hashtext('catalog_node_registry_reconcile'))`;

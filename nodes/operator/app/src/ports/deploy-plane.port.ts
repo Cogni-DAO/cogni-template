@@ -206,6 +206,8 @@ export interface DeployPlanePort {
   listCatalogNodes(input: {
     readonly parentOwner: string;
     readonly parentRepo: string;
+    /** Exact deployed operator revision whose catalog is being projected. */
+    readonly sourceRef: string;
   }): Promise<readonly CatalogNodeDefinition[]>;
 
   /**
