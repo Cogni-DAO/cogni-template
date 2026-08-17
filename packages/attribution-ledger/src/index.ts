@@ -110,10 +110,13 @@ export {
   buildEIP712TypedData,
   type CanonicalMessageParams,
   computeApproverSetHash,
+  type EIP712DeploymentEnvironment,
+  EIP712_DEPLOYMENT_ENVIRONMENTS,
   EIP712_DOMAIN_NAME,
   EIP712_DOMAIN_VERSION,
   type EIP712TypedData,
   type EIP712TypedDataParams,
+  parseEIP712DeploymentEnvironment,
 } from "./signing";
 
 // Store port interface + types

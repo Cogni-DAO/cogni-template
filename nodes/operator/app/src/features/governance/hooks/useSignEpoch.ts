@@ -5,9 +5,9 @@
  * Module: `@features/governance/hooks/useSignEpoch`
  * Purpose: Orchestrates EIP-712 epoch signing flow — fetch sign-data, wallet signature, POST finalize.
  * Scope: Client-side state machine for sign & finalize. Does not access database or server-side logic.
- * Invariants: WRITE_ROUTES_APPROVER_GATED (server enforces), SIGNATURE_SCOPE_BOUND (sign-data includes all scope fields).
+ * Invariants: WRITE_ROUTES_APPROVER_GATED (server enforces), SIGNATURE_SCOPE_BOUND, SIGNATURE_DEPLOYMENT_BOUND (server-supplied environment is signed).
  * Side-effects: IO (HTTP fetch, wagmi wallet signing)
- * Links: src/contracts/attribution.sign-data.v1.contract.ts, src/contracts/attribution.finalize-epoch.v1.contract.ts
+ * Links: packages/node-contracts/src/attribution.sign-data.v2.contract.ts, packages/node-contracts/src/attribution.finalize-epoch.v1.contract.ts
  * @public
  */
 
@@ -30,6 +30,12 @@ interface SignDataResponse {
     nodeId: string;
     scopeId: string;
     epochId: string;
+    deploymentEnvironment:
+      | "local"
+      | "test"
+      | "candidate-a"
+      | "preview"
+      | "production";
     finalAllocationSetHash: string;
     poolTotalCredits: string;
   };

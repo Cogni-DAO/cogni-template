@@ -41,7 +41,8 @@ tags: [governance, transparency, payments, attribution]
 | IDENTITY_BEST_EFFORT             | Ingestion receipts carry `platform_user_id` and optional `platform_login`. Resolution to `user_id` via `user_bindings` is best-effort. Unresolved receipts keep `user_id = NULL` in selection, but `epoch_receipt_claimants` rows preserve them as identity claimants (keyed by stable external identity) so attribution remains visible and can resolve later when bindings appear.                                                                                                                                                                                                                                                                                                                                                                             |
 | ADMIN_FINALIZES_ONCE             | An admin reviews recomputable user projections, optionally records per-subject review overrides, then triggers finalize. Finalization materializes canonical claimant-scoped final allocations before signing. Single action closes the epoch — no per-event approval workflow.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | APPROVERS_PER_SCOPE              | Each scope declares its own `approvers[]` list. At closeIngestion the current approver list and its hash are pinned on the epoch (APPROVERS_PINNED_AT_REVIEW). Finalization and sign-data check against the **pinned** set, not repo-spec. V0: single scope, single approver in repo-spec. Multi-scope: each `.cogni/projects/*.yaml` carries its own list. Addresses normalized to lowercase at storage.                                                                                                                                                                                                                                                                                                                                                        |
-| SIGNATURE_SCOPE_BOUND            | Signed typed data must include `node_id + scope_id + final_allocation_set_hash`. Prevents cross-scope and cross-node signature replay.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| SIGNATURE_SCOPE_BOUND            | Signed typed data must include `node_id + scope_id + epoch_id + final_allocation_set_hash + pool_total_credits`. Prevents cross-scope, cross-node, and cross-epoch signature replay.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| SIGNATURE_DEPLOYMENT_BOUND       | EIP-712 v2 includes wallet-visible `deploymentEnvironment`, derived only from the server's validated `DEPLOY_ENVIRONMENT` (`candidate-a`, `preview`, `production`; `local`/`test` are isolated development values). Sign-data and finalize fail closed when it is missing or unsupported. The v2 domain version makes legacy v1 signatures incompatible.                                                                                                                                                                                                                                                                                                                                                                                                         |
 | EPOCH_THREE_PHASE                | Epochs progress through `open → review → finalized`. No backward transitions. `open`: ingest + select. `review`: ingestion closed, selection still allowed. `finalized`: immutable forever.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | INGESTION_CLOSED_ON_REVIEW       | App-level enforcement — `CollectEpochWorkflow` exits when `epoch.status != 'open'`. No DB trigger on `ingestion_receipts` (V0) because `ingestion_receipts` has no `epoch_id` column; epoch membership is determined at the selection layer. Raw facts locked once review begins; late arrivals rejected. Selection (inclusion, weight overrides, identity resolution) remains mutable.                                                                                                                                                                                                                                                                                                                                                                          |
 | WEIGHTS_INTEGER_ONLY             | All weight values are integer milli-units (e.g., 8000 for PR merged, 500 for Discord message). No floating point anywhere (ALL_MATH_BIGINT).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
@@ -766,20 +767,30 @@ Deterministic workflow ID: `ledger-finalize-{scopeId}-{epochId}`
 
 ## Signing Workflow
 
-### Canonical Message Format
+### EIP-712 v2 Typed Message
 
-The signed message binds to node, scope, and allocation data (SIGNATURE_SCOPE_BOUND):
+The wallet-visible signed message binds to node, scope, deployment environment,
+and allocation data (SIGNATURE_SCOPE_BOUND, SIGNATURE_DEPLOYMENT_BOUND):
 
 ```
-Cogni Attribution Statement v1
-Node: {node_id}
-Scope: {scope_id}
-Epoch: {epoch_id}
-Final Allocation Hash: {final_allocation_set_hash}
-Pool Total: {pool_total_credits}
+domain: { name: "Cogni Attribution", version: "2", chainId }
+AttributionStatement: {
+  nodeId,
+  scopeId,
+  epochId,
+  deploymentEnvironment,
+  finalAllocationSetHash,
+  poolTotalCredits
+}
 ```
 
-Frontend constructs EIP-712 typed data from epoch data, calls `walletClient.signTypedData()`, and POSTs the signature to the finalize route. `buildCanonicalMessage()` is retained only as a deprecated compatibility helper.
+`GET /sign-data` constructs the complete typed data server-side, including
+`deploymentEnvironment` from validated runtime configuration. The frontend can
+display and sign that value but cannot submit or override it. Finalize derives
+the environment from the same server configuration and recomputes the exact v2
+message before verification. `buildCanonicalMessage()` is retained only as a
+deprecated EIP-191 compatibility helper; v1 EIP-712 signatures do not verify
+against v2.
 
 ### Verification
 
@@ -787,6 +798,7 @@ Backend verifies the typed-data signature and checks:
 
 1. Recovered address is in the epoch's pinned `approvers[]` (set at closeIngestion, not re-read from repo-spec)
 2. Message fields match the epoch's actual data (prevents signing stale/wrong data)
+3. `deploymentEnvironment` matches the finalizing server's validated runtime environment (prevents candidate-a/preview/production replay)
 
 ### Storage
 

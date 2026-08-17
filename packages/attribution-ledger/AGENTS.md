@@ -66,6 +66,7 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
   - `validatePoolComponentId()` — V0 allowlist validation
   - `EpochNotOpenError`, `EpochAlreadyFinalizedError`, `PoolComponentMissingError` — Domain errors with type guards
   - `buildEIP712TypedData()` — Canonical EIP-712 typed-data builder for statement signing
+  - `parseEIP712DeploymentEnvironment()`, `EIP712_DEPLOYMENT_ENVIRONMENTS`, `EIP712DeploymentEnvironment` — Fail-closed protocol environment validation for deployment-bound EIP-712 v2 signatures
   - `buildCanonicalMessage()` — Deprecated EIP-191 compatibility helper retained for one release cycle
   - `computeApproverSetHash()` — Deterministic approver-set hash pinned at review
   - `computeArtifactsHash()` — SHA-256 of sorted locked artifact tuples

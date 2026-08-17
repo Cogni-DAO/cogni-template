@@ -64,12 +64,13 @@ actual token distribution and attributed-vs-claimed diffs.
 
 This spec introduces no new invariants. All behavioral guarantees are defined in the detailed specs above. The key invariants that govern the pipeline flow are:
 
-| Rule                    | Summary                                              |
-| ----------------------- | ---------------------------------------------------- |
-| EPOCH_THREE_PHASE       | `open → review → finalized`, no backward transitions |
-| ADMIN_FINALIZES_ONCE    | Human reviews, optionally overrides, then signs once |
-| STATEMENT_DETERMINISTIC | Same inputs → byte-for-byte identical statement      |
-| SIGNATURE_SCOPE_BOUND   | EIP-712 covers nodeId + scopeId + hash (no replay)   |
+| Rule                       | Summary                                                 |
+| -------------------------- | ------------------------------------------------------- |
+| EPOCH_THREE_PHASE          | `open → review → finalized`, no backward transitions    |
+| ADMIN_FINALIZES_ONCE       | Human reviews, optionally overrides, then signs once    |
+| STATEMENT_DETERMINISTIC    | Same inputs → byte-for-byte identical statement         |
+| SIGNATURE_SCOPE_BOUND      | EIP-712 covers nodeId + scopeId + epoch + allocation    |
+| SIGNATURE_DEPLOYMENT_BOUND | EIP-712 v2 covers server-derived deployment environment |
 
 ## Design
 
@@ -169,17 +170,19 @@ This spec introduces no new invariants. All behavioral guarantees are defined in
                                        │
                                        ▼
  ┌─────────────────────────────────────────────────────────────────────────┐
- │  FINALIZE  (admin signs, Temporal executes)                             │
+ │  FINALIZE  (admin signs, node finalizes in-process)                     │
  │                                                                         │
  │  1. GET /sign-data  →  builds EIP-712 typed data:                       │
  │     Load locked claimants + selected receipts + locked evaluations      │
  │     dispatchAllocator() → applyReceiptWeightOverrides()                 │
  │       → explodeToClaimants() → computeFinalClaimantAllocationSetHash()  │
- │     Return typed data: { nodeId, scopeId, epochId, hash, poolTotal }   │
+ │     Return EIP-712 v2 typed data:                                       │
+ │       { nodeId, scopeId, epochId, deploymentEnvironment, hash, poolTotal }│
+ │     deploymentEnvironment comes from server DEPLOY_ENVIRONMENT only     │
  │                                                                         │
  │  2. Admin wallet signs EIP-712 typed data (MetaMask / WalletConnect)    │
  │                                                                         │
- │  3. POST /finalize  →  starts FinalizeEpochWorkflow:                    │
+ │  3. POST /finalize  →  finalizes in-process on the node's own DB:       │
  │     • Recompute identical hash (same allocator dispatch path as sign-data)│
  │     • Verify EIP-712 signature against approvers[]                      │
  │     • Atomic DB transaction:                                            │
@@ -194,7 +197,7 @@ This spec introduces no new invariants. All behavioral guarantees are defined in
  │  │  { claimant_key, final_units, pool_share, credit_amount,        │    │
  │  │    receipt_ids }  ×  N claimants                                 │    │
  │  │  + finalAllocationSetHash (SHA-256)                              │    │
- │  │  + EIP-712 signature (scope-bound, replay-resistant)             │    │
+ │  │  + EIP-712 v2 signature (scope + deployment-bound)               │    │
  │  │  + review_overrides_json (audit trail)                           │    │
  │  └─────────────────────────────────────────────────────────────────┘    │
  │                                                                         │
@@ -361,4 +364,4 @@ Every step from allocation to statement is fully reproducible from stored data:
 3. **Integer math only**: BIGINT throughout, largest-remainder rounding for exact sums
 4. **Verification endpoint**: `GET /verify/epoch/:id` recomputes from stored data and compares
 
-The signed `finalAllocationSetHash` is a SHA-256 of the sorted final claimant allocations. Combined with the EIP-712 signature binding `nodeId + scopeId + epochId + hash + poolTotal`, the statement is tamper-evident and scope-bound.
+The signed `finalAllocationSetHash` is a SHA-256 of the sorted final claimant allocations. Combined with the EIP-712 v2 signature binding `nodeId + scopeId + epochId + deploymentEnvironment + hash + poolTotal`, the statement is tamper-evident, scope-bound, and non-replayable across candidate-a, preview, and production. Both sign-data generation and finalize verification derive the environment server-side; missing or unsupported configuration fails closed.

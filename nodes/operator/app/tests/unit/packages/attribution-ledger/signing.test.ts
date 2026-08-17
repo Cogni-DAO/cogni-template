@@ -17,8 +17,10 @@ import {
   buildCanonicalMessage,
   buildEIP712TypedData,
   computeApproverSetHash,
+  EIP712_DEPLOYMENT_ENVIRONMENTS,
   EIP712_DOMAIN_NAME,
   EIP712_DOMAIN_VERSION,
+  parseEIP712DeploymentEnvironment,
 } from "@cogni/attribution-ledger";
 import { verifyTypedData } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -134,6 +136,7 @@ describe("buildEIP712TypedData", () => {
     finalAllocationSetHash: "abc123def456",
     poolTotalCredits: "10000",
     chainId: 8453,
+    deploymentEnvironment: "candidate-a" as const,
   };
 
   it("returns correct domain with name, version, and chainId", () => {
@@ -156,6 +159,7 @@ describe("buildEIP712TypedData", () => {
       nodeId: params.nodeId,
       scopeId: params.scopeId,
       epochId: params.epochId,
+      deploymentEnvironment: params.deploymentEnvironment,
       finalAllocationSetHash: params.finalAllocationSetHash,
       poolTotalCredits: params.poolTotalCredits,
     });
@@ -164,12 +168,13 @@ describe("buildEIP712TypedData", () => {
   it("exports correct type definitions matching viem expectations", () => {
     const data = buildEIP712TypedData(params);
     expect(data.types).toBe(ATTRIBUTION_STATEMENT_TYPES);
-    expect(data.types.AttributionStatement).toHaveLength(5);
+    expect(data.types.AttributionStatement).toHaveLength(6);
     const fieldNames = data.types.AttributionStatement.map((f) => f.name);
     expect(fieldNames).toEqual([
       "nodeId",
       "scopeId",
       "epochId",
+      "deploymentEnvironment",
       "finalAllocationSetHash",
       "poolTotalCredits",
     ]);
@@ -196,6 +201,18 @@ describe("buildEIP712TypedData", () => {
     // domain is same — only message differs
     expect(a.domain).toEqual(b.domain);
   });
+
+  it("accepts only explicit signing deployment environments", () => {
+    for (const environment of EIP712_DEPLOYMENT_ENVIRONMENTS) {
+      expect(parseEIP712DeploymentEnvironment(environment)).toBe(environment);
+    }
+    expect(() => parseEIP712DeploymentEnvironment(undefined)).toThrow(
+      /DEPLOY_ENVIRONMENT/
+    );
+    expect(() => parseEIP712DeploymentEnvironment("candidate-b")).toThrow(
+      /DEPLOY_ENVIRONMENT/
+    );
+  });
 });
 
 describe("EIP-712 sign/verify round-trip", () => {
@@ -211,6 +228,7 @@ describe("EIP-712 sign/verify round-trip", () => {
     finalAllocationSetHash: "abc123def456",
     poolTotalCredits: "10000",
     chainId: 8453,
+    deploymentEnvironment: "candidate-a",
   });
 
   it("signTypedData → verifyTypedData recovers the signer address", async () => {
@@ -255,5 +273,68 @@ describe("EIP-712 sign/verify round-trip", () => {
     });
 
     expect(valid).toBe(false);
+  });
+
+  it.each(["preview", "production"] as const)(
+    "candidate-a signature cannot replay in %s",
+    async (deploymentEnvironment) => {
+      const signature = await account.signTypedData({
+        domain: typedData.domain,
+        types: typedData.types,
+        primaryType: typedData.primaryType,
+        message: typedData.message,
+      });
+      const replayTarget = buildEIP712TypedData({
+        ...typedData.message,
+        chainId: typedData.domain.chainId,
+        deploymentEnvironment,
+      });
+
+      await expect(
+        verifyTypedData({
+          address: account.address,
+          domain: replayTarget.domain,
+          types: replayTarget.types,
+          primaryType: replayTarget.primaryType,
+          message: replayTarget.message,
+          signature,
+        })
+      ).resolves.toBe(false);
+    }
+  );
+
+  it("v1 signature cannot replay against v2 typed data", async () => {
+    const legacyTypes = {
+      AttributionStatement: [
+        { name: "nodeId", type: "string" },
+        { name: "scopeId", type: "string" },
+        { name: "epochId", type: "string" },
+        { name: "finalAllocationSetHash", type: "string" },
+        { name: "poolTotalCredits", type: "string" },
+      ],
+    } as const;
+    const { deploymentEnvironment: _deploymentEnvironment, ...legacyMessage } =
+      typedData.message;
+    const legacySignature = await account.signTypedData({
+      domain: {
+        name: EIP712_DOMAIN_NAME,
+        version: "1",
+        chainId: typedData.domain.chainId,
+      },
+      types: legacyTypes,
+      primaryType: "AttributionStatement",
+      message: legacyMessage,
+    });
+
+    await expect(
+      verifyTypedData({
+        address: account.address,
+        domain: typedData.domain,
+        types: typedData.types,
+        primaryType: typedData.primaryType,
+        message: typedData.message,
+        signature: legacySignature,
+      })
+    ).resolves.toBe(false);
   });
 });

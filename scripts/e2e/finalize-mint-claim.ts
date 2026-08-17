@@ -527,7 +527,7 @@ async function main(): Promise<void> {
       emissionsHolderAddress: DAO,
       walletResolver: new DrizzleClaimantWalletResolver(db),
       distributionConfigClient: null,
-      deploymentEnvironment: undefined,
+      deploymentEnvironment: "local",
       logger: finalizeLogger,
     };
     ok(
@@ -564,6 +564,7 @@ async function main(): Promise<void> {
       nodeId,
       scopeId,
       epochId: epochId.toString(),
+      deploymentEnvironment: "local",
       finalAllocationSetHash,
       poolTotalCredits: poolTotal.toString(),
       chainId: ids.chainId,

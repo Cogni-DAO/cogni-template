@@ -266,6 +266,7 @@ describe("finalizeEpoch", () => {
         tokenAddress: null,
         distributorAddress: null,
         walletResolver: null,
+        deploymentEnvironment: "test",
         logger: mockLogger,
       },
       {
@@ -277,6 +278,11 @@ describe("finalizeEpoch", () => {
 
     expect(result.statementLineCount).toBe(2);
     expect(finalizeEpochAtomic).toHaveBeenCalledTimes(1);
+    expect(verifyTypedData).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.objectContaining({ deploymentEnvironment: "test" }),
+      })
+    );
 
     const finalizeParams = finalizeEpochAtomic.mock.calls[0]?.[0];
     // Both receipts have equal weight (same eventType, no override), each claimant owns one receipt
@@ -437,7 +443,7 @@ describe("finalizeEpoch — per-node distribution config (bug.5020)", () => {
         typeof runFinalizeEpoch
       >[0]["walletResolver"],
       distributionConfigClient: opts.distributionConfigClient ?? null,
-      deploymentEnvironment: opts.deploymentEnvironment,
+      deploymentEnvironment: opts.deploymentEnvironment ?? "test",
       logger: mockLogger,
     };
   }
@@ -449,6 +455,16 @@ describe("finalizeEpoch — per-node distribution config (bug.5020)", () => {
       signerAddress: SIGNER,
     });
   }
+
+  it("fails closed before reading the epoch when deployment config is absent", async () => {
+    const { store } = await makeFinalizeStore();
+    const deps = finalizeDepsWith(store, {});
+
+    await expect(
+      runFinalize({ ...deps, deploymentEnvironment: undefined })
+    ).rejects.toThrow(/DEPLOY_ENVIRONMENT/);
+    expect(store.getEpoch).not.toHaveBeenCalled();
+  });
 
   it("ACTIVE: folds against the per-node config from the gateway (not baked)", async () => {
     const { store } = await makeFinalizeStore();
