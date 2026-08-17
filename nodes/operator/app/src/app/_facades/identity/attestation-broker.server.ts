@@ -29,7 +29,11 @@ import { resolveServiceDb } from "@/bootstrap/container";
 import { resolveNodeRef } from "@/features/nodes/node-lookup";
 import { serverEnv } from "@/shared/env";
 import { importAttestationSigningKey } from "@/shared/identity/attestation-keys";
-import { hostForEnv, rootDomain } from "@/shared/node-registry/deploy-hosts";
+import {
+  hostForEnv,
+  isFlightEnv,
+  rootDomain,
+} from "@/shared/node-registry/deploy-hosts";
 import { baseDomain } from "@/shared/node-registry/resolve";
 
 export type AttestationBrokerErrorCode =
@@ -99,15 +103,17 @@ export async function issueBrowserIdentityAttestation(params: {
   }
 
   const deployRootDomain = rootDomain(domain);
-  const registeredOrigins = targetNode.deployEnvs.map(
-    (deployEnv) =>
-      `https://${hostForEnv(
-        targetNode.slug,
-        targetNode.slug === "operator",
-        deployEnv,
-        deployRootDomain
-      )}`
-  );
+  const registeredOrigins = targetNode.deployEnvs
+    .filter(isFlightEnv)
+    .map(
+      (deployEnv) =>
+        `https://${hostForEnv(
+          targetNode.slug,
+          targetNode.slug === "operator",
+          deployEnv,
+          deployRootDomain
+        )}`
+    );
   if (!registeredOrigins.includes(params.request.targetOrigin)) {
     throw new AttestationBrokerError("invalid_return_to");
   }

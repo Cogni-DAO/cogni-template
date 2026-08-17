@@ -98,7 +98,16 @@ const mockNodeDb = {
     from: () => ({
       where: () => ({
         limit: () =>
-          dbState.nodeExists ? [{ id: NODE_ID, slug: "node-template" }] : [],
+          dbState.nodeExists
+            ? [
+                {
+                  id: NODE_ID,
+                  slug: "node-template",
+                  deployEnvs: ["production"],
+                  activityEnv: "production",
+                },
+              ]
+            : [],
       }),
     }),
   }),
@@ -108,9 +117,14 @@ import { GET as jwksGET } from "@/app/.well-known/jwks.json/route";
 import { POST } from "@/app/api/v1/identity/attestations/route";
 
 const ISSUER = "https://operator.test";
+const TARGET_ORIGIN = "https://node-template.operator.test";
 
 function postRequest(
-  body: Record<string, unknown> = { nodeId: NODE_ID, nonce: NONCE },
+  body: Record<string, unknown> = {
+    nodeId: NODE_ID,
+    nonce: NONCE,
+    targetOrigin: TARGET_ORIGIN,
+  },
   origin = "https://untrusted-host.example"
 ): Request {
   return new Request(`${origin}/api/v1/identity/attestations`, {
@@ -177,6 +191,7 @@ describe("POST /api/v1/identity/attestations", () => {
     expect(payload.aud).toBe(`urn:cogni:node:${NODE_ID}`);
     expect(payload.nodeId).toBe(NODE_ID);
     expect(payload.nonce).toBe(NONCE);
+    expect(payload.targetOrigin).toBe(TARGET_ORIGIN);
     expect(payload.wallet).toBe("0xabcdef0123456789abcdef0123456789abcdef01");
     expect(payload.github).toEqual({ id: "12345", login: "octocat" });
     expect(payload.jti).toBeDefined();
@@ -239,15 +254,32 @@ describe("POST /api/v1/identity/attestations", () => {
       postRequest({
         nodeId: NODE_ID,
         nonce: NONCE,
+        targetOrigin: TARGET_ORIGIN,
         audience: "https://attacker.example",
       })
     );
     expect(withAudience.status).toBe(400);
 
     const weakNonce = await POST(
-      postRequest({ nodeId: NODE_ID, nonce: "short" })
+      postRequest({
+        nodeId: NODE_ID,
+        nonce: "short",
+        targetOrigin: TARGET_ORIGIN,
+      })
     );
     expect(weakNonce.status).toBe(400);
+  });
+
+  it("rejects an origin not registered for the target node", async () => {
+    const response = await POST(
+      postRequest({
+        nodeId: NODE_ID,
+        nonce: NONCE,
+        targetOrigin: "https://attacker.example",
+      })
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "invalid_target_origin" });
   });
 
   it("returns 404 unknown_node rather than signing for an unregistered node", async () => {
