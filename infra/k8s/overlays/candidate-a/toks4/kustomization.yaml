@@ -13,8 +13,8 @@ namePrefix: toks4-
 
 images:
   - name: ghcr.io/cogni-dao/cogni-template
-    newName: ghcr.io/cogni-dao/toks4
-    digest: "sha256:6b7e7fa2e0d35133d9645bd7f6df54325f790ff1161ddf832f823658dd98952f"
+    newName: ghcr.io/cogni-dao/cogni-template
+    digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
 patches:
   - target:
