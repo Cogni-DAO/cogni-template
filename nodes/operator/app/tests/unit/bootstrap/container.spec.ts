@@ -103,6 +103,35 @@ describe("bootstrap container DI wiring", { timeout: 30_000 }, () => {
       expect(container1.log).toBe(container2.log);
     });
 
+    it("starts governance sync only after the catalog projection succeeds", async () => {
+      let resolveCatalog: (() => void) | undefined;
+      const catalogReady = new Promise<void>((resolve) => {
+        resolveCatalog = resolve;
+      });
+      const startCatalogRegistryReconcileOnBoot = vi.fn(() => catalogReady);
+      const startGovernanceSyncOnBoot = vi.fn();
+      vi.doMock("@/bootstrap/catalog-registry-reconcile", () => ({
+        startCatalogRegistryReconcileOnBoot,
+      }));
+      vi.doMock("@/bootstrap/startup-reconcile", () => ({
+        startGovernanceSyncOnBoot,
+      }));
+
+      const { getContainer } = await import("@/bootstrap/container");
+      getContainer();
+
+      expect(startCatalogRegistryReconcileOnBoot).toHaveBeenCalledOnce();
+      expect(startGovernanceSyncOnBoot).not.toHaveBeenCalled();
+
+      resolveCatalog?.();
+      await vi.waitFor(() => {
+        expect(startGovernanceSyncOnBoot).toHaveBeenCalledOnce();
+      });
+
+      vi.doUnmock("@/bootstrap/catalog-registry-reconcile");
+      vi.doUnmock("@/bootstrap/startup-reconcile");
+    });
+
     it("resolveAiAdapterDeps uses singleton container", async () => {
       const { getContainer, resolveAiAdapterDeps } = await import(
         "@/bootstrap/container"

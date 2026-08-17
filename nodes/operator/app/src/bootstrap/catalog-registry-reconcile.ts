@@ -7,6 +7,8 @@
  * Scope: Process lifecycle and coalescing only; delegates all IO to the reconcile job.
  * Invariants:
  *   - BOOT_IS_IMMEDIATE: the first container initialization requests a reconcile without blocking it.
+ *   - FIRST_SUCCESS_BARRIER: callers can await the first successful projection before starting
+ *     consumers whose routing depends on the projected registry.
  *   - POLL_HEALS_MISSED_TRIGGERS: a ten-minute interval re-reads merged git through the App.
  *   - NO_OVERLAP: concurrent triggers coalesce; the job also has a cross-replica advisory lock.
  *   - TEST_INERT: automatic timers never start in tests.
@@ -20,17 +22,27 @@ const FALLBACK_INTERVAL_MS = 10 * 60 * 1000;
 let _started = false;
 let _running: Promise<void> | null = null;
 let _rerunRequested = false;
+let _firstSuccess: Promise<void> | null = null;
+let _resolveFirstSuccess: (() => void) | null = null;
 
-/** Start an immediate reconcile plus the missed-trigger fallback, once per process. */
-export function startCatalogRegistryReconcileOnBoot(): void {
-  if (_started || isTestRuntime()) return;
+/**
+ * Start an immediate reconcile plus the missed-trigger fallback, once per process.
+ * Resolves after the first successful projection, so startup consumers never race stale routing.
+ */
+export function startCatalogRegistryReconcileOnBoot(): Promise<void> {
+  if (isTestRuntime()) return Promise.resolve();
+  if (_started) return _firstSuccess ?? Promise.resolve();
   _started = true;
+  _firstSuccess = new Promise<void>((resolve) => {
+    _resolveFirstSuccess = resolve;
+  });
   triggerCatalogRegistryReconcile();
   const timer = setInterval(
     triggerCatalogRegistryReconcile,
     FALLBACK_INTERVAL_MS
   );
   timer.unref();
+  return _firstSuccess;
 }
 
 /**
@@ -63,6 +75,8 @@ async function runReconcile(): Promise<void> {
     "@/bootstrap/jobs/reconcileCatalogNodeRegistry.job"
   );
   await runCatalogNodeRegistryReconcileJob();
+  _resolveFirstSuccess?.();
+  _resolveFirstSuccess = null;
 }
 
 function isTestRuntime(): boolean {

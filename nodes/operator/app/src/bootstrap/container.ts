@@ -364,14 +364,17 @@ let _workflowClientPromise: Promise<{
 export function getContainer(): Container {
   if (!_container) {
     _container = createContainer();
-    // First container init (e.g. the readyz probe) is the earliest in-bootstrap seam
-    // to self-activate this deploy's governance schedules from repo-spec
-    // (SELF_RECONCILE_ON_BOOT) — instrumentation.ts cannot import bootstrap. Detached,
-    // fire-once, retry-until-Temporal-ready; never blocks the caller.
-    startGovernanceSyncOnBoot();
     // Project merged catalog intent into THIS environment's Postgres + OpenFGA.
-    // Detached and single-writer guarded; a periodic App-read heals missed push triggers.
-    startCatalogRegistryReconcileOnBoot();
+    // Detached and single-writer guarded; a periodic App-read heals missed push triggers. Only
+    // start governance sync after the first successful projection: its routable-node set is a
+    // consumer of this registry and must never race stale environment/activity authority.
+    void startCatalogRegistryReconcileOnBoot().then(() => {
+      // First container init (e.g. the readyz probe) is the earliest in-bootstrap seam
+      // to self-activate this deploy's governance schedules from repo-spec
+      // (SELF_RECONCILE_ON_BOOT) — instrumentation.ts cannot import bootstrap. Detached,
+      // fire-once, retry-until-Temporal-ready; never blocks the caller.
+      startGovernanceSyncOnBoot();
+    });
   }
   return _container;
 }
