@@ -150,12 +150,12 @@ issuer or relying origin.
 
 The implementation follows the inside-out dependency boundary:
 
-| Layer | Operator issuer | Node relying party |
-| --- | --- | --- |
-| Contract | strict request/claims + fingerprint | identical frozen contract + start response |
-| Feature | origin allowlist, claims, TTL, preconditions | nonce TTL + redemption outcome state machine |
-| Port | subject/node repository + signer | transactional nonce/binding repository |
-| Adapter | Drizzle reads + Jose Ed25519 signing | Drizzle atomic consume/bind/evidence write |
+| Layer            | Operator issuer                              | Node relying party                           |
+| ---------------- | -------------------------------------------- | -------------------------------------------- |
+| Contract         | strict request/claims + fingerprint          | identical frozen contract + start response   |
+| Feature          | origin allowlist, claims, TTL, preconditions | nonce TTL + redemption outcome state machine |
+| Port             | subject/node repository + signer             | transactional nonce/binding repository       |
+| Adapter          | Drizzle reads + Jose Ed25519 signing         | Drizzle atomic consume/bind/evidence write   |
 | Bootstrap/facade | dependency composition and HTTP mapping only | dependency composition and HTTP mapping only |
 
 `NO_AUTO_MERGE` remains authoritative: a GitHub provider id already owned by a
@@ -198,9 +198,9 @@ Provide a stable, auth-method-agnostic identity for every user. `users.id` works
 | BINDINGS_ARE_EVIDENCED | Every binding has proof recorded in `identity_events.payload` (SIWE signature, bot challenge, PR link). Bindings table is current-state index only.     |
 | NO_AUTO_MERGE          | If a binding's `(provider, external_id)` is already bound to a different user, the bind attempt fails. Never silently re-point. DB-enforced via UNIQUE. |
 | SIWE_UNCHANGED         | SIWE authentication continues working. Binding additions are additive — no existing auth flow breaks.                                                   |
-| ATTESTATION_V1_FROZEN  | Operator and node exchange and verify the same pinned protocol fingerprint; a one-sided drift fails closed.                                               |
-| ATTESTATION_TLS_ONLY   | Issuer and target are exact canonical HTTPS origins without URL credentials, path, query, or fragment.                                                   |
-| ATTESTATION_ONE_TIME   | The relying node owns the nonce; consumption and binding decision commit atomically exactly once.                                                        |
+| ATTESTATION_V1_FROZEN  | Operator and node exchange and verify the same pinned protocol fingerprint; a one-sided drift fails closed.                                             |
+| ATTESTATION_TLS_ONLY   | Issuer and target are exact canonical HTTPS origins without URL credentials, path, query, or fragment.                                                  |
+| ATTESTATION_ONE_TIME   | The relying node owns the nonce; consumption and binding decision commit atomically exactly once.                                                       |
 | UUID_STAYS_AS_PK       | `users.id` (UUID) remains the relational PK and FK target.                                                                                              |
 | APPEND_ONLY_EVENTS     | `identity_events` rows are append-only. DB trigger rejects UPDATE/DELETE. Revocation creates a new event, never deletes rows.                           |
 | LEDGER_REFERENCES_USER | Receipts, epochs, and payout statements reference `user_id` — never wallet or DID directly.                                                             |
@@ -281,23 +281,23 @@ Implemented in `src/app/_facades/users/profile.server.ts:resolveDisplayName()`.
 
 ### File Pointers
 
-| File                                             | Purpose                                                                    |
-| ------------------------------------------------ | -------------------------------------------------------------------------- |
-| `packages/db-schema/src/identity.ts`             | `user_bindings` + `identity_events` + `linkTransactions` table definitions |
-| `packages/db-schema/src/profile.ts`              | `user_profiles` table definition                                           |
-| `src/app/_facades/users/profile.server.ts`       | Profile read/update facade, display name fallback chain                    |
-| `src/contracts/users.profile.v1.contract.ts`     | Zod contracts for `/api/v1/users/me`                                       |
-| `src/auth.ts`                                    | NextAuth config, signIn callback, link tx create/consume helpers           |
-| `src/proxy.ts`                                   | Server-side auth routing (single authority for redirects)                  |
-| `src/adapters/server/identity/create-binding.ts` | Atomic binding + identity_event insert (idempotent)                        |
-| `packages/node-contracts/src/identity.attestation.v1.contract.ts` | Frozen operator↔node request/claims protocol and fingerprint |
-| `nodes/operator/app/src/features/identity/services/issue-identity-attestation.ts` | Operator issuance and registered-origin policy |
-| `nodes/operator/app/src/adapters/server/identity/identity-attestation.adapter.ts` | Operator persistence and Ed25519 signing adapters |
-| `src/shared/auth/session.ts`                     | `SessionUser` type (id + nullable walletAddress)                           |
-| `src/shared/auth/link-intent-store.ts`           | Discriminated union types + AsyncLocalStorage for link intent              |
-| `src/app/api/auth/[...nextauth]/route.ts`        | JWT decode → pending/failed intent via AsyncLocalStorage                   |
-| `src/app/api/auth/link/[provider]/route.ts`      | Link initiation: DB insert + signed JWT cookie + redirect                  |
-| `src/lib/auth/server.ts`                         | `getServerSessionUser()` — requires only `id`                              |
+| File                                                                              | Purpose                                                                    |
+| --------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `packages/db-schema/src/identity.ts`                                              | `user_bindings` + `identity_events` + `linkTransactions` table definitions |
+| `packages/db-schema/src/profile.ts`                                               | `user_profiles` table definition                                           |
+| `src/app/_facades/users/profile.server.ts`                                        | Profile read/update facade, display name fallback chain                    |
+| `src/contracts/users.profile.v1.contract.ts`                                      | Zod contracts for `/api/v1/users/me`                                       |
+| `src/auth.ts`                                                                     | NextAuth config, signIn callback, link tx create/consume helpers           |
+| `src/proxy.ts`                                                                    | Server-side auth routing (single authority for redirects)                  |
+| `src/adapters/server/identity/create-binding.ts`                                  | Atomic binding + identity_event insert (idempotent)                        |
+| `packages/node-contracts/src/identity.attestation.v1.contract.ts`                 | Frozen operator↔node request/claims protocol and fingerprint              |
+| `nodes/operator/app/src/features/identity/services/issue-identity-attestation.ts` | Operator issuance and registered-origin policy                             |
+| `nodes/operator/app/src/adapters/server/identity/identity-attestation.adapter.ts` | Operator persistence and Ed25519 signing adapters                          |
+| `src/shared/auth/session.ts`                                                      | `SessionUser` type (id + nullable walletAddress)                           |
+| `src/shared/auth/link-intent-store.ts`                                            | Discriminated union types + AsyncLocalStorage for link intent              |
+| `src/app/api/auth/[...nextauth]/route.ts`                                         | JWT decode → pending/failed intent via AsyncLocalStorage                   |
+| `src/app/api/auth/link/[provider]/route.ts`                                       | Link initiation: DB insert + signed JWT cookie + redirect                  |
+| `src/lib/auth/server.ts`                                                          | `getServerSessionUser()` — requires only `id`                              |
 
 ## DID Readiness (P2)
 
