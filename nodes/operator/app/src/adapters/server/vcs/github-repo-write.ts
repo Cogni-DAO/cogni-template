@@ -36,6 +36,7 @@ import { z } from "zod";
 import type {
   CandidateFlightDispatchResult,
   CatalogForkTarget,
+  CatalogNodeDefinition,
   DeployPlanePort,
   MirrorCanonicalFilesInput,
   MirrorCanonicalFilesResult,
@@ -95,6 +96,8 @@ export interface OpenNodeAppPrInput {
   readonly repo: string;
   readonly slug: string;
   readonly nodeId: string;
+  /** Stable owner binding projected into the parent catalog; never an env-local users.id. */
+  readonly ownerWallet: string;
   readonly chainId: number;
   readonly daoContract?: string;
   readonly pluginContract?: string;
@@ -386,6 +389,27 @@ function parseCatalogPorts(
 
 /** Slugs that are catalog `type: node` but are never fork-sync targets. */
 const FORK_SYNC_EXCLUDED_SLUGS = new Set(["node-template", "operator"]);
+
+const CatalogRegistryRowSchema = z
+  .object({
+    name: z.string().min(1),
+    type: z.literal("node"),
+    node_id: z.string().uuid().optional(),
+    source_repo: z.string().url().optional(),
+    path_prefix: z.string().min(1),
+    envs: z.array(z.enum(["candidate-a", "preview", "production"])),
+    activity_env: z.enum(["candidate-a", "preview", "production"]),
+    owner_wallet: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+  })
+  .superRefine((row, ctx) => {
+    if (!row.envs.includes(row.activity_env)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["activity_env"],
+        message: "activity_env must be present in envs",
+      });
+    }
+  });
 
 /**
  * Pure: one `infra/catalog/<slug>.yaml` body → a fork target, or null. Null when the row is not a
@@ -1254,6 +1278,116 @@ export class GitHubRepoWriter implements DeployPlanePort {
       if (target) targets.push(target);
     }
     return targets;
+  }
+
+  async listCatalogNodes(input: {
+    parentOwner: string;
+    parentRepo: string;
+  }): Promise<readonly CatalogNodeDefinition[]> {
+    const { parentOwner, parentRepo } = input;
+    const octokit = await this.getOctokit(parentOwner, parentRepo);
+    let entries: Array<{ name: string; type: string }>;
+    try {
+      const { data } = await octokit.request(
+        "GET /repos/{owner}/{repo}/contents/{path}",
+        {
+          owner: parentOwner,
+          repo: parentRepo,
+          path: "infra/catalog",
+          ref: "main",
+        }
+      );
+      entries = Array.isArray(data)
+        ? (data as Array<{ name: string; type: string }>)
+        : [];
+    } catch (error) {
+      if ((error as { status?: number })?.status === 404) {
+        throw deployPlaneError(
+          "catalog_missing",
+          `${parentOwner}/${parentRepo} has no infra/catalog directory on main`,
+          404
+        );
+      }
+      throw error;
+    }
+
+    const definitions: CatalogNodeDefinition[] = [];
+    for (const entry of entries) {
+      if (entry.type !== "file" || !entry.name.endsWith(".yaml")) continue;
+      const slug = entry.name.replace(/\.yaml$/, "");
+      const text = await this.fetchFileText({
+        owner: parentOwner,
+        repo: parentRepo,
+        path: `infra/catalog/${entry.name}`,
+        ref: "main",
+      });
+      if (!text) {
+        throw deployPlaneError(
+          "catalog_read_failed",
+          `infra/catalog/${entry.name} disappeared while reading main`,
+          409
+        );
+      }
+
+      let parsed: unknown;
+      try {
+        parsed = parseYaml(text);
+      } catch (error) {
+        throw deployPlaneError(
+          "invalid_catalog",
+          `infra/catalog/${entry.name} is invalid YAML: ${String(error)}`,
+          409
+        );
+      }
+      if ((parsed as { type?: unknown })?.type !== "node") continue;
+      const row = CatalogRegistryRowSchema.safeParse(parsed);
+      if (!row.success || row.data.name !== slug) {
+        throw deployPlaneError(
+          "invalid_catalog",
+          `infra/catalog/${entry.name} cannot project a node registry row: ${row.success ? "name must match filename" : row.error.message}`,
+          409
+        );
+      }
+
+      const source = row.data.source_repo
+        ? parseGithubRepoUrl(row.data.source_repo)
+        : { owner: parentOwner, repo: parentRepo };
+      let nodeId = row.data.node_id;
+      if (!nodeId) {
+        const specPath = `${row.data.path_prefix}.cogni/repo-spec.yaml`;
+        const specText = await this.fetchFileText({
+          owner: parentOwner,
+          repo: parentRepo,
+          path: specPath,
+          ref: "main",
+        });
+        if (!specText) {
+          throw deployPlaneError(
+            "repo_spec_missing",
+            `${specPath} is required to project in-repo node '${slug}'`,
+            409
+          );
+        }
+        try {
+          nodeId = extractNodeId(parseRepoSpec(specText));
+        } catch (error) {
+          throw invalidRepoSpecError(error);
+        }
+      }
+
+      definitions.push({
+        nodeId,
+        slug,
+        repoUrl: `https://github.com/${source.owner}/${source.repo}`,
+        repoOwner: source.owner,
+        repoName: source.repo,
+        deployEnvs: row.data.envs,
+        activityEnv: row.data.activity_env,
+        ownerWallet: row.data.owner_wallet,
+      });
+    }
+
+    return definitions;
   }
 
   async syncTemplateUpstreamToFork(
@@ -2612,14 +2746,15 @@ export class GitHubRepoWriter implements DeployPlanePort {
             sourceRepo: input.nodeRepoUrl,
             nodeId: input.nodeId,
             sourceSha: input.nodeRepoHeadSha,
+            ownerWallet: input.ownerWallet,
           }
-        : {};
+        : { ownerWallet: input.ownerWallet };
     await addBlob(
       `infra/catalog/${slug}.yaml`,
       renderCatalog(slug, port, nodePort, catalogInput)
     );
 
-    // overlays×3 — per birth env. Each overlay dir clones BOTH the node-template
+    // overlays per birth env (candidate-a only today). Each overlay dir clones BOTH the node-template
     // kustomization.yaml AND its external-secret.yaml (the ESO producer of
     // <slug>-env-secrets — without it the pod's envFrom secret never exists →
     // CreateContainerConfigError). Byte-exact twin of render-node-overlays.sh.
@@ -2646,7 +2781,7 @@ export class GitHubRepoWriter implements DeployPlanePort {
       );
     }
 
-    // per-node AppSets×3 — one ApplicationSet object per (env, slug) for structural LANE_ISOLATION
+    // per-node AppSets for the birth envs — one ApplicationSet object per (env, slug) for structural LANE_ISOLATION
     // (bug.0378). New files from the shared template (byte-exact to render-node-appset.sh) land under
     // the PER-ENV infra/k8s/argocd/appsets/<env>/ dir (each reconciled+pruned by its own per-env
     // cogni-<env>-appsets app-of-apps, story.5020), then folded into that env's appsets/<env>/

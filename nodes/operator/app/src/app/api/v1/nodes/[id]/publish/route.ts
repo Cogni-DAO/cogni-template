@@ -223,6 +223,22 @@ export async function POST(request: Request, routeArgs: RouteParams) {
           logRequestEnd(ctx.log, { status: 401, durationMs: durationMs() });
           return NextResponse.json({ error: "unauthorized" }, { status: 401 });
         }
+        if (!session.walletAddress) {
+          logTerminal("warn", {
+            outcome: "error",
+            errorCode: "wallet_required",
+            status: 409,
+          });
+          logRequestEnd(ctx.log, { status: 409, durationMs: durationMs() });
+          return NextResponse.json(
+            {
+              error: "wallet required",
+              reason:
+                "Node publishing requires a linked wallet so ownership can be projected into every environment.",
+            },
+            { status: 409 }
+          );
+        }
 
         ctx.log.info(
           {
@@ -651,6 +667,7 @@ export async function POST(request: Request, routeArgs: RouteParams) {
             repo: parentRepo,
             slug: node.slug,
             ...identity,
+            ownerWallet: session.walletAddress,
             nodeRepoUrl: minted.cloneUrl,
             nodeRepoHeadSha: minted.headSha,
           });

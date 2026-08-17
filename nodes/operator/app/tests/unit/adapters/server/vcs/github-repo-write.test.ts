@@ -191,30 +191,6 @@ function setHappyForkHandlers(): void {
           type: "blob",
           sha: "external-secret-kustomization-blob",
         },
-        {
-          path: "k8s/external-secrets/preview/external-secret.yaml",
-          mode: "100644",
-          type: "blob",
-          sha: "external-secret-blob",
-        },
-        {
-          path: "k8s/external-secrets/preview/kustomization.yaml",
-          mode: "100644",
-          type: "blob",
-          sha: "external-secret-kustomization-blob",
-        },
-        {
-          path: "k8s/external-secrets/production/external-secret.yaml",
-          mode: "100644",
-          type: "blob",
-          sha: "external-secret-blob",
-        },
-        {
-          path: "k8s/external-secrets/production/kustomization.yaml",
-          mode: "100644",
-          type: "blob",
-          sha: "external-secret-kustomization-blob",
-        },
       ]);
       return { sha: "identity-tree" };
     },
@@ -717,10 +693,6 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
       "POST /repos/{owner}/{repo}/git/blobs",
       "POST /repos/{owner}/{repo}/git/blobs",
       "POST /repos/{owner}/{repo}/git/blobs",
-      "POST /repos/{owner}/{repo}/git/blobs",
-      "POST /repos/{owner}/{repo}/git/blobs",
-      "POST /repos/{owner}/{repo}/git/blobs",
-      "POST /repos/{owner}/{repo}/git/blobs",
       "POST /repos/{owner}/{repo}/git/trees",
       "POST /repos/{owner}/{repo}/git/commits",
       "POST /repos/{owner}/{repo}/git/refs",
@@ -908,6 +880,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
         owner: "Cogni-DAO",
         slug: "atlas",
         nodeId: "11111111-1111-4111-8111-111111111111",
+        ownerWallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949",
         chainId: 8453,
       })
     ).rejects.toMatchObject({ status: 403 });
@@ -1001,10 +974,6 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
       "PUT /repos/{owner}/{repo}/actions/permissions",
       "PUT /repos/{owner}/{repo}/actions/permissions/workflow",
       "GET /repos/{owner}/{repo}/actions/workflows",
-      "POST /repos/{owner}/{repo}/git/blobs",
-      "POST /repos/{owner}/{repo}/git/blobs",
-      "POST /repos/{owner}/{repo}/git/blobs",
-      "POST /repos/{owner}/{repo}/git/blobs",
       "POST /repos/{owner}/{repo}/git/blobs",
       "POST /repos/{owner}/{repo}/git/blobs",
       "POST /repos/{owner}/{repo}/git/blobs",
@@ -1301,7 +1270,7 @@ node_port: 30200
           readonly path: string;
           readonly sha: string;
         }>;
-        for (const env of ["candidate-a", "preview", "production"]) {
+        for (const env of ["candidate-a"]) {
           const entry = tree.find(
             (item) =>
               item.path === `infra/k8s/overlays/${env}/atlas/kustomization.yaml`
@@ -1334,6 +1303,16 @@ node_port: 30200
           expect(kust).toContain(`${env}-atlas-applicationset.yaml`);
           expect(kust).toContain(`${env}-node-template-applicationset.yaml`);
         }
+        expect(
+          tree.some((item) =>
+            item.path.startsWith("infra/k8s/overlays/preview/atlas/")
+          )
+        ).toBe(false);
+        expect(
+          tree.some((item) =>
+            item.path.startsWith("infra/k8s/overlays/production/atlas/")
+          )
+        ).toBe(false);
 
         // ROSTER DRIFT-GREEN PROOF (#1957): the publish PR MUST splice the new node into the
         // committed web-node roster in the SAME tree as the catalog row it adds — else the
@@ -1356,7 +1335,13 @@ node_port: 30200
           (item) => item.path === "infra/catalog/atlas.yaml"
         );
         expect(catalogEntry).toBeDefined();
-        expect(blobs.get(catalogEntry?.sha ?? "")).toContain("type: node");
+        const catalog = blobs.get(catalogEntry?.sha ?? "");
+        expect(catalog).toContain("type: node");
+        expect(catalog).toContain("envs: [candidate-a]");
+        expect(catalog).toContain("activity_env: candidate-a");
+        expect(catalog).toContain(
+          'owner_wallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949"'
+        );
 
         return { sha: "birth-tree" };
       },
@@ -1383,6 +1368,7 @@ node_port: 30200
         repo: "cogni",
         slug: "atlas",
         nodeId: "11111111-1111-4111-8111-111111111111",
+        ownerWallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949",
         chainId: 8453,
         nodeRepoUrl: "https://github.com/Cogni-DAO/atlas.git",
         nodeRepoHeadSha: "0123456789012345678901234567890123456789",
@@ -1391,6 +1377,114 @@ node_port: 30200
       prNumber: 88,
       prUrl: "https://github.com/Cogni-DAO/cogni/pull/88",
     });
+  });
+});
+
+describe("GitHubRepoWriter.listCatalogNodes", () => {
+  const encode = (value: string) =>
+    Buffer.from(value, "utf-8").toString("base64");
+
+  it("App-reads external and in-repo node identity for registry projection", async () => {
+    routeHandlers = {
+      "GET /repos/{owner}/{repo}/contents/{path}": (params) => {
+        if (params.path === "infra/catalog") {
+          return [
+            { name: "atlas.yaml", type: "file" },
+            { name: "operator.yaml", type: "file" },
+            { name: "_schema.json", type: "file" },
+          ];
+        }
+        const bodies: Record<string, string> = {
+          "infra/catalog/atlas.yaml": `name: atlas
+type: node
+node_id: 11111111-1111-4111-8111-111111111111
+source_repo: https://github.com/Cogni-DAO/atlas.git
+path_prefix: nodes/atlas/
+envs: [candidate-a]
+activity_env: candidate-a
+owner_wallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949"
+`,
+          "infra/catalog/operator.yaml": `name: operator
+type: node
+path_prefix: nodes/operator/
+envs: [candidate-a, preview, production]
+activity_env: production
+owner_wallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949"
+`,
+          "nodes/operator/.cogni/repo-spec.yaml": `schema_version: "0.1.4"
+node_id: "4ff8eac1-4eba-4ed0-931b-b1fe4f64713d"
+scope_id: "a28a8b1e-1f9d-5cd5-9329-569e4819feda"
+scope_key: "default"
+intent:
+  name: operator
+  mission: "Operate the network"
+governance:
+  chain_id: "8453"
+`,
+        };
+        const body = bodies[String(params.path)];
+        if (!body) throw statusError(404, `not found: ${params.path}`);
+        return { type: "file", encoding: "base64", content: encode(body) };
+      },
+    };
+
+    await expect(
+      makeWriter().listCatalogNodes({
+        parentOwner: "Cogni-DAO",
+        parentRepo: "cogni",
+      })
+    ).resolves.toEqual([
+      {
+        nodeId: "11111111-1111-4111-8111-111111111111",
+        slug: "atlas",
+        repoUrl: "https://github.com/Cogni-DAO/atlas",
+        repoOwner: "Cogni-DAO",
+        repoName: "atlas",
+        deployEnvs: ["candidate-a"],
+        activityEnv: "candidate-a",
+        ownerWallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949",
+      },
+      {
+        nodeId: "4ff8eac1-4eba-4ed0-931b-b1fe4f64713d",
+        slug: "operator",
+        repoUrl: "https://github.com/Cogni-DAO/cogni",
+        repoOwner: "Cogni-DAO",
+        repoName: "cogni",
+        deployEnvs: ["candidate-a", "preview", "production"],
+        activityEnv: "production",
+        ownerWallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949",
+      },
+    ]);
+  });
+
+  it("fails loud when activity_env is outside the deploy set", async () => {
+    routeHandlers = {
+      "GET /repos/{owner}/{repo}/contents/{path}": (params) => {
+        if (params.path === "infra/catalog") {
+          return [{ name: "atlas.yaml", type: "file" }];
+        }
+        return {
+          type: "file",
+          encoding: "base64",
+          content: encode(`name: atlas
+type: node
+node_id: 11111111-1111-4111-8111-111111111111
+source_repo: https://github.com/Cogni-DAO/atlas.git
+path_prefix: nodes/atlas/
+envs: [candidate-a]
+activity_env: production
+owner_wallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949"
+`),
+        };
+      },
+    };
+
+    await expect(
+      makeWriter().listCatalogNodes({
+        parentOwner: "Cogni-DAO",
+        parentRepo: "cogni",
+      })
+    ).rejects.toThrow(/activity_env must be present in envs/);
   });
 });
 
