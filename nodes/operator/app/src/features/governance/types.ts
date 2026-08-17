@@ -65,6 +65,8 @@ export interface EpochView {
   readonly periodStart: string;
   readonly periodEnd: string;
   readonly poolTotalCredits: string | null;
+  /** Epoch-pinned signer authority; null before open → review. */
+  readonly approvers: readonly string[] | null;
   readonly contributors: readonly EpochContributor[];
   /** Number of activity events with no resolved user_id. */
   readonly unresolvedCount: number;

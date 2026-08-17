@@ -14,6 +14,7 @@
 "use client";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 
 interface ReviewEpochResponse {
   readonly epoch: {
@@ -52,6 +53,26 @@ export function isEpochReadyForReview(
   return (
     status === "open" && Number.isFinite(periodEndMs) && nowMs >= periodEndMs
   );
+}
+
+/** Hydration-safe clock edge: false during SSR/hydration, then flips at periodEnd. */
+export function useEpochReviewReadiness(
+  status: "open" | "review" | "finalized",
+  periodEnd: string
+): boolean {
+  const [boundaryReached, setBoundaryReached] = useState(false);
+
+  useEffect(() => {
+    if (status !== "open") return;
+    const periodEndMs = Date.parse(periodEnd);
+    if (!Number.isFinite(periodEndMs)) return;
+
+    const remainingMs = Math.max(0, periodEndMs - Date.now());
+    const timer = window.setTimeout(() => setBoundaryReached(true), remainingMs);
+    return () => window.clearTimeout(timer);
+  }, [periodEnd, status]);
+
+  return status === "open" && boundaryReached;
 }
 
 export function useOpenEpochReview() {

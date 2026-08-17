@@ -5,7 +5,7 @@
  * Module: `@app/(app)/gov/review/view`
  * Purpose: Client component for epoch review admin page — review contributions, adjust weights via review-subject overrides, sign & finalize.
  * Scope: Composition of EpochDetail + useSignEpoch + useReviewEpochs + useReviewSubjectOverrides. Does not perform server-side logic or direct DB access.
- * Invariants: WRITE_ROUTES_APPROVER_GATED (UI gate via isApprover prop, server enforces). BigInt units displayed via Number() for presentation only.
+ * Invariants: REVIEW_AUTHORITY_IS_EPOCH_PINNED (UI gate via epoch snapshot, server enforces). BigInt units displayed via Number() for presentation only.
  * Side-effects: IO (via hooks — review-subject-overrides CRUD, sign-data, finalize)
  * Links: src/features/governance/types.ts, work/items/task.0119.epoch-signer-ui.md
  * @public
@@ -49,26 +49,11 @@ import type {
 } from "@/features/governance/types";
 
 interface ReviewViewProps {
-  readonly isApprover: boolean;
+  readonly walletAddress: string | null;
 }
 
-export function ReviewView({ isApprover }: ReviewViewProps): ReactElement {
+export function ReviewView({ walletAddress }: ReviewViewProps): ReactElement {
   const { data: reviewEpochs, isLoading, error } = useReviewEpochs();
-
-  if (!isApprover) {
-    return (
-      <div className="flex flex-col items-center justify-center gap-4 rounded-lg border bg-card p-12 text-center">
-        <Lock className="h-10 w-10 text-muted-foreground" />
-        <div>
-          <h2 className="font-semibold text-lg">Not Authorized</h2>
-          <p className="mt-1 text-muted-foreground text-sm">
-            Only ledger approvers can access the epoch review page. Connect an
-            approver wallet via SIWE to proceed.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   if (error) {
     return (
@@ -92,6 +77,30 @@ export function ReviewView({ isApprover }: ReviewViewProps): ReactElement {
     );
   }
 
+  const normalizedWallet = walletAddress?.toLowerCase() ?? null;
+  const authorizedEpochs = reviewEpochs.filter(
+    (epoch) =>
+      !!normalizedWallet &&
+      !!epoch.approvers?.some(
+        (approver) => approver.toLowerCase() === normalizedWallet
+      )
+  );
+
+  if (reviewEpochs.length > 0 && authorizedEpochs.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 rounded-lg border bg-card p-12 text-center">
+        <Lock className="h-10 w-10 text-muted-foreground" />
+        <div>
+          <h2 className="font-semibold text-lg">Not Authorized</h2>
+          <p className="mt-1 text-muted-foreground text-sm">
+            Only an approver pinned to this epoch can review it. Connect that
+            wallet via SIWE to proceed.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -101,7 +110,7 @@ export function ReviewView({ isApprover }: ReviewViewProps): ReactElement {
         </p>
       </div>
 
-      {reviewEpochs.length === 0 ? (
+      {authorizedEpochs.length === 0 ? (
         <div className="rounded-lg border bg-card p-12 text-center">
           <p className="text-muted-foreground">
             No epochs currently in review.
@@ -111,7 +120,7 @@ export function ReviewView({ isApprover }: ReviewViewProps): ReactElement {
           </p>
         </div>
       ) : (
-        reviewEpochs.map((epoch) => (
+        authorizedEpochs.map((epoch) => (
           <ReviewEpochSection key={epoch.id} epoch={epoch} />
         ))
       )}

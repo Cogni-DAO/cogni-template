@@ -24,9 +24,16 @@ import { CurrentEpochView } from "./view";
 export default async function CurrentEpochPage(): Promise<ReactElement> {
   const user = await getServerSessionUser();
   const approvers = getLedgerApprovers();
-  const isApprover =
+  const walletAddress = user?.walletAddress?.toLowerCase() ?? null;
+  const isCurrentApprover =
     !!user?.walletAddress &&
     approvers.includes(user.walletAddress.toLowerCase());
 
-  return <CurrentEpochView nodeId={getNodeId()} isApprover={isApprover} />;
+  return (
+    <CurrentEpochView
+      nodeId={getNodeId()}
+      walletAddress={walletAddress}
+      isCurrentApprover={isCurrentApprover}
+    />
+  );
 }

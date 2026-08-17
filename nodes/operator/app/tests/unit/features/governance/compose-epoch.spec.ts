@@ -226,6 +226,7 @@ function makeEpochView(
     periodStart: "2026-03-01T00:00:00.000Z",
     periodEnd: "2026-03-08T00:00:00.000Z",
     poolTotalCredits: "10000",
+    approvers: ["0xapprover"],
     unresolvedCount: 0,
     unresolvedActivities: [],
     contributors: contributors.map((c) => {
