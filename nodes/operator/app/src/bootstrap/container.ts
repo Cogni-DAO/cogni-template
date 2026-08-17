@@ -161,6 +161,7 @@ import { createScheduleCapability } from "@/bootstrap/capabilities/schedule";
 import { createVcsCapability } from "@/bootstrap/capabilities/vcs";
 import { createWebSearchCapability } from "@/bootstrap/capabilities/web-search";
 import { createWorkItemCapability } from "@/bootstrap/capabilities/work-item";
+import { startCatalogRegistryReconcileOnBoot } from "@/bootstrap/catalog-registry-reconcile";
 import type { RateLimitBypassConfig } from "@/bootstrap/http/wrapPublicRoute";
 import { resolveNodeKnowledgeRemoteUrl } from "@/bootstrap/knowledge-mirror";
 import { startProcessHealthPublisher } from "@/bootstrap/publishers";
@@ -368,6 +369,9 @@ export function getContainer(): Container {
     // (SELF_RECONCILE_ON_BOOT) — instrumentation.ts cannot import bootstrap. Detached,
     // fire-once, retry-until-Temporal-ready; never blocks the caller.
     startGovernanceSyncOnBoot();
+    // Project merged catalog intent into THIS environment's Postgres + OpenFGA.
+    // Detached and single-writer guarded; a periodic App-read heals missed push triggers.
+    startCatalogRegistryReconcileOnBoot();
   }
   return _container;
 }

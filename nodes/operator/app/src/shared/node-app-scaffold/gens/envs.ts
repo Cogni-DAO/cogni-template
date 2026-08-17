@@ -3,7 +3,7 @@
 
 /**
  * Module: `@shared/node-app-scaffold/gens/envs`
- * Purpose: Single source for the environment matrix a wizard-born node enters.
+ * Purpose: Single source for supported deployment environments and the candidate-only birth set.
  * Scope: Pure constants consumed by node-formation generators and route observability.
  * Side-effects: none
  * Links: docs/guides/create-node.md, docs/spec/secrets-management.md
@@ -11,13 +11,25 @@
  */
 
 /**
- * A `type: node` birth is all-three-envs or none. Candidate-b/canary are not
- * birth targets.
+ * Every environment that can be managed after birth. Candidate-b/canary are not
+ * deployment targets.
  */
-export const NODE_FORMATION_ENVS = [
+export const NODE_DEPLOY_ENVS = [
   "candidate-a",
   "preview",
   "production",
 ] as const;
 
-export type NodeFormationEnv = (typeof NODE_FORMATION_ENVS)[number];
+export type NodeFormationEnv = (typeof NODE_DEPLOY_ENVS)[number];
+
+/**
+ * Fresh nodes start in candidate-a only. Preview and production are explicit,
+ * separately validated catalog transitions; birth must not reserve RAM or run
+ * a second activity ledger in either environment.
+ */
+export const NODE_FORMATION_ENVS = [
+  "candidate-a",
+] as const satisfies readonly NodeFormationEnv[];
+
+/** The one activity environment stamped at birth. */
+export const NODE_FORMATION_ACTIVITY_ENV = "candidate-a" as const;

@@ -139,6 +139,8 @@ export async function POST(request: Request) {
           repoName: monorepo.repo,
           repoVisibility: "public",
           ownerUserId: session.id,
+          deployEnvs: ["candidate-a"],
+          activityEnv: "candidate-a",
           chainId: parsed.data.chainId,
           status: "dao_pending",
         })

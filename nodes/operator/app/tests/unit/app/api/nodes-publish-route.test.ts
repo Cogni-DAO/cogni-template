@@ -219,7 +219,10 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
       DOLTHUB_API_TOKEN: "test-dolthub-token",
     };
     mockGetServerSessionUser.mockReset();
-    mockGetServerSessionUser.mockResolvedValue({ id: "user-1" });
+    mockGetServerSessionUser.mockResolvedValue({
+      id: "user-1",
+      walletAddress: "0x070075F1389Ae1182aBac722B36CA12285d0c949",
+    });
     mockEnsureDatabase.mockReset();
     mockEnsureDatabase.mockResolvedValue({
       owner: "cogni-dao",
@@ -326,6 +329,7 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
       repo: "cogni-monorepo",
       slug: "atlas",
       nodeId: "11111111-1111-4111-8111-111111111111",
+      ownerWallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949",
       chainId: 8453,
       daoContract: "0x1111111111111111111111111111111111111111",
       pluginContract: "0x2222222222222222222222222222222222222222",
@@ -395,8 +399,8 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
         childRepoHeadSha: "identity-commit",
         parentPrNumber: 1532,
         secretTargetName: "atlas-env-secrets",
-        externalSecretEnvs: ["candidate-a", "preview", "production"],
-        overlayEnvs: ["candidate-a", "preview", "production"],
+        externalSecretEnvs: ["candidate-a"],
+        overlayEnvs: ["candidate-a"],
       }),
       "feature.node_publish.secret_shape_generated"
     );
@@ -509,6 +513,27 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
         outcome: "error",
         errorCode: "unauthorized",
         status: 401,
+      }),
+      "feature.node_publish.complete"
+    );
+  });
+
+  it("requires a stable owner wallet before minting the node", async () => {
+    mockGetServerSessionUser.mockResolvedValue({ id: "user-1" });
+
+    const response = await publishNode();
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.error).toBe("wallet required");
+    expect(mockForkFromTemplate).not.toHaveBeenCalled();
+    expect(mockLog.warn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "feature.node_publish.complete",
+        step: "auth",
+        outcome: "error",
+        errorCode: "wallet_required",
+        status: 409,
       }),
       "feature.node_publish.complete"
     );
