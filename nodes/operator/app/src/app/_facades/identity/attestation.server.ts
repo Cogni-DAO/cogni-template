@@ -51,7 +51,11 @@ import {
   ATTESTATION_ALG,
   attestationKeyId,
 } from "@/shared/identity/attestation-keys";
-import { hostForEnv, rootDomain } from "@/shared/node-registry/deploy-hosts";
+import {
+  hostForEnv,
+  isFlightEnv,
+  rootDomain,
+} from "@/shared/node-registry/deploy-hosts";
 
 export type AttestationPreconditionCode =
   | "no_github_binding"
@@ -90,15 +94,17 @@ export async function issueIdentityAttestation(params: {
   }
 
   const deployRootDomain = rootDomain(domain);
-  const registeredOrigins = targetNode.deployEnvs.map(
-    (deployEnv) =>
-      `https://${hostForEnv(
-        targetNode.slug,
-        targetNode.slug === "operator",
-        deployEnv,
-        deployRootDomain
-      )}`
-  );
+  const registeredOrigins = targetNode.deployEnvs
+    .filter(isFlightEnv)
+    .map(
+      (deployEnv) =>
+        `https://${hostForEnv(
+          targetNode.slug,
+          targetNode.slug === "operator",
+          deployEnv,
+          deployRootDomain
+        )}`
+    );
   if (!registeredOrigins.includes(request.targetOrigin)) {
     throw new AttestationPreconditionError("invalid_target_origin");
   }
