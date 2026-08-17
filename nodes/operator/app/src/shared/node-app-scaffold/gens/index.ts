@@ -43,7 +43,12 @@ export {
   externalSecretPath,
   overlayPath,
 } from "./env-membership-plan";
-export { NODE_FORMATION_ENVS, type NodeFormationEnv } from "./envs";
+export {
+  NODE_DEPLOY_ENVS,
+  NODE_FORMATION_ACTIVITY_ENV,
+  NODE_FORMATION_ENVS,
+  type NodeFormationEnv,
+} from "./envs";
 export {
   renderNodeExternalSecret,
   renderNodeExternalSecretKustomization,

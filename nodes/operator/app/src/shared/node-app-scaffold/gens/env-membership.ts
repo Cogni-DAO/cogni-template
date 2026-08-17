@@ -23,10 +23,10 @@
  * @public
  */
 
-import { NODE_FORMATION_ENVS, type NodeFormationEnv } from "./envs";
+import { NODE_DEPLOY_ENVS, type NodeFormationEnv } from "./envs";
 
 /** Canonical env order (candidate-a < preview < production) — the order the catalog row is emitted in. */
-const ENV_ORDER = NODE_FORMATION_ENVS;
+const ENV_ORDER = NODE_DEPLOY_ENVS;
 
 /**
  * Matches the catalog row's flow-sequence `envs:` line, e.g. `envs: [candidate-a, preview, production]`.

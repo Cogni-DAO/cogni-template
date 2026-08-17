@@ -73,6 +73,11 @@ export type {
   BillingResolver,
   PreflightCreditCheckFn,
 } from "./billing-context";
+export type {
+  CatalogNodeOwnerProjection,
+  CatalogNodeRegistryPort,
+  CatalogNodeRegistryReconcileSummary,
+} from "./catalog-node-registry.port";
 export type { Clock } from "./clock.port";
 export type {
   ConnectionBrokerPort,
@@ -82,6 +87,7 @@ export type {
 export type {
   CandidateFlightDispatchResult,
   CatalogForkTarget,
+  CatalogNodeDefinition,
   DeployPlanePort,
   MirrorCanonicalFilesInput,
   MirrorCanonicalFilesResult,

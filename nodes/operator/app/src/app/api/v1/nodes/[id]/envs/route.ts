@@ -34,7 +34,7 @@ import { resolveServiceDb } from "@/bootstrap/container";
 import { nodeIdOrSlug } from "@/features/nodes/node-lookup";
 import { nodes } from "@/shared/db/nodes";
 import { serverEnv } from "@/shared/env";
-import { NODE_FORMATION_ENVS } from "@/shared/node-app-scaffold/gens";
+import { NODE_DEPLOY_ENVS } from "@/shared/node-app-scaffold/gens";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,7 +43,7 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-const VALID_ENVS = new Set<string>(NODE_FORMATION_ENVS);
+const VALID_ENVS = new Set<string>(NODE_DEPLOY_ENVS);
 
 export async function POST(request: Request, routeArgs: RouteParams) {
   const sessionUser = await getSessionUser();
@@ -140,7 +140,7 @@ export async function POST(request: Request, routeArgs: RouteParams) {
       owner,
       repo,
       slug: node.slug,
-      env: targetEnv as (typeof NODE_FORMATION_ENVS)[number],
+      env: targetEnv as (typeof NODE_DEPLOY_ENVS)[number],
       present,
     });
   } catch (err) {
