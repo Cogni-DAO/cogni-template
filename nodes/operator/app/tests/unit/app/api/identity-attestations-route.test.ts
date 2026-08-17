@@ -14,6 +14,7 @@
 
 import { randomBytes } from "node:crypto";
 
+import { IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256 } from "@cogni/node-contracts";
 import {
   createLocalJWKSet,
   decodeProtectedHeader,
@@ -121,6 +122,7 @@ const TARGET_ORIGIN = "https://node-template.operator.test";
 
 function postRequest(
   body: Record<string, unknown> = {
+    protocol: IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256,
     nodeId: NODE_ID,
     nonce: NONCE,
     targetOrigin: TARGET_ORIGIN,
@@ -187,6 +189,7 @@ describe("POST /api/v1/identity/attestations", () => {
       }
     );
     expect(payload.type).toBe("identity.attestation.v1");
+    expect(payload.protocol).toBe(IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256);
     expect(payload.sub).toBe(USER_ID);
     expect(payload.aud).toBe(`urn:cogni:node:${NODE_ID}`);
     expect(payload.nodeId).toBe(NODE_ID);
@@ -252,6 +255,7 @@ describe("POST /api/v1/identity/attestations", () => {
   it("rejects caller-supplied audiences and malformed nonces", async () => {
     const withAudience = await POST(
       postRequest({
+        protocol: IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256,
         nodeId: NODE_ID,
         nonce: NONCE,
         targetOrigin: TARGET_ORIGIN,
@@ -262,17 +266,29 @@ describe("POST /api/v1/identity/attestations", () => {
 
     const weakNonce = await POST(
       postRequest({
+        protocol: IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256,
         nodeId: NODE_ID,
         nonce: "short",
         targetOrigin: TARGET_ORIGIN,
       })
     );
     expect(weakNonce.status).toBe(400);
+
+    const driftedProtocol = await POST(
+      postRequest({
+        protocol: "0".repeat(64),
+        nodeId: NODE_ID,
+        nonce: NONCE,
+        targetOrigin: TARGET_ORIGIN,
+      })
+    );
+    expect(driftedProtocol.status).toBe(400);
   });
 
   it("rejects an origin not registered for the target node", async () => {
     const response = await POST(
       postRequest({
+        protocol: IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256,
         nodeId: NODE_ID,
         nonce: NONCE,
         targetOrigin: "https://attacker.example",
@@ -327,6 +343,20 @@ describe("POST /api/v1/identity/attestations", () => {
 
   it("returns 503 when the canonical issuer config is absent", async () => {
     envState.current = { IDENTITY_ATTESTATION_PRIVATE_KEY: freshSeed() };
+
+    const response = await POST(postRequest());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "attestation_unavailable" });
+  });
+
+  it.each([
+    "http://operator.test",
+    "https://user:pass@operator.test",
+  ])("returns 503 for unsafe issuer config %s", async (issuer) => {
+    envState.current = {
+      APP_BASE_URL: issuer,
+      IDENTITY_ATTESTATION_PRIVATE_KEY: freshSeed(),
+    };
 
     const response = await POST(postRequest());
     expect(response.status).toBe(503);

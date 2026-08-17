@@ -14,19 +14,23 @@
  *   - SIWE_SESSION_ONLY: uses getServerSessionUser (cookie session), never the
  *     agent-bearer resolver — an agent key must not mint wallet↔github claims.
  *   - CALLER_NEVER_SETS_AUDIENCE: body accepts {nodeId, nonce}; the facade
- *     resolves that registered node and derives its exact audience.
+ *     sends the pinned protocol fingerprint plus {nodeId, nonce, targetOrigin};
+ *     the service resolves that registered node and derives its exact audience.
  *   - FAIL_CLOSED: unset/malformed signing key or canonical APP_BASE_URL → 503;
  *     missing wallet/github binding → 409; unknown node → 404.
  *   - CONFIGURED_ISSUER_ONLY: iss is the canonical APP_BASE_URL configuration,
  *     never request URL, Host, or forwarded headers.
  * Side-effects: IO (database reads; no writes — issuance is log-only v0)
- * Links: .context/designs/task.5024-fleet-identity-design.md, src/app/_facades/identity/attestation.server.ts
+ * Links: docs/spec/decentralized-user-identity.md, src/app/_facades/identity/attestation.server.ts
  * @public
  */
 
 import type { KeyObject } from "node:crypto";
 
-import { identityAttestationOperation } from "@cogni/node-contracts";
+import {
+  IdentityAttestationOriginSchema,
+  identityAttestationOperation,
+} from "@cogni/node-contracts";
 import { NextResponse } from "next/server";
 import {
   AttestationPreconditionError,
@@ -45,13 +49,8 @@ export const runtime = "nodejs";
 /** Normalize an explicit origin-only config value; reject paths/query/hash. */
 function canonicalIssuer(configured: string | undefined): string | null {
   if (!configured) return null;
-  try {
-    const url = new URL(configured);
-    if (url.pathname !== "/" || url.search || url.hash) return null;
-    return url.origin;
-  } catch {
-    return null;
-  }
+  const parsed = IdentityAttestationOriginSchema.safeParse(configured);
+  return parsed.success ? parsed.data : null;
 }
 
 export const POST = wrapRouteHandlerWithLogging(

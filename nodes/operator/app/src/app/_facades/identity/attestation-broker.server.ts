@@ -4,8 +4,8 @@
 /**
  * Module: `@app/_facades/identity/attestation-broker.server`
  * Purpose: Completes the authenticated browser leg of identity.attestation.v1.
- * Scope: Resolves the registered node's canonical origins from deploy_envs, validates return_to,
- *   resolves configured signing custody, and delegates JWT issuance.
+ * Scope: Validates return_to, resolves configured signing custody, and delegates
+ *   all registered-node/origin/claim policy to the identity feature service.
  * Invariants:
  *   - NO_OPEN_REDIRECT: return_to must be exactly the registered node's
  *     canonical `/profile` URL in one of its registered deploy environments.
@@ -19,21 +19,17 @@
 
 import type { KeyObject } from "node:crypto";
 
-import type { IdentityAttestationRequest } from "@cogni/node-contracts";
+import {
+  IdentityAttestationOriginSchema,
+  type IdentityAttestationRequest,
+} from "@cogni/node-contracts";
 import type { SessionUser } from "@cogni/node-shared";
 import {
   AttestationPreconditionError,
   issueIdentityAttestation,
 } from "@/app/_facades/identity/attestation.server";
-import { resolveServiceDb } from "@/bootstrap/container";
-import { resolveNodeRef } from "@/features/nodes/node-lookup";
 import { serverEnv } from "@/shared/env";
 import { importAttestationSigningKey } from "@/shared/identity/attestation-keys";
-import {
-  hostForEnv,
-  isFlightEnv,
-  rootDomain,
-} from "@/shared/node-registry/deploy-hosts";
 import { baseDomain } from "@/shared/node-registry/resolve";
 
 export type AttestationBrokerErrorCode =
@@ -50,13 +46,8 @@ export class AttestationBrokerError extends Error {
 
 function canonicalOrigin(configured: string | undefined): string | null {
   if (!configured) return null;
-  try {
-    const url = new URL(configured);
-    if (url.pathname !== "/" || url.search || url.hash) return null;
-    return url.origin;
-  } catch {
-    return null;
-  }
+  const parsed = IdentityAttestationOriginSchema.safeParse(configured);
+  return parsed.success ? parsed.data : null;
 }
 
 /** Exact allowlist check: canonical registered-node origin plus `/profile`. */
@@ -64,6 +55,9 @@ export function validateAttestationReturnTo(
   returnTo: string,
   expectedNodeOrigin: string
 ): string | null {
+  if (!IdentityAttestationOriginSchema.safeParse(expectedNodeOrigin).success) {
+    return null;
+  }
   try {
     const url = new URL(returnTo);
     if (
@@ -94,29 +88,6 @@ export async function issueBrowserIdentityAttestation(params: {
     throw new AttestationBrokerError("attestation_unavailable");
   }
 
-  const targetNode = await resolveNodeRef(
-    resolveServiceDb(),
-    params.request.nodeId
-  );
-  if (!targetNode || targetNode.nodeId !== params.request.nodeId) {
-    throw new AttestationBrokerError("unknown_node");
-  }
-
-  const deployRootDomain = rootDomain(domain);
-  const registeredOrigins = targetNode.deployEnvs
-    .filter(isFlightEnv)
-    .map(
-      (deployEnv) =>
-        `https://${hostForEnv(
-          targetNode.slug,
-          targetNode.slug === "operator",
-          deployEnv,
-          deployRootDomain
-        )}`
-    );
-  if (!registeredOrigins.includes(params.request.targetOrigin)) {
-    throw new AttestationBrokerError("invalid_return_to");
-  }
   const safeReturnTo = validateAttestationReturnTo(
     params.returnTo,
     params.request.targetOrigin
@@ -153,6 +124,12 @@ export async function issueBrowserIdentityAttestation(params: {
       error.code === "unknown_node"
     ) {
       throw new AttestationBrokerError("unknown_node");
+    }
+    if (
+      error instanceof AttestationPreconditionError &&
+      error.code === "invalid_target_origin"
+    ) {
+      throw new AttestationBrokerError("invalid_return_to");
     }
     throw error;
   }

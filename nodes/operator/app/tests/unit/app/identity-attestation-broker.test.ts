@@ -3,29 +3,34 @@
 
 /** Security tests for the authenticated identity attestation broker. */
 
+import { IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256 } from "@cogni/node-contracts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const NODE_ID = "22222222-2222-4222-8222-222222222222";
 const NONCE = "33333333-3333-4333-8333-333333333333";
-const mockResolveNodeRef = vi.fn();
 const mockIssue = vi.fn();
+const envState = vi.hoisted(() => ({ appBaseUrl: "https://cognidao.org" }));
+const MockAttestationPreconditionError = vi.hoisted(
+  () =>
+    class extends Error {
+      constructor(readonly code: string) {
+        super(code);
+      }
+    }
+);
 
 vi.mock("@/shared/env", () => ({
   serverEnv: () => ({
-    APP_BASE_URL: "https://cognidao.org",
+    APP_BASE_URL: envState.appBaseUrl,
     DOMAIN: "cognidao.org",
     IDENTITY_ATTESTATION_PRIVATE_KEY: "seed",
   }),
-}));
-vi.mock("@/bootstrap/container", () => ({ resolveServiceDb: () => ({}) }));
-vi.mock("@/features/nodes/node-lookup", () => ({
-  resolveNodeRef: (...args: unknown[]) => mockResolveNodeRef(...args),
 }));
 vi.mock("@/shared/identity/attestation-keys", () => ({
   importAttestationSigningKey: () => ({}),
 }));
 vi.mock("@/app/_facades/identity/attestation.server", () => ({
-  AttestationPreconditionError: class extends Error {},
+  AttestationPreconditionError: MockAttestationPreconditionError,
   issueIdentityAttestation: (...args: unknown[]) => mockIssue(...args),
 }));
 
@@ -42,6 +47,7 @@ const SESSION = {
   avatarColor: null,
 };
 const REQUEST = {
+  protocol: IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256,
   nodeId: NODE_ID,
   nonce: NONCE,
   targetOrigin: "https://node-template.cognidao.org",
@@ -49,12 +55,7 @@ const REQUEST = {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mockResolveNodeRef.mockResolvedValue({
-    nodeId: NODE_ID,
-    slug: "node-template",
-    deployEnvs: ["production"],
-    activityEnv: "production",
-  });
+  envState.appBaseUrl = "https://cognidao.org";
   mockIssue.mockResolvedValue({ attestation: "signed.jwt", expiresIn: 600 });
 });
 
@@ -117,14 +118,7 @@ describe("issueBrowserIdentityAttestation", () => {
     expect(mockIssue).not.toHaveBeenCalled();
   });
 
-  it("accepts candidate toks4 when candidate-a is registered", async () => {
-    mockResolveNodeRef.mockResolvedValue({
-      nodeId: NODE_ID,
-      slug: "toks4",
-      deployEnvs: ["candidate-a", "production"],
-      activityEnv: "production",
-    });
-
+  it("preserves the exact candidate origin through issuance and redirect", async () => {
     const result = await issueBrowserIdentityAttestation({
       sessionUser: SESSION,
       request: {
@@ -141,12 +135,9 @@ describe("issueBrowserIdentityAttestation", () => {
   });
 
   it("rejects a canonical env origin not registered for that node", async () => {
-    mockResolveNodeRef.mockResolvedValue({
-      nodeId: NODE_ID,
-      slug: "toks4",
-      deployEnvs: ["production"],
-      activityEnv: "production",
-    });
+    mockIssue.mockRejectedValueOnce(
+      new MockAttestationPreconditionError("invalid_target_origin")
+    );
 
     await expect(
       issueBrowserIdentityAttestation({
@@ -160,7 +151,7 @@ describe("issueBrowserIdentityAttestation", () => {
     ).rejects.toMatchObject<AttestationBrokerError>({
       code: "invalid_return_to",
     });
-    expect(mockIssue).not.toHaveBeenCalled();
+    expect(mockIssue).toHaveBeenCalledOnce();
   });
 
   it("rejects when return_to and the signed target origin disagree", async () => {
@@ -176,8 +167,10 @@ describe("issueBrowserIdentityAttestation", () => {
     expect(mockIssue).not.toHaveBeenCalled();
   });
 
-  it("rejects an unregistered node before issuance", async () => {
-    mockResolveNodeRef.mockResolvedValue(null);
+  it("maps an unknown-node issuance rejection", async () => {
+    mockIssue.mockRejectedValueOnce(
+      new MockAttestationPreconditionError("unknown_node")
+    );
     await expect(
       issueBrowserIdentityAttestation({
         sessionUser: SESSION,
@@ -185,6 +178,21 @@ describe("issueBrowserIdentityAttestation", () => {
         returnTo: "https://node-template.cognidao.org/profile",
       })
     ).rejects.toMatchObject({ code: "unknown_node" });
+    expect(mockIssue).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    "http://cognidao.org",
+    "https://user:pass@cognidao.org",
+  ])("fails closed for unsafe configured issuer %s", async (issuer) => {
+    envState.appBaseUrl = issuer;
+    await expect(
+      issueBrowserIdentityAttestation({
+        sessionUser: SESSION,
+        request: REQUEST,
+        returnTo: "https://node-template.cognidao.org/profile",
+      })
+    ).rejects.toMatchObject({ code: "attestation_unavailable" });
     expect(mockIssue).not.toHaveBeenCalled();
   });
 });
