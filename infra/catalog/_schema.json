@@ -168,18 +168,18 @@
     },
     "envs": {
       "type": "array",
-      "description": "task.5017 — the per-env deploy set: which environments deploy this node. Consumed by scripts/ci/render-node-appset.sh (emits one ApplicationSet per env in this list) and scripts/ci/reconcile-node-substrate.sh (refuses to provision substrate for an env not listed). deploy ⊆ provisioned: an env only deploys nodes it lists. ATOMIC_PER_ENV — any subset is valid and each env is independent (candidate-a is no different from preview/production); no mandatory env. The empty set (`[]`) is valid — the node is deployed nowhere.",
+      "description": "task.5017/5025 — the non-empty per-env deploy set: which environments deploy this node. Consumed by scripts/ci/render-node-appset.sh and scripts/ci/reconcile-node-substrate.sh. deploy ⊆ provisioned: an env only deploys nodes it lists. Individual env membership is independent, but the final environment cannot be removed; full decommission is a separate lifecycle operation.",
       "items": {
         "type": "string",
         "enum": ["candidate-a", "preview", "production"]
       },
-      "minItems": 0,
+      "minItems": 1,
       "uniqueItems": true
     },
     "activity_env": {
       "type": "string",
       "enum": ["candidate-a", "preview", "production"],
-      "description": "task.5025 — singleton environment that owns activity ingestion and epoch scheduling for this node. Must also be present in envs; promotion cutover changes this atomically after validation. Deploying a node in multiple envs never permits multiple activity ledgers."
+      "description": "task.5025 — singleton environment that owns activity ingestion and epoch scheduling for this node. Must also be present in envs. V1 wizard births are fixed to candidate-a authority generation 1; changing authority is unsupported until a fenced quiesce/activate protocol exists. Deploying a node in multiple envs never permits multiple activity ledgers."
     },
     "owner_wallet": {
       "type": "string",

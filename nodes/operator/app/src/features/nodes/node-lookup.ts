@@ -29,6 +29,10 @@ export interface ResolvedNodeRef {
   readonly nodeId: string;
   /** Human/agent addressing handle. */
   readonly slug: string;
+  /** Environments where merged catalog intent deploys this node. */
+  readonly deployEnvs: readonly string[];
+  /** Singleton environment allowed to schedule epochs and ingest activity. */
+  readonly activityEnv: string;
 }
 
 const UUID_RE =
@@ -64,10 +68,22 @@ export async function resolveNodeRef(
   idOrSlug: string
 ): Promise<ResolvedNodeRef | null> {
   const rows = await db
-    .select({ id: nodes.id, slug: nodes.slug })
+    .select({
+      id: nodes.id,
+      slug: nodes.slug,
+      deployEnvs: nodes.deployEnvs,
+      activityEnv: nodes.activityEnv,
+    })
     .from(nodes)
     .where(nodeIdOrSlug(idOrSlug))
     .limit(1);
   const row = rows[0];
-  return row ? { nodeId: row.id, slug: row.slug } : null;
+  return row
+    ? {
+        nodeId: row.id,
+        slug: row.slug,
+        deployEnvs: row.deployEnvs,
+        activityEnv: row.activityEnv,
+      }
+    : null;
 }

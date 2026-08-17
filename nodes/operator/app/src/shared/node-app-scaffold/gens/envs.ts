@@ -23,13 +23,13 @@ export const NODE_DEPLOY_ENVS = [
 export type NodeFormationEnv = (typeof NODE_DEPLOY_ENVS)[number];
 
 /**
- * Fresh nodes start in candidate-a only. Preview and production are explicit,
- * separately validated catalog transitions; birth must not reserve RAM or run
- * a second activity ledger in either environment.
+ * Activity-authority protocol generation 1: fresh nodes start in candidate-a
+ * only. Preview and production may be added as passive deployments, but v1 has
+ * no authority-transfer verb; birth must not run a second activity ledger.
  */
 export const NODE_FORMATION_ENVS = [
   "candidate-a",
 ] as const satisfies readonly NodeFormationEnv[];
 
-/** The one activity environment stamped at birth. */
+/** The fixed generation-1 activity environment stamped at birth. */
 export const NODE_FORMATION_ACTIVITY_ENV = "candidate-a" as const;

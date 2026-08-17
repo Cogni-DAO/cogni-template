@@ -28,6 +28,9 @@ export {
 export {
   addCatalogEnv,
   dropCatalogEnv,
+  type EnvRemovalViolation,
+  envRemovalViolation,
+  parseCatalogActivityEnv,
   parseCatalogEnvs,
   setCatalogEnvs,
 } from "./env-membership";

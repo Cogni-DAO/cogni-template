@@ -58,6 +58,28 @@ The node declares **shape**. The operator provisions and connects that shape per
 
 This is the same split already used for submodule nodes: the node repo owns app, packages, base manifests, local policy, and image build; the operator owns catalog, overlays, AppSets, provisioning, flight, and promotion.
 
+### Spawn activity authority — generation 1
+
+Every merged `type: node` catalog row projects three environment-sensitive facts into each
+environment's local operator registry: the non-empty `deploy_envs` set, one `activity_env`, and the
+stable owner wallet (resolved to that environment's own user row). A deployment is allowed to serve a
+node without owning its activity ledger. Epoch schedules are created only when both conditions hold:
+
+1. the local `DEPLOY_ENVIRONMENT` is present in `deploy_envs`; and
+2. it exactly equals `activity_env`.
+
+The v1 spawn protocol is deliberately fixed: a fresh wizard node is born with
+`deploy_envs=[candidate-a]` and `activity_env=candidate-a`. This is **authority generation 1**, a
+non-transferable initial state—not a claim that a catalog edit can atomically move authority. Preview
+or production may later be added as passive deployments, but the env-management route rejects removal
+of the final deployment and rejects removal of the current activity environment.
+
+There is no production activity-authority cutover in v1. A future cutover must first specify a durable,
+monotonic generation/fencing token and a two-phase `old authority quiesced → new authority active`
+protocol that recovers across partial git/DB/Temporal failure. Until that lands, manually changing
+`activity_env` is unsupported. Cross-environment webhook relay is a separate transport concern and is
+not part of this registry projection slice.
+
 ### A node is a bundle, not a service — `node → services → deployments`
 
 A **node is a codebase bundle**, not a single deployable. One node repo can build

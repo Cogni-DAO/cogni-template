@@ -4,9 +4,10 @@
 /**
  * Module: `@shared/db/nodes`
  * Purpose: Operator-local Drizzle schema for the externally-registered node registry.
- * Scope: Wizard working state for operator-managed nodes. Existing inline nodes
- *   (operator/resy/canary/node-template) are NOT registered here — they live in `infra/catalog/*.yaml`.
- * Invariants: NODES_TABLE_SCOPE (external only), STATE_MACHINE_TOTAL, OWNER_GATING, NO_PRIVATE_KEYS,
+ * Scope: Environment-local projection of merged catalog nodes plus wizard working state before catalog
+ *   merge. Inline and submodule nodes share this registry; git catalog intent is reconciled into it.
+ * Invariants: NODES_TABLE_SCOPE (env-local catalog projection + pre-merge wizard state),
+ *   STATE_MACHINE_TOTAL, OWNER_GATING, NO_PRIVATE_KEYS,
  *   OPERATOR_NODE_ROW_ID_IS_NODE_ID — `nodes.id` IS the operator's projection of the node's repo-spec
  *   `node_id` (the deployment-identity SSOT, docs/spec/identity-model.md). It is the OpenFGA `node:<id>`
  *   resource and the Loki `node` label, never an unrelated surrogate. Wizard creation's `defaultRandom()`
