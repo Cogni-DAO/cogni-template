@@ -19,9 +19,13 @@ import {
 // ---------------------------------------------------------------------------
 
 const mockGraphqlFn = vi.fn();
+const mockRequestFn = vi.fn();
 
 vi.mock("../src/adapters/ingestion/octokit-client", () => ({
-  createGitHubClient: () => ({ graphql: mockGraphqlFn }),
+  createGitHubClient: () => ({
+    graphql: mockGraphqlFn,
+    request: mockRequestFn,
+  }),
 }));
 
 // ---------------------------------------------------------------------------
@@ -69,6 +73,10 @@ function makeCollectParams(overrides?: Partial<CollectParams>): CollectParams {
 describe("GitHubSourceAdapter", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRequestFn.mockImplementation(
+      (_route: string, params: { pull_number: number }) =>
+        Promise.resolve({ data: [{ sha: `commit-sha-${params.pull_number}` }] })
+    );
   });
 
   describe("streams()", () => {
@@ -103,9 +111,7 @@ describe("GitHubSourceAdapter", () => {
       const result = await adapter.collect(makeCollectParams());
 
       expect(result.events).toHaveLength(1);
-      expect(result.events[0]?.id).toBe(
-        "github:pr:cogni-dao/cogni-template:42"
-      );
+      expect(result.events[0]?.id).toBe("github:pr:github-repo-node-id:42");
     });
 
     it("produces deterministic payload hashes", async () => {
@@ -161,9 +167,7 @@ describe("GitHubSourceAdapter", () => {
       const result = await adapter.collect(makeCollectParams());
 
       expect(result.events).toHaveLength(1);
-      expect(result.events[0]?.id).toBe(
-        "github:pr:cogni-dao/cogni-template:11"
-      );
+      expect(result.events[0]?.id).toBe("github:pr:github-repo-node-id:11");
     });
 
     it("sets eventType to pr_merged", async () => {
@@ -189,6 +193,60 @@ describe("GitHubSourceAdapter", () => {
         mergedById: "github-user-node-merger",
         commitShas: ["commit-sha-1"],
       });
+    });
+
+    it("keeps ID and economic hash stable across a repository rename", async () => {
+      const beforeRename = makePrNode({
+        number: 42,
+        mergedAt: "2026-01-05T12:00:00Z",
+        repo: "cogni-dao/old-name",
+      });
+      const afterRename = makePrNode({
+        number: 42,
+        mergedAt: "2026-01-05T12:00:00Z",
+        repo: "cogni-dao/new-name",
+        title: "Edited after rename",
+      });
+      mockGraphqlFn
+        .mockResolvedValueOnce(wrapPrResponse([beforeRename]))
+        .mockResolvedValueOnce(wrapPrResponse([afterRename]));
+
+      const first = await makeAdapter({
+        repos: ["cogni-dao/old-name"],
+      }).collect(makeCollectParams());
+      const second = await makeAdapter({
+        repos: ["cogni-dao/new-name"],
+      }).collect(makeCollectParams());
+
+      expect(first.events[0]?.id).toBe("github:pr:github-repo-node-id:42");
+      expect(second.events[0]?.id).toBe(first.events[0]?.id);
+      expect(second.events[0]?.payloadHash).toBe(first.events[0]?.payloadHash);
+    });
+
+    it("hydrates every merged-PR commit including item 251", async () => {
+      const commits = Array.from(
+        { length: 251 },
+        (_, index) => `commit-${String(index + 1).padStart(3, "0")}`
+      );
+      mockRequestFn.mockImplementation(
+        (_route: string, params: { page: number }) =>
+          Promise.resolve({
+            data: commits
+              .slice((params.page - 1) * 100, params.page * 100)
+              .map((sha) => ({ sha })),
+          })
+      );
+      mockGraphqlFn.mockResolvedValueOnce(
+        wrapPrResponse([
+          makePrNode({ number: 251, mergedAt: "2026-01-05T12:00:00Z" }),
+        ])
+      );
+
+      const result = await makeAdapter().collect(makeCollectParams());
+      const commitShas = result.events[0]?.metadata.commitShas as string[];
+      expect(commitShas).toHaveLength(251);
+      expect(commitShas[250]).toBe("commit-251");
+      expect(mockRequestFn).toHaveBeenCalledTimes(3);
     });
 
     it("filters PRs outside the time window (client-side)", async () => {
@@ -369,7 +427,7 @@ describe("GitHubSourceAdapter", () => {
 
       expect(result.events).toHaveLength(1);
       expect(result.events[0]?.id).toBe(
-        "github:review:cogni-dao/cogni-template:42:555"
+        "github:review:github-repo-node-id:42:555"
       );
       expect(result.events[0]?.eventType).toBe("review_submitted");
       expect(result.events[0]?.metadata).toMatchObject({
@@ -448,9 +506,7 @@ describe("GitHubSourceAdapter", () => {
       );
 
       expect(result.events).toHaveLength(1);
-      expect(result.events[0]?.id).toBe(
-        "github:issue:cogni-dao/cogni-template:99"
-      );
+      expect(result.events[0]?.id).toBe("github:issue:github-repo-node-id:99");
       expect(result.events[0]?.eventType).toBe("issue_closed");
       expect(result.events[0]?.metadata).toMatchObject({
         schemaVersion: 1,

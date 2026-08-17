@@ -18,7 +18,7 @@ const NODE_ID = "11111111-1111-4111-8111-111111111111";
 
 function validPrReceipt() {
   return {
-    receiptId: "github:pr:cogni-dao/cogni:42",
+    receiptId: "github:pr:github-repo-node-id:42",
     source: "github",
     eventType: "pr_merged",
     platformUserId: "12345",
@@ -103,6 +103,17 @@ describe("internal attribution receipt v1 contract", () => {
         ...envelope(),
         receipts: [receipt, receipt],
       }).success
+    ).toBe(false);
+  });
+
+  it("rejects a receipt ID derived from mutable owner/repo text", () => {
+    expect(
+      internalDeliverReceiptsOperation.input.safeParse(
+        envelope({
+          ...validPrReceipt(),
+          receiptId: "github:pr:cogni-dao/cogni:42",
+        })
+      ).success
     ).toBe(false);
   });
 });

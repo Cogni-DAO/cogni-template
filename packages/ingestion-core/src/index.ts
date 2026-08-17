@@ -23,10 +23,12 @@ export {
 } from "./github-context";
 // Pure helpers
 export {
+  buildCanonicalReceiptId,
   buildEventId,
   canonicalJson,
   hashCanonicalPayload,
   hashReceiptEconomicContent,
+  toReceiptDisplaySnapshotV1,
   toReceiptEconomicContent,
 } from "./helpers";
 // Model types
@@ -35,7 +37,9 @@ export type {
   CollectParams,
   CollectResult,
   ReceiptContent,
+  ReceiptDisplaySnapshotV1,
   ReceiptEconomicContent,
+  ReceiptEconomicCoreV1,
   ReceiptEventType,
   ReceiptProducer,
   ReceiptSource,

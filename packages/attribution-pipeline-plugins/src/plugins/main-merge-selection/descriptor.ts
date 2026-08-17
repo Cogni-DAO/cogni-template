@@ -36,7 +36,7 @@ export const MAIN_MERGE_SELECTION_POLICY_REF =
 /**
  * Build the set of "repo:prNumber" identifiers for PRs merged to `main`, so reviews
  * on those PRs can be matched and included. PR number is derived from the receiptId
- * (`github:pr:owner/repo:42` → `42`), mirroring the promotion-selection convention.
+ * (`github:pr:<providerRepoId>:42` → `42`), mirroring the promotion-selection convention.
  */
 function buildMergedMainPrNumbers(
   allReceipts: readonly IngestionReceipt[]

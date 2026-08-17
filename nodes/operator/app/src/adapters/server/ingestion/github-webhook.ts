@@ -21,7 +21,7 @@ import type {
   WebhookNormalizer,
 } from "@cogni/ingestion-core";
 import {
-  buildEventId,
+  buildCanonicalReceiptId,
   buildGitHubIssueContextV1,
   buildGitHubPrMergedContextV1,
   buildGitHubReviewContextV1,
@@ -198,9 +198,11 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
 
     if (!eventTime) return [];
 
-    const id = isMerged
-      ? buildEventId("github", "pr", fullName, prNumber)
-      : buildEventId("github", "pr", fullName, prNumber, action);
+    const id = buildCanonicalReceiptId({
+      source: "github",
+      eventType,
+      metadata: { providerRepoId: repoId, prNumber },
+    });
 
     const base = pr.base as Record<string, unknown> | undefined;
     const head = pr.head as Record<string, unknown> | undefined;
@@ -315,9 +317,22 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     const submittedAt = review.submitted_at as string;
     if (!submittedAt) return [];
 
-    const id = buildEventId("github", "review", fullName, prNumber, reviewId);
-
     const base = pr.base as Record<string, unknown> | undefined;
+    const metadata = buildGitHubReviewContextV1({
+      providerRepoId: repoId,
+      repo: fullName,
+      prNumber,
+      reviewId,
+      prBaseBranch: base?.ref as string,
+      prMergeCommitSha:
+        (pr.merge_commit_sha as string | null | undefined) ?? null,
+      state: review.state as string,
+    });
+    const id = buildCanonicalReceiptId({
+      source: "github",
+      eventType: "review_submitted",
+      metadata,
+    });
 
     return [
       await finalizeReceiptEvent({
@@ -327,15 +342,7 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
         platformUserId: actor.id,
         platformLogin: actor.login,
         artifactUrl: review.html_url as string,
-        metadata: buildGitHubReviewContextV1({
-          providerRepoId: repoId,
-          repo: fullName,
-          prNumber,
-          prBaseBranch: base?.ref as string,
-          prMergeCommitSha:
-            (pr.merge_commit_sha as string | null | undefined) ?? null,
-          state: review.state as string,
-        }),
+        metadata,
         eventTime: new Date(submittedAt),
       }),
     ];
@@ -372,9 +379,18 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
 
     if (!eventTime) return [];
 
-    const id = isClosed
-      ? buildEventId("github", "issue", fullName, issueNumber)
-      : buildEventId("github", "issue", fullName, issueNumber, action);
+    const metadata = buildGitHubIssueContextV1({
+      providerRepoId: repoId,
+      repo: fullName,
+      issueNumber,
+      title: issue.title as string,
+      action: isClosed ? "closed" : "opened",
+    });
+    const id = buildCanonicalReceiptId({
+      source: "github",
+      eventType,
+      metadata,
+    });
 
     return [
       await finalizeReceiptEvent({
@@ -384,13 +400,7 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
         platformUserId: actor.id,
         platformLogin: actor.login,
         artifactUrl: issue.html_url as string,
-        metadata: buildGitHubIssueContextV1({
-          providerRepoId: repoId,
-          repo: fullName,
-          issueNumber,
-          title: issue.title as string,
-          action: isClosed ? "closed" : "opened",
-        }),
+        metadata,
         eventTime: new Date(eventTime),
       }),
     ];
@@ -423,7 +433,18 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     const createdAt = comment.created_at as string;
     if (!createdAt) return [];
 
-    const id = buildEventId("github", "comment", fullName, commentId);
+    const metadata = {
+      schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
+      providerRepoId: repoId,
+      commentId,
+      issueNumber: issue.number as number,
+      repo: fullName,
+    };
+    const id = buildCanonicalReceiptId({
+      source: "github",
+      eventType: "comment_created",
+      metadata,
+    });
 
     return [
       await finalizeReceiptEvent({
@@ -433,12 +454,7 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
         platformUserId: actor.id,
         platformLogin: actor.login,
         artifactUrl: comment.html_url as string,
-        metadata: {
-          schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
-          providerRepoId: repoId,
-          issueNumber: issue.number as number,
-          repo: fullName,
-        },
+        metadata,
         eventTime: new Date(createdAt),
       }),
     ];
@@ -469,13 +485,24 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
     if (!after || after === "0000000000000000000000000000000000000000")
       return [];
 
-    const id = buildEventId("github", "push", fullName, after);
-
     const headCommit = payload.head_commit as
       | Record<string, unknown>
       | undefined;
     const eventTime = headCommit?.timestamp as string | undefined;
     if (!eventTime) return [];
+    const metadata = {
+      schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
+      providerRepoId: repoId,
+      ref,
+      after,
+      commitCount,
+      repo: fullName,
+    };
+    const id = buildCanonicalReceiptId({
+      source: "github",
+      eventType: "commit_pushed",
+      metadata,
+    });
 
     return [
       await finalizeReceiptEvent({
@@ -485,14 +512,7 @@ export class GitHubWebhookNormalizer implements WebhookNormalizer {
         platformUserId: actor.id,
         platformLogin: actor.login,
         artifactUrl: `https://github.com/${fullName}/commit/${after}`,
-        metadata: {
-          schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
-          providerRepoId: repoId,
-          ref,
-          after,
-          commitCount,
-          repo: fullName,
-        },
+        metadata,
         eventTime: new Date(eventTime),
       }),
     ];

@@ -22,7 +22,7 @@
 export interface ActivityEvent {
   /**
    * Deterministic from source data. Format: "{source}:{type}:{scope}:{identifier}"
-   * Examples: "github:pr:owner/repo:42", "discord:message:guild:channel:msgId"
+   * Examples: "github:pr:<providerRepoId>:42", "discord:message:guild:channel:msgId"
    */
   readonly id: string;
 
@@ -91,6 +91,7 @@ export interface ReceiptContent {
   readonly source: ReceiptSource;
   readonly eventType: ReceiptEventType;
   readonly platformUserId: string;
+  readonly platformLogin?: string | null;
   readonly artifactUrl: string | null;
   readonly metadata: Record<string, unknown>;
   readonly eventTime: Date | string;
@@ -100,14 +101,27 @@ export interface ReceiptContent {
  * Immutable identity/economic facts covered by payloadHash. Mutable display
  * snapshots (login, URLs, titles, bodies, labels, review state) are excluded.
  */
-export interface ReceiptEconomicContent {
+export interface ReceiptEconomicCoreV1 {
   readonly schemaVersion: typeof RECEIPT_CONTEXT_SCHEMA_VERSION;
+  /** Canonical provider-object identity; also the durable receipt_id. */
+  readonly eventIdentity: string;
   readonly source: ReceiptSource;
   readonly eventType: ReceiptEventType;
   readonly platformUserId: string;
   readonly economicContext: Record<string, unknown>;
   readonly eventTime: string;
 }
+
+/** Mutable latest-known presentation; never participates in payloadHash. */
+export interface ReceiptDisplaySnapshotV1 {
+  readonly schemaVersion: typeof RECEIPT_CONTEXT_SCHEMA_VERSION;
+  readonly platformLogin: string | null;
+  readonly artifactUrl: string | null;
+  readonly metadata: Record<string, unknown>;
+}
+
+/** @deprecated Use ReceiptEconomicCoreV1. */
+export type ReceiptEconomicContent = ReceiptEconomicCoreV1;
 
 /** Definition of a collectible stream within a source adapter. */
 export interface StreamDefinition {

@@ -7,7 +7,7 @@
  * Scope: Pure economic-content equality. Does not exercise database transaction behavior; component tests cover that seam.
  * Invariants: PROVENANCE_MAY_DIFFER, ATTRIBUTION_CONTEXT_MUST_MATCH.
  * Side-effects: none
- * Links: story.5023
+ * Links: task.5023
  * @internal
  */
 

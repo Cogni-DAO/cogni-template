@@ -6,7 +6,7 @@
  * Purpose: Port interface for the epoch ledger store. Shared by app and scheduler-worker.
  * Scope: Type definitions only. Does not contain implementations or I/O.
  * Invariants:
- * - RECEIPT_APPEND_ONLY: insertIngestionReceipts never updates existing rows; economic-content conflicts throw.
+ * - RECEIPT_CORE_IMMUTABLE: equal-core retries refresh display only; economic-content conflicts throw.
  * - SELECTION_FREEZE_ON_FINALIZE: upsertSelection rejects writes when epoch is finalized.
  * - SELECTION_AUTO_POPULATE: insertSelectionDoNothing + updateSelectionUserId never overwrite admin-set fields.
  * - IDENTITY_BEST_EFFORT: resolveIdentities is best-effort; unresolved receipts get userId=null.
@@ -202,7 +202,7 @@ export interface InsertReceiptParams {
   readonly retrievedAt: Date;
 }
 
-/** Outcome of append-only receipt insertion after economic-content duplicate checks. */
+/** Outcome after immutable-core classification; duplicates may refresh display. */
 export interface ReceiptInsertResult {
   readonly inserted: number;
   readonly duplicates: number;

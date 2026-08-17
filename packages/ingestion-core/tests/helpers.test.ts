@@ -14,6 +14,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildCanonicalReceiptId,
   buildEventId,
   canonicalJson,
   hashCanonicalPayload,
@@ -84,7 +85,7 @@ describe("canonicalJson", () => {
 
 describe("hashReceiptEconomicContent", () => {
   const content = {
-    receiptId: "github:pr:owner/repo:42",
+    receiptId: "github:pr:github-repo-node-id:42",
     source: "github" as const,
     eventType: "pr_merged" as const,
     platformUserId: "12345",
@@ -148,6 +149,21 @@ describe("hashReceiptEconomicContent", () => {
     };
     await expect(hashReceiptEconomicContent(content)).resolves.not.toBe(
       await hashReceiptEconomicContent(conflicting)
+    );
+  });
+
+  it("rejects a mutable owner/repo receipt ID", async () => {
+    await expect(
+      hashReceiptEconomicContent({
+        ...content,
+        receiptId: "github:pr:owner/repo:42",
+      })
+    ).rejects.toThrow("does not match canonical event identity");
+  });
+
+  it("derives identity from the provider repository object", () => {
+    expect(buildCanonicalReceiptId(content)).toBe(
+      "github:pr:github-repo-node-id:42"
     );
   });
 });

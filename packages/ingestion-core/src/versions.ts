@@ -12,4 +12,4 @@
  */
 
 /** GitHub source adapter version. Shared by poll (scheduler-worker) and webhook (app) adapters. */
-export const GITHUB_ADAPTER_VERSION = "0.4.0" as const;
+export const GITHUB_ADAPTER_VERSION = "0.5.0" as const;

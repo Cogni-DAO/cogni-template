@@ -62,7 +62,7 @@ async function validEnvelope() {
     changedFiles: 2,
   });
   const receipt = {
-    receiptId: "github:pr:cogni-dao/node:42",
+    receiptId: "github:pr:github-repo-node-id:42",
     source: "github" as const,
     eventType: "pr_merged" as const,
     platformUserId: "12345",
@@ -145,7 +145,7 @@ describe("POST internal attribution receipts", () => {
 
   it("returns 409 with conflict IDs when the same ID has different content", async () => {
     insertIngestionReceipts.mockRejectedValue(
-      new ReceiptContentConflictError(["github:pr:cogni-dao/node:42"], 0)
+      new ReceiptContentConflictError(["github:pr:github-repo-node-id:42"], 0)
     );
     const response = await post(await validEnvelope());
     expect(response.status).toBe(409);
@@ -153,7 +153,7 @@ describe("POST internal attribution receipts", () => {
       inserted: 0,
       duplicates: 0,
       conflicts: 1,
-      conflictReceiptIds: ["github:pr:cogni-dao/node:42"],
+      conflictReceiptIds: ["github:pr:github-repo-node-id:42"],
     });
   });
 

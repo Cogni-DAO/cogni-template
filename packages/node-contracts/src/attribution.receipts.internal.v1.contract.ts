@@ -27,6 +27,7 @@
  */
 
 import {
+  buildCanonicalReceiptId,
   RECEIPT_EVENT_TYPES,
   RECEIPT_PRODUCERS,
   RECEIPT_SOURCES,
@@ -75,6 +76,7 @@ const reviewContextV1 = contextV1.extend({
   providerRepoId: z.string().min(1),
   repo: githubRepo,
   prNumber: z.number().int().positive(),
+  reviewId: z.number().int().positive(),
   prBaseBranch: z.string().min(1),
   prMergeCommitSha: nullableSha,
   state: z.string().min(1),
@@ -92,6 +94,7 @@ const commentContextV1 = contextV1.extend({
   providerRepoId: z.string().min(1),
   repo: githubRepo,
   issueNumber: z.number().int().positive(),
+  commentId: z.number().int().positive(),
 });
 
 const commitPushedContextV1 = contextV1.extend({
@@ -157,6 +160,26 @@ export const InternalReceiptSchema = z
       for (const issue of context.error.issues) {
         ctx.addIssue({ ...issue, path: ["metadata", ...issue.path] });
       }
+    }
+
+    try {
+      const canonicalReceiptId = buildCanonicalReceiptId(receipt);
+      if (receipt.receiptId !== canonicalReceiptId) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["receiptId"],
+          message: `receiptId must equal canonical event identity ${canonicalReceiptId}`,
+        });
+      }
+    } catch (error) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["receiptId"],
+        message:
+          error instanceof Error
+            ? error.message
+            : "receipt identity cannot be derived",
+      });
     }
 
     const expectedSource = expectedSourceForEvent(receipt.eventType);

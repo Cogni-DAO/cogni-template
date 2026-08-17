@@ -7,7 +7,7 @@
  * Scope: GitHub App read I/O only. Does not normalize or hash receipt content.
  * Invariants: AUTH_VIA_APP; all pages are read before the canonical receipt is minted.
  * Side-effects: IO (GitHub REST)
- * Links: story.5023, github-webhook.ts
+ * Links: task.5023, github-webhook.ts
  * @internal
  */
 

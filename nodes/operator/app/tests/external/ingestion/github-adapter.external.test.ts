@@ -125,7 +125,9 @@ describeWithAuth("GitHubSourceAdapter (external)", () => {
     expect(result.events.length).toBeGreaterThanOrEqual(1);
 
     const ourIssue = result.events.find(
-      (e) => e.id === `github:issue:${TEST_REPO}:${fixtures.issueNumber}`
+      (e) =>
+        e.eventType === "issue_closed" &&
+        e.metadata.issueNumber === fixtures.issueNumber
     );
     expect(ourIssue).toBeDefined();
     expect(ourIssue?.eventType).toBe("issue_closed");

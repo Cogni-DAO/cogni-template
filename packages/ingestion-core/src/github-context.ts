@@ -7,7 +7,7 @@
  * Scope: Pure normalized metadata construction. Does not parse GitHub payloads or perform I/O.
  * Invariants: PRODUCER_CONVERGENCE — equal source facts produce equal context objects.
  * Side-effects: none
- * Links: story.5023
+ * Links: task.5023
  * @public
  */
 
@@ -59,6 +59,7 @@ export interface GitHubReviewContextV1Input {
   readonly providerRepoId: string;
   readonly repo: string;
   readonly prNumber: number;
+  readonly reviewId: number;
   readonly prBaseBranch: string;
   readonly prMergeCommitSha: string | null;
   readonly state: string;
@@ -72,6 +73,7 @@ export function buildGitHubReviewContextV1(
     providerRepoId: input.providerRepoId,
     repo: input.repo,
     prNumber: input.prNumber,
+    reviewId: input.reviewId,
     prBaseBranch: input.prBaseBranch,
     prMergeCommitSha: input.prMergeCommitSha,
     state: input.state.toLowerCase(),

@@ -7,7 +7,7 @@
  * Scope: Pure equality only. Does not persist or mutate receipts.
  * Invariants: presentation/enrichment and delivery provenance do not change economic identity.
  * Side-effects: none
- * Links: story.5023
+ * Links: task.5023
  * @public
  */
 

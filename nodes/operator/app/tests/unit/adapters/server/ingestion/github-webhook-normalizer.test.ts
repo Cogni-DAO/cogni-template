@@ -220,7 +220,7 @@ describe("GitHubWebhookNormalizer", () => {
       expect(events).toHaveLength(1);
 
       const e = events[0];
-      expect(e.id).toBe("github:pr:test/repo:42");
+      expect(e.id).toBe("github:pr:github-repo-node-id:42");
       expect(e.source).toBe("github");
       expect(e.eventType).toBe("pr_merged");
       expect(e.platformUserId).toBe("12345");
@@ -248,6 +248,30 @@ describe("GitHubWebhookNormalizer", () => {
       });
     });
 
+    it("keeps canonical identity stable when the repository display name changes", async () => {
+      const original = makePrPayload();
+      const renamed = makePrPayload();
+      renamed.repository = {
+        full_name: "renamed/repo",
+        node_id: "github-repo-node-id",
+      };
+      renamed.pull_request.title = "Edited after rename";
+      renamed.pull_request.html_url = "https://github.com/renamed/repo/pull/42";
+
+      const first = await normalizer.normalize(
+        makeHeaders("pull_request", ""),
+        original
+      );
+      const second = await normalizer.normalize(
+        makeHeaders("pull_request", ""),
+        renamed
+      );
+
+      expect(second[0]?.id).toBe(first[0]?.id);
+      expect(second[0]?.payloadHash).toBe(first[0]?.payloadHash);
+      expect(second[0]?.metadata.repo).not.toBe(first[0]?.metadata.repo);
+    });
+
     it("produces pr_opened event for opened PR", async () => {
       const payload = makePrPayload({ action: "opened" });
       (payload.pull_request as Record<string, unknown>).merged = false;
@@ -257,7 +281,7 @@ describe("GitHubWebhookNormalizer", () => {
       const events = await normalizer.normalize(headers, payload);
       expect(events).toHaveLength(1);
       expect(events[0].eventType).toBe("pr_opened");
-      expect(events[0].id).toBe("github:pr:test/repo:42:opened");
+      expect(events[0].id).toBe("github:pr:github-repo-node-id:42:opened");
     });
 
     it("produces pr_closed event for unmerged closed PR", async () => {
@@ -269,7 +293,7 @@ describe("GitHubWebhookNormalizer", () => {
       const events = await normalizer.normalize(headers, payload);
       expect(events).toHaveLength(1);
       expect(events[0].eventType).toBe("pr_closed");
-      expect(events[0].id).toBe("github:pr:test/repo:42:closed");
+      expect(events[0].id).toBe("github:pr:github-repo-node-id:42:closed");
     });
 
     it("skips bot authors", async () => {
@@ -299,7 +323,7 @@ describe("GitHubWebhookNormalizer", () => {
       expect(events).toHaveLength(1);
 
       const e = events[0];
-      expect(e.id).toBe("github:review:test/repo:42:999");
+      expect(e.id).toBe("github:review:github-repo-node-id:42:999");
       expect(e.eventType).toBe("review_submitted");
       expect(e.platformUserId).toBe("11111");
       expect(e.platformLogin).toBe("reviewer");
@@ -349,7 +373,7 @@ describe("GitHubWebhookNormalizer", () => {
       expect(events).toHaveLength(1);
 
       const e = events[0];
-      expect(e.id).toBe("github:issue:test/repo:7");
+      expect(e.id).toBe("github:issue:github-repo-node-id:7");
       expect(e.eventType).toBe("issue_closed");
       expect(e.platformUserId).toBe("67890");
       expect(e.platformLogin).toBe("issueuser");
@@ -367,7 +391,7 @@ describe("GitHubWebhookNormalizer", () => {
       const events = await normalizer.normalize(headers, payload);
       expect(events).toHaveLength(1);
       expect(events[0].eventType).toBe("issue_opened");
-      expect(events[0].id).toBe("github:issue:test/repo:7:opened");
+      expect(events[0].id).toBe("github:issue:github-repo-node-id:7:opened");
     });
 
     it("skips bot authors on issues", async () => {
@@ -397,7 +421,7 @@ describe("GitHubWebhookNormalizer", () => {
       expect(events).toHaveLength(1);
 
       const e = events[0];
-      expect(e.id).toBe("github:comment:test/repo:555");
+      expect(e.id).toBe("github:comment:github-repo-node-id:555");
       expect(e.eventType).toBe("comment_created");
       expect(e.platformUserId).toBe("12345");
       expect(e.metadata).toMatchObject({
@@ -429,7 +453,7 @@ describe("GitHubWebhookNormalizer", () => {
       expect(events).toHaveLength(1);
 
       const e = events[0];
-      expect(e.id).toBe("github:push:test/repo:abc123def456");
+      expect(e.id).toBe("github:push:github-repo-node-id:abc123def456");
       expect(e.eventType).toBe("commit_pushed");
       expect(e.platformUserId).toBe("12345");
       expect(e.metadata).toMatchObject({

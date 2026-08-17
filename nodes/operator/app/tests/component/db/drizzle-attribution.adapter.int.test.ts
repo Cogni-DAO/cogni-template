@@ -4,8 +4,8 @@
 /**
  * Module: `@tests/component/db/drizzle-attribution.adapter.int`
  * Purpose: Component tests for DrizzleAttributionAdapter against real PostgreSQL via testcontainers.
- * Scope: Verifies adapter + DB triggers (RECEIPT_APPEND_ONLY, SELECTION_FREEZE_ON_FINALIZE, ONE_OPEN_EPOCH, RECEIPT_IDEMPOTENT). Does not test domain logic or routes.
- * Invariants: RECEIPT_APPEND_ONLY, RECEIPT_IDEMPOTENT, SELECTION_FREEZE_ON_FINALIZE, ONE_OPEN_EPOCH, SCOPE_GATED_QUERIES
+ * Scope: Verifies adapter + DB triggers (RECEIPT_ECONOMIC_CORE_IMMUTABLE, RECEIPT_DISPLAY_REFRESHABLE, SELECTION_FREEZE_ON_FINALIZE, ONE_OPEN_EPOCH, RECEIPT_IDEMPOTENT). Does not test domain logic or routes.
+ * Invariants: RECEIPT_ECONOMIC_CORE_IMMUTABLE, RECEIPT_DISPLAY_REFRESHABLE, RECEIPT_IDEMPOTENT, SELECTION_FREEZE_ON_FINALIZE, ONE_OPEN_EPOCH, SCOPE_GATED_QUERIES
  * Side-effects: IO (database operations via testcontainers)
  * Links: packages/db-client/src/adapters/drizzle-attribution.adapter.ts, packages/attribution-ledger/src/store.ts
  * @public
@@ -18,6 +18,7 @@ import {
   ReceiptContentConflictError,
 } from "@cogni/attribution-ledger";
 import { DrizzleAttributionAdapter } from "@cogni/db-client";
+import { ingestionReceipts } from "@cogni/db-schema";
 import {
   epochWindow,
   makeEvaluation,
@@ -33,7 +34,7 @@ import {
 } from "@tests/_fixtures/attribution/seed-attribution";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { seedTestActor, type TestActor } from "@tests/_fixtures/stack/seed";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 /** Unwrap DrizzleQueryError → underlying PostgresError message */
@@ -268,7 +269,7 @@ describe("DrizzleAttributionAdapter (Component)", () => {
       expect(ids).toContain("github:pr:test/repo:2");
     });
 
-    it("RECEIPT_IDEMPOTENT: mutable replay enrichment is a duplicate no-op", async () => {
+    it("RECEIPT_DISPLAY_REFRESHABLE: equal-core replay refreshes display only", async () => {
       const event = makeIngestionReceipt({
         receiptId: "github:pr:test/repo:1",
         platformUserId: "111",
@@ -292,6 +293,30 @@ describe("DrizzleAttributionAdapter (Component)", () => {
         (e) => e.receiptId === "github:pr:test/repo:1"
       );
       expect(matching).toHaveLength(1);
+      expect(matching[0]).toMatchObject({
+        platformLogin: "renamed-user",
+        artifactUrl: "https://github.com/renamed/repo/pull/1",
+        metadata: { title: "Edited after merge", labels: ["later-label"] },
+      });
+
+      const [raw] = await db
+        .select()
+        .from(ingestionReceipts)
+        .where(
+          and(
+            eq(ingestionReceipts.nodeId, TEST_NODE_ID),
+            eq(ingestionReceipts.receiptId, "github:pr:test/repo:1")
+          )
+        );
+      expect(raw).toMatchObject({
+        platformLogin: null,
+        artifactUrl: null,
+        metadata: null,
+        payloadHash: "test-hash-placeholder",
+        producer: "test-adapter",
+        producerVersion: "0.0.0-test",
+        retrievedAt: new Date("2026-01-06T12:00:01Z"),
+      });
     });
 
     it("RECEIPT_CONFLICT_LOUD: same ID with different economic hash is rejected", async () => {
@@ -326,7 +351,79 @@ describe("DrizzleAttributionAdapter (Component)", () => {
       expect(stored?.payloadHash).toBe("a".repeat(64));
     });
 
-    it("RECEIPT_APPEND_ONLY: UPDATE on ingestion_receipts is rejected by trigger", async () => {
+    it("CONCURRENT_EQUAL_CORE: one insert and one transactional display refresh survive", async () => {
+      const receiptId = "github:pr:provider-repo:concurrent-equal";
+      const core = {
+        receiptId,
+        payloadHash: "c".repeat(64),
+        eventTime: new Date("2026-01-06T15:00:00Z"),
+      };
+      const first = makeIngestionReceipt({
+        ...core,
+        platformLogin: "before",
+        metadata: { title: "Before" },
+      });
+      const second = makeIngestionReceipt({
+        ...core,
+        platformLogin: "after",
+        metadata: { title: "After" },
+      });
+
+      const results = await Promise.all([
+        adapter.insertIngestionReceipts([first]),
+        adapter.insertIngestionReceipts([second]),
+      ]);
+      expect(results.reduce((sum, result) => sum + result.inserted, 0)).toBe(1);
+      expect(results.reduce((sum, result) => sum + result.duplicates, 0)).toBe(
+        1
+      );
+
+      const stored = (await adapter.getAllReceipts(TEST_NODE_ID)).filter(
+        (receipt) => receipt.receiptId === receiptId
+      );
+      expect(stored).toHaveLength(1);
+      expect(["before", "after"]).toContain(stored[0]?.platformLogin);
+      expect(["Before", "After"]).toContain(stored[0]?.metadata?.title);
+    });
+
+    it("CONCURRENT_DIVERGENT_CORE: one writer wins and the other conflicts", async () => {
+      const receiptId = "github:pr:provider-repo:concurrent-conflict";
+      const eventTime = new Date("2026-01-06T16:00:00Z");
+      const writes = await Promise.allSettled([
+        adapter.insertIngestionReceipts([
+          makeIngestionReceipt({
+            receiptId,
+            eventTime,
+            payloadHash: "d".repeat(64),
+          }),
+        ]),
+        adapter.insertIngestionReceipts([
+          makeIngestionReceipt({
+            receiptId,
+            eventTime,
+            payloadHash: "e".repeat(64),
+          }),
+        ]),
+      ]);
+
+      expect(
+        writes.filter((result) => result.status === "fulfilled")
+      ).toHaveLength(1);
+      const rejected = writes.find((result) => result.status === "rejected");
+      expect(rejected).toMatchObject({
+        status: "rejected",
+        reason: expect.any(ReceiptContentConflictError),
+      });
+      const stored = (await adapter.getAllReceipts(TEST_NODE_ID)).filter(
+        (receipt) => receipt.receiptId === receiptId
+      );
+      expect(stored).toHaveLength(1);
+      expect(["d".repeat(64), "e".repeat(64)]).toContain(
+        stored[0]?.payloadHash
+      );
+    });
+
+    it("RECEIPT_ECONOMIC_CORE_IMMUTABLE: core UPDATE is rejected by trigger", async () => {
       await expect(
         db.execute(
           sql`UPDATE ingestion_receipts SET source = 'modified' WHERE receipt_id = 'github:pr:test/repo:1' AND node_id = ${TEST_NODE_ID}::uuid`
@@ -336,7 +433,7 @@ describe("DrizzleAttributionAdapter (Component)", () => {
       );
     });
 
-    it("RECEIPT_APPEND_ONLY: DELETE on ingestion_receipts is rejected by trigger", async () => {
+    it("RECEIPT_ECONOMIC_CORE_IMMUTABLE: DELETE is rejected by trigger", async () => {
       await expect(
         db.execute(
           sql`DELETE FROM ingestion_receipts WHERE receipt_id = 'github:pr:test/repo:1' AND node_id = ${TEST_NODE_ID}::uuid`

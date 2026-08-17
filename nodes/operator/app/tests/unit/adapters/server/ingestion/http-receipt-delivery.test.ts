@@ -46,7 +46,7 @@ describe("HttpReceiptDelivery", () => {
       changedFiles: 1,
     });
     const eventTime = new Date("2026-08-16T20:00:00.000Z");
-    const receiptId = "github:pr:cogni-dao/node:42";
+    const receiptId = "github:pr:github-repo-node-id:42";
     const artifactUrl = "https://github.com/cogni-dao/node/pull/42";
     const payloadHash = await hashReceiptEconomicContent({
       receiptId,

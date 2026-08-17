@@ -173,7 +173,7 @@ function makeEvaluation(
   };
 }
 
-const EVENT_ID = "github:pr:test/repo:1";
+const EVENT_ID = "github:pr:github-repo-node-id:1";
 const EVENT_ARTIFACT_URL = "https://github.com/test/repo/pull/1";
 const EVENT_TIME = new Date("2026-02-20T12:00:00Z");
 const EVENT_METADATA = buildGitHubPrMergedContextV1({
@@ -630,7 +630,7 @@ describe("collectFromSource", () => {
     });
 
     expect(result.events).toHaveLength(1);
-    expect(result.events[0].id).toBe("github:pr:test/repo:1");
+    expect(result.events[0].id).toBe("github:pr:github-repo-node-id:1");
     expect(result.producerVersion).toBe("0.3.0");
     expect(registration.poll?.collect).toHaveBeenCalledOnce();
   });

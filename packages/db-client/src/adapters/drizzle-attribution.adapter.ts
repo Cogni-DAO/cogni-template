@@ -130,21 +130,31 @@ function toEpoch(row: typeof epochs.$inferSelect): AttributionEpoch {
 function toIngestionReceipt(
   row: typeof ingestionReceipts.$inferSelect
 ): IngestionReceipt {
+  const display = row.displaySnapshot;
   return {
     receiptId: row.receiptId,
     nodeId: row.nodeId,
     source: row.source,
     eventType: row.eventType,
     platformUserId: row.platformUserId,
-    platformLogin: row.platformLogin,
-    artifactUrl: row.artifactUrl,
-    metadata: row.metadata,
+    platformLogin: display ? display.platformLogin : row.platformLogin,
+    artifactUrl: display ? display.artifactUrl : row.artifactUrl,
+    metadata: display ? display.metadata : row.metadata,
     payloadHash: row.payloadHash,
     producer: row.producer,
     producerVersion: row.producerVersion,
     eventTime: row.eventTime,
     retrievedAt: row.retrievedAt,
     ingestedAt: row.ingestedAt,
+  };
+}
+
+function displaySnapshotFromReceipt(receipt: InsertReceiptParams) {
+  return {
+    schemaVersion: 1 as const,
+    platformLogin: receipt.platformLogin ?? null,
+    artifactUrl: receipt.artifactUrl ?? null,
+    metadata: receipt.metadata ?? {},
   };
 }
 
@@ -870,6 +880,7 @@ export class DrizzleAttributionAdapter implements AttributionStore {
         included: epochSelection.included,
         weightOverrideMilli: epochSelection.weightOverrideMilli,
         metadata: ingestionReceipts.metadata,
+        displaySnapshot: ingestionReceipts.displaySnapshot,
         payloadHash: ingestionReceipts.payloadHash,
       })
       .from(epochSelection)
@@ -888,7 +899,7 @@ export class DrizzleAttributionAdapter implements AttributionStore {
       eventType: r.eventType,
       included: r.included,
       weightOverrideMilli: r.weightOverrideMilli,
-      metadata: r.metadata,
+      metadata: r.displaySnapshot ? r.displaySnapshot.metadata : r.metadata,
       payloadHash: r.payloadHash,
     }));
   }
@@ -908,6 +919,7 @@ export class DrizzleAttributionAdapter implements AttributionStore {
         platformUserId: ingestionReceipts.platformUserId,
         platformLogin: ingestionReceipts.platformLogin,
         artifactUrl: ingestionReceipts.artifactUrl,
+        displaySnapshot: ingestionReceipts.displaySnapshot,
         eventTime: ingestionReceipts.eventTime,
         payloadHash: ingestionReceipts.payloadHash,
       })
@@ -929,8 +941,12 @@ export class DrizzleAttributionAdapter implements AttributionStore {
       included: r.included,
       weightOverrideMilli: r.weightOverrideMilli,
       platformUserId: r.platformUserId,
-      platformLogin: r.platformLogin,
-      artifactUrl: r.artifactUrl,
+      platformLogin: r.displaySnapshot
+        ? r.displaySnapshot.platformLogin
+        : r.platformLogin,
+      artifactUrl: r.displaySnapshot
+        ? r.displaySnapshot.artifactUrl
+        : r.artifactUrl,
       eventTime: r.eventTime,
       payloadHash: r.payloadHash,
     }));
@@ -992,6 +1008,7 @@ export class DrizzleAttributionAdapter implements AttributionStore {
             platformLogin: e.platformLogin ?? null,
             artifactUrl: e.artifactUrl ?? null,
             metadata: e.metadata ?? null,
+            displaySnapshot: displaySnapshotFromReceipt(e),
             payloadHash: e.payloadHash,
             producer: e.producer,
             producerVersion: e.producerVersion,
@@ -1041,6 +1058,7 @@ export class DrizzleAttributionAdapter implements AttributionStore {
       );
 
       const conflictIds: string[] = [];
+      const displayRefreshes: InsertReceiptParams[] = [];
       let duplicateCount = 0;
       for (const incoming of skipped) {
         const stored = existingByKey.get(
@@ -1048,12 +1066,26 @@ export class DrizzleAttributionAdapter implements AttributionStore {
         );
         const sameContent =
           stored !== undefined && sameReceiptEconomicContent(stored, incoming);
-        if (sameContent) duplicateCount += 1;
-        else conflictIds.push(incoming.receiptId);
+        if (sameContent) {
+          duplicateCount += 1;
+          displayRefreshes.push(incoming);
+        } else conflictIds.push(incoming.receiptId);
       }
 
       if (conflictIds.length > 0) {
         throw new ReceiptContentConflictError(conflictIds, duplicateCount);
+      }
+      for (const incoming of displayRefreshes) {
+        await tx
+          .update(ingestionReceipts)
+          .set({ displaySnapshot: displaySnapshotFromReceipt(incoming) })
+          .where(
+            and(
+              eq(ingestionReceipts.nodeId, incoming.nodeId),
+              eq(ingestionReceipts.receiptId, incoming.receiptId),
+              eq(ingestionReceipts.payloadHash, incoming.payloadHash)
+            )
+          );
       }
       return {
         inserted: inserted.length,

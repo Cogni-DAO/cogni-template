@@ -7,7 +7,7 @@
  * Scope: Pure builders and hashing. Does not perform GitHub I/O.
  * Invariants: PRODUCER_CONVERGENCE, PROVENANCE_EXCLUDED_FROM_CONTENT_HASH.
  * Side-effects: none
- * Links: story.5023
+ * Links: task.5023
  * @internal
  */
 
@@ -20,6 +20,10 @@ import { hashReceiptEconomicContent } from "../src/helpers";
 
 describe("GitHub receipt producer convergence", () => {
   it("gives mutable webhook/poll snapshots the same economic hash", async () => {
+    const commitShas = Array.from(
+      { length: 251 },
+      (_, index) => `commit-${index + 1}`
+    );
     const facts = {
       providerRepoId: "github-repo-node-id",
       repo: "cogni-dao/node",
@@ -30,15 +34,15 @@ describe("GitHub receipt producer convergence", () => {
       branch: "feat/human",
       mergeCommitSha: "merge-sha",
       mergedById: "github-user-node-merger",
-      commitShas: ["one", "two"],
+      commitShas,
       labels: ["attribution"],
       additions: 20,
       deletions: 3,
       changedFiles: 4,
     } as const;
 
-    // The webhook obtains commitShas through GitHub App hydration; poll obtains
-    // them through GraphQL. From this boundary onward their context is identical.
+    // Both producers page GitHub REST to exhaustion. The shared builder must
+    // preserve the 251st commit byte-for-byte.
     const webhookContext = buildGitHubPrMergedContextV1(facts);
     const pollContext = buildGitHubPrMergedContextV1({
       ...facts,
@@ -49,9 +53,10 @@ describe("GitHub receipt producer convergence", () => {
       labels: ["later-label"],
     });
     expect(webhookContext).not.toEqual(pollContext);
+    expect((pollContext.commitShas as string[])[250]).toBe("commit-251");
 
     const content = {
-      receiptId: "github:pr:cogni-dao/node:42",
+      receiptId: "github:pr:github-repo-node-id:42",
       source: "github" as const,
       eventType: "pr_merged" as const,
       platformUserId: "12345",
@@ -71,7 +76,7 @@ describe("GitHub receipt producer convergence", () => {
 
   it("does not quarantine a review when later enrichment changes", async () => {
     const content = {
-      receiptId: "github:review:cogni-dao/node:42:9001",
+      receiptId: "github:review:github-repo-node-id:42:9001",
       source: "github" as const,
       eventType: "review_submitted" as const,
       platformUserId: "67890",
@@ -83,6 +88,7 @@ describe("GitHub receipt producer convergence", () => {
       providerRepoId: "github-repo-node-id",
       repo: "cogni-dao/node",
       prNumber: 42,
+      reviewId: 9001,
       prBaseBranch: "main",
       prMergeCommitSha: null,
       state: "approved",
@@ -91,6 +97,7 @@ describe("GitHub receipt producer convergence", () => {
       providerRepoId: "github-repo-node-id",
       repo: "cogni-dao/renamed-node",
       prNumber: 42,
+      reviewId: 9001,
       prBaseBranch: "release",
       prMergeCommitSha: "merge-sha-added-later",
       state: "dismissed",

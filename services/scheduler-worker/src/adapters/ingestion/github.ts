@@ -29,7 +29,7 @@ import type {
   VcsTokenProvider,
 } from "@cogni/ingestion-core";
 import {
-  buildEventId,
+  buildCanonicalReceiptId,
   buildGitHubIssueContextV1,
   buildGitHubPrMergedContextV1,
   buildGitHubReviewContextV1,
@@ -68,10 +68,6 @@ interface GitHubActor {
   databaseId?: number; // Only on User, not Bot/Mannequin
 }
 
-interface PrCommitNode {
-  commit: { oid: string };
-}
-
 interface PrNode {
   number: number;
   title: string;
@@ -88,7 +84,6 @@ interface PrNode {
   deletions: number;
   changedFiles: number;
   labels: { nodes: Array<{ name: string }> };
-  commits: { nodes: PrCommitNode[] };
 }
 
 interface ReviewNode {
@@ -165,7 +160,6 @@ const MERGED_PRS_QUERY = /* GraphQL */ `
           deletions
           changedFiles
           labels(first: 20) { nodes { name } }
-          commits(first: 250) { nodes { commit { oid } } }
         }
       }
     }
@@ -441,18 +435,19 @@ export class GitHubSourceAdapter implements PollAdapter {
       return null;
     }
 
-    if (
-      !pr.mergedBy?.id ||
-      !pr.mergeCommit?.oid ||
-      pr.commits.nodes.length === 0
-    ) {
+    if (!pr.mergedBy?.id || !pr.mergeCommit?.oid) {
       throw new Error(
         `Merged PR #${pr.number} in ${owner}/${repoName} is missing immutable merge identity`
       );
     }
-    const id = buildEventId("github", "pr", `${owner}/${repoName}`, pr.number);
     const authorId = String(pr.author.databaseId);
     const eventTime = new Date(pr.mergedAt);
+    const commitShas = await this.loadPrCommitShas(owner, repoName, pr.number);
+    if (commitShas.length === 0) {
+      throw new Error(
+        `Merged PR #${pr.number} in ${owner}/${repoName} has no commits`
+      );
+    }
     const metadata = buildGitHubPrMergedContextV1({
       providerRepoId,
       repo: `${owner}/${repoName}`,
@@ -463,11 +458,16 @@ export class GitHubSourceAdapter implements PollAdapter {
       branch: pr.headRefName,
       mergeCommitSha: pr.mergeCommit.oid,
       mergedById: pr.mergedBy.id,
-      commitShas: pr.commits.nodes.map((c) => c.commit.oid),
+      commitShas,
       labels: pr.labels.nodes.map((l) => l.name),
       additions: pr.additions,
       deletions: pr.deletions,
       changedFiles: pr.changedFiles,
+    });
+    const id = buildCanonicalReceiptId({
+      source: "github",
+      eventType: "pr_merged",
+      metadata,
     });
     const payloadHash = await hashReceiptEconomicContent({
       receiptId: id,
@@ -580,13 +580,6 @@ export class GitHubSourceAdapter implements PollAdapter {
       return null;
     }
 
-    const id = buildEventId(
-      "github",
-      "review",
-      `${owner}/${repoName}`,
-      prNumber,
-      review.databaseId
-    );
     const authorId = String(review.author.databaseId);
     const eventTime = new Date(review.submittedAt);
     const artifactUrl = `https://github.com/${owner}/${repoName}/pull/${prNumber}#pullrequestreview-${review.databaseId}`;
@@ -594,9 +587,15 @@ export class GitHubSourceAdapter implements PollAdapter {
       providerRepoId,
       repo: `${owner}/${repoName}`,
       prNumber,
+      reviewId: review.databaseId,
       prBaseBranch,
       prMergeCommitSha,
       state: review.state,
+    });
+    const id = buildCanonicalReceiptId({
+      source: "github",
+      eventType: "review_submitted",
+      metadata,
     });
     const payloadHash = await hashReceiptEconomicContent({
       receiptId: id,
@@ -697,12 +696,6 @@ export class GitHubSourceAdapter implements PollAdapter {
       return null;
     }
 
-    const id = buildEventId(
-      "github",
-      "issue",
-      `${owner}/${repoName}`,
-      issue.number
-    );
     const authorId = String(issue.author.databaseId);
     const eventTime = new Date(issue.closedAt);
     const metadata = buildGitHubIssueContextV1({
@@ -711,6 +704,11 @@ export class GitHubSourceAdapter implements PollAdapter {
       issueNumber: issue.number,
       title: issue.title,
       action: "closed",
+    });
+    const id = buildCanonicalReceiptId({
+      source: "github",
+      eventType: "issue_closed",
+      metadata,
     });
     const payloadHash = await hashReceiptEconomicContent({
       receiptId: id,
@@ -746,5 +744,24 @@ export class GitHubSourceAdapter implements PollAdapter {
   ): Promise<T> {
     const client = await this.getClient();
     return client.graphql<T>(query, variables);
+  }
+
+  /** REST pagination is required: nested GraphQL commit connections truncate. */
+  private async loadPrCommitShas(
+    owner: string,
+    repo: string,
+    prNumber: number
+  ): Promise<string[]> {
+    const client = await this.getClient();
+    const commitShas: string[] = [];
+    for (let page = 1; ; page += 1) {
+      const response = await client.request(
+        "GET /repos/{owner}/{repo}/pulls/{pull_number}/commits",
+        { owner, repo, pull_number: prNumber, per_page: 100, page }
+      );
+      const commits = response.data as ReadonlyArray<{ sha: string }>;
+      commitShas.push(...commits.map((commit) => commit.sha));
+      if (commits.length < 100) return commitShas;
+    }
   }
 }

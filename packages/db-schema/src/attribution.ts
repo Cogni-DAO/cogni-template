@@ -7,7 +7,7 @@
  * Scope: Defines all ledger tables (epochs, ingestion_receipts, epoch_selection, epoch_user_projections, epoch_evaluations, ingestion_cursors, epoch_pool_components, epoch_review_subject_overrides, epoch_final_claimant_allocations, epoch_statements, epoch_statement_signatures, epoch_distribution_manifests, epoch_distribution_leaves). Does not contain queries, business logic, or I/O.
  * Invariants:
  * - All credit/unit columns use BIGINT (ALL_MATH_BIGINT).
- * - Ingestion layer (ingestion_receipts, epoch_pool_components) are append-only (DB triggers in migration).
+ * - Receipt economic core and epoch_pool_components are immutable; receipt display_snapshot may refresh (DB triggers in migration).
  * - Selection layer (epoch_selection) is mutable while epoch open/review, frozen on finalize (SELECTION_FREEZE_ON_FINALIZE).
  * - ONE_OPEN_EPOCH: partial unique index on epochs WHERE status = 'open', scoped to (node_id, scope_id).
  * - EPOCH_WINDOW_UNIQUE: unique(node_id, scope_id, period_start, period_end).
@@ -97,16 +97,16 @@ export const epochs = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// Ingestion Layer: Raw Receipts (immutable always)
+// Ingestion Layer: immutable economic receipts + refreshable display snapshots
 // ---------------------------------------------------------------------------
 
 /**
- * Ingestion receipts — immutable facts, append-only (RECEIPT_APPEND_ONLY).
- * DB trigger rejects UPDATE/DELETE.
+ * Ingestion receipts — immutable economic facts with a refreshable display snapshot.
+ * DB trigger rejects DELETE and any UPDATE outside display_snapshot.
  * No user_id — identity resolution happens at selection layer.
  * No epoch_id — epoch membership derived from event_time at selection layer.
  * No scope_id — receipts are scope-agnostic global facts (RECEIPT_SCOPE_AGNOSTIC).
- * Composite PK: (node_id, receipt_id) where receipt_id is deterministic (e.g., "github:pr:org/repo:42").
+ * Composite PK: (node_id, receipt_id) where receipt_id uses immutable provider identity (e.g., "github:pr:<providerRepoId>:42").
  */
 export const ingestionReceipts = pgTable(
   "ingestion_receipts",
@@ -119,6 +119,12 @@ export const ingestionReceipts = pgTable(
     platformLogin: text("platform_login"),
     artifactUrl: text("artifact_url"),
     metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    displaySnapshot: jsonb("display_snapshot").$type<{
+      schemaVersion: 1;
+      platformLogin: string | null;
+      artifactUrl: string | null;
+      metadata: Record<string, unknown>;
+    }>(),
     payloadHash: text("payload_hash").notNull(),
     producer: text("producer").notNull(),
     producerVersion: text("producer_version").notNull(),

@@ -17,7 +17,10 @@
 import {
   RECEIPT_CONTEXT_SCHEMA_VERSION,
   type ReceiptContent,
-  type ReceiptEconomicContent,
+  type ReceiptDisplaySnapshotV1,
+  type ReceiptEconomicCoreV1,
+  type ReceiptEventType,
+  type ReceiptSource,
 } from "./model";
 
 /**
@@ -85,6 +88,114 @@ export async function hashCanonicalPayload(
     .join("");
 }
 
+type CanonicalReceiptIdentityInput = {
+  readonly source: ReceiptSource;
+  readonly eventType: ReceiptEventType;
+  readonly metadata: Record<string, unknown>;
+};
+
+function requiredString(
+  metadata: Record<string, unknown>,
+  key: string
+): string {
+  const value = metadata[key];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new Error(`Receipt metadata.${key} must be a non-empty string`);
+  }
+  return value;
+}
+
+function requiredPositiveInteger(
+  metadata: Record<string, unknown>,
+  key: string
+): number {
+  const value = metadata[key];
+  if (!Number.isInteger(value) || (value as number) <= 0) {
+    throw new Error(`Receipt metadata.${key} must be a positive integer`);
+  }
+  return value as number;
+}
+
+/**
+ * Build the durable provider-object identity for a receipt. Human-readable
+ * owner/repo names are deliberately absent because GitHub repositories rename.
+ */
+export function buildCanonicalReceiptId(
+  content: CanonicalReceiptIdentityInput
+): string {
+  const { metadata, eventType } = content;
+  if (eventType === "cogni_signal") {
+    if (content.source !== "alchemy") {
+      throw new Error("cogni_signal receipt source must be alchemy");
+    }
+    return buildEventId(
+      "alchemy",
+      "cogni_signal",
+      requiredString(metadata, "txHash")
+    );
+  }
+  if (content.source !== "github") {
+    throw new Error(`${eventType} receipt source must be github`);
+  }
+
+  const providerRepoId = requiredString(metadata, "providerRepoId");
+  switch (eventType) {
+    case "pr_merged":
+      return buildEventId(
+        "github",
+        "pr",
+        providerRepoId,
+        requiredPositiveInteger(metadata, "prNumber")
+      );
+    case "pr_opened":
+    case "pr_closed":
+      return buildEventId(
+        "github",
+        "pr",
+        providerRepoId,
+        requiredPositiveInteger(metadata, "prNumber"),
+        eventType === "pr_opened" ? "opened" : "closed"
+      );
+    case "review_submitted":
+      return buildEventId(
+        "github",
+        "review",
+        providerRepoId,
+        requiredPositiveInteger(metadata, "prNumber"),
+        requiredPositiveInteger(metadata, "reviewId")
+      );
+    case "issue_closed":
+      return buildEventId(
+        "github",
+        "issue",
+        providerRepoId,
+        requiredPositiveInteger(metadata, "issueNumber")
+      );
+    case "issue_opened":
+      return buildEventId(
+        "github",
+        "issue",
+        providerRepoId,
+        requiredPositiveInteger(metadata, "issueNumber"),
+        "opened"
+      );
+    case "comment_created":
+      return buildEventId(
+        "github",
+        "comment",
+        providerRepoId,
+        requiredPositiveInteger(metadata, "commentId")
+      );
+    case "commit_pushed":
+      return buildEventId(
+        "github",
+        "push",
+        providerRepoId,
+        requiredString(metadata, "after")
+      );
+  }
+}
+
 /**
  * Project a receipt snapshot onto immutable economic identity. Mutable GitHub
  * presentation/enrichment is intentionally absent so a later polling replay
@@ -92,8 +203,14 @@ export async function hashCanonicalPayload(
  */
 export function toReceiptEconomicContent(
   content: ReceiptContent
-): ReceiptEconomicContent {
+): ReceiptEconomicCoreV1 {
   const metadata = content.metadata;
+  const eventIdentity = buildCanonicalReceiptId(content);
+  if (content.receiptId !== eventIdentity) {
+    throw new Error(
+      `Receipt ID ${content.receiptId} does not match canonical event identity ${eventIdentity}`
+    );
+  }
   let economicContext: Record<string, unknown>;
   switch (content.eventType) {
     case "pr_merged":
@@ -120,14 +237,21 @@ export function toReceiptEconomicContent(
       economicContext = {
         providerRepoId: metadata.providerRepoId,
         prNumber: metadata.prNumber,
+        reviewId: metadata.reviewId,
       };
       break;
     case "issue_opened":
     case "issue_closed":
+      economicContext = {
+        providerRepoId: metadata.providerRepoId,
+        issueNumber: metadata.issueNumber,
+      };
+      break;
     case "comment_created":
       economicContext = {
         providerRepoId: metadata.providerRepoId,
         issueNumber: metadata.issueNumber,
+        commentId: metadata.commentId,
       };
       break;
     case "commit_pushed":
@@ -145,6 +269,7 @@ export function toReceiptEconomicContent(
 
   return {
     schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
+    eventIdentity,
     source: content.source,
     eventType: content.eventType,
     platformUserId: content.platformUserId,
@@ -153,6 +278,18 @@ export function toReceiptEconomicContent(
       content.eventTime instanceof Date
         ? content.eventTime.toISOString()
         : new Date(content.eventTime).toISOString(),
+  };
+}
+
+/** Project the mutable latest-known presentation stored beside the core. */
+export function toReceiptDisplaySnapshotV1(
+  content: ReceiptContent
+): ReceiptDisplaySnapshotV1 {
+  return {
+    schemaVersion: RECEIPT_CONTEXT_SCHEMA_VERSION,
+    platformLogin: content.platformLogin ?? null,
+    artifactUrl: content.artifactUrl,
+    metadata: content.metadata,
   };
 }
 
