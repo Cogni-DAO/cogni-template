@@ -8,7 +8,7 @@ import { type KeyObject, randomUUID } from "node:crypto";
 import {
   DrizzleIdentityAttestationRepository,
   JoseIdentityAttestationSigner,
-} from "@/adapters/server/identity/identity-attestation.adapter";
+} from "@/adapters/server";
 import {
   getContainer,
   resolveAppDb,
