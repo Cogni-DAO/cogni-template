@@ -131,13 +131,16 @@ Event-driven only:
 
 - `ci.yaml` — `pull_request`, `merge_group`, `push`
 - `pr-lint.yaml` — `pull_request`
-- `pr-build.yml` — `pull_request`
 
 Manual levers:
 
 - `candidate-flight.yml`
 - `candidate-flight-infra.yml`
+- `candidate-a-sealed-secret-export.yml` — one-time ciphertext-only secret
+  export plus explicit non-secret variable parity; fixed canonical candidate-a
+  source and fixed test-parent target
 - `flight-preview.yml`
+- `pr-build.yml` — pull-request build plus operator source-SHA dispatch
 - `promote-and-deploy.yml`
 - `release.yml`
 - `stack-test.yml`
