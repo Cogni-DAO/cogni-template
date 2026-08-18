@@ -28,6 +28,7 @@ const TEMPLATE = `metadata:
 spec:
   generators:
     - git:
+        repoURL: __DEPLOYMENT_PARENT_REPO_URL__
         revision: deploy/__ENV__-__NODE__
         files:
           - path: "infra/catalog/__NODE__.yaml"
@@ -63,12 +64,20 @@ const BEFORE = `${HEADER}
 
 describe("renderNodeAppset", () => {
   it("substitutes __ENV__/__NODE__ globally and leaves {{.name}} intact", () => {
-    expect(renderNodeAppset(TEMPLATE, "foo", "candidate-a")).toBe(
+    expect(
+      renderNodeAppset(
+        TEMPLATE,
+        "foo",
+        "candidate-a",
+        "https://github.com/cogni-test-org/cogni-monorepo.git"
+      )
+    ).toBe(
       `metadata:
   name: cogni-candidate-a-foo
 spec:
   generators:
     - git:
+        repoURL: https://github.com/cogni-test-org/cogni-monorepo.git
         revision: deploy/candidate-a-foo
         files:
           - path: "infra/catalog/foo.yaml"

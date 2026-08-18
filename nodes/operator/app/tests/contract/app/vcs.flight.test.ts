@@ -58,11 +58,13 @@ const envState = vi.hoisted(() => ({
       Buffer.from("private-key").toString("base64"),
     NODE_SUBMODULE_PARENT_OWNER: "cogni-test-org",
     NODE_SUBMODULE_PARENT_REPO: "cogni-monorepo",
+    DEPLOY_ENVIRONMENT: "candidate-a",
   } as {
     GH_REVIEW_APP_ID?: string;
     GH_REVIEW_APP_PRIVATE_KEY_BASE64?: string;
     NODE_SUBMODULE_PARENT_OWNER?: string;
     NODE_SUBMODULE_PARENT_REPO?: string;
+    DEPLOY_ENVIRONMENT?: string;
   },
 }));
 
@@ -239,6 +241,7 @@ describe("POST /api/v1/vcs/flight", () => {
         Buffer.from("private-key").toString("base64"),
       NODE_SUBMODULE_PARENT_OWNER: "cogni-test-org",
       NODE_SUBMODULE_PARENT_REPO: "cogni-monorepo",
+      DEPLOY_ENVIRONMENT: "candidate-a",
     };
     mockGetSessionUser.mockResolvedValue(TEST_SESSION_USER_1);
   });

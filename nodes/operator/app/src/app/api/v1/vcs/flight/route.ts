@@ -34,6 +34,7 @@ import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import type { DeployPlanePort, PreparedNodeRefCandidateFlight } from "@/ports";
 import { nodes } from "@/shared/db/nodes";
 import { type ServerEnv, serverEnv } from "@/shared/env";
+import { assertDeploymentParent } from "@/shared/deployment-parent";
 import {
   EVENT_NAMES,
   logEvent,
@@ -225,6 +226,11 @@ function getNodeRefParentRepo(env: ServerEnv): {
       "operator not configured for node-ref flight: NODE_SUBMODULE_PARENT_OWNER + NODE_SUBMODULE_PARENT_REPO required"
     );
   }
+  assertDeploymentParent({
+    env: env.DEPLOY_ENVIRONMENT,
+    owner: env.NODE_SUBMODULE_PARENT_OWNER,
+    repo: env.NODE_SUBMODULE_PARENT_REPO,
+  });
   return {
     owner: env.NODE_SUBMODULE_PARENT_OWNER,
     repo: env.NODE_SUBMODULE_PARENT_REPO,

@@ -79,6 +79,8 @@ export interface EnvPlanCurrent {
   readonly templateExternalSecretByEnv?: Readonly<Record<string, string>>;
   /** The shared `node-applicationset.yaml.tmpl` (only needed on ADD). */
   readonly appsetTemplate?: string | undefined;
+  /** Git URL of the deployment parent that owns this env's deploy branches. */
+  readonly deploymentParentRepoUrl?: string | undefined;
   /** Current `appsets/<env>/kustomization.yaml` per env. Keyed by env. */
   readonly appsetsKustomizationByEnv: Readonly<Record<string, string>>;
   /** Container port + node_port for the overlay render (only needed on ADD). */
@@ -174,6 +176,7 @@ function planAdd(args: {
     templateExternalSecret === undefined ||
     appsetsKustomization === undefined ||
     current.appsetTemplate === undefined ||
+    current.deploymentParentRepoUrl === undefined ||
     current.port === undefined ||
     current.nodePort === undefined
   ) {
@@ -216,7 +219,12 @@ function planAdd(args: {
     {
       op: "upsert",
       path: appsetPath(env, slug),
-      content: renderNodeAppset(current.appsetTemplate, slug, env),
+      content: renderNodeAppset(
+        current.appsetTemplate,
+        slug,
+        env,
+        current.deploymentParentRepoUrl
+      ),
     },
     {
       op: "upsert",

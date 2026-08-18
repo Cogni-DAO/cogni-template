@@ -1,0 +1,14 @@
+{
+  "candidate-a": {
+    "owner": "cogni-test-org",
+    "repo": "cogni-monorepo"
+  },
+  "preview": {
+    "owner": "cogni-dao",
+    "repo": "cogni"
+  },
+  "production": {
+    "owner": "cogni-dao",
+    "repo": "cogni"
+  }
+}

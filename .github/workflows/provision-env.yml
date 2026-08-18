@@ -197,6 +197,9 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: 0
 
+      - name: Verify deployment parent
+        run: bash scripts/ci/assert-deployment-parent.sh "$DEPLOY_ENV"
+
       - name: Pre-flight — Grafana Cloud admin token (optional)
         env:
           GRAFANA_CLOUD_ADMIN_TOKEN: ${{ secrets.GH_GRAFANA_CLOUD_ADMIN_TOKEN }}

@@ -47,6 +47,8 @@ APPSETS_DIR="$ARGOCD_DIR/appsets"
 # operator's TS node scaffolder (task.5092). Both interpolate __ENV__/__NODE__.
 TEMPLATE="$SCRIPT_DIR/node-applicationset.yaml.tmpl"
 ENVS=(candidate-a preview production)
+# shellcheck source=scripts/ci/lib/deployment-parent.sh
+source "$SCRIPT_DIR/lib/deployment-parent.sh"
 
 # Deployable node slugs, sorted. A catalog row with a `candidate_a_branch` is an
 # Argo app; everything else (type: infra) is VM/compose tier. yq (not grep) so the
@@ -83,12 +85,61 @@ deployable_nodes_for_env() {
 }
 
 # Emit one ApplicationSet object for (env, node) by interpolating the shared
-# template. Only __ENV__ and __NODE__ are substituted; `{{.name}}` (Argo
+# template. __ENV__, __NODE__, and the env's declared deployment-parent URL are
+# substituted; `{{.name}}` (Argo
 # goTemplate) is left intact. Node/env slugs never contain `/`, so the sed
 # delimiter is safe.
 render_one() {
   local env="$1" node="$2"
-  sed -e "s/__ENV__/$env/g" -e "s/__NODE__/$node/g" "$TEMPLATE"
+  local repo_url
+  repo_url="$(deployment_parent_repo_url "$env")"
+  sed -e "s/__ENV__/$env/g" \
+    -e "s/__NODE__/$node/g" \
+    -e "s#__DEPLOYMENT_PARENT_REPO_URL__#$repo_url#g" \
+    "$TEMPLATE"
+}
+
+control_plane_files() {
+  local env="$1"
+  printf '%s\n' \
+    "$ARGOCD_DIR/control-plane/roots/${env}-control-plane-application.yaml" \
+    "$ARGOCD_DIR/control-plane/${env}/${env}-appsets-application.yaml"
+}
+
+render_control_plane_file() {
+  local env="$1" path="$2" repo_url
+  repo_url="$(deployment_parent_repo_url "$env")"
+  sed -E "s#^([[:space:]]*repoURL:).*#\\1 $repo_url#" "$path"
+}
+
+write_control_plane_files() {
+  local env path tmp
+  for env in "${ENVS[@]}"; do
+    while IFS= read -r path; do
+      [ -f "$path" ] || { echo "[ERROR] missing control-plane file $path" >&2; exit 1; }
+      tmp="${path}.tmp.$$"
+      render_control_plane_file "$env" "$path" > "$tmp"
+      mv "$tmp" "$path"
+    done < <(control_plane_files "$env")
+  done
+}
+
+check_control_plane_files() {
+  local env path stale=0
+  for env in "${ENVS[@]}"; do
+    while IFS= read -r path; do
+      if [ ! -f "$path" ]; then
+        echo "[ERROR] missing control-plane file $path" >&2
+        stale=1
+        continue
+      fi
+      if ! diff -u "$path" <(render_control_plane_file "$env" "$path") >/dev/null; then
+        echo "[ERROR] $path points at the wrong deployment parent — run: pnpm gen:node-appset" >&2
+        stale=1
+      fi
+    done < <(control_plane_files "$env")
+  done
+  return "$stale"
 }
 
 env_dir() {
@@ -160,6 +211,7 @@ write() {
     done
     write_kustomization "$env"
   done
+  write_control_plane_files
   echo "Wrote $count per-node ApplicationSet files (pruned $pruned stale) + per-env appsets kustomizations."
 }
 
@@ -203,6 +255,9 @@ check() {
       stale=1
     fi
   done
+  if ! check_control_plane_files; then
+    stale=1
+  fi
   if [ "$stale" -ne 0 ]; then
     echo "        A node was added/removed without regenerating its AppSets (pnpm gen:node-appset)." >&2
     exit 1

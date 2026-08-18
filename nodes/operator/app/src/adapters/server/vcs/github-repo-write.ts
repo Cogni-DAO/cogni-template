@@ -49,6 +49,11 @@ import type {
   SyncTemplateUpstreamResult,
 } from "@/ports";
 import {
+  assertDeploymentParent,
+  deploymentParentRepoUrl,
+  type DeploymentEnvironment,
+} from "@/shared/deployment-parent";
+import {
   buildEnvDeltaPlan,
   type EnvPlanCurrent,
   EnvPlanError,
@@ -274,6 +279,7 @@ const appsetsKustomizationPath = (env: string): string =>
  * so the operator's emit is byte-exact to the renderer and the `--check` drift gate stays green (bug.0378).
  */
 const APPSET_TEMPLATE_PATH = "scripts/ci/node-applicationset.yaml.tmpl";
+const DEPLOYMENT_PARENT_CONTRACT_PATH = "infra/deployment-parents.json";
 const SOURCE_SHA_PATTERN = /^[0-9a-fA-F]{40}$/;
 const NODE_REPO_REQUIRED_WORKFLOWS = [
   ".github/workflows/ci.yaml",
@@ -1141,6 +1147,121 @@ export class GitHubRepoWriter implements DeployPlanePort {
     }
   }
 
+  /**
+   * Fail-closed compatibility gate for a deployment parent before node birth.
+   * The runtime target, the parent's own contract, its flight workflow, the
+   * control-plane roots, and the generated AppSet lane must all name the same
+   * repository. This runs before any fork/branch/PR mutation.
+   */
+  async assertDeploymentParentReady(input: {
+    readonly env: DeploymentEnvironment;
+    readonly owner: string;
+    readonly repo: string;
+  }): Promise<void> {
+    const expected = assertDeploymentParent(input);
+    const expectedSlug = `${expected.owner}/${expected.repo}`;
+    const expectedUrl = deploymentParentRepoUrl(expected);
+    const workflowPath =
+      input.env === "candidate-a"
+        ? ".github/workflows/candidate-flight.yml"
+        : ".github/workflows/promote-and-deploy.yml";
+    const workflowGuard =
+      input.env === "candidate-a"
+        ? "assert-deployment-parent.sh candidate-a"
+        : 'assert-deployment-parent.sh "${{ inputs.environment }}"';
+
+    const requiredPaths = [
+      DEPLOYMENT_PARENT_CONTRACT_PATH,
+      workflowPath,
+      "scripts/ci/assert-deployment-parent.sh",
+      APPSET_TEMPLATE_PATH,
+      `infra/k8s/argocd/control-plane/roots/${input.env}-control-plane-application.yaml`,
+      `infra/k8s/argocd/control-plane/${input.env}/${input.env}-appsets-application.yaml`,
+      `infra/k8s/argocd/appsets/${input.env}/${input.env}-node-template-applicationset.yaml`,
+    ] as const;
+    const octokit = await this.getOctokit(input.owner, input.repo);
+    const contents = await Promise.all(
+      requiredPaths.map(async (path) => ({
+        path,
+        content: await this.readFileAtRef(
+          octokit,
+          input.owner,
+          input.repo,
+          path,
+          "main"
+        ),
+      }))
+    );
+    const missing = contents.find(({ content }) => content === null)?.path;
+    if (missing !== undefined) {
+      throw deployPlaneError(
+        "deployment_parent_incompatible",
+        `${expectedSlug} is missing required deployment-parent file ${missing}`,
+        409
+      );
+    }
+    const files = new Map(
+      contents.map(({ path, content }) => [path, content ?? ""])
+    );
+
+    let remoteContract: unknown;
+    try {
+      remoteContract = JSON.parse(
+        files.get(DEPLOYMENT_PARENT_CONTRACT_PATH) ?? ""
+      );
+    } catch {
+      throw deployPlaneError(
+        "deployment_parent_incompatible",
+        `${expectedSlug} has an invalid ${DEPLOYMENT_PARENT_CONTRACT_PATH}`,
+        409
+      );
+    }
+    const remoteEntry = z
+      .record(z.string(), z.object({ owner: z.string(), repo: z.string() }))
+      .safeParse(remoteContract);
+    const remoteParent = remoteEntry.success
+      ? remoteEntry.data[input.env]
+      : undefined;
+    if (
+      !remoteParent ||
+      remoteParent.owner.toLowerCase() !== expected.owner.toLowerCase() ||
+      remoteParent.repo.toLowerCase() !== expected.repo.toLowerCase()
+    ) {
+      throw deployPlaneError(
+        "deployment_parent_incompatible",
+        `${expectedSlug} does not declare itself as the ${input.env} deployment parent`,
+        409
+      );
+    }
+
+    const workflow = files.get(workflowPath) ?? "";
+    if (!workflow.includes(workflowGuard)) {
+      throw deployPlaneError(
+        "deployment_parent_incompatible",
+        `${expectedSlug} ${input.env} workflow lacks the deployment-parent fail-closed guard`,
+        409
+      );
+    }
+    const template = files.get(APPSET_TEMPLATE_PATH) ?? "";
+    if (!template.includes("__DEPLOYMENT_PARENT_REPO_URL__")) {
+      throw deployPlaneError(
+        "deployment_parent_incompatible",
+        `${expectedSlug} AppSet template is not deployment-parent parameterized`,
+        409
+      );
+    }
+    for (const path of requiredPaths.slice(4)) {
+      const content = files.get(path) ?? "";
+      if (!content.includes(`repoURL: ${expectedUrl}`)) {
+        throw deployPlaneError(
+          "deployment_parent_incompatible",
+          `${expectedSlug} has a mismatched repoURL in ${path}; expected ${expectedUrl}`,
+          409
+        );
+      }
+    }
+  }
+
   async syncCanonicalFilesToFork(
     input: MirrorCanonicalFilesInput
   ): Promise<MirrorCanonicalFilesResult> {
@@ -1846,6 +1967,7 @@ export class GitHubRepoWriter implements DeployPlanePort {
    */
   async openNodeEnvPr(input: OpenNodeEnvPrInput): Promise<OpenNodeEnvPrResult> {
     const { owner, repo, slug, env, present } = input;
+    assertDeploymentParent({ env, owner, repo });
     const octokit = await this.getOctokit(owner, repo);
     const { baseCommitSha, baseTreeSha } = await this.resolveMainBase(
       octokit,
@@ -1972,6 +2094,7 @@ export class GitHubRepoWriter implements DeployPlanePort {
         templateOverlayByEnv,
         templateExternalSecretByEnv,
         appsetTemplate,
+        deploymentParentRepoUrl: deploymentParentRepoUrl({ owner, repo }),
         appsetsKustomizationByEnv,
         port,
         nodePort,
@@ -2912,7 +3035,12 @@ export class GitHubRepoWriter implements DeployPlanePort {
     for (const env of NODE_FORMATION_ENVS) {
       await addBlob(
         `infra/k8s/argocd/appsets/${env}/${env}-${slug}-applicationset.yaml`,
-        renderNodeAppset(appsetTemplate, slug, env)
+        renderNodeAppset(
+          appsetTemplate,
+          slug,
+          env,
+          deploymentParentRepoUrl({ owner, repo })
+        )
       );
       const argocdKustomization = await this.readFileOnMain(
         octokit,

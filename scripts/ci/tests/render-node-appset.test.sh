@@ -13,6 +13,9 @@
 #      SIGPIPE-under-pipefail bug that silently dropped matching nodes).
 #   4. FAIL-CLOSED: a deployable row missing `envs:` aborts the render rather
 #      than silently fanning the node out to every env.
+#   5. ONE_DEPLOYMENT_PARENT_PER_ENV: generated AppSets + both control-plane
+#      roots point at the contract repo for that env.
+#   6. WRONG_WORKFLOW_REPO_FAILS: the workflow guard rejects a split parent.
 #
 # Run: bash scripts/ci/tests/render-node-appset.test.sh
 set -euo pipefail
@@ -99,5 +102,40 @@ rm -rf "$tmp_catalog"
 [ "$rc" -ne 0 ] || fail "render did not fail closed on a deployable row missing 'envs'"
 grep -q "has no 'envs'" <<<"$out" || fail "missing fail-closed message for absent envs; got: $out"
 pass "fail-closed when a deployable row omits envs"
+
+# 5. Every generated/control-plane repoURL is contract-derived.
+# shellcheck source=scripts/ci/lib/deployment-parent.sh
+source scripts/ci/lib/deployment-parent.sh
+for env in candidate-a preview production; do
+  expected_url="$(deployment_parent_repo_url "$env")"
+  for path in \
+    "$APPSETS_DIR/$env"/*-applicationset.yaml \
+    "infra/k8s/argocd/control-plane/roots/${env}-control-plane-application.yaml" \
+    "infra/k8s/argocd/control-plane/${env}/${env}-appsets-application.yaml"; do
+    [ -f "$path" ] || fail "missing deployment-parent consumer $path"
+    bad="$(awk '/repoURL:/ {print $2}' "$path" | grep -vxF "$expected_url" || true)"
+    [ -z "$bad" ] || fail "$path has repoURL outside $env contract: $bad"
+  done
+done
+grep -q '__DEPLOYMENT_PARENT_REPO_URL__' scripts/ci/node-applicationset.yaml.tmpl \
+  || fail "AppSet template must carry the deployment-parent token"
+pass "AppSets + control-plane roots use the env deployment-parent contract"
+
+# 6. Workflow repo guard accepts the declared parent and rejects a split repo.
+bash scripts/ci/assert-deployment-parent.sh candidate-a cogni-test-org/cogni-monorepo >/dev/null \
+  || fail "candidate-a declared parent rejected"
+if bash scripts/ci/assert-deployment-parent.sh candidate-a cogni-dao/cogni >/dev/null 2>&1; then
+  fail "candidate-a wrong workflow repo was accepted"
+fi
+pass "wrong workflow repository fails closed"
+for workflow in \
+  .github/workflows/candidate-flight.yml \
+  .github/workflows/candidate-flight-infra.yml \
+  .github/workflows/promote-and-deploy.yml \
+  .github/workflows/provision-env.yml; do
+  grep -q 'assert-deployment-parent.sh' "$workflow" \
+    || fail "$workflow does not enforce its deployment-parent repo"
+done
+pass "flight, infra, promotion, and provision workflows carry the guard"
 
 echo "PASS: render-node-appset.test.sh"

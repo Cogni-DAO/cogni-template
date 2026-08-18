@@ -360,6 +360,8 @@ After Formation returns a verified repo-spec fragment, the **operator** mints th
 - `SUBMODULE_NOT_INLINE` — node content lives in its own repo + a gitlink, never inlined into the operator tree.
 - `NO_SECRET_VALUES_IN_PR` — secret values and per-node `secrets-catalog.yaml` are absent from the template seed. The PR may carry ESO shape (`k8s/external-secrets/**`) so OpenBao values can materialize as `<slug>-env-secrets` ([secrets-management.md](secrets-management.md), [node-wizard-secret-setting.md](../design/node-wizard-secret-setting.md)).
 - `GENS_ARE_BYTE_EXACT` — every footprint gen shares one template with its `scripts/ci/render-*.sh` source of truth, enforced by the per-gen CI drift gate.
+- `PUBLISH_PARENT_IS_DEPLOY_PARENT` — `infra/deployment-parents.json` selects the parent per env; runtime config, the parent PR, flight workflow, Argo roots/AppSets, and deploy branches must all name that same repo. The parent is compatibility-checked before the child fork is touched.
+- `MAIN_IS_PUBLISH_TRUTH` — `publishPrUrl` is a convenience pointer, not completion authority. A published DB row whose catalog entry never reached parent `main` is repairable: Publish regenerates the fixed birth branch from current templates and opens/reuses a current PR. Only a catalog row on parent `main` returns `alreadyPublished`.
 
 > Verification: flight the operator + Publish one throwaway node → it mints `Cogni-DAO/<slug>` and opens the submodule PR; the gitlink PR passes `single-node-scope`, and the node flights (`<node>-test/version == build_sha`). Requires the env's operator App to hold org `administration: write` + an "all repositories" install (it must create AND commit to the new repo — see node-ci-cd-contract.md).
 

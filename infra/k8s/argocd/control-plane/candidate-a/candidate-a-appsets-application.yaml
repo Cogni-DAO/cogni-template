@@ -45,7 +45,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/cogni-dao/cogni.git
+    repoURL: https://github.com/cogni-test-org/cogni-monorepo.git
     targetRevision: main
     path: infra/k8s/argocd/appsets/candidate-a
   destination:

@@ -60,6 +60,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify candidate-a deployment parent
+        run: bash scripts/ci/assert-deployment-parent.sh candidate-a
+
       - name: Resolve PR metadata
         id: meta
         env:

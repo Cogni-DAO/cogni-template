@@ -13,7 +13,7 @@ spec:
   goTemplate: true
   generators:
     - git:
-        repoURL: https://github.com/cogni-dao/cogni.git
+        repoURL: https://github.com/cogni-test-org/cogni-monorepo.git
         revision: deploy/candidate-a-scheduler-worker
         files:
           - path: "infra/catalog/scheduler-worker.yaml"
@@ -26,7 +26,7 @@ spec:
     spec:
       project: default
       source:
-        repoURL: https://github.com/cogni-dao/cogni.git
+        repoURL: https://github.com/cogni-test-org/cogni-monorepo.git
         targetRevision: "deploy/candidate-a-{{.name}}"
         path: "infra/k8s/overlays/candidate-a/{{.name}}"
       destination:

@@ -26,6 +26,7 @@ import { createDoltHubDatabaseEnsurer } from "@/features/nodes/dolthub-database"
 import { transition } from "@/features/nodes/state-machine";
 import { getServerSessionUser } from "@/lib/auth/server";
 import { type NodeStatus, nodes } from "@/shared/db/nodes";
+import { assertDeploymentParent } from "@/shared/deployment-parent";
 import { serverEnv } from "@/shared/env";
 import { NODE_FORMATION_ENVS } from "@/shared/node-app-scaffold/gens";
 import { buildNodeKnowledgeRemote } from "@/shared/node-app-scaffold/knowledge-remote";
@@ -151,6 +152,7 @@ type PublishStep =
   | "auth"
   | "config"
   | "load_node"
+  | "validate_parent"
   | "validate_state"
   | "validate_addresses"
   | "check_capacity"
@@ -315,6 +317,30 @@ export async function POST(request: Request, routeArgs: RouteParams) {
             { status: 503 }
           );
         }
+        try {
+          assertDeploymentParent({
+            env: env.DEPLOY_ENVIRONMENT,
+            owner: parentOwner,
+            repo: parentRepo,
+          });
+        } catch (error) {
+          logTerminal("error", {
+            outcome: "error",
+            errorCode: "node_parent_config_mismatch",
+            status: 503,
+          });
+          logRequestEnd(ctx.log, { status: 503, durationMs: durationMs() });
+          return NextResponse.json(
+            {
+              error: "operator deployment parent does not match environment",
+              reason:
+                error instanceof Error
+                  ? error.message
+                  : "invalid deployment parent",
+            },
+            { status: 503 }
+          );
+        }
         if (!env.DOLTHUB_API_TOKEN || !env.DOLTHUB_OWNER) {
           logTerminal("error", {
             outcome: "error",
@@ -361,27 +387,67 @@ export async function POST(request: Request, routeArgs: RouteParams) {
           nodeStatus: node.status,
         });
 
-        // Idempotent: if already published, return the existing PR.
-        if (
-          ["published", "wallet_ready", "payments_ready", "active"].includes(
-            node.status
-          ) &&
-          node.publishPrUrl
-        ) {
-          logTerminal("info", {
-            outcome: "already_published",
-            status: 200,
+        const writer = createNodeRepoWriter(env);
+        currentStep = "validate_parent";
+        try {
+          await writer.assertDeploymentParentReady({
+            env: env.DEPLOY_ENVIRONMENT,
+            owner: parentOwner,
+            repo: parentRepo,
+          });
+        } catch (error) {
+          logTerminal("error", {
+            outcome: "error",
+            errorCode: "deployment_parent_incompatible",
+            status: 503,
             slug: node.slug,
             nodeStatus: node.status,
           });
-          logRequestEnd(ctx.log, { status: 200, durationMs: durationMs() });
-          return NextResponse.json({ node, alreadyPublished: true });
+          logRequestEnd(ctx.log, { status: 503, durationMs: durationMs() });
+          return NextResponse.json(
+            {
+              error: "deployment parent is not ready for node birth",
+              reason:
+                error instanceof Error
+                  ? error.message
+                  : "incompatible deployment parent",
+            },
+            { status: 503 }
+          );
+        }
+        const isPublishedState = [
+          "published",
+          "wallet_ready",
+          "payments_ready",
+          "active",
+        ].includes(node.status);
+
+        // Git main, not the remembered PR URL, is the idempotency authority. A
+        // closed/stale birth PR leaves no catalog row on main, so publish repairs
+        // the fixed branch from today's generators and opens/reuses a current PR.
+        if (isPublishedState && node.publishPrUrl) {
+          const catalog = await writer.fetchFileText({
+            owner: parentOwner,
+            repo: parentRepo,
+            path: `infra/catalog/${node.slug}.yaml`,
+            ref: "main",
+          });
+          if (catalog !== null) {
+            logTerminal("info", {
+              outcome: "already_published",
+              status: 200,
+              slug: node.slug,
+              nodeStatus: node.status,
+            });
+            logRequestEnd(ctx.log, { status: 200, durationMs: durationMs() });
+            return NextResponse.json({ node, alreadyPublished: true });
+          }
         }
 
         currentStep = "validate_state";
-        const t = transition(node.status as NodeStatus, {
-          type: "spec_published",
-        });
+        const t = isPublishedState
+          ? ({ ok: true, nextStatus: node.status } as const)
+          : transition(node.status as NodeStatus, { type: "spec_published" });
         if (!t.ok) {
           logTerminal("warn", {
             outcome: "error",
@@ -435,7 +501,6 @@ export async function POST(request: Request, routeArgs: RouteParams) {
         // the parent catalog (type:node + source_repo) — the post-#1647 deployment SSOT (`.gitmodules`
         // is retired); ceiling from config.
         currentStep = "check_capacity";
-        const writer = createNodeRepoWriter(env);
         logStep("check_capacity", "started", {
           slug: node.slug,
           owner: parentOwner,
@@ -503,7 +568,7 @@ export async function POST(request: Request, routeArgs: RouteParams) {
           deployedNodeCount,
           ceiling: env.NODE_CAPACITY_CEILING,
         });
-        if (!capacity.allowed) {
+        if (!capacity.allowed && !isPublishedState) {
           logStep("check_capacity", "error", {
             slug: node.slug,
             errorCode: "at_capacity",

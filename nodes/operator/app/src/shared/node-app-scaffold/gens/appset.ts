@@ -47,9 +47,13 @@ resources:`;
 export function renderNodeAppset(
   template: string,
   slug: string,
-  env: string
+  env: string,
+  deploymentParentRepoUrl: string
 ): string {
-  return template.replaceAll("__ENV__", env).replaceAll("__NODE__", slug);
+  return template
+    .replaceAll("__ENV__", env)
+    .replaceAll("__NODE__", slug)
+    .replaceAll("__DEPLOYMENT_PARENT_REPO_URL__", deploymentParentRepoUrl);
 }
 
 /**

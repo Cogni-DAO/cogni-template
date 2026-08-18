@@ -1181,22 +1181,68 @@ patches:
     routeHandlers = {
       "GET /repos/{owner}/{repo}/git/ref/{ref}": (params) => {
         expect(params).toMatchObject({
-          owner: "Cogni-DAO",
-          repo: "cogni",
+          owner: "cogni-test-org",
+          repo: "cogni-monorepo",
           ref: "heads/main",
         });
         return { object: { sha: "parent-main" } };
       },
       "GET /repos/{owner}/{repo}/git/commits/{commit_sha}": (params) => {
         expect(params).toMatchObject({
-          owner: "Cogni-DAO",
-          repo: "cogni",
+          owner: "cogni-test-org",
+          repo: "cogni-monorepo",
           commit_sha: "parent-main",
         });
         return { tree: { sha: "parent-tree" } };
       },
       "GET /repos/{owner}/{repo}/contents/{path}": (params) => {
         const path = String(params.path);
+        if (path === "infra/deployment-parents.json") {
+          return {
+            type: "file",
+            encoding: "base64",
+            content: encode(
+              JSON.stringify({
+                "candidate-a": {
+                  owner: "cogni-test-org",
+                  repo: "cogni-monorepo",
+                },
+              })
+            ),
+          };
+        }
+        if (path === ".github/workflows/candidate-flight.yml") {
+          return {
+            type: "file",
+            encoding: "base64",
+            content: encode(
+              "run: bash scripts/ci/assert-deployment-parent.sh candidate-a\n"
+            ),
+          };
+        }
+        if (path === "scripts/ci/assert-deployment-parent.sh") {
+          return {
+            type: "file",
+            encoding: "base64",
+            content: encode("guard\n"),
+          };
+        }
+        if (
+          path ===
+            "infra/k8s/argocd/control-plane/roots/candidate-a-control-plane-application.yaml" ||
+          path ===
+            "infra/k8s/argocd/control-plane/candidate-a/candidate-a-appsets-application.yaml" ||
+          path ===
+            "infra/k8s/argocd/appsets/candidate-a/candidate-a-node-template-applicationset.yaml"
+        ) {
+          return {
+            type: "file",
+            encoding: "base64",
+            content: encode(
+              "repoURL: https://github.com/cogni-test-org/cogni-monorepo.git\n"
+            ),
+          };
+        }
         if (path === ".gitmodules") {
           return Promise.reject(statusError(404, "not found"));
         }
@@ -1212,7 +1258,9 @@ patches:
           return {
             type: "file",
             encoding: "base64",
-            content: encode("appset __ENV__ __NODE__\n"),
+            content: encode(
+              "appset __ENV__ __NODE__ __DEPLOYMENT_PARENT_REPO_URL__\n"
+            ),
           };
         }
         // PER-ENV appsets kustomization: appsets/<env>/kustomization.yaml lists ONLY that
@@ -1334,7 +1382,7 @@ node_port: 30200
           );
           expect(appsetEntry).toBeDefined();
           expect(blobs.get(appsetEntry?.sha ?? "")).toBe(
-            `appset ${env} atlas\n`
+            `appset ${env} atlas https://github.com/cogni-test-org/cogni-monorepo.git\n`
           );
 
           // The slug folds into THAT env's own appsets/<env>/kustomization.yaml only.
@@ -1391,8 +1439,8 @@ node_port: 30200
       },
       "POST /repos/{owner}/{repo}/git/commits": (params) => {
         expect(params).toMatchObject({
-          owner: "Cogni-DAO",
-          repo: "cogni",
+          owner: "cogni-test-org",
+          repo: "cogni-monorepo",
           message: "feat(node): register atlas",
           tree: "birth-tree",
           parents: ["parent-main"],
@@ -1402,25 +1450,86 @@ node_port: 30200
       "POST /repos/{owner}/{repo}/git/refs": () => ({}),
       "POST /repos/{owner}/{repo}/pulls": () => ({
         number: 88,
-        html_url: "https://github.com/Cogni-DAO/cogni/pull/88",
+        html_url: "https://github.com/cogni-test-org/cogni-monorepo/pull/88",
       }),
     };
 
+    const writer = makeWriter();
     await expect(
-      makeWriter().openNodeSubmodulePr({
-        owner: "Cogni-DAO",
-        repo: "cogni",
+      writer.assertDeploymentParentReady({
+        env: "candidate-a",
+        owner: "cogni-test-org",
+        repo: "cogni-monorepo",
+      })
+    ).resolves.toBeUndefined();
+
+    await expect(
+      writer.openNodeSubmodulePr({
+        owner: "cogni-test-org",
+        repo: "cogni-monorepo",
         slug: "atlas",
         nodeId: "11111111-1111-4111-8111-111111111111",
         ownerWallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949",
         chainId: 8453,
-        nodeRepoUrl: "https://github.com/Cogni-DAO/atlas.git",
+        nodeRepoUrl: "https://github.com/cogni-test-org/atlas.git",
         nodeRepoHeadSha: "0123456789012345678901234567890123456789",
       })
     ).resolves.toEqual({
       prNumber: 88,
-      prUrl: "https://github.com/Cogni-DAO/cogni/pull/88",
+      prUrl: "https://github.com/cogni-test-org/cogni-monorepo/pull/88",
     });
+  });
+
+  it("rejects a parent missing the compatibility contract before mutation", async () => {
+    routeHandlers = {
+      "GET /repos/{owner}/{repo}/contents/{path}": () =>
+        Promise.reject(statusError(404, "not found")),
+    };
+
+    await expect(
+      makeWriter().assertDeploymentParentReady({
+        env: "candidate-a",
+        owner: "cogni-test-org",
+        repo: "cogni-monorepo",
+      })
+    ).rejects.toThrow(
+      "cogni-test-org/cogni-monorepo is missing required deployment-parent file infra/deployment-parents.json"
+    );
+  });
+
+  it("validates production against its own parent, workflow, and roots", async () => {
+    const encode = (value: string) =>
+      Buffer.from(value, "utf-8").toString("base64");
+    routeHandlers = {
+      "GET /repos/{owner}/{repo}/contents/{path}": (params) => {
+        expect(params).toMatchObject({ owner: "cogni-dao", repo: "cogni" });
+        const path = String(params.path);
+        let content: string;
+        if (path === "infra/deployment-parents.json") {
+          content = JSON.stringify({
+            production: { owner: "cogni-dao", repo: "cogni" },
+          });
+        } else if (path === ".github/workflows/promote-and-deploy.yml") {
+          content =
+            'run: bash scripts/ci/assert-deployment-parent.sh "${{ inputs.environment }}"\n';
+        } else if (path === "scripts/ci/assert-deployment-parent.sh") {
+          content = "guard\n";
+        } else if (path === "scripts/ci/node-applicationset.yaml.tmpl") {
+          content = "repoURL: __DEPLOYMENT_PARENT_REPO_URL__\n";
+        } else {
+          content = "repoURL: https://github.com/cogni-dao/cogni.git\n";
+        }
+        return { type: "file", encoding: "base64", content: encode(content) };
+      },
+    };
+
+    await expect(
+      makeWriter().assertDeploymentParentReady({
+        env: "production",
+        owner: "cogni-dao",
+        repo: "cogni",
+      })
+    ).resolves.toBeUndefined();
   });
 });
 
@@ -2678,9 +2787,8 @@ describe("GitHubRepoWriter.syncTemplateUpstreamToFork", () => {
       },
     };
 
-    const result = await makeWriter().syncTemplateUpstreamToFork(
-      upstreamInput()
-    );
+    const result =
+      await makeWriter().syncTemplateUpstreamToFork(upstreamInput());
     expect(result).toMatchObject({
       status: "pr_opened",
       prNumber: 5,
@@ -2770,9 +2878,8 @@ describe("GitHubRepoWriter.syncTemplateUpstreamToFork", () => {
         Promise.reject(statusError(422, "No commits between main and main")),
       "GET /repos/{owner}/{repo}/pulls": () => [],
     };
-    const result = await makeWriter().syncTemplateUpstreamToFork(
-      upstreamInput()
-    );
+    const result =
+      await makeWriter().syncTemplateUpstreamToFork(upstreamInput());
     expect(result).toEqual({ status: "up_to_date" });
     expect(requests.map((r) => r.route)).not.toContain(
       "POST /repos/{owner}/{repo}/git/commits"

@@ -163,6 +163,9 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: 0
 
+      - name: Verify candidate-a deployment parent
+        run: bash scripts/ci/assert-deployment-parent.sh candidate-a
+
       - name: Setup SSH
         run: |
           if [ -z "$VM_HOST" ]; then

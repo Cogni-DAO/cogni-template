@@ -86,6 +86,7 @@ const APPSET_TEMPLATE = `metadata:
 spec:
   generators:
     - git:
+        repoURL: __DEPLOYMENT_PARENT_REPO_URL__
         files:
           - path: "infra/catalog/__NODE__.yaml"
 `;
@@ -124,6 +125,7 @@ function baseCurrent(envs: readonly string[]): EnvPlanCurrent {
     templateOverlayByEnv,
     templateExternalSecretByEnv,
     appsetTemplate: APPSET_TEMPLATE,
+    deploymentParentRepoUrl: "https://github.com/cogni-dao/cogni.git",
     appsetsKustomizationByEnv,
     port: 3200,
     nodePort: 31100,
@@ -185,6 +187,14 @@ describe("buildEnvDeltaPlan — ADD env", () => {
     );
     if (kustOp?.op === "upsert") {
       expect(kustOp.content).toContain("preview-blue-applicationset.yaml");
+    }
+    const appsetOp = res.ops.find(
+      (o) => o.path === appsetPath("preview", SLUG)
+    );
+    if (appsetOp?.op === "upsert") {
+      expect(appsetOp.content).toContain(
+        "repoURL: https://github.com/cogni-dao/cogni.git"
+      );
     }
   });
 

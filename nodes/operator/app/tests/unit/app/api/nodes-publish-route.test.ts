@@ -54,6 +54,7 @@ const envState = vi.hoisted(() => ({
     NODE_TEMPLATE_OWNER: "cogni-test-org",
     NODE_SUBMODULE_PARENT_OWNER: "cogni-test-org",
     NODE_SUBMODULE_PARENT_REPO: "cogni-monorepo",
+    DEPLOY_ENVIRONMENT: "candidate-a",
     NODE_CAPACITY_CEILING: 8,
   } as {
     GH_REVIEW_APP_ID?: string;
@@ -62,6 +63,7 @@ const envState = vi.hoisted(() => ({
     NODE_TEMPLATE_OWNER?: string;
     NODE_SUBMODULE_PARENT_OWNER?: string;
     NODE_SUBMODULE_PARENT_REPO?: string;
+    DEPLOY_ENVIRONMENT?: string;
     NODE_CAPACITY_CEILING?: number;
     DOLTHUB_OWNER?: string;
     DOLTHUB_API_TOKEN?: string;
@@ -75,6 +77,7 @@ const mockForkFromTemplate = vi.hoisted(() => vi.fn());
 const mockOpenNodeSubmodulePr = vi.hoisted(() => vi.fn());
 const mockFetchFileText = vi.hoisted(() => vi.fn());
 const mockCountDeployedWizardNodes = vi.hoisted(() => vi.fn());
+const mockAssertDeploymentParentReady = vi.hoisted(() => vi.fn());
 const mockLogEvent = vi.hoisted(() => vi.fn());
 const mockLog = vi.hoisted(() => ({
   child: vi.fn().mockReturnThis(),
@@ -105,6 +108,7 @@ vi.mock("@/bootstrap/capabilities/node-repo-write", () => ({
     openNodeSubmodulePr: mockOpenNodeSubmodulePr,
     fetchFileText: mockFetchFileText,
     countDeployedWizardNodes: mockCountDeployedWizardNodes,
+    assertDeploymentParentReady: mockAssertDeploymentParentReady,
   }),
 }));
 
@@ -214,6 +218,7 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
       NODE_TEMPLATE_OWNER: "cogni-test-org",
       NODE_SUBMODULE_PARENT_OWNER: "cogni-test-org",
       NODE_SUBMODULE_PARENT_REPO: "cogni-monorepo",
+      DEPLOY_ENVIRONMENT: "candidate-a",
       NODE_CAPACITY_CEILING: 8,
       DOLTHUB_OWNER: "cogni-dao",
       DOLTHUB_API_TOKEN: "test-dolthub-token",
@@ -241,6 +246,8 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
     });
     mockFetchFileText.mockReset();
     mockCountDeployedWizardNodes.mockReset();
+    mockAssertDeploymentParentReady.mockReset();
+    mockAssertDeploymentParentReady.mockResolvedValue(undefined);
     // Default: 0 deployed wizard nodes in the catalog → under the ceiling.
     mockCountDeployedWizardNodes.mockResolvedValue(0);
     mockLogEvent.mockReset();
@@ -671,6 +678,7 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
       status: "published",
       publishPrUrl: "https://github.com/Cogni-DAO/cogni/pull/1",
     };
+    mockFetchFileText.mockResolvedValue("name: atlas\ntype: node\n");
 
     const response = await publishNode();
     const body = await response.json();
@@ -680,14 +688,70 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
     expect(mockLog.info).toHaveBeenCalledWith(
       expect.objectContaining({
         event: "feature.node_publish.complete",
-        step: "load_node",
         outcome: "already_published",
+        step: "validate_parent",
         status: 200,
         slug: "atlas",
         nodeStatus: "published",
       }),
       "feature.node_publish.complete"
     );
+  });
+
+  it("repairs a published row whose birth PR never reached parent main", async () => {
+    dbState.current = {
+      ...defaultNode,
+      status: "published",
+      publishPrUrl: "https://github.com/cogni-test-org/cogni-monorepo/pull/59",
+    };
+    mockFetchFileText.mockResolvedValue(null);
+
+    const response = await publishNode();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.alreadyPublished).toBeUndefined();
+    expect(mockForkFromTemplate).toHaveBeenCalledOnce();
+    expect(mockOpenNodeSubmodulePr).toHaveBeenCalledOnce();
+    expect(dbState.patch?.status).toBe("published");
+    expect(dbState.patch?.publishPrUrl).toBe(
+      "https://github.com/cogni-test-org/cogni-monorepo/pull/1532"
+    );
+  });
+
+  it("fails before child mint when the deployment parent lacks the required control plane", async () => {
+    mockAssertDeploymentParentReady.mockRejectedValue(
+      new Error("missing candidate-a control-plane root")
+    );
+
+    const response = await publishNode();
+    const body = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(body.error).toBe("deployment parent is not ready for node birth");
+    expect(body.reason).toContain("control-plane root");
+    expect(mockEnsureDatabase).not.toHaveBeenCalled();
+    expect(mockForkFromTemplate).not.toHaveBeenCalled();
+    expect(mockOpenNodeSubmodulePr).not.toHaveBeenCalled();
+  });
+
+  it("threads the runtime deployment environment into parent compatibility", async () => {
+    envState.current.DEPLOY_ENVIRONMENT = "production";
+    envState.current.NODE_SUBMODULE_PARENT_OWNER = "cogni-dao";
+    envState.current.NODE_SUBMODULE_PARENT_REPO = "cogni";
+    mockAssertDeploymentParentReady.mockRejectedValue(
+      new Error("production compatibility probe")
+    );
+
+    const response = await publishNode();
+
+    expect(response.status).toBe(503);
+    expect(mockAssertDeploymentParentReady).toHaveBeenCalledWith({
+      env: "production",
+      owner: "cogni-dao",
+      repo: "cogni",
+    });
+    expect(mockForkFromTemplate).not.toHaveBeenCalled();
   });
 
   it("logs invalid state before attempting repo authoring", async () => {
