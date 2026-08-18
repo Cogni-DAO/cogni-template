@@ -1,8 +1,0 @@
-{
-  "name": "cogni-sealed-secret-transfer",
-  "private": true,
-  "type": "module",
-  "dependencies": {
-    "libsodium-wrappers": "0.7.15"
-  }
-}
