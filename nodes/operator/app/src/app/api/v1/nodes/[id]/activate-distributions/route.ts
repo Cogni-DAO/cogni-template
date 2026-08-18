@@ -50,13 +50,13 @@ import { resolveNodeAndAuthorize } from "@/app/_lib/node-rbac";
 import { createNodeRepoWriter } from "@/bootstrap/capabilities/node-repo-write";
 import { resolveServiceDb } from "@/bootstrap/container";
 import { withRootSpan } from "@/bootstrap/otel";
-import { nodeIdOrSlug } from "@/features/nodes/node-lookup";
 import {
   buildPublishPermissionProbe,
   classifyCasPublishPermission,
   DAO_ABI,
   EXECUTE_PERMISSION_ID,
 } from "@/features/governance/lib/proposal-abis";
+import { nodeIdOrSlug } from "@/features/nodes/node-lookup";
 import { type NodeStatus, nodes } from "@/shared/db/nodes";
 import { serverEnv } from "@/shared/env";
 import {

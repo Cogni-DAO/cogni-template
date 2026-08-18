@@ -220,7 +220,7 @@ export function DistributionsCard({
           refetchRecord={refetchRecord}
         />
       ) : (
-        <p className="text-muted-foreground mt-2 text-sm">
+        <p className="mt-2 text-muted-foreground text-sm">
           Complete this node&apos;s DAO and token formation first. Distribution
           setup becomes available when the operator has the node&apos;s DAO,
           token, voting plugin, and chain.
@@ -329,8 +329,8 @@ function SetupSequence({
     <div className="mt-2 space-y-3">
       {/* Wallet + chain gating is shared by steps 1 and 2. Step 3 is the terminal server write. */}
       {!isConnected ? (
-        <div className="border-border bg-muted/20 rounded-lg border p-3">
-          <p className="text-muted-foreground mb-2 text-sm">
+        <div className="rounded-lg border border-border bg-muted/20 p-3">
+          <p className="mb-2 text-muted-foreground text-sm">
             Connect the node owner wallet to deploy + authorize.
           </p>
           <WalletConnectButton />
@@ -430,7 +430,7 @@ function DeployStep({
           : "recorded in the open activation PR";
     return (
       <StepRow n={1} state="done" title="Distributor deployed">
-        <p className="text-muted-foreground font-mono text-xs break-all">
+        <p className="break-all font-mono text-muted-foreground text-xs">
           Distributor: {derived.distributorAddress} ({sourceLabel})
         </p>
         {onChain.status === "verified" ? (
@@ -619,7 +619,7 @@ function RecordStep({
                 href={repoSpecUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="text-muted-foreground hover:text-foreground text-sm"
+                className="text-muted-foreground text-sm hover:text-foreground"
               >
                 View repo-spec
               </a>
@@ -686,7 +686,7 @@ function AuthorizeStep({
           onAuthorized={onAuthorized}
         />
       ) : (
-        <p className="text-muted-foreground pl-0 text-sm">
+        <p className="pl-0 text-muted-foreground text-sm">
           Grant your wallet scoped authority to publish — available once the
           distributor is deployed and verified on-chain.
         </p>
@@ -819,7 +819,7 @@ function ExternalLinkRow({
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="text-primary inline-flex items-center gap-1.5 text-sm hover:underline"
+      className="inline-flex items-center gap-1.5 text-primary text-sm hover:underline"
     >
       {children}
       <ExternalLink className="size-3.5" />
