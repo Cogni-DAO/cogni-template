@@ -1510,8 +1510,7 @@ node_port: 30200
             production: { owner: "cogni-dao", repo: "cogni" },
           });
         } else if (path === ".github/workflows/promote-and-deploy.yml") {
-          content =
-            'run: bash scripts/ci/assert-deployment-parent.sh "${{ inputs.environment }}"\n';
+          content = `run: bash scripts/ci/assert-deployment-parent.sh "\${{ inputs.environment }}"\n`;
         } else if (path === "scripts/ci/assert-deployment-parent.sh") {
           content = "guard\n";
         } else if (path === "scripts/ci/node-applicationset.yaml.tmpl") {
@@ -2787,8 +2786,9 @@ describe("GitHubRepoWriter.syncTemplateUpstreamToFork", () => {
       },
     };
 
-    const result =
-      await makeWriter().syncTemplateUpstreamToFork(upstreamInput());
+    const result = await makeWriter().syncTemplateUpstreamToFork(
+      upstreamInput()
+    );
     expect(result).toMatchObject({
       status: "pr_opened",
       prNumber: 5,
@@ -2878,8 +2878,9 @@ describe("GitHubRepoWriter.syncTemplateUpstreamToFork", () => {
         Promise.reject(statusError(422, "No commits between main and main")),
       "GET /repos/{owner}/{repo}/pulls": () => [],
     };
-    const result =
-      await makeWriter().syncTemplateUpstreamToFork(upstreamInput());
+    const result = await makeWriter().syncTemplateUpstreamToFork(
+      upstreamInput()
+    );
     expect(result).toEqual({ status: "up_to_date" });
     expect(requests.map((r) => r.route)).not.toContain(
       "POST /repos/{owner}/{repo}/git/commits"

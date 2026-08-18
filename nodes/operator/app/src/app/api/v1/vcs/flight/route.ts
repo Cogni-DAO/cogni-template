@@ -33,8 +33,8 @@ import { getContainer, resolveServiceDb } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import type { DeployPlanePort, PreparedNodeRefCandidateFlight } from "@/ports";
 import { nodes } from "@/shared/db/nodes";
-import { type ServerEnv, serverEnv } from "@/shared/env";
 import { assertDeploymentParent } from "@/shared/deployment-parent";
+import { type ServerEnv, serverEnv } from "@/shared/env";
 import {
   EVENT_NAMES,
   logEvent,

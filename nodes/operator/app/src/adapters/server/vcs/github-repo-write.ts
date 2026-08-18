@@ -50,8 +50,8 @@ import type {
 } from "@/ports";
 import {
   assertDeploymentParent,
-  deploymentParentRepoUrl,
   type DeploymentEnvironment,
+  deploymentParentRepoUrl,
 } from "@/shared/deployment-parent";
 import {
   buildEnvDeltaPlan,
@@ -1168,7 +1168,7 @@ export class GitHubRepoWriter implements DeployPlanePort {
     const workflowGuard =
       input.env === "candidate-a"
         ? "assert-deployment-parent.sh candidate-a"
-        : 'assert-deployment-parent.sh "${{ inputs.environment }}"';
+        : `assert-deployment-parent.sh "\${{ inputs.environment }}"`;
 
     const requiredPaths = [
       DEPLOYMENT_PARENT_CONTRACT_PATH,
