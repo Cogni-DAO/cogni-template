@@ -71,8 +71,12 @@ eslint/
 .yarn
 .npm
 
-# Infra / IaC (not needed in app images)
+# Infra / IaC (not needed in app images). The deployment-parent contract is
+# imported by the operator build, so keep that one declarative file in context.
 infra
+!infra/
+infra/**
+!infra/deployment-parents.json
 scripts/ci
 scripts/bootstrap
 

@@ -119,6 +119,8 @@ for env in candidate-a preview production; do
 done
 grep -q '__DEPLOYMENT_PARENT_REPO_URL__' scripts/ci/node-applicationset.yaml.tmpl \
   || fail "AppSet template must carry the deployment-parent token"
+grep -qx '!infra/deployment-parents.json' .dockerignore \
+  || fail "operator Docker build must include the deployment-parent contract"
 pass "AppSets + control-plane roots use the env deployment-parent contract"
 
 # 6. Workflow repo guard accepts the declared parent and rejects a split repo.
