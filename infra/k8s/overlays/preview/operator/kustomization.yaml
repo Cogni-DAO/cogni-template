@@ -16,7 +16,7 @@ namePrefix: operator-
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:7dc923bb19ddc771dbb4aa8e8092c14d54db724c0744cfad71492540047a5644"
+    digest: "sha256:7b4a46f6ceaa64b4e60e9554dd4d1b003f6e6efc60921dddd80d39add67709d0"
 
 patches:
   # Node-specific ConfigMap values.
