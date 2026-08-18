@@ -121,7 +121,8 @@ activity_ledger:
   approvers:
     - "0x070075F1389Ae1182aBac722B36CA12285d0c949" # derekg1729.eth (template default)
   # Explicit v0 issuance; never rely on the missing-config 0n runtime fallback.
-  # Policy canon: docs/spec/tokenomics-distribution.md.
+  # Policy canon: docs/spec/tokenomics.md and operator knowledge entry
+  # epoch-distribution-golden-path.
   pool_config:
     base_issuance_credits: "${DEFAULT_BASE_ISSUANCE_CREDITS}"
   activity_sources:
