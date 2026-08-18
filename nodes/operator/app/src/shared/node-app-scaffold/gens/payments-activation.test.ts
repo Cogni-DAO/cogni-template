@@ -36,7 +36,7 @@ intent:
   name: atlas
   mission: "do things"
 
-cogni_dao:
+governance:
   dao_contract: "0xDA0"
   chain_id: "8453"
 
@@ -74,7 +74,7 @@ describe("renderPaymentsActivationSpec", () => {
     expect(activated).toContain("# Node Template - repo-spec");
     expect(activated).toContain('node_id: "abc"');
     const parsed = parseYaml(activated) as Record<string, unknown>;
-    expect((parsed.cogni_dao as Record<string, unknown>).dao_contract).toBe(
+    expect((parsed.governance as Record<string, unknown>).dao_contract).toBe(
       "0xDA0"
     );
     expect(Array.isArray(parsed.gates)).toBe(true);

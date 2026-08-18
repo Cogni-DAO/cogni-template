@@ -53,7 +53,7 @@ The adapter holds **no raw EVM key** (`KEY_NEVER_IN_APP`). Privy's HSM holds the
 
 ### What makes it "live" (container wiring)
 
-`container.ts` builds `operatorWallet` (`:770`) ONLY when `!isTestMode` AND `PRIVY_APP_ID/SECRET/SIGNING_KEY` present AND `operator_wallet.address` in repo-spec AND `cogni_dao.dao_contract` present AND `getPaymentConfig()` present AND `EVM_RPC_URL` set — else `undefined` (graceful skip). `providerFunding` additionally requires `OPENROUTER_API_KEY` and enforces `MARGIN_PRESERVED` (`:868–884`): `markup × (1 − fee) > 1 + revenueShare`, else it throws at boot. `paymentRailGuard` (`:820`) fail-closes intents when repo-spec/Split disagree. `isTestMode` swaps every port for fakes — **no real money path in test**.
+`container.ts` builds `operatorWallet` (`:770`) ONLY when `!isTestMode` AND `PRIVY_APP_ID/SECRET/SIGNING_KEY` present AND `operator_wallet.address` in repo-spec AND `governance.dao_contract` present AND `getPaymentConfig()` present AND `EVM_RPC_URL` set — else `undefined` (graceful skip). `providerFunding` additionally requires `OPENROUTER_API_KEY` and enforces `MARGIN_PRESERVED` (`:868–884`): `markup × (1 − fee) > 1 + revenueShare`, else it throws at boot. `paymentRailGuard` (`:820`) fail-closes intents when repo-spec/Split disagree. `isTestMode` swaps every port for fakes — **no real money path in test**.
 
 ---
 
