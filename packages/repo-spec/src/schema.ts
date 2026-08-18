@@ -254,7 +254,10 @@ export const poolConfigSpecSchema = z.object({
   /** Base issuance in credits (string → bigint). Governance-set budget per epoch. */
   base_issuance_credits: z
     .string()
-    .min(1, "base_issuance_credits must be a non-empty string"),
+    .regex(
+      /^[0-9]+$/,
+      "base_issuance_credits must be a non-negative integer string"
+    ),
 });
 
 export type PoolConfigSpec = z.infer<typeof poolConfigSpecSchema>;
@@ -275,7 +278,7 @@ export const activityLedgerSpecSchema = z.object({
     .default([]),
   /** Map of source name → source config */
   activity_sources: z.record(z.string(), activitySourceSpecSchema),
-  /** Pool budget configuration (optional — defaults to 0 base issuance if missing) */
+  /** Pool budget configuration. Optional until token distributions are activated. */
   pool_config: poolConfigSpecSchema.optional(),
 });
 
@@ -675,6 +678,23 @@ export const repoSpecSchema = z
     /** Node registry — operator-only. Declares child nodes in the monorepo. */
     nodes: z.array(nodeRegistryEntrySchema).optional(),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((spec, ctx) => {
+    if (spec.distributions?.status !== "active") return;
+
+    const configured = spec.activity_ledger?.pool_config?.base_issuance_credits;
+    const isPositiveInteger =
+      configured !== undefined &&
+      /^[0-9]+$/.test(configured) &&
+      BigInt(configured) > 0n;
+    if (!isPositiveInteger) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["activity_ledger", "pool_config", "base_issuance_credits"],
+        message:
+          "active distributions require explicit base_issuance_credits greater than zero",
+      });
+    }
+  });
 
 export type RepoSpec = z.infer<typeof repoSpecSchema>;

@@ -24,6 +24,9 @@ import { v5 as uuidv5 } from "uuid";
 
 import type { NodeKnowledgeRemote } from "../knowledge-remote";
 
+/** Explicit v0 per-epoch issuance persisted into every freshly minted node. */
+export const DEFAULT_BASE_ISSUANCE_CREDITS = "10000" as const;
+
 export interface RenderRepoSpecInput {
   readonly slug: string;
   readonly repoOwner: string;
@@ -117,6 +120,8 @@ activity_ledger:
   epoch_length_days: 7
   approvers:
     - "0x070075F1389Ae1182aBac722B36CA12285d0c949" # derekg1729.eth (template default)
+  pool_config:
+    base_issuance_credits: "${DEFAULT_BASE_ISSUANCE_CREDITS}"
   activity_sources:
     github:
       attribution_pipeline: cogni-v0.0

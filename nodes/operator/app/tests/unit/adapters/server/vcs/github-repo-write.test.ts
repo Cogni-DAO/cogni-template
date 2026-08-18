@@ -250,6 +250,14 @@ governance:
   signal_contract: "0x3333333333333333333333333333333333333333"
   token_contract: "0x4444444444444444444444444444444444444444"
   chain_id: "8453"
+activity_ledger:
+  epoch_length_days: 7
+  pool_config:
+    base_issuance_credits: "10000"
+  activity_sources:
+    github:
+      attribution_pipeline: cogni-v0.0
+      source_refs: ["cogni-test-org/test-cog"]
 distributions:
   status: pending_activation
 `;
@@ -520,17 +528,18 @@ describe("GitHubRepoWriter.openDistributionActivationPr", () => {
     ]);
   });
 
-  it("opens a one-file activation PR from a pending repo-spec", async () => {
+  it("opens one PR that activates and reconciles a missing legacy issuance", async () => {
     const tokenAddress = "0x4444444444444444444444444444444444444444";
     const emissionsHolderAddress = "0x5555555555555555555555555555555555555555";
     const branch = "cogni-operator/activate-distributions-test-cog";
-    const desiredSpec = renderDistributionActivationSpec(
-      DISTRIBUTION_PENDING_SPEC,
-      {
-        tokenAddress,
-        emissionsHolderAddress,
-      }
+    const legacySpec = DISTRIBUTION_PENDING_SPEC.replace(
+      / {2}pool_config:\n {4}base_issuance_credits: "10000"\n/,
+      ""
     );
+    const desiredSpec = renderDistributionActivationSpec(legacySpec, {
+      tokenAddress,
+      emissionsHolderAddress,
+    });
     const encode = (content: string) =>
       Buffer.from(content, "utf-8").toString("base64");
 
@@ -544,7 +553,7 @@ describe("GitHubRepoWriter.openDistributionActivationPr", () => {
         return {
           type: "file",
           encoding: "base64",
-          content: encode(DISTRIBUTION_PENDING_SPEC),
+          content: encode(legacySpec),
           sha: "repo-spec-sha",
         };
       },
@@ -657,6 +666,39 @@ describe("GitHubRepoWriter.openDistributionActivationPr", () => {
       "POST /repos/{owner}/{repo}/git/refs",
       "POST /repos/{owner}/{repo}/pulls",
       "PATCH /repos/{owner}/{repo}/pulls/{pull_number}",
+    ]);
+  });
+
+  it("rejects activation before Git writes when issuance is explicitly zero", async () => {
+    const invalidIssuance = DISTRIBUTION_PENDING_SPEC.replace(
+      'base_issuance_credits: "10000"',
+      'base_issuance_credits: "0"'
+    );
+    const encode = (content: string) =>
+      Buffer.from(content, "utf-8").toString("base64");
+    routeHandlers = {
+      "GET /repos/{owner}/{repo}/contents/{path}": () => ({
+        type: "file",
+        encoding: "base64",
+        content: encode(invalidIssuance),
+        sha: "repo-spec-sha",
+      }),
+    };
+
+    await expect(
+      makeWriter().openDistributionActivationPr({
+        owner: "cogni-test-org",
+        repo: "test-cog",
+        slug: "test-cog",
+        tokenAddress: "0x4444444444444444444444444444444444444444",
+        emissionsHolderAddress: "0x5555555555555555555555555555555555555555",
+      })
+    ).rejects.toMatchObject({
+      code: "distribution_issuance_invalid",
+      status: 422,
+    });
+    expect(requests.map((request) => request.route)).toEqual([
+      "GET /repos/{owner}/{repo}/contents/{path}",
     ]);
   });
 });

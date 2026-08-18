@@ -13,7 +13,7 @@
  * @public
  */
 
-import { parseRepoSpec } from "@cogni/repo-spec";
+import { extractLedgerConfig, parseRepoSpec } from "@cogni/repo-spec";
 import { describe, expect, it } from "vitest";
 import { parse as parseYaml } from "yaml";
 
@@ -52,6 +52,7 @@ interface ParsedSpec {
   activity_ledger?: {
     epoch_length_days: number;
     approvers: string[];
+    pool_config: { base_issuance_credits: string };
     activity_sources: {
       github?: {
         attribution_pipeline: string;
@@ -119,6 +120,16 @@ describe("renderRepoSpec — BORN_REVIEWABLE", () => {
     expect(spec.activity_ledger?.approvers).toContain(
       "0x070075F1389Ae1182aBac722B36CA12285d0c949"
     );
+  });
+
+  it("persists nonzero v0 issuance so a fresh node can fund its first epoch", () => {
+    expect(spec.activity_ledger?.pool_config.base_issuance_credits).toBe(
+      "10000"
+    );
+    expect(
+      extractLedgerConfig(parseRepoSpec(rendered))?.poolConfig
+        .baseIssuanceCredits
+    ).toBe(10000n);
   });
 
   it("emits the default review gates so minted nodes are born-reviewable", () => {

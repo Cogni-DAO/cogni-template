@@ -16,12 +16,16 @@
  *     formation or payments activation.
  *   - SINGLE_HOME: writes ONLY to the node's own `.cogni/repo-spec.yaml`.
  *   - IDEMPOTENT_SPLICE: re-splicing an already-activated spec is a no-op.
+ *   - ISSUANCE_IS_EXPLICIT: a missing legacy pool budget is reconciled to the persisted v0 default;
+ *     an explicit zero/invalid budget is a policy conflict and fails closed.
  * Side-effects: none.
  * Links: docs/spec/node-formation.md, docs/spec/tokenomics.md, task.0135
  * @public
  */
 
 import { parse as parseYaml } from "yaml";
+
+import { DEFAULT_BASE_ISSUANCE_CREDITS } from "./repo-spec";
 
 // The claim pattern MUST name the distributor the node actually deploys +
 // claims against. Activation deploys the vendored 1inch CumulativeMerkleDrop
@@ -47,9 +51,88 @@ export interface RenderDistributionActivationInput {
   readonly distributorAddress?: string;
 }
 
+/** True only when the repo-spec explicitly persists a positive per-epoch issuance. */
+export function hasPositiveBaseIssuanceCredits(spec: string): boolean {
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(spec);
+  } catch {
+    return false;
+  }
+
+  const root = asRecord(parsed);
+  const ledger = asRecord(root?.activity_ledger);
+  const pool = asRecord(ledger?.pool_config);
+  const issuance = pool?.base_issuance_credits;
+  return (
+    typeof issuance === "string" &&
+    /^[0-9]+$/.test(issuance) &&
+    BigInt(issuance) > 0n
+  );
+}
+
 const DISTRIBUTIONS_BLOCK = `distributions:
   status: active
   claim_contract_pattern: ${DISTRIBUTION_CLAIM_CONTRACT_PATTERN}`;
+
+function reconcileDistributionIssuance(spec: string): string {
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(spec);
+  } catch {
+    throw new Error("distribution activation requires a parseable repo-spec");
+  }
+
+  const root = asRecord(parsed);
+  const ledger = asRecord(root?.activity_ledger);
+  if (!ledger) {
+    throw new Error(
+      "distribution activation requires an activity_ledger before token distributions can be activated"
+    );
+  }
+
+  const pool = asRecord(ledger.pool_config);
+  const issuance = pool?.base_issuance_credits;
+  if (issuance !== undefined) {
+    if (
+      typeof issuance !== "string" ||
+      !/^[0-9]+$/.test(issuance) ||
+      BigInt(issuance) <= 0n
+    ) {
+      throw new Error(
+        "configured activity_ledger.pool_config.base_issuance_credits must be a positive integer string"
+      );
+    }
+    return spec;
+  }
+
+  const ledgerRe = topLevelBlockRegex("activity_ledger");
+  const match = ledgerRe.exec(spec);
+  if (!match) {
+    throw new Error(
+      "distribution activation requires an activity_ledger before token distributions can be activated"
+    );
+  }
+
+  const leading = match[1] ?? "";
+  let body = match[0].slice(leading.length);
+  const poolRe = /(^|\n) {2}pool_config:[^\n]*(?:\n {4}[^\n]*)*/m;
+  const poolMatch = poolRe.exec(body);
+  if (poolMatch) {
+    const poolLeading = poolMatch[1] ?? "";
+    const poolBody = poolMatch[0].slice(poolLeading.length);
+    body = body.replace(
+      poolRe,
+      `${poolLeading}${poolBody}\n    base_issuance_credits: "${DEFAULT_BASE_ISSUANCE_CREDITS}"`
+    );
+  } else {
+    body = body.replace(
+      /^activity_ledger:[^\n]*$/m,
+      `activity_ledger:\n  pool_config:\n    base_issuance_credits: "${DEFAULT_BASE_ISSUANCE_CREDITS}"`
+    );
+  }
+  return spec.replace(ledgerRe, `${leading}${body}`);
+}
 
 /**
  * Splice distribution activation config into an existing repo-spec YAML string.
@@ -60,12 +143,13 @@ const DISTRIBUTIONS_BLOCK = `distributions:
  *   3. Upsert `distributions.status: active`.
  *   4. Upsert `distributions.claim_contract_pattern: 1inch.cumulative-merkle-drop.v1`.
  *   5. When a distributor is supplied, upsert `distributions.distributor_address`.
+ *   6. Persist the v0 issuance default when legacy `activity_ledger.pool_config` is absent.
  */
 export function renderDistributionActivationSpec(
   current: string,
   input: RenderDistributionActivationInput
 ): string {
-  let out = current.replace(/\s*$/, "\n");
+  let out = reconcileDistributionIssuance(current).replace(/\s*$/, "\n");
 
   out = upsertGovernanceDistributionFields(out, input);
   out = upsertDistributionsBlock(out, input.distributorAddress);
@@ -111,6 +195,7 @@ export function hasDistributionActivationSpec(
     sameAddress(distributions.distributor_address, input.distributorAddress);
 
   return (
+    hasPositiveBaseIssuanceCredits(spec) &&
     distributions.status === "active" &&
     distributions.claim_contract_pattern ===
       DISTRIBUTION_CLAIM_CONTRACT_PATTERN &&

@@ -42,6 +42,15 @@ governance:
   signal_contract: "0x5555555555555555555555555555555555555555"
   chain_id: "8453"
 
+activity_ledger:
+  epoch_length_days: 7
+  pool_config:
+    base_issuance_credits: "10000"
+  activity_sources:
+    github:
+      attribution_pipeline: cogni-v0.0
+      source_refs: ["cogni-test-org/atlas"]
+
 distributions:
   status: pending_activation
 
@@ -67,6 +76,40 @@ describe("renderDistributionActivationSpec", () => {
     expect(distributions.claim_contract_pattern).toBe(
       DISTRIBUTION_CLAIM_CONTRACT_PATTERN
     );
+  });
+
+  it("persists the v0 default when a legacy ledger has no pool_config", () => {
+    const missingIssuance = PENDING_SPEC.replace(
+      / {2}pool_config:\n {4}base_issuance_credits: "10000"\n/,
+      ""
+    );
+    const reconciled = renderDistributionActivationSpec(missingIssuance, {
+      tokenAddress: TOKEN,
+      emissionsHolderAddress: EMISSIONS_HOLDER,
+    });
+    const parsed = parseYaml(reconciled) as {
+      activity_ledger: {
+        pool_config: { base_issuance_credits: string };
+      };
+    };
+    expect(parsed.activity_ledger.pool_config.base_issuance_credits).toBe(
+      "10000"
+    );
+  });
+
+  it("fails closed instead of overriding an explicit invalid issuance", () => {
+    for (const configured of ["0", "-1", "10.5", "not-a-number"]) {
+      const invalidIssuance = PENDING_SPEC.replace(
+        'base_issuance_credits: "10000"',
+        `base_issuance_credits: "${configured}"`
+      );
+      expect(() =>
+        renderDistributionActivationSpec(invalidIssuance, {
+          tokenAddress: TOKEN,
+          emissionsHolderAddress: EMISSIONS_HOLDER,
+        })
+      ).toThrow(/must be a positive integer string/);
+    }
   });
 
   // bug.5031 regression: the recorded claim pattern MUST name the distributor the
@@ -151,6 +194,15 @@ governance:
   chain_id: "8453"
   token_contract: "${TOKEN.toUpperCase()}"
   emissions_holder: "${EMISSIONS_HOLDER.toUpperCase()}"
+
+activity_ledger:
+  epoch_length_days: 7
+  pool_config:
+    base_issuance_credits: "10000"
+  activity_sources:
+    github:
+      attribution_pipeline: cogni-v0.0
+      source_refs: ["cogni-test-org/atlas"]
 `;
 
     expect(

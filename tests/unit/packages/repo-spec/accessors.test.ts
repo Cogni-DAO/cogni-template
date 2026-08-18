@@ -42,6 +42,21 @@ const TEST_CHAIN_ID = 8453;
 
 /** Builds a minimal valid RepoSpec for testing */
 function buildSpec(overrides: Partial<RepoSpec> = {}): RepoSpec {
+  const activeDistributionLedger =
+    overrides.distributions?.status === "active" && !overrides.activity_ledger
+      ? {
+          activity_ledger: {
+            epoch_length_days: 7,
+            pool_config: { base_issuance_credits: "10000" },
+            activity_sources: {
+              github: {
+                attribution_pipeline: "cogni-v0.0",
+                source_refs: ["cogni-dao/test"],
+              },
+            },
+          },
+        }
+      : {};
   return parseRepoSpec({
     node_id: TEST_NODE_ID,
     governance: { chain_id: String(TEST_CHAIN_ID) },
@@ -51,6 +66,7 @@ function buildSpec(overrides: Partial<RepoSpec> = {}): RepoSpec {
         receiving_address: "0x1111111111111111111111111111111111111111",
       },
     },
+    ...activeDistributionLedger,
     ...overrides,
   });
 }

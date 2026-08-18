@@ -2230,6 +2230,7 @@ export class GitHubRepoWriter implements DeployPlanePort {
       "GovernanceERC20 token + DAO-controlled emissions holder into `.cogni/repo-spec.yaml`:\n\n" +
       `- \`governance.token_contract\` = \`${input.tokenAddress}\`\n` +
       `- \`governance.emissions_holder\` = \`${input.emissionsHolderAddress}\`\n` +
+      '- `activity_ledger.pool_config.base_issuance_credits: "10000"` when absent (legacy reconciliation)\n' +
       "- `distributions.status: active`\n" +
       "- `distributions.claim_contract_pattern: 1inch.cumulative-merkle-drop.v1`\n" +
       distributorLines +
@@ -2251,7 +2252,6 @@ export class GitHubRepoWriter implements DeployPlanePort {
         422
       );
     }
-
     const specInput = {
       tokenAddress: input.tokenAddress,
       emissionsHolderAddress: input.emissionsHolderAddress,
@@ -2259,7 +2259,16 @@ export class GitHubRepoWriter implements DeployPlanePort {
         ? { distributorAddress: input.distributorAddress }
         : {}),
     };
-    const nextSpec = renderDistributionActivationSpec(currentSpec, specInput);
+    let nextSpec: string;
+    try {
+      nextSpec = renderDistributionActivationSpec(currentSpec, specInput);
+    } catch (error) {
+      throw deployPlaneError(
+        "distribution_issuance_invalid",
+        error instanceof Error ? error.message : String(error),
+        422
+      );
+    }
     if (
       nextSpec === currentSpec ||
       hasDistributionActivationSpec(currentSpec, specInput)

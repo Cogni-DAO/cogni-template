@@ -121,6 +121,73 @@ describe("parseRepoSpec", () => {
       expect(result.governance.chain_id).toBe("8453");
     });
 
+    it("requires explicit positive issuance when distributions are active", () => {
+      const active = {
+        ...VALID_OBJECT,
+        distributions: { status: "active" },
+        activity_ledger: {
+          epoch_length_days: 7,
+          activity_sources: {
+            github: {
+              attribution_pipeline: "cogni-v0.0",
+              source_refs: ["cogni-dao/test"],
+            },
+          },
+        },
+      } as const;
+
+      expect(() => parseRepoSpec(active)).toThrow(
+        /active distributions require explicit base_issuance_credits greater than zero/
+      );
+      expect(() =>
+        parseRepoSpec({
+          ...active,
+          activity_ledger: {
+            ...active.activity_ledger,
+            pool_config: { base_issuance_credits: "0" },
+          },
+        })
+      ).toThrow(
+        /active distributions require explicit base_issuance_credits greater than zero/
+      );
+      expect(() =>
+        parseRepoSpec({
+          ...active,
+          activity_ledger: {
+            ...active.activity_ledger,
+            pool_config: { base_issuance_credits: "not-a-number" },
+          },
+        })
+      ).toThrow(/base_issuance_credits must be a non-negative integer string/);
+      expect(() =>
+        parseRepoSpec({
+          ...active,
+          activity_ledger: {
+            ...active.activity_ledger,
+            pool_config: { base_issuance_credits: "10000" },
+          },
+        })
+      ).not.toThrow();
+    });
+
+    it("rejects non-integer base issuance before bigint extraction", () => {
+      expect(() =>
+        parseRepoSpec({
+          ...VALID_OBJECT,
+          activity_ledger: {
+            epoch_length_days: 7,
+            pool_config: { base_issuance_credits: "10.5" },
+            activity_sources: {
+              github: {
+                attribution_pipeline: "cogni-v0.0",
+                source_refs: ["cogni-dao/test"],
+              },
+            },
+          },
+        })
+      ).toThrow(/base_issuance_credits must be a non-negative integer string/);
+    });
+
     it("accepts Cogni-owned DoltHub knowledge remote config", () => {
       const result = parseRepoSpec({
         ...VALID_OBJECT,
