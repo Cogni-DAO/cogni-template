@@ -3,11 +3,11 @@
 
 /**
  * Module: `@scripts/ci/tests/sealed-secret-transfer`
- * Purpose: Prove fixed allowlists, sealed-box compatibility, plaintext exclusion, and target-only apply behavior.
+ * Purpose: Prove cold-process sealing, fixed allowlists, plaintext exclusion, and target-only apply behavior.
  * Scope: Ephemeral keys and a fake gh binary only; does not read or mutate live GitHub state.
  * Invariants: FORBIDDEN_RUNTIME_NAMES_FAIL_CLOSED; PLAN_IS_NON_MUTATING; TARGET_EXTRAS_ARE_PRESERVED.
  * Side-effects: IO (ephemeral test files and child processes).
- * Links: task.5034, scripts/ci/sealed-secret-transfer/candidate-a-manifest.json
+ * Links: task.5034, bug.5053, scripts/ci/sealed-secret-transfer/candidate-a-manifest.json
  * @internal
  */
 
@@ -41,6 +41,47 @@ const applyPath = resolve(
   repoRoot,
   "scripts/ci/sealed-secret-transfer/apply.mjs"
 );
+const sealPath = resolve(
+  repoRoot,
+  "scripts/ci/sealed-secret-transfer/seal.mjs"
+);
+
+test("seal CLI succeeds in a fresh process without secret plaintext output", async () => {
+  const root = await mkdtemp(resolve(tmpdir(), "sealed-transfer-cold-"));
+  const bundlePath = resolve(root, "cold-process-bundle.json");
+  const secretFixtures = {
+    CLOUDFLARE_API_TOKEN: "cold-process-secret-token",
+    CLOUDFLARE_ZONE_ID: "cold-process-secret-zone",
+    SSH_DEPLOY_KEY: "cold-process-secret-ssh-key",
+    VM_HOST: "cold-process-secret-vm-host",
+  };
+  const coldProcess = spawnSync(process.execPath, [sealPath], {
+    cwd: repoRoot,
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      ...Object.fromEntries(
+        Object.entries(secretFixtures).map(([name, value]) => [
+          `SOURCE_SECRET_${name}`,
+          value,
+        ])
+      ),
+      SOURCE_VARIABLE_DOMAIN: "cold-process.example.test",
+      SEALED_BUNDLE_OUTPUT: bundlePath,
+    },
+  });
+  assert.equal(coldProcess.status, 0, coldProcess.stderr);
+  assert.match(coldProcess.stdout, /sealed 4 secret names/);
+
+  const serializedBundle = await readFile(bundlePath, "utf8");
+  const observableOutput = `${coldProcess.stdout}${coldProcess.stderr}${serializedBundle}`;
+  for (const plaintext of Object.values(secretFixtures)) {
+    assert.equal(observableOutput.includes(plaintext), false);
+  }
+  const bundle = JSON.parse(serializedBundle);
+  assert.equal(bundle.entries.length, EXPECTED_SECRET_COUNT);
+  assert.deepEqual(bundle.missing, []);
+});
 
 async function fixture() {
   await sodium.ready;
@@ -87,6 +128,14 @@ test("manifest is the minimal fixed candidate flight authority contract", async 
   assert.deepEqual(
     manifest.secrets.map(({ name }) => name),
     ["CLOUDFLARE_API_TOKEN", "CLOUDFLARE_ZONE_ID", "SSH_DEPLOY_KEY", "VM_HOST"]
+  );
+
+  const wrongLengthKey = structuredClone(manifest);
+  wrongLengthKey.target.sealingKey.publicKey =
+    Buffer.alloc(31).toString("base64");
+  assert.throws(
+    () => assertManifest(wrongLengthKey),
+    /target sealing public key is malformed/
   );
 });
 

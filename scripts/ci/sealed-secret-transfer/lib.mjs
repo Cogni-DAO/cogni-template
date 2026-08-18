@@ -7,7 +7,7 @@
  * Scope: Pure manifest/bundle validation plus sealed-box encryption; does not access GitHub or runtime state.
  * Invariants: EXACT_FOUR_SECRET_ALLOWLIST; REVIEWED_TARGET_KEY; NO_RUNTIME_SECRET_TRANSFER.
  * Side-effects: IO (reads the reviewed manifest); cryptographic randomness for sealed boxes.
- * Links: task.5034, docs/spec/secrets-management.md, docs/spec/secrets-classification.md
+ * Links: task.5034, bug.5053, docs/spec/secrets-management.md, docs/spec/secrets-classification.md
  * @internal
  */
 
@@ -31,6 +31,7 @@ export const EXPECTED_SECRET_NAMES = Object.freeze([
 ]);
 export const EXPECTED_SECRET_COUNT = EXPECTED_SECRET_NAMES.length;
 export const EXPECTED_VARIABLE_NAMES = Object.freeze(["DOMAIN"]);
+const SEALED_BOX_PUBLIC_KEY_BYTES = 32;
 
 function sameEndpoint(actual, expected) {
   return (
@@ -84,7 +85,7 @@ export function assertManifest(manifest) {
     typeof sealingKey.publicKey !== "string" ||
     !/^[A-Za-z0-9+/]+={0,2}$/.test(sealingKey.publicKey) ||
     Buffer.from(sealingKey.publicKey, "base64").length !==
-      sodium.crypto_box_PUBLICKEYBYTES
+      SEALED_BOX_PUBLIC_KEY_BYTES
   ) {
     throw new Error("manifest target sealing public key is malformed");
   }
@@ -153,9 +154,9 @@ function decodeTargetPublicKey(publicKey) {
   } catch {
     throw new Error("target public key must be valid base64");
   }
-  if (decoded.length !== sodium.crypto_box_PUBLICKEYBYTES) {
+  if (decoded.length !== SEALED_BOX_PUBLIC_KEY_BYTES) {
     throw new Error(
-      `target public key must decode to ${sodium.crypto_box_PUBLICKEYBYTES} bytes`
+      `target public key must decode to ${SEALED_BOX_PUBLIC_KEY_BYTES} bytes`
     );
   }
   return decoded;
