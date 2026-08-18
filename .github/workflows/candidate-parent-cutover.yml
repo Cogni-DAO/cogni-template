@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2026 Cogni-DAO
+
+name: Candidate-a Deployment Parent Cutover
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type: CUTOVER candidate-a cogni-dao/cogni -> cogni-test-org/cogni-monorepo"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: candidate-a-deployment-parent-cutover
+  cancel-in-progress: false
+
+jobs:
+  cutover:
+    runs-on: ubuntu-latest
+    environment: candidate-a
+    env:
+      CUTOVER_CONFIRMATION: ${{ inputs.confirmation }}
+      CUTOVER_MANIFEST: infra/candidate-a-parent-cutover.json
+      DEPLOY_ENVIRONMENT: candidate-a
+      VM_HOST: ${{ secrets.VM_HOST }}
+      SSH_KEY: /home/runner/.ssh/deploy_key
+    steps:
+      - name: Checkout target main
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify target repository and dispatch ref
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "cogni-test-org/cogni-monorepo"
+          test "$GITHUB_REF_NAME" = "main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          bash scripts/ci/assert-deployment-parent.sh candidate-a
+          bash scripts/ci/candidate-parent-cutover.sh validate
+
+      - name: Setup candidate-a SSH
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_HOST"
+          test -n "$SSH_DEPLOY_KEY"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_DEPLOY_KEY" | tr -d '\r' > "$SSH_KEY"
+          chmod 600 "$SSH_KEY"
+          ssh-keyscan -T 10 -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Mirror exact refs, apply root, and prove no workload delta
+        run: bash scripts/ci/candidate-parent-cutover.sh run
+
+      - name: Publish cutover proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: candidate-parent-cutover-proof-${{ github.run_id }}
+          path: ${{ runner.temp }}/candidate-parent-cutover/
+          if-no-files-found: error
+          retention-days: 30

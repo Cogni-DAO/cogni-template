@@ -1,0 +1,64 @@
+{
+  "$schema": "../docs/spec/candidate-parent-cutover.schema.json",
+  "schemaVersion": 1,
+  "environment": "candidate-a",
+  "sourceRepository": "cogni-dao/cogni",
+  "sourceMainSha": "a6ad07e9a52e049744d494802081f03981fa0412",
+  "targetRepository": "cogni-test-org/cogni-monorepo",
+  "rootManifest": "infra/k8s/argocd/control-plane/roots/candidate-a-control-plane-application.yaml",
+  "branches": [
+    {
+      "name": "deploy/candidate-a",
+      "sha": "6fe215b54ac73182cd91f111e8bb883f4ce5683e",
+      "role": "environment"
+    },
+    {
+      "name": "deploy/candidate-a-beacon",
+      "sha": "bbdadd466e5bc68c0595f9975dacf8ec9b811886",
+      "role": "application",
+      "app": "beacon",
+      "sourceSha": "bf18d2878bd0e4b44bbdad279dfc3bcede3831e2",
+      "image": "ghcr.io/cogni-dao/beacon@sha256:7ba093656bc22f7751648efb94033e75939075da8c797432715a852679e15264"
+    },
+    {
+      "name": "deploy/candidate-a-node-template",
+      "sha": "4b2bf06c550a0a001c7a3652b07927482e27c1f6",
+      "role": "application",
+      "app": "node-template",
+      "sourceSha": "a1554e3aedaff0a8c2dadc5214c9595139b2fe62",
+      "image": "ghcr.io/cogni-dao/node-template@sha256:4d3ee62819b75fdf0ee6dbd42615f699fb16b5093f891f33f3f8ce19eedf4ec9"
+    },
+    {
+      "name": "deploy/candidate-a-operator",
+      "sha": "adcf900a6f2099d538725963bc3c3c1db021a60d",
+      "role": "application",
+      "app": "operator",
+      "sourceSha": "6d3e024fc637adc45c0290751c423d88a2a2a533",
+      "image": "ghcr.io/cogni-dao/cogni-template@sha256:c8f5a0a2e0efcdd0cd4151615e9bb41e08fcc6726789ef0a25ea866860b2243e"
+    },
+    {
+      "name": "deploy/candidate-a-poly",
+      "sha": "a20595f5e5a7081dbc039b403aa4afbaecad4b7a",
+      "role": "application",
+      "app": "poly",
+      "sourceSha": "8636ff86926c7e90fe4b413406145585842b979d",
+      "image": "ghcr.io/cogni-dao/poly@sha256:0e1028040eaf3da86e7a7cd1814bd586b8309149aa8a3bdf9a5f2be987afcf07"
+    },
+    {
+      "name": "deploy/candidate-a-scheduler-worker",
+      "sha": "8b45232074b85682dbde190b844f71bb3779b98f",
+      "role": "application",
+      "app": "scheduler-worker",
+      "sourceSha": "7161e1a9f45ef6b53a754a135aba199f546f8f5b",
+      "image": "ghcr.io/cogni-dao/cogni-template@sha256:86d951bd1ae90ff89151c5fc1fc47c5ea1cfc34b1fafe387ccb43c8d35666e59"
+    },
+    {
+      "name": "deploy/candidate-a-toks4",
+      "sha": "eca8d313835fead6a1376cca0b967cefa9081e70",
+      "role": "application",
+      "app": "toks4",
+      "sourceSha": "1e3e333df209c940c8055cbf4004cec13a167b05",
+      "image": "ghcr.io/cogni-dao/toks4@sha256:754549b33ac3b177496b9ec12e9e6164eb3f680351c4c786a822be7b697c5381"
+    }
+  ]
+}

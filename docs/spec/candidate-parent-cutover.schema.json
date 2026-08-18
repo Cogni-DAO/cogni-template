@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cognidao.org/schemas/candidate-parent-cutover.schema.json",
+  "title": "Candidate deployment-parent cutover manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "environment",
+    "sourceRepository",
+    "sourceMainSha",
+    "targetRepository",
+    "rootManifest",
+    "branches"
+  ],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "environment": { "const": "candidate-a" },
+    "sourceRepository": { "const": "cogni-dao/cogni" },
+    "sourceMainSha": { "$ref": "#/$defs/sha" },
+    "targetRepository": { "const": "cogni-test-org/cogni-monorepo" },
+    "rootManifest": {
+      "const": "infra/k8s/argocd/control-plane/roots/candidate-a-control-plane-application.yaml"
+    },
+    "branches": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "sha", "role"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^deploy/candidate-a(?:-[a-z0-9-]+)?$" },
+          "sha": { "$ref": "#/$defs/sha" },
+          "role": { "enum": ["environment", "application"] },
+          "app": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "sourceSha": { "$ref": "#/$defs/sha" },
+          "image": { "type": "string", "pattern": "^ghcr\\.io/.+@sha256:[0-9a-f]{64}$" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+  }
+}

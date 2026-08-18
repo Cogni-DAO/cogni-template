@@ -23,6 +23,7 @@ const removedFiles = ["ci.yml", "lint-pr.yml"];
 const manualWorkflows = [
   "candidate-flight.yml",
   "candidate-flight-infra.yml",
+  "candidate-parent-cutover.yml",
   "flight-preview.yml",
   "promote-and-deploy.yml",
   "release.yml",
