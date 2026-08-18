@@ -6,15 +6,11 @@
  * Purpose: Open the distribution-activation PR into the NODE'S OWN repo: write the Aragon
  *   GovernanceERC20 token, DAO-controlled emissions holder, and `distributions.status: active` into
  *   `.cogni/repo-spec.yaml` through the cogni-operator GitHub App.
- * Scope: Bearer/session auth + owner-or-developer gating. Activation is METADATA-ONLY: it records
- *   that the node is ready to distribute. The DAO is the GovernanceERC20 minter and mints per-epoch
- *   into a Merkle distributor later, so NO token supply is pre-minted and NO human transfers tokens.
- *   This route derives the emissions holder from the node's DAO, verifies the token + DAO contracts
- *   merely exist on-chain (bytecode present), then records the activation in git. Existing DAO nodes
- *   can activate without replaying formation because tokenAddress may be supplied when the operator
- *   row lacks one.
+ * Scope: Bearer/session auth + owner-or-developer gating. This is the terminal setup write: it
+ *   records readiness only after the distributor and the publisher's CAS-scoped authorization are
+ *   independently verified on-chain.
  * Invariants:
- *   - METADATA_ONLY: activation records distribution readiness; it does NOT move tokens.
+ *   - RECORD_IS_TERMINAL: no active repo-spec before distributor + CAS authority verify.
  *   - DAO_IS_EMISSIONS_HOLDER: the emissions holder is the DAO contract unconditionally (the DAO is
  *     the GovernanceERC20 minter; it mints per-epoch into the distributor).
  *   - NO_BALANCE_GATE: activation never checks token inventory — nothing is pre-minted, so a zero
@@ -23,12 +19,13 @@
  *   - SINGLE_HOME: targets the node's OWN repo (`NODE_MINT_OWNER`/slug), writes ONLY
  *     `.cogni/repo-spec.yaml`.
  *   - VENDORED_DISTRIBUTOR: pins the 1inch CumulativeMerkleDrop v1 claim pattern (the contract the
- *     deploy path actually vendors + verifies). The optional
+ *     deploy path actually vendors + verifies). The required
  *     `distributorAddress` (deployed by the OWNER'S wallet from the vendored
  *     `CumulativeMerkleDistributor`, then transferred to the DAO) is VERIFIED on-chain
  *     (owner()==daoAddress AND token()==tokenAddress) before it is recorded — the operator never
  *     deploys a contract and never pins an unverified/foreign distributor.
- *   - DISTRIBUTOR_OPTIONAL: absent `distributorAddress` keeps the metadata-only readiness path.
+ *   - CAS_PERMISSION_REQUIRED: paired probes prove a canonical publish is allowed while an
+ *     otherwise-identical non-atomic publish is denied. Missing/broad/stale authority fails closed.
  *   - OWNER_OR_DEVELOPER: node owner session OR `node.flight` authorizes activation.
  *   - NON_LINEAR_ACTIVATION: does not depend on payment activation and can run for already-active
  *     existing DAOs with a node repo.
@@ -54,6 +51,12 @@ import { createNodeRepoWriter } from "@/bootstrap/capabilities/node-repo-write";
 import { resolveServiceDb } from "@/bootstrap/container";
 import { withRootSpan } from "@/bootstrap/otel";
 import { nodeIdOrSlug } from "@/features/nodes/node-lookup";
+import {
+  buildPublishPermissionProbe,
+  classifyCasPublishPermission,
+  DAO_ABI,
+  EXECUTE_PERMISSION_ID,
+} from "@/features/governance/lib/proposal-abis";
 import { type NodeStatus, nodes } from "@/shared/db/nodes";
 import { serverEnv } from "@/shared/env";
 import {
@@ -85,11 +88,9 @@ const ActivateDistributionsInput = z.object({
   // Optional: the emissions holder is the DAO unconditionally. If supplied it
   // must equal the DAO; otherwise it defaults to node.daoAddress.
   emissionsHolderAddress: z.string().optional(),
-  // Optional DEPLOY path: a CumulativeMerkleDistributor the owner's wallet just
-  // deployed + transferred to the DAO. When present it is VERIFIED on-chain
-  // (owner()==DAO, token()==node token) and pinned into the spec. Absent keeps
-  // the metadata-only activation working unchanged.
-  distributorAddress: z.string().optional(),
+  // Required fresh-activation facts. The route verifies both on-chain.
+  distributorAddress: z.string(),
+  publisherAddress: z.string(),
   // Deploy tx hash (surfaced in the PR body only). Not persisted to the spec.
   deployTx: z.string().optional(),
 });
@@ -246,16 +247,22 @@ async function handleActivateDistributions(
   // The emissions holder is the DAO unconditionally (the DAO is the minter). If
   // the caller supplied one it must equal the DAO; otherwise default to the DAO.
   const emissionsHolderAddress = daoAddress;
-  // Optional DEPLOY path: a distributor the wallet just deployed + transferred to
-  // the DAO. Checksum it here; on-chain owner()/token() verification runs below.
-  const distributorAddress = parsed.data.distributorAddress
-    ? checksummedAddress(parsed.data.distributorAddress)
-    : null;
-  if (parsed.data.distributorAddress && !distributorAddress) {
+  const distributorAddress = checksummedAddress(parsed.data.distributorAddress);
+  if (!distributorAddress) {
     return NextResponse.json(
       {
         error: "invalid distributor address",
         distributorAddress: parsed.data.distributorAddress,
+      },
+      { status: 400 }
+    );
+  }
+  const publisherAddress = checksummedAddress(parsed.data.publisherAddress);
+  if (!publisherAddress) {
+    return NextResponse.json(
+      {
+        error: "invalid publisher address",
+        publisherAddress: parsed.data.publisherAddress,
       },
       { status: 400 }
     );
@@ -348,9 +355,8 @@ async function handleActivateDistributions(
       chain: viemChain,
       transport: http(env.EVM_RPC_URL),
     });
-    // METADATA_ONLY / NO_BALANCE_GATE: verify the token + DAO contracts merely
-    // exist on-chain. Nothing is pre-minted (the DAO mints per-epoch into the
-    // distributor), so a zero token balance is expected — never gate on it.
+    // NO_BALANCE_GATE: verify the token + DAO contracts exist on-chain. Nothing is
+    // pre-minted, so a zero token balance is expected and must not block setup.
     const [tokenCode, holderCode] = await Promise.all([
       client.getBytecode({ address: tokenAddress }),
       client.getBytecode({ address: emissionsHolderAddress }),
@@ -382,12 +388,9 @@ async function handleActivateDistributions(
       );
     }
 
-    // DEPLOY path: when the wallet supplied a freshly-deployed distributor, verify
-    // the on-chain invariants that make it trustworthy before pinning it into the
-    // spec: (1) ownership was transferred to the DAO (owner()==node.daoAddress),
-    // and (2) it distributes THIS node's token (token()==node.tokenAddress). A
-    // mismatch is a 409 — the spec must never pin an unverified/foreign distributor.
-    if (distributorAddress) {
+    // A fresh activation always includes a distributor. Verify owner/token and the
+    // publisher's CAS-scoped authority before pinning anything into repo-spec.
+    {
       const distCode = await client.getBytecode({
         address: distributorAddress,
       });
@@ -443,6 +446,75 @@ async function handleActivateDistributions(
           { status: 409 }
         );
       }
+
+      const liveRoot = await client.readContract({
+        abi: CUMULATIVE_MERKLE_DISTRIBUTOR_ABI,
+        address: distributorAddress,
+        functionName: "merkleRoot",
+      });
+      const validProbeData = buildPublishPermissionProbe(
+        tokenAddress,
+        distributorAddress,
+        liveRoot,
+        0n
+      );
+      const nonAtomicProbeData = buildPublishPermissionProbe(
+        tokenAddress,
+        distributorAddress,
+        liveRoot,
+        1n
+      );
+      const [validPublishAllowed, nonAtomicPublishAllowed] = await Promise.all([
+        client.readContract({
+          abi: DAO_ABI,
+          address: daoAddress,
+          functionName: "hasPermission",
+          args: [
+            daoAddress,
+            publisherAddress,
+            EXECUTE_PERMISSION_ID,
+            validProbeData,
+          ],
+        }),
+        client.readContract({
+          abi: DAO_ABI,
+          address: daoAddress,
+          functionName: "hasPermission",
+          args: [
+            daoAddress,
+            publisherAddress,
+            EXECUTE_PERMISSION_ID,
+            nonAtomicProbeData,
+          ],
+        }),
+      ]);
+      const permissionState = classifyCasPublishPermission(
+        validPublishAllowed,
+        nonAtomicPublishAllowed
+      );
+      ctx.log.info(
+        {
+          event: "node.distribution_activation.publisher_verified",
+          reqId: ctx.reqId,
+          routeId: ctx.routeId,
+          nodeId: node.id,
+          slug: node.slug,
+          publisherAddress,
+          permissionState,
+        },
+        "activate-distributions: publisher verification result"
+      );
+      if (permissionState !== "verified") {
+        return NextResponse.json(
+          {
+            error: "publishing authorization verification failed",
+            reason:
+              "publisher must have the node's CAS-scoped distribution permission before activation is recorded",
+            publisherAddress,
+          },
+          { status: 409 }
+        );
+      }
     }
   } catch (err) {
     const reason = err instanceof Error ? err.message : "unknown";
@@ -476,7 +548,7 @@ async function handleActivateDistributions(
       slug: node.slug,
       tokenAddress,
       emissionsHolderAddress,
-      ...(distributorAddress ? { distributorAddress } : {}),
+      distributorAddress,
       ...(parsed.data.deployTx ? { deployTx: parsed.data.deployTx } : {}),
     });
   } catch (err) {

@@ -17,8 +17,8 @@
  *   - OPEN_PR_IS_FIRST_CLASS: an unmerged activation PR derives `pr_open` — NEVER `not_recorded`.
  *     On-chain-succeeded-but-unrecorded derives `record_incomplete`/`not_recorded` with the
  *     distributor still visible — never hidden.
- *   - ORDERED_STEPS: deploy → record → authorize. `currentStep` is the first step needing OWNER
- *     action; an open PR needs a merge (not an owner click here), so it does not block progression.
+ *   - ORDERED_STEPS: deploy → authorize → record. The repo-spec cannot say active until both
+ *     on-chain planes are verified; an open record PR is terminal and awaits merge.
  * Side-effects: none
  * Links: src/features/nodes/DistributionsCard.client.tsx,
  *   src/app/api/v1/nodes/[id]/distributions-status/route.ts,
@@ -57,6 +57,8 @@ export interface DistributionSetupInput {
   readonly pendingDistributorAddress: string | null;
   /** Distributor the connected wallet deployed THIS session (freshest known), if any. */
   readonly sessionDistributorAddress: string | null;
+  /** Plane-1 chain proof: owner()==DAO AND token()==node token for the known distributor. */
+  readonly distributorVerified: boolean;
   /** Plane-3 chain read: the wallet holds the scoped EXECUTE grant (`hasPermission === true`). */
   readonly authorized: boolean;
 }
@@ -93,11 +95,11 @@ export function deriveDistributionSetup(
     recordedDistributorAddress,
     pendingDistributorAddress,
     sessionDistributorAddress,
+    distributorVerified,
     authorized,
   } = input;
 
-  // Plane 1 — the distributor. A session deploy is the freshest truth; otherwise the git record
-  // (main, then the open PR's branch) carries the address. Any known address = deployed.
+  // Plane 1 — the distributor. An address is only complete once the chain proves owner/token.
   const distributorAddress =
     sessionDistributorAddress ??
     recordedDistributorAddress ??
@@ -110,7 +112,7 @@ export function deriveDistributionSetup(
         : pendingDistributorAddress !== null
           ? "activation-pr"
           : null;
-  const deployed = distributorAddress !== null;
+  const deployed = distributorAddress !== null && distributorVerified;
 
   // Plane 2 — the git record. `recorded` requires main to carry the FULL truth we know: when a
   // distributor is known, main must record that exact address (an active-but-addressless spec, or a
@@ -127,17 +129,16 @@ export function deriveDistributionSetup(
         ? { kind: "record_incomplete" }
         : { kind: "not_recorded" };
 
-  // The record plane blocks owner progression only when an owner CLICK is needed. An open PR is
-  // complete at this surface (merge persists it) — authorize does not wait for the merge.
+  // The record is terminal: activation is written only after deploy + CAS authorization verify.
   const recordNeedsOwnerAction =
     recordPlane.kind === "not_recorded" ||
     recordPlane.kind === "record_incomplete";
 
   const currentStep: DistributionSetupDerived["currentStep"] = !deployed
     ? 1
-    : recordNeedsOwnerAction
+    : !authorized
       ? 2
-      : !authorized
+      : recordNeedsOwnerAction
         ? 3
         : null;
 
@@ -151,12 +152,12 @@ export function deriveDistributionSetup(
       ? "done"
       : recordPlane.kind === "pr_open"
         ? "awaiting"
-        : currentStep === 2
+        : currentStep === 3
           ? "current"
           : "pending") as SetupStepState,
     authorize: (authorized
       ? "done"
-      : currentStep === 3
+      : currentStep === 2
         ? "current"
         : "pending") as SetupStepState,
   };

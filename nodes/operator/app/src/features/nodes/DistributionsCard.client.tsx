@@ -10,16 +10,16 @@
  *        `CumulativeMerkleDistributor(token)` and transfers ownership to the DAO
  *        (useDeployDistributor). Truth: a known distributor address, verified on-chain
  *        (`owner()==DAO`, `token()==token` via useDistributorOnChain).
- *     2. RECORD ACTIVATION (git) — the operator App opens a repo-spec PR on the node's own repo
+ *     2. AUTHORIZE PUBLISHING (on-chain) — ONE governance proposal granting the wallet CAS-scoped
+ *        EXECUTE via the publish condition. Truth is a paired on-chain permission proof.
+ *     3. RECORD ACTIVATION (git) — only after both on-chain planes verify, the operator App opens a
+ *        repo-spec PR on the node's own repo
  *        (`distributions.status: active`, `distributor_address`, claim pattern). Truth: the
  *        GET distributions-status route (repo-spec on `main` + open-PR state). The OPEN-PR state is
  *        FIRST-CLASS: "Activation recorded — PR #N open, merge to persist" with a clickable link —
  *        NEVER rendered as baseline while the PR is unmerged (the toks3 revert-to-baseline bug).
- *     3. AUTHORIZE PUBLISHING (on-chain) — ONE governance proposal granting the wallet SCOPED
- *        EXECUTE via the publish condition (useAuthorizePublishing). Truth: the on-chain
- *        `hasPermission` probe (useHasExecutePermission).
- *   Ordering is enforced honestly: deploy precedes record (the record pins `distributor_address`),
- *   authorize needs the distributor; disabled steps say WHY. State folding is pure + unit-tested
+ *   Ordering is enforced honestly: deploy → authorize → record. The repo-spec never says active
+ *   before CAS publishing authority is verified. State folding is pure + unit-tested
  *   (`distribution-setup-state.ts`).
  * Scope: Renders a "Set up distributions" SectionCard (page-aligned with NodeAccess/Danger zone).
  *   Wallet-gated (wagmi) + chain-gated (node chain) for the on-chain steps. Server props
@@ -220,21 +220,18 @@ export function DistributionsCard({
           refetchRecord={refetchRecord}
         />
       ) : (
-        <ActivateOnlyRow
-          nodeId={nodeId}
-          slug={slug}
-          repoSpecUrl={repoSpecUrl}
-          distributionsActive={distributionsActive}
-          record={recordQuery.data ?? null}
-          refetchRecord={refetchRecord}
-        />
+        <p className="text-muted-foreground mt-2 text-sm">
+          Complete this node&apos;s DAO and token formation first. Distribution
+          setup becomes available when the operator has the node&apos;s DAO,
+          token, voting plugin, and chain.
+        </p>
       )}
     </SectionCard>
   );
 }
 
 /**
- * The three-step guided setup, ordered deploy → record → authorize. Every step state comes from
+ * The three-step guided setup, ordered deploy → authorize → record. Every step state comes from
  * `deriveDistributionSetup` over per-plane ground truth; in-session actions only trigger refetches
  * (status route, on-chain permission, router.refresh) — they never flip a step by themselves.
  */
@@ -267,15 +264,11 @@ function SetupSequence({
   const connectedChainId = useChainId();
   const { switchChain } = useSwitchChain();
 
-  // Step 1 driver: the wallet deploy flow (deploy → transferOwnership(DAO) → auto-record POST).
-  const deploy = useDeployDistributor(nodeId, tokenAddress, daoAddress);
+  // Step 1 driver: deploy → transferOwnership(DAO). This does not activate the node.
+  const deploy = useDeployDistributor(tokenAddress, daoAddress);
 
-  // Fallback PR ref for environments where the status route is unavailable (local dev, no App
-  // creds): the PR url returned by an in-session POST. Ground truth (the status route) wins.
+  // Fallback PR ref for environments where the status route is unavailable.
   const [sessionPrUrl, setSessionPrUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (deploy.prUrl) setSessionPrUrl(deploy.prUrl);
-  }, [deploy.prUrl]);
 
   // Fold the per-plane truths. When the status route answered, IT is the record truth; otherwise
   // fall back to the page's server-side read + the in-session PR url.
@@ -295,13 +288,12 @@ function SetupSequence({
   const pendingAddress = record?.pendingDistributorAddress ?? null;
 
   // Best-known distributor (session > main record > open PR) — needed BEFORE the fold so the
-  // on-chain permission probe (plane 3 truth) can run against it.
+  // on-chain permission probe (plane 2 truth) can run against it.
   const knownDistributor = (deploy.distributorAddress ??
     recordedAddress ??
     pendingAddress) as `0x${string}` | null;
 
-  // Plane-3 truth: does the connected wallet already hold scoped EXECUTE_PERMISSION on the DAO?
-  // Probed with token + distributor so the SCOPED condition evaluates a real publish shape.
+  // Plane-2 truth: paired probes prove the wallet holds the current CAS-scoped permission.
   const { hasPermission, refetch: refetchPermission } = useHasExecutePermission(
     {
       daoAddress,
@@ -326,6 +318,7 @@ function SetupSequence({
     recordedDistributorAddress: recordedAddress,
     pendingDistributorAddress: pendingAddress,
     sessionDistributorAddress: deploy.distributorAddress,
+    distributorVerified: distributorOnChain.status === "verified",
     authorized: hasPermission === true,
   });
 
@@ -334,11 +327,10 @@ function SetupSequence({
 
   return (
     <div className="mt-2 space-y-3">
-      {/* Wallet + chain gating is shared by steps 1 and 3 (the on-chain steps). Step 2 is a server
-          POST and needs no wallet. Surface the connect / switch control once, up top. */}
+      {/* Wallet + chain gating is shared by steps 1 and 2. Step 3 is the terminal server write. */}
       {!isConnected ? (
-        <div className="rounded-lg border border-border bg-muted/20 p-3">
-          <p className="mb-2 text-muted-foreground text-sm">
+        <div className="border-border bg-muted/20 rounded-lg border p-3">
+          <p className="text-muted-foreground mb-2 text-sm">
             Connect the node owner wallet to deploy + authorize.
           </p>
           <WalletConnectButton />
@@ -360,20 +352,6 @@ function SetupSequence({
         derived={derived}
         onChain={distributorOnChain}
         walletReady={walletReady}
-        refetchRecord={refetchRecord}
-      />
-
-      <RecordStep
-        state={derived.steps.record}
-        nodeId={nodeId}
-        slug={slug}
-        repoSpecUrl={repoSpecUrl}
-        derived={derived}
-        autoRecordError={deploy.recordError}
-        onRecorded={(prUrl) => {
-          if (prUrl) setSessionPrUrl(prUrl);
-          refetchRecord();
-        }}
       />
 
       <AuthorizeStep
@@ -383,10 +361,23 @@ function SetupSequence({
         daoAddress={daoAddress}
         pluginAddress={pluginAddress}
         distributorAddress={knownDistributor}
-        recordPlaneKind={derived.recordPlane.kind}
         wallet={address ?? null}
         walletReady={walletReady}
         onAuthorized={refetchPermission}
+      />
+
+      <RecordStep
+        state={derived.steps.record}
+        nodeId={nodeId}
+        slug={slug}
+        repoSpecUrl={repoSpecUrl}
+        derived={derived}
+        publisherAddress={address ?? null}
+        deployTx={deploy.deployTx}
+        onRecorded={(prUrl) => {
+          if (prUrl) setSessionPrUrl(prUrl);
+          refetchRecord();
+        }}
       />
 
       {derived.currentStep === null ? (
@@ -412,7 +403,6 @@ function DeployStep({
   derived,
   onChain,
   walletReady,
-  refetchRecord,
 }: {
   state: SetupStepState;
   chainId: number;
@@ -420,35 +410,16 @@ function DeployStep({
   derived: DistributionSetupDerived;
   onChain: ReturnType<typeof useDistributorOnChain>;
   walletReady: boolean;
-  refetchRecord: () => void;
 }): ReactElement {
-  const router = useRouter();
-  const {
-    phase,
-    deployTx,
-    transferTx,
-    prUrl,
-    error,
-    deploy: runDeploy,
-  } = deploy;
+  const { phase, deployTx, transferTx, error, deploy: runDeploy } = deploy;
 
-  const busy =
-    phase === "deploying" || phase === "transferring" || phase === "recording";
+  const busy = phase === "deploying" || phase === "transferring";
   const deployTxUrl = deployTx
     ? getTransactionExplorerUrl(chainId, deployTx)
     : null;
   const transferTxUrl = transferTx
     ? getTransactionExplorerUrl(chainId, transferTx)
     : null;
-
-  // Once the auto-record lands (PR opened), re-read plane 2 + the page's server props.
-  // MUST be an effect, not a render-body call — a render-body refresh re-fires every render.
-  useEffect(() => {
-    if (phase === "done") {
-      refetchRecord();
-      if (prUrl) router.refresh();
-    }
-  }, [phase, prUrl, router, refetchRecord]);
 
   if (state === "done") {
     const sourceLabel =
@@ -459,7 +430,7 @@ function DeployStep({
           : "recorded in the open activation PR";
     return (
       <StepRow n={1} state="done" title="Distributor deployed">
-        <p className="break-all font-mono text-muted-foreground text-xs">
+        <p className="text-muted-foreground font-mono text-xs break-all">
           Distributor: {derived.distributorAddress} ({sourceLabel})
         </p>
         {onChain.status === "verified" ? (
@@ -481,9 +452,7 @@ function DeployStep({
       ? "Deploying distributor… confirm in wallet"
       : phase === "transferring"
         ? "Transferring ownership to the DAO… confirm in wallet"
-        : phase === "recording"
-          ? "Verifying on-chain + recording in the repo-spec…"
-          : null;
+        : null;
 
   return (
     <StepRow n={1} state={toStepRowState(state)} title="Deploy distributor">
@@ -493,7 +462,7 @@ function DeployStep({
             Your wallet deploys the vendored CumulativeMerkleDistributor for
             this node&apos;s token and transfers ownership to the DAO — the DAO
             owns it from then on. The address is then recorded in the
-            node&apos;s repo-spec (step 2).
+            node&apos;s repo-spec after publishing authorization is verified.
           </p>
 
           <Button
@@ -532,7 +501,7 @@ function DeployStep({
 }
 
 /**
- * Step 2 — the git-authoritative activation record. Four honest states from plane-2 ground truth:
+ * Step 3 — the git-authoritative activation record. Four honest states from plane-2 ground truth:
  *   recorded (merged on main) · pr_open (FIRST-CLASS: "merge to persist" + PR link — never
  *   baseline) · record_incomplete (spec active but the deployed distributor isn't pinned) ·
  *   not_recorded (needs the deploy first, or the record click).
@@ -543,7 +512,8 @@ function RecordStep({
   slug,
   repoSpecUrl,
   derived,
-  autoRecordError,
+  publisherAddress,
+  deployTx,
   onRecorded,
 }: {
   state: SetupStepState;
@@ -551,7 +521,8 @@ function RecordStep({
   slug: string;
   repoSpecUrl: string | null;
   derived: DistributionSetupDerived;
-  autoRecordError: string | null;
+  publisherAddress: `0x${string}` | null;
+  deployTx: `0x${string}` | undefined;
   onRecorded: (prUrl: string | null) => void;
 }): ReactElement {
   const router = useRouter();
@@ -559,12 +530,14 @@ function RecordStep({
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const handleRecord = async () => {
-    if (submitting || !derived.distributorAddress) return;
+    if (submitting || !derived.distributorAddress || !publisherAddress) return;
     setSubmitting(true);
     setSubmitError(null);
     try {
       const activation = await postActivateDistributions(nodeId, {
         distributorAddress: derived.distributorAddress,
+        publisherAddress,
+        ...(deployTx ? { deployTx } : {}),
       });
       onRecorded(
         activation?.status === "pr_opened" && activation.prUrl
@@ -581,7 +554,7 @@ function RecordStep({
 
   if (derived.recordPlane.kind === "recorded") {
     return (
-      <StepRow n={2} state="done" title="Activation recorded">
+      <StepRow n={3} state="done" title="Activation recorded">
         <p className="text-muted-foreground text-sm">
           The node repo-spec records <code>distributions.status: active</code>
           {derived.distributorAddress ? " and the distributor address" : ""}.
@@ -597,7 +570,7 @@ function RecordStep({
     const pr = derived.recordPlane.pr;
     return (
       <StepRow
-        n={2}
+        n={3}
         state="awaiting"
         title="Activation recorded — merge to persist"
       >
@@ -618,21 +591,14 @@ function RecordStep({
   }
 
   return (
-    <StepRow n={2} state={toStepRowState(state)} title="Record activation">
+    <StepRow n={3} state={toStepRowState(state)} title="Record activation">
       {state === "current" ? (
         <>
           <p className="text-muted-foreground text-sm">
             {derived.recordPlane.kind === "record_incomplete"
               ? "The repo-spec is active but does not record the deployed distributor. Re-record to pin its address."
-              : "Opens a one-file pull request on the node's repo writing distributions.status: active, the distributor address, and the claim pattern. Metadata only — no tokens move."}
+              : "After the operator re-verifies the distributor and CAS publishing authority on-chain, this opens a one-file PR writing distributions.status: active, the distributor address, and the claim pattern."}
           </p>
-          {autoRecordError ? (
-            <p className="text-muted-foreground text-sm">
-              Automatic record after deploy failed (
-              <span className="font-mono text-xs">{autoRecordError}</span>) —
-              the on-chain deploy is safe; retry the record below.
-            </p>
-          ) : null}
           {submitError ? (
             <p className="text-destructive text-sm">{submitError}</p>
           ) : null}
@@ -640,7 +606,9 @@ function RecordStep({
             <Button
               type="button"
               onClick={handleRecord}
-              disabled={submitting || !derived.distributorAddress}
+              disabled={
+                submitting || !derived.distributorAddress || !publisherAddress
+              }
               className="gap-2"
             >
               {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
@@ -651,7 +619,7 @@ function RecordStep({
                 href={repoSpecUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="text-muted-foreground text-sm hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground text-sm"
               >
                 View repo-spec
               </a>
@@ -660,7 +628,7 @@ function RecordStep({
         </>
       ) : (
         <p className="text-muted-foreground text-sm">
-          Deploy the distributor first — its address is part of the record.
+          Deploy the distributor and verify publishing authorization first.
         </p>
       )}
     </StepRow>
@@ -668,9 +636,9 @@ function RecordStep({
 }
 
 /**
- * Step 3 — authorize publishing (a governance proposal, on-chain plane). Deploys the scoped
+ * Step 2 — authorize publishing (a governance proposal, on-chain plane). Deploys the scoped
  * DistributionPublishCondition(token, distributor) and submits ONE grantWithCondition proposal.
- * Truth is the on-chain permission probe; the step can run while the record PR is still open.
+ * Truth is the paired on-chain permission proof. Only then may step 3 record activation.
  */
 function AuthorizeStep({
   state,
@@ -679,7 +647,6 @@ function AuthorizeStep({
   daoAddress,
   pluginAddress,
   distributorAddress,
-  recordPlaneKind,
   wallet,
   walletReady,
   onAuthorized,
@@ -690,14 +657,13 @@ function AuthorizeStep({
   daoAddress: `0x${string}`;
   pluginAddress: `0x${string}` | null;
   distributorAddress: `0x${string}` | null;
-  recordPlaneKind: DistributionSetupDerived["recordPlane"]["kind"];
   wallet: `0x${string}` | null;
   walletReady: boolean;
   onAuthorized: () => void;
 }): ReactElement {
   if (state === "done") {
     return (
-      <StepRow n={3} state="done" title="Publishing authorized">
+      <StepRow n={2} state="done" title="Publishing authorized">
         <p className="text-muted-foreground text-sm">
           Your wallet holds scoped authority to publish this node&apos;s
           distributions — and nothing else (verified on-chain).
@@ -707,7 +673,7 @@ function AuthorizeStep({
   }
 
   return (
-    <StepRow n={3} state={toStepRowState(state)} title="Authorize publishing">
+    <StepRow n={2} state={toStepRowState(state)} title="Authorize publishing">
       {state === "current" ? (
         <AuthorizeStepBody
           chainId={chainId}
@@ -715,29 +681,27 @@ function AuthorizeStep({
           daoAddress={daoAddress}
           pluginAddress={pluginAddress}
           distributorAddress={distributorAddress}
-          recordPlaneKind={recordPlaneKind}
           wallet={wallet}
           walletReady={walletReady}
           onAuthorized={onAuthorized}
         />
       ) : (
-        <p className="pl-0 text-muted-foreground text-sm">
+        <p className="text-muted-foreground pl-0 text-sm">
           Grant your wallet scoped authority to publish — available once the
-          distributor is deployed.
+          distributor is deployed and verified on-chain.
         </p>
       )}
     </StepRow>
   );
 }
 
-/** The live authorize flow (only mounted when step 3 is the current step + all inputs are present). */
+/** The live authorize flow (only mounted when step 2 is current). */
 function AuthorizeStepBody({
   chainId,
   tokenAddress,
   daoAddress,
   pluginAddress,
   distributorAddress,
-  recordPlaneKind,
   wallet,
   walletReady,
   onAuthorized,
@@ -747,7 +711,6 @@ function AuthorizeStepBody({
   daoAddress: `0x${string}`;
   pluginAddress: `0x${string}` | null;
   distributorAddress: `0x${string}` | null;
-  recordPlaneKind: DistributionSetupDerived["recordPlane"]["kind"];
   wallet: `0x${string}` | null;
   walletReady: boolean;
   onAuthorized: () => void;
@@ -795,12 +758,6 @@ function AuthorizeStepBody({
         single transaction with no vote.
       </p>
 
-      {recordPlaneKind === "pr_open" ? (
-        <p className="text-muted-foreground text-sm">
-          The activation PR (step 2) can merge later — authorization is on-chain
-          and does not wait for it.
-        </p>
-      ) : null}
       {!pluginAddress ? (
         <p className="text-muted-foreground text-sm">
           This node is missing its voting-plugin address; authorize can&apos;t
@@ -844,104 +801,6 @@ function AuthorizeStepBody({
   );
 }
 
-/**
- * The metadata-only activation row, shown when on-chain setup isn't available (no token/DAO/chain).
- * There is nothing to deploy or authorize without those; the record state still derives from the
- * status route (open PR first-class) with the server props + in-session PR url as fallback.
- */
-function ActivateOnlyRow({
-  nodeId,
-  slug,
-  repoSpecUrl,
-  distributionsActive,
-  record,
-  refetchRecord,
-}: {
-  nodeId: string;
-  slug: string;
-  repoSpecUrl: string | null;
-  distributionsActive: boolean;
-  record: DistributionRecordStatus | null;
-  refetchRecord: () => void;
-}): ReactElement {
-  const router = useRouter();
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [sessionPrUrl, setSessionPrUrl] = useState<string | null>(null);
-
-  const activated = record ? record.repoSpecActive : distributionsActive;
-  const openPrUrl =
-    record?.activationPr?.state === "open"
-      ? record.activationPr.url
-      : (sessionPrUrl ?? null);
-  const openPrNumber =
-    record?.activationPr?.state === "open" ? record.activationPr.number : null;
-
-  const handleActivate = async () => {
-    if (submitting) return;
-    setSubmitting(true);
-    setError(null);
-    try {
-      const activation = await postActivateDistributions(nodeId, {});
-      if (activation?.status === "pr_opened" && activation.prUrl) {
-        setSessionPrUrl(activation.prUrl);
-      }
-      refetchRecord();
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "activation failed");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div className="mt-2 space-y-3">
-      <p className="text-muted-foreground text-sm">
-        Records that <span className="font-medium">{slug}</span> is ready to
-        distribute. Deploy + authorize become available once the node has a
-        token, DAO, and chain.
-      </p>
-      {activated ? (
-        <p className="text-primary text-sm">Distributions activated.</p>
-      ) : openPrUrl ? (
-        <p className="text-muted-foreground text-sm">
-          Activation recorded — merge the PR to persist.
-        </p>
-      ) : null}
-      {openPrUrl ? (
-        <ExternalLinkRow href={openPrUrl}>
-          {openPrNumber != null
-            ? `Activation PR #${openPrNumber} — review + merge`
-            : "Activation PR opened"}
-        </ExternalLinkRow>
-      ) : null}
-      {error ? <p className="text-destructive text-sm">{error}</p> : null}
-      <div className="flex items-center gap-3">
-        <Button
-          type="button"
-          onClick={handleActivate}
-          disabled={submitting || activated}
-          className="gap-2"
-        >
-          {submitting ? <Loader2 className="size-4 animate-spin" /> : null}
-          Activate distributions
-        </Button>
-        {repoSpecUrl ? (
-          <a
-            href={repoSpecUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-muted-foreground text-sm hover:text-foreground"
-          >
-            View repo-spec
-          </a>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 /** Map the derived step state onto the shared stepper's display state (1:1 today). */
 function toStepRowState(state: SetupStepState): StepState {
   return state;
@@ -960,7 +819,7 @@ function ExternalLinkRow({
       href={href}
       target="_blank"
       rel="noreferrer"
-      className="inline-flex items-center gap-1.5 text-primary text-sm hover:underline"
+      className="text-primary inline-flex items-center gap-1.5 text-sm hover:underline"
     >
       {children}
       <ExternalLink className="size-3.5" />
