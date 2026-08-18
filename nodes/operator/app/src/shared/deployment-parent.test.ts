@@ -31,6 +31,16 @@ describe("deployment parent contract", () => {
     );
   });
 
+  it("returns the narrowed runtime environment after validation", () => {
+    expect(
+      assertDeploymentParent({
+        env: "production",
+        owner: "cogni-dao",
+        repo: "cogni",
+      })
+    ).toEqual({ env: "production", owner: "cogni-dao", repo: "cogni" });
+  });
+
   it("fails closed on runtime parent drift", () => {
     expect(() =>
       assertDeploymentParent({

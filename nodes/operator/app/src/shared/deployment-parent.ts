@@ -20,6 +20,10 @@ export interface DeploymentParent {
   readonly repo: string;
 }
 
+export interface ValidatedDeploymentParent extends DeploymentParent {
+  readonly env: DeploymentEnvironment;
+}
+
 const DEPLOYMENT_ENVIRONMENTS = new Set<string>([
   "candidate-a",
   "preview",
@@ -46,7 +50,7 @@ export function assertDeploymentParent(input: {
   readonly env: string | undefined;
   readonly owner: string;
   readonly repo: string;
-}): DeploymentParent {
+}): ValidatedDeploymentParent {
   if (!isDeploymentEnvironment(input.env)) {
     throw new Error(
       `unsupported DEPLOY_ENVIRONMENT '${input.env ?? ""}' for deployment parent`
@@ -61,5 +65,5 @@ export function assertDeploymentParent(input: {
       `deployment parent mismatch for ${input.env}: expected ${expected.owner}/${expected.repo}, got ${input.owner}/${input.repo}`
     );
   }
-  return expected;
+  return { env: input.env, ...expected };
 }

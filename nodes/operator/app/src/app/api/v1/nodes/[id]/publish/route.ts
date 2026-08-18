@@ -317,8 +317,9 @@ export async function POST(request: Request, routeArgs: RouteParams) {
             { status: 503 }
           );
         }
+        let deploymentParent: ReturnType<typeof assertDeploymentParent>;
         try {
-          assertDeploymentParent({
+          deploymentParent = assertDeploymentParent({
             env: env.DEPLOY_ENVIRONMENT,
             owner: parentOwner,
             repo: parentRepo,
@@ -391,7 +392,7 @@ export async function POST(request: Request, routeArgs: RouteParams) {
         currentStep = "validate_parent";
         try {
           await writer.assertDeploymentParentReady({
-            env: env.DEPLOY_ENVIRONMENT,
+            env: deploymentParent.env,
             owner: parentOwner,
             repo: parentRepo,
           });
