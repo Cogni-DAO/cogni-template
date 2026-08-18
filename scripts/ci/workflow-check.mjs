@@ -23,14 +23,12 @@ const removedFiles = ["ci.yml", "lint-pr.yml"];
 const manualWorkflows = [
   "candidate-flight.yml",
   "candidate-flight-infra.yml",
-  "candidate-a-sealed-secret-export.yml",
   "flight-preview.yml",
-  "pr-build.yml",
   "promote-and-deploy.yml",
   "release.yml",
   "stack-test.yml",
 ];
-const nonDispatchWorkflows = ["ci.yaml", "pr-lint.yaml"];
+const nonDispatchWorkflows = ["ci.yaml", "pr-lint.yaml", "pr-build.yml"];
 
 let failures = 0;
 
