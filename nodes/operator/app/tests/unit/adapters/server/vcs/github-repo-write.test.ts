@@ -230,7 +230,7 @@ scope_key: "default"
 intent:
   name: test-cog
   mission: "test payments"
-cogni_dao:
+governance:
   dao_contract: "0xDA0"
   chain_id: "8453"
 payments:
@@ -662,6 +662,101 @@ describe("GitHubRepoWriter.openDistributionActivationPr", () => {
 });
 
 describe("GitHubRepoWriter.forkFromTemplate", () => {
+  it("allows only the env-local repo identity to differ from canonical", async () => {
+    routeHandlers = {
+      "GET /repos/{owner}/{repo}/git/trees/{tree_sha}": (params) => ({
+        truncated: false,
+        tree: [
+          {
+            path: "packages/repo-spec/src/schema.ts",
+            mode: "100644",
+            type: "blob",
+            sha: "shared-schema",
+          },
+          {
+            path: ".cogni/repo-spec.yaml",
+            mode: "100644",
+            type: "blob",
+            sha:
+              params.owner === "cogni-test-org"
+                ? "test-identity"
+                : "canonical-identity",
+          },
+        ],
+      }),
+      "POST /repos/{owner}/{repo}/forks": () => {
+        throw new Error("fork creation reached");
+      },
+    };
+
+    await expect(
+      makeWriter().forkFromTemplate({
+        templateOwner: "cogni-test-org",
+        owner: "cogni-test-org",
+        slug: "atlas",
+        nodeId: "11111111-1111-4111-8111-111111111111",
+        chainId: 8453,
+      })
+    ).rejects.toThrow("fork creation reached");
+    expect(requests.at(-1)?.route).toBe("POST /repos/{owner}/{repo}/forks");
+  });
+
+  it("fails before creating a fork when an env-local mint source drifted from canonical", async () => {
+    routeHandlers = {
+      "GET /repos/{owner}/{repo}/git/trees/{tree_sha}": (params) => {
+        const sharedEntry = {
+          path: "packages/repo-spec/src/schema.ts",
+          mode: "100644",
+          type: "blob",
+        };
+        if (params.owner === "cogni-test-org") {
+          return {
+            truncated: false,
+            tree: [
+              { ...sharedEntry, sha: "stale-schema" },
+              {
+                path: ".cogni/repo-spec.yaml",
+                mode: "100644",
+                type: "blob",
+                sha: "test-identity",
+              },
+            ],
+          };
+        }
+        expect(params.owner).toBe("Cogni-DAO");
+        return {
+          truncated: false,
+          tree: [
+            { ...sharedEntry, sha: "canonical-schema" },
+            {
+              path: ".cogni/repo-spec.yaml",
+              mode: "100644",
+              type: "blob",
+              sha: "canonical-identity",
+            },
+          ],
+        };
+      },
+    };
+
+    await expect(
+      makeWriter().forkFromTemplate({
+        templateOwner: "cogni-test-org",
+        owner: "cogni-test-org",
+        slug: "atlas",
+        nodeId: "11111111-1111-4111-8111-111111111111",
+        chainId: 8453,
+      })
+    ).rejects.toThrow(
+      "node-template source drift: cogni-test-org/node-template differs from Cogni-DAO/node-template at 1 path(s): packages/repo-spec/src/schema.ts"
+    );
+    expect(
+      requests.some(
+        (request) => request.route === "POST /repos/{owner}/{repo}/forks"
+      )
+    ).toBe(false);
+  });
+
   it("mints a node as a named fork and commits identity on top of template main", async () => {
     setHappyForkHandlers();
 

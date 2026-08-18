@@ -798,6 +798,25 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
     );
   });
 
+  it("returns a stable conflict when the configured mint source drifted", async () => {
+    mockForkFromTemplate.mockRejectedValue(
+      new Error(
+        "node-template source drift: cogni-test-org/node-template differs from Cogni-DAO/node-template"
+      )
+    );
+
+    const response = await publishNode();
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.reason).toBe(
+      "Configured node-template source is stale or incompatible with canonical main."
+    );
+    expect(body.errorCode).toBe("template_source_drift");
+    expect(body.step).toBe("fork_from_template");
+    expect(mockOpenNodeSubmodulePr).not.toHaveBeenCalled();
+  });
+
   it("logs unexpected persistence failures at the update step", async () => {
     dbState.throwOnUpdate = true;
 

@@ -54,6 +54,7 @@ type MintErrorCode =
   | "forbidden"
   | "github_not_found"
   | "template_not_found"
+  | "template_source_drift"
   | "repo_exists"
   | "github_rate_limited"
   | "main_not_ready"
@@ -89,6 +90,9 @@ function classifyMintError(err: unknown): {
   if (/main not ready/i.test(message)) {
     return { errorCode: "main_not_ready", status };
   }
+  if (/node-template source drift/i.test(message)) {
+    return { errorCode: "template_source_drift", status };
+  }
   if (status === 422 || /already exists|name already/i.test(message)) {
     return { errorCode: "repo_exists", status };
   }
@@ -122,6 +126,8 @@ const mintErrorMessages: Record<MintErrorCode, string> = {
   forbidden: "GitHub App cannot write to the target repository.",
   github_not_found: "Target GitHub repository was not found.",
   template_not_found: "Configured node-template repository was not found.",
+  template_source_drift:
+    "Configured node-template source is stale or incompatible with canonical main.",
   repo_exists:
     "Target node repository already exists and could not be reused safely.",
   github_rate_limited: "GitHub rate limit blocked node repo publishing.",
@@ -132,6 +138,7 @@ const mintErrorMessages: Record<MintErrorCode, string> = {
 function statusForMintError(errorCode: MintErrorCode): number {
   switch (errorCode) {
     case "repo_exists":
+    case "template_source_drift":
       return 409;
     case "github_rate_limited":
       return 429;

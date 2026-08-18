@@ -255,6 +255,8 @@ interface GitTreeEntry {
 }
 
 const TEMPLATE_SLUG = "node-template";
+const CANONICAL_TEMPLATE_OWNER = "Cogni-DAO";
+const TEMPLATE_SOURCE_ALLOWED_DIVERGENCE = new Set([".cogni/repo-spec.yaml"]);
 const CONTAINER_PORT = 3200;
 
 /** Footprint files edited in-place by the node-formation PR (single-file gens over current main). */
@@ -1611,6 +1613,13 @@ export class GitHubRepoWriter implements DeployPlanePort {
     const { templateOwner, owner, slug } = input;
     const tplOctokit = await this.getOctokit(templateOwner, TEMPLATE_SLUG);
 
+    // Candidate/preview may mint from an env-local mirror so their GitHub App needs no
+    // Cogni-DAO installation. That mirror must still be byte-identical to canonical main,
+    // except for its own repo identity. Fail before POST /forks: mixing a current wizard
+    // renderer with stale inherited parsers/workflows creates a repository that can never
+    // pass its first CI run (bug.5046/task.5032).
+    await this.assertTemplateSourceCompatible(tplOctokit, templateOwner);
+
     // Mint the repo as a named fork — idempotent: a prior partial run (fork created, pin PR failed)
     // re-runs cleanly by reusing the existing matching fork instead of 422-ing on the duplicate name.
     let cloneUrl: string;
@@ -2627,6 +2636,91 @@ export class GitHubRepoWriter implements DeployPlanePort {
       }
     }
     return { tipTreeSha, blobs };
+  }
+
+  /**
+   * Prove a non-canonical mint source is a content mirror of canonical node-template main.
+   * Git blob SHAs are content-addressed across repositories, so comparing recursive tree
+   * entries detects stale code, workflows, parsers, file modes, additions, and deletions
+   * without cloning either repository. The source repo's own identity is the sole carve-out.
+   */
+  private async assertTemplateSourceCompatible(
+    sourceOctokit: Octokit,
+    templateOwner: string
+  ): Promise<void> {
+    if (
+      templateOwner.toLowerCase() === CANONICAL_TEMPLATE_OWNER.toLowerCase()
+    ) {
+      return;
+    }
+
+    // Canonical node-template is public. Use an anonymous client because candidate's
+    // intentionally isolated GitHub App is installed only on the test organization.
+    const canonicalOctokit = new Octokit();
+    const [sourceResponse, canonicalResponse] = await Promise.all([
+      sourceOctokit.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", {
+        owner: templateOwner,
+        repo: TEMPLATE_SLUG,
+        tree_sha: "main",
+        recursive: "1",
+      }),
+      canonicalOctokit.request(
+        "GET /repos/{owner}/{repo}/git/trees/{tree_sha}",
+        {
+          owner: CANONICAL_TEMPLATE_OWNER,
+          repo: TEMPLATE_SLUG,
+          tree_sha: "main",
+          recursive: "1",
+        }
+      ),
+    ]);
+
+    if (sourceResponse.data.truncated || canonicalResponse.data.truncated) {
+      throw new Error(
+        "node-template source drift: recursive Git tree was truncated; refusing to publish"
+      );
+    }
+
+    const entriesByPath = (
+      tree: typeof sourceResponse.data.tree
+    ): Map<string, string> => {
+      const entries = new Map<string, string>();
+      for (const entry of tree) {
+        if (
+          entry.type === "tree" ||
+          !entry.path ||
+          !entry.mode ||
+          !entry.sha ||
+          TEMPLATE_SOURCE_ALLOWED_DIVERGENCE.has(entry.path)
+        ) {
+          continue;
+        }
+        entries.set(
+          entry.path,
+          `${entry.type ?? "unknown"}:${entry.mode}:${entry.sha}`
+        );
+      }
+      return entries;
+    };
+
+    const sourceEntries = entriesByPath(sourceResponse.data.tree);
+    const canonicalEntries = entriesByPath(canonicalResponse.data.tree);
+    const paths = new Set([
+      ...sourceEntries.keys(),
+      ...canonicalEntries.keys(),
+    ]);
+    const differingPaths = [...paths]
+      .filter((path) => sourceEntries.get(path) !== canonicalEntries.get(path))
+      .sort();
+    if (differingPaths.length === 0) return;
+
+    const sample = differingPaths.slice(0, 8).join(", ");
+    const remainder = differingPaths.length > 8 ? ", ..." : "";
+    throw new Error(
+      `node-template source drift: ${templateOwner}/${TEMPLATE_SLUG} differs from ` +
+        `${CANONICAL_TEMPLATE_OWNER}/${TEMPLATE_SLUG} at ${differingPaths.length} path(s): ` +
+        `${sample}${remainder}; sync the mint source before publishing`
+    );
   }
 
   /** Resolve `heads/main` → its commit + root-tree SHAs (the parent for a node-formation commit). */
