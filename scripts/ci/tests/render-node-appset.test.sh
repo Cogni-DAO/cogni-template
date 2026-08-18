@@ -106,17 +106,39 @@ pass "fail-closed when a deployable row omits envs"
 # 5. Every generated/control-plane repoURL is contract-derived.
 # shellcheck source=scripts/ci/lib/deployment-parent.sh
 source scripts/ci/lib/deployment-parent.sh
+shopt -s nullglob
+assert_parent_url() {
+  local path="$1" expected_url="$2" bad
+  [ -f "$path" ] || fail "missing deployment-parent consumer $path"
+  bad="$(awk '/repoURL:/ {print $2}' "$path" | grep -vxF "$expected_url" || true)"
+  [ -z "$bad" ] || fail "$path has repoURL outside its env contract: $bad"
+}
 for env in candidate-a preview production; do
   expected_url="$(deployment_parent_repo_url "$env")"
-  for path in \
-    "$APPSETS_DIR/$env"/*-applicationset.yaml \
-    "infra/k8s/argocd/control-plane/roots/${env}-control-plane-application.yaml" \
-    "infra/k8s/argocd/control-plane/${env}/${env}-appsets-application.yaml"; do
-    [ -f "$path" ] || fail "missing deployment-parent consumer $path"
-    bad="$(awk '/repoURL:/ {print $2}' "$path" | grep -vxF "$expected_url" || true)"
-    [ -z "$bad" ] || fail "$path has repoURL outside $env contract: $bad"
+  for path in "$APPSETS_DIR/$env"/*-applicationset.yaml; do
+    assert_parent_url "$path" "$expected_url"
   done
+  # Unlike the AppSet collection, both control-plane registration files are
+  # mandatory even when an environment currently deploys zero nodes.
+  assert_parent_url \
+    "infra/k8s/argocd/control-plane/roots/${env}-control-plane-application.yaml" \
+    "$expected_url"
+  assert_parent_url \
+    "infra/k8s/argocd/control-plane/${env}/${env}-appsets-application.yaml" \
+    "$expected_url"
 done
+
+# Empty AppSet sets are valid under ATOMIC_PER_ENV. Prove preview/production do
+# not turn an unmatched glob into a fake required filename.
+empty_appsets="$(mktemp -d)"
+mkdir -p "$empty_appsets/preview" "$empty_appsets/production"
+for env in preview production; do
+  empty_paths=("$empty_appsets/$env"/*-applicationset.yaml)
+  [ "${#empty_paths[@]}" -eq 0 ] || fail "$env empty AppSet set expanded unexpectedly"
+done
+rm -rf "$empty_appsets"
+pass "empty preview/production AppSet sets are valid"
+
 grep -q '__DEPLOYMENT_PARENT_REPO_URL__' scripts/ci/node-applicationset.yaml.tmpl \
   || fail "AppSet template must carry the deployment-parent token"
 grep -qx '!infra/deployment-parents.json' .dockerignore \
