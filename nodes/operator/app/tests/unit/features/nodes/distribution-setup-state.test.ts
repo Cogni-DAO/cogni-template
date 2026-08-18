@@ -31,6 +31,7 @@ function input(over: Partial<DistributionSetupInput>): DistributionSetupInput {
     recordedDistributorAddress: null,
     pendingDistributorAddress: null,
     sessionDistributorAddress: null,
+    distributorVerified: false,
     authorized: false,
     ...over,
   };
@@ -58,6 +59,7 @@ describe("deriveDistributionSetup", () => {
         repoSpecActive: false, // main still reads pending_activation pre-merge
         openPr: PR,
         pendingDistributorAddress: DISTRIBUTOR, // address lives only in the PR branch
+        distributorVerified: true,
         authorized: true, // chain truth: grant already live
       })
     );
@@ -73,22 +75,26 @@ describe("deriveDistributionSetup", () => {
     expect(derived.currentStep).toBeNull();
   });
 
-  it("open PR does not block progression: authorize becomes current while the PR awaits merge", () => {
+  it("an existing open record cannot bypass CAS authorization", () => {
     const derived = deriveDistributionSetup(
       input({
         openPr: PR,
         pendingDistributorAddress: DISTRIBUTOR,
+        distributorVerified: true,
         authorized: false,
       })
     );
     expect(derived.steps.record).toBe("awaiting");
-    expect(derived.currentStep).toBe(3);
+    expect(derived.currentStep).toBe(2);
     expect(derived.steps.authorize).toBe("current");
   });
 
-  it("deployed this session but unrecorded: record is current and the address stays visible", () => {
+  it("deployed this session but unrecorded: authorize is current before record", () => {
     const derived = deriveDistributionSetup(
-      input({ sessionDistributorAddress: DISTRIBUTOR })
+      input({
+        sessionDistributorAddress: DISTRIBUTOR,
+        distributorVerified: true,
+      })
     );
     expect(derived.distributorAddress).toBe(DISTRIBUTOR);
     expect(derived.distributorSource).toBe("session");
@@ -96,8 +102,8 @@ describe("deriveDistributionSetup", () => {
     expect(derived.currentStep).toBe(2);
     expect(derived.steps).toEqual({
       deploy: "done",
-      record: "current",
-      authorize: "pending",
+      record: "pending",
+      authorize: "current",
     });
   });
 
@@ -106,6 +112,7 @@ describe("deriveDistributionSetup", () => {
       input({
         repoSpecActive: true,
         recordedDistributorAddress: DISTRIBUTOR,
+        distributorVerified: true,
         authorized: true,
       })
     );
@@ -124,6 +131,7 @@ describe("deriveDistributionSetup", () => {
         repoSpecActive: true,
         recordedDistributorAddress: DISTRIBUTOR.toLowerCase(),
         sessionDistributorAddress: DISTRIBUTOR,
+        distributorVerified: true,
       })
     );
     expect(derived.recordPlane).toEqual({ kind: "recorded" });
@@ -137,15 +145,29 @@ describe("deriveDistributionSetup", () => {
     expect(derived.steps.deploy).toBe("current");
   });
 
-  it("spec active but the deployed distributor is not pinned → record_incomplete, re-record", () => {
+  it("record stays pending until CAS authorization is verified", () => {
     const derived = deriveDistributionSetup(
       input({
         repoSpecActive: true,
         sessionDistributorAddress: DISTRIBUTOR,
+        distributorVerified: true,
       })
     );
     expect(derived.recordPlane).toEqual({ kind: "record_incomplete" });
     expect(derived.currentStep).toBe(2);
+    expect(derived.steps.authorize).toBe("current");
+    expect(derived.steps.record).toBe("pending");
+  });
+
+  it("record becomes current only after deploy and CAS authorization both verify", () => {
+    const derived = deriveDistributionSetup(
+      input({
+        sessionDistributorAddress: DISTRIBUTOR,
+        distributorVerified: true,
+        authorized: true,
+      })
+    );
+    expect(derived.currentStep).toBe(3);
     expect(derived.steps.record).toBe("current");
   });
 
@@ -155,21 +177,33 @@ describe("deriveDistributionSetup", () => {
         repoSpecActive: true,
         recordedDistributorAddress: OTHER_DISTRIBUTOR,
         sessionDistributorAddress: DISTRIBUTOR,
+        distributorVerified: true,
+        authorized: true,
       })
     );
     expect(derived.distributorAddress).toBe(DISTRIBUTOR); // freshest truth wins display
     expect(derived.recordPlane).toEqual({ kind: "record_incomplete" });
-    expect(derived.currentStep).toBe(2);
+    expect(derived.currentStep).toBe(3);
   });
 
   it("refresh-safe by construction: identical inputs derive identical state", () => {
     const shape = input({
       openPr: PR,
       pendingDistributorAddress: DISTRIBUTOR,
+      distributorVerified: true,
       authorized: true,
     });
     expect(deriveDistributionSetup(shape)).toEqual(
       deriveDistributionSetup(shape)
     );
+  });
+
+  it("an address without owner/token verification does not complete deploy", () => {
+    const derived = deriveDistributionSetup(
+      input({ sessionDistributorAddress: DISTRIBUTOR })
+    );
+    expect(derived.currentStep).toBe(1);
+    expect(derived.steps.deploy).toBe("current");
+    expect(derived.steps.authorize).toBe("pending");
   });
 });

@@ -18,9 +18,14 @@
   "scripts": {
     "build": "tsup",
     "postbuild": "node -e \"const fs=require('fs'); if(!fs.existsSync('dist/index.js')){console.error('ERROR: dist/index.js missing'); process.exit(1)}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "contracts:verify": "forge build --force && node --input-type=module -e \"import { createHash } from 'node:crypto'; import { readFileSync } from 'node:fs'; const artifact = JSON.parse(readFileSync('out/DistributionPublishCondition.sol/DistributionPublishCondition.json', 'utf8')); const moduleText = readFileSync('src/distribution-publish-condition/bytecode.ts', 'utf8'); const vendored = moduleText.match(/\\\"(0x[0-9a-f]+)\\\" as const;/)?.[1]; const compiled = artifact.bytecode.object; if (!vendored || vendored !== compiled) { console.error('DistributionPublishCondition vendored bytecode differs from deterministic Foundry build'); process.exit(1); } const source = readFileSync('src/distribution-publish-condition/DistributionPublishCondition.sol', 'utf8'); const sha256 = (value) => createHash('sha256').update(value).digest('hex'); const metadata = typeof artifact.metadata === 'string' ? JSON.parse(artifact.metadata) : artifact.metadata; console.log(JSON.stringify({ compiler: metadata.compiler.version, evmVersion: metadata.settings.evmVersion, optimizer: metadata.settings.optimizer, sourceSha256: sha256(source), creationBytecodeSha256: sha256(compiled) }, null, 2));\"",
+    "test:solidity": "forge test -vv",
+    "check:solidity": "pnpm contracts:verify && pnpm test:solidity"
   },
   "devDependencies": {
+    "@aragon/osx-commons-contracts": "1.4.0",
+    "@openzeppelin/contracts": "4.9.6",
     "tsup": "^8.5.1",
     "typescript": "^5",
     "viem": "2.39.3"

@@ -29,8 +29,9 @@
  * (The previous hand-rolled version omitted `supportsInterface` and reverted
  * `grantWithCondition` with `ConditionInterfaceNotSupported` / `0xa6a7dbbd`.)
  *
- * `isGranted` decodes the `DAO.execute` calldata and returns true ONLY when the action
- * set is exactly `[token.mint(distributor, *), distributor.setMerkleRoot(*)]` — nothing
+ * `isGranted` decodes the `DAO.execute` calldata and returns true ONLY when `_callId`
+ * equals the distributor's live root, the failure bitmap is zero, and the action set is
+ * exactly `[token.mint(distributor, *), distributor.setMerkleRoot(newRoot)]` — nothing
  * else, no third action, no other target. Two immutables set at deploy:
  * `constructor(address token, address distributor)`.
  *
