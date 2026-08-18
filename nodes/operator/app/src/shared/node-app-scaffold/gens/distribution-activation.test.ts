@@ -97,6 +97,40 @@ describe("renderDistributionActivationSpec", () => {
     );
   });
 
+  it("expands an empty inline pool_config into valid explicit YAML", () => {
+    const inlineEmptyPool = PENDING_SPEC.replace(
+      / {2}pool_config:\n {4}base_issuance_credits: "10000"/,
+      "  pool_config: {} # legacy placeholder"
+    );
+    const reconciled = renderDistributionActivationSpec(inlineEmptyPool, {
+      tokenAddress: TOKEN,
+      emissionsHolderAddress: EMISSIONS_HOLDER,
+    });
+    const parsed = parseYaml(reconciled) as {
+      activity_ledger: {
+        pool_config: { base_issuance_credits: string };
+      };
+    };
+
+    expect(parsed.activity_ledger.pool_config.base_issuance_credits).toBe(
+      "10000"
+    );
+    expect(reconciled).toContain("pool_config: # legacy placeholder");
+  });
+
+  it("rejects a nonempty inline pool policy that omits issuance", () => {
+    const conflictingPool = PENDING_SPEC.replace(
+      / {2}pool_config:\n {4}base_issuance_credits: "10000"/,
+      '  pool_config: { future_policy: "custom" }'
+    );
+    expect(() =>
+      renderDistributionActivationSpec(conflictingPool, {
+        tokenAddress: TOKEN,
+        emissionsHolderAddress: EMISSIONS_HOLDER,
+      })
+    ).toThrow(/cannot be reconciled safely/);
+  });
+
   it("fails closed instead of overriding an explicit invalid issuance", () => {
     for (const configured of ["0", "-1", "10.5", "not-a-number"]) {
       const invalidIssuance = PENDING_SPEC.replace(

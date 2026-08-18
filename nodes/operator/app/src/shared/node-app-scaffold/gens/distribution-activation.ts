@@ -121,10 +121,25 @@ function reconcileDistributionIssuance(spec: string): string {
   if (poolMatch) {
     const poolLeading = poolMatch[1] ?? "";
     const poolBody = poolMatch[0].slice(poolLeading.length);
-    body = body.replace(
-      poolRe,
-      `${poolLeading}${poolBody}\n    base_issuance_credits: "${DEFAULT_BASE_ISSUANCE_CREDITS}"`
-    );
+    const firstLine = poolBody.split("\n", 1)[0] ?? "";
+    const inlineValue = firstLine.slice(firstLine.indexOf(":") + 1).trim();
+    const emptyInlineObject = /^\{\s*\}(?:\s+(#.*))?$/.exec(inlineValue);
+    if (emptyInlineObject) {
+      const trailingComment = emptyInlineObject[1];
+      body = body.replace(
+        poolRe,
+        `${poolLeading}  pool_config:${trailingComment ? ` ${trailingComment}` : ""}\n    base_issuance_credits: "${DEFAULT_BASE_ISSUANCE_CREDITS}"`
+      );
+    } else if (inlineValue === "" || inlineValue.startsWith("#")) {
+      body = body.replace(
+        poolRe,
+        `${poolLeading}${poolBody}\n    base_issuance_credits: "${DEFAULT_BASE_ISSUANCE_CREDITS}"`
+      );
+    } else {
+      throw new Error(
+        "configured inline activity_ledger.pool_config is missing base_issuance_credits and cannot be reconciled safely"
+      );
+    }
   } else {
     body = body.replace(
       /^activity_ledger:[^\n]*$/m,
