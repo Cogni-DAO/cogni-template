@@ -10,8 +10,10 @@ import {Action} from "@aragon/osx-commons-contracts/src/executors/IExecutor.sol"
  * @title DistributionPublishCondition
  * @notice Scoped Aragon OSx EXECUTE condition. Deployed ONCE per node, bound via
  *   `grantWithCondition(where=DAO, who=executor, EXECUTE_PERMISSION, condition=this)`.
- *   Thereafter the executor may call `DAO.execute` ONLY for the exact publish action
- *   set `[token.mint(distributor, *), distributor.setMerkleRoot(*)]` — nothing else.
+ *   Thereafter the executor may call `DAO.execute` ONLY for an atomic compare-and-swap
+ *   publish: `_callId` must equal the distributor's live root, `_allowFailureMap` must
+ *   be zero, and the exact action set remains
+ *   `[token.mint(distributor, *), distributor.setMerkleRoot(newRoot)]`.
  *   A compromised executor key can publish, never drain the treasury or re-permission.
  * @dev Extends Aragon's `PermissionCondition` abstract base — the BEST-PRACTICE way to
  *   author an OSx condition. The base derives from `ERC165` and implements
@@ -36,8 +38,7 @@ contract DistributionPublishCondition is PermissionCondition {
     /// @dev bytes4(keccak256("mint(address,uint256)")) — GovernanceERC20 mint selector.
     bytes4 private constant MINT_SELECTOR = bytes4(keccak256("mint(address,uint256)"));
     /// @dev bytes4(keccak256("setMerkleRoot(bytes32)")) — distributor root-rotation selector.
-    bytes4 private constant SET_MERKLE_ROOT_SELECTOR =
-        bytes4(keccak256("setMerkleRoot(bytes32)"));
+    bytes4 private constant SET_MERKLE_ROOT_SELECTOR = bytes4(keccak256("setMerkleRoot(bytes32)"));
 
     constructor(address _token, address _distributor) {
         token = _token;
@@ -46,7 +47,8 @@ contract DistributionPublishCondition is PermissionCondition {
 
     /**
      * @notice Returns true ONLY when `_data` is a `DAO.execute` call whose action set is
-     *   exactly `[token.mint(distributor, *), distributor.setMerkleRoot(*)]`.
+     *   an atomic compare-and-swap publish with exactly
+     *   `[token.mint(distributor, *), distributor.setMerkleRoot(newRoot)]`.
      * @dev `_where`/`_who`/`_permissionId` are unused: OSx already routed this condition to
      *   the (where=DAO, who=executor, EXECUTE_PERMISSION) grant, so the ONLY thing left to
      *   verify is the SHAPE of the requested execution. We inspect `_data` and nothing else.
@@ -57,16 +59,27 @@ contract DistributionPublishCondition is PermissionCondition {
         address, /* _who */
         bytes32, /* _permissionId */
         bytes calldata _data
-    ) public view override returns (bool) {
+    )
+        public
+        view
+        override
+        returns (bool)
+    {
         // `_data` is the full calldata of:
         //   DAO.execute(bytes32 _callId, Action[] _actions, uint256 _allowFailureMap)
         // Strip the 4-byte function selector, then decode the three args. `abi.decode`
         // handles the dynamic `Action[]` (a head offset pointing at the tail array) itself;
         // a malformed/short tail reverts inside `abi.decode` (a revert reads as "not granted"
-        // to the caller). We ignore _callId and _allowFailureMap — they don't affect scope.
+        // to the caller). `_callId` is intentionally repurposed as the expected previous root.
         if (_data.length < 4) return false;
-        (, Action[] memory actions, ) =
+        (bytes32 expectedPreviousRoot, Action[] memory actions, uint256 allowFailureMap) =
             abi.decode(_data[4:], (bytes32, Action[], uint256));
+
+        // Both actions are one economic state transition. Neither mint nor root rotation may
+        // fail independently, and a payload built from a stale root must be denied before mint.
+        if (allowFailureMap != 0) return false;
+        (bool rootReadable, bytes32 liveRoot) = _tryLiveMerkleRoot();
+        if (!rootReadable || expectedPreviousRoot != liveRoot) return false;
 
         // EXACTLY two actions: mint then setMerkleRoot. No third action, no fewer.
         if (actions.length != 2) return false;
@@ -75,12 +88,12 @@ contract DistributionPublishCondition is PermissionCondition {
         Action memory mintAction = actions[0];
         if (mintAction.to != token) return false; // must target the node token
         if (mintAction.value != 0) return false; // never sends ETH
-        if (mintAction.data.length < 4) return false; // need at least a selector
+        if (mintAction.data.length != 68) return false; // selector + address + uint256
         // First 4 bytes must be the mint selector.
         if (bytes4(mintAction.data) != MINT_SELECTOR) return false;
         // Decode (address to, uint256 amount) from the calldata AFTER the selector.
         // A short/garbled arg tail reverts in abi.decode ⇒ reads as not-granted.
-        (address mintTo, ) = abi.decode(_slice4(mintAction.data), (address, uint256));
+        (address mintTo,) = abi.decode(_slice4(mintAction.data), (address, uint256));
         // The mint recipient MUST be the distributor — tokens can only be minted TO it.
         if (mintTo != distributor) return false;
 
@@ -88,13 +101,25 @@ contract DistributionPublishCondition is PermissionCondition {
         Action memory rootAction = actions[1];
         if (rootAction.to != distributor) return false; // must target the distributor
         if (rootAction.value != 0) return false; // never sends ETH
-        if (rootAction.data.length < 4) return false; // need at least a selector
-        // First 4 bytes must be the setMerkleRoot selector. The bytes32 root arg is
-        // unconstrained by design — the manifest, off-chain, decides the root.
+        if (rootAction.data.length != 36) return false; // selector + bytes32
+        // First 4 bytes must be the setMerkleRoot selector.
         if (bytes4(rootAction.data) != SET_MERKLE_ROOT_SELECTOR) return false;
+        bytes32 newRoot = abi.decode(_slice4(rootAction.data), (bytes32));
+        if (newRoot == expectedPreviousRoot) return false;
 
         // All checks passed: this is a well-formed, in-scope publish. Grant.
         return true;
+    }
+
+    /**
+     * @dev Read the distributor root inside permission evaluation: the on-chain CAS authority.
+     */
+    function _tryLiveMerkleRoot() private view returns (bool ok, bytes32 root) {
+        bytes memory result;
+        (ok, result) = distributor.staticcall(abi.encodeWithSelector(bytes4(keccak256("merkleRoot()"))));
+        if (!ok || result.length != 32) return (false, bytes32(0));
+        root = abi.decode(result, (bytes32));
+        return (true, root);
     }
 
     /**
@@ -104,7 +129,7 @@ contract DistributionPublishCondition is PermissionCondition {
     function _slice4(bytes memory data) private pure returns (bytes memory out) {
         uint256 len = data.length - 4;
         out = new bytes(len);
-        for (uint256 i = 0; i < len; ) {
+        for (uint256 i = 0; i < len;) {
             out[i] = data[i + 4];
             unchecked {
                 ++i;

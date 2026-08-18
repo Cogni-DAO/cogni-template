@@ -8,8 +8,8 @@
  *   node's distributions — and nothing else — so every subsequent per-epoch publish is a single direct
  *   `DAO.execute` with NO vote. Two wallet transactions:
  *     1. DEPLOY `DistributionPublishCondition(token, distributor)` — a tiny per-node permission
- *        condition whose `isGranted` returns true ONLY for the exact publish action set. Capture its
- *        address from the deploy receipt.
+ *        condition whose `isGranted` returns true ONLY for an atomic compare-and-swap publish.
+ *        Capture its address from the deploy receipt.
  *     2. GOVERNANCE PROPOSAL: `plugin.createProposal([DAO.grantWithCondition(DAO, wallet,
  *        EXECUTE_PERMISSION, condition)], 0, 0, 0, Yes, tryEarlyExecution)`. On a 100%-owner
  *        EarlyExecution DAO this auto-executes, giving the wallet the SCOPED standing grant. This IS
@@ -17,8 +17,8 @@
  *        EXECUTE grant (even a compromised executor key can only publish, never drain the treasury).
  * Scope: Client-side wagmi wiring extracted from `ExecuteDistributionPanel` so BOTH the per-epoch
  *   publish panel and the node-page setup sequence can drive the same authorize flow. Reads no secrets;
- *   the connected wallet signs every transaction. Does NOT read `hasPermission` — the caller reads it
- *   (via `useHasExecutePermission`) to gate/skip this step and re-reads when this hook reports success.
+ *   the connected wallet signs every transaction. Does NOT declare activation complete — the caller
+ *   re-reads paired `hasPermission` probes and only the terminal record route may mark the node active.
  * Invariants:
  *   - AUTHORIZE_IS_A_PROPOSAL: the grant is wrapped in createProposal(Yes, tryEarlyExecution); it is a
  *     governance action, never "executed".
@@ -187,9 +187,8 @@ export function useAuthorizePublishing(
     writeContract,
   ]);
 
-  // Grant proposal confirmed → done (EarlyExecution auto-executed the scoped grant).
-  // A mined-but-REVERTED grant (e.g. EarlyExecution failed) must NOT read as success —
-  // the caller re-reads hasPermission, but the phase must not lie in the meantime.
+  // Grant proposal confirmed → transaction done. This is not activation success: the caller must
+  // still prove the new condition with paired on-chain permission probes before recording active.
   useEffect(() => {
     if (phase !== "granting" || !grantReceipt) return;
     setPhase(grantReceipt.status === "success" ? "done" : "error");

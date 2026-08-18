@@ -1,0 +1,15 @@
+[profile.default]
+src = "src/distribution-publish-condition"
+test = "test"
+out = "out"
+cache_path = "out/cache"
+solc_version = "0.8.17"
+evm_version = "london"
+optimizer = true
+optimizer_runs = 200
+bytecode_hash = "ipfs"
+auto_detect_remappings = false
+remappings = [
+  "@aragon/osx-commons-contracts/=node_modules/@aragon/osx-commons-contracts/",
+  "@openzeppelin/contracts/=node_modules/@openzeppelin/contracts/",
+]

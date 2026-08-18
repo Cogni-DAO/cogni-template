@@ -7,9 +7,8 @@
  *   - `useExecuteDistribution` fetches the publish payload for a finalized epoch — the mint delta,
  *     new merkle root, distributor/token/DAO addresses, and chain — so a scoped publisher wallet can
  *     build the mint + setMerkleRoot actions. Read-only: the write is the caller's wagmi hook.
- *   - `useHasExecutePermission` reads the scoped DAO EXECUTE permission using a representative publish
- *     call. If absent, the UI points to one-time setup; if present, the per-epoch write is one direct
- *     `DAO.execute([mint,setRoot])` transaction with no proposal or vote.
+ *   - `useHasExecutePermission` uses paired probes to prove CAS-scoped DAO EXECUTE authority. Only
+ *     the canonical atomic publish may pass; an otherwise-identical non-atomic payload must fail.
  * Scope: Client-side. The payload fetch hits the SIWE-authenticated per-node read route same-origin;
  *   the permission read is a pure on-chain view call. Neither performs DB access or write txs.
  * Invariants:
@@ -18,81 +17,24 @@
  *   - CALMLY_NULL_ON_NOT_READY: 404 (epoch/node) and 409 (not finalized / no manifest / no
  *     distributor) resolve to a typed not-ready reason rather than throwing, so the panel can
  *     render a quiet "not ready yet" state.
- *   - PERMISSION_GATES_UI: hasPermission is `undefined` until read (never throws for "not ready"),
- *     so the panel can hold both steps behind a loading state and re-read after the authorize tx.
+ *   - PERMISSION_FAILS_CLOSED: only the exact paired-probe result unlocks publishing.
  * Side-effects: IO (HTTP GET to the authed distribution-tx route; on-chain hasPermission read).
  * Links: nodes/operator/app/src/app/api/v1/nodes/[id]/attribution/epochs/[eid]/distribution-tx/route.ts,
  *   nodes/operator/app/src/features/governance/lib/proposal-abis.ts
  * @public
  */
 
+import { CUMULATIVE_MERKLE_DISTRIBUTOR_ABI } from "@cogni/cogni-contracts";
 import { useQuery } from "@tanstack/react-query";
-import { encodeFunctionData } from "viem";
 import { useReadContract } from "wagmi";
 
 import {
+  buildPublishPermissionProbe,
+  type CasPublishPermissionState,
+  classifyCasPublishPermission,
   DAO_ABI,
   EXECUTE_PERMISSION_ID,
 } from "@/features/governance/lib/proposal-abis";
-
-/** Minimal ABIs to build a REPRESENTATIVE publish payload for the permission probe. */
-const MINT_ABI = [
-  {
-    type: "function",
-    name: "mint",
-    stateMutability: "nonpayable",
-    inputs: [{ type: "address" }, { type: "uint256" }],
-    outputs: [],
-  },
-] as const;
-const SET_MERKLE_ROOT_ABI = [
-  {
-    type: "function",
-    name: "setMerkleRoot",
-    stateMutability: "nonpayable",
-    inputs: [{ type: "bytes32" }],
-    outputs: [],
-  },
-] as const;
-const ZERO_ROOT =
-  "0x0000000000000000000000000000000000000000000000000000000000000000" as const;
-const PROBE_CALL_ID =
-  "0x0000000000000000000000000000000000000000000000000000000000000001" as const;
-
-/**
- * A SCOPED EXECUTE grant (via `DistributionPublishCondition`) only reads as `hasPermission`
- * when the probe `_data` is a well-formed publish call — `DAO.execute([mint(distributor,*),
- * setMerkleRoot(*)])`. Probing with empty `"0x"` makes the condition DENY (empty ≠ publish
- * shape), so a live grant would falsely read `false`. This builds a representative (amount 0,
- * root 0) publish payload so the condition returns true for an authorized wallet.
- */
-function buildPublishProbeData(
-  token: `0x${string}`,
-  distributor: `0x${string}`
-): `0x${string}` {
-  const mintData = encodeFunctionData({
-    abi: MINT_ABI,
-    functionName: "mint",
-    args: [distributor, 0n],
-  });
-  const rootData = encodeFunctionData({
-    abi: SET_MERKLE_ROOT_ABI,
-    functionName: "setMerkleRoot",
-    args: [ZERO_ROOT],
-  });
-  return encodeFunctionData({
-    abi: DAO_ABI,
-    functionName: "execute",
-    args: [
-      PROBE_CALL_ID,
-      [
-        { to: token, value: 0n, data: mintData },
-        { to: distributor, value: 0n, data: rootData },
-      ],
-      0n,
-    ],
-  });
-}
 
 export interface ExecuteDistributionPayload {
   readonly epochId: string;
@@ -192,8 +134,9 @@ export function useExecuteDistribution(
 }
 
 export interface UseHasExecutePermission {
-  /** True once the wallet holds EXECUTE_PERMISSION on the DAO. `undefined` until read. */
+  /** True only when paired probes prove the current CAS-scoped condition. */
   readonly hasPermission: boolean | undefined;
+  readonly permissionState: CasPublishPermissionState;
   readonly isLoading: boolean;
   readonly error: Error | null;
   /** Re-read after the authorize tx confirms so the UI advances to Publish. */
@@ -203,10 +146,9 @@ export interface UseHasExecutePermission {
 /**
  * Read `DAO.hasPermission(_where=DAO, _who=wallet, EXECUTE_PERMISSION, <publish probe>)` on
  * chain. The grant is SCOPED via `DistributionPublishCondition`, so the probe `_data` must be
- * a representative publish call (`execute([mint(distributor,0), setMerkleRoot(0)])`) or the
- * condition denies it — see `buildPublishProbeData`. Gates the publish surface: false ⇒ show
- * the one-time authorize step, true ⇒ show the per-epoch direct execute. Disabled (undefined)
- * until DAO + wallet + token + distributor are all present.
+ * a representative compare-and-swap publish. A second, otherwise-identical probe sets a non-zero
+ * allow-failure map and MUST be denied. Only the exact true/false pair unlocks publishing; a broad,
+ * stale, unreadable, or missing grant fails closed.
  */
 export function useHasExecutePermission(params: {
   daoAddress: `0x${string}` | undefined;
@@ -223,32 +165,84 @@ export function useHasExecutePermission(params: {
     Boolean(tokenAddress) &&
     Boolean(distributorAddress);
 
-  const probeData =
-    tokenAddress && distributorAddress
-      ? buildPublishProbeData(tokenAddress, distributorAddress)
+  const rootRead = useReadContract({
+    abi: CUMULATIVE_MERKLE_DISTRIBUTOR_ABI,
+    address: distributorAddress ?? undefined,
+    functionName: "merkleRoot",
+    chainId,
+    query: { enabled },
+  });
+  const liveRoot =
+    typeof rootRead.data === "string"
+      ? (rootRead.data as `0x${string}`)
+      : undefined;
+  const probeReady = enabled && liveRoot !== undefined;
+  const validProbeData =
+    tokenAddress && distributorAddress && liveRoot
+      ? buildPublishPermissionProbe(
+          tokenAddress,
+          distributorAddress,
+          liveRoot,
+          0n
+        )
+      : "0x";
+  const nonAtomicProbeData =
+    tokenAddress && distributorAddress && liveRoot
+      ? buildPublishPermissionProbe(
+          tokenAddress,
+          distributorAddress,
+          liveRoot,
+          1n
+        )
       : "0x";
 
-  const { data, isLoading, error, refetch } = useReadContract({
+  const validProbe = useReadContract({
     abi: DAO_ABI,
     address: daoAddress,
     functionName: "hasPermission",
-    // _where=DAO, _who=wallet, _permissionId=EXECUTE_PERMISSION, _data=<publish probe>
     args: [
       daoAddress ?? "0x0000000000000000000000000000000000000000",
       wallet ?? "0x0000000000000000000000000000000000000000",
       EXECUTE_PERMISSION_ID,
-      probeData,
+      validProbeData,
     ],
     chainId,
-    query: { enabled },
+    query: { enabled: probeReady },
   });
+  const nonAtomicProbe = useReadContract({
+    abi: DAO_ABI,
+    address: daoAddress,
+    functionName: "hasPermission",
+    args: [
+      daoAddress ?? "0x0000000000000000000000000000000000000000",
+      wallet ?? "0x0000000000000000000000000000000000000000",
+      EXECUTE_PERMISSION_ID,
+      nonAtomicProbeData,
+    ],
+    chainId,
+    query: { enabled: probeReady },
+  });
+  const permissionState = classifyCasPublishPermission(
+    validProbe.data as boolean | undefined,
+    nonAtomicProbe.data as boolean | undefined
+  );
 
   return {
-    hasPermission: data as boolean | undefined,
-    isLoading,
-    error: error as Error | null,
+    hasPermission:
+      permissionState === "loading"
+        ? undefined
+        : permissionState === "verified",
+    permissionState,
+    isLoading:
+      rootRead.isLoading || validProbe.isLoading || nonAtomicProbe.isLoading,
+    error: (rootRead.error ??
+      validProbe.error ??
+      nonAtomicProbe.error ??
+      null) as Error | null,
     refetch: () => {
-      void refetch();
+      void rootRead.refetch();
+      void validProbe.refetch();
+      void nonAtomicProbe.refetch();
     },
   };
 }

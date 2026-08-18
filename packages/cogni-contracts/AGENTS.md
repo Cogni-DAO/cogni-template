@@ -42,7 +42,8 @@ Pure TypeScript package for Cogni-owned contract ABIs, bytecode, and addresses. 
   - `COGNI_SIGNAL_ABI` - CogniSignal contract ABI
   - `COGNI_SIGNAL_BYTECODE` - CogniSignal deployment bytecode (deployed fresh at setup time)
   - `CUMULATIVE_MERKLE_DISTRIBUTOR_ABI` / `CUMULATIVE_MERKLE_DISTRIBUTOR_BYTECODE` - vendored 1inch CumulativeMerkleDrop (ONE per node, mutable owner-set root + cumulative claim)
-- **Files considered API:** `index.ts`, `cogni-signal/abi.ts`, `cogni-signal/bytecode.ts`, `cumulative-merkle-distributor/*`
+  - `DISTRIBUTION_PUBLISH_CONDITION_ABI` / `DISTRIBUTION_PUBLISH_CONDITION_BYTECODE` - Cogni CAS-scoped Aragon permission condition deployed once per node
+- **Files considered API:** `index.ts`, `cogni-signal/*`, `cumulative-merkle-distributor/*`, `distribution-publish-condition/*`
 
 ## Ports
 
