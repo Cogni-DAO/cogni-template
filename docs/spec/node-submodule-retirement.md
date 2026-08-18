@@ -84,11 +84,13 @@ the secret-free unit gate never touches node source at all.
 
 ### 1. Node-source access at deploy: OSS cross-repo checkout by sourceSha
 
-CD jobs that need the node's `k8s/base/**` + `k8s/external-secrets/<env>/**` use **`actions/checkout`**
-(`repository: <source_repo>`, `ref: <source_sha>`, `token: <app-token | GIT_READ_TOKEN>`, `path: node-src`),
+CD jobs that need the node's `k8s/base/**` + `k8s/external-secrets/<env>/**` fetch the exact
+`source_sha` from `source_repo` over credential-free GitHub HTTPS. Public repositories clone
+anonymously; private repositories opt into the same URL with `<app-token | GIT_READ_TOKEN>` supplied
+through a credential helper, never embedded in the remote URL. They materialize the result at `nodes/<node>`,
 then copy the needed paths into the deploy branch. This replaces the `submodule update --init` +
-`rsync app-src/nodes/<node>/k8s/**` pair in **candidate-flight.yml** (×3) and **promote-and-deploy.yml**.
-No bespoke fetch script; identical for public/private.
+`rsync app-src/nodes/<node>/k8s/**` pair in **candidate-flight.yml** (×2) and **promote-and-deploy.yml** (×1).
+The shared checkout primitive is identical for public/private; only credential lookup differs.
 
 ### 2. Secret-free CI: metadata-only, no drift check
 

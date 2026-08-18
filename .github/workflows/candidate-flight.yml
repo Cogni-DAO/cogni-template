@@ -309,7 +309,8 @@ jobs:
         run: |
           set -euo pipefail
           # Remote-source node: fetch its tree at the catalog source_sha pin into
-          # nodes/<NODE> — no submodule, no gitlink, private-safe (GIT_READ_TOKEN).
+          # nodes/<NODE>. Public repos need no token; private repos use the
+          # optional GIT_READ_TOKEN without embedding it in the remote URL.
           # In-repo nodes carry no source_repo and are already in app-src.
           # spec.node-submodule-retirement.
           catalog="app-src/infra/catalog/${NODE}.yaml"
@@ -318,12 +319,10 @@ jobs:
           [ -n "$src_repo" ] || exit 0
           src_sha="${NODE_SOURCE_SHA:-$(yq -N '.source_sha // ""' "$catalog")}"
           [ -n "$src_sha" ] || { echo "::error::no source_sha for remote-source node ${NODE}"; exit 1; }
-          repo_path="${src_repo#https://github.com/}"; repo_path="${repo_path%.git}"
           rm -rf "app-src/nodes/${NODE}"
-          git init -q "app-src/nodes/${NODE}"
-          git -C "app-src/nodes/${NODE}" remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${repo_path}.git"
-          git -C "app-src/nodes/${NODE}" fetch -q --depth 1 origin "$src_sha"
-          git -C "app-src/nodes/${NODE}" checkout -q --detach FETCH_HEAD
+          # shellcheck source=../../scripts/ci/lib/github-clone.sh
+          . app-src/scripts/ci/lib/github-clone.sh
+          github_materialize_commit "$src_repo" "$src_sha" "app-src/nodes/${NODE}"
 
       - name: Prepare deploy branch shape
         env:
@@ -342,7 +341,9 @@ jobs:
             fi
           done
 
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" deploy-branch
+          # shellcheck source=../../scripts/ci/lib/github-clone.sh
+          . app-src/scripts/ci/lib/github-clone.sh
+          github_clone_repo "${{ github.repository }}" deploy-branch
           cd deploy-branch
           git fetch origin "+refs/heads/deploy/*:refs/remotes/origin/deploy/*"
           if git rev-parse --verify --quiet "refs/remotes/origin/${PER_NODE_BRANCH}" >/dev/null; then
@@ -631,7 +632,8 @@ jobs:
         run: |
           set -euo pipefail
           # Remote-source node: fetch its tree at the catalog source_sha pin into
-          # nodes/<NODE> — no submodule, no gitlink, private-safe (GIT_READ_TOKEN).
+          # nodes/<NODE>. Public repos need no token; private repos use the
+          # optional GIT_READ_TOKEN without embedding it in the remote URL.
           # In-repo nodes carry no source_repo and are already in app-src.
           # spec.node-submodule-retirement.
           catalog="app-src/infra/catalog/${NODE}.yaml"
@@ -640,12 +642,10 @@ jobs:
           [ -n "$src_repo" ] || exit 0
           src_sha="${NODE_SOURCE_SHA:-$(yq -N '.source_sha // ""' "$catalog")}"
           [ -n "$src_sha" ] || { echo "::error::no source_sha for remote-source node ${NODE}"; exit 1; }
-          repo_path="${src_repo#https://github.com/}"; repo_path="${repo_path%.git}"
           rm -rf "app-src/nodes/${NODE}"
-          git init -q "app-src/nodes/${NODE}"
-          git -C "app-src/nodes/${NODE}" remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${repo_path}.git"
-          git -C "app-src/nodes/${NODE}" fetch -q --depth 1 origin "$src_sha"
-          git -C "app-src/nodes/${NODE}" checkout -q --detach FETCH_HEAD
+          # shellcheck source=../../scripts/ci/lib/github-clone.sh
+          . app-src/scripts/ci/lib/github-clone.sh
+          github_materialize_commit "$src_repo" "$src_sha" "app-src/nodes/${NODE}"
 
       - name: Setup SSH to candidate-a VM
         env:
@@ -770,7 +770,9 @@ jobs:
           PER_NODE_BRANCH: deploy/${{ matrix.env }}-${{ matrix.node }}
         run: |
           set -euo pipefail
-          git clone "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" deploy-branch
+          # shellcheck source=../../scripts/ci/lib/github-clone.sh
+          . app-src/scripts/ci/lib/github-clone.sh
+          github_clone_repo "${{ github.repository }}" deploy-branch
           cd deploy-branch
           git fetch origin "+refs/heads/deploy/*:refs/remotes/origin/deploy/*"
           if git rev-parse --verify --quiet "refs/remotes/origin/${PER_NODE_BRANCH}" >/dev/null; then
@@ -859,6 +861,7 @@ jobs:
         id: push-deploy
         working-directory: deploy-branch
         env:
+          GH_TOKEN: ${{ github.token }}
           PER_NODE_BRANCH: deploy/${{ matrix.env }}-${{ matrix.node }}
           NODE: ${{ matrix.node }}
           HEAD_SHA: ${{ needs.decide.outputs.head_sha }}

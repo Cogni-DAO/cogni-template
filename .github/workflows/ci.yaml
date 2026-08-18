@@ -425,6 +425,9 @@ jobs:
       - name: candidate-a deployment-parent cutover tests
         run: bash scripts/ci/tests/candidate-parent-cutover.test.sh
 
+      - name: GitHub HTTPS clone fallback tests
+        run: bash scripts/ci/tests/github-clone.test.sh
+
       # Per-node overlay drift (CATALOG_IS_SSOT + NODE_AT_ROOT_MIGRATE_PATH,
       # bug.5008). Wizard-born node overlays are frozen to the operator version
       # that minted them; a stale operator ships monorepo migrate paths that
