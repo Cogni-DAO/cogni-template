@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "source": {
+    "repository": "cogni-dao/cogni",
+    "environment": "candidate-a"
+  },
+  "target": {
+    "repository": "cogni-test-org/cogni-monorepo",
+    "environment": "candidate-a",
+    "sealingKey": {
+      "keyId": "3380204578043523366",
+      "publicKey": "Yz2aKzjBsoTVDUdGUFoiPRa1gPp/OpHRVtMGGSXOVgE="
+    }
+  },
+  "targetRepositorySecretsToPreserve": [
+    "ACTIONS_AUTOMATION_BOT_PAT",
+    "GHCR_DEPLOY_TOKEN",
+    "GHCR_DEPLOY_USERNAME"
+  ],
+  "variables": [
+    { "name": "DOMAIN", "authorityClass": "candidate-plane-config" }
+  ],
+  "forbiddenSecretClasses": [
+    "openbao-runtime",
+    "agent-generated",
+    "database-or-dsn",
+    "runtime-oauth-or-app",
+    "runtime-observability",
+    "repo-level-ci"
+  ],
+  "cutoverContract": {
+    "scope": "Only the four GitHub-environment-custodied credentials required by candidate-flight's VM and DNS paths move. DOMAIN is the sole required plain environment variable; FORK_DOMAIN_ROOT safely falls back.",
+    "runtimeMaterialization": "OpenBao remains unchanged and authoritative. Candidate-flight reaches the existing VM with VM_HOST plus SSH_DEPLOY_KEY, then materializes node values with short-lived in-cluster Kubernetes authentication. This transfer carries no OpenBao root token and changes no OIDC binding.",
+    "excluded": "APP_DB_*, AUTH_SECRET, DB/DSNs, LITELLM, INTERNAL_OPS, runtime OAuth/App keys, Loki/Grafana runtime-observability duplicates, and every source:agent runtime value are forbidden. GHCR/ACTIONS credentials remain target repo-level. GIT_READ_TOKEN is not copied; public remote sources use the separately reviewed unauthenticated fallback.",
+    "defaultBranchSequencing": "workflow_dispatch is usable only after this workflow exists on canonical main. Merge prepares the one-time lever; export and apply remain separate explicit admin actions. The target sealing key is committed for review; rotation fails closed and requires a reviewed manifest update. Remove the exporter immediately after verified apply so it does not become permanent legacy."
+  },
+  "secrets": [
+    {
+      "name": "CLOUDFLARE_API_TOKEN",
+      "authorityClass": "candidate-dns-writer"
+    },
+    { "name": "CLOUDFLARE_ZONE_ID", "authorityClass": "candidate-dns-writer" },
+    { "name": "SSH_DEPLOY_KEY", "authorityClass": "candidate-vm-access" },
+    { "name": "VM_HOST", "authorityClass": "candidate-vm-access" }
+  ]
+}

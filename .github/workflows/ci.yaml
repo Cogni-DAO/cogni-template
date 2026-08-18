@@ -333,6 +333,14 @@ jobs:
       - name: secrets:set CLI tests (task.0284)
         run: bash scripts/ci/tests/set-secret.test.sh
 
+      # task.5034 — one-time candidate control-plane secret transfer. The test
+      # uses an ephemeral libsodium keypair and a fake gh binary: no live secret
+      # read, GitHub write, workflow dispatch, or network dependency.
+      - name: sealed candidate environment transfer tests (task.5034)
+        run: |
+          npm ci --ignore-scripts --workspaces=false --prefix scripts/ci/sealed-secret-transfer
+          node --test scripts/ci/tests/sealed-secret-transfer.test.mjs
+
       # bug.5068 — OpenBao shared-bucket clobber proof. A transient `bao kv patch`
       # failure must NEVER fall back to a destructive `put` (which replaces the whole
       # multi-key bucket). Drives set-secret.sh's real bao codepath with a stub bao
