@@ -7,7 +7,7 @@ import type { KeyObject } from "node:crypto";
 
 import { type Database, withTenantScope } from "@cogni/db-client";
 import { type UserId, userActor } from "@cogni/ids";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { SignJWT } from "jose";
 
 import type {
@@ -78,6 +78,7 @@ export class OperatorIdentityAttestationRepository
               eq(userBindings.provider, "github")
             )
           )
+          .orderBy(desc(userBindings.createdAt), desc(userBindings.id))
           .limit(1),
         tx.query.users.findFirst({
           where: eq(users.id, userId),

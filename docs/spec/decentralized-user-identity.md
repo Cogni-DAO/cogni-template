@@ -123,6 +123,11 @@ GitHub OAuth credentials exist only on the environment-local operator. A
 contributor first links GitHub there; relying nodes do not configure OAuth and
 import the operator-signed binding through this protocol.
 
+When an operator user has linked more than one GitHub identity, the issuer uses
+the most recently created GitHub binding. This matches the existing "Link
+another GitHub" flow and keeps issuance deterministic without a node-specific
+identity override.
+
 ```text
 node profile
   → mint durable, session-owned nonce
