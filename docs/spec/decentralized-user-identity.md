@@ -152,13 +152,13 @@ relying origin.
 
 The implementation follows the inside-out dependency boundary:
 
-| Layer            | Operator issuer                              | Node relying party                           |
-| ---------------- | -------------------------------------------- | -------------------------------------------- |
-| Contract         | strict request/claims + fingerprint          | identical frozen contract + start response   |
-| Feature          | origin allowlist, claims, TTL, preconditions | nonce TTL + redemption outcome state machine |
-| Port             | subject/node repository + signer             | transactional nonce/binding repository       |
+| Layer            | Operator issuer                                  | Node relying party                           |
+| ---------------- | ------------------------------------------------ | -------------------------------------------- |
+| Contract         | strict request/claims + fingerprint              | identical frozen contract + start response   |
+| Feature          | origin allowlist, claims, TTL, preconditions     | nonce TTL + redemption outcome state machine |
+| Port             | subject/node repository + signer                 | transactional nonce/binding repository       |
 | Adapter          | App-read catalog + Drizzle subject + Jose signer | Drizzle atomic consume/bind/evidence write   |
-| Bootstrap/facade | dependency composition and HTTP mapping only | dependency composition and HTTP mapping only |
+| Bootstrap/facade | dependency composition and HTTP mapping only     | dependency composition and HTTP mapping only |
 
 `NO_AUTO_MERGE` remains authoritative: a GitHub provider id already owned by a
 different local user returns `already_linked` and is never re-pointed. Nonce
