@@ -25,6 +25,7 @@ const dbState = vi.hoisted(() => ({
     daoAddress: "0x1111111111111111111111111111111111111111",
     pluginAddress: "0x2222222222222222222222222222222222222222",
     signalAddress: "0x3333333333333333333333333333333333333333",
+    distributionBudgetTotalCredits: 520000,
     publishPrUrl: null,
   } as {
     id: string;
@@ -37,6 +38,7 @@ const dbState = vi.hoisted(() => ({
     daoAddress: string | null;
     pluginAddress: string | null;
     signalAddress: string | null;
+    distributionBudgetTotalCredits: number | null;
     publishPrUrl: string | null;
   } | null,
   patch: undefined as
@@ -184,6 +186,7 @@ const defaultNode = {
   daoAddress: "0x1111111111111111111111111111111111111111",
   pluginAddress: "0x2222222222222222222222222222222222222222",
   signalAddress: "0x3333333333333333333333333333333333333333",
+  distributionBudgetTotalCredits: 520000,
   publishPrUrl: null,
 };
 
@@ -314,6 +317,7 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
       daoContract: "0x1111111111111111111111111111111111111111",
       pluginContract: "0x2222222222222222222222222222222222222222",
       signalContract: "0x3333333333333333333333333333333333333333",
+      budgetTotalCredits: 520000n,
       knowledgeRemote: {
         database: "knowledge_atlas",
         owner: "cogni-dao",
@@ -334,6 +338,7 @@ describe("POST /api/v1/nodes/[id]/publish", () => {
       daoContract: "0x1111111111111111111111111111111111111111",
       pluginContract: "0x2222222222222222222222222222222222222222",
       signalContract: "0x3333333333333333333333333333333333333333",
+      budgetTotalCredits: 520000n,
       knowledgeRemote: {
         database: "knowledge_atlas",
         owner: "cogni-dao",

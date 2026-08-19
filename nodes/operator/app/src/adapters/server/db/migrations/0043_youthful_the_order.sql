@@ -1,0 +1,1 @@
+ALTER TABLE "nodes" ADD COLUMN "distribution_budget_total_credits" bigint;

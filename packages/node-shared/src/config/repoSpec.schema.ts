@@ -16,6 +16,8 @@ export {
   type ActivitySourceSpec,
   activityLedgerSpecSchema,
   activitySourceSpecSchema,
+  type BudgetPolicySpec,
+  budgetPolicySpecSchema,
   type CreditsTopupSpec,
   creditsTopupSpecSchema,
   type GovernanceScheduleSpec,

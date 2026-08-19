@@ -79,6 +79,14 @@ export const nodes = pgTable(
     pluginAddress: text("plugin_address"),
     signalAddress: text("signal_address"),
     tokenAddress: text("token_address"),
+    distributionBudgetTotalCredits: bigint(
+      "distribution_budget_total_credits",
+      {
+        // Formation caps policy supply at 1e9 whole tokens, safely below MAX_SAFE_INTEGER.
+        // Number mode keeps node API rows JSON-serializable without bespoke projections.
+        mode: "number",
+      }
+    ),
     operatorWalletAddress: text("operator_wallet_address"),
     operatorWalletPrivyId: text("operator_wallet_privy_id"),
     splitAddress: text("split_address"),

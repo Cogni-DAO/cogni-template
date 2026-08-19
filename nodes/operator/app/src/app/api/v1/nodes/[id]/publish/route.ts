@@ -406,7 +406,8 @@ export async function POST(request: Request, routeArgs: RouteParams) {
           !node.chainId ||
           !node.daoAddress ||
           !node.pluginAddress ||
-          !node.signalAddress
+          !node.signalAddress ||
+          node.distributionBudgetTotalCredits === null
         ) {
           logTerminal("warn", {
             outcome: "error",
@@ -418,6 +419,7 @@ export async function POST(request: Request, routeArgs: RouteParams) {
             hasDaoAddress: Boolean(node.daoAddress),
             hasPluginAddress: Boolean(node.pluginAddress),
             hasSignalAddress: Boolean(node.signalAddress),
+            hasDistributionBudget: node.distributionBudgetTotalCredits !== null,
           });
           logRequestEnd(ctx.log, { status: 409, durationMs: durationMs() });
           return NextResponse.json(
@@ -636,6 +638,7 @@ export async function POST(request: Request, routeArgs: RouteParams) {
           signalContract: node.signalAddress,
           knowledgeRemote,
           ...(node.tokenAddress ? { tokenContract: node.tokenAddress } : {}),
+          budgetTotalCredits: BigInt(node.distributionBudgetTotalCredits),
         };
         let pr: { prNumber: number; prUrl: string };
         try {

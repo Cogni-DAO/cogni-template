@@ -31,6 +31,12 @@ export interface GovernanceSchedule {
   entrypoint: string;
 }
 
+export interface LedgerBudgetPolicy {
+  budgetTotal: bigint;
+  accrualPerEpoch: bigint;
+}
+
+/** @deprecated Transitional runtime shape; derived from budgetPolicy until stacked PR B lands. */
 export interface LedgerPoolConfig {
   baseIssuanceCredits: bigint;
 }
@@ -47,8 +53,10 @@ export interface LedgerConfig {
       excludedLogins?: string[];
     }
   >;
+  budgetPolicy?: LedgerBudgetPolicy;
+  /** @deprecated Derived from budgetPolicy.accrualPerEpoch for the stacked runtime migration. */
   poolConfig: LedgerPoolConfig;
-  /** base_issuance_credits as string (bigint serialized) for schedule payload. */
+  /** @deprecated Derived from budgetPolicy.accrualPerEpoch for the stacked runtime migration. */
   baseIssuanceCredits?: string;
   /** EVM approver addresses from repo-spec. */
   approvers?: string[];
@@ -301,20 +309,21 @@ export function extractLedgerConfig(spec: RepoSpec): LedgerConfig | null {
     };
   }
 
-  const poolCfg = spec.activity_ledger.pool_config;
-  const baseIssuanceCredits = poolCfg
-    ? BigInt(poolCfg.base_issuance_credits)
-    : 0n;
+  const budgetPolicy = spec.activity_ledger.budget_policy;
 
   return {
     scopeId: spec.scope_id,
     scopeKey: spec.scope_key,
     epochLengthDays: spec.activity_ledger.epoch_length_days,
     activitySources: sources,
-    poolConfig: {
-      baseIssuanceCredits,
+    budgetPolicy: {
+      budgetTotal: BigInt(budgetPolicy.budget_total),
+      accrualPerEpoch: BigInt(budgetPolicy.accrual_per_epoch),
     },
-    baseIssuanceCredits: baseIssuanceCredits.toString(),
+    poolConfig: {
+      baseIssuanceCredits: BigInt(budgetPolicy.accrual_per_epoch),
+    },
+    baseIssuanceCredits: budgetPolicy.accrual_per_epoch,
     approvers: spec.activity_ledger.approvers,
   };
 }

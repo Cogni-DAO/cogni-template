@@ -33,6 +33,8 @@ export interface RenderRepoSpecInput {
   readonly pluginContract?: string | undefined;
   readonly signalContract?: string | undefined;
   readonly tokenContract?: string | undefined;
+  /** Formation-derived unminted whole-token supply available to distributions. */
+  readonly budgetTotalCredits: bigint;
   readonly knowledgeRemote?: NodeKnowledgeRemote | undefined;
   /**
    * One-line node mission (`intent.mission`) — the north-star the cognition
@@ -58,6 +60,9 @@ function starterMission(slug: string): string {
 
 /** Render `.cogni/repo-spec.yaml` for a freshly-formed node (pending payment activation). */
 export function renderRepoSpec(input: RenderRepoSpecInput): string {
+  if (input.budgetTotalCredits <= 0n) {
+    throw new RangeError("budgetTotalCredits must be positive");
+  }
   const scopeId = deriveScopeId(input.nodeId);
   const daoLines = [
     input.daoContract ? `  dao_contract: "${input.daoContract}"` : undefined,
@@ -79,6 +84,8 @@ export function renderRepoSpec(input: RenderRepoSpecInput): string {
     .join("\n");
 
   const sourceRef = `${input.repoOwner}/${input.slug}`;
+  const accrualPerEpoch =
+    input.budgetTotalCredits < 10000n ? input.budgetTotalCredits : 10000n;
   // YAML double-quoted scalar: collapse any embedded quotes so the spec stays parseable.
   const mission = (input.mission ?? starterMission(input.slug)).replace(
     /"/g,
@@ -117,6 +124,9 @@ activity_ledger:
   epoch_length_days: 7
   approvers:
     - "0x070075F1389Ae1182aBac722B36CA12285d0c949" # derekg1729.eth (template default)
+  budget_policy:
+    budget_total: "${input.budgetTotalCredits.toString()}"
+    accrual_per_epoch: "${accrualPerEpoch.toString()}"
   activity_sources:
     github:
       attribution_pipeline: cogni-v0.0

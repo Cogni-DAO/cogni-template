@@ -98,6 +98,12 @@ Enable any founder to register a node, form a fully-verified Cogni DAO via walle
 
 10. **SPLIT_CONTROLLER_IS_OPERATOR**: The Split contract's owner/controller is the operator wallet (Privy-managed). This enables programmatic allocation updates if pricing constants change. The deployer (founder wallet) signs the deployment tx but does not retain admin control.
 
+11. **FORMATION_DERIVES_BUDGET**: On the verified DAO transition, the server persists
+    `distribution_budget_total_credits = policySupply - genesisMint` in whole-token
+    credits. Publish must fail if it is absent and writes that exact finite total into
+    the spawned repo's required `activity_ledger.budget_policy`. Payment or distribution
+    activation never repairs or mutates this policy.
+
 ## Schema
 
 **User Input (P0 form):**
@@ -112,6 +118,7 @@ Enable any founder to register a node, form a fully-verified Cogni DAO via walle
 
 - `chainId` - From connected wallet (must be in `SUPPORTED_CHAIN_IDS`)
 - `genesisMint` - Whole-token amount computed from the selected template
+- `distributionBudgetTotalCredits` - Whole-token `policySupply - genesisMint`, persisted by the server for publish
 
 **Verify Request (to server):**
 

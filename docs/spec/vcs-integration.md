@@ -441,7 +441,7 @@ interface NodeScopeConfig {
     }
   >;
   approvers: string[]; // EVM addresses
-  poolConfig: { baseIssuanceCredits: string };
+  budgetPolicy: { budgetTotal: string; accrualPerEpoch: string };
 }
 
 /** Persistence port — operator stores node + scope + capability state. */
