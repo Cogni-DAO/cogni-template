@@ -413,6 +413,14 @@ const CatalogRegistryRowSchema = z
     }
   });
 
+const RepoSpecIdentitySchema = z.object({
+  node_id: z.string().uuid("node_id must be a valid UUID"),
+});
+
+function parseRepoSpecNodeId(repoSpecYaml: string): string {
+  return RepoSpecIdentitySchema.parse(parseYaml(repoSpecYaml)).node_id;
+}
+
 /**
  * Pure: one `infra/catalog/<slug>.yaml` body → a fork target, or null. Null when the row is not a
  * `type: node` with a parseable `source_repo`, or the slug is the source/hub. Exported for unit tests.
@@ -1390,7 +1398,7 @@ export class GitHubRepoWriter implements DeployPlanePort {
           );
         }
         try {
-          nodeId = extractNodeId(parseRepoSpec(specText));
+          nodeId = parseRepoSpecNodeId(specText);
         } catch (error) {
           throw invalidRepoSpecError(error);
         }
