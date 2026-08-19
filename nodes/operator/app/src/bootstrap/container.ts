@@ -169,6 +169,7 @@ import { startGovernanceSyncOnBoot } from "@/bootstrap/startup-reconcile";
 import {
   type AttributionProfileResolver,
   createAttributionProfileResolver,
+  selectLocalAttributionNodes,
 } from "@/features/nodes/attribution-profile-resolver";
 import {
   createNodeDistributionConfigResolver,
@@ -224,7 +225,7 @@ import {
 } from "@/shared/config";
 import { nodes } from "@/shared/db/nodes";
 import { serverEnv } from "@/shared/env/server-env";
-import { baseDomain, internalNodeAppUrl } from "@/shared/node-registry/resolve";
+import { baseDomain } from "@/shared/node-registry/resolve";
 import { makeLogger } from "@/shared/observability";
 import { USDC_TOKEN_ADDRESS } from "@/shared/web3";
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
@@ -964,15 +965,9 @@ function createContainer(): Container {
   const runStream = new RedisRunStreamAdapter(redisClient);
   const nodeStream = new RedisNodeStreamAdapter(redisClient);
 
-  // Attribution operator-gateway: HTTP delivery of receipts to FOREIGN owning nodes' own ledgers
-  // (#1924 routing). NORTH_STAR: resolve the node's internal URL from the operator's OWN DB
-  // registry (listRoutableNodes → slug → internalNodeAppUrl), NOT a static COGNI_NODE_ENDPOINTS
-  // map — that map is only for the DB-less scheduler-worker. Bearer SCHEDULER_API_TOKEN.
+  // Attribution operator-gateway: the catalog/profile resolver supplies the authoritative nodeId +
+  // slug pair; delivery derives the in-cluster URL without re-resolving through a stale DB snapshot.
   const receiptDelivery = createHttpReceiptDelivery({
-    resolveNodeUrl: async (nodeId) => {
-      const node = (await listRoutableNodes()).find((n) => n.id === nodeId);
-      return node ? internalNodeAppUrl(node.slug) : null;
-    },
     schedulerApiToken: env.SCHEDULER_API_TOKEN,
     logger: log.child({ component: "http-receipt-delivery" }),
   });
@@ -1217,10 +1212,10 @@ async function listRoutableNodes(): Promise<{ id: string; slug: string }[]> {
 }
 
 /**
- * Module-singleton attribution-profile resolver. Built once so its short-TTL single-flight index
- * cache is shared across all concurrent webhook requests (never a per-request rebuild). Wires the
- * real deploy plane (App-reads `infra/catalog/<slug>.yaml` + each node's repo-spec) to the pure
- * `buildRepoIndex`; the deployment parent monorepo comes from the env-scoped submodule-parent vars.
+ * Module-singleton attribution-profile resolver. The short-TTL index App-reads merged `main`
+ * catalog intent rather than the operator image's APP_BUILD_SHA: a standard node spawn adds a
+ * catalog row without rebuilding the operator image. Local `deploy_envs` + `activity_env` select
+ * this environment's authority before each selected node's own repo-spec supplies source_refs.
  */
 let cachedAttributionProfileResolver: AttributionProfileResolver | undefined;
 
@@ -1233,9 +1228,15 @@ export function resolveAttributionProfileResolver(): AttributionProfileResolver 
   const parentRepo = env.NODE_SUBMODULE_PARENT_REPO ?? "";
 
   cachedAttributionProfileResolver = createAttributionProfileResolver({
-    listRoutableNodes,
-    resolveNodeRepo: (slug) =>
-      plane.resolveNodeRepo({ parentOwner, parentRepo, slug }),
+    listRoutingNodes: async () =>
+      selectLocalAttributionNodes(
+        await plane.listCatalogNodes({
+          parentOwner,
+          parentRepo,
+          sourceRef: "main",
+        }),
+        env.DEPLOY_ENVIRONMENT ?? ""
+      ),
     // In-repo node → `nodes/<slug>/.cogni/repo-spec.yaml` under the parent monorepo;
     // fork → `.cogni/repo-spec.yaml` at the fork root. Mirrors prepareNodeRefCandidateFlight.
     fetchRepoSpecText: ({ owner, repo, isInRepo, slug }) =>

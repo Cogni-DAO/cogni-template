@@ -14,6 +14,8 @@
  * - NODE_WRITES_OWN_LEDGER: only the operator's OWN repos write to the operator's local store;
  *   receipts for a FOREIGN owning node are DELIVERED over HTTP so that node persists them in its
  *   own ledger. The own-node path is byte-for-byte behavior-preserving (regression guard).
+ * - UNROUTABLE_NEVER_WRITES: a verified webhook with no unique attribution target may still drive
+ *   non-attribution webhook hooks, but it writes no receipt to any ledger.
  * Side-effects: IO (insertIngestionReceipts for own node; HTTP delivery for foreign nodes)
  * Links: docs/spec/attribution-ledger.md,
  *   nodes/operator/app/src/adapters/server/ingestion/http-receipt-delivery.ts
@@ -25,6 +27,7 @@ import type {
   AttributionStore,
   DataSourceRegistration,
   ReceiptDelivery,
+  ReceiptDeliveryTarget,
 } from "@/ports";
 import type { Logger } from "@/shared/observability";
 
@@ -35,8 +38,8 @@ import type { Logger } from "@/shared/observability";
 export interface WebhookReceiverDeps {
   readonly attributionStore: AttributionStore;
   readonly sourceRegistrations: ReadonlyMap<string, DataSourceRegistration>;
-  /** The owning node for these receipts (operator's own node, or a foreign node — #1924). */
-  readonly nodeId: string;
+  /** Unique owning node for these receipts, or null when attribution routing failed closed. */
+  readonly target: ReceiptDeliveryTarget | null;
   /** The operator's OWN node_id. When `nodeId === operatorNodeId` → local store write (no regression). */
   readonly operatorNodeId: string;
   /** HTTP delivery client for foreign owning nodes (NODE_WRITES_OWN_LEDGER). */
@@ -57,6 +60,7 @@ export interface WebhookReceiverDeps {
 export interface WebhookReceiveResult {
   readonly eventCount: number;
   readonly source: string;
+  readonly persisted: boolean;
   readonly receipts: ReadonlyArray<{
     readonly receiptId: string;
     readonly eventType: string;
@@ -82,7 +86,7 @@ export async function receiveWebhook(
   const {
     attributionStore,
     sourceRegistrations,
-    nodeId,
+    target,
     operatorNodeId,
     receiptDelivery,
     logger,
@@ -111,14 +115,31 @@ export async function receiveWebhook(
   const events = await registration.webhook.normalize(headers, parsed);
 
   if (events.length === 0) {
-    return { eventCount: 0, source, receipts: [] };
+    return { eventCount: 0, source, persisted: false, receipts: [] };
+  }
+
+  const receiptSummaries = events.map((e) => ({
+    receiptId: e.id,
+    eventType: e.eventType,
+    platformLogin: e.platformLogin ?? null,
+  }));
+
+  // A verified, normalized event may still be unrelated to any declared attribution profile.
+  // Keep its summaries for diagnostics and downstream webhook hooks, but never invent an owner.
+  if (target === null) {
+    return {
+      eventCount: events.length,
+      source,
+      persisted: false,
+      receipts: receiptSummaries,
+    };
   }
 
   // 4. Build receipts once (RECEIPT_IDEMPOTENT via deterministic e.id).
   const retrievedAt = new Date();
   const receipts: InsertReceiptParams[] = events.map((e) => ({
     receiptId: e.id,
-    nodeId,
+    nodeId: target.nodeId,
     source: e.source,
     eventType: e.eventType,
     platformUserId: e.platformUserId,
@@ -136,14 +157,15 @@ export async function receiveWebhook(
   //   - OWN node (operator repos): local store write, UNCHANGED (no-regression path).
   //   - FOREIGN node (#1924 source_refs owner): deliver over HTTP so the node writes its OWN ledger
   //     (NODE_WRITES_OWN_LEDGER). ON CONFLICT DO NOTHING keyed on (node_id, receipt_id) both ways.
-  if (nodeId === operatorNodeId) {
+  if (target.nodeId === operatorNodeId) {
     await attributionStore.insertIngestionReceipts(receipts);
   } else {
-    await receiptDelivery.deliverReceipts(nodeId, source, receipts);
+    await receiptDelivery.deliverReceipts(target, source, receipts);
     logger.info(
       {
         event: "attribution.receipt_delivered",
-        nodeId,
+        nodeId: target.nodeId,
+        slug: target.slug,
         source,
         count: receipts.length,
       },
@@ -154,11 +176,8 @@ export async function receiveWebhook(
   return {
     eventCount: events.length,
     source,
-    receipts: events.map((e) => ({
-      receiptId: e.id,
-      eventType: e.eventType,
-      platformLogin: e.platformLogin ?? null,
-    })),
+    persisted: true,
+    receipts: receiptSummaries,
   };
 }
 

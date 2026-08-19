@@ -3,33 +3,28 @@
 
 /**
  * Module: `@features/nodes/attribution-profile-resolver`
- * Purpose: Route an inbound GitHub webhook to the sovereign node that OWNS the repo it came from.
- *   The ONE cogni-operator GitHub App receives every repo's webhooks; each node declares its git
- *   attribution profile via `activity_ledger.activity_sources.github.source_refs` (a list of
- *   `owner/repo` full-names) in its OWN `.cogni/repo-spec.yaml`. This resolver builds a
- *   ref→nodeId index from every routable node's declared profile and answers "which node owns
- *   `owner/repo`?" so the webhook route can stamp the correct `nodeId` on ingested receipts.
- * Scope: Composition of injected deps — list routable nodes, App-read each node's repo-spec,
- *   parse → extract source-refs → `buildRepoIndex`. Behind a short-TTL single-flight cache so a
- *   burst of concurrent webhooks shares ONE rebuild. No DB/env/octokit here — all injected.
+ * Purpose: Route an inbound GitHub webhook to the one sovereign node whose merged catalog entry
+ *   and own repo-spec jointly declare the webhook repository as an attribution source.
+ * Scope: Composes injected catalog/spec reads, validates node identity, builds a short-lived routing
+ *   snapshot, and returns a typed routing decision. No DB/env/Octokit access is embedded here.
  * Invariants:
- *   - ROUTE_BY_DECLARED_SOURCE_REFS: routing keys off the repo-spec `source_refs` profile, NOT the
- *     `nodes.repo_owner/repo_name` columns (those deliberately hold the parent monorepo for
- *     deploy-via-parent detection). No schema dependency here.
- *   - PROFILE_SKIP_NEVER_THROWS: a node with a missing catalog (pre-publish fork), null/absent
- *     repo-spec, or an unparseable spec is SKIPPED (logged), never fatal — one bad node must not
- *     blank routing for the whole fleet. Total failure → empty index → caller falls back to operator.
- *   - FIRST_WRITER_WINS: delegated to `buildRepoIndex`; a repo attributes to exactly one node.
- * Side-effects: none directly (injected deps do the I/O)
- * Links: packages/repo-spec/src/repo-index.ts, src/adapters/server/vcs/github-repo-write.ts
- *   (resolveNodeRepo + fetchFileText), src/shared/cache/ttl-single-flight.ts,
- *   src/app/api/internal/webhooks/[source]/route.ts (consumer)
+ *   - CATALOG_AND_PROFILE_JOINT_AUTHORITY: the merged parent catalog selects locally authoritative
+ *     nodes; each selected node's own repo-spec selects its source repositories.
+ *   - UNIQUE_ROUTE_OR_NO_WRITE: unknown, ambiguous, mismatched, and unreadable profiles never route
+ *     to a fallback ledger.
+ *   - NODE_IDENTITY_MATCHES: a catalog node_id projection must equal the child repo-spec node_id.
+ *   - SHORT_LIVED_SINGLE_FLIGHT: a bounded cache prevents GitHub API fan-out per webhook while a
+ *     newly merged spawn becomes discoverable without redeploying the operator.
+ * Side-effects: none directly (injected dependencies perform GitHub App reads and logging).
+ * Links: packages/repo-spec/src/repo-index.ts, docs/design/attribution-operator-gateway.md,
+ *   src/app/api/internal/webhooks/[source]/route.ts, bug.5052
  * @internal
  */
 
 import {
   buildRepoIndex,
   extractLedgerConfig,
+  extractNodeId,
   parseRepoSpec,
   type RepoIndexEntry,
 } from "@cogni/repo-spec";
@@ -38,57 +33,115 @@ import type { Logger } from "pino";
 import { ttlSingleFlight } from "@/shared/cache/ttl-single-flight";
 import { makeLogger } from "@/shared/observability";
 
-/** Default index freshness — a repo-spec profile edit takes effect within ~1 minute. */
-const DEFAULT_TTL_MS = 60_000;
+/** Catalog/spec edits become visible quickly without rebuilding the index for every webhook. */
+const DEFAULT_TTL_MS = 10_000;
 
-/** A routable node — anything the operator will index a git-attribution profile for. */
-export interface RoutableNode {
+export interface AttributionRoutingNode {
   readonly id: string;
   readonly slug: string;
+  readonly repo: ResolvedNodeRepo;
 }
 
-/** The node's REAL repo, as resolved from its catalog entry. */
+/** Minimal merged-catalog projection needed to select this environment's activity authority. */
+export interface CatalogAttributionNode {
+  readonly nodeId: string;
+  readonly slug: string;
+  readonly repoOwner: string;
+  readonly repoName: string;
+  readonly deployEnvs: readonly string[];
+  readonly activityEnv: string;
+}
+
 export interface ResolvedNodeRepo {
   readonly owner: string;
   readonly repo: string;
 }
 
+export type RepoRouteIssueReason =
+  | "repo_spec_missing"
+  | "repo_spec_read_failed"
+  | "repo_spec_invalid"
+  | "node_id_mismatch"
+  | "catalog_repo_undeclared";
+
+export interface RepoRouteIssue {
+  readonly nodeId: string;
+  readonly slug: string;
+  readonly reason: RepoRouteIssueReason;
+}
+
+export type RepoRouteDecision =
+  | {
+      readonly status: "matched";
+      readonly repo: string;
+      readonly target: AttributionRoutingNode;
+    }
+  | {
+      readonly status: "unclaimed";
+      readonly repo: string;
+    }
+  | {
+      readonly status: "ambiguous";
+      readonly repo: string;
+      readonly nodeIds: readonly string[];
+    }
+  | {
+      readonly status: "profile_unavailable";
+      readonly repo: string;
+      readonly issue: RepoRouteIssue;
+    }
+  | {
+      readonly status: "index_unavailable";
+      readonly repo: string;
+    };
+
 export interface AttributionProfileResolverDeps {
-  /** Nodes eligible for routing (status ∈ {published, active}). */
-  readonly listRoutableNodes: () => Promise<readonly RoutableNode[]>;
-  /** App-read `infra/catalog/<slug>.yaml` → the node's REAL `{owner, repo}`. */
-  readonly resolveNodeRepo: (slug: string) => Promise<ResolvedNodeRepo>;
-  /**
-   * App-read the node's `.cogni/repo-spec.yaml`. `isInRepo` selects the path discriminator
-   * (in-repo node → `nodes/<slug>/.cogni/repo-spec.yaml`; fork → `.cogni/repo-spec.yaml`).
-   * `slug` is passed so the in-repo path can be constructed. Returns null when absent.
-   */
+  /** App-read merged catalog entries already selected for local activity authority. */
+  readonly listRoutingNodes: () => Promise<readonly AttributionRoutingNode[]>;
+  /** App-read the node's own `.cogni/repo-spec.yaml` from main. */
   readonly fetchRepoSpecText: (input: {
     owner: string;
     repo: string;
     isInRepo: boolean;
     slug: string;
   }) => Promise<string | null>;
-  /** The deployment parent monorepo — used to discriminate in-repo nodes from forks. */
   readonly parentOwner: string;
   readonly parentRepo: string;
-  /** Injectable clock for deterministic cache tests. */
   readonly now?: () => number;
-  /** Cache TTL override (ms). */
   readonly ttlMs?: number;
   readonly log?: Logger;
 }
 
 export interface RepoIndexSnapshot {
-  readonly repoToNode: ReadonlyMap<string, string>;
+  readonly repoToTarget: ReadonlyMap<string, AttributionRoutingNode>;
+  readonly ambiguousRepos: ReadonlyMap<string, readonly string[]>;
+  readonly catalogRepoIssues: ReadonlyMap<string, RepoRouteIssue>;
   readonly builtAt: number;
 }
 
 export interface AttributionProfileResolver {
-  /** Resolve the owning nodeId for a `owner/repo` full-name, or null if unclaimed. */
-  resolveNodeForRepo(fullName: string): Promise<string | null>;
-  /** The current (cached) ref→node index snapshot. */
+  /** Resolve one normalized repository to a typed, fail-closed routing decision. */
+  resolveRepoRoute(fullName: string): Promise<RepoRouteDecision>;
+  /** Return the current discovery snapshot for deterministic readiness diagnostics. */
   resolveRepoIndex(): Promise<RepoIndexSnapshot>;
+}
+
+/** Select only nodes whose catalog says this environment owns activity and deploys the node. */
+export function selectLocalAttributionNodes(
+  definitions: readonly CatalogAttributionNode[],
+  deployEnvironment: string
+): AttributionRoutingNode[] {
+  return definitions
+    .filter(
+      (node) =>
+        node.activityEnv === deployEnvironment &&
+        node.deployEnvs.includes(deployEnvironment)
+    )
+    .map((node) => ({
+      id: node.nodeId,
+      slug: node.slug,
+      repo: { owner: node.repoOwner, repo: node.repoName },
+    }));
 }
 
 export function createAttributionProfileResolver(
@@ -99,46 +152,90 @@ export function createAttributionProfileResolver(
   const ttlMs = deps.ttlMs ?? DEFAULT_TTL_MS;
 
   const buildSnapshot = async (): Promise<RepoIndexSnapshot> => {
-    let nodes: readonly RoutableNode[];
-    try {
-      nodes = await deps.listRoutableNodes();
-    } catch (err) {
-      // Total failure → empty index → caller falls back to the operator node.
-      log.warn(
-        { event: "attribution.index_build_failed", err: String(err) },
-        "attribution profile index build failed — routing all to fallback"
-      );
-      return { repoToNode: new Map(), builtAt: now() };
-    }
-
-    // Fetch every node's profile in parallel; one bad node never blocks the others.
-    const settled = await Promise.allSettled(
-      nodes.map((node) => resolveNodeEntry(node, deps, log))
+    const nodes = await deps.listRoutingNodes();
+    const settled = await Promise.all(
+      nodes.map((node) => resolveNodeProfile(node, deps))
     );
 
-    const entries: RepoIndexEntry[] = [];
-    for (const outcome of settled) {
-      if (outcome.status === "fulfilled" && outcome.value !== null) {
-        entries.push(outcome.value);
-      }
-      // Rejections are impossible — resolveNodeEntry swallows all errors — but if one slips
-      // through, it is simply omitted (fail-open to fallback), never thrown.
+    const ready = settled.filter(
+      (result): result is ResolvedNodeProfile => result.status === "ready"
+    );
+    const entries: RepoIndexEntry[] = ready.map((result) => ({
+      nodeId: result.target.id,
+      sourceRefs: result.sourceRefs,
+    }));
+    const targetByNodeId = new Map(
+      ready.map((result) => [result.target.id, result.target] as const)
+    );
+    const { repoToNode, collisions } = buildRepoIndex(entries);
+
+    const ambiguousRepos = new Map<string, readonly string[]>();
+    for (const collision of collisions) {
+      const nodeIds = new Set(
+        ambiguousRepos.get(collision.ref) ?? [collision.ownerNodeId]
+      );
+      nodeIds.add(collision.droppedNodeId);
+      ambiguousRepos.set(collision.ref, [...nodeIds].sort());
+      repoToNode.delete(collision.ref);
     }
 
-    const { repoToNode, collisions } = buildRepoIndex(entries);
-    for (const c of collisions) {
+    const repoToTarget = new Map<string, AttributionRoutingNode>();
+    for (const [repo, nodeId] of repoToNode) {
+      const target = targetByNodeId.get(nodeId);
+      if (target) repoToTarget.set(repo, target);
+    }
+
+    const catalogRepoIssues = new Map<string, RepoRouteIssue>();
+    for (const result of settled) {
+      if (result.status === "issue") {
+        catalogRepoIssues.set(normalizeRepo(result.catalogRepo), result.issue);
+        continue;
+      }
+      const catalogRepo = normalizeRepo(
+        `${result.target.repo.owner}/${result.target.repo.repo}`
+      );
+      if (
+        !result.sourceRefs.some((ref) => normalizeRepo(ref) === catalogRepo)
+      ) {
+        catalogRepoIssues.set(catalogRepo, {
+          nodeId: result.target.id,
+          slug: result.target.slug,
+          reason: "catalog_repo_undeclared",
+        });
+      }
+    }
+
+    for (const [repo, nodeIds] of ambiguousRepos) {
+      log.error(
+        { event: "attribution.profile_ambiguous", repo, nodeIds },
+        "attribution source repository is claimed by multiple nodes"
+      );
+    }
+    for (const [repo, issue] of catalogRepoIssues) {
       log.warn(
-        {
-          event: "attribution.profile_collision",
-          ref: c.ref,
-          ownerNodeId: c.ownerNodeId,
-          droppedNodeId: c.droppedNodeId,
-        },
-        "attribution source_ref claimed by multiple nodes — first-writer kept"
+        { event: "attribution.profile_unavailable", repo, ...issue },
+        "attribution profile is not ready for routing"
       );
     }
 
-    return { repoToNode, builtAt: now() };
+    const snapshot = {
+      repoToTarget,
+      ambiguousRepos,
+      catalogRepoIssues,
+      builtAt: now(),
+    } as const;
+    log.info(
+      {
+        event: "attribution.profile_index_ready",
+        nodeCount: nodes.length,
+        routeCount: repoToTarget.size,
+        ambiguousCount: ambiguousRepos.size,
+        unavailableCount: catalogRepoIssues.size,
+        builtAt: snapshot.builtAt,
+      },
+      "attribution profile index ready"
+    );
+    return snapshot;
   };
 
   const cache = ttlSingleFlight<RepoIndexSnapshot>({
@@ -151,68 +248,88 @@ export function createAttributionProfileResolver(
     async resolveRepoIndex(): Promise<RepoIndexSnapshot> {
       return cache.get();
     },
-    async resolveNodeForRepo(fullName: string): Promise<string | null> {
-      const key = fullName.trim().toLowerCase();
-      if (key === "") return null;
-      const { repoToNode } = await cache.get();
-      return repoToNode.get(key) ?? null;
+    async resolveRepoRoute(fullName: string): Promise<RepoRouteDecision> {
+      const repo = normalizeRepo(fullName);
+      if (repo === "") return { status: "unclaimed", repo };
+
+      let snapshot: RepoIndexSnapshot;
+      try {
+        snapshot = await cache.get();
+      } catch (err) {
+        log.error(
+          { event: "attribution.profile_index_failed", repo, err: String(err) },
+          "attribution profile index unavailable"
+        );
+        return { status: "index_unavailable", repo };
+      }
+
+      const ambiguous = snapshot.ambiguousRepos.get(repo);
+      if (ambiguous) {
+        return { status: "ambiguous", repo, nodeIds: ambiguous };
+      }
+      const issue = snapshot.catalogRepoIssues.get(repo);
+      if (issue) return { status: "profile_unavailable", repo, issue };
+      const target = snapshot.repoToTarget.get(repo);
+      if (target) return { status: "matched", repo, target };
+      return { status: "unclaimed", repo };
     },
   };
 }
 
-/**
- * Resolve ONE node's `{nodeId, sourceRefs}` entry, or null if it declares no git source-refs.
- * Swallows every failure (catalog_missing for pre-publish forks, null spec, parse error) with a
- * `attribution.profile_skipped` warn — PROFILE_SKIP_NEVER_THROWS.
- */
-async function resolveNodeEntry(
-  node: RoutableNode,
-  deps: AttributionProfileResolverDeps,
-  log: Logger
-): Promise<RepoIndexEntry | null> {
+interface ResolvedNodeProfile {
+  readonly status: "ready";
+  readonly target: AttributionRoutingNode;
+  readonly sourceRefs: readonly string[];
+}
+
+interface UnavailableNodeProfile {
+  readonly status: "issue";
+  readonly catalogRepo: string;
+  readonly issue: RepoRouteIssue;
+}
+
+async function resolveNodeProfile(
+  target: AttributionRoutingNode,
+  deps: AttributionProfileResolverDeps
+): Promise<ResolvedNodeProfile | UnavailableNodeProfile> {
+  const catalogRepo = `${target.repo.owner}/${target.repo.repo}`;
+  const issue = (reason: RepoRouteIssueReason): UnavailableNodeProfile => ({
+    status: "issue",
+    catalogRepo,
+    issue: { nodeId: target.id, slug: target.slug, reason },
+  });
+
+  const isInRepo =
+    normalizeRepo(catalogRepo) ===
+    normalizeRepo(`${deps.parentOwner}/${deps.parentRepo}`);
+
+  let specText: string | null;
   try {
-    const repo = await deps.resolveNodeRepo(node.slug);
-    // In-repo node ⇔ its resolved repo IS the deployment parent monorepo.
-    const isInRepo =
-      repo.owner.toLowerCase() === deps.parentOwner.toLowerCase() &&
-      repo.repo.toLowerCase() === deps.parentRepo.toLowerCase();
-
-    const specText = await deps.fetchRepoSpecText({
-      owner: repo.owner,
-      repo: repo.repo,
+    specText = await deps.fetchRepoSpecText({
+      owner: target.repo.owner,
+      repo: target.repo.repo,
       isInRepo,
-      slug: node.slug,
+      slug: target.slug,
     });
-    if (specText === null) {
-      log.warn(
-        {
-          event: "attribution.profile_skipped",
-          slug: node.slug,
-          reason: "repo_spec_missing",
-        },
-        "attribution profile skipped — repo-spec not found"
-      );
-      return null;
-    }
-
-    const spec = parseRepoSpec(specText);
-    const ledger = extractLedgerConfig(spec);
-    const sourceRefs = ledger?.activitySources.github?.sourceRefs ?? [];
-    if (sourceRefs.length === 0) {
-      // Not an error — the node simply declares no GitHub source-refs to route.
-      return null;
-    }
-    return { nodeId: node.id, sourceRefs };
-  } catch (err) {
-    const reason = (err as { code?: string })?.code ?? "profile_resolve_error";
-    log.warn(
-      {
-        event: "attribution.profile_skipped",
-        slug: node.slug,
-        reason,
-      },
-      "attribution profile skipped"
-    );
-    return null;
+  } catch {
+    return issue("repo_spec_read_failed");
   }
+  if (specText === null) return issue("repo_spec_missing");
+
+  try {
+    const spec = parseRepoSpec(specText);
+    if (extractNodeId(spec) !== target.id) return issue("node_id_mismatch");
+    const ledger = extractLedgerConfig(spec);
+    return {
+      status: "ready",
+      target,
+      sourceRefs: ledger?.activitySources.github?.sourceRefs ?? [],
+    };
+  } catch {
+    return issue("repo_spec_invalid");
+  }
+}
+
+function normalizeRepo(value: string): string {
+  return value.trim().toLowerCase();
 }

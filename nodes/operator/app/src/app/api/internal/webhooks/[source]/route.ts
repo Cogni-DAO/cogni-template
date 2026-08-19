@@ -3,11 +3,12 @@
 
 /**
  * Module: `@app/api/internal/webhooks/[source]`
- * Purpose: Webhook receiver route — accepts platform webhook payloads and inserts receipts.
+ * Purpose: Webhook receiver route — accepts platform payloads and uniquely routes attribution receipts.
  * Scope: HTTP entry point only. Delegates to WebhookReceiverService. Does not contain business logic.
  * Invariants:
  * - WEBHOOK_VERIFY_BEFORE_NORMALIZE: Verification happens inside the feature service before normalization
  * - WEBHOOK_RECEIPT_APPEND_EXEMPT: Receipt insertion bypasses WRITES_VIA_TEMPORAL (safe per RECEIPT_IDEMPOTENT + RECEIPT_APPEND_ONLY)
+ * - UNIQUE_ROUTE_OR_NO_WRITE: GitHub attribution never falls back to the operator ledger.
  * - ARCHITECTURE_ALIGNMENT: Route → feature service → port
  * Side-effects: IO (database writes via feature service)
  * Links: docs/spec/attribution-ledger.md
@@ -29,7 +30,9 @@ import {
   WebhookSourceNotFoundError,
   WebhookVerificationError,
 } from "@/features/ingestion/services/webhook-receiver";
-import { getNodeId } from "@/shared/config";
+import type { RepoRouteDecision } from "@/features/nodes/attribution-profile-resolver";
+import type { ReceiptDeliveryTarget } from "@/ports";
+import { getNodeId, getNodeName } from "@/shared/config";
 import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
 
@@ -68,22 +71,26 @@ interface RouteParams {
  *
  * ATTRIBUTION_ROUTE_BY_SOURCE_REFS: for GitHub, read `repository.full_name` off the parsed body and
  * ask the attribution-profile resolver which sovereign node declared that `owner/repo` in its
- * `activity_ledger.activity_sources.github.source_refs`. Unclaimed repos (and every non-github
- * source) fall back to the operator node (`getNodeId()`), preserving prior behavior. Parsing here is
- * only to READ the repo full-name for routing — signature verification still happens inside
- * `receiveWebhook` BEFORE any insert (WEBHOOK_VERIFY_BEFORE_NORMALIZE is unchanged).
+ * `activity_ledger.activity_sources.github.source_refs`. GitHub attribution requires one unique
+ * match; every other decision carries a null target so no ledger is polluted. Non-GitHub sources
+ * retain the operator-local path. Signature verification remains inside `receiveWebhook` before
+ * normalization or persistence.
  */
 async function resolveTargetNode(
   source: string,
   body: Buffer
 ): Promise<{
-  nodeId: string;
+  target: ReceiptDeliveryTarget | null;
   repo: string | null;
-  fallbackToOperator: boolean;
+  status: RepoRouteDecision["status"] | "operator_local" | "missing_repo";
+  detail?: RepoRouteDecision | undefined;
 }> {
-  const operatorNodeId = getNodeId();
   if (source !== "github") {
-    return { nodeId: operatorNodeId, repo: null, fallbackToOperator: true };
+    return {
+      target: { nodeId: getNodeId(), slug: getNodeName() },
+      repo: null,
+      status: "operator_local",
+    };
   }
 
   let fullName: string | null = null;
@@ -93,34 +100,32 @@ async function resolveTargetNode(
     };
     fullName = parsed.repository?.full_name ?? null;
   } catch {
-    // Unparseable body → let receiveWebhook reject it; route to operator meanwhile.
-    return { nodeId: operatorNodeId, repo: null, fallbackToOperator: true };
+    // Let receiveWebhook verify first, then reject the malformed body. No fallback write meanwhile.
+    return { target: null, repo: null, status: "missing_repo" };
   }
 
   if (!fullName) {
-    return { nodeId: operatorNodeId, repo: null, fallbackToOperator: true };
+    return { target: null, repo: null, status: "missing_repo" };
   }
 
-  let resolved: string | null = null;
-  try {
-    resolved =
-      await resolveAttributionProfileResolver().resolveNodeForRepo(fullName);
-  } catch (err) {
-    // Never let a routing failure drop the webhook — fall back to the operator node.
-    log.warn(
-      {
-        event: "attribution.route_resolve_failed",
-        repo: fullName,
-        err: String(err),
+  const decision =
+    await resolveAttributionProfileResolver().resolveRepoRoute(fullName);
+  if (decision.status === "matched") {
+    return {
+      target: {
+        nodeId: decision.target.id,
+        slug: decision.target.slug,
       },
-      "attribution route resolve failed — falling back to operator"
-    );
+      repo: decision.repo,
+      status: decision.status,
+      detail: decision,
+    };
   }
-
   return {
-    nodeId: resolved ?? operatorNodeId,
-    repo: fullName,
-    fallbackToOperator: resolved === null,
+    target: null,
+    repo: decision.repo,
+    status: decision.status,
+    detail: decision,
   };
 }
 
@@ -171,16 +176,15 @@ export async function POST(
   try {
     const container = getContainer();
 
-    // Route receipts to the node whose declared source_refs profile owns this repo (GitHub);
-    // non-github + unclaimed repos fall back to the operator node. Signature verification still
-    // happens inside receiveWebhook BEFORE any insert.
+    // GitHub receipts require a unique catalog+profile owner. An unresolved route still verifies
+    // and normalizes so unrelated review/sync hooks can run, but it writes no attribution receipt.
     const target = await resolveTargetNode(source, bodyBuffer);
 
     const result = await receiveWebhook(
       {
         attributionStore: container.attributionStore,
         sourceRegistrations: container.webhookRegistrations,
-        nodeId: target.nodeId,
+        target: target.target,
         // The operator's OWN node_id — when it equals the owning nodeId the receiver keeps the
         // local store write (no regression); a FOREIGN owner is delivered over HTTP instead.
         operatorNodeId: getNodeId(),
@@ -196,25 +200,56 @@ export async function POST(
         source,
         eventType,
         eventCount: result.eventCount,
-        nodeId: target.nodeId,
+        nodeId: target.target?.nodeId ?? null,
+        slug: target.target?.slug ?? null,
         repo: target.repo,
-        fallbackToOperator: target.fallbackToOperator,
+        routeStatus: target.status,
+        persisted: result.persisted,
       },
       "webhook processed"
     );
+
+    if (source === "github" && target.target === null) {
+      const fields = {
+        event: "attribution.route_unroutable",
+        source,
+        eventType,
+        repo: target.repo,
+        routeStatus: target.status,
+        routeDetail: target.detail,
+        receiptCount: result.receipts.length,
+        receiptIds: result.receipts.map((receipt) => receipt.receiptId),
+      } as const;
+      if (
+        target.status === "ambiguous" ||
+        target.status === "profile_unavailable" ||
+        target.status === "index_unavailable"
+      ) {
+        log.error(
+          fields,
+          "github attribution route unavailable — no ledger write"
+        );
+      } else {
+        log.warn(
+          fields,
+          "github repository has no attribution owner — no ledger write"
+        );
+      }
+    }
 
     // Ingestion telemetry: makes attribution receipts observable in Loki. Without
     // this, "are git contributions reaching the ledger?" was unanswerable from logs
     // (only the raw normalized count was logged, never which contributors/event types
     // were persisted). Idempotent — ON CONFLICT DO NOTHING may no-op on replay.
-    if (result.receipts.length > 0) {
+    if (result.persisted && result.receipts.length > 0) {
       log.info(
         {
           event: "attribution.receipt_ingested",
           source,
-          nodeId: target.nodeId,
+          nodeId: target.target?.nodeId ?? null,
+          slug: target.target?.slug ?? null,
           repo: target.repo,
-          fallbackToOperator: target.fallbackToOperator,
+          routeStatus: target.status,
           receiptCount: result.receipts.length,
           eventTypes: [...new Set(result.receipts.map((r) => r.eventType))],
           logins: [
@@ -253,7 +288,15 @@ export async function POST(
     }
 
     return NextResponse.json(
-      { ok: true, eventCount: result.eventCount },
+      {
+        ok: true,
+        eventCount: result.eventCount,
+        attributionRoute: {
+          status: target.status,
+          repo: target.repo,
+          persisted: result.persisted,
+        },
+      },
       { status: 200 }
     );
   } catch (error) {
