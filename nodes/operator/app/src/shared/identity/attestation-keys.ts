@@ -4,8 +4,8 @@
 /**
  * Module: `@shared/identity/attestation-keys`
  * Purpose: Ed25519 key handling for operator-signed identity attestations —
- *   derives signing keypairs from current/previous private seeds and exposes
- *   only their public halves as a rotation-safe JWKS document.
+ *   derives a signing keypair from one private seed and exposes only its public
+ *   half as a JWKS document.
  * Scope: Pure key material transforms (seed → KeyObject → public JWK + kid).
  *   Does not read env, sign tokens, or touch the database.
  * Invariants:
@@ -72,25 +72,23 @@ export function importAttestationSigningKey(base64Seed: string): KeyObject {
 }
 
 /**
- * Export a deduplicated JWKS containing the public halves of the current key
- * followed by any previous key retained for verifier-cache overlap.
+ * Export a JWKS containing the signing key's public half.
  */
 export async function attestationPublicJwks(
-  signingKeys: readonly KeyObject[]
+  signingKey: KeyObject
 ): Promise<{ keys: AttestationJwk[] }> {
-  const keys = await Promise.all(
-    signingKeys.map(async (signingKey) => {
-      const publicJwk = await exportJWK(createPublicKey(signingKey));
-      const kid = await calculateJwkThumbprint(publicJwk);
-      return {
+  const publicJwk = await exportJWK(createPublicKey(signingKey));
+  const kid = await calculateJwkThumbprint(publicJwk);
+  return {
+    keys: [
+      {
         ...publicJwk,
         kid,
         alg: ATTESTATION_ALG,
-        use: "sig" as const,
-      } satisfies AttestationJwk;
-    })
-  );
-  return { keys: [...new Map(keys.map((key) => [key.kid, key])).values()] };
+        use: "sig",
+      },
+    ],
+  };
 }
 
 /** kid of the signing key's public half (RFC 7638 thumbprint). */

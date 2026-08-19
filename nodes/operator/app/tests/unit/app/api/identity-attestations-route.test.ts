@@ -31,7 +31,6 @@ const envState = vi.hoisted(() => ({
     GH_REVIEW_APP_ID?: string;
     GH_REVIEW_APP_PRIVATE_KEY_BASE64?: string;
     IDENTITY_ATTESTATION_PRIVATE_KEY?: string;
-    IDENTITY_ATTESTATION_PREVIOUS_PRIVATE_KEY?: string;
   },
 }));
 
@@ -446,64 +445,5 @@ describe("GET /.well-known/jwks.json", () => {
     const first = (await (await jwksGET()).json()) as JSONWebKeySet;
     const second = (await (await jwksGET()).json()) as JSONWebKeySet;
     expect(first.keys[0]?.kid).toBe(second.keys[0]?.kid);
-  });
-
-  it("publishes current then previous keys during rotation overlap", async () => {
-    envState.current = {
-      IDENTITY_ATTESTATION_PRIVATE_KEY: freshSeed(),
-      IDENTITY_ATTESTATION_PREVIOUS_PRIVATE_KEY: freshSeed(),
-    };
-
-    const jwks = (await (await jwksGET()).json()) as JSONWebKeySet;
-    expect(jwks.keys).toHaveLength(2);
-    expect(jwks.keys[0]?.kid).not.toBe(jwks.keys[1]?.kid);
-  });
-
-  it("keeps the current JWKS key when the previous slot is malformed", async () => {
-    envState.current = {
-      IDENTITY_ATTESTATION_PRIVATE_KEY: freshSeed(),
-      IDENTITY_ATTESTATION_PREVIOUS_PRIVATE_KEY: "not-base64",
-    };
-
-    const jwks = (await (await jwksGET()).json()) as JSONWebKeySet;
-    expect(jwks.keys).toHaveLength(1);
-  });
-
-  it("keeps a pre-rotation token verifiable from the previous-key slot", async () => {
-    const previous = freshSeed();
-    envState.current = {
-      APP_BASE_URL: ISSUER,
-      NODE_SUBMODULE_PARENT_OWNER: "cogni-test-org",
-      NODE_SUBMODULE_PARENT_REPO: "cogni-monorepo",
-      GH_REVIEW_APP_ID: "test-app-id",
-      GH_REVIEW_APP_PRIVATE_KEY_BASE64: "test-private-key",
-      IDENTITY_ATTESTATION_PRIVATE_KEY: previous,
-    };
-    dbState.githubBinding = { externalId: "12345", providerLogin: "octocat" };
-    dbState.walletAddress = "0xAbCdEf0123456789aBcDeF0123456789ABCDEF01";
-    dbState.nodeExists = true;
-    mockGetServerSessionUser.mockResolvedValue({
-      id: USER_ID,
-      walletAddress: null,
-      displayName: null,
-      avatarColor: null,
-    });
-
-    const issued = await POST(postRequest());
-    expect(issued.status).toBe(201);
-    const { attestation } = await issued.json();
-
-    envState.current = {
-      APP_BASE_URL: ISSUER,
-      IDENTITY_ATTESTATION_PRIVATE_KEY: freshSeed(),
-      IDENTITY_ATTESTATION_PREVIOUS_PRIVATE_KEY: previous,
-    };
-    const rotatedJwks = (await (await jwksGET()).json()) as JSONWebKeySet;
-    const { payload } = await jwtVerify(
-      attestation,
-      createLocalJWKSet(rotatedJwks),
-      { issuer: ISSUER, audience: `urn:cogni:node:${NODE_ID}` }
-    );
-    expect(payload.nonce).toBe(NONCE);
   });
 });
