@@ -6,7 +6,7 @@
  * Purpose: Webhook receiver route — accepts platform payloads and uniquely routes attribution receipts.
  * Scope: HTTP entry point only. Delegates to WebhookReceiverService. Does not contain business logic.
  * Invariants:
- * - WEBHOOK_VERIFY_BEFORE_NORMALIZE: Verification happens inside the feature service before normalization
+ * - WEBHOOK_VERIFY_BEFORE_ROUTE: Verification happens before parsing, routing, persistence, or dispatch
  * - WEBHOOK_RECEIPT_APPEND_EXEMPT: Receipt insertion bypasses WRITES_VIA_TEMPORAL (safe per RECEIPT_IDEMPOTENT + RECEIPT_APPEND_ONLY)
  * - UNIQUE_ROUTE_OR_NO_WRITE: GitHub attribution never falls back to the operator ledger.
  * - ARCHITECTURE_ALIGNMENT: Route → feature service → port
@@ -25,7 +25,8 @@ import {
 } from "@/bootstrap/container";
 import { dispatchSignalExecution } from "@/features/governance/services/signal-dispatch";
 import {
-  receiveWebhook,
+  receiveVerifiedWebhook,
+  verifyWebhook,
   WebhookPayloadParseError,
   WebhookSourceNotFoundError,
   WebhookVerificationError,
@@ -78,7 +79,7 @@ interface RouteParams {
  */
 async function resolveTargetNode(
   source: string,
-  body: Buffer
+  payload: Record<string, unknown>
 ): Promise<{
   target: ReceiptDeliveryTarget | null;
   repo: string | null;
@@ -93,17 +94,14 @@ async function resolveTargetNode(
     };
   }
 
-  let fullName: string | null = null;
-  try {
-    const parsed = JSON.parse(body.toString("utf-8")) as {
-      repository?: { full_name?: string };
-    };
-    fullName = parsed.repository?.full_name ?? null;
-  } catch {
-    // Let receiveWebhook verify first, then reject the malformed body. No fallback write meanwhile.
-    return { target: null, repo: null, status: "missing_repo" };
-  }
-
+  const repository = payload.repository;
+  const fullName =
+    typeof repository === "object" &&
+    repository !== null &&
+    "full_name" in repository &&
+    typeof repository.full_name === "string"
+      ? repository.full_name
+      : null;
   if (!fullName) {
     return { target: null, repo: null, status: "missing_repo" };
   }
@@ -171,19 +169,29 @@ export async function POST(
   });
 
   const eventType = headers["x-github-event"] ?? "unknown";
+  // Non-null only after verifyWebhook returns; the catch path uses this as its positive proof.
+  let verifiedPayload: Record<string, unknown> | null = null;
 
   // 4. Delegate ingestion to feature service (verify → normalize → insert receipts)
   try {
     const container = getContainer();
 
+    // Positive verification is the boundary for every parse, App lookup, ledger write, and hook.
+    const verified = await verifyWebhook(container.webhookRegistrations, {
+      source,
+      headers,
+      body: bodyBuffer,
+      secret,
+    });
+    verifiedPayload = verified.payload;
+
     // GitHub receipts require a unique catalog+profile owner. An unresolved route still verifies
     // and normalizes so unrelated review/sync hooks can run, but it writes no attribution receipt.
-    const target = await resolveTargetNode(source, bodyBuffer);
+    const target = await resolveTargetNode(source, verified.payload);
 
-    const result = await receiveWebhook(
+    const result = await receiveVerifiedWebhook(
       {
         attributionStore: container.attributionStore,
-        sourceRegistrations: container.webhookRegistrations,
         target: target.target,
         // The operator's OWN node_id — when it equals the owning nodeId the receiver keeps the
         // local store write (no regression); a FOREIGN owner is delivered over HTTP instead.
@@ -191,7 +199,7 @@ export async function POST(
         receiptDelivery: container.receiptDelivery,
         logger: log,
       },
-      { source, headers, body: bodyBuffer, secret }
+      verified
     );
 
     log.info(
@@ -268,23 +276,41 @@ export async function POST(
     // 5. Fire-and-forget dispatches after successful verification.
     // Runs async — errors logged, never block webhook response.
     if (source === "github" && eventType === "pull_request") {
-      const payload = JSON.parse(bodyBuffer.toString("utf-8"));
-      dispatchPrReview(payload, env, log);
+      dispatchPrReview(verified.payload, env, log);
       // Node-merge → preview tie: a merged spawned-node PR dispatches promote-and-deploy
       // at env=preview SOURCE-ADDRESSED by the PR head sha, pin on deploy/preview, ZERO
       // writes to main (PREVIEW_VIA_SOURCE_ADDRESSED_PROMOTE, task.5022).
-      dispatchNodePreviewPromote(payload, env, log);
+      dispatchNodePreviewPromote(verified.payload, env, log);
     }
 
     // node-template merge→main → mirror canonical content to every child fork (one PR each).
     if (source === "github" && eventType === "push") {
-      const payload = JSON.parse(bodyBuffer.toString("utf-8"));
-      dispatchCanonicalForkSync(payload, env, log);
+      dispatchCanonicalForkSync(verified.payload, env, log);
     }
 
     if (source === "alchemy") {
-      const payload = JSON.parse(bodyBuffer.toString("utf-8"));
-      dispatchSignalExecution(payload, env, log);
+      dispatchSignalExecution(verified.payload, env, log);
+    }
+
+    if (
+      source === "github" &&
+      result.receipts.length > 0 &&
+      (target.status === "unclaimed" ||
+        target.status === "index_unavailable" ||
+        target.status === "profile_unavailable")
+    ) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Attribution route not ready; retry delivery",
+          attributionRoute: {
+            status: target.status,
+            repo: target.repo,
+            persisted: false,
+          },
+        },
+        { status: 503 }
+      );
     }
 
     return NextResponse.json(
@@ -314,27 +340,31 @@ export async function POST(
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    // DB or other infra error — still dispatch review (signature was already verified
-    // inside receiveWebhook before the DB insert that failed).
+    // DB or other infra error — dispatch hooks only after an explicit positive verification proof.
     log.error(
       { source, eventType, error: String(error) },
-      "webhook ingestion failed — dispatching review anyway"
+      "webhook ingestion failed"
     );
 
-    if (source === "github" && eventType === "pull_request") {
-      const payload = JSON.parse(bodyBuffer.toString("utf-8"));
-      dispatchPrReview(payload, env, log);
-      dispatchNodePreviewPromote(payload, env, log);
+    if (
+      verifiedPayload !== null &&
+      source === "github" &&
+      eventType === "pull_request"
+    ) {
+      dispatchPrReview(verifiedPayload, env, log);
+      dispatchNodePreviewPromote(verifiedPayload, env, log);
     }
 
-    if (source === "github" && eventType === "push") {
-      const payload = JSON.parse(bodyBuffer.toString("utf-8"));
-      dispatchCanonicalForkSync(payload, env, log);
+    if (
+      verifiedPayload !== null &&
+      source === "github" &&
+      eventType === "push"
+    ) {
+      dispatchCanonicalForkSync(verifiedPayload, env, log);
     }
 
-    if (source === "alchemy") {
-      const payload = JSON.parse(bodyBuffer.toString("utf-8"));
-      dispatchSignalExecution(payload, env, log);
+    if (verifiedPayload !== null && source === "alchemy") {
+      dispatchSignalExecution(verifiedPayload, env, log);
     }
 
     return NextResponse.json(

@@ -8,7 +8,8 @@
  *   (AttributionStore, DataSourceRegistration, ReceiptDelivery). Does not perform HTTP I/O directly
  *   (delegates to the injected ReceiptDelivery) or hold mutable state.
  * Invariants:
- * - WEBHOOK_VERIFY_BEFORE_NORMALIZE: verify() is always called before normalize()
+ * - WEBHOOK_VERIFY_BEFORE_ROUTE: verify() completes before payload parsing, routing, normalization,
+ *   persistence, or downstream dispatch
  * - RECEIPT_IDEMPOTENT: Events use deterministic IDs, inserted with ON CONFLICT DO NOTHING
  * - WEBHOOK_RECEIPT_APPEND_EXEMPT: Receipt insertion bypasses WRITES_VIA_TEMPORAL (safe per RECEIPT_IDEMPOTENT + RECEIPT_APPEND_ONLY)
  * - NODE_WRITES_OWN_LEDGER: only the operator's OWN repos write to the operator's local store;
@@ -48,6 +49,13 @@ export interface WebhookReceiverDeps {
   readonly logger: Logger;
 }
 
+export interface VerifiedWebhook {
+  readonly source: string;
+  readonly headers: Record<string, string>;
+  readonly payload: Record<string, unknown>;
+  readonly registration: DataSourceRegistration;
+}
+
 /**
  * Result from processing a webhook.
  *
@@ -83,14 +91,21 @@ export async function receiveWebhook(
     readonly secret: string;
   }
 ): Promise<WebhookReceiveResult> {
-  const {
-    attributionStore,
-    sourceRegistrations,
-    target,
-    operatorNodeId,
-    receiptDelivery,
-    logger,
-  } = deps;
+  const { sourceRegistrations } = deps;
+  const verified = await verifyWebhook(sourceRegistrations, params);
+  return receiveVerifiedWebhook(deps, verified);
+}
+
+/** Verify and parse exactly once before any routing lookup or downstream side effect. */
+export async function verifyWebhook(
+  sourceRegistrations: ReadonlyMap<string, DataSourceRegistration>,
+  params: {
+    readonly source: string;
+    readonly headers: Record<string, string>;
+    readonly body: Buffer;
+    readonly secret: string;
+  }
+): Promise<VerifiedWebhook> {
   const { source, headers, body, secret } = params;
 
   // 1. Lookup registration
@@ -112,7 +127,30 @@ export async function receiveWebhook(
   } catch {
     throw new WebhookPayloadParseError(source);
   }
-  const events = await registration.webhook.normalize(headers, parsed);
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new WebhookPayloadParseError(source);
+  }
+  return {
+    source,
+    headers,
+    payload: parsed as Record<string, unknown>,
+    registration,
+  };
+}
+
+/** Normalize and persist a payload that has crossed the positive verification boundary. */
+export async function receiveVerifiedWebhook(
+  deps: Omit<WebhookReceiverDeps, "sourceRegistrations">,
+  verified: VerifiedWebhook
+): Promise<WebhookReceiveResult> {
+  const { attributionStore, target, operatorNodeId, receiptDelivery, logger } =
+    deps;
+  const { source, headers, payload, registration } = verified;
+  if (!registration.webhook) {
+    // verifyWebhook guarantees this; keep the processing boundary total for direct callers.
+    throw new WebhookSourceNotFoundError(source);
+  }
+  const events = await registration.webhook.normalize(headers, payload);
 
   if (events.length === 0) {
     return { eventCount: 0, source, persisted: false, receipts: [] };
