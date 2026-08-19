@@ -83,8 +83,7 @@ const LEDGER: NonNullable<GovernanceConfig["ledger"]> = {
       sourceRefs: ["cogni-dao/cogni"],
     },
   },
-  poolConfig: { baseIssuanceCredits: 10000n },
-  baseIssuanceCredits: "10000",
+  budgetPolicy: { budgetTotal: 520000n, accrualPerEpoch: 10000n },
   approvers: ["0x070075F1389Ae1182aBac722B36CA12285d0c949"],
 };
 
@@ -337,7 +336,10 @@ describe("syncGovernanceSchedules", () => {
             scopeKey: LEDGER.scopeKey,
             epochLengthDays: LEDGER.epochLengthDays,
             activitySources: LEDGER.activitySources,
-            baseIssuanceCredits: LEDGER.baseIssuanceCredits,
+            budgetPolicy: {
+              budgetTotal: LEDGER.budgetPolicy.budgetTotal.toString(),
+              accrualPerEpoch: LEDGER.budgetPolicy.accrualPerEpoch.toString(),
+            },
             approvers: LEDGER.approvers,
           },
           overlapPolicy: "skip",
@@ -364,7 +366,10 @@ describe("syncGovernanceSchedules", () => {
           scopeKey: LEDGER.scopeKey,
           epochLengthDays: LEDGER.epochLengthDays,
           activitySources: LEDGER.activitySources,
-          baseIssuanceCredits: LEDGER.baseIssuanceCredits,
+          budgetPolicy: {
+            budgetTotal: LEDGER.budgetPolicy.budgetTotal.toString(),
+            accrualPerEpoch: LEDGER.budgetPolicy.accrualPerEpoch.toString(),
+          },
           approvers: LEDGER.approvers,
         },
         dbScheduleId: null,

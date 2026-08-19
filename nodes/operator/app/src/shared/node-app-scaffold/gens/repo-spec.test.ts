@@ -30,6 +30,7 @@ const rendered = renderRepoSpec({
   repoOwner: "cogni-dao-test",
   nodeId: "11111111-2222-4333-8444-555555555555",
   chainId: 8453,
+  budgetTotalCredits: 520000n,
   daoContract: "0x1111111111111111111111111111111111111111",
   pluginContract: "0x2222222222222222222222222222222222222222",
   signalContract: "0x3333333333333333333333333333333333333333",
@@ -52,6 +53,10 @@ interface ParsedSpec {
   activity_ledger?: {
     epoch_length_days: number;
     approvers: string[];
+    budget_policy: {
+      budget_total: string;
+      accrual_per_epoch: string;
+    };
     activity_sources: {
       github?: {
         attribution_pipeline: string;
@@ -98,6 +103,7 @@ describe("renderRepoSpec — BORN_REVIEWABLE", () => {
         repoOwner: "cogni-dao-test",
         nodeId: "11111111-2222-4333-8444-555555555555",
         chainId: 8453,
+        budgetTotalCredits: 520000n,
         mission: "Mirror Polymarket copy-trades for the DAO.",
       })
     ) as ParsedSpec;
@@ -119,6 +125,28 @@ describe("renderRepoSpec — BORN_REVIEWABLE", () => {
     expect(spec.activity_ledger?.approvers).toContain(
       "0x070075F1389Ae1182aBac722B36CA12285d0c949"
     );
+    expect(spec.activity_ledger?.budget_policy).toEqual({
+      budget_total: "520000",
+      accrual_per_epoch: "10000",
+    });
+  });
+
+  it("caps accrual at a small formation-derived total so the minted spec stays valid", () => {
+    const small = renderRepoSpec({
+      slug: "small-node",
+      repoOwner: "cogni-dao-test",
+      nodeId: "11111111-2222-4333-8444-555555555555",
+      chainId: 8453,
+      budgetTotalCredits: 999n,
+    });
+    expect(parseRepoSpec(parseYaml(small))).toMatchObject({
+      activity_ledger: {
+        budget_policy: {
+          budget_total: "999",
+          accrual_per_epoch: "999",
+        },
+      },
+    });
   });
 
   it("emits the default review gates so minted nodes are born-reviewable", () => {

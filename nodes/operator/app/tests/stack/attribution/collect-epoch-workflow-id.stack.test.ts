@@ -46,6 +46,10 @@ const WORKFLOW_INPUT = {
         sourceRefs: ["Cogni-DAO/test-repo"],
       },
     },
+    budgetPolicy: {
+      budgetTotal: "520000",
+      accrualPerEpoch: "10000",
+    },
   },
 };
 

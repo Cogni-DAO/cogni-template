@@ -24,11 +24,11 @@ export type {
   FinalizedAllocation,
   IngestionCursor,
   IngestionReceipt,
-  InsertPoolComponentParams,
   InsertReceiptParams,
   InsertSignatureParams,
   InsertStatementParams,
   InsertUserProjectionParams,
+  ReserveEpochBudgetParams,
   StatementLineItem,
   UpsertSelectionParams,
 } from "@cogni/attribution-ledger";
@@ -48,6 +48,4 @@ export {
   isEpochAlreadyFinalizedError,
   isEpochNotFoundError,
   isEpochNotOpenError,
-  isPoolComponentMissingError,
-  PoolComponentMissingError,
 } from "@cogni/attribution-ledger";

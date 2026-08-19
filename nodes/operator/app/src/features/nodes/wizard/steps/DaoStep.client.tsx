@@ -218,11 +218,15 @@ export function DaoStep({ node }: WizardStepProps): ReactElement {
   useEffect(() => {
     if (phase !== "SUCCESS") return;
     if (!formation.state.addresses) return;
+    if (!formation.state.config) {
+      setPatchError("Verified DAO is missing its formation policy");
+      return;
+    }
     if (patchedRef.current) return;
     patchedRef.current = true;
     setAdvancing(true);
 
-    const { addresses, daoTxHash, signalTxHash, signalBlockNumber } =
+    const { addresses, config, daoTxHash, signalTxHash, signalBlockNumber } =
       formation.state;
     void (async () => {
       try {
@@ -235,6 +239,8 @@ export function DaoStep({ node }: WizardStepProps): ReactElement {
             pluginAddress: addresses.plugin,
             signalAddress: addresses.signal,
             tokenAddress: addresses.token,
+            policySupplyUnits: config.policySupplyUnits.toString(),
+            genesisMintUnits: config.genesisMintUnits.toString(),
             daoTxHash,
             signalTxHash,
             signalBlockNumber,

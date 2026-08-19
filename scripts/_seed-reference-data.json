@@ -161,7 +161,7 @@
     "insertIngestionReceipts": "store.insertIngestionReceipts([InsertIngestionReceiptParams...])",
     "insertSelectionDoNothing": "store.insertSelectionDoNothing([InsertSelectionAutoParams...])",
     "insertAllocations": "store.insertAllocations([InsertAllocationParams...])",
-    "insertPoolComponent": "store.insertPoolComponent(InsertPoolComponentParams)",
+    "reserveEpochBudget": "store.reserveEpochBudget(ReserveEpochBudgetParams)",
     "closeIngestion": "store.closeIngestion(epochId, approverSetHash, allocAlgoRef, weightConfigHash)",
     "finalizeEpoch": "store.finalizeEpoch(epochId, poolTotal)",
     "insertEpochStatement": "store.insertEpochStatement(InsertEpochStatementParams)"
@@ -187,7 +187,7 @@
       "makeIngestionReceipt",
       "makeSelection",
       "makeAllocation",
-      "makePoolComponent",
+      "makeBudgetReservation",
       "makeEpochStatement",
       "seedClosedEpoch"
     ]

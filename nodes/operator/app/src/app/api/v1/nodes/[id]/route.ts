@@ -22,6 +22,7 @@ import { z } from "zod";
 
 import { resolveAppDb } from "@/bootstrap/container";
 import { getCurrentTraceId } from "@/bootstrap/otel";
+import { deriveDistributionBudgetTotalCredits } from "@/features/nodes/budget-policy";
 import { type NodeEvent, transition } from "@/features/nodes/state-machine";
 import { getServerSessionUser } from "@/lib/auth/server";
 import { type NodeStatus, nodes } from "@/shared/db/nodes";
@@ -50,6 +51,14 @@ const PatchInput = z.object({
   pluginAddress: z.string().optional(),
   signalAddress: z.string().optional(),
   tokenAddress: z.string().optional(),
+  policySupplyUnits: z
+    .string()
+    .regex(/^[1-9][0-9]*$/)
+    .optional(),
+  genesisMintUnits: z
+    .string()
+    .regex(/^[1-9][0-9]*$/)
+    .optional(),
   daoTxHash: z.string().optional(),
   signalTxHash: z.string().optional(),
   signalBlockNumber: z.number().int().nonnegative().optional(),
@@ -213,6 +222,41 @@ export async function PATCH(request: Request, ctx: RouteParams) {
     patch.signalAddress = parsed.data.signalAddress;
   if (parsed.data.tokenAddress !== undefined)
     patch.tokenAddress = parsed.data.tokenAddress;
+  if (
+    parsed.data.event?.type === "dao_verified" ||
+    parsed.data.policySupplyUnits !== undefined ||
+    parsed.data.genesisMintUnits !== undefined
+  ) {
+    if (
+      parsed.data.policySupplyUnits === undefined ||
+      parsed.data.genesisMintUnits === undefined ||
+      parsed.data.event?.type !== "dao_verified"
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "policySupplyUnits and genesisMintUnits are both required with dao_verified",
+        },
+        { status: 400 }
+      );
+    }
+    try {
+      patch.distributionBudgetTotalCredits = Number(
+        deriveDistributionBudgetTotalCredits({
+          policySupplyUnits: BigInt(parsed.data.policySupplyUnits),
+          genesisMintUnits: BigInt(parsed.data.genesisMintUnits),
+        })
+      );
+    } catch (error) {
+      return NextResponse.json(
+        {
+          error:
+            error instanceof Error ? error.message : "invalid budget policy",
+        },
+        { status: 400 }
+      );
+    }
+  }
   if (parsed.data.daoTxHash !== undefined)
     patch.daoTxHash = parsed.data.daoTxHash;
   if (parsed.data.signalTxHash !== undefined)

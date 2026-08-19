@@ -19,9 +19,9 @@ import {
 import { DrizzleAttributionAdapter } from "@cogni/db-client";
 import {
   epochWindow,
+  makeBudgetReservation,
   makeEvaluation,
   makeIngestionReceipt,
-  makePoolComponent,
   makeSelection,
   makeSelectionAuto,
   makeUserProjection,
@@ -685,11 +685,12 @@ describe("DrizzleAttributionAdapter (Component)", () => {
   // ── Pool Components ───────────────────────────────────────────
 
   describe("pool components", () => {
+    const budgetNodeId = "00000000-0000-4000-8000-0000000000b5";
     let epochId: bigint;
 
     beforeAll(async () => {
       const epoch = await adapter.createEpoch({
-        nodeId: TEST_NODE_ID,
+        nodeId: budgetNodeId,
         scopeId: TEST_SCOPE_ID,
         ...epochWindow(5),
         weightConfig: TEST_WEIGHT_CONFIG,
@@ -697,37 +698,36 @@ describe("DrizzleAttributionAdapter (Component)", () => {
       epochId = epoch.id;
     });
 
-    afterAll(async () => {
-      await adapter.closeIngestion(
-        epochId,
-        [],
-        "cleanup-hash",
-        "weight-sum-v0",
-        "cleanup-wch"
-      );
-      await adapter.finalizeEpoch(epochId, 0n);
-    });
+    it("ONE_OPEN_EPOCH serializes concurrent finite-budget reservations", async () => {
+      const attempts = await Promise.all([
+        adapter.reserveEpochBudget(
+          makeBudgetReservation({ nodeId: budgetNodeId, epochId })
+        ),
+        adapter.reserveEpochBudget(
+          makeBudgetReservation({ nodeId: budgetNodeId, epochId })
+        ),
+      ]);
+      const components = attempts.map(({ component }) => component);
 
-    it("inserts and retrieves pool components", async () => {
-      const { component: comp, created } = await adapter.insertPoolComponent(
-        makePoolComponent({ epochId })
-      );
-
-      expect(created).toBe(true);
-      expect(comp.componentId).toBe("base_issuance");
-      expect(comp.amountCredits).toBe(10000n);
+      expect(attempts.filter(({ created }) => created)).toHaveLength(1);
+      expect(
+        components.every((component) => component?.id === components[0]?.id)
+      ).toBe(true);
+      expect(components[0]?.componentId).toBe("budget_reservation");
+      expect(components[0]?.amountCredits).toBe(10000n);
 
       const all = await adapter.getPoolComponentsForEpoch(epochId);
       expect(all).toHaveLength(1);
     });
 
-    it("POOL_UNIQUE_PER_TYPE: duplicate insert is idempotent, returns existing", async () => {
-      const { component: existing, created } =
-        await adapter.insertPoolComponent(makePoolComponent({ epochId }));
+    it("BUDGET_RESERVATION_IDEMPOTENT: retry returns the immutable reservation", async () => {
+      const { component: existing, created } = await adapter.reserveEpochBudget(
+        makeBudgetReservation({ nodeId: budgetNodeId, epochId })
+      );
 
       expect(created).toBe(false);
-      expect(existing.componentId).toBe("base_issuance");
-      expect(existing.amountCredits).toBe(10000n);
+      expect(existing?.componentId).toBe("budget_reservation");
+      expect(existing?.amountCredits).toBe(10000n);
 
       // Still only one row
       const all = await adapter.getPoolComponentsForEpoch(epochId);
@@ -744,42 +744,77 @@ describe("DrizzleAttributionAdapter (Component)", () => {
       );
     });
 
-    it("POOL_LOCKED_AT_REVIEW: insertPoolComponent rejected after closeIngestion", async () => {
-      // Close the describe-level epoch so ONE_OPEN_EPOCH allows a new one
+    it("caps the final active-epoch reservation and then exhausts the budget", async () => {
       await adapter.closeIngestion(
         epochId,
         [],
-        "pre-review-hash",
+        "cap-prerequisite-hash",
         "weight-sum-v0",
-        "pre-review-wch"
+        "cap-prerequisite-wch"
       );
-      await adapter.finalizeEpoch(epochId, 0n);
+      await adapter.finalizeEpoch(epochId, 10000n);
 
-      const reviewEpoch = await adapter.createEpoch({
-        nodeId: TEST_NODE_ID,
+      const cappedEpoch = await adapter.createEpoch({
+        nodeId: budgetNodeId,
         scopeId: TEST_SCOPE_ID,
         ...epochWindow(30),
         weightConfig: TEST_WEIGHT_CONFIG,
       });
+      const capped = await adapter.reserveEpochBudget(
+        makeBudgetReservation({
+          epochId: cappedEpoch.id,
+          nodeId: budgetNodeId,
+          budgetTotal: 15000n,
+        })
+      );
+      expect(capped.component?.amountCredits).toBe(5000n);
+
       await adapter.closeIngestion(
-        reviewEpoch.id,
+        cappedEpoch.id,
         [],
-        "pool-lock-hash",
+        "cap-hash",
         "weight-sum-v0",
-        "pool-lock-wch"
+        "cap-wch"
+      );
+      await adapter.finalizeEpoch(cappedEpoch.id, 5000n);
+
+      const exhaustedEpoch = await adapter.createEpoch({
+        nodeId: budgetNodeId,
+        scopeId: TEST_SCOPE_ID,
+        ...epochWindow(31),
+        weightConfig: TEST_WEIGHT_CONFIG,
+      });
+      const exhausted = await adapter.reserveEpochBudget(
+        makeBudgetReservation({
+          epochId: exhaustedEpoch.id,
+          nodeId: budgetNodeId,
+          budgetTotal: 15000n,
+        })
+      );
+      expect(exhausted).toEqual({ component: null, created: false });
+      epochId = exhaustedEpoch.id;
+    });
+
+    it("BUDGET_LOCKED_AT_REVIEW: reservation requires the unique open epoch", async () => {
+      await adapter.closeIngestion(
+        epochId,
+        [],
+        "budget-lock-hash",
+        "weight-sum-v0",
+        "budget-lock-wch"
       );
 
       await expect(
-        adapter.insertPoolComponent(
-          makePoolComponent({ epochId: reviewEpoch.id })
+        adapter.reserveEpochBudget(
+          makeBudgetReservation({ nodeId: budgetNodeId, epochId })
         )
       ).rejects.toThrow(EpochNotOpenError);
 
       // Also rejected when finalized
-      await adapter.finalizeEpoch(reviewEpoch.id, 0n);
+      await adapter.finalizeEpoch(epochId, 0n);
       await expect(
-        adapter.insertPoolComponent(
-          makePoolComponent({ epochId: reviewEpoch.id })
+        adapter.reserveEpochBudget(
+          makeBudgetReservation({ nodeId: budgetNodeId, epochId })
         )
       ).rejects.toThrow(EpochNotOpenError);
     });
@@ -1396,8 +1431,8 @@ describe("DrizzleAttributionAdapter (Component)", () => {
         }),
       ]);
 
-      await adapter.insertPoolComponent(
-        makePoolComponent({
+      await adapter.reserveEpochBudget(
+        makeBudgetReservation({
           nodeId: TEST_NODE_ID,
           epochId: closeEpochId,
         })

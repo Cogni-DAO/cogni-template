@@ -39,7 +39,7 @@ const {
   ensureEpochForWindow,
   findStaleOpenEpoch,
   transitionEpochForWindow,
-  ensurePoolComponents,
+  ensureBudgetReservation,
 } = proxyActivities<LedgerActivities>(STANDARD_ACTIVITY_OPTIONS);
 
 const { deriveWeightConfig, buildLockedEvaluations } =
@@ -68,8 +68,10 @@ export interface AttributionIngestRunV1 {
       sourceRefs: string[];
     }
   >;
-  /** Pool budget config — base_issuance_credits as string (bigint serialized). Optional for backward compat. */
-  readonly baseIssuanceCredits?: string;
+  readonly budgetPolicy: {
+    readonly budgetTotal: string;
+    readonly accrualPerEpoch: string;
+  };
   /** EVM approver addresses for epoch close. Optional for backward compat. */
   readonly approvers?: string[];
 }
@@ -81,7 +83,7 @@ export interface AttributionIngestRunV1 {
  * 4-5. Detect stale epoch → build evaluations → transition atomically (or simple find-or-create)
  * 6.   Delegate source collection to CollectSourcesWorkflow (child)
  * 7-9. Delegate enrichment + allocation to EnrichAndAllocateWorkflow (child)
- * 10.  Ensure pool components (inline, conditional)
+ * 10.  Atomically reserve the finite policy amount for eligible activity
  *
  * Epoch close happens at the START of the next window (not via timer/grace period).
  * When a new window begins, any stale open epoch is closed atomically with the new epoch's creation.
@@ -185,7 +187,7 @@ export async function CollectEpochWorkflow(
   });
 
   // 7-9. Enrich and allocate (child workflow — selection → enrichment → allocation)
-  await executeChild(EnrichAndAllocateWorkflow, {
+  const allocation = await executeChild(EnrichAndAllocateWorkflow, {
     args: [
       {
         epochId: epoch.epochId,
@@ -197,11 +199,11 @@ export async function CollectEpochWorkflow(
     parentClosePolicy: ParentClosePolicy.PARENT_CLOSE_POLICY_TERMINATE,
   });
 
-  // 10. Ensure pool components (base_issuance from config, idempotent)
-  if (config.baseIssuanceCredits) {
-    await ensurePoolComponents({
-      epochId: epoch.epochId,
-      baseIssuanceCredits: config.baseIssuanceCredits,
-    });
-  }
+  // 10. Atomically reserve the finite policy amount only for eligible activity.
+  await ensureBudgetReservation({
+    epochId: epoch.epochId,
+    budgetTotal: config.budgetPolicy.budgetTotal,
+    accrualPerEpoch: config.budgetPolicy.accrualPerEpoch,
+    hasIncludedReceipts: allocation.totalAllocations > 0,
+  });
 }

@@ -63,7 +63,10 @@ function buildFullSpec(): RepoSpec {
     activity_ledger: {
       epoch_length_days: 7,
       approvers: ["0x070075F1389Ae1182aBac722B36CA12285d0c949"],
-      pool_config: { base_issuance_credits: "10000" },
+      budget_policy: {
+        budget_total: "520000",
+        accrual_per_epoch: "10000",
+      },
       activity_sources: {
         github: {
           attribution_pipeline: "cogni-v0.0",
@@ -333,8 +336,10 @@ describe("extractLedgerConfig", () => {
     expect(ledger?.epochLengthDays).toBe(7);
     expect(ledger?.scopeId).toBe(TEST_SCOPE_ID);
     expect(ledger?.scopeKey).toBe("default");
-    expect(ledger?.poolConfig.baseIssuanceCredits).toBe(10000n);
-    expect(ledger?.baseIssuanceCredits).toBe("10000");
+    expect(ledger?.budgetPolicy).toEqual({
+      budgetTotal: 520000n,
+      accrualPerEpoch: 10000n,
+    });
     expect(ledger?.approvers).toEqual([
       "0x070075F1389Ae1182aBac722B36CA12285d0c949",
     ]);
@@ -360,6 +365,10 @@ describe("extractLedgerConfig", () => {
       },
       activity_ledger: {
         epoch_length_days: 7,
+        budget_policy: {
+          budget_total: "520000",
+          accrual_per_epoch: "10000",
+        },
         activity_sources: {
           github: {
             attribution_pipeline: "cogni-v0.0",
@@ -371,30 +380,23 @@ describe("extractLedgerConfig", () => {
     expect(extractLedgerConfig(spec)).toBeNull();
   });
 
-  it("defaults pool baseIssuanceCredits to 0n when pool_config missing", () => {
-    const spec = parseRepoSpec({
-      node_id: TEST_NODE_ID,
-      scope_id: TEST_SCOPE_ID,
-      scope_key: "default",
-      governance: { chain_id: String(TEST_CHAIN_ID) },
-      payments_in: {
-        credits_topup: {
-          provider: "test",
-          receiving_address: "0x1111111111111111111111111111111111111111",
-        },
-      },
-      activity_ledger: {
-        epoch_length_days: 7,
-        activity_sources: {
-          github: {
-            attribution_pipeline: "cogni-v0.0",
-            source_refs: ["r"],
+  it("rejects activity ledger without a finite budget policy", () => {
+    expect(() =>
+      parseRepoSpec({
+        node_id: TEST_NODE_ID,
+        scope_id: TEST_SCOPE_ID,
+        scope_key: "default",
+        activity_ledger: {
+          epoch_length_days: 7,
+          activity_sources: {
+            github: {
+              attribution_pipeline: "cogni-v0.0",
+              source_refs: ["r"],
+            },
           },
         },
-      },
-    });
-    const ledger = extractLedgerConfig(spec);
-    expect(ledger?.poolConfig.baseIssuanceCredits).toBe(0n);
+      })
+    ).toThrow(/Invalid repo-spec structure/);
   });
 });
 
@@ -422,6 +424,10 @@ describe("extractLedgerApprovers", () => {
       },
       activity_ledger: {
         epoch_length_days: 7,
+        budget_policy: {
+          budget_total: "520000",
+          accrual_per_epoch: "10000",
+        },
         activity_sources: {
           github: {
             attribution_pipeline: "cogni-v0.0",

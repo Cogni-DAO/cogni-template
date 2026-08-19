@@ -696,6 +696,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
         slug: "atlas",
         nodeId: "11111111-1111-4111-8111-111111111111",
         chainId: 8453,
+        budgetTotalCredits: 520000n,
       })
     ).rejects.toThrow("fork creation reached");
     expect(requests.at(-1)?.route).toBe("POST /repos/{owner}/{repo}/forks");
@@ -746,6 +747,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
         slug: "atlas",
         nodeId: "11111111-1111-4111-8111-111111111111",
         chainId: 8453,
+        budgetTotalCredits: 520000n,
       })
     ).rejects.toThrow(
       "node-template source drift: cogni-test-org/node-template differs from Cogni-DAO/node-template at 1 path(s): packages/repo-spec/src/schema.ts"
@@ -766,6 +768,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
       slug: "atlas",
       nodeId: "11111111-1111-4111-8111-111111111111",
       chainId: 8453,
+      budgetTotalCredits: 520000n,
       daoContract: "0x1111111111111111111111111111111111111111",
       pluginContract: "0x2222222222222222222222222222222222222222",
       signalContract: "0x3333333333333333333333333333333333333333",
@@ -833,6 +836,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
       slug: "atlas",
       nodeId: "11111111-1111-4111-8111-111111111111",
       chainId: 8453,
+      budgetTotalCredits: 520000n,
       protectionSourceOwner: "Cogni-DAO",
       protectionSourceRepo: "cogni",
     });
@@ -880,6 +884,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
       slug: "atlas",
       nodeId: "11111111-1111-4111-8111-111111111111",
       chainId: 8453,
+      budgetTotalCredits: 520000n,
       protectionSourceOwner: "Cogni-DAO",
       protectionSourceRepo: "cogni",
     });
@@ -941,6 +946,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
       slug: "atlas",
       nodeId: "11111111-1111-4111-8111-111111111111",
       chainId: 8453,
+      budgetTotalCredits: 520000n,
       protectionSourceOwner: "Cogni-DAO",
       protectionSourceRepo: "cogni",
     });
@@ -960,6 +966,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
         nodeId: "11111111-1111-4111-8111-111111111111",
         ownerWallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949",
         chainId: 8453,
+        budgetTotalCredits: 520000n,
         protectionSourceOwner: "Cogni-DAO",
         protectionSourceRepo: "cogni",
       })
@@ -984,6 +991,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
         slug: "atlas",
         nodeId: "11111111-1111-4111-8111-111111111111",
         chainId: 8453,
+        budgetTotalCredits: 520000n,
       })
     ).rejects.toThrow(
       "forkFromTemplate: Cogni-DAO/atlas already exists but is not a fork of Cogni-DAO/node-template"
@@ -1007,6 +1015,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
       slug: "atlas",
       nodeId: "11111111-1111-4111-8111-111111111111",
       chainId: 8453,
+      budgetTotalCredits: 520000n,
     });
 
     expect(result).toEqual({
@@ -1053,6 +1062,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
       slug: "atlas",
       nodeId: "11111111-1111-4111-8111-111111111111",
       chainId: 8453,
+      budgetTotalCredits: 520000n,
     });
 
     expect(result).toEqual({
@@ -1084,6 +1094,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
       slug: "atlas",
       nodeId: "11111111-1111-4111-8111-111111111111",
       chainId: 8453,
+      budgetTotalCredits: 520000n,
     });
 
     expect(result).toEqual({
@@ -1109,6 +1120,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
       slug: "atlas",
       nodeId: "11111111-1111-4111-8111-111111111111",
       chainId: 8453,
+      budgetTotalCredits: 520000n,
     });
 
     expect(result).toEqual({
@@ -1414,6 +1426,7 @@ node_port: 30200
         nodeId: "11111111-1111-4111-8111-111111111111",
         ownerWallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949",
         chainId: 8453,
+        budgetTotalCredits: 520000n,
         nodeRepoUrl: "https://github.com/Cogni-DAO/atlas.git",
         nodeRepoHeadSha: "0123456789012345678901234567890123456789",
       })

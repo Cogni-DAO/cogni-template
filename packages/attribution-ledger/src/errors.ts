@@ -38,19 +38,6 @@ export class EpochNotInReviewError extends Error {
   }
 }
 
-export class PoolComponentMissingError extends Error {
-  public readonly code = "POOL_COMPONENT_MISSING" as const;
-  constructor(
-    public readonly epochId: string,
-    public readonly componentId: string
-  ) {
-    super(
-      `Epoch ${epochId} is missing required pool component: ${componentId}`
-    );
-    this.name = "PoolComponentMissingError";
-  }
-}
-
 export class EpochNotFoundError extends Error {
   public readonly code = "EPOCH_NOT_FOUND" as const;
   constructor(public readonly epochId: string) {
@@ -88,12 +75,6 @@ export function isEpochNotInReviewError(
   error: unknown
 ): error is EpochNotInReviewError {
   return error instanceof Error && error.name === "EpochNotInReviewError";
-}
-
-export function isPoolComponentMissingError(
-  error: unknown
-): error is PoolComponentMissingError {
-  return error instanceof Error && error.name === "PoolComponentMissingError";
 }
 
 export function isEpochNotFoundError(

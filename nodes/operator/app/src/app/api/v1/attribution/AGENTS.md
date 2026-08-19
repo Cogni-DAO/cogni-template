@@ -35,13 +35,12 @@ Authenticated HTTP endpoints for attribution operations. SIWE-protected reads fo
   - `GET /api/v1/attribution/epochs/[id]/activity` — ingestion receipts with selection join (SIWE auth, PII)
   - `GET /api/v1/attribution/epochs/[id]/claimants` — claimant-aware finalized attribution (SIWE auth)
   - `GET /api/v1/attribution/epochs/[id]/user-projections` — read unsigned per-user projections (SIWE auth)
-  - `POST /api/v1/attribution/epochs/[id]/pool-components` — record pool component (SIWE + approver)
   - `POST /api/v1/attribution/epochs/[id]/review` — close ingestion, transition open → review (SIWE + approver)
   - `GET /api/v1/attribution/epochs/[id]/sign-data` — EIP-712 typed data for epoch signing (SIWE + approver)
   - `GET|PATCH|DELETE /api/v1/attribution/epochs/[id]/review-subject-overrides` — manage subject identity overrides for epoch review (SIWE + approver)
   - `POST /api/v1/attribution/epochs/[id]/finalize` — sign + finalize epoch IN-PROCESS on this node's own DB (story.5007 FINALIZE_IN_PROCESS), returns **200 + the statement + R3 cumulative distribution** (SIWE + approver). No Temporal, no `ledger-tasks` queue — the route calls `finalizeEpochInProcess` (bootstrap) → `runFinalizeEpoch` (`@cogni/attribution-pipeline-plugins`). Idempotent (a re-POST repairs; fold FREEZE preserves a published manifest). Client-fault failures (wrong state / unknown signer / bad signature) → **422 + `{error, code}`** (typed `FinalizeEpochError`, FAULT_PARTY_BEFORE_BUCKET); server faults → 500.
   - `POST /api/v1/attribution/epochs/collect` — trigger epoch collection on demand (SIWE session, any user, 5min cooldown). Triggers LEDGER_INGEST schedule via ScheduleHandle.trigger().
-- **Files considered API:** `distribution-lifecycle/route.ts`, `epochs/route.ts`, `epochs/[id]/activity/route.ts`, `epochs/[id]/claimants/route.ts`, `epochs/[id]/user-projections/route.ts`, `epochs/[id]/pool-components/route.ts`, `epochs/[id]/review/route.ts`, `epochs/[id]/sign-data/route.ts`, `epochs/[id]/review-subject-overrides/route.ts`, `epochs/[id]/finalize/route.ts`, `epochs/collect/route.ts`
+- **Files considered API:** `distribution-lifecycle/route.ts`, `epochs/route.ts`, `epochs/[id]/activity/route.ts`, `epochs/[id]/claimants/route.ts`, `epochs/[id]/user-projections/route.ts`, `epochs/[id]/review/route.ts`, `epochs/[id]/sign-data/route.ts`, `epochs/[id]/review-subject-overrides/route.ts`, `epochs/[id]/finalize/route.ts`, `epochs/collect/route.ts`
 
 ## Ports
 

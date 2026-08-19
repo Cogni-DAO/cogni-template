@@ -58,9 +58,9 @@ tags: [governance, transparency, payments, attribution]
 | SCOPE_SCOPED                     | All epoch-level tables include `scope_id UUID NOT NULL`. `scope_id` identifies the governance/statement domain (project) within a node. Derived deterministically: `uuidv5(node_id, scope_key)`. See [Project Scoping](#project-scoping).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | RECEIPT_SCOPE_AGNOSTIC           | Ingestion receipts carry no `scope_id` — they are global facts. Scope is assigned at the selection layer via epoch membership. One receipt can be selected into multiple scope-specific epochs.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | EVALUATION_LOCKED_IMMUTABLE      | DB trigger rejects UPDATE/DELETE on `epoch_evaluations` rows with `status='locked'`. Locked evaluations are immutable facts. INSERT of new locked rows is allowed (during `closeIngestionWithEvaluations`).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |     |
-| POOL_REPRODUCIBLE                | `pool_total_credits = SUM(epoch_pool_components.amount_credits)`. Each component stores algorithm version + inputs + amount.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| POOL_UNIQUE_PER_TYPE             | `UNIQUE(epoch_id, component_id)` — each component type appears at most once per epoch.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
-| POOL_REQUIRES_BASE               | At least one `base_issuance` component must exist before epoch finalize is allowed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| BUDGET_HARD_CAP                  | Across a `(node_id, scope_id)`, the sum of `budget_reservation` rows never exceeds repo-spec `budget_total`. Quiet or exhausted epochs create no reservation.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| BUDGET_RESERVATION_ATOMIC        | Reservation is allowed only on the DB-enforced unique open epoch. The adapter locks that epoch row and performs status check, scoped historical sum, capped computation, and insert in one transaction. `UNIQUE(epoch_id, component_id)` makes retries return the existing immutable row.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| POOL_REPRODUCIBLE                | A finalizable epoch has exactly one positive `budget_reservation` component using `flat-cap-v1`; that amount is `pool_total_credits`. The row pins policy inputs and `reservedBefore`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | WRITES_VIA_TEMPORAL              | All write operations (collect, finalize) execute in Temporal workflows via the existing `scheduler-worker` service. Next.js routes return 202 + workflow ID. **Exception:** `ingestion_receipts` appends are exempt — webhook receivers may insert receipts directly via feature services because RECEIPT_IDEMPOTENT + RECEIPT_APPEND_ONLY guarantees make them safe outside Temporal.                                                                                                                                                                                                                                                                                                                                                                           |
 | PROVENANCE_REQUIRED              | Every ingestion receipt includes `producer`, `producer_version`, `payload_hash`, `retrieved_at`. Audit trail for reproducibility.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | SCOPE_GATED_QUERIES              | `DrizzleAttributionAdapter` takes `scopeId` at construction. Every epochId-based read/write calls `resolveEpochScoped(epochId)` — `WHERE id = $epochId AND scope_id = $scopeId`. Scope mismatches throw `EpochNotFoundError` (indistinguishable from missing epoch). No port signature changes; scope is an adapter-internal concern.                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -86,7 +86,7 @@ tags: [governance, transparency, payments, attribution]
 | CONFIG_LOCKED_AT_REVIEW          | At `closeIngestion` (open→review), the epoch's `weight_config_hash` and `allocation_algo_ref` are computed and locked. These fields are NULL while open and immutable after review. All subsequent verification and statement computation uses these locked snapshots.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | ALLOCATION_ALGO_PINNED           | `allocation_algo_ref` is NULL while epoch is open, set at `closeIngestion`. `computeReceiptWeights(algoRef, receipts, weightConfig)` dispatches to the correct versioned algorithm. Same inputs + same algoRef → identical output. V0: `weight-sum-v0` (simple per-event-type weight sum). Future: content-addressable ref.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | ALLOCATION_PRESERVES_OVERRIDES   | Periodic recomputation updates only `epoch_user_projections.projected_units` and `receipt_count`. Review overrides live separately in `epoch_review_subject_overrides`, and signed canonical units live in `epoch_final_claimant_allocations`. Recomputing projections never mutates review overrides or finalized claimant allocations.                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| POOL_LOCKED_AT_REVIEW            | No new pool component inserts after `closeIngestion` (open→review). `component_id` validated against V0 allowlist: `base_issuance`, `kpi_bonus_v0`, `top_up`. Application-level enforcement.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| BUDGET_LOCKED_AT_REVIEW          | Budget reservation is only permitted while the target is the unique open epoch. Review and finalized epochs reject reservation. No administrative component or top-up write path exists.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | EPOCH_WINDOW_DETERMINISTIC       | Epoch boundaries computed by `computeEpochWindowV1()` — pure function, Monday-aligned UTC, anchored to 2026-01-05. Same `(asOf, epochLengthDays)` always yields the same window.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 ## Project Scoping
@@ -134,13 +134,16 @@ SIWE wallet login provides `{ id, walletAddress }` in the session. Authorization
 **Approver configuration** follows the repo-spec pattern (committed to repo, no env override, same as `node_id` and `dao_contract`):
 
 ```yaml
-# .cogni/repo-spec.yaml — V0 default scope
-ledger:
+# .cogni/repo-spec.yaml — default scope
+activity_ledger:
   approvers:
     - "0xYourWalletAddress"
+  budget_policy:
+    budget_total: "520000"
+    accrual_per_epoch: "10000"
 ```
 
-V0 has one scope (`default`), so `ledger.approvers` in repo-spec.yaml is the single source of truth. When multi-scope activates, each `.cogni/projects/*.yaml` carries its own `ledger.approvers[]` list, overriding the repo-spec default for that scope.
+The default scope reads `activity_ledger.approvers` and its finite budget policy from repo-spec.
 
 Loaded via `getLedgerConfig()` in `repoSpec.server.ts`, validated by Zod schema (array of EVM addresses), cached at startup.
 
@@ -149,7 +152,7 @@ Admin capability (wallet must be in scope's `approvers[]`) required for:
 - Triggering activity collection (or let Temporal cron handle it)
 - Editing review subject overrides
 - Triggering epoch finalize
-- Recording pool components
+- Reviewing the policy-derived budget reservation (read-only)
 - Signing epoch statements (EIP-712 typed data, required before finalize)
 
 Public read routes expose closed-epoch data only (epochs list, user projections, claimant attribution, statements). Ingestion receipts (PII fields: platformUserId, platformLogin, artifactUrl) require SIWE authentication. Open/current epoch data requires SIWE authentication.
@@ -255,24 +258,25 @@ Epoch status models **governance finality**, not payment execution. Distribution
                  → Runs enrichers → epoch_evaluations (draft, overwritten each pass)
                  → Claimant resolution: `materializeSelection` inserts `epoch_receipt_claimants` (draft) per receipt
                  → Computes recomputable per-user rollups → epoch_user_projections
-                 → Admin selects: adjust inclusion, resolve identities, record pool components
+                 → Admin selects: adjust inclusion and resolve identities
+                 → Runtime atomically reserves the policy-derived budget after allocation
 
 2. REVIEW        closeIngestionWithEvaluations locks config + evaluations (CONFIG_LOCKED_AT_REVIEW, EVALUATION_FINAL_ATOMIC)
                  → Enrichers run one final time → locked evaluations
                  → Sets allocation_algo_ref, weight_config_hash, evaluations_hash on epoch (immutable after)
                  → No new ingestion_receipts (INGESTION_CLOSED_ON_REVIEW)
-                 → No new pool components (POOL_LOCKED_AT_REVIEW)
+                 → No budget reservation after transition (BUDGET_LOCKED_AT_REVIEW)
                  → Selection still mutable: adjust inclusion, weight overrides, identity resolution
                  → Admin reviews + records `epoch_review_subject_overrides` (absolute override values, not deltas)
                  → User projections recomputed on demand from selected receipts + locked evaluations + locked weight_config
                  → Read models resolve current display names and linked/unlinked state at read time
 
-3. FINALIZED     Admin triggers finalize (requires signature + base_issuance)
+3. FINALIZED     Admin triggers finalize (requires signature + budget reservation)
                  → Loads locked `epoch_receipt_claimants` + selected receipts
                  → `computeReceiptWeights()` → per-receipt units
                  → `explodeToClaimants()` joins receipt weights × locked claimants → `FinalClaimantAllocation[]`
                  → Materializes `epoch_final_claimant_allocations` (canonical signed claimant units)
-                 → Reads pool components → pool_total_credits
+                 → Reads the one budget reservation → pool_total_credits
                  → computeAttributionStatementLines(final_claimant_allocations, pool_total) → epoch_statement
                  → Stores statement + signature atomically → epoch immutable forever
 ```
@@ -280,7 +284,7 @@ Epoch status models **governance finality**, not payment execution. Distribution
 **Transitions:**
 
 - `open → review`: Automatically at the start of the next epoch window (close-on-transition), **or** admin triggers early via API route. When a new window begins, `transitionEpochForWindow` closes the previous epoch and creates the new one atomically in a single DB transaction.
-- `review → finalized`: Admin action. Requires 1-of-N EIP-712 signature from scope's `approvers[]` + at least one `base_issuance` pool component.
+- `review → finalized`: Admin action. Requires 1-of-N EIP-712 signature from scope's `approvers[]` and exactly one valid `budget_reservation` component.
 - No backward transitions. Corrections use `supersedes_statement_id` on a new epoch statement.
 
 ### Statement Computation
@@ -300,13 +304,17 @@ The final allocation set hash (SHA-256 of canonical claimant allocation data, so
 
 ### Pool Model
 
-Unchanged. Each epoch's credit budget is the sum of independently computed pool components:
+Each scope has one finite repo-spec `budget_policy`: `budget_total` and
+`accrual_per_epoch`. The sole component is `budget_reservation` using
+`flat-cap-v1`:
 
-- **`base_issuance`** — constant amount per epoch (bootstraps early-stage work)
-- **`kpi_bonus_v0`** — computed from DAO-defined KPI snapshots with pinned algorithm
-- **`top_up`** — explicit governance allocation with evidence link
+`amount = hasIncludedReceipts ? min(accrual_per_epoch, budget_total - reservedBefore) : 0`
 
-Each component stores `algorithm_version`, `inputs_json`, `amount_credits`, and `evidence_ref`.
+Zero amounts are not written. The adapter locks the DB-enforced unique open epoch
+row and performs the status check, scoped historical sum, capped computation, and
+insert in one transaction. Concurrent retries return the same immutable reservation.
+Finalization accepts exactly one positive reservation; there is no administrative
+bonus, top-up, or arbitrary pool mutation path.
 
 ### Verification
 
@@ -316,7 +324,7 @@ Each component stores `algorithm_version`, `inputs_json`, `amount_credits`, and 
 2. Recompute user projections from receipts + stored `weight_config`
 3. Read locked `epoch_receipt_claimants` + `epoch_review_subject_overrides`
 4. Recompute `computeReceiptWeights()` + `explodeToClaimants()` and compare against `epoch_final_claimant_allocations`
-5. Recompute statement lines from final claimant allocations + pool components
+5. Recompute statement lines from final claimant allocations + budget reservation
 6. Compare recomputed values against stored statement
 7. Return verification report
 
@@ -338,7 +346,7 @@ Each component stores `algorithm_version`, `inputs_json`, `amount_credits`, and 
 | `approver_set_hash`   | TEXT         | SHA-256 of canonical approvers list (NULL while open, set at closeIngestion)                                |
 | `allocation_algo_ref` | TEXT         | Algorithm version ref (NULL while open, set at closeIngestion — CONFIG_LOCKED_AT_REVIEW)                    |
 | `artifacts_hash`      | TEXT         | SHA-256 of locked evaluations (NULL while open, set at closeIngestionWithEvaluations)                       |
-| `pool_total_credits`  | BIGINT       | Sum of pool components (set at finalize, NULL while open/review)                                            |
+| `pool_total_credits`  | BIGINT       | Budget reservation amount (set at finalize, NULL while open/review)                                         |
 | `opened_at`           | TIMESTAMPTZ  |                                                                                                             |
 | `closed_at`           | TIMESTAMPTZ  | NULL while open/review                                                                                      |
 | `created_at`          | TIMESTAMPTZ  |                                                                                                             |
@@ -496,19 +504,23 @@ Note: `source_ref` is the external system's namespace (GitHub repo slug, Discord
 
 ### `epoch_pool_components` — immutable, append-only, pinned inputs
 
+The runtime writes only `budget_reservation/flat-cap-v1`. Immutable historical
+migration SQL and snapshots may retain retired literals solely to preserve migration
+history; they are not supported configuration, API, or runtime write paths.
+
 Unchanged from original spec. See [original schema](#pool-model).
 
-| Column              | Type             | Notes                                          |
-| ------------------- | ---------------- | ---------------------------------------------- |
-| `id`                | UUID PK          |                                                |
-| `node_id`           | UUID             | NOT NULL (NODE_SCOPED)                         |
-| `epoch_id`          | BIGINT FK→epochs |                                                |
-| `component_id`      | TEXT             | e.g. `base_issuance`, `kpi_bonus_v0`, `top_up` |
-| `algorithm_version` | TEXT             | Git SHA or semver of the algorithm             |
-| `inputs_json`       | JSONB            | Snapshotted KPI values used for computation    |
-| `amount_credits`    | BIGINT           | Computed credit amount for this component      |
-| `evidence_ref`      | TEXT             | Link to KPI source or governance vote          |
-| `computed_at`       | TIMESTAMPTZ      |                                                |
+| Column              | Type             | Notes                                       |
+| ------------------- | ---------------- | ------------------------------------------- |
+| `id`                | UUID PK          |                                             |
+| `node_id`           | UUID             | NOT NULL (NODE_SCOPED)                      |
+| `epoch_id`          | BIGINT FK→epochs |                                             |
+| `component_id`      | TEXT             | `budget_reservation`                        |
+| `algorithm_version` | TEXT             | Git SHA or semver of the algorithm          |
+| `inputs_json`       | JSONB            | Snapshotted KPI values used for computation |
+| `amount_credits`    | BIGINT           | Computed credit amount for this component   |
+| `evidence_ref`      | TEXT             | Link to KPI source or governance vote       |
+| `computed_at`       | TIMESTAMPTZ      |                                             |
 
 DB trigger rejects UPDATE/DELETE (POOL_IMMUTABLE).
 Constraint: `UNIQUE(epoch_id, component_id)` (POOL_UNIQUE_PER_TYPE).
@@ -654,14 +666,13 @@ Definition of "working" for the V0 fix, in order. Each step is observable; do no
 
 ### Write Routes (SIWE + scope approver check → Temporal workflow → 202)
 
-| Method | Route                                                     | Purpose                                                                                |
-| ------ | --------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| POST   | `/api/v1/attribution/epochs/collect`                      | Trigger activity collection for new/existing epoch                                     |
-| GET    | `/api/v1/attribution/epochs/:id/user-projections`         | Read recomputable per-user projections for the epoch                                   |
-| PATCH  | `/api/v1/attribution/epochs/:id/review-subject-overrides` | Admin records review-time subject overrides (epoch must be `review`)                   |
-| POST   | `/api/v1/attribution/epochs/:id/pool-components`          | Record a pool component (epoch must be `open` — POOL_LOCKED_AT_REVIEW)                 |
-| POST   | `/api/v1/attribution/epochs/:id/review`                   | Close ingestion, transition `open → review` (or auto via Temporal)                     |
-| POST   | `/api/v1/attribution/epochs/:id/finalize`                 | Sign + finalize epoch → compute statement (requires EIP-712 signature + base_issuance) |
+| Method | Route                                                     | Purpose                                                                                           |
+| ------ | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| POST   | `/api/v1/attribution/epochs/collect`                      | Trigger activity collection for new/existing epoch                                                |
+| GET    | `/api/v1/attribution/epochs/:id/user-projections`         | Read recomputable per-user projections for the epoch                                              |
+| PATCH  | `/api/v1/attribution/epochs/:id/review-subject-overrides` | Admin records review-time subject overrides (epoch must be `review`)                              |
+| POST   | `/api/v1/attribution/epochs/:id/review`                   | Close ingestion, transition `open → review` (or auto via Temporal)                                |
+| POST   | `/api/v1/attribution/epochs/:id/finalize`                 | Sign + finalize epoch → compute statement (requires EIP-712 signature + valid budget reservation) |
 
 ### Public Read Routes (no auth, closed-epoch data only)
 
@@ -731,7 +742,7 @@ interface LedgerIngestRunV1 {
    - Compute `inputsHash` and `payloadHash` per evaluation
    - `upsertDraftEvaluation()` — overwrites previous draft (EVALUATION_UNIQUE_PER_REF_STATUS)
 9. **Compute allocations** — `computeAllocations` activity (unchanged, runs against selected receipts)
-10. **Ensure pool components** — `ensurePoolComponents` activity (inline in parent workflow, conditional on `baseIssuanceCredits`)
+10. **Reserve finite epoch budget** — `ensureBudgetReservation` atomically reserves `min(accrual_per_epoch, remaining)` only when included receipts exist
 
 Deterministic workflow ID: managed by Temporal Schedule (overlap=SKIP, run IDs per firing).
 
@@ -750,14 +761,14 @@ Input: `{ epochId, signature }` — `signerAddress` derived from SIWE session (n
 1. Verify epoch exists and is `review`
 2. If epoch already `finalized`, return existing statement (EPOCH_FINALIZE_IDEMPOTENT)
 3. Verify `allocation_algo_ref` and `weight_config_hash` are set (CONFIG_LOCKED_AT_REVIEW)
-4. Verify at least one `base_issuance` pool component exists (POOL_REQUIRES_BASE)
+4. Verify exactly one positive `budget_reservation` using `flat-cap-v1` exists
 5. Verify signer is in epoch's pinned `approvers[]` (APPROVERS_PINNED_AT_REVIEW / APPROVERS_PER_SCOPE)
 6. Build canonical finalize message from epoch data, `ecrecover(message, signature)` — verify recovered address matches `signerAddress`
 7. Load locked `epoch_receipt_claimants` + selected receipts for the epoch
 8. `computeReceiptWeights(algoRef, receipts, weightConfig)` → per-receipt units
 9. `explodeToClaimants(receiptWeights, lockedClaimants)` → `FinalClaimantAllocation[]` (fails loud if any receipt lacks locked claimants)
 10. Persist `epoch_final_claimant_allocations` (canonical signed claimant units)
-11. Read pool components, compute `pool_total_credits = SUM(amount_credits)`
+11. Read the reservation and use its amount as `pool_total_credits`
 12. `computeAttributionStatementLines(final_claimant_allocations, pool_total)` — BIGINT, largest-remainder
 13. Compute claimant-aware `final_allocation_set_hash`
 14. Atomic transaction: set `pool_total_credits` on epoch, update status to `'finalized'`, upsert final claimant allocations, insert epoch statement + statement signature

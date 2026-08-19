@@ -247,17 +247,27 @@ export const activitySourceSpecSchema = z.object({
 
 export type ActivitySourceSpec = z.infer<typeof activitySourceSpecSchema>;
 
-/**
- * Schema for pool_config — governance-managed pool budget parameters.
- */
-export const poolConfigSpecSchema = z.object({
-  /** Base issuance in credits (string → bigint). Governance-set budget per epoch. */
-  base_issuance_credits: z
-    .string()
-    .min(1, "base_issuance_credits must be a non-empty string"),
-});
+const positiveCreditString = z
+  .string()
+  .regex(/^[1-9][0-9]*$/, "must be a positive integer string");
 
-export type PoolConfigSpec = z.infer<typeof poolConfigSpecSchema>;
+/** Finite, governance-in-git budget for eligible epoch reservations. */
+export const budgetPolicySpecSchema = z
+  .object({
+    budget_total: positiveCreditString,
+    accrual_per_epoch: positiveCreditString,
+  })
+  .superRefine((policy, ctx) => {
+    if (BigInt(policy.accrual_per_epoch) > BigInt(policy.budget_total)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["accrual_per_epoch"],
+        message: "accrual_per_epoch must not exceed budget_total",
+      });
+    }
+  });
+
+export type BudgetPolicySpec = z.infer<typeof budgetPolicySpecSchema>;
 
 export const activityLedgerSpecSchema = z.object({
   /** Epoch length in days (1–90) */
@@ -275,8 +285,8 @@ export const activityLedgerSpecSchema = z.object({
     .default([]),
   /** Map of source name → source config */
   activity_sources: z.record(z.string(), activitySourceSpecSchema),
-  /** Pool budget configuration (optional — defaults to 0 base issuance if missing) */
-  pool_config: poolConfigSpecSchema.optional(),
+  /** Finite issuance policy. Required whenever the activity ledger is enabled. */
+  budget_policy: budgetPolicySpecSchema,
 });
 
 export type ActivityLedgerSpec = z.infer<typeof activityLedgerSpecSchema>;

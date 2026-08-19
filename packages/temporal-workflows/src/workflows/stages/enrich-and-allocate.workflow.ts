@@ -43,7 +43,7 @@ export interface EnrichAndAllocateInput {
  */
 export async function EnrichAndAllocateWorkflow(
   input: EnrichAndAllocateInput
-): Promise<void> {
+): Promise<{ totalAllocations: number; totalProposedUnits: string }> {
   // Materialize selection and resolve identities (SELECTION_AUTO_POPULATE)
   await materializeSelection({
     epochId: input.epochId,
@@ -57,7 +57,7 @@ export async function EnrichAndAllocateWorkflow(
   });
 
   // Compute allocations
-  await computeAllocations({
+  return await computeAllocations({
     epochId: input.epochId,
     attributionPipeline: input.attributionPipeline,
     weightConfig: input.weightConfig,

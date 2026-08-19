@@ -231,8 +231,9 @@ describe("parseRepoSpec", () => {
         "  epoch_length_days: 7",
         "  approvers:",
         '    - "0x070075F1389Ae1182aBac722B36CA12285d0c949"',
-        "  pool_config:",
-        '    base_issuance_credits: "10000"',
+        "  budget_policy:",
+        '    budget_total: "520000"',
+        '    accrual_per_epoch: "10000"',
         "  activity_sources:",
         "    github:",
         "      attribution_pipeline: cogni-v0.0",
@@ -256,9 +257,10 @@ describe("parseRepoSpec", () => {
       expect(result.scope_key).toBe("default");
       expect(result.activity_ledger?.epoch_length_days).toBe(7);
       expect(result.activity_ledger?.approvers).toHaveLength(1);
-      expect(result.activity_ledger?.pool_config?.base_issuance_credits).toBe(
-        "10000"
-      );
+      expect(result.activity_ledger?.budget_policy).toEqual({
+        budget_total: "520000",
+        accrual_per_epoch: "10000",
+      });
       expect(result.governance?.schedules).toHaveLength(1);
       expect(result.governance?.schedules[0]?.charter).toBe("HEARTBEAT");
     });

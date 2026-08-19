@@ -41,22 +41,22 @@ Replace arbitrary, inflationary credit issuance with principled tokenomics:
 
 | Problem                     | Evidence                                                                                                  |
 | --------------------------- | --------------------------------------------------------------------------------------------------------- |
-| **Infinite inflation**      | `base_issuance_credits: "10000"` mints 10K every epoch forever. No cap.                                   |
+| **Infinite inflation**      | The prior uncapped per-epoch constant could mint forever. The finite policy removes that path.            |
 | **Two meaningless numbers** | UI shows "Score" (`units/1000`) AND "Credits" (`proportional share × pool`). Neither has intrinsic value. |
-| **Magic pool size**         | `estimatePoolComponentsV0()` returns config value unchanged. `algorithmVersion: "config-constant-v0"`.    |
+| **Magic pool size**         | The prior pool copied a configuration constant without a supply cap.                                      |
 | **No scarcity signal**      | Credits accumulate without bound. No reason to value them.                                                |
 | **Admin discretion risk**   | If admin could set `epoch_pool` arbitrarily, trust breaks.                                                |
 
 ## Invariants
 
-| Rule                        | Constraint                                                                                                                                                                                                            |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| BUDGET_HARD_CAP             | `SUM(all epoch_pools ever) ≤ budget_total`. Off-chain governance policy enforced by remaining-budget check in Crawl. In Walk+, the real cap is the on-chain emissions holder balance.                                 |
-| EPOCH_POOL_DETERMINISTIC    | `epoch_pool = min(accrual_per_epoch, remaining)` when an epoch has included receipts, otherwise `0`. Policy function, not admin choice. Admin can reduce (exclude receipts, zero-weight), never inflate above policy. |
-| ONE_USER_FACING_UNIT        | Users see one number in one denomination. Internal milli-units are never displayed.                                                                                                                                   |
-| BUDGET_BANK_APPEND_ONLY     | Budget ledger entries are append-only so `remaining` is replayable and auditable. This is a governance transparency property, not a hard security boundary.                                                           |
-| SETTLEMENT_DECOUPLED        | Attribution statements are governance commitments. Settlement (how entitlements become claims) is a separate, pluggable layer.                                                                                        |
-| GOVERNANCE_REWARD_PLUGGABLE | The attribution pipeline outputs `creditAmount`. Whether credits settle into the same governance token or separate instruments is a settlement-layer decision. Attribution remains instrument-agnostic.               |
+| Rule                            | Constraint                                                                                                                                                                                              |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| BUDGET_HARD_CAP                 | `SUM(all epoch_pools ever) ≤ budget_total`. Off-chain governance policy enforced by remaining-budget check in Crawl. In Walk+, the real cap is the on-chain emissions holder balance.                   |
+| EPOCH_POOL_DETERMINISTIC        | `epoch_pool = min(accrual_per_epoch, remaining)` when allocation finds included receipts, otherwise `0`. The amount is a policy function, never an admin input.                                         |
+| ONE_USER_FACING_UNIT            | Users see one number in one denomination. Internal milli-units are never displayed.                                                                                                                     |
+| BUDGET_RESERVATIONS_APPEND_ONLY | Immutable `budget_reservation` rows make `remaining` replayable and auditable. The DB adapter serializes reservations on the unique open epoch.                                                         |
+| SETTLEMENT_DECOUPLED            | Attribution statements are governance commitments. Settlement (how entitlements become claims) is a separate, pluggable layer.                                                                          |
+| GOVERNANCE_REWARD_PLUGGABLE     | The attribution pipeline outputs `creditAmount`. Whether credits settle into the same governance token or separate instruments is a settlement-layer decision. Attribution remains instrument-agnostic. |
 
 ## Design
 
@@ -86,7 +86,7 @@ The UI shows: **"You earned 3,420 credits this epoch (34.2% of pool)"**
 
 #### C2. Budget Policy — Finite Supply + Flat Epoch Budget
 
-Replace the magic `base_issuance_credits: "10000"` with a hard-capped budget policy.
+Use one hard-capped budget policy derived at formation.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -135,18 +135,18 @@ activity_ledger:
       streams: ["pull_requests", "reviews", "issues"]
 ```
 
-`pool_config.base_issuance_credits` is **replaced** by `budget_policy`. Migration: existing epochs keep their stored `pool_components`; new epochs use the budget policy.
+`budget_policy` is the only supported runtime configuration. Existing immutable epoch
+rows remain historical evidence; all new reservations use the finite policy.
 
 #### C4. Code Changes (Crawl)
 
-| File                                             | Change                                                                                                                                                            |
-| ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `packages/repo-spec/src/schema.ts`               | Add `budgetPolicySchema`. Deprecate `poolConfigSpecSchema`.                                                                                                       |
-| `packages/repo-spec/src/accessors.ts`            | Add `getBudgetPolicy()` accessor.                                                                                                                                 |
-| `packages/attribution-ledger/src/pool.ts`        | Add `computeEpochBudget(remaining, policy, hasIncludedReceipts)` pure function. Keep `estimatePoolComponentsV0` for backward compat.                              |
-| `packages/attribution-ledger/src/budget-bank.ts` | Optional helper module if retained. MVP should model remaining-budget bookkeeping only; no hidden carry mechanics.                                                |
-| DB migration                                     | Add `budget_bank_ledger` table: `(node_id, scope_id, epoch_id, entry_type, amount, remaining_after, created_at)`. Append-only for replayability and auditability. |
-| `services/scheduler-worker/`                     | `CollectEpochWorkflow` reads remaining budget, computes epoch_pool via policy, records pool component.                                                            |
+| File                                      | Change                                                                                           |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `packages/repo-spec/src/schema.ts`        | Requires `budget_policy` whenever `activity_ledger` is configured.                               |
+| `packages/repo-spec/src/accessors.ts`     | Exposes positive bigint policy values.                                                           |
+| `packages/attribution-ledger/src/pool.ts` | Pure `flat-cap-v1` computation; quiet and exhausted epochs return no reservation.                |
+| `packages/db-client/`                     | Locks the unique open epoch and performs status, scoped sum, cap, and insert in one transaction. |
+| `services/scheduler-worker/`              | Reserves the finite amount after allocation establishes whether the epoch has included receipts. |
 
 #### C5. Budget Policy State Machine
 
@@ -176,10 +176,10 @@ The attribution pipeline can produce a signed statement with any `poolTotalCredi
 ┌─────────────────────────────────────────────────────────────────────────┐
 │  CRAWL (off-chain only)                                                 │
 │                                                                         │
-│  budget_total, remaining    → Postgres + pure functions                 │
-│  accrual_per_epoch          → repo-spec.yaml                            │
-│  Enforcement:               → NONE. Governance policy, not security.    │
-│  What stops over-issuance?  → Nothing automated. Admin reviews.         │
+│  budget_total + accrual     → repo-spec.yaml                            │
+│  remaining                 → derived from immutable reservations       │
+│  Enforcement:               → atomic scoped sum + capped reservation    │
+│  What stops over-issuance?  → unique-open-epoch row lock + hard cap     │
 ├─────────────────────────────────────────────────────────────────────────┤
 │  WALK (first token claims)                                              │
 │                                                                         │
@@ -196,12 +196,12 @@ The attribution pipeline can produce a signed statement with any `poolTotalCredi
 │  EmissionsController.maxPerEpoch      → on-chain, immutable per era     │
 │  EmissionsController.totalReleased    → on-chain counter                │
 │  Enforcement:                         → require() reverts over-budget tx │
-│  Postgres budget_bank_ledger          → index/cache, not source of truth│
+│  Postgres budget reservations         → index/cache, not source of truth│
 │  repo-spec accrual_per_epoch          → read from contract state        │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key insight:** the on-chain state — not Postgres — is the security boundary once the DAO is minting (Walk). The `budget_bank_ledger` is Crawl scaffolding, progressively replaced by on-chain state; it remains useful for off-chain auditability but is never the boundary. Under the mint-per-epoch model the hard cap is **policy supply minus total minted**, enforced when the DAO authorizes each `mint(distributor, amount)` under a signed root — not a pre-minted balance parked in an emissions holder. (Where this section reads `emissionsHolder.balanceOf` above, treat it as the general "on-chain supply state" until the Walk P0 reconciliation lands.)
+**Key insight:** the on-chain state — not Postgres — is the security boundary once the DAO is minting (Walk). Immutable epoch reservations remain useful for off-chain auditability but are never the on-chain boundary. Under the mint-per-epoch model the hard cap is **policy supply minus total minted**, enforced when the DAO authorizes each `mint(distributor, amount)` under a signed root — not a pre-minted balance parked in an emissions holder. (Where this section reads `emissionsHolder.balanceOf` above, treat it as the general "on-chain supply state" until the Walk P0 reconciliation lands.)
 
 ---
 

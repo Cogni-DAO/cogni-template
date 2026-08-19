@@ -47,7 +47,6 @@ export * from "./attribution.finalize-epoch.v1.contract";
 export * from "./attribution.latest-distribution.v1.contract";
 export * from "./attribution.list-epochs.v1.contract";
 export * from "./attribution.receipts.internal.v1.contract";
-export * from "./attribution.record-pool-component.v1.contract";
 export * from "./attribution.review-epoch.v1.contract";
 export * from "./attribution.review-subject-overrides.v1.contract";
 export * from "./attribution.sign-data.v1.contract";

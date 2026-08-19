@@ -14,7 +14,8 @@
  * - SELECTION_FREEZE_ON_FINALIZE: DB trigger enforces; adapter does not duplicate check.
  * - ONE_OPEN_EPOCH: DB constraint enforces; adapter lets DB error propagate.
  * - USER_PROJECTIONS_RECOMPUTABLE: upsertUserProjections updates projected_units/receipt_count and never stores signed final units.
- * - POOL_LOCKED_AT_REVIEW: insertPoolComponent rejects inserts when epoch status != 'open'. Idempotent via ON CONFLICT DO NOTHING + SELECT fallback; returns { component, created }.
+ * - BUDGET_RESERVATION_ATOMIC: reserveEpochBudget locks the sole open epoch row, verifies status,
+ *   sums prior immutable reservations, computes the capped amount, and inserts in one transaction.
  * - CONFIG_LOCKED_AT_REVIEW: closeIngestion pins allocationAlgoRef + weightConfigHash.
  * - EVALUATION_FINAL_ATOMIC: closeIngestionWithEvaluations inserts locked evaluations + sets artifacts_hash + transitions epoch in one transaction.
  * - EPOCH_CLOSE_ON_TRANSITION: transitionEpochForWindow closes stale open epoch + creates new epoch in one DB transaction.
@@ -33,6 +34,7 @@ import type {
   AttributionStatementLineRecord,
   AttributionStatementSignature,
   AttributionStore,
+  BudgetReservationResult,
   CloseIngestionWithEvaluationsParams,
   DistributionClaimRecord,
   DistributionLeafRecord,
@@ -43,15 +45,14 @@ import type {
   IngestionReceipt,
   InsertDistributionManifestParams,
   InsertFinalClaimantAllocationParams,
-  InsertPoolComponentParams,
   InsertReceiptClaimantsParams,
   InsertReceiptParams,
   InsertSelectionAutoParams,
   InsertSignatureParams,
   InsertStatementParams,
   InsertUserProjectionParams,
-  PoolComponentInsertResult,
   ReceiptClaimantsRecord,
+  ReserveEpochBudgetParams,
   ReviewSubjectOverrideRecord,
   SelectedReceiptForAllocation,
   SelectedReceiptForAttribution,
@@ -64,6 +65,8 @@ import type {
   UpsertSelectionParams,
 } from "@cogni/attribution-ledger";
 import {
+  BUDGET_RESERVATION_COMPONENT_ID,
+  computeEpochBudgetReservation,
   EpochNotFoundError,
   EpochNotInReviewError,
   EpochNotOpenError,
@@ -1288,45 +1291,86 @@ export class DrizzleAttributionAdapter implements AttributionStore {
 
   // ── Pool components ─────────────────────────────────────────
 
-  async insertPoolComponent(
-    params: InsertPoolComponentParams
-  ): Promise<PoolComponentInsertResult> {
-    const epoch = await this.resolveEpochScoped(params.epochId);
-    // POOL_LOCKED_AT_REVIEW: reject pool component inserts after closeIngestion
-    if (epoch.status !== "open") {
-      throw new EpochNotOpenError(params.epochId.toString());
-    }
-    // Idempotent: ON CONFLICT DO NOTHING + SELECT fallback (matches adapter pattern)
-    const [inserted] = await this.db
-      .insert(epochPoolComponents)
-      .values({
-        nodeId: params.nodeId,
-        epochId: params.epochId,
-        componentId: params.componentId,
-        algorithmVersion: params.algorithmVersion,
-        inputsJson: params.inputsJson,
-        amountCredits: params.amountCredits,
-        evidenceRef: params.evidenceRef ?? null,
-      })
-      .onConflictDoNothing({
-        target: [epochPoolComponents.epochId, epochPoolComponents.componentId],
-      })
-      .returning();
-    if (inserted)
-      return { component: toPoolComponent(inserted), created: true };
-    // Conflict: row already exists — SELECT by unique key (epochId, componentId)
-    const [existing] = await this.db
-      .select()
-      .from(epochPoolComponents)
-      .where(
-        and(
-          eq(epochPoolComponents.epochId, params.epochId),
-          eq(epochPoolComponents.componentId, params.componentId)
+  async reserveEpochBudget(
+    params: ReserveEpochBudgetParams
+  ): Promise<BudgetReservationResult> {
+    return await this.db.transaction(async (tx) => {
+      // ONE_OPEN_EPOCH is DB-enforced per node+scope. Locking the target epoch
+      // therefore serializes every possible reservation with epoch transition.
+      const [epoch] = await tx
+        .select()
+        .from(epochs)
+        .where(
+          and(
+            eq(epochs.id, params.epochId),
+            eq(epochs.nodeId, params.nodeId),
+            eq(epochs.scopeId, this.scopeId)
+          )
         )
-      );
-    if (!existing)
-      throw new Error("insertPoolComponent: conflict but row not found");
-    return { component: toPoolComponent(existing), created: false };
+        .limit(1)
+        .for("update");
+      if (!epoch) {
+        throw new EpochNotFoundError(params.epochId.toString());
+      }
+      if (epoch.status !== "open") {
+        throw new EpochNotOpenError(params.epochId.toString());
+      }
+
+      const [existing] = await tx
+        .select()
+        .from(epochPoolComponents)
+        .where(
+          and(
+            eq(epochPoolComponents.epochId, params.epochId),
+            eq(epochPoolComponents.componentId, BUDGET_RESERVATION_COMPONENT_ID)
+          )
+        )
+        .limit(1);
+      if (existing) {
+        return { component: toPoolComponent(existing), created: false };
+      }
+
+      const [reserved] = await tx
+        .select({
+          total: sql<string>`coalesce(sum(${epochPoolComponents.amountCredits}), 0)::text`,
+        })
+        .from(epochPoolComponents)
+        .innerJoin(epochs, eq(epochs.id, epochPoolComponents.epochId))
+        .where(
+          and(
+            eq(epochs.nodeId, params.nodeId),
+            eq(epochs.scopeId, this.scopeId),
+            eq(epochPoolComponents.componentId, BUDGET_RESERVATION_COMPONENT_ID)
+          )
+        );
+      const reservedBefore = BigInt(reserved?.total ?? "0");
+      const [estimate] = computeEpochBudgetReservation({
+        budgetTotal: params.budgetTotal,
+        accrualPerEpoch: params.accrualPerEpoch,
+        reservedBefore,
+        hasIncludedReceipts: params.hasIncludedReceipts,
+      });
+      if (!estimate) {
+        return { component: null, created: false };
+      }
+
+      const [inserted] = await tx
+        .insert(epochPoolComponents)
+        .values({
+          nodeId: params.nodeId,
+          epochId: params.epochId,
+          componentId: estimate.componentId,
+          algorithmVersion: estimate.algorithmVersion,
+          inputsJson: estimate.inputsJson,
+          amountCredits: estimate.amountCredits,
+          evidenceRef: null,
+        })
+        .returning();
+      if (!inserted) {
+        throw new Error("reserveEpochBudget: INSERT returned no rows");
+      }
+      return { component: toPoolComponent(inserted), created: true };
+    });
   }
 
   async getPoolComponentsForEpoch(

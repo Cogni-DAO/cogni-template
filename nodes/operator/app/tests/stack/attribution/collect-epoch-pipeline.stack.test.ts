@@ -173,7 +173,10 @@ describe("[attribution] CollectEpochWorkflow pipeline (stack)", () => {
                 sourceRefs: ["test-org/test-repo"],
               },
             },
-            // Omit baseIssuanceCredits and approvers — skip pool/auto-close paths
+            budgetPolicy: {
+              budgetTotal: "520000",
+              accrualPerEpoch: "10000",
+            },
           },
         },
       ],
@@ -264,6 +267,10 @@ describe("[attribution] CollectEpochWorkflow pipeline (stack)", () => {
                 sourceRefs: ["test-org/test-repo"],
               },
             },
+            budgetPolicy: {
+              budgetTotal: "520000",
+              accrualPerEpoch: "10000",
+            },
           },
         },
       ],
@@ -319,6 +326,10 @@ describe("[attribution] CollectEpochWorkflow pipeline (stack)", () => {
                 attributionPipeline: TEST_PIPELINE,
                 sourceRefs: ["test-org/test-repo"],
               },
+            },
+            budgetPolicy: {
+              budgetTotal: "520000",
+              accrualPerEpoch: "10000",
             },
           },
         },

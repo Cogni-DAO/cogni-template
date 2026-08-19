@@ -79,7 +79,7 @@ function makeMockStore(
     getUserDisplayNames: vi.fn().mockResolvedValue(new Map()),
     upsertCursor: vi.fn(),
     getCursor: vi.fn().mockResolvedValue(null),
-    insertPoolComponent: vi
+    reserveEpochBudget: vi
       .fn()
       .mockResolvedValue({ component: {}, created: true }),
     getPoolComponentsForEpoch: vi.fn(),
@@ -245,9 +245,13 @@ describe("finalizeEpoch", () => {
           id: "pool-1",
           nodeId: NODE_ID,
           epochId: reviewEpoch.id,
-          componentId: "base_issuance",
-          algorithmVersion: "v1",
-          inputsJson: { base_amount: 10000 },
+          componentId: "budget_reservation",
+          algorithmVersion: "flat-cap-v1",
+          inputsJson: {
+            budgetTotal: "520000",
+            accrualPerEpoch: "10000",
+            reservedBefore: "0",
+          },
           amountCredits: 10000n,
           evidenceRef: null,
           computedAt: new Date(),
@@ -377,9 +381,13 @@ describe("finalizeEpoch — per-node distribution config (bug.5020)", () => {
           id: "pool-1",
           nodeId: NODE_ID,
           epochId: reviewEpoch.id,
-          componentId: "base_issuance",
-          algorithmVersion: "v1",
-          inputsJson: { base_amount: 10000 },
+          componentId: "budget_reservation",
+          algorithmVersion: "flat-cap-v1",
+          inputsJson: {
+            budgetTotal: "520000",
+            accrualPerEpoch: "10000",
+            reservedBefore: "0",
+          },
           amountCredits: 10000n,
           evidenceRef: null,
           computedAt: new Date(),
