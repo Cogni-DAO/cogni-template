@@ -50,7 +50,7 @@ declare -ga NODE_BASELINE_KEYS=(
   DOLTGRES_PASSWORD DOLTGRES_URL
   POSTHOG_API_KEY POSTHOG_HOST OPENROUTER_API_KEY
   EVM_RPC_URL POLYGON_RPC_URL
-  APP_BASE_URL NEXTAUTH_URL
+  DOMAIN APP_BASE_URL NEXTAUTH_URL
   # External integrations (source: human, gate-by-presence). _node_gets_key
   # gates each against the catalog: _shared/llm/web reach every node; PRIVY_*
   # (appliesTo: payments) + PRIVY_USER_WALLETS_* (service: poly) drop from

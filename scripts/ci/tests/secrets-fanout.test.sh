@@ -101,6 +101,11 @@ r=0; [[ "$(val_for node-template NEXTAUTH_URL)" == "https://node-template.test.c
    && "$(val_for poly NEXTAUTH_URL)" == "https://poly.test.cognidao.org" ]] || r=1
 assert "$r" "NEXTAUTH_URL binds per-node FQDN"
 
+r=0; [[ "$(val_for node-template DOMAIN)" == "test.cognidao.org" \
+   && "$(val_for poly DOMAIN)" == "test.cognidao.org" \
+   && "$(val_for operator DOMAIN)" == "test.cognidao.org" ]] || r=1
+assert "$r" "DOMAIN shares the environment-local operator/base domain with every node"
+
 # 4. DATABASE_URL binds the per-node database cogni_<node>.
 r=0; [[ "$(val_for node-template DATABASE_URL)" == *"/cogni_node_template?"* \
    && "$(val_for poly DATABASE_URL)" == *"/cogni_poly?"* ]] || r=1
