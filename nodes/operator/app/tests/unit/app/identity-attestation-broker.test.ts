@@ -33,9 +33,14 @@ vi.mock("@/shared/env", () => ({
 vi.mock("@/shared/identity/attestation-keys", () => ({
   importAttestationSigningKey: () => ({}),
 }));
-vi.mock("@/app/_facades/identity/attestation.server", () => ({
+vi.mock("@/bootstrap/identity-attestation", () => ({
+  resolveIdentityAttestationDependencies: () => ({}),
+}));
+vi.mock("@/features/identity/services/issue-identity-attestation", () => ({
   AttestationPreconditionError: MockAttestationPreconditionError,
-  issueIdentityAttestation: (...args: unknown[]) => mockIssue(...args),
+  createIdentityAttestationService: () => ({
+    issue: (...args: unknown[]) => mockIssue(...args),
+  }),
 }));
 
 import {
@@ -100,6 +105,8 @@ describe("issueBrowserIdentityAttestation", () => {
     expect(mockIssue).toHaveBeenCalledWith(
       expect.objectContaining({
         request: REQUEST,
+        userId: SESSION.id,
+        fallbackWalletAddress: SESSION.walletAddress,
         issuer: "https://cognidao.org",
         domain: "cognidao.org",
       })

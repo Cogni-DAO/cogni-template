@@ -24,10 +24,11 @@ import {
   type IdentityAttestationRequest,
 } from "@cogni/node-contracts";
 import type { SessionUser } from "@cogni/node-shared";
+import { resolveIdentityAttestationDependencies } from "@/bootstrap/identity-attestation";
 import {
   AttestationPreconditionError,
-  issueIdentityAttestation,
-} from "@/app/_facades/identity/attestation.server";
+  createIdentityAttestationService,
+} from "@/features/identity/services/issue-identity-attestation";
 import { serverEnv } from "@/shared/env";
 import { importAttestationSigningKey } from "@/shared/identity/attestation-keys";
 import { baseDomain } from "@/shared/node-registry/resolve";
@@ -116,11 +117,14 @@ export async function issueBrowserIdentityAttestation(params: {
   }
 
   try {
-    const issued = await issueIdentityAttestation({
-      sessionUser: params.sessionUser,
+    const service = createIdentityAttestationService(
+      resolveIdentityAttestationDependencies(signingKey)
+    );
+    const issued = await service.issue({
+      userId: params.sessionUser.id,
+      fallbackWalletAddress: params.sessionUser.walletAddress,
       issuer,
       domain,
-      signingKey,
       request: params.request,
     });
     return {
