@@ -25,10 +25,10 @@ export type {
   IngestionCursor,
   IngestionReceipt,
   InsertDistributionManifestParams,
-  InsertPoolComponentParams,
   InsertReceiptParams,
   InsertSignatureParams,
   InsertStatementParams,
   InsertUserProjectionParams,
+  ReserveEpochBudgetParams,
   UpsertSelectionParams,
 } from "@cogni/attribution-ledger";

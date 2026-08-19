@@ -45,8 +45,8 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
   - `AttributionStore` — Composed port interface for ledger persistence
   - `EpochReader`, `EpochWriter`, `ReceiptStore`, `SelectionReader`, `SelectionWriter`, `SelectionStore`, `EvaluationStore`, `ProjectionStore`, `ClaimantStore`, `CursorStore`, `PoolStore`, `StatementStore`, `OverrideStore`, `FinalAllocationStore`, `IdentityResolver` — Narrow ledger store sub-interfaces for scoped consumers
   - `AttributionEpoch`, `IngestionReceipt`, `EpochUserProjection`, `FinalClaimantAllocationRecord`, `IngestionCursor`, `AttributionPoolComponent`, `AttributionStatement`, `AttributionStatementSignature`, `AttributionEvaluation`, `ReviewSubjectOverrideRecord` — Read-side record types
-  - `InsertReceiptParams`, `InsertUserProjectionParams`, `InsertFinalClaimantAllocationParams`, `InsertPoolComponentParams`, `InsertStatementParams`, `InsertSignatureParams`, `UpsertReviewSubjectOverrideParams`, `UpsertEvaluationParams`, `CloseIngestionWithEvaluationsParams` — Write-side param types
-  - `PoolComponentInsertResult` — Return type for idempotent `insertPoolComponent` (`{ component, created }`)
+  - `InsertReceiptParams`, `InsertUserProjectionParams`, `InsertFinalClaimantAllocationParams`, `ReserveEpochBudgetParams`, `InsertStatementParams`, `InsertSignatureParams`, `UpsertReviewSubjectOverrideParams`, `UpsertEvaluationParams`, `CloseIngestionWithEvaluationsParams` — Write-side param types
+  - `BudgetReservationResult` — Return type for atomic idempotent `reserveEpochBudget`
   - `computeEpochWindowV1()` — Pure, deterministic epoch window computation (Monday-aligned UTC). Safe in Temporal workflow code.
   - `EpochWindow`, `EpochWindowParams` — Types for epoch window computation
   - `computeStatementItems()` — Legacy user-only statement helper retained for compatibility
@@ -61,10 +61,9 @@ Pure domain logic for the attribution ledger — shared between the Next.js app 
   - `ReceiptForWeighting`, `ReceiptUnitWeight` — Receipt-scoped allocation input/output types
   - `SelectedReceiptForAllocation`, `ProposedAllocation` — Legacy user-scoped allocation types (retained)
   - `AllocationAlgoRef` — Type alias for algorithm version string
-  - `estimatePoolComponentsV0()` — Pool component estimation from config (V0: base_issuance only)
-  - `PoolComponentEstimate`, `PoolComponentId`, `POOL_COMPONENT_ALLOWLIST` — Pool types and validation
-  - `validatePoolComponentId()` — V0 allowlist validation
-  - `EpochNotOpenError`, `EpochAlreadyFinalizedError`, `PoolComponentMissingError` — Domain errors with type guards
+  - `computeEpochBudgetReservation()` — Finite flat-cap reservation math for eligible epochs
+  - `PoolComponentEstimate`, `BUDGET_RESERVATION_COMPONENT_ID`, `BUDGET_RESERVATION_ALGORITHM` — Single finite reservation contract
+  - `EpochNotOpenError`, `EpochAlreadyFinalizedError` — Domain errors with type guards
   - `buildEIP712TypedData()` — Canonical EIP-712 typed-data builder for statement signing
   - `parseEIP712DeploymentEnvironment()`, `EIP712_DEPLOYMENT_ENVIRONMENTS`, `EIP712DeploymentEnvironment` — Fail-closed protocol environment validation for deployment-bound EIP-712 v2 signatures
   - `buildCanonicalMessage()` — Deprecated EIP-191 compatibility helper retained for one release cycle

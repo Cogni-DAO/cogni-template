@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/scheduler-core/services/syncGovernanceSchedules`
  * Purpose: Sync governance schedules from config to Temporal. Pure orchestration — depends only on ports and types.
- * Scope: Creates/updates/resumes Temporal schedules for each charter in governance config; pauses schedules removed from config. For NON-operator routable nodes, routes LEDGER_INGEST charters to a per-node NodeTaskWorkflow dispatch (`/api/internal/attribution/collect`) that runs the collect pass IN the owning node on its own ledger DB. For the OPERATOR node it preserves the live single-tenant CollectEpochWorkflow path byte-for-byte. Does not manage tenant-facing schedule CRUD or workflow execution.
+ * Scope: Creates/updates/resumes Temporal schedules for each charter in governance config; pauses schedules removed from config. For NON-operator routable nodes, routes LEDGER_INGEST charters to a per-node NodeTaskWorkflow dispatch (`/api/internal/attribution/collect`) that runs the collect pass IN the owning node on its own ledger DB. For the OPERATOR node it preserves the live single-tenant CollectEpochWorkflow path while carrying the current required policy payload. Does not manage tenant-facing schedule CRUD or workflow execution.
  * Invariants:
  *   - OVERLAP_SKIP_DEFAULT: All governance schedules use overlap=SKIP (enforced by ScheduleControlPort)
  *   - CATCHUP_WINDOW_ZERO: No backfill (enforced by ScheduleControlPort)
@@ -56,7 +56,7 @@ const NODE_TASK_WORKFLOW_TYPE = "NodeTaskWorkflow";
 /**
  * Workflow type for the OPERATOR's live single-tenant epoch collect. story.5001 keeps the
  * operator on this (NOT NodeTaskWorkflow) so its live `governance:ledger_ingest` schedule is
- * byte-for-byte unchanged — no dead dispatch, no double-collect (REGRESSION_BAR).
+ * unchanged in routing and identity — no dead dispatch, no double-collect (REGRESSION_BAR).
  */
 const COLLECT_EPOCH_WORKFLOW_TYPE = "CollectEpochWorkflow";
 
@@ -98,8 +98,10 @@ export interface LedgerScheduleConfig {
       sourceRefs: string[];
     }
   >;
-  /** Pool budget: base_issuance_credits as string (bigint serialized). */
-  baseIssuanceCredits?: string;
+  budgetPolicy: {
+    budgetTotal: bigint;
+    accrualPerEpoch: bigint;
+  };
   /** EVM approver addresses for epoch close. */
   approvers?: string[];
 }
@@ -329,9 +331,11 @@ export async function syncGovernanceSchedules(
         scopeKey: config.ledger.scopeKey,
         epochLengthDays: config.ledger.epochLengthDays,
         activitySources: config.ledger.activitySources,
-        ...(config.ledger.baseIssuanceCredits && {
-          baseIssuanceCredits: config.ledger.baseIssuanceCredits,
-        }),
+        budgetPolicy: {
+          budgetTotal: config.ledger.budgetPolicy.budgetTotal.toString(),
+          accrualPerEpoch:
+            config.ledger.budgetPolicy.accrualPerEpoch.toString(),
+        },
         ...(config.ledger.approvers &&
           config.ledger.approvers.length > 0 && {
             approvers: config.ledger.approvers,

@@ -31,7 +31,6 @@ import type {
 import {
   computeApproverSetHash,
   computeWeightConfigHash,
-  estimatePoolComponentsV0,
   sha256OfCanonicalJson,
   validateWeightConfig,
 } from "@cogni/attribution-ledger";
@@ -167,18 +166,21 @@ export interface ComputeAllocationsOutput {
 }
 
 /**
- * Input for ensurePoolComponents activity.
+ * Input for the finite budget reservation activity.
  */
-export interface EnsurePoolComponentsInput {
+export interface EnsureBudgetReservationInput {
   readonly epochId: string; // bigint serialized
-  readonly baseIssuanceCredits: string; // bigint serialized
+  readonly budgetTotal: string;
+  readonly accrualPerEpoch: string;
+  readonly hasIncludedReceipts: boolean;
 }
 
 /**
- * Output from ensurePoolComponents activity.
+ * Output from the finite budget reservation activity.
  */
-export interface EnsurePoolComponentsOutput {
-  readonly componentsEnsured: number;
+export interface EnsureBudgetReservationOutput {
+  readonly created: boolean;
+  readonly amountCredits: string;
 }
 
 /**
@@ -833,66 +835,44 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
   }
 
   /**
-   * Ensure pool components exist for an epoch. Idempotent via POOL_UNIQUE_PER_TYPE.
-   * Only inserts when epoch is open (POOL_LOCKED_AT_REVIEW enforced by adapter).
+   * Reserve the policy-capped pool for an eligible epoch in one atomic store call.
    */
-  async function ensurePoolComponents(
-    input: EnsurePoolComponentsInput
-  ): Promise<EnsurePoolComponentsOutput> {
+  async function ensureBudgetReservation(
+    input: EnsureBudgetReservationInput
+  ): Promise<EnsureBudgetReservationOutput> {
     const epochId = BigInt(input.epochId);
-    const baseIssuanceCredits = BigInt(input.baseIssuanceCredits);
 
     logger.info(
       {
         epochId: input.epochId,
-        baseIssuanceCredits: input.baseIssuanceCredits,
+        budgetTotal: input.budgetTotal,
+        accrualPerEpoch: input.accrualPerEpoch,
+        hasIncludedReceipts: input.hasIncludedReceipts,
       },
-      "Ensuring pool components"
+      "Ensuring finite budget reservation"
     );
 
-    // Check epoch is open before attempting inserts
-    const epoch = await attributionStore.getEpoch(epochId);
-    if (!epoch) {
-      throw new Error(`ensurePoolComponents: epoch ${input.epochId} not found`);
-    }
-    if (epoch.status !== "open") {
-      logger.info(
-        { epochId: input.epochId, status: epoch.status },
-        "Epoch not open — skipping pool component insert"
-      );
-      return { componentsEnsured: 0 };
-    }
-
-    const estimates = estimatePoolComponentsV0({ baseIssuanceCredits });
-    let ensured = 0;
-
-    for (const estimate of estimates) {
-      // insertPoolComponent is idempotent (ON CONFLICT DO NOTHING + SELECT)
-      const { created } = await attributionStore.insertPoolComponent({
-        nodeId,
-        epochId,
-        componentId: estimate.componentId,
-        algorithmVersion: estimate.algorithmVersion,
-        inputsJson: estimate.inputsJson,
-        amountCredits: estimate.amountCredits,
-        evidenceRef: estimate.evidenceRef,
-      });
-      if (created) {
-        ensured++;
-      } else {
-        logger.info(
-          { componentId: estimate.componentId },
-          "Pool component already exists — skipping"
-        );
-      }
-    }
+    const { component, created } = await attributionStore.reserveEpochBudget({
+      nodeId,
+      epochId,
+      budgetTotal: BigInt(input.budgetTotal),
+      accrualPerEpoch: BigInt(input.accrualPerEpoch),
+      hasIncludedReceipts: input.hasIncludedReceipts,
+    });
 
     logger.info(
-      { epochId: input.epochId, componentsEnsured: ensured },
-      "Pool components ensured"
+      {
+        epochId: input.epochId,
+        created,
+        amountCredits: component?.amountCredits.toString() ?? "0",
+      },
+      "Finite budget reservation ensured"
     );
 
-    return { componentsEnsured: ensured };
+    return {
+      created,
+      amountCredits: component?.amountCredits.toString() ?? "0",
+    };
   }
 
   /**
@@ -1062,7 +1042,7 @@ export function createAttributionActivities(deps: AttributionActivityDeps) {
     saveCursor,
     materializeSelection,
     computeAllocations,
-    ensurePoolComponents,
+    ensureBudgetReservation,
     findStaleOpenEpoch,
     transitionEpochForWindow,
     resolveStreams,

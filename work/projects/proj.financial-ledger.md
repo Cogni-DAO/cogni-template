@@ -126,7 +126,7 @@ TigerBeetle is the transaction engine enforcing double-entry at the database lev
 ## Dependencies
 
 - [x] proj.transparent-credit-payouts P0 — finalized attribution statements exist
-- [ ] task.0130 (tokenomics Crawl) — budget policy replaces magic pool_config
+- [ ] task.0130 (tokenomics Crawl) — finite formation-derived budget policy
 - [ ] task.0142 (epoch pool value stabilization) — minimum activity threshold + carry-over prevents quiet-week windfalls before credits map to tokens
 - [ ] spike.0140 (multi-source category pool design) — informs credit:token ratio and settlement policy shape
 - [ ] Operator Port operational (signing + policy boundary for treasury actions)
@@ -136,8 +136,8 @@ TigerBeetle is the transaction engine enforcing double-entry at the database lev
 
 **Crawl handoff into this project:**
 
-- `task.0130` retires `pool_config.base_issuance_credits` in favor of `budget_policy`.
-- `budget_bank_ledger` is seeded from historical finalized `base_issuance` totals; settlement does not infer extra future issuance from quiet historical epochs.
+- `task.0130` makes `budget_policy` the sole issuance configuration.
+- Settlement reads immutable historical `budget_reservation` rows; quiet historical epochs do not imply extra issuance.
 - Settlement still starts from finalized signed statements. Budget policy changes pool sizing policy, not claimant allocation semantics.
 
 ## As-Built Specs

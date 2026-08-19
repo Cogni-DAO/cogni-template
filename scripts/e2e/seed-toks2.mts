@@ -258,15 +258,14 @@ async function main(): Promise<void> {
     ]);
     console.log(`  inserted owner projection (${totalUnits} units)`);
 
-    await store.insertPoolComponent({
+    await store.reserveEpochBudget({
       nodeId: NODE_ID,
       epochId: epoch.id,
-      componentId: "base_issuance",
-      algorithmVersion: "v1.0.0",
-      inputsJson: { base_amount: Number(poolCredits) },
-      amountCredits: poolCredits,
+      budgetTotal: poolCredits,
+      accrualPerEpoch: poolCredits,
+      hasIncludedReceipts: true,
     });
-    console.log("  inserted pool component (12000 credits)");
+    console.log("  reserved epoch budget (12000 credits)");
 
     const claimantParams: InsertReceiptClaimantsParams[] = events.map((e) => ({
       nodeId: NODE_ID,

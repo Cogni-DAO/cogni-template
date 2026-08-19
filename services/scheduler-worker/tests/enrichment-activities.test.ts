@@ -81,7 +81,7 @@ function makeMockStore(
     getReviewSubjectOverridesForEpoch: vi.fn().mockResolvedValue([]),
     upsertCursor: vi.fn(),
     getCursor: vi.fn().mockResolvedValue(null),
-    insertPoolComponent: vi
+    reserveEpochBudget: vi
       .fn()
       .mockResolvedValue({ component: {}, created: true }),
     getPoolComponentsForEpoch: vi.fn(),

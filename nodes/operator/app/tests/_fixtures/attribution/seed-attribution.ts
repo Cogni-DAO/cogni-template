@@ -18,11 +18,11 @@ import type {
   AttributionPoolComponent,
   AttributionStatement,
   AttributionStore,
-  InsertPoolComponentParams,
   InsertReceiptParams,
   InsertSelectionAutoParams,
   InsertStatementParams,
   InsertUserProjectionParams,
+  ReserveEpochBudgetParams,
   UpsertEvaluationParams,
   UpsertSelectionParams,
 } from "@cogni/attribution-ledger";
@@ -129,16 +129,15 @@ export function makeUserProjection(
   };
 }
 
-/** Build a pool component insert param with sensible defaults */
-export function makePoolComponent(
-  overrides: Partial<InsertPoolComponentParams> & { epochId: bigint }
-): InsertPoolComponentParams {
+/** Build a finite budget reservation param with sensible defaults. */
+export function makeBudgetReservation(
+  overrides: Partial<ReserveEpochBudgetParams> & { epochId: bigint }
+): ReserveEpochBudgetParams {
   return {
     nodeId: TEST_NODE_ID,
-    componentId: "base_issuance",
-    algorithmVersion: "v1.0.0",
-    inputsJson: { base_amount: 10000 },
-    amountCredits: 10000n,
+    budgetTotal: 520000n,
+    accrualPerEpoch: 10000n,
+    hasIncludedReceipts: true,
     ...overrides,
   };
 }
@@ -330,13 +329,14 @@ export async function seedClosedEpoch(
     }),
   ]);
 
-  // 5. Insert pool component
-  const { component: poolComponent } = await store.insertPoolComponent(
-    makePoolComponent({
+  // 5. Reserve this active epoch's finite budget slice.
+  const { component: poolComponent } = await store.reserveEpochBudget(
+    makeBudgetReservation({
       nodeId,
       epochId: epoch.id,
     })
   );
+  if (!poolComponent) throw new Error("fixture budget reservation missing");
 
   // 6. Transition epoch: open → review → finalized
   const poolTotal = 10000n;
@@ -456,12 +456,13 @@ export async function seedReviewEpoch(
     }),
   ]);
 
-  const { component: poolComponent } = await store.insertPoolComponent(
-    makePoolComponent({
+  const { component: poolComponent } = await store.reserveEpochBudget(
+    makeBudgetReservation({
       nodeId,
       epochId: epoch.id,
     })
   );
+  if (!poolComponent) throw new Error("fixture budget reservation missing");
 
   // Transition open → review (stop here — do NOT finalize)
   const reviewEpoch = await store.closeIngestion(

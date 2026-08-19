@@ -36,11 +36,6 @@ export interface LedgerBudgetPolicy {
   accrualPerEpoch: bigint;
 }
 
-/** @deprecated Transitional runtime shape; derived from budgetPolicy until stacked PR B lands. */
-export interface LedgerPoolConfig {
-  baseIssuanceCredits: bigint;
-}
-
 export interface LedgerConfig {
   scopeId: string;
   scopeKey: string;
@@ -53,11 +48,7 @@ export interface LedgerConfig {
       excludedLogins?: string[];
     }
   >;
-  budgetPolicy?: LedgerBudgetPolicy;
-  /** @deprecated Derived from budgetPolicy.accrualPerEpoch for the stacked runtime migration. */
-  poolConfig: LedgerPoolConfig;
-  /** @deprecated Derived from budgetPolicy.accrualPerEpoch for the stacked runtime migration. */
-  baseIssuanceCredits?: string;
+  budgetPolicy: LedgerBudgetPolicy;
   /** EVM approver addresses from repo-spec. */
   approvers?: string[];
 }
@@ -320,10 +311,6 @@ export function extractLedgerConfig(spec: RepoSpec): LedgerConfig | null {
       budgetTotal: BigInt(budgetPolicy.budget_total),
       accrualPerEpoch: BigInt(budgetPolicy.accrual_per_epoch),
     },
-    poolConfig: {
-      baseIssuanceCredits: BigInt(budgetPolicy.accrual_per_epoch),
-    },
-    baseIssuanceCredits: budgetPolicy.accrual_per_epoch,
     approvers: spec.activity_ledger.approvers,
   };
 }

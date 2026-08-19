@@ -51,8 +51,8 @@ export type {
   GovernanceSchedule,
   InboundPaymentConfig,
   KnowledgeConfig,
+  LedgerBudgetPolicy,
   LedgerConfig,
-  LedgerPoolConfig,
 } from "@cogni/repo-spec";
 
 // ---------------------------------------------------------------------------

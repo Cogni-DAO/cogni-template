@@ -68,8 +68,6 @@ export {
   isEpochNotFoundError,
   isEpochNotInReviewError,
   isEpochNotOpenError,
-  isPoolComponentMissingError,
-  PoolComponentMissingError,
 } from "./errors";
 
 // Hashing
@@ -93,11 +91,10 @@ export { EPOCH_STATUSES } from "./model";
 
 // Pool estimation (pure, deterministic)
 export {
-  estimatePoolComponentsV0,
-  POOL_COMPONENT_ALLOWLIST,
+  BUDGET_RESERVATION_ALGORITHM,
+  BUDGET_RESERVATION_COMPONENT_ID,
+  computeEpochBudgetReservation,
   type PoolComponentEstimate,
-  type PoolComponentId,
-  validatePoolComponentId,
 } from "./pool";
 
 // Rules
@@ -129,6 +126,7 @@ export type {
   AttributionStatementLineRecord,
   AttributionStatementSignature,
   AttributionStore,
+  BudgetReservationResult,
   ClaimantStore,
   CloseIngestionWithEvaluationsParams,
   CursorStore,
@@ -147,7 +145,6 @@ export type {
   IngestionReceipt,
   InsertDistributionManifestParams,
   InsertFinalClaimantAllocationParams,
-  InsertPoolComponentParams,
   InsertReceiptClaimantsParams,
   InsertReceiptParams,
   InsertSelectionAutoParams,
@@ -155,11 +152,11 @@ export type {
   InsertStatementParams,
   InsertUserProjectionParams,
   OverrideStore,
-  PoolComponentInsertResult,
   PoolStore,
   ProjectionStore,
   ReceiptClaimantsRecord,
   ReceiptStore,
+  ReserveEpochBudgetParams,
   ReviewSubjectOverrideRecord,
   SelectedReceiptWithMetadata,
   SelectionReader,

@@ -323,10 +323,12 @@ export interface LedgerActivities {
     closedStaleEpochId: string;
   }>;
 
-  ensurePoolComponents(input: {
+  ensureBudgetReservation(input: {
     epochId: string;
-    baseIssuanceCredits: string;
-  }): Promise<{ componentsEnsured: number }>;
+    budgetTotal: string;
+    accrualPerEpoch: string;
+    hasIncludedReceipts: boolean;
+  }): Promise<{ created: boolean; amountCredits: string }>;
 
   loadCursor(input: {
     source: string;

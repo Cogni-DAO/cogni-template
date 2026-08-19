@@ -113,7 +113,7 @@ class MockAttributionStore {
   async getCursor() {
     return null;
   }
-  async insertPoolComponent() {
+  async reserveEpochBudget() {
     return { component: {} as never, created: true };
   }
   async getPoolComponentsForEpoch() {

@@ -26,8 +26,6 @@ export {
   governanceSpecSchema,
   type OperatorWalletSpec,
   operatorWalletSpecSchema,
-  type PoolConfigSpec,
-  poolConfigSpecSchema,
   type RepoSpec,
   repoSpecSchema,
   scopeIdSchema,

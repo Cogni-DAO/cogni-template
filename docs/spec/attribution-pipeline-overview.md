@@ -84,7 +84,8 @@ This spec introduces no new invariants. All behavioral guarantees are defined in
  │  │ activity_ledger:                                                   │  │
  │  │   epoch_length_days: 7                                             │  │
  │  │   approvers: ["0x..."]                                             │  │
- │  │   pool_config: { base_issuance_credits: "10000" }                  │  │
+ │  │   budget_policy: { budget_total: "520000",                        │  │
+ │  │                    accrual_per_epoch: "10000" }                    │  │
  │  │   activity_sources:                                                │  │
  │  │     github:                                                        │  │
  │  │       attribution_pipeline: cogni-v0.0  ◄── selects profile        │  │
@@ -161,7 +162,7 @@ This spec introduces no new invariants. All behavioral guarantees are defined in
  │    • Adjust inclusion (select/deselect receipts)                        │
  │    • Record weight overrides (epoch_review_subject_overrides)           │
  │    • Resolve unlinked identities                                        │
- │    • Verify pool components (base_issuance, bonuses)                    │
+ │    • Verify the immutable, capped budget reservation                    │
  │                                                                         │
  │  No new ingestion. Selection still mutable. Overrides are absolute      │
  │  values, not deltas. Projections recompute on demand.                   │

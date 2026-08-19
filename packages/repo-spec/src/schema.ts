@@ -247,17 +247,6 @@ export const activitySourceSpecSchema = z.object({
 
 export type ActivitySourceSpec = z.infer<typeof activitySourceSpecSchema>;
 
-/**
- * @deprecated Transitional export for the stacked runtime migration. The
- * activity-ledger schema no longer accepts this key; PR B deletes the symbol.
- */
-export const poolConfigSpecSchema = z.object({
-  base_issuance_credits: z.string().min(1),
-});
-
-/** @deprecated Removed from repo-spec authority; retained only until stacked PR B lands. */
-export type PoolConfigSpec = z.infer<typeof poolConfigSpecSchema>;
-
 const positiveCreditString = z
   .string()
   .regex(/^[1-9][0-9]*$/, "must be a positive integer string");

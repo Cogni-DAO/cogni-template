@@ -54,8 +54,6 @@ export {
   isEpochAlreadyFinalizedError,
   isEpochNotFoundError,
   isEpochNotOpenError,
-  isPoolComponentMissingError,
-  PoolComponentMissingError,
 } from "./attribution/public";
 export {
   CREDITS_PER_USD,
@@ -67,11 +65,7 @@ export {
   usdCentsToCredits,
   usdToCredits,
 } from "./billing/pricing";
-export type {
-  Message,
-  MessageRole,
-  MessageToolCall,
-} from "./chat/model";
+export type { Message, MessageRole, MessageToolCall } from "./chat/model";
 export {
   assertMessageLength,
   ChatErrorCode,

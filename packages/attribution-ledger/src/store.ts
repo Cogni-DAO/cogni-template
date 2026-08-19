@@ -15,6 +15,7 @@
  * - RECEIPT_SCOPE_AGNOSTIC: receipts carry no scope_id; scope assigned at selection via epoch membership.
  * - EVALUATION_FINAL_ATOMIC: locked evaluation writes + artifacts_hash + epoch open→review in one transaction.
  * - EPOCH_CLOSE_ON_TRANSITION: transitionEpochForWindow closes stale open epoch + creates new epoch atomically. No grace period.
+ * - BUDGET_RESERVATION_ATOMIC: epoch status check + prior reservation sum + capped insert share one transaction.
  * - STATEMENT_FROM_FINAL_ONLY: allocation for statements consumes only status='locked' evaluations and claimant records.
  * - CLAIMANT_RESOLUTION_REQUIRED: upsertDraftClaimants, lockClaimantsForEpoch, loadLockedClaimants manage the epoch_receipt_claimants lifecycle.
  * - SELECTION_POLICY_AUTHORITY: getSelectionCandidates excludes receipts already selected in prior same-scope epochs but has no time-window filter — the selection policy decides epoch membership within remaining candidates.
@@ -229,14 +230,12 @@ export interface InsertFinalClaimantAllocationParams {
   readonly receiptIds: readonly string[];
 }
 
-export interface InsertPoolComponentParams {
+export interface ReserveEpochBudgetParams {
   readonly nodeId: string;
   readonly epochId: bigint;
-  readonly componentId: string;
-  readonly algorithmVersion: string;
-  readonly inputsJson: Record<string, unknown>;
-  readonly amountCredits: bigint;
-  readonly evidenceRef?: string | null;
+  readonly budgetTotal: bigint;
+  readonly accrualPerEpoch: bigint;
+  readonly hasIncludedReceipts: boolean;
 }
 
 export interface InsertStatementParams {
@@ -730,17 +729,17 @@ export interface CursorStore {
   ): Promise<IngestionCursor | null>;
 }
 
-/** Result of an idempotent pool component insert (ON CONFLICT DO NOTHING). */
-export interface PoolComponentInsertResult {
-  component: AttributionPoolComponent;
-  /** true if a new row was inserted; false if the component already existed. */
+/** Result of an atomic, idempotent finite-budget reservation. */
+export interface BudgetReservationResult {
+  component: AttributionPoolComponent | null;
+  /** true only when this call created a reservation row. */
   created: boolean;
 }
 
 export interface PoolStore {
-  insertPoolComponent(
-    params: InsertPoolComponentParams
-  ): Promise<PoolComponentInsertResult>;
+  reserveEpochBudget(
+    params: ReserveEpochBudgetParams
+  ): Promise<BudgetReservationResult>;
   getPoolComponentsForEpoch(
     epochId: bigint
   ): Promise<AttributionPoolComponent[]>;

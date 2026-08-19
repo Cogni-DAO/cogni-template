@@ -1534,15 +1534,14 @@ async function seedFinalizedEpoch(
   }
   console.log(`  Inserted ${userProjections.length} resolved-user projections`);
 
-  await store.insertPoolComponent({
+  await store.reserveEpochBudget({
     nodeId: NODE_ID,
     epochId: epoch.id,
-    componentId: "base_issuance",
-    algorithmVersion: "v1.0.0",
-    inputsJson: { base_amount: Number(epochDef.poolCredits) },
-    amountCredits: epochDef.poolCredits,
+    budgetTotal: 1_000_000n,
+    accrualPerEpoch: epochDef.poolCredits,
+    hasIncludedReceipts: true,
   });
-  console.log("  Inserted pool component");
+  console.log("  Reserved epoch budget");
 
   // Insert receipt claimants (draft then lock)
   const claimantParams = buildReceiptClaimantParams(epoch.id, epochDef.events);
@@ -1656,15 +1655,14 @@ async function seedReviewEpoch(
   }
   console.log(`  Inserted ${userProjections.length} resolved-user projections`);
 
-  await store.insertPoolComponent({
+  await store.reserveEpochBudget({
     nodeId: NODE_ID,
     epochId: epoch.id,
-    componentId: "base_issuance",
-    algorithmVersion: "v1.0.0",
-    inputsJson: { base_amount: Number(epochDef.poolCredits) },
-    amountCredits: epochDef.poolCredits,
+    budgetTotal: 1_000_000n,
+    accrualPerEpoch: epochDef.poolCredits,
+    hasIncludedReceipts: true,
   });
-  console.log("  Inserted pool component");
+  console.log("  Reserved epoch budget");
 
   // Insert receipt claimants (draft then lock)
   const claimantParams = buildReceiptClaimantParams(epoch.id, epochDef.events);

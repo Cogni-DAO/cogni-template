@@ -27,6 +27,8 @@ import {
 import {
   type AttributionStore,
   applyReceiptWeightOverrides,
+  BUDGET_RESERVATION_ALGORITHM,
+  BUDGET_RESERVATION_COMPONENT_ID,
   buildEIP712TypedData,
   buildReceiptWeightOverrideSnapshots,
   claimantKey,
@@ -70,8 +72,7 @@ export type FinalizeEpochErrorCode =
   | "config_not_locked"
   | "no_approvers"
   | "signer_not_approver"
-  | "no_pool_components"
-  | "missing_base_issuance"
+  | "invalid_budget_reservation"
   | "no_locked_claimants"
   | "no_claimant_allocations"
   | "signature_invalid";
@@ -678,29 +679,22 @@ export async function runFinalizeEpoch(
     );
   }
 
-  // 4. Load pool components → pool_total = SUM(amount_credits)
+  // 4. The single atomic finite-budget reservation is the epoch pool.
   const poolComponents =
     await attributionStore.getPoolComponentsForEpoch(epochId);
-  if (poolComponents.length === 0) {
+  const reservation = poolComponents[0];
+  if (
+    poolComponents.length !== 1 ||
+    reservation?.componentId !== BUDGET_RESERVATION_COMPONENT_ID ||
+    reservation.algorithmVersion !== BUDGET_RESERVATION_ALGORITHM ||
+    reservation.amountCredits <= 0n
+  ) {
     throw new FinalizeEpochError(
-      "no_pool_components",
-      `finalizeEpoch: epoch ${input.epochId} has no pool components (POOL_REQUIRES_BASE)`
+      "invalid_budget_reservation",
+      `finalizeEpoch: epoch ${input.epochId} must have exactly one positive ${BUDGET_RESERVATION_COMPONENT_ID}/${BUDGET_RESERVATION_ALGORITHM} component`
     );
   }
-  const hasBaseIssuance = poolComponents.some(
-    (c) => c.componentId === "base_issuance"
-  );
-  if (!hasBaseIssuance) {
-    throw new FinalizeEpochError(
-      "missing_base_issuance",
-      `finalizeEpoch: epoch ${input.epochId} missing base_issuance component (POOL_REQUIRES_BASE)`
-    );
-  }
-
-  const poolTotal = poolComponents.reduce(
-    (sum, c) => sum + c.amountCredits,
-    0n
-  );
+  const poolTotal = reservation.amountCredits;
 
   // 5. Load locked claimants + receipt weights + overrides → explode to claimant allocations
   const lockedClaimants = await attributionStore.loadLockedClaimants(epochId);

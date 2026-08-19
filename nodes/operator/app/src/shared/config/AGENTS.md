@@ -38,7 +38,7 @@ Server-only thin wrapper over `@cogni/repo-spec`. Handles file I/O, caching, and
 ## Public Surface
 
 - **Exports:** `getNodeId()`, `getScopeId()`, `getPaymentConfig()`, `InboundPaymentConfig`, `getGovernanceConfig()`, `GovernanceConfig`, `GovernanceSchedule`, `getLedgerApprovers()` - server-only helpers reading repo-spec metadata
-- **Exports (schema):** Re-exported from `@cogni/repo-spec`: `repoSpecSchema`, `creditsTopupSpecSchema`, `governanceScheduleSchema`, `governanceSpecSchema`, `activityLedgerSpecSchema`, `poolConfigSpecSchema`
+- **Exports (schema):** Re-exported from `@cogni/repo-spec`: `repoSpecSchema`, `creditsTopupSpecSchema`, `governanceScheduleSchema`, `governanceSpecSchema`, `activityLedgerSpecSchema`, `budgetPolicySpecSchema`
 - **Exports (types):** Re-exported from `@cogni/repo-spec`: `LedgerPoolConfig`, `LedgerConfig`, `GovernanceSchedule`, `InboundPaymentConfig`, `GovernanceConfig`
 - **Routes/CLI:** none
 - **Env/Config keys:** none (reads versioned files only)

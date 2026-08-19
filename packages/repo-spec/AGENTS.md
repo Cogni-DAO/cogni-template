@@ -53,7 +53,7 @@ Pure parsing and typed extraction for `.cogni/repo-spec.yaml` — the governance
   - `extractScopeId(spec)` — Scope identity UUID (throws if missing)
   - `extractChainId(spec)` — Numeric chain ID from governance section
   - Zod schemas: `repoSpecSchema`, `nodeRegistryEntrySchema`, `creditsTopupSpecSchema`, `governanceScheduleSchema`, etc.
-  - Types: `RepoSpec`, `NodeRegistryEntry`, `InboundPaymentConfig`, `GovernanceConfig`, `GovernanceSchedule`, `LedgerConfig`, `LedgerPoolConfig`
+  - Types: `RepoSpec`, `NodeRegistryEntry`, `InboundPaymentConfig`, `GovernanceConfig`, `GovernanceSchedule`, `LedgerConfig`, `LedgerBudgetPolicy`
 - **Subpath `@cogni/repo-spec/testing`** — test-only fixtures; never imported from production code:
   - `TEST_NODE_IDS`, `TEST_NODE_ENTRIES`, `TEST_SCOPE_ID`, `TEST_CHAIN_ID`, `TEST_RECEIVING_ADDRESS`, `TEST_APPROVER_ADDRESS`
   - `buildTestRepoSpec(overrides?)` — parsed `RepoSpec` from minimal-valid input + overrides

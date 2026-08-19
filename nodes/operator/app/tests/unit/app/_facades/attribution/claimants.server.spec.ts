@@ -73,7 +73,7 @@ function makeStore(
     getSelectedReceiptsForAllocation: vi.fn().mockResolvedValue([]),
     upsertCursor: vi.fn(),
     getCursor: vi.fn(),
-    insertPoolComponent: vi
+    reserveEpochBudget: vi
       .fn()
       .mockResolvedValue({ component: {}, created: true }),
     getPoolComponentsForEpoch: vi.fn(),

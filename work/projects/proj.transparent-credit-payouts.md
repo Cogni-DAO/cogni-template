@@ -69,7 +69,7 @@ The system makes **what happened** (activity), **how it was valued** (weights), 
 4. System resolves platform identities → `user_id` via `user_bindings` (best-effort)
 5. Weight policy computes `proposed_units` per contributor → `epoch_allocations`
 6. Admin reviews allocations, adjusts `final_units` where needed
-7. Admin records pool components (`base_issuance` at minimum)
+7. Runtime atomically records the finite epoch `budget_reservation`
 8. Admin triggers finalize → `computeStatementItems(final_units, pool_total)` → `payout_statement`
 9. Anyone can recompute payouts from stored `activity_events` + pool + weight config
 
@@ -99,7 +99,7 @@ repo-spec.yaml → schedule sync → Temporal schedule → CollectEpochWorkflow 
 - [ ] **close-ingestion API route** — manual trigger for open→review (task.0100)
 - [ ] **sign-data API route** — return EIP-712 typed data for signing (task.0100)
 - [ ] **finalize API route** — verify review+signature, trigger FinalizeEpochWorkflow (task.0100)
-- [x] **pool-components API route** — record pool components for epoch (task.0096)
+- [x] **Finite budget reservation** — runtime-owned atomic reservation replaced the retired administrative component route
 - [x] **Remaining read/write API routes** — list epochs, activity, allocations, statement (task.0096 — verify deferred to task.0102)
 - [ ] **Discord source adapter** — deferred (GitHub-only for V0 launch)
 
@@ -196,9 +196,9 @@ See [attribution-ledger spec](../../docs/spec/attribution-ledger.md) for full ar
 - Activity weights are transparent and governable — system never hides valuation logic
 - Weight config pinned per epoch (stored in epoch row) — reproducible
 - Activity events are immutable facts — append-only with DB triggers
-- Pool components are pre-recorded during epoch — finalize reads them, never creates budget
-- Each pool component type appears at most once per epoch (POOL_UNIQUE_PER_TYPE)
-- At least one `base_issuance` pool component required before epoch finalize
+- The finite budget reservation is recorded atomically during the open epoch; finalize only reads it
+- At most one immutable `budget_reservation` exists per epoch
+- Exactly one valid positive `budget_reservation` is required before epoch finalize
 - Epoch close is idempotent — same inputs produce identical statement hash
 - All write operations go through Temporal — Next.js stays stateless. **Exception:** `ingestion_receipts` appends via webhook receivers (per WEBHOOK_RECEIPT_APPEND_EXEMPT)
 - All monetary math in BIGINT — no floating point, including weights (integer milli-units)
