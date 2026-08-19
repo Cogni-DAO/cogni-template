@@ -253,6 +253,38 @@ describe("createAttributionProfileResolver", () => {
     });
   });
 
+  it("fails closed instead of serving a stale owner when catalog refresh fails", async () => {
+    let clock = 1_000;
+    let calls = 0;
+    const resolver = createAttributionProfileResolver(
+      makeDeps({
+        listRoutingNodes: async () => {
+          calls += 1;
+          if (calls > 1) throw new Error("catalog unavailable");
+          return [makeNode(NODE_A, "fresh-node")];
+        },
+        specs: {
+          "cogni-test-org/fresh-node": specWithRefs(NODE_A, [
+            "cogni-test-org/fresh-node",
+          ]),
+        },
+        now: () => clock,
+        ttlMs: 10_000,
+      })
+    );
+
+    await expect(
+      resolver.resolveRepoRoute("cogni-test-org/fresh-node")
+    ).resolves.toMatchObject({ status: "matched" });
+    clock += 10_001;
+    await expect(
+      resolver.resolveRepoRoute("cogni-test-org/fresh-node")
+    ).resolves.toEqual({
+      status: "index_unavailable",
+      repo: "cogni-test-org/fresh-node",
+    });
+  });
+
   it("distinguishes an unreadable child repo-spec from a missing one", async () => {
     const resolver = createAttributionProfileResolver(
       makeDeps({

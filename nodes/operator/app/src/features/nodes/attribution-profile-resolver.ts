@@ -246,6 +246,8 @@ export function createAttributionProfileResolver(
     compute: buildSnapshot,
     ttlMs,
     now,
+    // Ownership changes must fail closed; a stale last-good route is not safe authority.
+    serveStaleOnFailure: false,
   });
 
   return {

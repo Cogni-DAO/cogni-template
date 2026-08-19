@@ -109,6 +109,25 @@ describe("ttlSingleFlight", () => {
     await expect(cache.get()).rejects.toThrow("boom");
   });
 
+  it("propagates a warm refresh failure when stale fallback is disabled", async () => {
+    const clock = fakeClock();
+    let calls = 0;
+    const cache = ttlSingleFlight<number>({
+      ttlMs: 100,
+      now: clock.now,
+      serveStaleOnFailure: false,
+      compute: async () => {
+        calls += 1;
+        if (calls === 1) return 7;
+        throw new Error("authority unavailable");
+      },
+    });
+
+    expect(await cache.get()).toBe(7);
+    clock.advance(150);
+    await expect(cache.get()).rejects.toThrow("authority unavailable");
+  });
+
   it("retries after a stale-served failure on the next refresh window", async () => {
     const clock = fakeClock();
     let calls = 0;

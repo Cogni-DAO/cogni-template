@@ -12,7 +12,7 @@
  *   - SINGLE_FLIGHT: while a refresh is in flight, concurrent callers await the SAME promise — never a
  *     thundering herd of N parallel computes.
  *   - SERVE_STALE_ON_FAILURE: if a refresh throws but a previous value exists, callers get the last-good
- *     value (the render path never breaks); the failed refresh does not poison the cache.
+ *     value by default (the render path never breaks); strict callers can disable stale fallback.
  *   - TTL_IS_SOFT: a value older than `ttlMs` triggers a refresh on next access (lazy, not a timer).
  *   - CLOCK_INJECTED: `now()` is injectable so tests are deterministic (no real timers).
  * Side-effects: none (the injected `compute` may do IO; this wrapper does not)
@@ -34,6 +34,8 @@ export interface TtlSingleFlightOptions<T> {
   readonly ttlMs: number;
   /** Injectable clock (ms epoch). Defaults to `Date.now`. */
   readonly now?: () => number;
+  /** Default true. Set false when stale data is unsafe (for example, ownership routing). */
+  readonly serveStaleOnFailure?: boolean;
 }
 
 /**
@@ -50,6 +52,7 @@ export function ttlSingleFlight<T>(
   opts: TtlSingleFlightOptions<T>
 ): TtlSingleFlight<T> {
   const now = opts.now ?? Date.now;
+  const serveStaleOnFailure = opts.serveStaleOnFailure ?? true;
   let cached: { value: T; storedAt: number } | null = null;
   let inFlight: Promise<T> | null = null;
 
@@ -63,7 +66,7 @@ export function ttlSingleFlight<T>(
       })
       .catch((err) => {
         // SERVE_STALE_ON_FAILURE: a transient compute failure must not blank a cached value.
-        if (cached) return cached.value;
+        if (cached && serveStaleOnFailure) return cached.value;
         throw err;
       })
       .finally(() => {
