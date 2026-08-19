@@ -36,9 +36,13 @@ import { makeLogger } from "@/shared/observability";
 /** Catalog/spec edits become visible quickly without rebuilding the index for every webhook. */
 const DEFAULT_TTL_MS = 10_000;
 
-export interface AttributionRoutingNode {
+/** Minimal registry identity retained for sibling config resolvers. */
+export interface RoutableNode {
   readonly id: string;
   readonly slug: string;
+}
+
+export interface AttributionRoutingNode extends RoutableNode {
   readonly repo: ResolvedNodeRepo;
 }
 
