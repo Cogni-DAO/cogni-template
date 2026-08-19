@@ -158,17 +158,6 @@ export const IdentityAttestationClaimsSchema = z
     }
   });
 
-export const identityAttestationOperation = {
-  id: IDENTITY_ATTESTATION_V1,
-  input: IdentityAttestationRequestSchema,
-  output: z
-    .object({
-      attestation: z.string().min(1),
-      expiresIn: z.number().int().positive(),
-    })
-    .strict(),
-} as const;
-
 export type IdentityAttestationRequest = z.infer<
   typeof IdentityAttestationRequestSchema
 >;
