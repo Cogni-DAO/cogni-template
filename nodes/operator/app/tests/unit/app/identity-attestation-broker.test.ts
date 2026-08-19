@@ -185,6 +185,20 @@ describe("issueBrowserIdentityAttestation", () => {
     expect(mockIssue).toHaveBeenCalledOnce();
   });
 
+  it("maps missing subject evidence into a broker-safe error", async () => {
+    mockIssue.mockRejectedValueOnce(
+      new MockAttestationPreconditionError("no_github_binding")
+    );
+    await expect(
+      issueBrowserIdentityAttestation({
+        sessionUser: SESSION,
+        request: REQUEST,
+        returnTo: "https://node-template.cognidao.org/profile",
+      })
+    ).rejects.toMatchObject({ code: "no_github_binding" });
+    expect(mockIssue).toHaveBeenCalledOnce();
+  });
+
   it.each([
     "http://cognidao.org",
     "https://user:pass@cognidao.org",

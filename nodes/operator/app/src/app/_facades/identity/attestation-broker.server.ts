@@ -35,6 +35,8 @@ import { baseDomain } from "@/shared/node-registry/resolve";
 export type AttestationBrokerErrorCode =
   | "attestation_unavailable"
   | "invalid_return_to"
+  | "no_github_binding"
+  | "no_wallet"
   | "unknown_node";
 
 export class AttestationBrokerError extends Error {
@@ -127,17 +129,12 @@ export async function issueBrowserIdentityAttestation(params: {
       )}`,
     };
   } catch (error) {
-    if (
-      error instanceof AttestationPreconditionError &&
-      error.code === "unknown_node"
-    ) {
-      throw new AttestationBrokerError("unknown_node");
-    }
-    if (
-      error instanceof AttestationPreconditionError &&
-      error.code === "invalid_target_origin"
-    ) {
-      throw new AttestationBrokerError("invalid_return_to");
+    if (error instanceof AttestationPreconditionError) {
+      throw new AttestationBrokerError(
+        error.code === "invalid_target_origin"
+          ? "invalid_return_to"
+          : error.code
+      );
     }
     throw error;
   }

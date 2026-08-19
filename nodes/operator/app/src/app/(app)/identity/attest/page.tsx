@@ -82,12 +82,6 @@ export default async function IdentityAttestationBrokerPage({
     if (error instanceof AttestationBrokerError) {
       return <BrokerFailure code={error.code} />;
     }
-    if (
-      error instanceof Error &&
-      error.name === "AttestationPreconditionError"
-    ) {
-      return <BrokerFailure code={error.message} />;
-    }
     throw error;
   }
 }
