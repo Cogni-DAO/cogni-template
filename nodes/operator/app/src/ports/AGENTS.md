@@ -53,6 +53,7 @@ Does NOT re-export packages with `node:` transitive dependencies.
 - SandboxRunnerPort, SandboxRunSpec, SandboxRunResult, SandboxProgramContract
 - ThreadPersistencePort, ThreadConflictError, ThreadSummary
 - OperatorWalletPort
+- ReceiptDelivery + ReceiptDeliveryTarget (catalog-routed operator→child attribution receipts)
 - TreasurySettlementPort, TreasurySettlementOutcome
 - Types (ChargeReceiptParams, LlmCaller, BillingAccount, CreditLedgerEntry, etc.)
 

@@ -69,6 +69,12 @@ Same `ingestion_receipts` shape, same downstream pipeline. New source = one inge
 
 The `attribution_pipeline` profile is meant to define **what activity a node monitors + ingests**, not only how it weights it. Today it does not: `PipelineProfile` (`packages/attribution-pipeline-contracts/src/profile.ts`) carries only `enricherRefs`/`allocatorRef`/`selectionPolicyRef`/`defaultWeightConfig`, and ingestion is `INGEST_ALL_FILTER_LATER` — `source_refs` filters at **selection** (fail-open). Until the profile carries an ingestion spec, `activity_sources.source_refs` drives **which repos**; event-type filtering stays at selection. Making the profile drive ingestion (which sources + event-types) is roadmap item 3.
 
+## Fresh-node route discovery
+
+The operator resolves GitHub `repository.full_name` against the merged environment catalog and each selected child's `activity_ledger.activity_sources.github.source_refs`. That projection uses a 10-second, strict single-flight snapshot: stale ownership is never served after a failed refresh.
+
+There is one important first-event edge. A spawn can merge while an app instance still holds a fresh pre-spawn snapshot, and GitHub does **not** automatically redeliver failed webhook deliveries. After HMAC verification, an `unclaimed`, `profile_unavailable`, or `index_unavailable` decision therefore triggers exactly one cache-bypassing, still-single-flight rebuild in the same request. A match is delivered once to the child ledger. A second miss remains a loud `503` with no ledger write and requires repair plus manual/App redelivery; it never falls back to the operator ledger.
+
 ## Phased delivery
 
 - **Phase 1 (this design) — git ingestion federation.** The node's internal receipt seam + the operator delivering git receipts to it. Proof: a git PR → an `ingestion_receipts` row in the **node's own** DB. MVP auth = shared `SCHEDULER_API_TOKEN` (same as graph dispatch). No collect yet.

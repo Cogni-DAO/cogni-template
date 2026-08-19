@@ -13,8 +13,8 @@
  *   to ISO strings for the wire.
  * Invariants:
  *   - NO_DB_IN_DELIVERY: only fetch(); the owning node stamps its own node_id.
- *   - nodeId → URL is resolved via the injected registry resolver at call time (operator DB
- *     registry, NORTH_STAR — not a static COGNI_NODE_ENDPOINTS map); unknown → throw (fail fast).
+ *   - The authoritative catalog/profile routing decision supplies nodeId + slug together. The slug
+ *     derives the in-cluster URL directly, avoiding a second, stale DB-registry resolution seam.
  *   - Bearer SCHEDULER_API_TOKEN attached to every request (MVP dispatch identity, same as graph
  *     dispatch; the per-node principal is the hardening — task.5033).
  *   - Idempotency-Key: `${nodeId}/${firstReceiptId}` — repeat delivery is a no-op on the node
@@ -35,18 +35,12 @@ import {
   internalDeliverReceiptsOperation,
 } from "@cogni/node-contracts";
 import type { ReceiptDelivery } from "@/ports";
+import { internalNodeAppUrl } from "@/shared/node-registry/resolve";
 import type { Logger } from "@/shared/observability";
 
 // ReceiptDelivery port lives in @/ports/receipt-delivery.port; this adapter implements it.
 
 export interface HttpReceiptDeliveryDeps {
-  /**
-   * Resolve a node's internal base URL by nodeId. NORTH_STAR: the operator resolves its
-   * nodes from its OWN DB registry (listRoutableNodes), never a static COGNI_NODE_ENDPOINTS
-   * map — that static map exists only for the DB-less scheduler-worker. Returns null when the
-   * nodeId is not a routable node in the registry.
-   */
-  readonly resolveNodeUrl: (nodeId: string) => Promise<string | null>;
   /** Bearer token for the internal dispatch identity (SCHEDULER_API_TOKEN). */
   readonly schedulerApiToken: string;
   readonly logger: Logger;
@@ -77,21 +71,6 @@ const RETRYABLE_TRANSIENT_4XX = new Set([404, 408, 409, 429]);
 function isRetryableStatus(status: number): boolean {
   if (status >= 500) return true;
   return RETRYABLE_TRANSIENT_4XX.has(status);
-}
-
-async function resolveNodeUrl(
-  resolve: (nodeId: string) => Promise<string | null>,
-  nodeId: string
-): Promise<string> {
-  const url = await resolve(nodeId);
-  if (!url) {
-    throw new ReceiptDeliveryError(
-      `Unknown nodeId "${nodeId}" — not a routable node in the operator registry`,
-      0,
-      false
-    );
-  }
-  return url.replace(/\/$/, "");
 }
 
 function authHeaders(token: string, idempotencyKey: string): HeadersInit {
@@ -135,13 +114,14 @@ function toWireReceipt(r: InsertReceiptParams): InternalReceipt {
 export function createHttpReceiptDelivery(
   deps: HttpReceiptDeliveryDeps
 ): ReceiptDelivery {
-  const { resolveNodeUrl: resolveUrl, schedulerApiToken, logger } = deps;
+  const { schedulerApiToken, logger } = deps;
 
   return {
-    async deliverReceipts(nodeId, source, receipts): Promise<void> {
+    async deliverReceipts(target, source, receipts): Promise<void> {
       if (receipts.length === 0) return;
 
-      const base = await resolveNodeUrl(resolveUrl, nodeId);
+      const { nodeId, slug } = target;
+      const base = internalNodeAppUrl(slug);
       const url = `${base}/api/internal/attribution/receipts`;
 
       const body: InternalDeliverReceiptsInput = {

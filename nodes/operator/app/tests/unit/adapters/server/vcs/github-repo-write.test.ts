@@ -1457,16 +1457,8 @@ envs: [candidate-a, preview, production]
 activity_env: production
 owner_wallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949"
 `,
-          "nodes/operator/.cogni/repo-spec.yaml": `schema_version: "0.1.4"
-node_id: "4ff8eac1-4eba-4ed0-931b-b1fe4f64713d"
-scope_id: "a28a8b1e-1f9d-5cd5-9329-569e4819feda"
-scope_key: "default"
-intent:
-  name: operator
-  mission: "Operate the network"
-governance:
-  chain_id: "8453"
-`,
+          "nodes/operator/.cogni/repo-spec.yaml":
+            'node_id: "4ff8eac1-4eba-4ed0-931b-b1fe4f64713d"\n',
         };
         const body = bodies[String(params.path)];
         if (!body) throw statusError(404, `not found: ${params.path}`);
@@ -1502,6 +1494,38 @@ governance:
         ownerWallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949",
       },
     ]);
+  });
+
+  it("rejects an invalid in-repo node identity", async () => {
+    const sourceRef = "0123456789012345678901234567890123456789";
+    routeHandlers = {
+      "GET /repos/{owner}/{repo}/contents/{path}": (params) => {
+        if (params.path === "infra/catalog") {
+          return [{ name: "operator.yaml", type: "file" }];
+        }
+        const bodies: Record<string, string> = {
+          "infra/catalog/operator.yaml": `name: operator
+type: node
+path_prefix: nodes/operator/
+envs: [candidate-a]
+activity_env: candidate-a
+owner_wallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949"
+`,
+          "nodes/operator/.cogni/repo-spec.yaml": "node_id: not-a-uuid\n",
+        };
+        const body = bodies[String(params.path)];
+        if (!body) throw statusError(404, `not found: ${params.path}`);
+        return { type: "file", encoding: "base64", content: encode(body) };
+      },
+    };
+
+    await expect(
+      makeWriter().listCatalogNodes({
+        parentOwner: "Cogni-DAO",
+        parentRepo: "cogni",
+        sourceRef,
+      })
+    ).rejects.toMatchObject({ code: "invalid_repo_spec", status: 422 });
   });
 
   it("fails loud when activity_env is outside the deploy set", async () => {
