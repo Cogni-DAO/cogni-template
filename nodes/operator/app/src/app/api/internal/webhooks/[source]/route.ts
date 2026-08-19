@@ -9,6 +9,7 @@
  * - WEBHOOK_VERIFY_BEFORE_ROUTE: Verification happens before parsing, routing, persistence, or dispatch
  * - WEBHOOK_RECEIPT_APPEND_EXEMPT: Receipt insertion bypasses WRITES_VIA_TEMPORAL (safe per RECEIPT_IDEMPOTENT + RECEIPT_APPEND_ONLY)
  * - UNIQUE_ROUTE_OR_NO_WRITE: GitHub attribution never falls back to the operator ledger.
+ * - FRESH_NODE_FORCE_REFRESH: verified unresolved GitHub routes bypass the cache exactly once.
  * - ARCHITECTURE_ALIGNMENT: Route → feature service → port
  * Side-effects: IO (database writes via feature service)
  * Links: docs/spec/attribution-ledger.md
@@ -79,7 +80,8 @@ interface RouteParams {
  */
 async function resolveTargetNode(
   source: string,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  options?: { readonly forceRefresh?: boolean }
 ): Promise<{
   target: ReceiptDeliveryTarget | null;
   repo: string | null;
@@ -106,8 +108,10 @@ async function resolveTargetNode(
     return { target: null, repo: null, status: "missing_repo" };
   }
 
-  const decision =
-    await resolveAttributionProfileResolver().resolveRepoRoute(fullName);
+  const decision = await resolveAttributionProfileResolver().resolveRepoRoute(
+    fullName,
+    options
+  );
   if (decision.status === "matched") {
     return {
       target: {
@@ -187,7 +191,31 @@ export async function POST(
 
     // GitHub receipts require a unique catalog+profile owner. An unresolved route still verifies
     // and normalizes so unrelated review/sync hooks can run, but it writes no attribution receipt.
-    const target = await resolveTargetNode(source, verified.payload);
+    let target = await resolveTargetNode(source, verified.payload);
+    if (
+      source === "github" &&
+      (target.status === "unclaimed" ||
+        target.status === "index_unavailable" ||
+        target.status === "profile_unavailable")
+    ) {
+      // GitHub does not automatically redeliver failed webhook deliveries. A fresh node can be
+      // absent from a still-valid 10s snapshot, so bypass it exactly once while this verified
+      // request is in hand. The refresh remains single-flight; a second miss stays loud/no-write
+      // and requires manual/App redelivery rather than an operator-ledger fallback.
+      log.info(
+        {
+          event: "attribution.route_forced_refresh",
+          source,
+          eventType,
+          repo: target.repo,
+          routeStatus: target.status,
+        },
+        "refreshing attribution route after verified cache miss"
+      );
+      target = await resolveTargetNode(source, verified.payload, {
+        forceRefresh: true,
+      });
+    }
 
     const result = await receiveVerifiedWebhook(
       {
@@ -302,7 +330,7 @@ export async function POST(
       return NextResponse.json(
         {
           ok: false,
-          error: "Attribution route not ready; retry delivery",
+          error: "Attribution route not ready; manually redeliver after repair",
           attributionRoute: {
             status: target.status,
             repo: target.repo,

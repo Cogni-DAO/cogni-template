@@ -351,4 +351,31 @@ describe("createAttributionProfileResolver", () => {
     await resolver.resolveRepoRoute("cogni-test-org/fresh-node");
     expect(listRoutingNodes).toHaveBeenCalledTimes(2);
   });
+
+  it("bypasses a fresh pre-spawn snapshot once when forceRefresh is requested", async () => {
+    let nodes: AttributionRoutingNode[] = [];
+    const listRoutingNodes = vi.fn(async () => nodes);
+    const resolver = createAttributionProfileResolver(
+      makeDeps({
+        listRoutingNodes,
+        fetchRepoSpecText: async () =>
+          specWithRefs(NODE_A, ["cogni-test-org/fresh-node"]),
+        ttlMs: 10_000,
+      })
+    );
+
+    await expect(
+      resolver.resolveRepoRoute("cogni-test-org/fresh-node")
+    ).resolves.toMatchObject({ status: "unclaimed" });
+    nodes = [makeNode(NODE_A, "fresh-node")];
+    await expect(
+      resolver.resolveRepoRoute("cogni-test-org/fresh-node", {
+        forceRefresh: true,
+      })
+    ).resolves.toMatchObject({
+      status: "matched",
+      target: { id: NODE_A, slug: "fresh-node" },
+    });
+    expect(listRoutingNodes).toHaveBeenCalledTimes(2);
+  });
 });

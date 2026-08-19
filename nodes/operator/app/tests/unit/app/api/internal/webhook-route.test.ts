@@ -3,9 +3,9 @@
 
 /**
  * Module: `@tests/unit/app/api/internal/webhook-route`
- * Purpose: Pin the webhook verification boundary and retryable fresh-node routing behavior.
+ * Purpose: Pin the webhook verification boundary and fresh-node forced-refresh routing behavior.
  * Scope: Route shell with container, routing, persistence, delivery, and dispatch mocked; no IO.
- * Invariants: WEBHOOK_VERIFY_BEFORE_ROUTE, UNIQUE_ROUTE_OR_NO_WRITE, RETRY_UNREADY_ROUTE.
+ * Invariants: WEBHOOK_VERIFY_BEFORE_ROUTE, UNIQUE_ROUTE_OR_NO_WRITE, FRESH_NODE_FORCE_REFRESH.
  * Side-effects: none
  * Links: src/app/api/internal/webhooks/[source]/route.ts, bug.5052
  * @public
@@ -129,7 +129,62 @@ describe("POST internal webhook verification boundary", () => {
     expect(fakes.signal).not.toHaveBeenCalled();
   });
 
-  it("asks GitHub to retry a verified attributable event while a fresh route is unclaimed", async () => {
+  it("force-refreshes a warm pre-spawn snapshot and routes the first verified fresh-node event once", async () => {
+    fakes.verify.mockResolvedValue(true);
+    fakes.catalogLookup
+      .mockResolvedValueOnce({
+        status: "unclaimed",
+        repo: "cogni-test-org/fresh-node",
+      })
+      .mockResolvedValueOnce({
+        status: "matched",
+        repo: "cogni-test-org/fresh-node",
+        target: {
+          id: "fresh-node-id",
+          slug: "fresh-node",
+          repo: { owner: "cogni-test-org", repo: "fresh-node" },
+        },
+      });
+    fakes.normalize.mockResolvedValue([
+      {
+        id: "github:issue:cogni-test-org/fresh-node:1:opened",
+        source: "github",
+        eventType: "issue_opened",
+        platformUserId: "123",
+        platformLogin: "contributor",
+        artifactUrl: "https://github.com/cogni-test-org/fresh-node/issues/1",
+        metadata: null,
+        payloadHash: "a".repeat(64),
+        eventTime: new Date("2026-08-18T00:00:00.000Z"),
+      },
+    ]);
+
+    const response = await post(
+      { repository: { full_name: "cogni-test-org/fresh-node" } },
+      "issues"
+    );
+
+    expect(response.status).toBe(200);
+    expect(fakes.catalogLookup).toHaveBeenNthCalledWith(
+      1,
+      "cogni-test-org/fresh-node",
+      undefined
+    );
+    expect(fakes.catalogLookup).toHaveBeenNthCalledWith(
+      2,
+      "cogni-test-org/fresh-node",
+      { forceRefresh: true }
+    );
+    expect(fakes.insert).not.toHaveBeenCalled();
+    expect(fakes.deliver).toHaveBeenCalledOnce();
+    expect(fakes.deliver).toHaveBeenCalledWith(
+      { nodeId: "fresh-node-id", slug: "fresh-node" },
+      "github",
+      [expect.objectContaining({ nodeId: "fresh-node-id" })]
+    );
+  });
+
+  it("fails loud and write-free when the one forced refresh remains unclaimed", async () => {
     fakes.verify.mockResolvedValue(true);
     fakes.catalogLookup.mockResolvedValue({
       status: "unclaimed",
@@ -155,9 +210,7 @@ describe("POST internal webhook verification boundary", () => {
     );
 
     expect(response.status).toBe(503);
-    expect(fakes.catalogLookup).toHaveBeenCalledWith(
-      "cogni-test-org/fresh-node"
-    );
+    expect(fakes.catalogLookup).toHaveBeenCalledTimes(2);
     expect(fakes.insert).not.toHaveBeenCalled();
     expect(fakes.deliver).not.toHaveBeenCalled();
   });

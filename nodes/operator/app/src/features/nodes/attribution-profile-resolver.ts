@@ -125,7 +125,10 @@ export interface RepoIndexSnapshot {
 
 export interface AttributionProfileResolver {
   /** Resolve one normalized repository to a typed, fail-closed routing decision. */
-  resolveRepoRoute(fullName: string): Promise<RepoRouteDecision>;
+  resolveRepoRoute(
+    fullName: string,
+    options?: { readonly forceRefresh?: boolean }
+  ): Promise<RepoRouteDecision>;
   /** Return the current discovery snapshot for deterministic readiness diagnostics. */
   resolveRepoIndex(): Promise<RepoIndexSnapshot>;
 }
@@ -254,13 +257,18 @@ export function createAttributionProfileResolver(
     async resolveRepoIndex(): Promise<RepoIndexSnapshot> {
       return cache.get();
     },
-    async resolveRepoRoute(fullName: string): Promise<RepoRouteDecision> {
+    async resolveRepoRoute(
+      fullName: string,
+      options?: { readonly forceRefresh?: boolean }
+    ): Promise<RepoRouteDecision> {
       const repo = normalizeRepo(fullName);
       if (repo === "") return { status: "unclaimed", repo };
 
       let snapshot: RepoIndexSnapshot;
       try {
-        snapshot = await cache.get();
+        snapshot = options?.forceRefresh
+          ? await cache.refresh()
+          : await cache.get();
       } catch (err) {
         log.error(
           { event: "attribution.profile_index_failed", repo, err: String(err) },

@@ -25,6 +25,8 @@
 export interface TtlSingleFlight<T> {
   /** Return the cached value, refreshing it (single-flight) when stale or absent. */
   get(): Promise<T>;
+  /** Recompute now even when the cached value is fresh; concurrent refreshes still share one flight. */
+  refresh(): Promise<T>;
 }
 
 export interface TtlSingleFlightOptions<T> {
@@ -83,5 +85,6 @@ export function ttlSingleFlight<T>(
       }
       return refresh();
     },
+    refresh,
   };
 }
