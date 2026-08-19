@@ -204,6 +204,6 @@ export async function CollectEpochWorkflow(
     epochId: epoch.epochId,
     budgetTotal: config.budgetPolicy.budgetTotal,
     accrualPerEpoch: config.budgetPolicy.accrualPerEpoch,
-    hasIncludedReceipts: allocation.totalAllocations > 0,
+    hasIncludedReceipts: BigInt(allocation.totalProposedUnits) > 0n,
   });
 }

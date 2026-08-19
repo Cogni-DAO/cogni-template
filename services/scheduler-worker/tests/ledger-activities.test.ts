@@ -1408,6 +1408,45 @@ describe("computeAllocations", () => {
     ]);
   });
 
+  it("reports zero proposed units for an included zero-weight receipt", async () => {
+    const store = makeMockStore({
+      getSelectedReceiptsForAllocation: vi.fn().mockResolvedValue([
+        {
+          receiptId: "receipt-zero",
+          userId: "user-1",
+          source: "github",
+          eventType: "pr_merged",
+          included: true,
+          weightOverrideMilli: null,
+        },
+      ]),
+      getEvaluationsForEpoch: vi
+        .fn()
+        .mockResolvedValue([makeEvaluation({ status: "draft" })]),
+      getUserProjectionsForEpoch: vi.fn().mockResolvedValue([]),
+    });
+    const activities = createAttributionActivities({
+      attributionStore: store,
+      sourceRegistrations: new Map(),
+      registries,
+      nodeId: NODE_ID,
+      scopeId: SCOPE_ID,
+      chainId: 8453,
+      logger: mockLogger,
+    });
+
+    const result = await activities.computeAllocations({
+      epochId: "1",
+      attributionPipeline: "cogni-v0.0",
+      weightConfig: { "github:pr_merged": 0 },
+    });
+
+    expect(result).toEqual({
+      totalAllocations: 1,
+      totalProposedUnits: "0",
+    });
+  });
+
   it("fails when the allocator's required evaluations are missing", async () => {
     const store = makeMockStore({
       getSelectedReceiptsForAllocation: vi.fn().mockResolvedValue([

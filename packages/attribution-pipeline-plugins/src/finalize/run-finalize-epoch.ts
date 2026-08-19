@@ -735,6 +735,16 @@ export async function runFinalizeEpoch(
       `finalizeEpoch: epoch ${input.epochId} has no claimant allocations`
     );
   }
+  const totalFinalUnits = finalClaimantAllocations.reduce(
+    (sum, allocation) => sum + allocation.finalUnits,
+    0n
+  );
+  if (totalFinalUnits <= 0n) {
+    throw new FinalizeEpochError(
+      "no_claimant_allocations",
+      `finalizeEpoch: epoch ${input.epochId} has no positive claimant allocation units`
+    );
+  }
 
   // Build override audit trail for statement persistence
   const reviewOverrideSnapshots = buildReceiptWeightOverrideSnapshots(
@@ -748,6 +758,12 @@ export async function runFinalizeEpoch(
     finalClaimantAllocations,
     poolTotal
   );
+  if (statementLines.length === 0) {
+    throw new FinalizeEpochError(
+      "no_claimant_allocations",
+      `finalizeEpoch: epoch ${input.epochId} produced no statement lines`
+    );
+  }
 
   // 7. Compute allocation set hash (deterministic)
   const finalAllocationSetHash = await computeFinalClaimantAllocationSetHash(

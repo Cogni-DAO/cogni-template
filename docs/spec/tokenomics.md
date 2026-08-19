@@ -146,25 +146,26 @@ rows remain historical evidence; all new reservations use the finite policy.
 | `packages/repo-spec/src/accessors.ts`     | Exposes positive bigint policy values.                                                           |
 | `packages/attribution-ledger/src/pool.ts` | Pure `flat-cap-v1` computation; quiet and exhausted epochs return no reservation.                |
 | `packages/db-client/`                     | Locks the unique open epoch and performs status, scoped sum, cap, and insert in one transaction. |
-| `services/scheduler-worker/`              | Reserves the finite amount after allocation establishes whether the epoch has included receipts. |
+| `services/scheduler-worker/`              | Reserves the finite amount only after allocation establishes positive proposed units.             |
 
 #### C5. Budget Policy State Machine
 
 ```
-                    ┌──────────────┐
-     close epoch ──►│   COMPUTE     │──► if included receipts exist:
-                    │   EPOCH_POOL  │      epoch_pool = min(accrual, remaining)
-                    └──────┬───────┘    else:
-                                           epoch_pool = 0
-                           │
-                           ▼
-                    ┌──────────────┐
-     finalize    ──►│    SPEND      │──► remaining -= epoch_pool
-                    │              │    pool_total locked on statement
-                    └──────────────┘    (existing POOL_REPRODUCIBLE invariant)
+                           ┌──────────────┐
+ positive proposed units ─►│   RESERVE    │──► epoch_pool = min(accrual, remaining)
+                           │  EPOCH_POOL  │    remaining -= epoch_pool
+                           └──────┬───────┘
+                                  │
+                                  ▼
+                           ┌──────────────┐
+             finalize   ──►│   CONSUME    │──► same reserved pool_total locked
+                           │ RESERVATION  │    on the signed statement
+                           └──────────────┘    (no second decrement)
 ```
 
-If `remaining = 0`, `epoch_pool = 0`. Epoch still runs (activity is recorded for transparency) but no credits are distributed.
+The immutable reservation is the budget commitment point. Finalization consumes that commitment into the signed statement; it does not subtract the budget again. An epoch left in review conservatively retains its reservation. Crawl has no release ledger; adding one is deferred until a real cancellation/reallocation requirement exists.
+
+If proposed units or `remaining` are zero, no reservation is created and no statement is produced. The epoch activity remains recorded for transparency.
 
 ---
 

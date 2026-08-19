@@ -464,6 +464,32 @@ describe("finalizeEpoch — per-node distribution config (bug.5020)", () => {
     });
   }
 
+  it("rejects before signing when review overrides zero every claimant", async () => {
+    const { store } = await makeFinalizeStore({
+      getReviewSubjectOverridesForEpoch: vi.fn().mockResolvedValue([
+        {
+          id: "override-1",
+          nodeId: NODE_ID,
+          epochId: 7n,
+          subjectRef: "receipt-1",
+          overrideUnits: 0n,
+          overrideSharesJson: null,
+          overrideReason: "exclude at review",
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ]),
+    });
+    const deps = finalizeDepsWith(store, {});
+    vi.mocked(verifyTypedData).mockClear();
+
+    await expect(runFinalize(deps)).rejects.toMatchObject({
+      code: "no_claimant_allocations",
+    });
+    expect(verifyTypedData).not.toHaveBeenCalled();
+    expect(store.finalizeEpochAtomic).not.toHaveBeenCalled();
+  });
+
   it("fails closed before reading the epoch when deployment config is absent", async () => {
     const { store } = await makeFinalizeStore();
     const deps = finalizeDepsWith(store, {});

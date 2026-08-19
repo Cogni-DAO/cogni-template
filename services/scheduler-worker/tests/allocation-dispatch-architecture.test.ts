@@ -41,4 +41,11 @@ describe("worker allocation dispatch architecture", () => {
     expect(source).not.toContain("deriveAllocationAlgoRef(");
     expect(source).toContain("attributionPipeline");
   });
+
+  it("reserves budget only when allocation produced positive units", () => {
+    const source = fs.readFileSync(collectWorkflowPath, "utf8");
+
+    expect(source).toContain("BigInt(allocation.totalProposedUnits) > 0n");
+    expect(source).not.toContain("allocation.totalAllocations > 0");
+  });
 });
