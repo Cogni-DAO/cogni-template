@@ -26,6 +26,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const envState = vi.hoisted(() => ({
   current: {} as {
     APP_BASE_URL?: string;
+    NODE_SUBMODULE_PARENT_OWNER?: string;
+    NODE_SUBMODULE_PARENT_REPO?: string;
+    GH_REVIEW_APP_ID?: string;
+    GH_REVIEW_APP_PRIVATE_KEY_BASE64?: string;
     IDENTITY_ATTESTATION_PRIVATE_KEY?: string;
     IDENTITY_ATTESTATION_PREVIOUS_PRIVATE_KEY?: string;
   },
@@ -37,9 +41,12 @@ const dbState = vi.hoisted(() => ({
     | undefined,
   walletAddress: null as string | null,
   nodeExists: true,
+  duplicateNode: false,
+  deployEnvs: ["production"] as Array<"candidate-a" | "preview" | "production">,
 }));
 
 const mockGetServerSessionUser = vi.hoisted(() => vi.fn());
+const mockListCatalogNodes = vi.hoisted(() => vi.fn());
 const mockLog = vi.hoisted(() => ({
   child: vi.fn().mockReturnThis(),
   debug: vi.fn(),
@@ -51,6 +58,15 @@ const mockLog = vi.hoisted(() => ({
 vi.mock("@/shared/env", () => ({
   serverEnv: () => envState.current,
 }));
+vi.mock("@/shared/env/server-env", () => ({
+  serverEnv: () => envState.current,
+}));
+
+vi.mock("@/bootstrap/capabilities/operator-deploy-plane", () => ({
+  createOperatorDeployPlane: () => ({
+    listCatalogNodes: (...args: unknown[]) => mockListCatalogNodes(...args),
+  }),
+}));
 
 vi.mock("@/lib/auth/server", () => ({
   getServerSessionUser: (...args: unknown[]) =>
@@ -59,7 +75,6 @@ vi.mock("@/lib/auth/server", () => ({
 
 vi.mock("@/bootstrap/container", () => ({
   resolveAppDb: () => ({}),
-  resolveServiceDb: () => mockNodeDb,
   getContainer: () => ({
     config: { unhandledErrorPolicy: "rethrow" },
     log: mockLog,
@@ -94,26 +109,6 @@ const NODE_ID = "22222222-2222-4222-8222-222222222222";
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const NONCE = "node_generated_nonce_0123456789abcdef";
 
-const mockNodeDb = {
-  select: () => ({
-    from: () => ({
-      where: () => ({
-        limit: () =>
-          dbState.nodeExists
-            ? [
-                {
-                  nodeId: NODE_ID,
-                  slug: "node-template",
-                  deployEnvs: ["production"],
-                  activityEnv: "production",
-                },
-              ]
-            : [],
-      }),
-    }),
-  }),
-};
-
 import { GET as jwksGET } from "@/app/.well-known/jwks.json/route";
 import { POST } from "@/app/api/v1/identity/attestations/route";
 
@@ -144,11 +139,38 @@ describe("POST /api/v1/identity/attestations", () => {
   beforeEach(() => {
     envState.current = {
       APP_BASE_URL: ISSUER,
+      NODE_SUBMODULE_PARENT_OWNER: "cogni-test-org",
+      NODE_SUBMODULE_PARENT_REPO: "cogni-monorepo",
+      GH_REVIEW_APP_ID: "test-app-id",
+      GH_REVIEW_APP_PRIVATE_KEY_BASE64: "test-private-key",
       IDENTITY_ATTESTATION_PRIVATE_KEY: freshSeed(),
     };
     dbState.githubBinding = { externalId: "12345", providerLogin: "octocat" };
     dbState.walletAddress = "0xAbCdEf0123456789aBcDeF0123456789ABCDEF01";
     dbState.nodeExists = true;
+    dbState.duplicateNode = false;
+    dbState.deployEnvs = ["production"];
+    mockListCatalogNodes.mockReset();
+    mockListCatalogNodes.mockImplementation(async () =>
+      dbState.nodeExists
+        ? [
+            {
+              nodeId: NODE_ID,
+              slug: "node-template",
+              deployEnvs: dbState.deployEnvs,
+            },
+            ...(dbState.duplicateNode
+              ? [
+                  {
+                    nodeId: NODE_ID,
+                    slug: "duplicate-node",
+                    deployEnvs: ["production" as const],
+                  },
+                ]
+              : []),
+          ]
+        : []
+    );
     mockGetServerSessionUser.mockReset();
     mockGetServerSessionUser.mockResolvedValue({
       id: USER_ID,
@@ -161,6 +183,11 @@ describe("POST /api/v1/identity/attestations", () => {
   it("issues a JWT that round-trips against the served JWKS", async () => {
     const response = await POST(postRequest());
     expect(response.status).toBe(201);
+    expect(mockListCatalogNodes).toHaveBeenCalledWith({
+      parentOwner: "cogni-test-org",
+      parentRepo: "cogni-monorepo",
+      sourceRef: "main",
+    });
     const body = await response.json();
     expect(body.expiresIn).toBe(600);
 
@@ -298,12 +325,42 @@ describe("POST /api/v1/identity/attestations", () => {
     expect(await response.json()).toEqual({ error: "invalid_target_origin" });
   });
 
+  it("issues for the exact registered candidate origin from merged catalog intent", async () => {
+    dbState.deployEnvs = ["candidate-a"];
+    const candidateOrigin = "https://node-template-test.operator.test";
+
+    const response = await POST(
+      postRequest({
+        protocol: IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256,
+        nodeId: NODE_ID,
+        nonce: NONCE,
+        targetOrigin: candidateOrigin,
+      })
+    );
+
+    expect(response.status).toBe(201);
+    const { payload } = await jwtVerify(
+      (await response.json()).attestation,
+      createLocalJWKSet((await (await jwksGET()).json()) as JSONWebKeySet),
+      { issuer: ISSUER, audience: `urn:cogni:node:${NODE_ID}` }
+    );
+    expect(payload.targetOrigin).toBe(candidateOrigin);
+  });
+
   it("returns 404 unknown_node rather than signing for an unregistered node", async () => {
     dbState.nodeExists = false;
 
     const response = await POST(postRequest());
     expect(response.status).toBe(404);
     expect(await response.json()).toEqual({ error: "unknown_node" });
+  });
+
+  it("fails loud rather than choosing between duplicate catalog node ids", async () => {
+    dbState.duplicateNode = true;
+
+    await expect(POST(postRequest())).rejects.toThrow(
+      `merged catalog contains duplicate node id '${NODE_ID}'`
+    );
   });
 
   it("uses configured APP_BASE_URL as issuer, never request host headers", async () => {
@@ -416,6 +473,10 @@ describe("GET /.well-known/jwks.json", () => {
     const previous = freshSeed();
     envState.current = {
       APP_BASE_URL: ISSUER,
+      NODE_SUBMODULE_PARENT_OWNER: "cogni-test-org",
+      NODE_SUBMODULE_PARENT_REPO: "cogni-monorepo",
+      GH_REVIEW_APP_ID: "test-app-id",
+      GH_REVIEW_APP_PRIVATE_KEY_BASE64: "test-private-key",
       IDENTITY_ATTESTATION_PRIVATE_KEY: previous,
     };
     dbState.githubBinding = { externalId: "12345", providerLogin: "octocat" };

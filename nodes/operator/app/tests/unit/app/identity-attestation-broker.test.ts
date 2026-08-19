@@ -24,6 +24,10 @@ vi.mock("@/shared/env", () => ({
     APP_BASE_URL: envState.appBaseUrl,
     DOMAIN: "cognidao.org",
     IDENTITY_ATTESTATION_PRIVATE_KEY: "seed",
+    NODE_SUBMODULE_PARENT_OWNER: "Cogni-DAO",
+    NODE_SUBMODULE_PARENT_REPO: "cogni",
+    GH_REVIEW_APP_ID: "test-app-id",
+    GH_REVIEW_APP_PRIVATE_KEY_BASE64: "test-private-key",
   }),
 }));
 vi.mock("@/shared/identity/attestation-keys", () => ({

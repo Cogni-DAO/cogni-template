@@ -62,7 +62,15 @@ export const POST = wrapRouteHandlerWithLogging(
     const env = serverEnv();
     const issuer = canonicalIssuer(env.APP_BASE_URL);
     const domain = baseDomain(env);
-    if (!env.IDENTITY_ATTESTATION_PRIVATE_KEY || !issuer || !domain) {
+    if (
+      !env.IDENTITY_ATTESTATION_PRIVATE_KEY ||
+      !env.NODE_SUBMODULE_PARENT_OWNER ||
+      !env.NODE_SUBMODULE_PARENT_REPO ||
+      !env.GH_REVIEW_APP_ID ||
+      !env.GH_REVIEW_APP_PRIVATE_KEY_BASE64 ||
+      !issuer ||
+      !domain
+    ) {
       return NextResponse.json(
         { error: "attestation_unavailable" },
         { status: 503 }

@@ -6,20 +6,27 @@
 import { type KeyObject, randomUUID } from "node:crypto";
 
 import {
-  DrizzleIdentityAttestationRepository,
   JoseIdentityAttestationSigner,
+  OperatorIdentityAttestationRepository,
 } from "@/adapters/server";
-import {
-  getContainer,
-  resolveAppDb,
-  resolveServiceDb,
-} from "@/bootstrap/container";
+import { createOperatorDeployPlane } from "@/bootstrap/capabilities/operator-deploy-plane";
+import { getContainer, resolveAppDb } from "@/bootstrap/container";
+import { serverEnv } from "@/shared/env/server-env";
 
 export function resolveIdentityAttestationDependencies(signingKey: KeyObject) {
+  const env = serverEnv();
+  const parentOwner = env.NODE_SUBMODULE_PARENT_OWNER;
+  const parentRepo = env.NODE_SUBMODULE_PARENT_REPO;
+  if (!parentOwner || !parentRepo) {
+    throw new Error(
+      "identity attestation requires NODE_SUBMODULE_PARENT_OWNER + NODE_SUBMODULE_PARENT_REPO"
+    );
+  }
   return {
-    repository: new DrizzleIdentityAttestationRepository(
+    repository: new OperatorIdentityAttestationRepository(
       resolveAppDb(),
-      resolveServiceDb()
+      createOperatorDeployPlane(env),
+      { parentOwner, parentRepo }
     ),
     signer: new JoseIdentityAttestationSigner(signingKey),
     clock: getContainer().clock,

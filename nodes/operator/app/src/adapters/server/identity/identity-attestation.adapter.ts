@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2026 Cogni-DAO
 
-/** Drizzle persistence and Ed25519 signing adapters for identity attestations. */
+/** Live catalog, Drizzle subject, and Ed25519 signing adapters for identity attestations. */
 
 import type { KeyObject } from "node:crypto";
 
@@ -11,36 +11,55 @@ import { and, eq } from "drizzle-orm";
 import { SignJWT } from "jose";
 
 import type {
+  DeployPlanePort,
   IdentityAttestationJwtClaims,
   IdentityAttestationRepositoryPort,
   IdentityAttestationSignerPort,
 } from "@/ports";
-import { nodes } from "@/shared/db/nodes";
 import { userBindings, users } from "@/shared/db/schema";
 import {
   ATTESTATION_ALG,
   attestationKeyId,
 } from "@/shared/identity/attestation-keys";
 
-export class DrizzleIdentityAttestationRepository
+export interface OperatorIdentityAttestationRepositoryConfig {
+  readonly parentOwner: string;
+  readonly parentRepo: string;
+}
+
+/**
+ * Resolve relying nodes from the environment-local parent's merged catalog while
+ * retaining tenant-scoped subject reads in the app database. Identity issuance
+ * is rare and security-sensitive, so each request reads `main` directly instead
+ * of trusting the eventually-consistent catalog registry projection.
+ */
+export class OperatorIdentityAttestationRepository
   implements IdentityAttestationRepositoryPort
 {
   constructor(
     private readonly appDb: Database,
-    private readonly serviceDb: Database
+    private readonly deployPlane: Pick<DeployPlanePort, "listCatalogNodes">,
+    private readonly config: OperatorIdentityAttestationRepositoryConfig
   ) {}
 
   async findNode(nodeId: string) {
-    const rows = await this.serviceDb
-      .select({
-        nodeId: nodes.id,
-        slug: nodes.slug,
-        deployEnvs: nodes.deployEnvs,
-      })
-      .from(nodes)
-      .where(eq(nodes.id, nodeId))
-      .limit(1);
-    return rows[0] ?? null;
+    const nodes = await this.deployPlane.listCatalogNodes({
+      parentOwner: this.config.parentOwner,
+      parentRepo: this.config.parentRepo,
+      sourceRef: "main",
+    });
+    const matches = nodes.filter((candidate) => candidate.nodeId === nodeId);
+    if (matches.length === 0) return null;
+    if (matches.length > 1) {
+      throw new Error(`merged catalog contains duplicate node id '${nodeId}'`);
+    }
+    const node = matches[0];
+    if (!node) return null;
+    return {
+      nodeId: node.nodeId,
+      slug: node.slug,
+      deployEnvs: node.deployEnvs,
+    };
   }
 
   async findSubject(userId: string, fallbackWalletAddress: string | null) {

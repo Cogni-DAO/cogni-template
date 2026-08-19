@@ -17,7 +17,7 @@
  *   - ASYMMETRIC_ONLY: EdDSA on purpose — a shared HMAC would let any node
  *     forge attestations for its peers (the SCHEDULER_API_TOKEN defect).
  * Side-effects: none
- * Links: .context/designs/task.5024-fleet-identity-design.md, infra/secrets-catalog.yaml
+ * Links: docs/spec/decentralized-user-identity.md, infra/secrets-catalog.yaml
  * @public
  */
 

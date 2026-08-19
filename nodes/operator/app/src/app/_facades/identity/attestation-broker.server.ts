@@ -84,7 +84,15 @@ export async function issueBrowserIdentityAttestation(params: {
   const env = serverEnv();
   const issuer = canonicalOrigin(env.APP_BASE_URL);
   const domain = baseDomain(env);
-  if (!issuer || !domain || !env.IDENTITY_ATTESTATION_PRIVATE_KEY) {
+  if (
+    !issuer ||
+    !domain ||
+    !env.IDENTITY_ATTESTATION_PRIVATE_KEY ||
+    !env.NODE_SUBMODULE_PARENT_OWNER ||
+    !env.NODE_SUBMODULE_PARENT_REPO ||
+    !env.GH_REVIEW_APP_ID ||
+    !env.GH_REVIEW_APP_PRIVATE_KEY_BASE64
+  ) {
     throw new AttestationBrokerError("attestation_unavailable");
   }
 

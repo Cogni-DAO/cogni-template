@@ -144,9 +144,11 @@ closed before issuance and again during JWT verification. Semantic changes
 create a new protocol version; they do not mutate v1.
 
 Only canonical HTTPS origins are accepted. HTTP, URL credentials, paths,
-queries, and fragments are rejected rather than normalized. The operator's
-node registry is the target-origin allowlist; request headers never select the
-issuer or relying origin.
+queries, and fragments are rejected rather than normalized. The
+environment-local parent's merged catalog is the target-origin allowlist;
+issuance App-reads `main` directly so a newly registered node does not wait for
+the Postgres catalog projection. Request headers never select the issuer or
+relying origin.
 
 The implementation follows the inside-out dependency boundary:
 
@@ -155,7 +157,7 @@ The implementation follows the inside-out dependency boundary:
 | Contract         | strict request/claims + fingerprint          | identical frozen contract + start response   |
 | Feature          | origin allowlist, claims, TTL, preconditions | nonce TTL + redemption outcome state machine |
 | Port             | subject/node repository + signer             | transactional nonce/binding repository       |
-| Adapter          | Drizzle reads + Jose Ed25519 signing         | Drizzle atomic consume/bind/evidence write   |
+| Adapter          | App-read catalog + Drizzle subject + Jose signer | Drizzle atomic consume/bind/evidence write   |
 | Bootstrap/facade | dependency composition and HTTP mapping only | dependency composition and HTTP mapping only |
 
 `NO_AUTO_MERGE` remains authoritative: a GitHub provider id already owned by a

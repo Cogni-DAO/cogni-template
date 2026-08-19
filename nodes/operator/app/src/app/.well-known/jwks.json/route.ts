@@ -16,7 +16,7 @@
  *     suppress a valid current key.
  *   - PUBLIC_HALF_ONLY: only the exported public JWK ever leaves this route.
  * Side-effects: none
- * Links: .context/designs/task.5024-fleet-identity-design.md, src/shared/identity/attestation-keys.ts
+ * Links: docs/spec/decentralized-user-identity.md, src/shared/identity/attestation-keys.ts
  * @public
  */
 
