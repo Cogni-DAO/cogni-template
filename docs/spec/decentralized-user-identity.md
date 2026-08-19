@@ -119,6 +119,10 @@ A user who already proved wallet + GitHub ownership at the operator may import
 that binding into another registered Cogni node without repeating OAuth. This is
 a deliberately narrow federation seam, not a general credential system.
 
+GitHub OAuth credentials exist only on the environment-local operator. A
+contributor first links GitHub there; relying nodes do not configure OAuth and
+import the operator-signed binding through this protocol.
+
 ```text
 node profile
   → mint durable, session-owned nonce
