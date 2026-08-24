@@ -37,7 +37,6 @@ export type AttestationBrokerErrorCode =
   | "attestation_unavailable"
   | "invalid_return_to"
   | "no_github_binding"
-  | "no_wallet"
   | "unknown_node";
 
 export class AttestationBrokerError extends Error {
@@ -122,7 +121,6 @@ export async function issueBrowserIdentityAttestation(params: {
     );
     const issued = await service.issue({
       userId: params.sessionUser.id,
-      fallbackWalletAddress: params.sessionUser.walletAddress,
       issuer,
       domain,
       request: params.request,

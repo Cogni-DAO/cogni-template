@@ -34,10 +34,7 @@ function service(overrides?: {
         slug: "toks4",
         deployEnvs: ["candidate-a", "production"],
       }),
-      findSubject: async () => ({
-        walletAddress: "0xabcdef0123456789abcdef0123456789abcdef01",
-        github: { id: "12345", login: null },
-      }),
+      findGithubIdentity: async () => ({ id: "12345", login: null }),
     };
   const signer = overrides?.signer ?? { sign: vi.fn(async () => "signed.jwt") };
   return createIdentityAttestationService({
@@ -49,11 +46,10 @@ function service(overrides?: {
 }
 
 describe("identity attestation issuance service", () => {
-  it("signs exact registered candidate origin, audience, and subject", async () => {
+  it("signs the GitHub OAuth result for the exact node request", async () => {
     const sign = vi.fn(async () => "signed.jwt");
     const issued = await service({ signer: { sign } }).issue({
       userId: "11111111-1111-4111-8111-111111111111",
-      fallbackWalletAddress: null,
       issuer: "https://cognidao.org",
       domain: "cognidao.org",
       request: REQUEST,
@@ -68,6 +64,8 @@ describe("identity attestation issuance service", () => {
         github: { id: "12345", login: null },
       })
     );
+    expect(sign.mock.calls[0]?.[0]).not.toHaveProperty("wallet");
+    expect(sign.mock.calls[0]?.[0]).not.toHaveProperty("sub");
   });
 
   it("rejects an origin outside the registered deployment set before signing", async () => {
@@ -75,7 +73,6 @@ describe("identity attestation issuance service", () => {
     await expect(
       service({ signer: { sign } }).issue({
         userId: "11111111-1111-4111-8111-111111111111",
-        fallbackWalletAddress: null,
         issuer: "https://cognidao.org",
         domain: "cognidao.org",
         request: { ...REQUEST, targetOrigin: "https://attacker.example" },
@@ -83,6 +80,28 @@ describe("identity attestation issuance service", () => {
     ).rejects.toEqual(
       new AttestationPreconditionError("invalid_target_origin")
     );
+    expect(sign).not.toHaveBeenCalled();
+  });
+
+  it("rejects issuance without a GitHub-authenticated operator session", async () => {
+    const sign = vi.fn(async () => "signed.jwt");
+    const repository: IdentityAttestationRepositoryPort = {
+      findNode: async () => ({
+        nodeId: NODE_ID,
+        slug: "toks4",
+        deployEnvs: ["candidate-a", "production"],
+      }),
+      findGithubIdentity: async () => null,
+    };
+
+    await expect(
+      service({ repository, signer: { sign } }).issue({
+        userId: "11111111-1111-4111-8111-111111111111",
+        issuer: "https://cognidao.org",
+        domain: "cognidao.org",
+        request: REQUEST,
+      })
+    ).rejects.toEqual(new AttestationPreconditionError("no_github_binding"));
     expect(sign).not.toHaveBeenCalled();
   });
 });

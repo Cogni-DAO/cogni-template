@@ -106,7 +106,6 @@ describe("issueBrowserIdentityAttestation", () => {
       expect.objectContaining({
         request: REQUEST,
         userId: SESSION.id,
-        fallbackWalletAddress: SESSION.walletAddress,
         issuer: "https://cognidao.org",
         domain: "cognidao.org",
       })

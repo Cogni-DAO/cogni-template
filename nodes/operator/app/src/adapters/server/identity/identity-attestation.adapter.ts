@@ -16,7 +16,7 @@ import type {
   IdentityAttestationRepositoryPort,
   IdentityAttestationSignerPort,
 } from "@/ports";
-import { userBindings, users } from "@/shared/db/schema";
+import { userBindings } from "@/shared/db/schema";
 import {
   ATTESTATION_ALG,
   attestationKeyId,
@@ -62,36 +62,27 @@ export class OperatorIdentityAttestationRepository
     };
   }
 
-  async findSubject(userId: string, fallbackWalletAddress: string | null) {
+  async findGithubIdentity(userId: string) {
     const actorId = userActor(userId as UserId);
     return withTenantScope(this.appDb, actorId, async (tx) => {
-      const [bindings, user] = await Promise.all([
-        tx
-          .select({
-            externalId: userBindings.externalId,
-            providerLogin: userBindings.providerLogin,
-          })
-          .from(userBindings)
-          .where(
-            and(
-              eq(userBindings.userId, userId),
-              eq(userBindings.provider, "github")
-            )
+      const bindings = await tx
+        .select({
+          externalId: userBindings.externalId,
+          providerLogin: userBindings.providerLogin,
+        })
+        .from(userBindings)
+        .where(
+          and(
+            eq(userBindings.userId, userId),
+            eq(userBindings.provider, "github")
           )
-          .orderBy(desc(userBindings.createdAt), desc(userBindings.id))
-          .limit(1),
-        tx.query.users.findFirst({
-          where: eq(users.id, userId),
-          columns: { walletAddress: true },
-        }),
-      ]);
+        )
+        .orderBy(desc(userBindings.createdAt), desc(userBindings.id))
+        .limit(1);
       const binding = bindings[0];
-      return {
-        walletAddress: user?.walletAddress ?? fallbackWalletAddress,
-        github: binding
-          ? { id: binding.externalId, login: binding.providerLogin }
-          : null,
-      };
+      return binding
+        ? { id: binding.externalId, login: binding.providerLogin }
+        : null;
     });
   }
 }

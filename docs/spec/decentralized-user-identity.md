@@ -24,10 +24,12 @@ tags: [identity, auth, web3]
 | ------------ | ----------------------------------------------------------------------------------------- | ------------------------------------------ |
 | **Project**  | [proj.decentralized-identity](../../work/projects/proj.decentralized-identity.md)         | Roadmap, phases, work items                |
 | **Research** | [DID-first identity refactor](../research/did-first-identity-refactor.md)                 | Gap analysis, library eval                 |
+| **Spec**     | [Identity Model](./identity-model.md)                                                     | Local user, actor, and binding boundaries  |
 | **Spec**     | [Authentication](./authentication.md)                                                     | SIWE flow, wallet-session                  |
 | **Spec**     | [RBAC](./rbac.md)                                                                         | Actor types (will drop wallet from format) |
 | **Spec**     | [User Context](./user-context.md)                                                         | Agent identity injection                   |
-| **Consumer** | [proj.transparent-credit-payouts](../../work/projects/proj.transparent-credit-payouts.md) | Ledger references user_id                  |
+| **Consumer** | [Attribution Pipeline](./attribution-pipeline-overview.md)                                | Identity claimant → local claim resolution |
+| **Consumer** | [proj.transparent-credit-payouts](../../work/projects/proj.transparent-credit-payouts.md) | Claimant and future actor migration        |
 
 ## Design
 
@@ -113,35 +115,38 @@ POST /api/auth/link/{provider}
   → IF UNIQUE violation for different user → reject (NO_AUTO_MERGE)
 ```
 
-### Fleet-Portable GitHub Binding (`identity.attestation.v1`)
+### Operator-Brokered GitHub OAuth (`identity.attestation.v1`)
 
-A user who already proved wallet + GitHub ownership at the operator may import
-that binding into another registered Cogni node without repeating OAuth. This is
-a deliberately narrow federation seam, not a general credential system.
+GitHub OAuth credentials exist only on the environment-local operator. Relying
+nodes do not configure GitHub OAuth; they ask the operator to authenticate a
+GitHub account and return a short-lived, node-scoped proof of that OAuth result.
 
-GitHub OAuth credentials exist only on the environment-local operator. A
-contributor first links GitHub there; relying nodes do not configure OAuth and
-import the operator-signed binding through this protocol.
+Operator and node accounts remain independent. The operator does not export its
+`user_id`, wallet, or wallet-to-GitHub binding, and the node does not import an
+operator account. The only portable fact is the GitHub provider id authenticated
+in the broker round trip. The relying node binds that id to the local user who
+owned the one-time nonce.
 
-When an operator user has linked more than one GitHub identity, the issuer uses
-the most recently created GitHub binding. This matches the existing "Link
-another GitHub" flow and keeps issuance deterministic without a node-specific
-identity override.
+This follows `BINDING_IS_THE_MULTI_ENV_KEY` from the identity-model spec: a
+`user_id` is a node/environment-local surrogate, while the stable external
+GitHub id is the only cross-boundary identifier. The broker proof is deliberately
+VC-shaped evidence, not a portable person identity or a cross-node account.
 
 ```text
-node profile
-  → mint durable, session-owned nonce
+node profile (locally authenticated user)
+  → mint durable nonce owned by this node's local user_id
   → redirect to configured operator with
       {protocol fingerprint, nodeId, nonce, exact HTTPS target origin}
-operator broker (authenticated SIWE session)
+operator broker
+  → authenticate GitHub through the environment's central OAuth app
   → require the exact frozen v1 fingerprint
   → require target origin in that node's registered deploy environments
-  → sign 10-minute EdDSA JWT containing fingerprint + exact request binding
+  → sign 10-minute EdDSA JWT containing GitHub id + exact request binding
   → return JWT in URL fragment to the exact registered /profile URL
 node verifier
   → pin issuer + EdDSA JWKS + audience + nodeId + target origin + fingerprint
-  → require session wallet == attested wallet
-  → atomically consume nonce and create/refresh the GitHub binding + evidence
+  → require the current local user to own the nonce
+  → atomically consume nonce and create/refresh that user's GitHub binding + evidence
 ```
 
 The protocol source is
@@ -161,18 +166,28 @@ relying origin.
 
 The implementation follows the inside-out dependency boundary:
 
-| Layer            | Operator issuer                                  | Node relying party                           |
-| ---------------- | ------------------------------------------------ | -------------------------------------------- |
-| Contract         | strict request/claims + fingerprint              | identical frozen contract + start response   |
-| Feature          | origin allowlist, claims, TTL, preconditions     | nonce TTL + redemption outcome state machine |
-| Port             | subject/node repository + signer                 | transactional nonce/binding repository       |
-| Adapter          | App-read catalog + Drizzle subject + Jose signer | Drizzle atomic consume/bind/evidence write   |
-| Bootstrap/facade | dependency composition and HTTP mapping only     | dependency composition and HTTP mapping only |
+| Layer            | Operator issuer                                 | Node relying party                           |
+| ---------------- | ----------------------------------------------- | -------------------------------------------- |
+| Contract         | strict request/claims + fingerprint             | identical frozen contract + start response   |
+| Feature          | origin allowlist, OAuth result, claims, TTL     | nonce TTL + redemption outcome state machine |
+| Port             | GitHub identity/node repository + signer        | transactional nonce/binding repository       |
+| Adapter          | App-read catalog + Drizzle GitHub + Jose signer | Drizzle atomic consume/bind/evidence write   |
+| Bootstrap/facade | dependency composition and HTTP mapping only    | dependency composition and HTTP mapping only |
 
 `NO_AUTO_MERGE` remains authoritative: a GitHub provider id already owned by a
 different local user returns `already_linked` and is never re-pointed. Nonce
 consumption and the terminal binding decision share one database transaction;
 infrastructure failures roll the nonce consumption back.
+
+Git attribution first records the work under the stable external claimant key
+`identity:github:<id>`. It does not require a Cogni account and is not rewritten
+when someone later links that GitHub identity. At settlement/read time, a node
+may resolve that identity claimant through its own `user_bindings` to the local
+user who proved control of the GitHub account.
+
+For P0, this lets a locally authenticated human prove control of an
+agent-operated GitHub account such as `flock-leader` and claim its preserved
+identity allocation. The broker does not encode future actor/beneficiary policy.
 
 ### Session Type
 
@@ -187,7 +202,7 @@ Business logic references `id` (= `user_id`). `walletAddress` is nullable — `n
 
 ## Goal
 
-Provide a stable, auth-method-agnostic identity for every user. `users.id` works whether the user arrives via wallet, Discord, or any future auth method. Wallet and external accounts are evidenced bindings, not the identity itself. The ledger (proj.transparent-credit-payouts) references `user_id` for all attribution.
+Provide a stable, auth-method-agnostic identity inside each node. `users.id` works whether the user arrives via wallet, Discord, or any future auth method. Wallet and external accounts are evidenced bindings, not the identity itself. Attribution preserves external claimant provenance and resolves it through node-local bindings only when ownership or settlement needs a local account.
 
 ## Non-Goals
 
@@ -202,19 +217,21 @@ Provide a stable, auth-method-agnostic identity for every user. `users.id` works
 
 ## Invariants
 
-| Rule                   | Constraint                                                                                                                                              |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| USER_ID_AT_CREATION    | Every user gets a UUID minted at first contact. No user exists without one.                                                                             |
-| CANONICAL_IS_USER_ID   | Business logic identity references use `user_id`, never `wallet_address`, `discord_user_id`, or DID.                                                    |
-| BINDINGS_ARE_EVIDENCED | Every binding has proof recorded in `identity_events.payload` (SIWE signature, bot challenge, PR link). Bindings table is current-state index only.     |
-| NO_AUTO_MERGE          | If a binding's `(provider, external_id)` is already bound to a different user, the bind attempt fails. Never silently re-point. DB-enforced via UNIQUE. |
-| SIWE_UNCHANGED         | SIWE authentication continues working. Binding additions are additive — no existing auth flow breaks.                                                   |
-| ATTESTATION_V1_FROZEN  | Operator and node exchange and verify the same pinned protocol fingerprint; a one-sided drift fails closed.                                             |
-| ATTESTATION_TLS_ONLY   | Issuer and target are exact canonical HTTPS origins without URL credentials, path, query, or fragment.                                                  |
-| ATTESTATION_ONE_TIME   | The relying node owns the nonce; consumption and binding decision commit atomically exactly once.                                                       |
-| UUID_STAYS_AS_PK       | `users.id` (UUID) remains the relational PK and FK target.                                                                                              |
-| APPEND_ONLY_EVENTS     | `identity_events` rows are append-only. DB trigger rejects UPDATE/DELETE. Revocation creates a new event, never deletes rows.                           |
-| LEDGER_REFERENCES_USER | Receipts, epochs, and payout statements reference `user_id` — never wallet or DID directly.                                                             |
+| Rule                             | Constraint                                                                                                                                               |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| USER_ID_AT_CREATION              | Every user gets a UUID minted at first contact. No user exists without one.                                                                              |
+| CANONICAL_IS_USER_ID             | Business logic identity references use `user_id`, never `wallet_address`, `discord_user_id`, or DID.                                                     |
+| BINDINGS_ARE_EVIDENCED           | Every binding has proof recorded in `identity_events.payload` (SIWE signature, bot challenge, PR link). Bindings table is current-state index only.      |
+| NO_AUTO_MERGE                    | If a binding's `(provider, external_id)` is already bound to a different user, the bind attempt fails. Never silently re-point. DB-enforced via UNIQUE.  |
+| SIWE_UNCHANGED                   | SIWE authentication continues working. Binding additions are additive — no existing auth flow breaks.                                                    |
+| ATTESTATION_V1_FROZEN            | Operator and node exchange and verify the same pinned protocol fingerprint; a one-sided drift fails closed.                                              |
+| ATTESTATION_TLS_ONLY             | Issuer and target are exact canonical HTTPS origins without URL credentials, path, query, or fragment.                                                   |
+| ATTESTATION_ONE_TIME             | The relying node owns the nonce; consumption and binding decision commit atomically exactly once.                                                        |
+| ATTESTATION_ACCOUNTS_INDEPENDENT | Operator user IDs, wallets, and binding relationships never cross the seam; only the node-scoped GitHub OAuth result is attested.                        |
+| CLAIMANT_PROVENANCE_PRESERVED    | Linking `identity:github:<id>` to a local user changes claim resolution, never the finalized record of which external identity produced the work.        |
+| UUID_STAYS_AS_PK                 | `users.id` (UUID) remains the relational PK and FK target.                                                                                               |
+| APPEND_ONLY_EVENTS               | `identity_events` rows are append-only. DB trigger rejects UPDATE/DELETE. Revocation creates a new event, never deletes rows.                            |
+| LEDGER_PRESERVES_CLAIMANT        | Finalized attribution references stable user or external-identity claimant keys; wallets and DIDs are resolved bindings, never canonical statement keys. |
 
 ### Schema
 
@@ -303,7 +320,7 @@ Implemented in `src/app/_facades/users/profile.server.ts:resolveDisplayName()`.
 | `src/adapters/server/identity/create-binding.ts`                                  | Atomic binding + identity_event insert (idempotent)                        |
 | `packages/node-contracts/src/identity.attestation.v1.contract.ts`                 | Frozen operator↔node request/claims protocol and fingerprint              |
 | `nodes/operator/app/src/features/identity/services/issue-identity-attestation.ts` | Operator issuance and registered-origin policy                             |
-| `nodes/operator/app/src/adapters/server/identity/identity-attestation.adapter.ts` | Operator persistence and Ed25519 signing adapters                          |
+| `nodes/operator/app/src/adapters/server/identity/identity-attestation.adapter.ts` | Operator GitHub-session lookup and Ed25519 signing adapters                |
 | `src/shared/auth/session.ts`                                                      | `SessionUser` type (id + nullable walletAddress)                           |
 | `src/shared/auth/link-intent-store.ts`                                            | Discriminated union types + AsyncLocalStorage for link intent              |
 | `src/app/api/auth/[...nextauth]/route.ts`                                         | JWT decode → pending/failed intent via AsyncLocalStorage                   |

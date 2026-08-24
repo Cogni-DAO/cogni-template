@@ -3,7 +3,7 @@
 
 /**
  * Module: `@contracts/identity.attestation.v1`
- * Purpose: Shared relying-party contract for operator-signed fleet identity attestations.
+ * Purpose: Shared relying-party contract for operator-signed GitHub OAuth attestations.
  * Scope: Pure Zod wire schemas and deterministic audience construction. Does not sign or verify
  *   tokens, access environment/framework state, or persist nonces.
  * Invariants:
@@ -39,12 +39,10 @@ export const IDENTITY_ATTESTATION_V1_PROTOCOL = {
     "type",
     "protocol",
     "iss",
-    "sub",
     "aud",
     "nodeId",
     "nonce",
     "targetOrigin",
-    "wallet",
     "github",
     "iat",
     "exp",
@@ -56,14 +54,14 @@ export const IDENTITY_ATTESTATION_V1_PROTOCOL = {
     "issuer and target are canonical HTTPS origins without credentials",
     "audience is derived from nodeId",
     "nonce is URL-safe and 32..256 characters",
-    "wallet is lowercase 20-byte hex",
-    "github id is authoritative and login is nullable",
+    "operator and relying-node accounts remain independent",
+    "github OAuth id is authoritative and login is nullable",
     "expiration is later than issuance",
   ],
 } as const;
 
 export const IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256 =
-  "1ff565838f01cf0a2b87b69c93bcaea2fb9f767cd655d609782a4b27c7430a50" as const;
+  "e1cac953eb90a7102da2569494ebefed58d0763ea10aee4fdb2d8e1b14c5e8d8" as const;
 
 export const IdentityAttestationNodeIdSchema = z.string().uuid();
 
@@ -129,12 +127,10 @@ export const IdentityAttestationClaimsSchema = z
     type: z.literal(IDENTITY_ATTESTATION_V1),
     protocol: z.literal(IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256),
     iss: IdentityAttestationOriginSchema,
-    sub: z.string().uuid(),
     aud: IdentityAttestationAudienceSchema,
     nodeId: IdentityAttestationNodeIdSchema,
     nonce: IdentityAttestationNonceSchema,
     targetOrigin: IdentityAttestationTargetOriginSchema,
-    wallet: z.string().regex(/^0x[0-9a-f]{40}$/),
     github: IdentityAttestationGithubSchema,
     iat: z.number().int().nonnegative(),
     exp: z.number().int().positive(),

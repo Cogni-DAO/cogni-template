@@ -25,7 +25,6 @@ import {
 
 export type AttestationPreconditionCode =
   | "no_github_binding"
-  | "no_wallet"
   | "invalid_target_origin"
   | "unknown_node";
 
@@ -44,7 +43,6 @@ export interface IssuedAttestation {
 export interface IdentityAttestationService {
   issue(params: {
     userId: string;
-    fallbackWalletAddress: string | null;
     issuer: string;
     domain: string;
     request: IdentityAttestationRequest;
@@ -80,14 +78,8 @@ export function createIdentityAttestationService(deps: {
         throw new AttestationPreconditionError("invalid_target_origin");
       }
 
-      const subject = await deps.repository.findSubject(
-        params.userId,
-        params.fallbackWalletAddress
-      );
-      if (!subject.walletAddress) {
-        throw new AttestationPreconditionError("no_wallet");
-      }
-      if (!subject.github) {
+      const github = await deps.repository.findGithubIdentity(params.userId);
+      if (!github) {
         throw new AttestationPreconditionError("no_github_binding");
       }
 
@@ -96,13 +88,11 @@ export function createIdentityAttestationService(deps: {
         type: IDENTITY_ATTESTATION_V1,
         protocol: IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256,
         iss: params.issuer,
-        sub: params.userId,
         aud: identityAttestationAudience(targetNode.nodeId),
         nodeId: targetNode.nodeId,
         nonce: params.request.nonce,
         targetOrigin: params.request.targetOrigin,
-        wallet: subject.walletAddress.toLowerCase(),
-        github: subject.github,
+        github,
         iat,
         exp: iat + IDENTITY_ATTESTATION_TTL_SECONDS,
         jti: deps.createJti(),

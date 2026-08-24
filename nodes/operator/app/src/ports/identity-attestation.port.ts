@@ -9,32 +9,26 @@ export interface IdentityAttestationNode {
   readonly deployEnvs: readonly string[];
 }
 
-export interface IdentityAttestationSubject {
-  readonly walletAddress: string | null;
-  readonly github: {
-    readonly id: string;
-    readonly login: string | null;
-  } | null;
+export interface IdentityAttestationGithubIdentity {
+  readonly id: string;
+  readonly login: string | null;
 }
 
 export interface IdentityAttestationRepositoryPort {
   findNode(nodeId: string): Promise<IdentityAttestationNode | null>;
-  findSubject(
-    userId: string,
-    fallbackWalletAddress: string | null
-  ): Promise<IdentityAttestationSubject>;
+  findGithubIdentity(
+    userId: string
+  ): Promise<IdentityAttestationGithubIdentity | null>;
 }
 
 export interface IdentityAttestationJwtClaims {
   readonly type: "identity.attestation.v1";
   readonly protocol: string;
   readonly iss: string;
-  readonly sub: string;
   readonly aud: string;
   readonly nodeId: string;
   readonly nonce: string;
   readonly targetOrigin: string;
-  readonly wallet: string;
   readonly github: { readonly id: string; readonly login: string | null };
   readonly iat: number;
   readonly exp: number;
