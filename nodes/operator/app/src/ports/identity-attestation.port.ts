@@ -14,11 +14,13 @@ export interface IdentityAttestationGithubIdentity {
   readonly login: string | null;
 }
 
+/**
+ * Node registry only. There is deliberately NO subject lookup here: the attested
+ * GitHub identity comes from the authorization response for the request being
+ * brokered, never from an operator account or a stored binding (task.5024).
+ */
 export interface IdentityAttestationRepositoryPort {
   findNode(nodeId: string): Promise<IdentityAttestationNode | null>;
-  findGithubIdentity(
-    userId: string
-  ): Promise<IdentityAttestationGithubIdentity | null>;
 }
 
 export interface IdentityAttestationJwtClaims {

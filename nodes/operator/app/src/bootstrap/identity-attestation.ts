@@ -10,7 +10,7 @@ import {
   OperatorIdentityAttestationRepository,
 } from "@/adapters/server";
 import { createOperatorDeployPlane } from "@/bootstrap/capabilities/operator-deploy-plane";
-import { getContainer, resolveAppDb } from "@/bootstrap/container";
+import { getContainer } from "@/bootstrap/container";
 import { serverEnv } from "@/shared/env/server-env";
 
 export function resolveIdentityAttestationDependencies(signingKey: KeyObject) {
@@ -24,7 +24,6 @@ export function resolveIdentityAttestationDependencies(signingKey: KeyObject) {
   }
   return {
     repository: new OperatorIdentityAttestationRepository(
-      resolveAppDb(),
       createOperatorDeployPlane(env),
       { parentOwner, parentRepo }
     ),

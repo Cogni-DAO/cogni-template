@@ -1,13 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2026 Cogni-DAO
 
-/** Live catalog, Drizzle subject, and Ed25519 signing adapters for identity attestations. */
+/** Live catalog and Ed25519 signing adapters for identity attestations. */
 
 import type { KeyObject } from "node:crypto";
 
-import { type Database, withTenantScope } from "@cogni/db-client";
-import { type UserId, userActor } from "@cogni/ids";
-import { and, desc, eq } from "drizzle-orm";
 import { SignJWT } from "jose";
 
 import type {
@@ -16,7 +13,6 @@ import type {
   IdentityAttestationRepositoryPort,
   IdentityAttestationSignerPort,
 } from "@/ports";
-import { userBindings } from "@/shared/db/schema";
 import {
   ATTESTATION_ALG,
   attestationKeyId,
@@ -28,16 +24,16 @@ export interface OperatorIdentityAttestationRepositoryConfig {
 }
 
 /**
- * Resolve relying nodes from the environment-local parent's merged catalog while
- * retaining tenant-scoped subject reads in the app database. Identity issuance
- * is rare and security-sensitive, so each request reads `main` directly instead
- * of trusting the eventually-consistent catalog registry projection.
+ * Resolve relying nodes from the environment-local parent's merged catalog.
+ * Identity issuance is rare and security-sensitive, so each request reads `main`
+ * directly instead of trusting the eventually-consistent catalog registry
+ * projection. This adapter touches no user data — the attested subject comes from
+ * the GitHub authorization response, not from the operator's database (task.5024).
  */
 export class OperatorIdentityAttestationRepository
   implements IdentityAttestationRepositoryPort
 {
   constructor(
-    private readonly appDb: Database,
     private readonly deployPlane: Pick<DeployPlanePort, "listCatalogNodes">,
     private readonly config: OperatorIdentityAttestationRepositoryConfig
   ) {}
@@ -60,30 +56,6 @@ export class OperatorIdentityAttestationRepository
       slug: node.slug,
       deployEnvs: node.deployEnvs,
     };
-  }
-
-  async findGithubIdentity(userId: string) {
-    const actorId = userActor(userId as UserId);
-    return withTenantScope(this.appDb, actorId, async (tx) => {
-      const bindings = await tx
-        .select({
-          externalId: userBindings.externalId,
-          providerLogin: userBindings.providerLogin,
-        })
-        .from(userBindings)
-        .where(
-          and(
-            eq(userBindings.userId, userId),
-            eq(userBindings.provider, "github")
-          )
-        )
-        .orderBy(desc(userBindings.createdAt), desc(userBindings.id))
-        .limit(1);
-      const binding = bindings[0];
-      return binding
-        ? { id: binding.externalId, login: binding.providerLogin }
-        : null;
-    });
   }
 }
 

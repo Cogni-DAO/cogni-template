@@ -36,8 +36,13 @@ const APP_ROUTES = [
   "/setup",
   "/work",
   "/activity",
-  "/identity",
 ];
+
+// NOT an APP_ROUTE: `/identity/attest*` is the node-facing identity broker. It
+// deliberately carries no operator session — the attested GitHub account comes from
+// a fresh GitHub authorization, never from whoever happens to be signed in here
+// (task.5024). Gating it on a session is what let an ambient account decide a node's
+// binding on the 2026-08-19 candidate.
 
 function isAppRoute(pathname: string): boolean {
   return APP_ROUTES.some(

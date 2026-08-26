@@ -3,17 +3,25 @@
 
 /**
  * Module: `@app/_facades/identity/attestation-broker.server`
- * Purpose: Completes the authenticated browser leg of identity.attestation.v1.
- * Scope: Validates return_to, resolves configured signing custody, and delegates
- *   all registered-node/origin/claim policy to the identity feature service.
+ * Purpose: Completes the browser legs of `identity.attestation.v1` — validate the node
+ *   request, then (after GitHub has authenticated an account and the human has confirmed
+ *   it) sign the attestation and hand it back to the exact registered node origin.
+ * Scope: Validates return_to, resolves configured signing custody, and delegates all
+ *   registered-node/origin policy to the identity feature service.
  * Invariants:
- *   - NO_OPEN_REDIRECT: return_to must be exactly the registered node's
- *     canonical `/profile` URL in one of its registered deploy environments.
- *   - SAME_REQUEST_BINDING: the exact nodeId + nonce + registered targetOrigin validated by the shared
- *     contract are passed unchanged to the issuer.
- *   - FRAGMENT_ONLY: the signed token is returned in a URL fragment, never a
- *     query string or cross-origin fetch response.
- * Side-effects: IO (registry/user reads)
+ *   - SUBJECT_FROM_AUTHORIZATION_ONLY: the attested GitHub identity is supplied by the
+ *     caller from the authorization response for THIS request. There is no operator
+ *     session, no operator `user_id`, and no `user_bindings` read anywhere in this flow.
+ *     An ambient session silently selecting the subject is the confused deputy that
+ *     bound the wrong account on the 2026-08-19 candidate (task.5024).
+ *   - NO_OPEN_REDIRECT: return_to must be exactly the registered node's canonical
+ *     `/profile` URL in one of its registered deploy environments.
+ *   - SAME_REQUEST_BINDING: the exact nodeId + nonce + registered targetOrigin validated by
+ *     the shared contract are passed unchanged to the issuer.
+ *   - FRAGMENT_ONLY: the signed token is returned in a URL fragment, never a query string
+ *     or cross-origin fetch response. It is `aud`-, `nodeId`- and nonce-bound, so it is
+ *     inert without the relying node's unconsumed one-time nonce.
+ * Side-effects: IO (registry reads)
  * @public
  */
 
@@ -23,12 +31,13 @@ import {
   IdentityAttestationOriginSchema,
   type IdentityAttestationRequest,
 } from "@cogni/node-contracts";
-import type { SessionUser } from "@cogni/node-shared";
 import { resolveIdentityAttestationDependencies } from "@/bootstrap/identity-attestation";
 import {
   AttestationPreconditionError,
   createIdentityAttestationService,
+  type ResolvedAttestationNode,
 } from "@/features/identity/services/issue-identity-attestation";
+import type { IdentityAttestationGithubIdentity } from "@/ports";
 import { serverEnv } from "@/shared/env";
 import { importAttestationSigningKey } from "@/shared/identity/attestation-keys";
 import { baseDomain } from "@/shared/node-registry/resolve";
@@ -36,7 +45,6 @@ import { baseDomain } from "@/shared/node-registry/resolve";
 export type AttestationBrokerErrorCode =
   | "attestation_unavailable"
   | "invalid_return_to"
-  | "no_github_binding"
   | "unknown_node";
 
 export class AttestationBrokerError extends Error {
@@ -78,11 +86,13 @@ export function validateAttestationReturnTo(
   }
 }
 
-export async function issueBrowserIdentityAttestation(params: {
-  sessionUser: SessionUser;
-  request: IdentityAttestationRequest;
-  returnTo: string;
-}): Promise<{ redirectUrl: string }> {
+interface BrokerConfig {
+  issuer: string;
+  domain: string;
+  signingKey: KeyObject;
+}
+
+function resolveBrokerConfig(): BrokerConfig {
   const env = serverEnv();
   const issuer = canonicalOrigin(env.APP_BASE_URL);
   const domain = baseDomain(env);
@@ -97,7 +107,38 @@ export async function issueBrowserIdentityAttestation(params: {
   ) {
     throw new AttestationBrokerError("attestation_unavailable");
   }
+  try {
+    return {
+      issuer,
+      domain,
+      signingKey: importAttestationSigningKey(
+        env.IDENTITY_ATTESTATION_PRIVATE_KEY
+      ),
+    };
+  } catch {
+    throw new AttestationBrokerError("attestation_unavailable");
+  }
+}
 
+function mapPreconditionError(error: unknown): never {
+  if (error instanceof AttestationPreconditionError) {
+    throw new AttestationBrokerError(
+      error.code === "invalid_target_origin" ? "invalid_return_to" : error.code
+    );
+  }
+  throw error;
+}
+
+/**
+ * Entry leg. Proves the request names a registered node, a registered deploy origin,
+ * and an exact `/profile` return URL — BEFORE the human is sent to GitHub, so a bad
+ * request fails immediately instead of after an authentication nobody can use.
+ */
+export async function resolveAttestationTarget(params: {
+  request: IdentityAttestationRequest;
+  returnTo: string;
+}): Promise<{ node: ResolvedAttestationNode; safeReturnTo: string }> {
+  const config = resolveBrokerConfig();
   const safeReturnTo = validateAttestationReturnTo(
     params.returnTo,
     params.request.targetOrigin
@@ -106,23 +147,46 @@ export async function issueBrowserIdentityAttestation(params: {
     throw new AttestationBrokerError("invalid_return_to");
   }
 
-  let signingKey: KeyObject;
+  const service = createIdentityAttestationService(
+    resolveIdentityAttestationDependencies(config.signingKey)
+  );
   try {
-    signingKey = importAttestationSigningKey(
-      env.IDENTITY_ATTESTATION_PRIVATE_KEY
-    );
-  } catch {
-    throw new AttestationBrokerError("attestation_unavailable");
+    const node = await service.resolveNode({
+      domain: config.domain,
+      request: params.request,
+    });
+    return { node, safeReturnTo };
+  } catch (error) {
+    return mapPreconditionError(error);
+  }
+}
+
+/**
+ * Confirmation leg. `github` MUST come from the authorization response correlated to
+ * this request — never from a session or a stored binding.
+ */
+export async function issueBrowserIdentityAttestation(params: {
+  github: IdentityAttestationGithubIdentity;
+  request: IdentityAttestationRequest;
+  returnTo: string;
+}): Promise<{ redirectUrl: string }> {
+  const config = resolveBrokerConfig();
+  const safeReturnTo = validateAttestationReturnTo(
+    params.returnTo,
+    params.request.targetOrigin
+  );
+  if (!safeReturnTo) {
+    throw new AttestationBrokerError("invalid_return_to");
   }
 
   try {
     const service = createIdentityAttestationService(
-      resolveIdentityAttestationDependencies(signingKey)
+      resolveIdentityAttestationDependencies(config.signingKey)
     );
     const issued = await service.issue({
-      userId: params.sessionUser.id,
-      issuer,
-      domain,
+      github: params.github,
+      issuer: config.issuer,
+      domain: config.domain,
       request: params.request,
     });
     return {
@@ -131,13 +195,6 @@ export async function issueBrowserIdentityAttestation(params: {
       )}`,
     };
   } catch (error) {
-    if (error instanceof AttestationPreconditionError) {
-      throw new AttestationBrokerError(
-        error.code === "invalid_target_origin"
-          ? "invalid_return_to"
-          : error.code
-      );
-    }
-    throw error;
+    return mapPreconditionError(error);
   }
 }

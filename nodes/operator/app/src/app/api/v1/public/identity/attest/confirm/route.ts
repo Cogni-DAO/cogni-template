@@ -1,0 +1,146 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2026 Cogni-DAO
+
+/**
+ * Module: `@app/api/v1/public/identity/attest/confirm`
+ * Purpose: Terminal leg — the human confirmed the resolved GitHub account, so sign the
+ *   attestation and hand it to the exact registered node origin. Also handles
+ *   "use a different account" and "cancel".
+ * Scope: Reads the broker cookie, signs, clears the cookie, redirects. Never re-reads
+ *   the subject from anywhere else.
+ * Invariants:
+ *   - CONFIRM_BEFORE_SIGN: reachable only by an explicit POST from the confirm screen.
+ *   - BROKER_STATE_IS_CONSUMED: the cookie is cleared on every terminal outcome, so one
+ *     authorization cannot be confirmed twice.
+ *   - SWITCH_RE_AUTHENTICATES: "use a different account" restarts the GitHub leg with a
+ *     fresh state + PKCE pair rather than reusing the previous authentication.
+ * Side-effects: IO (registry read, signing, cookie clear, redirect)
+ * @public
+ */
+
+import {
+  IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256,
+  IdentityAttestationRequestSchema,
+} from "@cogni/node-contracts";
+import { cookies } from "next/headers";
+import { NextResponse } from "next/server";
+import {
+  AttestationBrokerError,
+  issueBrowserIdentityAttestation,
+} from "@/app/_facades/identity/attestation-broker.server";
+import { authSecret } from "@/auth";
+import { serverEnv } from "@/shared/env";
+import {
+  brokerRedirectUri,
+  resolveGithubOauthClient,
+} from "@/shared/identity/broker-config";
+import {
+  BROKER_STATE_COOKIE,
+  BROKER_STATE_COOKIE_PATH,
+  BROKER_STATE_TTL_SECONDS,
+  decodeBrokerState,
+  encodeBrokerState,
+} from "@/shared/identity/broker-state";
+import {
+  buildGithubAuthorizeUrl,
+  createAuthorizationChallenge,
+} from "@/shared/identity/github-oauth";
+
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
+function failure(request: Request, code: string): NextResponse {
+  return NextResponse.redirect(
+    new URL(
+      `/identity/attest/error?code=${encodeURIComponent(code)}`,
+      request.url
+    ),
+    { status: 303 }
+  );
+}
+
+export async function POST(request: Request): Promise<NextResponse> {
+  const cookieStore = await cookies();
+  const brokerState = await decodeBrokerState(
+    cookieStore.get(BROKER_STATE_COOKIE)?.value,
+    authSecret
+  );
+  if (!brokerState?.github) {
+    return failure(request, "broker_request_expired");
+  }
+
+  const form = await request.formData().catch(() => null);
+  const action = form?.get("action");
+  const env = serverEnv();
+
+  if (action === "switch") {
+    // Re-authenticate from scratch: fresh state + PKCE, no carried-over identity.
+    const client = resolveGithubOauthClient(env);
+    if (!client) {
+      cookieStore.delete(BROKER_STATE_COOKIE);
+      return failure(request, "attestation_unavailable");
+    }
+    const challenge = createAuthorizationChallenge();
+    cookieStore.set(
+      BROKER_STATE_COOKIE,
+      await encodeBrokerState(
+        {
+          state: challenge.state,
+          codeVerifier: challenge.codeVerifier,
+          nodeId: brokerState.nodeId,
+          nodeSlug: brokerState.nodeSlug,
+          nonce: brokerState.nonce,
+          targetOrigin: brokerState.targetOrigin,
+          returnTo: brokerState.returnTo,
+        },
+        authSecret
+      ),
+      {
+        httpOnly: true,
+        secure: env.isProd,
+        sameSite: "lax",
+        path: BROKER_STATE_COOKIE_PATH,
+        maxAge: BROKER_STATE_TTL_SECONDS,
+      }
+    );
+    return NextResponse.redirect(
+      buildGithubAuthorizeUrl({
+        clientId: client.clientId,
+        redirectUri: brokerRedirectUri(env),
+        state: challenge.state,
+        codeChallenge: challenge.codeChallenge,
+      }),
+      { status: 303 }
+    );
+  }
+
+  cookieStore.delete(BROKER_STATE_COOKIE);
+
+  if (action !== "confirm") {
+    return failure(request, "cancelled");
+  }
+
+  const parsed = IdentityAttestationRequestSchema.safeParse({
+    protocol: IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256,
+    nodeId: brokerState.nodeId,
+    nonce: brokerState.nonce,
+    targetOrigin: brokerState.targetOrigin,
+  });
+  if (!parsed.success) {
+    return failure(request, "invalid_request");
+  }
+
+  try {
+    const issued = await issueBrowserIdentityAttestation({
+      github: brokerState.github,
+      request: parsed.data,
+      returnTo: brokerState.returnTo,
+    });
+    return NextResponse.redirect(issued.redirectUrl, { status: 303 });
+  } catch (error) {
+    if (error instanceof AttestationBrokerError) {
+      return failure(request, error.code);
+    }
+    throw error;
+  }
+}

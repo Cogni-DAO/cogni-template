@@ -22,6 +22,7 @@ const REQUEST = {
   nonce: "node_generated_nonce_0123456789abcdef",
   targetOrigin: "https://toks4-test.cognidao.org",
 };
+const AUTHENTICATED_GITHUB = { id: "12345", login: "flock-leader" };
 
 function service(overrides?: {
   repository?: IdentityAttestationRepositoryPort;
@@ -34,7 +35,6 @@ function service(overrides?: {
         slug: "toks4",
         deployEnvs: ["candidate-a", "production"],
       }),
-      findGithubIdentity: async () => ({ id: "12345", login: null }),
     };
   const signer = overrides?.signer ?? { sign: vi.fn(async () => "signed.jwt") };
   return createIdentityAttestationService({
@@ -46,10 +46,10 @@ function service(overrides?: {
 }
 
 describe("identity attestation issuance service", () => {
-  it("signs the GitHub OAuth result for the exact node request", async () => {
+  it("signs the GitHub identity supplied by the caller for the exact node request", async () => {
     const sign = vi.fn(async () => "signed.jwt");
     const issued = await service({ signer: { sign } }).issue({
-      userId: "11111111-1111-4111-8111-111111111111",
+      github: AUTHENTICATED_GITHUB,
       issuer: "https://cognidao.org",
       domain: "cognidao.org",
       request: REQUEST,
@@ -61,18 +61,31 @@ describe("identity attestation issuance service", () => {
         protocol: IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256,
         aud: `urn:cogni:node:${NODE_ID}`,
         targetOrigin: REQUEST.targetOrigin,
-        github: { id: "12345", login: null },
+        github: AUTHENTICATED_GITHUB,
       })
     );
     expect(sign.mock.calls[0]?.[0]).not.toHaveProperty("wallet");
     expect(sign.mock.calls[0]?.[0]).not.toHaveProperty("sub");
   });
 
+  /**
+   * task.5024 regression: the service has NO way to look a subject up. Before the fix
+   * the repository owned `findGithubIdentity(userId)` and the ambient operator session
+   * chose the attested account — which bound the wrong GitHub account on the
+   * 2026-08-19 candidate. Removing the lookup makes that class of bug unrepresentable.
+   */
+  it("exposes no subject lookup on the repository port", () => {
+    const repository: IdentityAttestationRepositoryPort = {
+      findNode: async () => null,
+    };
+    expect(repository).not.toHaveProperty("findGithubIdentity");
+  });
+
   it("rejects an origin outside the registered deployment set before signing", async () => {
     const sign = vi.fn(async () => "signed.jwt");
     await expect(
       service({ signer: { sign } }).issue({
-        userId: "11111111-1111-4111-8111-111111111111",
+        github: AUTHENTICATED_GITHUB,
         issuer: "https://cognidao.org",
         domain: "cognidao.org",
         request: { ...REQUEST, targetOrigin: "https://attacker.example" },
@@ -83,25 +96,31 @@ describe("identity attestation issuance service", () => {
     expect(sign).not.toHaveBeenCalled();
   });
 
-  it("rejects issuance without a GitHub-authenticated operator session", async () => {
+  it("rejects an unregistered node before signing", async () => {
     const sign = vi.fn(async () => "signed.jwt");
     const repository: IdentityAttestationRepositoryPort = {
-      findNode: async () => ({
-        nodeId: NODE_ID,
-        slug: "toks4",
-        deployEnvs: ["candidate-a", "production"],
-      }),
-      findGithubIdentity: async () => null,
+      findNode: async () => null,
     };
 
     await expect(
       service({ repository, signer: { sign } }).issue({
-        userId: "11111111-1111-4111-8111-111111111111",
+        github: AUTHENTICATED_GITHUB,
         issuer: "https://cognidao.org",
         domain: "cognidao.org",
         request: REQUEST,
       })
-    ).rejects.toEqual(new AttestationPreconditionError("no_github_binding"));
+    ).rejects.toEqual(new AttestationPreconditionError("unknown_node"));
+    expect(sign).not.toHaveBeenCalled();
+  });
+
+  it("resolves the node for the entry leg without signing anything", async () => {
+    const sign = vi.fn(async () => "signed.jwt");
+    const node = await service({ signer: { sign } }).resolveNode({
+      domain: "cognidao.org",
+      request: REQUEST,
+    });
+
+    expect(node).toEqual({ nodeId: NODE_ID, slug: "toks4" });
     expect(sign).not.toHaveBeenCalled();
   });
 });

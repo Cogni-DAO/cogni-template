@@ -14,6 +14,7 @@ import {
 
 import type {
   Clock,
+  IdentityAttestationGithubIdentity,
   IdentityAttestationRepositoryPort,
   IdentityAttestationSignerPort,
 } from "@/ports";
@@ -24,7 +25,6 @@ import {
 } from "@/shared/node-registry/deploy-hosts";
 
 export type AttestationPreconditionCode =
-  | "no_github_binding"
   | "invalid_target_origin"
   | "unknown_node";
 
@@ -40,9 +40,28 @@ export interface IssuedAttestation {
   expiresIn: number;
 }
 
+export interface ResolvedAttestationNode {
+  readonly nodeId: string;
+  readonly slug: string;
+}
+
 export interface IdentityAttestationService {
+  /**
+   * Registered-node + registered-origin policy, evaluated BEFORE the user is sent to
+   * GitHub so an unknown node or unregistered origin fails immediately instead of
+   * after an authentication the caller can never use.
+   */
+  resolveNode(params: {
+    domain: string;
+    request: IdentityAttestationRequest;
+  }): Promise<ResolvedAttestationNode>;
   issue(params: {
-    userId: string;
+    /**
+     * The GitHub identity authenticated by the authorization response for THIS request.
+     * Never an ambient operator session, and never a stored binding — that conflation is
+     * the confused deputy this service exists to prevent (task.5024).
+     */
+    github: IdentityAttestationGithubIdentity;
     issuer: string;
     domain: string;
     request: IdentityAttestationRequest;
@@ -55,33 +74,41 @@ export function createIdentityAttestationService(deps: {
   clock: Clock;
   createJti: () => string;
 }): IdentityAttestationService {
+  async function resolveNode(params: {
+    domain: string;
+    request: IdentityAttestationRequest;
+  }): Promise<ResolvedAttestationNode> {
+    const targetNode = await deps.repository.findNode(params.request.nodeId);
+    if (!targetNode || targetNode.nodeId !== params.request.nodeId) {
+      throw new AttestationPreconditionError("unknown_node");
+    }
+
+    const deployRootDomain = rootDomain(params.domain);
+    const registeredOrigins = targetNode.deployEnvs
+      .filter(isFlightEnv)
+      .map(
+        (deployEnv) =>
+          `https://${hostForEnv(
+            targetNode.slug,
+            targetNode.slug === "operator",
+            deployEnv,
+            deployRootDomain
+          )}`
+      );
+    if (!registeredOrigins.includes(params.request.targetOrigin)) {
+      throw new AttestationPreconditionError("invalid_target_origin");
+    }
+
+    return { nodeId: targetNode.nodeId, slug: targetNode.slug };
+  }
+
   return {
+    resolveNode,
     async issue(params) {
-      const targetNode = await deps.repository.findNode(params.request.nodeId);
-      if (!targetNode || targetNode.nodeId !== params.request.nodeId) {
-        throw new AttestationPreconditionError("unknown_node");
-      }
-
-      const deployRootDomain = rootDomain(params.domain);
-      const registeredOrigins = targetNode.deployEnvs
-        .filter(isFlightEnv)
-        .map(
-          (deployEnv) =>
-            `https://${hostForEnv(
-              targetNode.slug,
-              targetNode.slug === "operator",
-              deployEnv,
-              deployRootDomain
-            )}`
-        );
-      if (!registeredOrigins.includes(params.request.targetOrigin)) {
-        throw new AttestationPreconditionError("invalid_target_origin");
-      }
-
-      const github = await deps.repository.findGithubIdentity(params.userId);
-      if (!github) {
-        throw new AttestationPreconditionError("no_github_binding");
-      }
+      const targetNode = await resolveNode({
+        domain: params.domain,
+        request: params.request,
+      });
 
       const iat = Math.floor(Date.parse(deps.clock.now()) / 1000);
       const claims = IdentityAttestationClaimsSchema.parse({
@@ -92,7 +119,7 @@ export function createIdentityAttestationService(deps: {
         nodeId: targetNode.nodeId,
         nonce: params.request.nonce,
         targetOrigin: params.request.targetOrigin,
-        github,
+        github: params.github,
         iat,
         exp: iat + IDENTITY_ATTESTATION_TTL_SECONDS,
         jti: deps.createJti(),

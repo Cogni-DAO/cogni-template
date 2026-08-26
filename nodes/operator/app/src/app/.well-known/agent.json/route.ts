@@ -73,7 +73,9 @@ export async function GET(request: Request) {
     registrationUrl: `${origin}/api/v1/agent/register`,
     auth: { type: "bearer", keyPrefix: "cogni_ag_sk_v1_" },
     // Fleet identity (task.5024): public keys nodes use to verify operator-signed
-    // identity attestations (POST /api/v1/identity/attestations, SIWE session).
+    // identity attestations. Nodes start the round trip at `/identity/attest`, which
+    // authenticates a GitHub account through this environment's OAuth client — no
+    // operator account is involved on either side of the seam.
     jwks_uri: `${origin}/.well-known/jwks.json`,
     endpoints: {
       completions: `${origin}/api/v1/chat/completions`,
