@@ -10,7 +10,8 @@
  */
 
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -31,7 +32,8 @@ import {
 } from "@/shared/identity/github-oauth";
 
 const SECRET = "test-broker-secret-value-0123456789";
-const SRC_ROOT = join(process.cwd(), "nodes/operator/app/src");
+// Resolve from this file, not cwd — turbo runs the suite from nodes/operator/app.
+const SRC_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../../src");
 
 const BROKER_STATE = {
   state: "state-value",

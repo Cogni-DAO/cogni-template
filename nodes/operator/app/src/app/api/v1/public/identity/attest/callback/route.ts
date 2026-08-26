@@ -13,14 +13,17 @@
  *     this exchange only — never a session, never a stored binding (task.5024).
  *   - TOKEN_IS_NEVER_PERSISTED: the access token is discarded inside the exchange.
  *   - NO_ACCOUNT_MINTED: authenticating here creates no operator user, binding, or event.
+ *   - PUBLIC_ROUTE_CONTRACT: unauthenticated by design (GitHub redirects the browser
+ *     here with no session), so it runs through `wrapPublicRoute` for rate limiting.
+ *     Never cached — every response is a one-shot redirect for one broker request.
  * Side-effects: IO (GitHub token exchange + user read, cookie rewrite, redirect)
  * @public
  */
 
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
-
 import { authSecret } from "@/auth";
+import { wrapPublicRoute } from "@/bootstrap/http";
 import { serverEnv } from "@/shared/env";
 import {
   brokerRedirectUri,
@@ -47,64 +50,67 @@ function failure(request: Request, code: string): NextResponse {
   );
 }
 
-export async function GET(request: Request): Promise<NextResponse> {
-  const query = new URL(request.url).searchParams;
-  const cookieStore = await cookies();
-  const brokerState = await decodeBrokerState(
-    cookieStore.get(BROKER_STATE_COOKIE)?.value,
-    authSecret
-  );
-  if (!brokerState) {
-    return failure(request, "broker_request_expired");
-  }
-
-  // The user declined at GitHub, or GitHub refused.
-  if (query.get("error")) {
-    cookieStore.delete(BROKER_STATE_COOKIE);
-    return failure(request, "github_declined");
-  }
-
-  const code = query.get("code");
-  const state = query.get("state");
-  if (!code || !state || state !== brokerState.state) {
-    cookieStore.delete(BROKER_STATE_COOKIE);
-    return failure(request, "invalid_request");
-  }
-
-  const env = serverEnv();
-  const client = resolveGithubOauthClient(env);
-  if (!client) {
-    cookieStore.delete(BROKER_STATE_COOKIE);
-    return failure(request, "attestation_unavailable");
-  }
-
-  let github: { id: string; login: string | null };
-  try {
-    github = await exchangeCodeForGithubIdentity({
-      clientId: client.clientId,
-      clientSecret: client.clientSecret,
-      code,
-      codeVerifier: brokerState.codeVerifier,
-      redirectUri: brokerRedirectUri(env),
-    });
-  } catch {
-    cookieStore.delete(BROKER_STATE_COOKIE);
-    return failure(request, "github_exchange_failed");
-  }
-
-  cookieStore.set(
-    BROKER_STATE_COOKIE,
-    await encodeBrokerState({ ...brokerState, github }, authSecret),
-    {
-      httpOnly: true,
-      secure: env.isProd,
-      sameSite: "lax",
-      path: BROKER_STATE_COOKIE_PATH,
-      maxAge: BROKER_STATE_TTL_SECONDS,
+export const GET = wrapPublicRoute(
+  { routeId: "identity.attest.callback", cacheTtlSeconds: 0 },
+  async (_ctx, request): Promise<NextResponse> => {
+    const query = new URL(request.url).searchParams;
+    const cookieStore = await cookies();
+    const brokerState = await decodeBrokerState(
+      cookieStore.get(BROKER_STATE_COOKIE)?.value,
+      authSecret
+    );
+    if (!brokerState) {
+      return failure(request, "broker_request_expired");
     }
-  );
 
-  return NextResponse.redirect(
-    new URL("/identity/attest/confirm", request.url)
-  );
-}
+    // The user declined at GitHub, or GitHub refused.
+    if (query.get("error")) {
+      cookieStore.delete(BROKER_STATE_COOKIE);
+      return failure(request, "github_declined");
+    }
+
+    const code = query.get("code");
+    const state = query.get("state");
+    if (!code || !state || state !== brokerState.state) {
+      cookieStore.delete(BROKER_STATE_COOKIE);
+      return failure(request, "invalid_request");
+    }
+
+    const env = serverEnv();
+    const client = resolveGithubOauthClient(env);
+    if (!client) {
+      cookieStore.delete(BROKER_STATE_COOKIE);
+      return failure(request, "attestation_unavailable");
+    }
+
+    let github: { id: string; login: string | null };
+    try {
+      github = await exchangeCodeForGithubIdentity({
+        clientId: client.clientId,
+        clientSecret: client.clientSecret,
+        code,
+        codeVerifier: brokerState.codeVerifier,
+        redirectUri: brokerRedirectUri(env),
+      });
+    } catch {
+      cookieStore.delete(BROKER_STATE_COOKIE);
+      return failure(request, "github_exchange_failed");
+    }
+
+    cookieStore.set(
+      BROKER_STATE_COOKIE,
+      await encodeBrokerState({ ...brokerState, github }, authSecret),
+      {
+        httpOnly: true,
+        secure: env.isProd,
+        sameSite: "lax",
+        path: BROKER_STATE_COOKIE_PATH,
+        maxAge: BROKER_STATE_TTL_SECONDS,
+      }
+    );
+
+    return NextResponse.redirect(
+      new URL("/identity/attest/confirm", request.url)
+    );
+  }
+);

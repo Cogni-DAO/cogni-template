@@ -14,6 +14,9 @@
  *     authorization cannot be confirmed twice.
  *   - SWITCH_RE_AUTHENTICATES: "use a different account" restarts the GitHub leg with a
  *     fresh state + PKCE pair rather than reusing the previous authentication.
+ *   - PUBLIC_ROUTE_CONTRACT: unauthenticated by design — its authority is the signed
+ *     broker cookie, never an operator session — so it runs through `wrapPublicRoute`
+ *     for rate limiting. Never cached.
  * Side-effects: IO (registry read, signing, cookie clear, redirect)
  * @public
  */
@@ -29,6 +32,7 @@ import {
   issueBrowserIdentityAttestation,
 } from "@/app/_facades/identity/attestation-broker.server";
 import { authSecret } from "@/auth";
+import { wrapPublicRoute } from "@/bootstrap/http";
 import { serverEnv } from "@/shared/env";
 import {
   brokerRedirectUri,
@@ -59,88 +63,91 @@ function failure(request: Request, code: string): NextResponse {
   );
 }
 
-export async function POST(request: Request): Promise<NextResponse> {
-  const cookieStore = await cookies();
-  const brokerState = await decodeBrokerState(
-    cookieStore.get(BROKER_STATE_COOKIE)?.value,
-    authSecret
-  );
-  if (!brokerState?.github) {
-    return failure(request, "broker_request_expired");
-  }
-
-  const form = await request.formData().catch(() => null);
-  const action = form?.get("action");
-  const env = serverEnv();
-
-  if (action === "switch") {
-    // Re-authenticate from scratch: fresh state + PKCE, no carried-over identity.
-    const client = resolveGithubOauthClient(env);
-    if (!client) {
-      cookieStore.delete(BROKER_STATE_COOKIE);
-      return failure(request, "attestation_unavailable");
+export const POST = wrapPublicRoute(
+  { routeId: "identity.attest.confirm", cacheTtlSeconds: 0 },
+  async (_ctx, request): Promise<NextResponse> => {
+    const cookieStore = await cookies();
+    const brokerState = await decodeBrokerState(
+      cookieStore.get(BROKER_STATE_COOKIE)?.value,
+      authSecret
+    );
+    if (!brokerState?.github) {
+      return failure(request, "broker_request_expired");
     }
-    const challenge = createAuthorizationChallenge();
-    cookieStore.set(
-      BROKER_STATE_COOKIE,
-      await encodeBrokerState(
-        {
-          state: challenge.state,
-          codeVerifier: challenge.codeVerifier,
-          nodeId: brokerState.nodeId,
-          nodeSlug: brokerState.nodeSlug,
-          nonce: brokerState.nonce,
-          targetOrigin: brokerState.targetOrigin,
-          returnTo: brokerState.returnTo,
-        },
-        authSecret
-      ),
-      {
-        httpOnly: true,
-        secure: env.isProd,
-        sameSite: "lax",
-        path: BROKER_STATE_COOKIE_PATH,
-        maxAge: BROKER_STATE_TTL_SECONDS,
+
+    const form = await request.formData().catch(() => null);
+    const action = form?.get("action");
+    const env = serverEnv();
+
+    if (action === "switch") {
+      // Re-authenticate from scratch: fresh state + PKCE, no carried-over identity.
+      const client = resolveGithubOauthClient(env);
+      if (!client) {
+        cookieStore.delete(BROKER_STATE_COOKIE);
+        return failure(request, "attestation_unavailable");
       }
-    );
-    return NextResponse.redirect(
-      buildGithubAuthorizeUrl({
-        clientId: client.clientId,
-        redirectUri: brokerRedirectUri(env),
-        state: challenge.state,
-        codeChallenge: challenge.codeChallenge,
-      }),
-      { status: 303 }
-    );
-  }
-
-  cookieStore.delete(BROKER_STATE_COOKIE);
-
-  if (action !== "confirm") {
-    return failure(request, "cancelled");
-  }
-
-  const parsed = IdentityAttestationRequestSchema.safeParse({
-    protocol: IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256,
-    nodeId: brokerState.nodeId,
-    nonce: brokerState.nonce,
-    targetOrigin: brokerState.targetOrigin,
-  });
-  if (!parsed.success) {
-    return failure(request, "invalid_request");
-  }
-
-  try {
-    const issued = await issueBrowserIdentityAttestation({
-      github: brokerState.github,
-      request: parsed.data,
-      returnTo: brokerState.returnTo,
-    });
-    return NextResponse.redirect(issued.redirectUrl, { status: 303 });
-  } catch (error) {
-    if (error instanceof AttestationBrokerError) {
-      return failure(request, error.code);
+      const challenge = createAuthorizationChallenge();
+      cookieStore.set(
+        BROKER_STATE_COOKIE,
+        await encodeBrokerState(
+          {
+            state: challenge.state,
+            codeVerifier: challenge.codeVerifier,
+            nodeId: brokerState.nodeId,
+            nodeSlug: brokerState.nodeSlug,
+            nonce: brokerState.nonce,
+            targetOrigin: brokerState.targetOrigin,
+            returnTo: brokerState.returnTo,
+          },
+          authSecret
+        ),
+        {
+          httpOnly: true,
+          secure: env.isProd,
+          sameSite: "lax",
+          path: BROKER_STATE_COOKIE_PATH,
+          maxAge: BROKER_STATE_TTL_SECONDS,
+        }
+      );
+      return NextResponse.redirect(
+        buildGithubAuthorizeUrl({
+          clientId: client.clientId,
+          redirectUri: brokerRedirectUri(env),
+          state: challenge.state,
+          codeChallenge: challenge.codeChallenge,
+        }),
+        { status: 303 }
+      );
     }
-    throw error;
+
+    cookieStore.delete(BROKER_STATE_COOKIE);
+
+    if (action !== "confirm") {
+      return failure(request, "cancelled");
+    }
+
+    const parsed = IdentityAttestationRequestSchema.safeParse({
+      protocol: IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256,
+      nodeId: brokerState.nodeId,
+      nonce: brokerState.nonce,
+      targetOrigin: brokerState.targetOrigin,
+    });
+    if (!parsed.success) {
+      return failure(request, "invalid_request");
+    }
+
+    try {
+      const issued = await issueBrowserIdentityAttestation({
+        github: brokerState.github,
+        request: parsed.data,
+        returnTo: brokerState.returnTo,
+      });
+      return NextResponse.redirect(issued.redirectUrl, { status: 303 });
+    } catch (error) {
+      if (error instanceof AttestationBrokerError) {
+        return failure(request, error.code);
+      }
+      throw error;
+    }
   }
-}
+);
