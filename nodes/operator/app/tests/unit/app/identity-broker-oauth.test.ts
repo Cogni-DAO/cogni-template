@@ -192,10 +192,14 @@ describe("broker configuration", () => {
   });
 
   /**
-   * A GitHub OAuth App registers exactly ONE callback URL, and matches it plus its
-   * SUBDIRECTORIES. NextAuth sign-in already owns `/api/auth/callback/github`, so the
-   * broker callback MUST live under `/api/auth/` — then registering
-   * `https://<host>/api/auth/` covers sign-in AND identity with one entry.
+   * A registered callback matches that URL plus its SUBDIRECTORIES. NextAuth sign-in
+   * already owns `/api/auth/callback/github`, so keeping the broker callback under
+   * `/api/auth/` lets ONE registration — `https://<host>/api/auth/` — cover sign-in,
+   * this broker, and every future auth route.
+   *
+   * (GitHub raised OAuth Apps from 1 to 10 redirect URIs on 2026-08-14, so a second
+   * path is now registrable rather than impossible. The prefix is still correct: it
+   * costs zero GitHub settings changes per new route, and 10 is still a ceiling.)
    *
    * Move it elsewhere (e.g. `/api/v1/public/...`) and the two can no longer share a
    * registration: you must either widen the callback to the apex — which also blesses

@@ -121,12 +121,18 @@ POST /api/auth/link/{provider}
 OAuth client; relying nodes configure none. A node asks the operator to authenticate a
 GitHub account and return a short-lived, node-scoped proof of that OAuth result.
 
-This is forced by GitHub's registration model, not chosen for convenience: a GitHub App
-registers at most 10 callback URLs and an OAuth App exactly one, so N node origins cannot
-each hold their own client; and node-direct OAuth would place the client secret on every
-node, making one node's compromise fleet-wide. Enabling wildcard subdomain matching to
-dodge the limit is strictly worse — any subdomain, including a preview or a compromised
-node, would receive fleet authorization codes.
+This is chosen for credential blast radius, not for callback cardinality. Node-direct
+OAuth would place the client secret on every node, so one node's compromise would be
+fleet-wide; and wildcard subdomain matching means any subdomain takeover receives fleet
+authorization codes. Registration limits are a secondary constraint and are no longer
+absolute — GitHub raised OAuth Apps to 10 redirect URIs with per-URI wildcard matching on
+2026-08-14, and GitHub Apps have long allowed 10 — but 10 is still a ceiling, and
+`preview-deployments.md` mints a new `{slug}.preview.cognidao.org` host per preview.
+
+Environments do NOT share a client: production uses its own OAuth app, and all
+non-production hosts share a second one. Each registers the `/api/auth/` PREFIX rather
+than a leaf path, so sign-in and this broker — and any future auth route — resolve from
+one entry.
 
 A dedicated `auth.cognidao.org` node speaking standard OIDC remains a valid future home
 (prototyped in PR #857, never merged). Moving there requires a stated reason; until then
