@@ -71,7 +71,7 @@ export default async function IdentityAttestationConfirmPage() {
       </p>
 
       <form
-        action="/api/v1/public/identity/attest/confirm"
+        action="/api/auth/attest/confirm"
         className="mt-8 flex flex-wrap gap-3"
         method="post"
       >

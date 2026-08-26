@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  BROKER_CALLBACK_PATH,
   brokerRedirectUri,
   resolveGithubOauthClient,
 } from "@/shared/identity/broker-config";
@@ -49,8 +50,7 @@ describe("github authorize URL", () => {
   const url = new URL(
     buildGithubAuthorizeUrl({
       clientId: "client-id",
-      redirectUri:
-        "https://cognidao.org/api/v1/public/identity/attest/callback",
+      redirectUri: "https://cognidao.org/api/auth/attest/callback",
       state: "state-value",
       codeChallenge: "challenge-value",
     })
@@ -105,8 +105,7 @@ describe("github code exchange", () => {
       clientSecret: "client-secret",
       code: "code",
       codeVerifier: "verifier",
-      redirectUri:
-        "https://cognidao.org/api/v1/public/identity/attest/callback",
+      redirectUri: "https://cognidao.org/api/auth/attest/callback",
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
 
@@ -127,8 +126,7 @@ describe("github code exchange", () => {
         clientSecret: "s",
         code: "code",
         codeVerifier: "verifier",
-        redirectUri:
-          "https://cognidao.org/api/v1/public/identity/attest/callback",
+        redirectUri: "https://cognidao.org/api/auth/attest/callback",
         fetchImpl: fetchImpl as unknown as typeof fetch,
       })
     ).rejects.toBeInstanceOf(GithubOauthError);
@@ -188,8 +186,32 @@ describe("broker configuration", () => {
 
   it("pins one exact redirect URI so GitHub exact-matching is satisfiable", () => {
     expect(brokerRedirectUri({ APP_BASE_URL: "https://cognidao.org" })).toBe(
-      "https://cognidao.org/api/v1/public/identity/attest/callback"
+      "https://cognidao.org/api/auth/attest/callback"
     );
+  });
+
+  /**
+   * A GitHub OAuth App registers exactly ONE callback URL, and matches it plus its
+   * SUBDIRECTORIES. NextAuth sign-in already owns `/api/auth/callback/github`, so the
+   * broker callback MUST live under `/api/auth/` — then registering
+   * `https://<host>/api/auth/` covers sign-in AND identity with one entry.
+   *
+   * Move it elsewhere (e.g. `/api/v1/public/...`) and the two can no longer share a
+   * registration: you must either widen the callback to the apex — which also blesses
+   * every other path on the host — or run a second OAuth App per environment. Pointing
+   * the single callback at a non-`/api/auth` path silently breaks GitHub sign-in,
+   * because NextAuth's redirect_uri stops matching.
+   */
+  it("keeps the broker callback under /api/auth so sign-in can share one registration", () => {
+    expect(BROKER_CALLBACK_PATH.startsWith("/api/auth/")).toBe(true);
+
+    const registered = "https://cognidao.org/api/auth/";
+    for (const redirectUri of [
+      "https://cognidao.org/api/auth/callback/github", // NextAuth sign-in
+      brokerRedirectUri({ APP_BASE_URL: "https://cognidao.org" }), // this broker
+    ]) {
+      expect(redirectUri.startsWith(registered)).toBe(true);
+    }
   });
 });
 
@@ -202,8 +224,8 @@ describe("no operator session in the broker flow", () => {
   const BROKER_SOURCES = [
     "app/(app)/identity/attest/route.ts",
     "app/(app)/identity/attest/confirm/page.tsx",
-    "app/api/v1/public/identity/attest/callback/route.ts",
-    "app/api/v1/public/identity/attest/confirm/route.ts",
+    "app/api/auth/attest/callback/route.ts",
+    "app/api/auth/attest/confirm/route.ts",
     "app/_facades/identity/attestation-broker.server.ts",
     "features/identity/services/issue-identity-attestation.ts",
     "adapters/server/identity/identity-attestation.adapter.ts",
@@ -241,17 +263,18 @@ describe("broker perimeter stays session-free", () => {
     expect(appRoutes).not.toContain('"/identity"');
   });
 
-  it("routes both broker API legs through the public namespace", () => {
+  it("routes both broker API legs through the ungated /api/auth tree", () => {
+    // /api/auth is absent from the proxy matcher, exactly like NextAuth's own
+    // callback — so these need no public-namespace carve-out.
+    expect(proxySource).not.toContain('"/api/auth');
     expect(
       brokerRedirectUri({ APP_BASE_URL: "https://cognidao.org" })
-    ).toContain("/api/v1/public/");
+    ).toContain("/api/auth/");
     const confirmPage = readFileSync(
       join(SRC_ROOT, "app/(app)/identity/attest/confirm/page.tsx"),
       "utf8"
     );
-    expect(confirmPage).toContain(
-      'action="/api/v1/public/identity/attest/confirm"'
-    );
+    expect(confirmPage).toContain('action="/api/auth/attest/confirm"');
   });
 
   it("still session-gates the ordinary app routes", () => {

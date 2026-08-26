@@ -9,7 +9,7 @@
  * Invariants: CONFIRM_BEFORE_SIGN; the signed subject is the one the callback
  *   recorded, never an operator session; state is consumed on every terminal path.
  * Side-effects: none (fully mocked)
- * Links: /api/v1/public/identity/attest/confirm route, task.5024
+ * Links: /api/auth/attest/confirm route, task.5024
  * @public
  */
 
@@ -58,7 +58,7 @@ vi.mock("@/bootstrap/http/rateLimiter", () => ({
   TokenBucketRateLimiter: vi.fn(),
 }));
 
-import { POST } from "@/app/api/v1/public/identity/attest/confirm/route";
+import { POST } from "@/app/api/auth/attest/confirm/route";
 import {
   BROKER_STATE_COOKIE,
   decodeBrokerState,
@@ -81,10 +81,10 @@ const AUTHENTICATED = {
 function request(action?: string): NextRequest {
   const body = new FormData();
   if (action) body.set("action", action);
-  return new NextRequest(
-    "https://cognidao.org/api/v1/public/identity/attest/confirm",
-    { method: "POST", body }
-  );
+  return new NextRequest("https://cognidao.org/api/auth/attest/confirm", {
+    method: "POST",
+    body,
+  });
 }
 
 async function seed(
@@ -99,7 +99,7 @@ async function seed(
   );
 }
 
-describe("/api/v1/public/identity/attest/confirm contract tests", () => {
+describe("/api/auth/attest/confirm contract tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cookieStore.store.clear();

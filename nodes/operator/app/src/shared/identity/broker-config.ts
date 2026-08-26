@@ -10,10 +10,13 @@
  *   - ONE_CLIENT_PER_ENVIRONMENT: never per node. A dedicated `GH_IDENTITY_OAUTH_*`
  *     pair is preferred because it keeps the broker decoupled from operator sign-in;
  *     the sign-in app is a fallback so the code works under either registration.
- *   - PUBLIC_NAMESPACE: the broker legs live under `/api/v1/public/` because they
- *     carry NO operator session by design — their authority is the signed broker
- *     cookie. This is the documented seam for unauthenticated routes; it avoids
- *     widening the proxy allowlist.
+ *   - AUTH_CALLBACKS_LIVE_UNDER_/api/auth: this sits beside NextAuth's own
+ *     `/api/auth/callback/github` and `/api/auth/link/[provider]`. That tree is
+ *     already outside the proxy matcher, so it needs no namespace gymnastics —
+ *     and, decisively, an OAuth App registers exactly ONE callback URL whose
+ *     SUBDIRECTORIES are matched. Registering `https://<host>/api/auth/` covers
+ *     NextAuth sign-in AND this broker with one entry. A callback anywhere else
+ *     would force sign-in and identity onto separate OAuth Apps.
  *   - EXACT_REDIRECT: one fixed path, so GitHub's exact-match rule is satisfiable
  *     without wildcard subdomain matching (which would let any subdomain receive
  *     fleet authorization codes).
@@ -23,7 +26,7 @@
  */
 
 /** Registered callback path for the identity broker. */
-export const BROKER_CALLBACK_PATH = "/api/v1/public/identity/attest/callback";
+export const BROKER_CALLBACK_PATH = "/api/auth/attest/callback";
 
 interface BrokerEnv {
   readonly APP_BASE_URL?: string | undefined;

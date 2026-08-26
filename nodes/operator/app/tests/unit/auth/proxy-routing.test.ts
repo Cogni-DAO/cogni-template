@@ -163,7 +163,7 @@ describe("proxy — page-level routing", () => {
     mockGetToken.mockResolvedValue(null);
 
     const res = await proxy(
-      makeRequest("/api/v1/public/identity/attest/callback?code=c&state=s")
+      makeRequest("/api/auth/attest/callback?code=c&state=s")
     );
 
     expect(res.status).toBe(200);
