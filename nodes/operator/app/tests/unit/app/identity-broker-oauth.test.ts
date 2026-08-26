@@ -265,6 +265,36 @@ describe("no operator session in the broker flow", () => {
     expect(source).not.toContain("findGithubIdentity");
   });
 
+  /**
+   * Observability review: all three legs shipped with ZERO log lines, which is why
+   * every LOKI cell on the first /validate-candidate run was 🟡 — there was no tier-1
+   * marker to query, so the feature could never be proven at a SHA. Each leg must emit
+   * a feature event, and none may log the code, token, PKCE verifier, or cookie.
+   */
+  it.each([
+    "app/(app)/identity/attest/route.ts",
+    "app/api/auth/attest/callback/route.ts",
+    "app/api/auth/attest/confirm/route.ts",
+  ])("%s emits a queryable feature marker", (relative) => {
+    const source = readFileSync(join(SRC_ROOT, relative), "utf8");
+    expect(source).toContain("EVENT_NAMES.IDENTITY_BROKER_");
+  });
+
+  it.each([
+    "app/(app)/identity/attest/route.ts",
+    "app/api/auth/attest/callback/route.ts",
+    "app/api/auth/attest/confirm/route.ts",
+  ])("%s never logs a broker secret", (relative) => {
+    const source = readFileSync(join(SRC_ROOT, relative), "utf8");
+    for (const [, logCall] of source.matchAll(
+      /brokerLog\(\)\.\w+\(\s*\{([\s\S]*?)\}\s*,/g
+    )) {
+      expect(logCall).not.toMatch(/codeVerifier|accessToken|access_token/);
+      expect(logCall).not.toMatch(/\bcode\b\s*[,:}]/);
+      expect(logCall).not.toContain("BROKER_STATE_COOKIE");
+    }
+  });
+
   it("keeps the broker state cookie name stable across legs", () => {
     expect(BROKER_STATE_COOKIE).toBe("identity_broker_state");
   });

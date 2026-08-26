@@ -23,6 +23,7 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { authSecret } from "@/auth";
+import { getNodeId } from "@/shared/config";
 import { serverEnv } from "@/shared/env";
 import {
   brokerRedirectUri,
@@ -37,15 +38,35 @@ import {
   encodeBrokerState,
 } from "@/shared/identity/broker-state";
 import { exchangeCodeForGithubIdentity } from "@/shared/identity/github-oauth";
+import { EVENT_NAMES, makeLogger } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function failure(code: string): NextResponse {
+/**
+ * Broker observability. These are the tier-1 markers `/validate-candidate` queries;
+ * without them the broker is invisible in Loki and the feature cannot be proven at a
+ * SHA. Deliberately NEVER logged: the authorization code, the access token, the PKCE
+ * verifier, and the broker cookie. `githubLogin` IS logged — proving WHICH account was
+ * attested is the entire point of task.5024.
+ */
+function brokerLog(): ReturnType<typeof makeLogger> {
+  return makeLogger({ nodeId: getNodeId(), service: "identity-broker" });
+}
+
+function failure(errorCode: string): NextResponse {
+  brokerLog().info(
+    {
+      event: EVENT_NAMES.IDENTITY_BROKER_REJECTED,
+      leg: "callback",
+      errorCode,
+    },
+    "Identity broker callback rejected"
+  );
   return NextResponse.redirect(
     brokerUrl(
       serverEnv(),
-      `/identity/attest/error?code=${encodeURIComponent(code)}`
+      `/identity/attest/error?code=${encodeURIComponent(errorCode)}`
     )
   );
 }
@@ -105,6 +126,17 @@ export async function GET(request: Request): Promise<NextResponse> {
       path: BROKER_STATE_COOKIE_PATH,
       maxAge: BROKER_STATE_TTL_SECONDS,
     }
+  );
+
+  brokerLog().info(
+    {
+      event: EVENT_NAMES.IDENTITY_BROKER_AUTHENTICATED,
+      nodeId: brokerState.nodeId,
+      nodeSlug: brokerState.nodeSlug,
+      githubId: github.id,
+      githubLogin: github.login,
+    },
+    "Identity broker authenticated a GitHub account; awaiting human confirmation"
   );
 
   return NextResponse.redirect(brokerUrl(env, "/identity/attest/confirm"));

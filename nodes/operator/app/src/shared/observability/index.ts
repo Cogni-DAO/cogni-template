@@ -33,6 +33,14 @@ export const EVENT_NAMES = {
   // Node env-membership verb (story.5020 W4): the flag-gated DNS reverse-reconcile seam. v0 ships
   // DNS_REVERSE_RECONCILE off, so a node-env REMOVE only logs the intended Cloudflare prune (the
   // record lingers until TTL) and a node-env ADD only logs the intended upsert. See W3b.
+  // Identity broker (task.5024): the three legs of one GitHub authorization for a
+  // relying node. These are the tier-1 markers /validate-candidate queries — without
+  // them the broker is unobservable and the feature can never be proven at a SHA.
+  // NEVER log the authorization code, access token, PKCE verifier, or broker cookie.
+  IDENTITY_BROKER_STARTED: "feature.identity_broker.started",
+  IDENTITY_BROKER_AUTHENTICATED: "feature.identity_broker.authenticated",
+  IDENTITY_BROKER_COMPLETE: "feature.identity_broker.complete",
+  IDENTITY_BROKER_REJECTED: "feature.identity_broker.rejected",
   DNS_REVERSE_RECONCILE_SKIPPED: "dns.reverse_reconcile.skipped",
   DNS_FORWARD_RECONCILE_SKIPPED: "dns.forward_reconcile.skipped",
 } as const;

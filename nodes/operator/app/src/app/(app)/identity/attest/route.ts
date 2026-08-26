@@ -28,6 +28,7 @@ import {
   resolveAttestationTarget,
 } from "@/app/_facades/identity/attestation-broker.server";
 import { authSecret } from "@/auth";
+import { getNodeId } from "@/shared/config";
 import { serverEnv } from "@/shared/env";
 import {
   brokerRedirectUri,
@@ -44,6 +45,7 @@ import {
   buildGithubAuthorizeUrl,
   createAuthorizationChallenge,
 } from "@/shared/identity/github-oauth";
+import { EVENT_NAMES, makeLogger } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -52,11 +54,31 @@ function one(value: string | null): string | undefined {
   return value === null ? undefined : value;
 }
 
-function failure(code: string): NextResponse {
+/**
+ * Broker observability. These are the tier-1 markers `/validate-candidate` queries;
+ * without them the broker is invisible in Loki and the feature cannot be proven at a
+ * SHA. Deliberately NEVER logged: the authorization code, the access token, the PKCE
+ * verifier, and the broker cookie. `githubLogin` IS logged — proving WHICH account was
+ * attested is the entire point of task.5024.
+ */
+function brokerLog(): ReturnType<typeof makeLogger> {
+  return makeLogger({ nodeId: getNodeId(), service: "identity-broker" });
+}
+
+function failure(errorCode: string, nodeId?: string): NextResponse {
+  brokerLog().info(
+    {
+      event: EVENT_NAMES.IDENTITY_BROKER_REJECTED,
+      leg: "start",
+      errorCode,
+      nodeId,
+    },
+    "Identity broker request rejected"
+  );
   return NextResponse.redirect(
     brokerUrl(
       serverEnv(),
-      `/identity/attest/error?code=${encodeURIComponent(code)}`
+      `/identity/attest/error?code=${encodeURIComponent(errorCode)}`
     )
   );
 }
@@ -90,7 +112,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     nodeSlug = target.node.slug;
   } catch (error) {
     if (error instanceof AttestationBrokerError) {
-      return failure(error.code);
+      return failure(error.code, parsed.data.nodeId);
     }
     throw error;
   }
@@ -119,6 +141,20 @@ export async function GET(request: Request): Promise<NextResponse> {
       path: BROKER_STATE_COOKIE_PATH,
       maxAge: BROKER_STATE_TTL_SECONDS,
     }
+  );
+
+  brokerLog().info(
+    {
+      event: EVENT_NAMES.IDENTITY_BROKER_STARTED,
+      nodeId: parsed.data.nodeId,
+      nodeSlug,
+      targetOrigin: parsed.data.targetOrigin,
+      // The corrected flow's signature: an authorization is actually requested, and
+      // no operator session was consulted to get here.
+      promptSelectAccount: true,
+      pkce: "S256",
+    },
+    "Identity broker starting GitHub authorization"
   );
 
   return NextResponse.redirect(

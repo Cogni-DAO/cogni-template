@@ -32,6 +32,7 @@ import {
   issueBrowserIdentityAttestation,
 } from "@/app/_facades/identity/attestation-broker.server";
 import { authSecret } from "@/auth";
+import { getNodeId } from "@/shared/config";
 import { serverEnv } from "@/shared/env";
 import {
   brokerRedirectUri,
@@ -49,15 +50,35 @@ import {
   buildGithubAuthorizeUrl,
   createAuthorizationChallenge,
 } from "@/shared/identity/github-oauth";
+import { EVENT_NAMES, makeLogger } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function failure(code: string): NextResponse {
+/**
+ * Broker observability. These are the tier-1 markers `/validate-candidate` queries;
+ * without them the broker is invisible in Loki and the feature cannot be proven at a
+ * SHA. Deliberately NEVER logged: the authorization code, the access token, the PKCE
+ * verifier, and the broker cookie. `githubLogin` IS logged — proving WHICH account was
+ * attested is the entire point of task.5024.
+ */
+function brokerLog(): ReturnType<typeof makeLogger> {
+  return makeLogger({ nodeId: getNodeId(), service: "identity-broker" });
+}
+
+function failure(errorCode: string): NextResponse {
+  brokerLog().info(
+    {
+      event: EVENT_NAMES.IDENTITY_BROKER_REJECTED,
+      leg: "confirm",
+      errorCode,
+    },
+    "Identity broker confirmation rejected"
+  );
   return NextResponse.redirect(
     brokerUrl(
       serverEnv(),
-      `/identity/attest/error?code=${encodeURIComponent(code)}`
+      `/identity/attest/error?code=${encodeURIComponent(errorCode)}`
     ),
     { status: 303 }
   );
@@ -140,6 +161,18 @@ export async function POST(request: Request): Promise<NextResponse> {
       request: parsed.data,
       returnTo: brokerState.returnTo,
     });
+    brokerLog().info(
+      {
+        event: EVENT_NAMES.IDENTITY_BROKER_COMPLETE,
+        nodeId: brokerState.nodeId,
+        nodeSlug: brokerState.nodeSlug,
+        githubId: brokerState.github.id,
+        githubLogin: brokerState.github.login,
+        targetOrigin: brokerState.targetOrigin,
+      },
+      "Identity broker issued an attestation for a human-confirmed GitHub account"
+    );
+
     return NextResponse.redirect(issued.redirectUrl, { status: 303 });
   } catch (error) {
     if (error instanceof AttestationBrokerError) {
