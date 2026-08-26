@@ -23,7 +23,21 @@ You are setting up the Cogni-Template repo for the first time, or need a referen
 - [ ] Node.js 22+ installed
 - [ ] pnpm installed (`corepack enable`)
 - [ ] Repository cloned
-- [ ] Docker running (for infrastructure services)
+- [ ] Docker running (for infrastructure services) — see [Docker disk hygiene](#docker-disk-hygiene-recommended-one-time)
+
+## Docker disk hygiene (recommended, one-time)
+
+Cogni's local stack builds images (`pnpm docker:dev:stack` runs `--build`), and Docker's build cache + image store grow **unbounded by default** — they can quietly consume 100GB+ over months. Cap it once so Docker garbage-collects itself:
+
+**Docker Desktop (macOS/Windows)** — merge into `~/.docker/daemon.json`, then _Settings → Apply & Restart_:
+
+```json
+{ "builder": { "gc": { "enabled": true, "policy": [{ "keepDuration": "168h", "reservedSpace": "5GB", "maxUsedSpace": "25GB", "minFreeSpace": "20GB" }] } } }
+```
+
+`maxUsedSpace` is a **hard ceiling** (BuildKit 0.13+ / Docker 26+) — the daemon evicts its own cache above it on every build. The older `defaultKeepStorage` is only a **floor** (a minimum to keep) and does **not** cap growth. Linux `dockerd` uses `/etc/docker/daemon.json` (same block; `sudo` + `systemctl restart docker`).
+
+Reactive one-off reclaim: `docker builder prune -af` (build cache) and `docker image prune -af` (unused images) — neither touches volumes.
 
 ## Steps
 
