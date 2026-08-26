@@ -26,6 +26,7 @@ import { authSecret } from "@/auth";
 import { serverEnv } from "@/shared/env";
 import {
   brokerRedirectUri,
+  brokerUrl,
   resolveGithubOauthClient,
 } from "@/shared/identity/broker-config";
 import {
@@ -40,11 +41,11 @@ import { exchangeCodeForGithubIdentity } from "@/shared/identity/github-oauth";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function failure(request: Request, code: string): NextResponse {
+function failure(code: string): NextResponse {
   return NextResponse.redirect(
-    new URL(
-      `/identity/attest/error?code=${encodeURIComponent(code)}`,
-      request.url
+    brokerUrl(
+      serverEnv(),
+      `/identity/attest/error?code=${encodeURIComponent(code)}`
     )
   );
 }
@@ -57,27 +58,27 @@ export async function GET(request: Request): Promise<NextResponse> {
     authSecret
   );
   if (!brokerState) {
-    return failure(request, "broker_request_expired");
+    return failure("broker_request_expired");
   }
 
   // The user declined at GitHub, or GitHub refused.
   if (query.get("error")) {
     cookieStore.delete(BROKER_STATE_COOKIE);
-    return failure(request, "github_declined");
+    return failure("github_declined");
   }
 
   const code = query.get("code");
   const state = query.get("state");
   if (!code || !state || state !== brokerState.state) {
     cookieStore.delete(BROKER_STATE_COOKIE);
-    return failure(request, "invalid_request");
+    return failure("invalid_request");
   }
 
   const env = serverEnv();
   const client = resolveGithubOauthClient(env);
   if (!client) {
     cookieStore.delete(BROKER_STATE_COOKIE);
-    return failure(request, "attestation_unavailable");
+    return failure("attestation_unavailable");
   }
 
   let github: { id: string; login: string | null };
@@ -91,7 +92,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     });
   } catch {
     cookieStore.delete(BROKER_STATE_COOKIE);
-    return failure(request, "github_exchange_failed");
+    return failure("github_exchange_failed");
   }
 
   cookieStore.set(
@@ -106,7 +107,5 @@ export async function GET(request: Request): Promise<NextResponse> {
     }
   );
 
-  return NextResponse.redirect(
-    new URL("/identity/attest/confirm", request.url)
-  );
+  return NextResponse.redirect(brokerUrl(env, "/identity/attest/confirm"));
 }

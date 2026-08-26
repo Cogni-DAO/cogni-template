@@ -53,5 +53,17 @@ export function resolveGithubOauthClient(
 }
 
 export function brokerRedirectUri(env: BrokerEnv): string {
-  return new URL(BROKER_CALLBACK_PATH, env.APP_BASE_URL).toString();
+  return brokerUrl(env, BROKER_CALLBACK_PATH);
+}
+
+/**
+ * Absolute URL for a broker page, built from the CONFIGURED public origin.
+ *
+ * Never derive these from `request.url`: inside the container that is the pod's
+ * internal origin (`https://0.0.0.0:3000`), so every redirect would send the
+ * browser somewhere unreachable. Caught on candidate-a at 5c8e75df — the error
+ * and confirm hops both pointed at 0.0.0.0.
+ */
+export function brokerUrl(env: BrokerEnv, path: string): string {
+  return new URL(path, env.APP_BASE_URL).toString();
 }

@@ -18,6 +18,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   BROKER_CALLBACK_PATH,
   brokerRedirectUri,
+  brokerUrl,
   resolveGithubOauthClient,
 } from "@/shared/identity/broker-config";
 import {
@@ -202,6 +203,32 @@ describe("broker configuration", () => {
    * the single callback at a non-`/api/auth` path silently breaks GitHub sign-in,
    * because NextAuth's redirect_uri stops matching.
    */
+  it("builds broker page URLs from the configured public origin", () => {
+    expect(
+      brokerUrl(
+        { APP_BASE_URL: "https://test.cognidao.org" },
+        "/identity/attest/error?code=x"
+      )
+    ).toBe("https://test.cognidao.org/identity/attest/error?code=x");
+  });
+
+  /**
+   * Caught on candidate-a at 5c8e75df: every broker redirect was built with
+   * `new URL(path, request.url)`. Inside the container `request.url` is the pod's
+   * own origin, so the browser was sent to `https://0.0.0.0:3000/identity/attest/error`
+   * — a dead end on the error path AND on the callback→confirm hop, mid-flow.
+   * Redirect targets must come from the configured public origin.
+   */
+  it.each([
+    "app/(app)/identity/attest/route.ts",
+    "app/api/auth/attest/callback/route.ts",
+    "app/api/auth/attest/confirm/route.ts",
+  ])("%s never builds a redirect from request.url", (relative) => {
+    const source = readFileSync(join(SRC_ROOT, relative), "utf8");
+    // Parsing the query off request.url is fine; using it as a redirect BASE is not.
+    expect(source).not.toMatch(/new URL\([^)]*,\s*request\.url\s*\)/);
+  });
+
   it("keeps the broker callback under /api/auth so sign-in can share one registration", () => {
     expect(BROKER_CALLBACK_PATH.startsWith("/api/auth/")).toBe(true);
 

@@ -35,6 +35,7 @@ import { authSecret } from "@/auth";
 import { serverEnv } from "@/shared/env";
 import {
   brokerRedirectUri,
+  brokerUrl,
   resolveGithubOauthClient,
 } from "@/shared/identity/broker-config";
 import {
@@ -52,11 +53,11 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function failure(request: Request, code: string): NextResponse {
+function failure(code: string): NextResponse {
   return NextResponse.redirect(
-    new URL(
-      `/identity/attest/error?code=${encodeURIComponent(code)}`,
-      request.url
+    brokerUrl(
+      serverEnv(),
+      `/identity/attest/error?code=${encodeURIComponent(code)}`
     ),
     { status: 303 }
   );
@@ -69,7 +70,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     authSecret
   );
   if (!brokerState?.github) {
-    return failure(request, "broker_request_expired");
+    return failure("broker_request_expired");
   }
 
   const form = await request.formData().catch(() => null);
@@ -81,7 +82,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const client = resolveGithubOauthClient(env);
     if (!client) {
       cookieStore.delete(BROKER_STATE_COOKIE);
-      return failure(request, "attestation_unavailable");
+      return failure("attestation_unavailable");
     }
     const challenge = createAuthorizationChallenge();
     cookieStore.set(
@@ -120,7 +121,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   cookieStore.delete(BROKER_STATE_COOKIE);
 
   if (action !== "confirm") {
-    return failure(request, "cancelled");
+    return failure("cancelled");
   }
 
   const parsed = IdentityAttestationRequestSchema.safeParse({
@@ -130,7 +131,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     targetOrigin: brokerState.targetOrigin,
   });
   if (!parsed.success) {
-    return failure(request, "invalid_request");
+    return failure("invalid_request");
   }
 
   try {
@@ -142,7 +143,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.redirect(issued.redirectUrl, { status: 303 });
   } catch (error) {
     if (error instanceof AttestationBrokerError) {
-      return failure(request, error.code);
+      return failure(error.code);
     }
     throw error;
   }

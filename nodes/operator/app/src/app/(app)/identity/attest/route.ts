@@ -31,6 +31,7 @@ import { authSecret } from "@/auth";
 import { serverEnv } from "@/shared/env";
 import {
   brokerRedirectUri,
+  brokerUrl,
   resolveGithubOauthClient,
 } from "@/shared/identity/broker-config";
 import {
@@ -51,11 +52,11 @@ function one(value: string | null): string | undefined {
   return value === null ? undefined : value;
 }
 
-function failure(request: Request, code: string): NextResponse {
+function failure(code: string): NextResponse {
   return NextResponse.redirect(
-    new URL(
-      `/identity/attest/error?code=${encodeURIComponent(code)}`,
-      request.url
+    brokerUrl(
+      serverEnv(),
+      `/identity/attest/error?code=${encodeURIComponent(code)}`
     )
   );
 }
@@ -70,12 +71,12 @@ export async function GET(request: Request): Promise<NextResponse> {
   });
   const returnTo = one(query.get("return_to"));
   if (!parsed.success || !returnTo) {
-    return failure(request, "invalid_request");
+    return failure("invalid_request");
   }
 
   const client = resolveGithubOauthClient(serverEnv());
   if (!client) {
-    return failure(request, "attestation_unavailable");
+    return failure("attestation_unavailable");
   }
 
   let safeReturnTo: string;
@@ -89,7 +90,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     nodeSlug = target.node.slug;
   } catch (error) {
     if (error instanceof AttestationBrokerError) {
-      return failure(request, error.code);
+      return failure(error.code);
     }
     throw error;
   }
