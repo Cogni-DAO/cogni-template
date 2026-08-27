@@ -6,11 +6,16 @@
  * Purpose: Terminal failure surface for the identity broker, so every rejected leg lands
  *   on a page that says what happened instead of a blank redirect.
  * Scope: Renders a known code. Holds no state and never retries.
- * Invariants: NO_LEAK — only a fixed, enumerated reason is shown; never token, code, or
- *   request internals.
+ * Invariants:
+ *   - NO_LEAK: only a fixed, enumerated reason is shown; never token, code, or request
+ *     internals. An unrecognised code falls back to the generic reason.
+ *   - SHARED_CHROME: uses PageContainer/SectionCard so a failed verification looks like
+ *     the product rather than a stack-trace page.
  * Side-effects: none
  * @public
  */
+
+import { PageContainer, SectionCard } from "@/components";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -41,15 +46,19 @@ export default async function IdentityAttestationErrorPage({
   const reason = REASONS[code] ?? "The node verification request was rejected.";
 
   return (
-    <main className="mx-auto max-w-xl px-6 py-16">
-      <h1 className="font-semibold text-xl">
-        GitHub verification could not continue
-      </h1>
-      <p className="mt-3 text-sm">{reason}</p>
-      <p className="mt-4 text-muted-foreground text-sm">
-        Return to the node and start again from your profile.
-        {code ? ` (${code})` : ""}
-      </p>
-    </main>
+    <PageContainer maxWidth="xl">
+      <SectionCard title="GitHub verification could not continue">
+        <p className="text-sm">{reason}</p>
+        <p className="text-muted-foreground text-sm">
+          Return to the node and start again from your profile.
+          {code ? (
+            <>
+              {" "}
+              <span className="font-mono text-xs">({code})</span>
+            </>
+          ) : null}
+        </p>
+      </SectionCard>
+    </PageContainer>
   );
 }

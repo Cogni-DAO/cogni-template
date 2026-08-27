@@ -14,14 +14,16 @@
  *     zero/one-account case. This screen is the only thing that proves the human meant
  *     THIS account for THIS node (task.5024).
  *   - NO_SILENT_ISSUANCE: there is no auto-submit and no redirect-on-render.
+ *   - SHARED_CHROME: uses PageContainer/SectionCard/Button so the one human gate in the
+ *     flow looks like the rest of the product, not a bare HTML page.
  * Side-effects: IO (cookie read)
  * @public
  */
 
 import { cookies } from "next/headers";
-import Link from "next/link";
 
 import { authSecret } from "@/auth";
+import { Button, PageContainer, SectionCard } from "@/components";
 import {
   BROKER_STATE_COOKIE,
   decodeBrokerState,
@@ -38,15 +40,14 @@ export default async function IdentityAttestationConfirmPage() {
 
   if (!brokerState?.github) {
     return (
-      <main className="mx-auto max-w-xl px-6 py-16">
-        <h1 className="font-semibold text-xl">
-          This verification request expired
-        </h1>
-        <p className="mt-3 text-muted-foreground text-sm">
-          Return to the node and start GitHub verification again from your
-          profile.
-        </p>
-      </main>
+      <PageContainer maxWidth="xl">
+        <SectionCard title="This verification request expired">
+          <p className="text-muted-foreground text-sm">
+            Return to the node and start GitHub verification again from your
+            profile. Nothing was shared.
+          </p>
+        </SectionCard>
+      </PageContainer>
     );
   }
 
@@ -54,60 +55,47 @@ export default async function IdentityAttestationConfirmPage() {
   const displayLogin = github.login ? `@${github.login}` : `id ${github.id}`;
 
   return (
-    <main className="mx-auto max-w-xl px-6 py-16">
-      <h1 className="font-semibold text-xl">Confirm GitHub verification</h1>
+    <PageContainer maxWidth="xl">
+      <SectionCard title="Confirm GitHub verification">
+        <div className="space-y-3 text-sm">
+          <p>
+            You signed in to GitHub as{" "}
+            <strong className="font-semibold">{displayLogin}</strong>.
+          </p>
+          <p>
+            Verify this GitHub account for the node{" "}
+            <strong className="font-semibold">{nodeSlug}</strong> at{" "}
+            <span className="font-mono text-xs">{targetOrigin}</span>?
+          </p>
+          <p className="text-muted-foreground">
+            Only this GitHub account&apos;s public identity is shared. Your
+            operator account, wallet, and any other links are never sent to the
+            node — the node records this GitHub identity against its own local
+            account.
+          </p>
+        </div>
 
-      <p className="mt-4 text-sm">
-        You signed in to GitHub as <strong>{displayLogin}</strong>.
-      </p>
-      <p className="mt-2 text-sm">
-        Verify this GitHub account for the node <strong>{nodeSlug}</strong> at{" "}
-        <strong>{targetOrigin}</strong>?
-      </p>
-      <p className="mt-4 text-muted-foreground text-sm">
-        Only this GitHub account&apos;s public identity is shared. Your operator
-        account, wallet, and any other links are never sent to the node — the
-        node records this GitHub identity against its own local account.
-      </p>
+        <form
+          action="/api/auth/attest/confirm"
+          className="flex flex-wrap gap-3"
+          method="post"
+        >
+          <Button name="action" type="submit" value="confirm">
+            Verify {displayLogin}
+          </Button>
+          <Button name="action" type="submit" value="switch" variant="outline">
+            Use a different account
+          </Button>
+          <Button name="action" type="submit" value="cancel" variant="ghost">
+            Cancel
+          </Button>
+        </form>
 
-      <form
-        action="/api/auth/attest/confirm"
-        className="mt-8 flex flex-wrap gap-3"
-        method="post"
-      >
-        <button
-          className="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground text-sm"
-          name="action"
-          type="submit"
-          value="confirm"
-        >
-          Verify {displayLogin}
-        </button>
-        <button
-          className="rounded-md border px-4 py-2 font-medium text-sm"
-          name="action"
-          type="submit"
-          value="switch"
-        >
-          Use a different account
-        </button>
-        <button
-          className="rounded-md border px-4 py-2 font-medium text-sm"
-          name="action"
-          type="submit"
-          value="cancel"
-        >
-          Cancel
-        </button>
-      </form>
-
-      <p className="mt-6 text-muted-foreground text-xs">
-        Wrong account?{" "}
-        <Link className="underline" href="https://github.com/logout">
-          Sign out of GitHub
-        </Link>{" "}
-        first, then choose &quot;Use a different account&quot;.
-      </p>
-    </main>
+        <p className="text-muted-foreground text-xs">
+          Wrong account? Sign out of GitHub first, then choose &quot;Use a
+          different account&quot;.
+        </p>
+      </SectionCard>
+    </PageContainer>
   );
 }
