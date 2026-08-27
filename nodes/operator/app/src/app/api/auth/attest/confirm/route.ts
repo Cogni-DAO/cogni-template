@@ -37,6 +37,7 @@ import { serverEnv } from "@/shared/env";
 import {
   brokerRedirectUri,
   brokerUrl,
+  isAttestableProvider,
   resolveGithubOauthClient,
 } from "@/shared/identity/broker-config";
 import {
@@ -99,6 +100,11 @@ export async function POST(request: Request): Promise<NextResponse> {
   const env = serverEnv();
 
   if (action === "switch") {
+    if (!isAttestableProvider(brokerState.provider)) {
+      cookieStore.delete(BROKER_STATE_COOKIE);
+      return failure("invalid_request");
+    }
+    const provider = brokerState.provider;
     // Re-authenticate from scratch: fresh state + PKCE, no carried-over identity.
     const client = resolveGithubOauthClient(env);
     if (!client) {
@@ -110,6 +116,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       BROKER_STATE_COOKIE,
       await encodeBrokerState(
         {
+          provider: brokerState.provider,
           state: challenge.state,
           codeVerifier: challenge.codeVerifier,
           nodeId: brokerState.nodeId,
@@ -131,7 +138,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.redirect(
       buildGithubAuthorizeUrl({
         clientId: client.clientId,
-        redirectUri: brokerRedirectUri(env),
+        redirectUri: brokerRedirectUri(env, provider),
         state: challenge.state,
         codeChallenge: challenge.codeChallenge,
       }),

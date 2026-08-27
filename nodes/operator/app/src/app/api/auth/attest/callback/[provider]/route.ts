@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Cogni-DAO
 
 /**
- * Module: `@app/api/auth/attest/callback/github`
+ * Module: `@app/api/auth/attest/callback/[provider]`
  * Purpose: GitHub's authorization response for one in-flight broker request.
  * Scope: Matches `state` against the signed broker cookie, exchanges the code (PKCE),
  *   reads the authenticated GitHub identity, and hands off to the confirm screen.
@@ -13,6 +13,9 @@
  *     this exchange only — never a session, never a stored binding (task.5024).
  *   - TOKEN_IS_NEVER_PERSISTED: the access token is discarded inside the exchange.
  *   - NO_ACCOUNT_MINTED: authenticating here creates no operator user, binding, or event.
+ *   - PROVIDER_IS_BOUND: the `[provider]` segment must be attestable AND must equal the
+ *     provider recorded when the round trip started, so a response cannot be replayed
+ *     onto a different provider's callback.
  *   - SITS_WITH_NEXTAUTH: unauthenticated by design — GitHub redirects the browser
  *     here with no session — and placed beside `/api/auth/callback/github` so one
  *     registered OAuth callback prefix (`/api/auth/`) covers sign-in and identity.
@@ -28,6 +31,7 @@ import { serverEnv } from "@/shared/env";
 import {
   brokerRedirectUri,
   brokerUrl,
+  isAttestableProvider,
   resolveGithubOauthClient,
 } from "@/shared/identity/broker-config";
 import {
@@ -71,7 +75,15 @@ function failure(errorCode: string): NextResponse {
   );
 }
 
-export async function GET(request: Request): Promise<NextResponse> {
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ provider: string }> }
+): Promise<NextResponse> {
+  const { provider } = await context.params;
+  if (!isAttestableProvider(provider)) {
+    return failure("invalid_request");
+  }
+
   const query = new URL(request.url).searchParams;
   const cookieStore = await cookies();
   const brokerState = await decodeBrokerState(
@@ -80,6 +92,12 @@ export async function GET(request: Request): Promise<NextResponse> {
   );
   if (!brokerState) {
     return failure("broker_request_expired");
+  }
+
+  // PROVIDER_IS_BOUND — the path segment must match the round trip that was started.
+  if (brokerState.provider !== provider) {
+    cookieStore.delete(BROKER_STATE_COOKIE);
+    return failure("invalid_request");
   }
 
   // The user declined at GitHub, or GitHub refused.
@@ -109,7 +127,7 @@ export async function GET(request: Request): Promise<NextResponse> {
       clientSecret: client.clientSecret,
       code,
       codeVerifier: brokerState.codeVerifier,
-      redirectUri: brokerRedirectUri(env),
+      redirectUri: brokerRedirectUri(env, provider),
     });
   } catch {
     cookieStore.delete(BROKER_STATE_COOKIE);

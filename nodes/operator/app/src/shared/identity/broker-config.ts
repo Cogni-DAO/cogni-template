@@ -25,16 +25,35 @@
  */
 
 /**
- * Registered callback path for the identity broker.
+ * Providers whose identity the broker can attest.
  *
- * Provider-suffixed on purpose, mirroring NextAuth's `/api/auth/callback/{provider}`.
- * The broker proves a CLAIMANT identity — someone who authored commits — so it applies
- * to GitHub (and one day GitLab), NOT to sign-in-only providers like Google or Apple.
- * Those need `/api/auth/callback/{provider}` and nothing here. Naming it explicitly
- * keeps the OAuth-app registration self-documenting and leaves room for a second
- * forge without a migration.
+ * This is deliberately NOT the sign-in provider list. The broker proves a CLAIMANT
+ * identity — someone who authored commits — so it covers forges. Google, Apple and
+ * Facebook identify a person for SIGN-IN but cannot identify a git author, so they
+ * never belong here; they need `/api/auth/callback/{provider}` and nothing more.
+ * Adding a forge (e.g. `gitlab`) means adding it here plus its exchange adapter —
+ * the route itself is already provider-generic.
  */
-export const BROKER_CALLBACK_PATH = "/api/auth/attest/callback/github";
+export const ATTESTABLE_PROVIDERS = ["github"] as const;
+
+export type AttestableProvider = (typeof ATTESTABLE_PROVIDERS)[number];
+
+export function isAttestableProvider(
+  value: string
+): value is AttestableProvider {
+  return (ATTESTABLE_PROVIDERS as readonly string[]).includes(value);
+}
+
+/**
+ * Registered callback path for one attestable provider.
+ *
+ * Mirrors NextAuth's `/api/auth/callback/{provider}` so the two callback families
+ * read the same way, and matches the dynamic-segment shape already used by
+ * `/api/auth/link/[provider]`.
+ */
+export function brokerCallbackPath(provider: AttestableProvider): string {
+  return `/api/auth/attest/callback/${provider}`;
+}
 
 interface BrokerEnv {
   readonly APP_BASE_URL?: string | undefined;
@@ -60,8 +79,11 @@ export function resolveGithubOauthClient(
   return { clientId, clientSecret };
 }
 
-export function brokerRedirectUri(env: BrokerEnv): string {
-  return brokerUrl(env, BROKER_CALLBACK_PATH);
+export function brokerRedirectUri(
+  env: BrokerEnv,
+  provider: AttestableProvider
+): string {
+  return brokerUrl(env, brokerCallbackPath(provider));
 }
 
 /**

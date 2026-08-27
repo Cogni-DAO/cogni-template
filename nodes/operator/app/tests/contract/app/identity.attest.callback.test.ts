@@ -56,7 +56,7 @@ vi.mock("@/bootstrap/http/rateLimiter", () => ({
   TokenBucketRateLimiter: vi.fn(),
 }));
 
-import { GET } from "@/app/api/auth/attest/callback/github/route";
+import { GET } from "@/app/api/auth/attest/callback/[provider]/route";
 import {
   BROKER_STATE_COOKIE,
   decodeBrokerState,
@@ -65,6 +65,7 @@ import {
 
 const SECRET = "test-secret-0123456789abcdef";
 const PENDING = {
+  provider: "github",
   state: "correlation-state",
   codeVerifier: "pkce-verifier",
   nodeId: "22222222-2222-4222-8222-222222222222",
@@ -73,6 +74,8 @@ const PENDING = {
   targetOrigin: "https://node-template-test.cognidao.org",
   returnTo: "https://node-template-test.cognidao.org/profile",
 };
+
+const PROVIDER_CTX = { params: Promise.resolve({ provider: "github" }) };
 
 function request(query: string): NextRequest {
   return new NextRequest(
@@ -97,7 +100,10 @@ describe("/api/auth/attest/callback/github contract tests", () => {
   it("records the authenticated GitHub identity and sends the user to confirm", async () => {
     await seedPendingCookie();
 
-    const res = await GET(request("?code=auth-code&state=correlation-state"));
+    const res = await GET(
+      request("?code=auth-code&state=correlation-state"),
+      PROVIDER_CTX
+    );
 
     expect(res.status).toBe(307);
     expect(res.headers.get("location")).toBe(
@@ -125,7 +131,10 @@ describe("/api/auth/attest/callback/github contract tests", () => {
   it("never exchanges a code whose state does not match the pending request", async () => {
     await seedPendingCookie();
 
-    const res = await GET(request("?code=auth-code&state=attacker-state"));
+    const res = await GET(
+      request("?code=auth-code&state=attacker-state"),
+      PROVIDER_CTX
+    );
 
     expect(mockExchange).not.toHaveBeenCalled();
     expect(res.headers.get("location")).toContain(
@@ -135,7 +144,10 @@ describe("/api/auth/attest/callback/github contract tests", () => {
   });
 
   it("rejects a callback with no pending broker request at all", async () => {
-    const res = await GET(request("?code=auth-code&state=correlation-state"));
+    const res = await GET(
+      request("?code=auth-code&state=correlation-state"),
+      PROVIDER_CTX
+    );
 
     expect(mockExchange).not.toHaveBeenCalled();
     expect(res.headers.get("location")).toContain(
@@ -146,7 +158,7 @@ describe("/api/auth/attest/callback/github contract tests", () => {
   it("reports a declined authorization without touching the exchange", async () => {
     await seedPendingCookie();
 
-    const res = await GET(request("?error=access_denied"));
+    const res = await GET(request("?error=access_denied"), PROVIDER_CTX);
 
     expect(mockExchange).not.toHaveBeenCalled();
     expect(res.headers.get("location")).toContain(
@@ -159,7 +171,10 @@ describe("/api/auth/attest/callback/github contract tests", () => {
     await seedPendingCookie();
     mockExchange.mockRejectedValueOnce(new Error("boom"));
 
-    const res = await GET(request("?code=auth-code&state=correlation-state"));
+    const res = await GET(
+      request("?code=auth-code&state=correlation-state"),
+      PROVIDER_CTX
+    );
 
     expect(res.headers.get("location")).toContain(
       "/identity/attest/error?code=github_exchange_failed"
@@ -170,7 +185,10 @@ describe("/api/auth/attest/callback/github contract tests", () => {
   it("returns no body, so an access token can never leak through this route", async () => {
     await seedPendingCookie();
 
-    const res = await GET(request("?code=auth-code&state=correlation-state"));
+    const res = await GET(
+      request("?code=auth-code&state=correlation-state"),
+      PROVIDER_CTX
+    );
 
     expect(await res.text()).toBe("");
   });

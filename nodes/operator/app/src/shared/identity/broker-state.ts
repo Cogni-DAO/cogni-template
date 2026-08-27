@@ -27,7 +27,13 @@ const BROKER_STATE_SALT = "identity-broker-state";
 export const BROKER_STATE_TTL_SECONDS = 10 * 60;
 
 export interface BrokerState {
-  /** CSRF/correlation value echoed by GitHub. */
+  /**
+   * Which attestable provider this round trip is for. Bound at entry and re-checked
+   * on the callback leg, so a response cannot be replayed onto a different provider's
+   * callback path.
+   */
+  readonly provider: string;
+  /** CSRF/correlation value echoed by the provider. */
   readonly state: string;
   /** PKCE S256 verifier for the token exchange. */
   readonly codeVerifier: string;
@@ -74,6 +80,7 @@ export async function decodeBrokerState(
   if (!decoded || decoded.purpose !== "identity_broker") return null;
 
   const {
+    provider,
     state,
     codeVerifier,
     nodeId,
@@ -83,6 +90,7 @@ export async function decodeBrokerState(
     returnTo,
   } = decoded;
   if (
+    typeof provider !== "string" ||
     typeof state !== "string" ||
     typeof codeVerifier !== "string" ||
     typeof nodeId !== "string" ||
@@ -109,6 +117,7 @@ export async function decodeBrokerState(
   }
 
   return {
+    provider,
     state,
     codeVerifier,
     nodeId,

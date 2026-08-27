@@ -68,6 +68,7 @@ import {
 const SECRET = "test-secret-0123456789abcdef";
 const GITHUB = { id: "295942454", login: "flock-leader" };
 const AUTHENTICATED = {
+  provider: "github",
   state: "correlation-state",
   codeVerifier: "pkce-verifier",
   nodeId: "22222222-2222-4222-8222-222222222222",

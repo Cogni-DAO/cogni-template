@@ -16,9 +16,11 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  BROKER_CALLBACK_PATH,
+  ATTESTABLE_PROVIDERS,
+  brokerCallbackPath,
   brokerRedirectUri,
   brokerUrl,
+  isAttestableProvider,
   resolveGithubOauthClient,
 } from "@/shared/identity/broker-config";
 import {
@@ -38,6 +40,7 @@ const SECRET = "test-broker-secret-value-0123456789";
 const SRC_ROOT = join(dirname(fileURLToPath(import.meta.url)), "../../../src");
 
 const BROKER_STATE = {
+  provider: "github",
   state: "state-value",
   codeVerifier: "verifier-value",
   nodeId: "22222222-2222-4222-8222-222222222222",
@@ -186,9 +189,9 @@ describe("broker configuration", () => {
   });
 
   it("pins one exact redirect URI so GitHub exact-matching is satisfiable", () => {
-    expect(brokerRedirectUri({ APP_BASE_URL: "https://cognidao.org" })).toBe(
-      "https://cognidao.org/api/auth/attest/callback/github"
-    );
+    expect(
+      brokerRedirectUri({ APP_BASE_URL: "https://cognidao.org" }, "github")
+    ).toBe("https://cognidao.org/api/auth/attest/callback/github");
   });
 
   it("builds broker page URLs from the configured public origin", () => {
@@ -209,7 +212,7 @@ describe("broker configuration", () => {
    */
   it.each([
     "app/(app)/identity/attest/route.ts",
-    "app/api/auth/attest/callback/github/route.ts",
+    "app/api/auth/attest/callback/[provider]/route.ts",
     "app/api/auth/attest/confirm/route.ts",
   ])("%s never builds a redirect from request.url", (relative) => {
     const source = readFileSync(join(SRC_ROOT, relative), "utf8");
@@ -228,14 +231,30 @@ describe("broker configuration", () => {
    * first, surfacing as "The redirect_uri is not associated with this application".
    * So EVERY auth route needs its own exact URI registered; there are 10 slots.
    */
+  it("only attests forges — sign-in-only providers get no attest callback", () => {
+    // The broker proves a git AUTHOR. Google/Apple/Facebook identify a person for
+    // sign-in but cannot identify a committer, so they must never appear here.
+    expect([...ATTESTABLE_PROVIDERS]).toEqual(["github"]);
+    for (const signInOnly of ["google", "discord", "apple", "facebook"]) {
+      expect(isAttestableProvider(signInOnly)).toBe(false);
+    }
+  });
+
+  it("derives each provider's callback from one shape", () => {
+    expect(brokerCallbackPath("github")).toBe(
+      "/api/auth/attest/callback/github"
+    );
+  });
+
   it("keeps the broker callback under /api/auth, grouped with sign-in", () => {
-    expect(BROKER_CALLBACK_PATH.startsWith("/api/auth/")).toBe(true);
+    expect(brokerCallbackPath("github").startsWith("/api/auth/")).toBe(true);
   });
 
   it("emits a fully-qualified redirect_uri that must be registered verbatim", () => {
-    const brokerUri = brokerRedirectUri({
-      APP_BASE_URL: "https://test.cognidao.org",
-    });
+    const brokerUri = brokerRedirectUri(
+      { APP_BASE_URL: "https://test.cognidao.org" },
+      "github"
+    );
     // These are DISTINCT registrations. A shared `/api/auth/` prefix does not cover
     // both once the app holds more than one redirect URI.
     expect(brokerUri).toBe(
@@ -257,7 +276,7 @@ describe("no operator session in the broker flow", () => {
   const BROKER_SOURCES = [
     "app/(app)/identity/attest/route.ts",
     "app/(app)/identity/attest/confirm/page.tsx",
-    "app/api/auth/attest/callback/github/route.ts",
+    "app/api/auth/attest/callback/[provider]/route.ts",
     "app/api/auth/attest/confirm/route.ts",
     "app/_facades/identity/attestation-broker.server.ts",
     "features/identity/services/issue-identity-attestation.ts",
@@ -279,7 +298,7 @@ describe("no operator session in the broker flow", () => {
    */
   it.each([
     "app/(app)/identity/attest/route.ts",
-    "app/api/auth/attest/callback/github/route.ts",
+    "app/api/auth/attest/callback/[provider]/route.ts",
     "app/api/auth/attest/confirm/route.ts",
   ])("%s emits a queryable feature marker", (relative) => {
     const source = readFileSync(join(SRC_ROOT, relative), "utf8");
@@ -288,7 +307,7 @@ describe("no operator session in the broker flow", () => {
 
   it.each([
     "app/(app)/identity/attest/route.ts",
-    "app/api/auth/attest/callback/github/route.ts",
+    "app/api/auth/attest/callback/[provider]/route.ts",
     "app/api/auth/attest/confirm/route.ts",
   ])("%s never logs a broker secret", (relative) => {
     const source = readFileSync(join(SRC_ROOT, relative), "utf8");
@@ -331,7 +350,7 @@ describe("broker perimeter stays session-free", () => {
     // callback — so these need no public-namespace carve-out.
     expect(proxySource).not.toContain('"/api/auth');
     expect(
-      brokerRedirectUri({ APP_BASE_URL: "https://cognidao.org" })
+      brokerRedirectUri({ APP_BASE_URL: "https://cognidao.org" }, "github")
     ).toContain("/api/auth/");
     const confirmPage = readFileSync(
       join(SRC_ROOT, "app/(app)/identity/attest/confirm/page.tsx"),

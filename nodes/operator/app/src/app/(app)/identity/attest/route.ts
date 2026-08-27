@@ -31,6 +31,7 @@ import { authSecret } from "@/auth";
 import { getNodeId } from "@/shared/config";
 import { serverEnv } from "@/shared/env";
 import {
+  type AttestableProvider,
   brokerRedirectUri,
   brokerUrl,
   resolveGithubOauthClient,
@@ -46,6 +47,13 @@ import {
   createAuthorizationChallenge,
 } from "@/shared/identity/github-oauth";
 import { EVENT_NAMES, makeLogger } from "@/shared/observability";
+
+/**
+ * v0 attests GitHub only — it is the sole provider that identifies a git author.
+ * When a second forge lands, this becomes a validated request parameter rather than
+ * a constant; everything downstream is already provider-generic.
+ */
+const ATTEST_PROVIDER: AttestableProvider = "github";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -123,6 +131,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     BROKER_STATE_COOKIE,
     await encodeBrokerState(
       {
+        provider: ATTEST_PROVIDER,
         state: challenge.state,
         codeVerifier: challenge.codeVerifier,
         nodeId: parsed.data.nodeId,
@@ -160,7 +169,7 @@ export async function GET(request: Request): Promise<NextResponse> {
   return NextResponse.redirect(
     buildGithubAuthorizeUrl({
       clientId: client.clientId,
-      redirectUri: brokerRedirectUri(serverEnv()),
+      redirectUri: brokerRedirectUri(serverEnv(), ATTEST_PROVIDER),
       state: challenge.state,
       codeChallenge: challenge.codeChallenge,
     })
