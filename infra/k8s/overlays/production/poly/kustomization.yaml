@@ -57,6 +57,21 @@ patches:
       - op: add
         path: /spec/selector/app.kubernetes.io~1instance
         value: "poly"
+  # INCIDENT 2026-08-27: poly scaled to 0. Its mirror/observation loops were
+  # driving multi-minute INSERT + VACUUM on poly_trader_current_positions,
+  # pushing the shared 6-core/6GB production VM into continuous swap thrash
+  # (vmstat wa=70%, load 42, si/so ~20MB/s). kubelet stalled -> NodeNotReady x83
+  # over 10d -> EVERY prod node intermittently 502, operator included. The pod
+  # was already 0/1 with 42 restarts (liveness timeouts), so it served nothing;
+  # this only stops it destroying the box for its neighbours.
+  # REVERT by removing this patch once the query cost + VM sizing are fixed.
+  - target:
+      kind: Deployment
+      name: node-app
+    patch: |
+      - op: add
+        path: /spec/replicas
+        value: 0
   - target:
       kind: Deployment
       name: node-app
