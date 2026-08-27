@@ -280,6 +280,7 @@ describe("no operator session in the broker flow", () => {
   const BROKER_SOURCES = [
     "app/(app)/identity/attest/route.ts",
     "app/(app)/identity/attest/confirm/page.tsx",
+    "app/(app)/identity/attest/confirm/actions.tsx",
     "app/api/auth/attest/callback/[provider]/route.ts",
     "app/api/auth/attest/confirm/route.ts",
     "app/_facades/identity/attestation-broker.server.ts",
@@ -356,11 +357,12 @@ describe("broker perimeter stays session-free", () => {
     expect(
       brokerRedirectUri({ APP_BASE_URL: "https://cognidao.org" }, "github")
     ).toContain("/api/auth/");
-    const confirmPage = readFileSync(
-      join(SRC_ROOT, "app/(app)/identity/attest/confirm/page.tsx"),
+    // The form lives in the client actions component, not the server page.
+    const confirmForm = readFileSync(
+      join(SRC_ROOT, "app/(app)/identity/attest/confirm/actions.tsx"),
       "utf8"
     );
-    expect(confirmPage).toContain('action="/api/auth/attest/confirm"');
+    expect(confirmForm).toContain('action="/api/auth/attest/confirm"');
   });
 
   it("still session-gates the ordinary app routes", () => {

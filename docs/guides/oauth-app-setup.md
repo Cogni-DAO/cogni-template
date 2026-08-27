@@ -71,20 +71,21 @@ Grouping the broker under `/api/auth/` buys tidiness, **not** free registration.
 
 For deployed environments the GitHub env secret is only a provision-time seed — the running pod reads OpenBao. Use `pnpm secrets:set <env> operator GH_OAUTH_CLIENT_ID …` and bounce the pod.
 
-### Worked example — the non-prod GitHub client
+### The actual app inventory
 
-`cogni-template-dev`, [app 3425496](https://github.com/settings/applications/3425496), serves local + candidate-a. Its redirect URIs:
+Three apps for four environments. The split is by **blast radius**, not by host count.
 
-```
-https://test.cognidao.org/api/auth/callback/github
-https://test.cognidao.org/api/auth/attest/callback/github
-http://localhost:3000/api/auth/callback/github
-http://localhost:3000/api/auth/attest/callback/github
-```
+| app                                                                                                | client ID              | serves                    | redirect URIs                                                                                           |
+| -------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `cogni-template-dev` ([3425496](https://github.com/settings/applications/3425496))                 | `Ov23livIPNUGpeVnUoUv` | **local only**            | `http://localhost:3000/api/auth/callback/github`, `.../api/auth/attest/callback/github`                 |
+| `cogni-developers` ([2966520](https://github.com/settings/applications/2966520), org `Cogni-1729`) | `Ov23liCiArFHz9X7oyla` | **candidate-a + preview** | 4 URLs: `{test,preview}.cognidao.org` × `{/api/auth/callback/github, /api/auth/attest/callback/github}` |
+| production ([2966454](https://github.com/settings/applications/2966454))                           | `Ov23lirY21xiXmFej5IP` | **production only**       | `https://cognidao.org/api/auth/callback/github`, `.../api/auth/attest/callback/github`                  |
 
-Adding preview later means adding its two URLs here too — 6 of 10 slots.
+**Why candidate-a and preview deliberately share one app.** Both are non-production, neither holds real user data, and a compromise of one is not materially worse than a compromise of the other. Rule 1 is about keeping **production's** secret off throwaway hosts — it does not demand a client per hostname. Since GitHub allows 10 redirect URIs, both hosts register their own exact URLs on the shared app and both work.
 
-> **Ephemeral hosts.** `preview-deployments.md` mints a new `{slug}.preview.cognidao.org` per preview, which cannot be pre-registered. Those do NOT get their own client: they go through the identity broker, which receives the callback on one stable host and forwards a signed proof to the exact node origin. See the `oauth-per-env-proxy` hub entry.
+**Why local does NOT join them.** `cogni-developers` is an org app intended for deployed environments; a developer laptop should not hold a credential that also authenticates a deployed host. Local keeps `cogni-template-dev`.
+
+> This supersedes an earlier reading of `bug.5061`, which treated candidate-a and preview sharing a client as the defect. The real defect was that they shared a client while **only one host's URLs were registered**, so the other silently failed — plus candidate-a declared no client of its own and inherited one by accident. Sharing with all four URLs registered is a deliberate, documented choice.
 
 ---
 
