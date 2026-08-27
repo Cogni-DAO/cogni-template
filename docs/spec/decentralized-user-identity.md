@@ -130,9 +130,11 @@ absolute — GitHub raised OAuth Apps to 10 redirect URIs with per-URI wildcard 
 `preview-deployments.md` mints a new `{slug}.preview.cognidao.org` host per preview.
 
 Environments do NOT share a client: production uses its own OAuth app, and all
-non-production hosts share a second one. Each registers the `/api/auth/` PREFIX rather
-than a leaf path, so sign-in and this broker — and any future auth route — resolve from
-one entry.
+non-production hosts share a second one. Each auth route registers its **exact** callback
+URL on that app. Registering the `/api/auth/` prefix and expecting sub-paths to match
+works only while an app holds exactly one redirect URI — GitHub enables wildcard matching
+implicitly in that case, and adding a second URI switches to exact matching, silently
+breaking the first.
 
 A dedicated `auth.cognidao.org` node speaking standard OIDC remains a valid future home
 (prototyped in PR #857, never merged). Moving there requires a stated reason; until then

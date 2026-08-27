@@ -12,16 +12,13 @@
  *     the sign-in app is a fallback so the code works under either registration.
  *   - AUTH_CALLBACKS_LIVE_UNDER_/api/auth: this sits beside NextAuth's own
  *     `/api/auth/callback/github` and `/api/auth/link/[provider]`. That tree is
- *     already outside the proxy matcher, so it needs no namespace gymnastics —
- *     and a registered callback matches that URL plus its SUBDIRECTORIES, so
- *     registering `https://<host>/api/auth/` covers NextAuth sign-in AND this
- *     broker with ONE entry — and every future auth route for free. (GitHub
- *     raised OAuth Apps to 10 redirect URIs on 2026-08-14, so extra paths are
- *     now *registrable*; a shared prefix is still better because it costs zero
- *     GitHub settings changes per route.)
- *   - EXACT_REDIRECT: one fixed path, so GitHub's exact-match rule is satisfiable
- *     without wildcard subdomain matching (which would let any subdomain receive
- *     fleet authorization codes).
+ *     already outside the proxy matcher, so it needs no namespace gymnastics.
+ *   - REGISTER_THE_EXACT_URL: this full path must be registered on the OAuth app.
+ *     Registering the `/api/auth/` prefix and expecting sub-paths to match works
+ *     ONLY while an app has exactly one redirect URI — GitHub enables wildcard
+ *     matching implicitly in that case. Add a second URI and matching becomes
+ *     exact, silently breaking the first. That cost a failed human validation on
+ *     2026-08-26; see the `oauth-per-env-proxy` hub entry.
  * Side-effects: none
  * Links: task.5024
  * @public

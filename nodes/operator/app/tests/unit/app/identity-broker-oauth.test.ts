@@ -191,22 +191,6 @@ describe("broker configuration", () => {
     );
   });
 
-  /**
-   * A registered callback matches that URL plus its SUBDIRECTORIES. NextAuth sign-in
-   * already owns `/api/auth/callback/github`, so keeping the broker callback under
-   * `/api/auth/` lets ONE registration — `https://<host>/api/auth/` — cover sign-in,
-   * this broker, and every future auth route.
-   *
-   * (GitHub raised OAuth Apps from 1 to 10 redirect URIs on 2026-08-14, so a second
-   * path is now registrable rather than impossible. The prefix is still correct: it
-   * costs zero GitHub settings changes per new route, and 10 is still a ceiling.)
-   *
-   * Move it elsewhere (e.g. `/api/v1/public/...`) and the two can no longer share a
-   * registration: you must either widen the callback to the apex — which also blesses
-   * every other path on the host — or run a second OAuth App per environment. Pointing
-   * the single callback at a non-`/api/auth` path silently breaks GitHub sign-in,
-   * because NextAuth's redirect_uri stops matching.
-   */
   it("builds broker page URLs from the configured public origin", () => {
     expect(
       brokerUrl(
@@ -233,16 +217,34 @@ describe("broker configuration", () => {
     expect(source).not.toMatch(/new URL\([^)]*,\s*request\.url\s*\)/);
   });
 
-  it("keeps the broker callback under /api/auth so sign-in can share one registration", () => {
+  /**
+   * Keep the broker callback under `/api/auth/`, beside NextAuth's own — it groups the
+   * auth routes and keeps them outside the proxy's session gate.
+   *
+   * It does NOT buy free registration, and believing it did cost a failed human
+   * validation on 2026-08-26. Prefix matching works only while an OAuth app holds
+   * exactly ONE redirect URI — GitHub enables wildcard matching implicitly in that case.
+   * Adding a second URI switches the app to exact matching and silently breaks the
+   * first, surfacing as "The redirect_uri is not associated with this application".
+   * So EVERY auth route needs its own exact URI registered; there are 10 slots.
+   */
+  it("keeps the broker callback under /api/auth, grouped with sign-in", () => {
     expect(BROKER_CALLBACK_PATH.startsWith("/api/auth/")).toBe(true);
+  });
 
-    const registered = "https://cognidao.org/api/auth/";
-    for (const redirectUri of [
-      "https://cognidao.org/api/auth/callback/github", // NextAuth sign-in
-      brokerRedirectUri({ APP_BASE_URL: "https://cognidao.org" }), // this broker
-    ]) {
-      expect(redirectUri.startsWith(registered)).toBe(true);
-    }
+  it("emits a fully-qualified redirect_uri that must be registered verbatim", () => {
+    const brokerUri = brokerRedirectUri({
+      APP_BASE_URL: "https://test.cognidao.org",
+    });
+    // These are DISTINCT registrations. A shared `/api/auth/` prefix does not cover
+    // both once the app holds more than one redirect URI.
+    expect(brokerUri).toBe(
+      "https://test.cognidao.org/api/auth/attest/callback"
+    );
+    expect(brokerUri).not.toBe("https://test.cognidao.org/api/auth/");
+    expect(brokerUri).not.toBe(
+      "https://test.cognidao.org/api/auth/callback/github"
+    );
   });
 });
 
