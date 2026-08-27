@@ -129,11 +129,19 @@ function setHappyForkHandlers(): void {
   routeHandlers = {
     "GET /repos/{owner}/{repo}/contents/{path}": (params) => {
       expect(String(params.owner).toLowerCase()).toBe("cogni-dao");
-      expect(params).toMatchObject({
-        repo: "node-template",
-        path: ".cogni/repo-policy.json",
-        ref: "main",
-      });
+      expect(params).toMatchObject({ path: ".cogni/repo-policy.json" });
+      // The policy is read TWICE by design: once as a pre-flight at floating template
+      // main (fail before minting an unprotectable repo), then again from the FORK at
+      // its exact base commit — the revision whose workflows must satisfy it.
+      if (params.repo === "node-template") {
+        expect(params.ref).toBe("main");
+      } else {
+        // The fork read must be pinned to the resolved base COMMIT (the sha the
+        // identity commit parents on), never the floating "main" the pre-flight used.
+        expect(params.repo).toBe("atlas");
+        expect(params.ref).toBe("template-main");
+        expect(params.ref).not.toBe("main");
+      }
       return {
         type: "file",
         encoding: "base64",
@@ -860,6 +868,9 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
       "PUT /repos/{owner}/{repo}/actions/permissions",
       "PUT /repos/{owner}/{repo}/actions/permissions/workflow",
       "GET /repos/{owner}/{repo}/actions/workflows",
+      // Policy re-read from the FORK at its base commit — the revision whose
+      // workflows must satisfy the contexts we are about to require.
+      "GET /repos/{owner}/{repo}/contents/{path}",
       "POST /repos/{owner}/{repo}/git/blobs",
       "POST /repos/{owner}/{repo}/git/blobs",
       "POST /repos/{owner}/{repo}/git/blobs",
@@ -1170,6 +1181,9 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
       "PUT /repos/{owner}/{repo}/actions/permissions",
       "PUT /repos/{owner}/{repo}/actions/permissions/workflow",
       "GET /repos/{owner}/{repo}/actions/workflows",
+      // Policy re-read from the FORK at its base commit — the revision whose
+      // workflows must satisfy the contexts we are about to require.
+      "GET /repos/{owner}/{repo}/contents/{path}",
       "POST /repos/{owner}/{repo}/git/blobs",
       "POST /repos/{owner}/{repo}/git/blobs",
       "POST /repos/{owner}/{repo}/git/blobs",
@@ -3323,5 +3337,95 @@ describe("forkFromTemplate — protection is the last fallible step", () => {
       (request) => request.params.name === NODE_MAIN_POLICY_RULESET_NAME
     );
     expect(policyWrites).toEqual([]);
+  });
+});
+
+describe("forkFromTemplate — policy is bound to the inherited tree", () => {
+  // Finding 3: the policy used to be read once, from FLOATING template main, before
+  // the fork existed. Template main can move between that read and the fork (and the
+  // 422-reuse path can hand back a much older fork), so the operator could enforce a
+  // required context the fork's inherited workflows never emit — which deadlocks the
+  // new node's default branch on its very first PR. The applied policy must come from
+  // the same revision as the workflows that have to satisfy it.
+  it("enforces the policy at the fork's base commit, not a template main that moved", async () => {
+    setHappyForkHandlers();
+    const movedOnTemplateMain = JSON.stringify({
+      ...TEST_NODE_REPO_POLICY,
+      ruleset: {
+        ...TEST_NODE_REPO_POLICY.ruleset,
+        requiredStatusChecks: {
+          ...TEST_NODE_REPO_POLICY.ruleset.requiredStatusChecks,
+          // A context that exists only on the newer template main.
+          contexts: [
+            "unit",
+            "component",
+            "static",
+            "manifest",
+            "brand-new-check",
+          ],
+        },
+      },
+    });
+    routeHandlers["GET /repos/{owner}/{repo}/contents/{path}"] = (params) => ({
+      type: "file",
+      encoding: "base64",
+      content: Buffer.from(
+        params.repo === "node-template"
+          ? movedOnTemplateMain // template main advanced after the pre-flight read
+          : TEST_NODE_REPO_POLICY_JSON // what the fork actually inherited
+      ).toString("base64"),
+    });
+
+    let written: Record<string, unknown> | undefined;
+    routeHandlers["POST /repos/{owner}/{repo}/rulesets"] = (params) => {
+      written = params;
+      return recordRuleset(params, 88);
+    };
+
+    await makeWriter().forkFromTemplate({
+      templateOwner: "Cogni-DAO",
+      owner: "Cogni-DAO",
+      slug: "atlas",
+      nodeId: "11111111-1111-4111-8111-111111111111",
+      chainId: 8453,
+    });
+
+    const required = (
+      written?.rules as Array<{ type: string; parameters?: unknown }>
+    ).find((rule) => rule.type === "required_status_checks");
+    const contexts = (
+      required?.parameters as {
+        required_status_checks: Array<{ context: string }>;
+      }
+    ).required_status_checks.map((check) => check.context);
+
+    expect(contexts).toEqual(
+      TEST_NODE_REPO_POLICY.ruleset.requiredStatusChecks.contexts
+    );
+    expect(contexts).not.toContain("brand-new-check");
+  });
+
+  it("fails formation when the fork's base commit carries no policy", async () => {
+    setHappyForkHandlers();
+    routeHandlers["GET /repos/{owner}/{repo}/contents/{path}"] = (params) => {
+      if (params.repo === "node-template") {
+        return {
+          type: "file",
+          encoding: "base64",
+          content: Buffer.from(TEST_NODE_REPO_POLICY_JSON).toString("base64"),
+        };
+      }
+      return Promise.reject(statusError(404, "Not Found"));
+    };
+
+    await expect(
+      makeWriter().forkFromTemplate({
+        templateOwner: "Cogni-DAO",
+        owner: "Cogni-DAO",
+        slug: "atlas",
+        nodeId: "11111111-1111-4111-8111-111111111111",
+        chainId: 8453,
+      })
+    ).rejects.toMatchObject({ code: "template_repo_policy_missing" });
   });
 });

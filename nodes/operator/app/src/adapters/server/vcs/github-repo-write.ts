@@ -1704,6 +1704,12 @@ export class GitHubRepoWriter implements DeployPlanePort {
   ): Promise<{ cloneUrl: string; headSha: string }> {
     const { templateOwner, owner, slug } = input;
     const tplOctokit = await this.getOctokit(templateOwner, TEMPLATE_SLUG);
+    // PRE-FLIGHT ONLY. Read at floating template `main` purely to fail BEFORE minting
+    // a repo we could never protect. It is deliberately NOT the authority for the
+    // ruleset write: template `main` can move between here and the fork, and the
+    // 422-reuse path can hand back a fork based on a much older commit. The policy
+    // that is actually applied is re-read at the fork's exact base SHA below, so the
+    // required contexts always match the workflows the fork really inherited.
     const policyText = await this.readFileAtRef(
       tplOctokit,
       templateOwner,
@@ -1718,9 +1724,8 @@ export class GitHubRepoWriter implements DeployPlanePort {
         409
       );
     }
-    let nodeRepoPolicy: NodeRepoPolicy;
     try {
-      nodeRepoPolicy = parseNodeRepoPolicy(policyText);
+      parseNodeRepoPolicy(policyText);
     } catch (error) {
       throw deployPlaneError(
         "template_repo_policy_invalid",
@@ -1786,6 +1791,37 @@ export class GitHubRepoWriter implements DeployPlanePort {
     }
     await this.ensureActionsEnabled(octokit, owner, slug);
     const { baseCommitSha, baseTreeSha } = base;
+
+    // POLICY_IS_BOUND_TO_THE_INHERITED_TREE. Re-read the policy from the FORK at the
+    // exact commit it is based on. The required contexts we are about to enforce must
+    // come from the same revision as the workflows that will emit them — otherwise a
+    // template `main` that moved between the pre-flight read and the fork (or a reused
+    // older fork) yields a ruleset requiring a context this repo's workflows never
+    // produce, which deadlocks the new node's default branch on its very first PR.
+    const forkPolicyText = await this.readFileAtRef(
+      octokit,
+      owner,
+      slug,
+      NODE_REPO_POLICY_PATH,
+      baseCommitSha
+    );
+    if (!forkPolicyText) {
+      throw deployPlaneError(
+        "template_repo_policy_missing",
+        `${owner}/${slug}@${baseCommitSha} is missing ${NODE_REPO_POLICY_PATH}`,
+        409
+      );
+    }
+    let nodeRepoPolicy: NodeRepoPolicy;
+    try {
+      nodeRepoPolicy = parseNodeRepoPolicy(forkPolicyText);
+    } catch (error) {
+      throw deployPlaneError(
+        "template_repo_policy_invalid",
+        `${owner}/${slug}@${baseCommitSha} has an invalid ${NODE_REPO_POLICY_PATH}: ${String(error)}`,
+        409
+      );
+    }
     const repoSpecSha = await this.createBlob(
       octokit,
       owner,
