@@ -13,7 +13,7 @@
 
 import { TEST_USER_ID_1 } from "@tests/_fakes/ids";
 import type { Account, User } from "next-auth";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 // --- Mocks (must precede imports of modules under test) ---
 
@@ -124,5 +124,51 @@ describe("WalletRequiredError guard", () => {
         ctx
       )
     ).rejects.toThrow(WalletRequiredError);
+  });
+});
+
+describe("GitHub provider registration — RFC 9207 issuer (bug.5071)", () => {
+  // The providers array is built at module evaluation from process.env, so each
+  // case needs a fresh module graph rather than a mutated `authOptions`.
+  async function loadProviders(): Promise<
+    { id: string; options?: { issuer?: string } }[]
+  > {
+    vi.resetModules();
+    const mod = await import("@/auth");
+    return mod.authOptions.providers as unknown as {
+      id: string;
+      options?: { issuer?: string };
+    }[];
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("declares the issuer GitHub sends as `iss` so openid-client can validate it", async () => {
+    vi.stubEnv("GH_OAUTH_CLIENT_ID", "test-client-id");
+    vi.stubEnv("GH_OAUTH_CLIENT_SECRET", "test-client-secret");
+
+    const github = (await loadProviders()).find((p) => p.id === "github");
+
+    expect(github).toBeDefined();
+    // Caller-supplied options sit under `options` until next-auth's
+    // `parseProviders` merges them onto the provider at request time, which is
+    // where `openidClient()` reads `provider.issuer`. Asserting the declaration
+    // is therefore the whole of OUR contribution to that value.
+    //
+    // Byte-exact: openid-client compares `params.iss` against it. Anything else
+    // reintroduces the OAuthCallback bounce that broke every GitHub sign-in
+    // from GitHub's April 2026 RFC 9207 rollout onward.
+    expect(github?.options?.issuer).toBe("https://github.com/login/oauth");
+  });
+
+  it("omits the GitHub provider entirely when creds are unset", async () => {
+    vi.stubEnv("GH_OAUTH_CLIENT_ID", "");
+    vi.stubEnv("GH_OAUTH_CLIENT_SECRET", "");
+
+    const providers = await loadProviders();
+
+    expect(providers.map((p) => p.id)).not.toContain("github");
   });
 });
