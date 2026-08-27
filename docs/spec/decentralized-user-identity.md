@@ -217,6 +217,19 @@ For P0, this lets a locally authenticated human prove control of an
 agent-operated GitHub account such as `flock-leader` and claim its preserved
 identity allocation. The broker does not encode future actor/beneficiary policy.
 
+**Attestation is not git-specific.** `claimantKey()` is
+`identity:<provider>:<external_id>` and `user_bindings.provider` already admits
+`wallet | discord | github | google`, so a Discord contribution produces the claimant
+`identity:discord:<snowflake>` — and whoever wants to claim it must prove control of
+that Discord account on that node, which is exactly what the broker does. A node's
+contributions are not only commits, and a node may involve no GitHub at all.
+
+What limits v1 to GitHub is the wire contract, not the design: the claims carry a
+literal `github: {id, login}` field. Generalising means a v2 whose subject is
+`{provider, id, login}`; the routes, broker cookie, PKCE machinery, and provider
+binding are already provider-generic. Widening the attestable-provider list without
+that v2 would sign a claim the contract cannot represent.
+
 ### Session Type
 
 ```typescript

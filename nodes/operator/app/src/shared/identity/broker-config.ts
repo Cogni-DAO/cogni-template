@@ -25,14 +25,24 @@
  */
 
 /**
- * Providers whose identity the broker can attest.
+ * Providers the broker can attest **today**.
  *
- * This is deliberately NOT the sign-in provider list. The broker proves a CLAIMANT
- * identity — someone who authored commits — so it covers forges. Google, Apple and
- * Facebook identify a person for SIGN-IN but cannot identify a git author, so they
- * never belong here; they need `/api/auth/callback/{provider}` and nothing more.
- * Adding a forge (e.g. `gitlab`) means adding it here plus its exchange adapter —
- * the route itself is already provider-generic.
+ * This is a CONTRACT limit, not a taxonomy. `identity.attestation.v1` carries a
+ * literal `github: {id, login}` claim, so v1 can only express a GitHub subject.
+ * That is the only reason this list has one entry.
+ *
+ * It is NOT because attestation is git-specific. Our own ledger disagrees:
+ * `claimantKey()` is `identity:${provider}:${externalId}`, and `user_bindings.provider`
+ * already admits `wallet | discord | github | google`. A Discord contribution produces
+ * the claimant `identity:discord:<snowflake>`, and whoever wants to claim it must
+ * prove they control that Discord account on that node — which is precisely this
+ * broker's job. Contributions to a node are not only commits, and a node may have no
+ * GitHub involvement at all.
+ *
+ * Generalising means a v2 contract whose subject is `{provider, id, login}` rather
+ * than a `github` field; the routes, cookie, and PKCE machinery are already
+ * provider-generic. Tracked in the follow-up on task.5024 — do not "fix" this by
+ * widening the list, which would sign a claim v1 cannot represent.
  */
 export const ATTESTABLE_PROVIDERS = ["github"] as const;
 

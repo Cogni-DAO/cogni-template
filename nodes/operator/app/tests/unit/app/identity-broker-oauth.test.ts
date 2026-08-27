@@ -231,13 +231,17 @@ describe("broker configuration", () => {
    * first, surfacing as "The redirect_uri is not associated with this application".
    * So EVERY auth route needs its own exact URI registered; there are 10 slots.
    */
-  it("only attests forges — sign-in-only providers get no attest callback", () => {
-    // The broker proves a git AUTHOR. Google/Apple/Facebook identify a person for
-    // sign-in but cannot identify a committer, so they must never appear here.
+  it("attests exactly what the v1 contract can express — no more", () => {
+    // A CONTRACT limit, not a taxonomy. identity.attestation.v1 carries a literal
+    // `github: {id, login}` claim, so v1 can only express a GitHub subject. Widening
+    // this list without a v2 contract would sign a claim the wire cannot represent.
+    //
+    // Attestation is NOT git-specific: claimantKey() is identity:<provider>:<id> and
+    // user_bindings already admits discord/google/wallet, so a Discord contribution
+    // yields identity:discord:<snowflake> and will need attesting too.
     expect([...ATTESTABLE_PROVIDERS]).toEqual(["github"]);
-    for (const signInOnly of ["google", "discord", "apple", "facebook"]) {
-      expect(isAttestableProvider(signInOnly)).toBe(false);
-    }
+    expect(isAttestableProvider("github")).toBe(true);
+    expect(isAttestableProvider("not-a-provider")).toBe(false);
   });
 
   it("derives each provider's callback from one shape", () => {
