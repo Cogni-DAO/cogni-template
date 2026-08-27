@@ -4,47 +4,95 @@ type: guide
 title: OAuth App Setup (GitHub + Google)
 status: draft
 trust: draft
-summary: Create GitHub and Google OAuth apps for dev and production environments. Covers app registration, callback URLs, env vars, and consent screen configuration.
-read_when: Setting up OAuth sign-in for the first time, adding a new environment, or rotating OAuth credentials.
+summary: Register OAuth clients per environment for GitHub and Google. Covers the exact-callback-URL rule, the GitHub multi-URI trap that silently breaks existing URIs, the full route inventory including the identity broker, and where secrets live per environment.
+read_when: Adding an OAuth provider, adding an environment, adding any new auth callback route, or debugging redirect_uri errors.
 owner: derekg1729
 created: 2026-02-28
-verified: 2026-02-28
+verified: 2026-08-27
 tags: [auth, oauth, setup]
 ---
 
 # OAuth App Setup (GitHub + Google)
 
-> Register OAuth apps with GitHub and Google so users can sign in. You need **two apps per provider** — one for local dev, one for production. Takes ~15 minutes per provider.
+> **One OAuth client per environment. One registered redirect URI per callback route. Always the exact full URL.**
+> Getting either half wrong fails at the provider, not in our code, and the error is unhelpful.
 
-## Prerequisites
+## The two rules that matter
 
-- Access to a GitHub account with permission to create OAuth Apps
-- Access to a Google Cloud project (or ability to create one)
-- The repo cloned locally with a working `.env.local`
-- Your production domain (e.g. `https://www.cognidao.org`)
+**1. One client per environment — never share across prod and non-prod.**
+A client is one client _secret_. Share it between production and a 48h throwaway preview box and the preview box now holds the credential guarding production sign-in.
 
-## How It Works
+**2. Register the EXACT full callback URL for every route. Never a prefix.**
 
-`src/auth.ts` conditionally registers each OAuth provider only when both `CLIENT_ID` and `CLIENT_SECRET` env vars are set. No code changes needed — just add the env vars.
+| provider   | matching                                                                         | multiple URIs                                                                                                                        |
+| ---------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| **Google** | always exact — no wildcards, no sub-paths, trailing slashes matter               | yes, many                                                                                                                            |
+| **GitHub** | exact… **except** an app holding exactly ONE URI gets implicit wildcard matching | up to **10** (since [2026-08-14](https://github.blog/changelog/2026-08-14-multiple-redirect-uris-and-token-refresh-for-oauth-apps/)) |
 
-**Callback URL pattern** (NextAuth v4):
+### ⚠️ The GitHub trap — adding a URI silently breaks the ones already there
+
+> _"Apps with only one redirect URI have wildcard matching enabled. This is a legacy behavior of GitHub that is now visible and controllable."_
+
+An app registered as `https://test.cognidao.org/api/auth/` worked for **every** sub-path while it was the only URI. Adding a second URI switched the app to exact matching, and `/api/auth/attest/callback` began failing with:
+
+> **Be careful!** The `redirect_uri` is not associated with this application.
+
+The registration looks untouched and correct throughout. This cost a failed human validation on 2026-08-26 (`task.5024`).
+
+**Therefore: register exact URLs from the start.** 10 slots exist; exactness is affordable. Prefer it over enabling wildcard matching, which grants _"any URL that matches a subdomain or additional path off of the redirect URI"_ — a real blast-radius increase on a fleet whose subdomains are node-controlled.
+
+**You cannot detect this from a script.** Providers validate `redirect_uri` only _after_ the user is signed in, so an anonymous `curl` of the authorize URL returns the login page whether or not the URI is registered. Only a signed-in browser surfaces the mismatch. Do not trust a scripted probe here.
+
+## How providers get registered
+
+`src/auth.ts` registers each provider only when both `*_CLIENT_ID` and `*_CLIENT_SECRET` are set. No code change is needed to add one — but note the failure mode: **NextAuth advertises a provider whenever its credentials exist, regardless of whether the callback URL is registered.** A provider showing up on the sign-in page is not evidence that it works.
+
+## Route inventory — every callback that needs registering
+
+Auth callbacks live under `/api/auth/`. That path tree sits outside the proxy's session gate, which is why they work unauthenticated.
+
+| route                        | provider | purpose                                                                         |
+| ---------------------------- | -------- | ------------------------------------------------------------------------------- |
+| `/api/auth/callback/github`  | GitHub   | sign-in                                                                         |
+| `/api/auth/callback/google`  | Google   | sign-in                                                                         |
+| `/api/auth/callback/discord` | Discord  | sign-in                                                                         |
+| `/api/auth/attest/callback`  | GitHub   | **identity broker** — attests a GitHub account for a relying node (`task.5024`) |
+
+Grouping the broker under `/api/auth/` buys tidiness, **not** free registration. Every new auth route costs one settings edit at the provider. Budget for it.
+
+## Environment matrix
+
+| env         | base URL                       | client                          | secrets live in                                |
+| ----------- | ------------------------------ | ------------------------------- | ---------------------------------------------- |
+| local       | `http://localhost:3000`        | non-prod client                 | `.env.local`                                   |
+| candidate-a | `https://test.cognidao.org`    | non-prod client                 | OpenBao `cogni/candidate-a/operator/*` via ESO |
+| preview     | `https://preview.cognidao.org` | non-prod client                 | OpenBao `cogni/preview/operator/*` via ESO     |
+| production  | `https://cognidao.org`         | **production client (its own)** | OpenBao `cogni/production/operator/*` via ESO  |
+
+For deployed environments the GitHub env secret is only a provision-time seed — the running pod reads OpenBao. Use `pnpm secrets:set <env> operator GH_OAUTH_CLIENT_ID …` and bounce the pod.
+
+### Worked example — the non-prod GitHub client
+
+`cogni-template-dev`, [app 3425496](https://github.com/settings/applications/3425496), serves local + candidate-a. Its redirect URIs:
 
 ```
-{NEXTAUTH_URL}/api/auth/callback/{provider}
+https://test.cognidao.org/api/auth/callback/github
+https://test.cognidao.org/api/auth/attest/callback
+http://localhost:3000/api/auth/callback/github
+http://localhost:3000/api/auth/attest/callback
 ```
 
-| Environment | Base URL                | GitHub Callback                                  | Google Callback                                  |
-| ----------- | ----------------------- | ------------------------------------------------ | ------------------------------------------------ |
-| Dev         | `http://localhost:3000` | `http://localhost:3000/api/auth/callback/github` | `http://localhost:3000/api/auth/callback/google` |
-| Production  | `https://app.cogni.dev` | `https://app.cogni.dev/api/auth/callback/github` | `https://app.cogni.dev/api/auth/callback/google` |
+Adding preview later means adding its two URLs here too — 6 of 10 slots.
 
-> Replace `app.cogni.dev` with your actual production domain throughout this guide.
+> **Ephemeral hosts.** `preview-deployments.md` mints a new `{slug}.preview.cognidao.org` per preview, which cannot be pre-registered. Those do NOT get their own client: they go through the identity broker, which receives the callback on one stable host and forwards a signed proof to the exact node origin. See the `oauth-per-env-proxy` hub entry.
+
+---
 
 ---
 
 ## 1. GitHub OAuth Apps
 
-GitHub OAuth Apps only support **one callback URL each**, so you need a separate app for dev and production.
+A GitHub OAuth App holds up to 10 redirect URIs, so one non-prod app covers local + candidate-a + preview. Production still gets its own app — see rule 1. Re-read the trap above before adding a URI to an existing app.
 
 ### 1a. Create the Dev App
 
@@ -55,9 +103,20 @@ GitHub OAuth Apps only support **one callback URL each**, so you need a separate
 
    | Field                      | Value                                            |
    | -------------------------- | ------------------------------------------------ |
-   | Application name           | `Cogni (dev)`                                    |
-   | Homepage URL               | `http://localhost:3000`                          |
+   | Application name           | `cogni-template-dev`                             |
+   | Homepage URL               | `https://test.cognidao.org`                      |
    | Authorization callback URL | `http://localhost:3000/api/auth/callback/github` |
+
+   Then **Add redirect URI** for every remaining non-prod route, all at once:
+
+   ```
+   http://localhost:3000/api/auth/attest/callback
+   https://test.cognidao.org/api/auth/callback/github
+   https://test.cognidao.org/api/auth/attest/callback
+   ```
+
+   > Add them **now**, not later. Registering one URI and adding a second afterwards is
+   > precisely the trap above — the first URI's matching behaviour changes underneath you.
 
 3. Click **Register application**
 
@@ -76,11 +135,11 @@ GitHub OAuth Apps only support **one callback URL each**, so you need a separate
 
 Repeat the same steps with production values:
 
-| Field                      | Value                                            |
-| -------------------------- | ------------------------------------------------ |
-| Application name           | `Cogni`                                          |
-| Homepage URL               | `https://app.cogni.dev`                          |
-| Authorization callback URL | `https://app.cogni.dev/api/auth/callback/github` |
+| Field                      | Value                                           |
+| -------------------------- | ----------------------------------------------- |
+| Application name           | `Cogni`                                         |
+| Homepage URL               | `https://cognidao.org`                          |
+| Authorization callback URL | `https://cognidao.org/api/auth/callback/github` |
 
 Add the credentials to your production environment (Vercel, Railway, etc.) as `GH_OAUTH_CLIENT_ID` and `GH_OAUTH_CLIENT_SECRET`.
 
@@ -94,7 +153,11 @@ Add the credentials to your production environment (Vercel, Railway, etc.) as `G
 
 ## 2. Google OAuth Clients
 
-Google uses a single project but supports multiple redirect URIs per client. You can use **one client** with both dev and prod redirect URIs, or create separate clients. Separate clients is cleaner.
+Google uses one project with multiple clients. **Create a separate client for production** — rule 1 applies to Google exactly as it does to GitHub: one client is one client secret, and production's must not live on a non-prod host.
+
+Google is stricter than GitHub and, usefully, has **no trap**: redirect URIs are always matched **exactly**, wildcards are not supported at all, and trailing slashes are significant. So there is no implicit-wildcard behaviour to lose — but it also means the prefix shortcut never works here. Register every full callback URL.
+
+Google has no equivalent of the identity broker route today; it needs only `/api/auth/callback/google` per environment.
 
 ### 2a. Set Up the Google Cloud Project (once)
 
@@ -121,12 +184,12 @@ Google uses a single project but supports multiple redirect URIs per client. You
 
 2. Fill in:
 
-   | Field                         | Value                                            |
-   | ----------------------------- | ------------------------------------------------ |
-   | Application type              | **Web application**                              |
-   | Name                          | `Cogni (dev)`                                    |
-   | Authorized JavaScript origins | `http://localhost:3000`                          |
-   | Authorized redirect URIs      | `http://localhost:3000/api/auth/callback/google` |
+   | Field                         | Value                                                                                                  |
+   | ----------------------------- | ------------------------------------------------------------------------------------------------------ |
+   | Application type              | **Web application**                                                                                    |
+   | Name                          | `cogni-nonprod`                                                                                        |
+   | Authorized JavaScript origins | `http://localhost:3000`, `https://test.cognidao.org`                                                   |
+   | Authorized redirect URIs      | `http://localhost:3000/api/auth/callback/google`, `https://test.cognidao.org/api/auth/callback/google` |
 
 3. Click **Create** — copy the **Client ID** and **Client Secret**
 
@@ -141,12 +204,12 @@ Google uses a single project but supports multiple redirect URIs per client. You
 
 Create a second OAuth client ID in the same project:
 
-| Field                         | Value                                            |
-| ----------------------------- | ------------------------------------------------ |
-| Application type              | **Web application**                              |
-| Name                          | `Cogni`                                          |
-| Authorized JavaScript origins | `https://app.cogni.dev`                          |
-| Authorized redirect URIs      | `https://app.cogni.dev/api/auth/callback/google` |
+| Field                         | Value                                           |
+| ----------------------------- | ----------------------------------------------- |
+| Application type              | **Web application**                             |
+| Name                          | `Cogni`                                         |
+| Authorized JavaScript origins | `https://cognidao.org`                          |
+| Authorized redirect URIs      | `https://cognidao.org/api/auth/callback/google` |
 
 Add the credentials to your production environment as `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET`.
 
@@ -201,14 +264,17 @@ If you're already signed in (e.g. via wallet), you can link an OAuth provider fr
 
 ## Troubleshooting
 
-| Symptom                          | Cause                                                  | Fix                                                                |
-| -------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------ |
-| Provider not showing on sign-in  | Missing or empty `CLIENT_ID` / `CLIENT_SECRET`         | Check `.env.local`, restart dev server                             |
-| "redirect_uri_mismatch" (Google) | Callback URL doesn't match registered redirect URI     | Verify exact URL in Google Cloud Console (trailing slashes matter) |
-| "redirect_uri_mismatch" (GitHub) | Callback URL doesn't match registered callback URL     | Verify exact URL in GitHub OAuth App settings                      |
-| Google "Access blocked" screen   | App in Testing mode, your email not in test users list | Add your email to OAuth consent screen → Test users                |
-| Google "unverified app" warning  | App not verified (expected in dev)                     | Click "Advanced" → "Go to Cogni (unsafe)" to proceed               |
-| Sign-in succeeds but no user row | DB connection issue                                    | Check Postgres is running, `DATABASE_URL` is correct               |
+| Symptom                                                                         | Cause                                                                                                                                                                      | Fix                                                                                                         |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Provider not showing on sign-in                                                 | Missing or empty `CLIENT_ID` / `CLIENT_SECRET`                                                                                                                             | Check `.env.local`, restart dev server                                                                      |
+| "redirect_uri_mismatch" (Google)                                                | Callback URL doesn't match registered redirect URI                                                                                                                         | Verify exact URL in Google Cloud Console (trailing slashes matter)                                          |
+| "redirect_uri_mismatch" (GitHub)                                                | Callback URL doesn't match registered callback URL                                                                                                                         | Verify exact URL in GitHub OAuth App settings                                                               |
+| GitHub "Be careful! The `redirect_uri` is not associated with this application" | The exact URL is not registered. **Most often: someone added a second redirect URI, which turned off the legacy implicit wildcard that was covering a registered prefix.** | Register the exact full callback URL for every route (see rule 2). Do not assume a prefix covers sub-paths. |
+| Provider listed on sign-in but the round trip dies at the provider              | Credentials are set, so NextAuth advertises it — but the callback URL is unregistered. Presence on the sign-in page proves nothing.                                        | Register the exact callback URL                                                                             |
+| Anonymous `curl` of the authorize URL "passes" but a browser fails              | Providers validate `redirect_uri` only after sign-in                                                                                                                       | Test in a signed-in browser; scripted probes give false passes                                              |
+| Google "Access blocked" screen                                                  | App in Testing mode, your email not in test users list                                                                                                                     | Add your email to OAuth consent screen → Test users                                                         |
+| Google "unverified app" warning                                                 | App not verified (expected in dev)                                                                                                                                         | Click "Advanced" → "Go to Cogni (unsafe)" to proceed                                                        |
+| Sign-in succeeds but no user row                                                | DB connection issue                                                                                                                                                        | Check Postgres is running, `DATABASE_URL` is correct                                                        |
 
 ## Related
 
