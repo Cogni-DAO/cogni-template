@@ -24,6 +24,16 @@ export interface OperatorIdentityAttestationRepositoryConfig {
 }
 
 /**
+ * Reads one node from the `nodes` projection. Returns null when the row is absent
+ * (including on read failure) so the caller falls back rather than failing open.
+ */
+export type FindNodeRow = (nodeId: string) => Promise<{
+  readonly id: string;
+  readonly slug: string;
+  readonly deployEnvs: readonly string[];
+} | null>;
+
+/**
  * Short-TTL cache for the merged-catalog read.
  *
  * The read is an App-authenticated GitHub fetch of `main`, and it sits on the entry
@@ -58,7 +68,11 @@ export class OperatorIdentityAttestationRepository
 {
   constructor(
     private readonly deployPlane: Pick<DeployPlanePort, "listCatalogNodes">,
-    private readonly config: OperatorIdentityAttestationRepositoryConfig
+    private readonly config: OperatorIdentityAttestationRepositoryConfig,
+    /**
+     * Fast path. Absent in tests that only exercise catalog behaviour.
+     */
+    private readonly findNodeRow?: FindNodeRow
   ) {}
 
   private async catalogNodes(): Promise<CatalogNodes> {
@@ -75,7 +89,37 @@ export class OperatorIdentityAttestationRepository
     return nodes;
   }
 
+  /**
+   * `nodes` in Postgres FIRST, the App-authenticated catalog read only as a fallback.
+   *
+   * bug.5063: this lookup sits on the interactive auth path, in front of a human, and
+   * the catalog read is an App JWT exchange plus a fetch per catalog file — measured
+   * at 11.0s cold against 0.22s warm on candidate-a. A human reads 11s as broken; they
+   * said so.
+   *
+   * The projection is safe to lead with. `identity-model.md` fixes `nodes.id` AS the
+   * repo-spec `node_id` — not a surrogate — so the row is keyed by the same identity the
+   * request names, and `deploy_envs` is the same list the allowlist needs.
+   * `catalog-registry-reconcile` re-reads merged git on a ten-minute poll, so staleness
+   * is bounded by that interval rather than unbounded.
+   *
+   * The fallback is what makes leading with it correct: a node registered within the
+   * last poll window is missing from the projection, and would otherwise be rejected as
+   * `unknown_node` — a fail-CLOSED error, but the wrong one. On a miss we pay the slow
+   * read once rather than lie about the node not existing.
+   */
   async findNode(nodeId: string) {
+    if (this.findNodeRow) {
+      const row = await this.findNodeRow(nodeId);
+      if (row) {
+        return {
+          nodeId: row.id,
+          slug: row.slug,
+          deployEnvs: row.deployEnvs,
+        };
+      }
+    }
+
     const nodes = await this.catalogNodes();
     const matches = nodes.filter((candidate) => candidate.nodeId === nodeId);
     if (matches.length === 0) return null;

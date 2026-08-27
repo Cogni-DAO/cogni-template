@@ -6,6 +6,7 @@
 import { IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256 } from "@cogni/node-contracts";
 import { describe, expect, it, vi } from "vitest";
 
+import { OperatorIdentityAttestationRepository } from "@/adapters/server/identity/identity-attestation.adapter";
 import {
   AttestationPreconditionError,
   createIdentityAttestationService,
@@ -122,5 +123,69 @@ describe("identity attestation issuance service", () => {
 
     expect(node).toEqual({ nodeId: NODE_ID, slug: "toks4" });
     expect(sign).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * bug.5063 — the node lookup sits on the interactive auth path, in front of a human.
+ * The App-authenticated catalog read measured 11.0s cold / 0.22s warm on candidate-a,
+ * which a human reads as broken. These pin the ordering that fixes it.
+ */
+describe("broker node lookup ordering (bug.5063)", () => {
+  const ROW = {
+    id: NODE_ID,
+    slug: "toks4",
+    deployEnvs: ["candidate-a", "production"],
+  };
+
+  function repoWith(findNodeRow?: (id: string) => Promise<typeof ROW | null>) {
+    const listCatalogNodes = vi.fn(async () => [
+      { nodeId: NODE_ID, slug: "toks4", deployEnvs: ["candidate-a"] },
+    ]);
+    const repository = new OperatorIdentityAttestationRepository(
+      { listCatalogNodes } as never,
+      { parentOwner: "Cogni-DAO", parentRepo: "cogni" },
+      findNodeRow as never
+    );
+    return { repository, listCatalogNodes };
+  }
+
+  it("never touches the catalog when the projection has the node", async () => {
+    const { repository, listCatalogNodes } = repoWith(async () => ROW);
+
+    await expect(repository.findNode(NODE_ID)).resolves.toEqual({
+      nodeId: NODE_ID,
+      slug: "toks4",
+      deployEnvs: ["candidate-a", "production"],
+    });
+    // The whole point: no GitHub round trip in front of the human.
+    expect(listCatalogNodes).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the catalog for a node registered since the last reconcile", async () => {
+    // catalog-registry-reconcile polls every ten minutes, so a just-registered node is
+    // absent from the projection. Rejecting it would be fail-closed but WRONG —
+    // unknown_node for a node that exists. Pay the slow read once instead.
+    const { repository, listCatalogNodes } = repoWith(async () => null);
+
+    await expect(repository.findNode(NODE_ID)).resolves.toMatchObject({
+      nodeId: NODE_ID,
+    });
+    expect(listCatalogNodes).toHaveBeenCalledOnce();
+  });
+
+  it("propagates a projection read error instead of silently falling open", async () => {
+    // The adapter does NOT swallow this. Swallowing here would make a DB outage
+    // indistinguishable from "node absent", and the fallback would then quietly
+    // re-answer from the catalog on every request — losing the whole fix under load
+    // with no signal. Containment belongs at the composition edge: the bootstrap
+    // `findNodeRow` catches and returns null, so production degrades to the catalog
+    // deliberately and in one place.
+    const { repository, listCatalogNodes } = repoWith(async () => {
+      throw new Error("db down");
+    });
+
+    await expect(repository.findNode(NODE_ID)).rejects.toThrow("db down");
+    expect(listCatalogNodes).not.toHaveBeenCalled();
   });
 });
