@@ -41,6 +41,7 @@ vi.mock("@octokit/core", () => ({
 }));
 
 import {
+  diffRulesetAgainstPolicy,
   GitHubRepoWriter,
   MERGE_QUEUE_RULESET_NAME,
   nodeMainPolicyRulesetPayload,
@@ -96,7 +97,35 @@ function installFetchMock(): void {
   );
 }
 
+const storedRulesets = new Map<number, Record<string, unknown>>();
+
+/**
+ * Record a ruleset write the way GitHub would persist it, and return the id.
+ * The protection readback reads this back, so a test that overrides the write route
+ * must go through here or the readback sees an empty ruleset.
+ */
+function recordRuleset(
+  params: Record<string, unknown>,
+  id?: number
+): { id: number } {
+  const { owner: _o, repo: _r, ruleset_id, ...stored } = params;
+  const rulesetId =
+    id ??
+    (typeof ruleset_id === "number" ? ruleset_id : 88 + storedRulesets.size);
+  storedRulesets.set(rulesetId, stored);
+  return { id: rulesetId };
+}
+
+/** Serve a previously-written ruleset plus GitHub's read-only envelope. */
+function readStoredRuleset(
+  params: Record<string, unknown>
+): Record<string, unknown> {
+  const id = params.ruleset_id as number;
+  return { id, source_type: "Repository", ...(storedRulesets.get(id) ?? {}) };
+}
+
 function setHappyForkHandlers(): void {
+  storedRulesets.clear();
   routeHandlers = {
     "GET /repos/{owner}/{repo}/contents/{path}": (params) => {
       expect(String(params.owner).toLowerCase()).toBe("cogni-dao");
@@ -117,7 +146,15 @@ function setHappyForkHandlers(): void {
     // Node main-policy upsert + merge-queue source lookup. Default: no rulesets,
     // so formation creates the required policy and skips the optional queue.
     "GET /repos/{owner}/{repo}/rulesets": () => [],
-    "POST /repos/{owner}/{repo}/rulesets": () => ({ id: 88 }),
+    "POST /repos/{owner}/{repo}/rulesets": (params) => recordRuleset(params),
+    "PUT /repos/{owner}/{repo}/rulesets/{ruleset_id}": (params) =>
+      recordRuleset(params),
+    // READBACK: the adapter re-reads the ruleset it just wrote and refuses to call a
+    // node protected until the ACTIVE rules match the policy. This store echoes what
+    // GitHub was actually asked to persist for THAT id (plus the read-only envelope),
+    // so the happy path exercises a real comparison instead of skipping it.
+    "GET /repos/{owner}/{repo}/rulesets/{ruleset_id}": (params) =>
+      readStoredRuleset(params),
     "POST /repos/{owner}/{repo}/forks": (params) => {
       expect(params).toMatchObject({
         owner: "Cogni-DAO",
@@ -833,6 +870,8 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
       "PATCH /repos/{owner}/{repo}",
       "GET /repos/{owner}/{repo}/rulesets",
       "POST /repos/{owner}/{repo}/rulesets",
+      // The write is not the last word — the ruleset is read back and compared.
+      "GET /repos/{owner}/{repo}/rulesets/{ruleset_id}",
     ]);
   });
 
@@ -841,7 +880,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
     let postParams: Record<string, unknown> | undefined;
     routeHandlers["POST /repos/{owner}/{repo}/rulesets"] = (params) => {
       postParams = params;
-      return { id: 88 };
+      return recordRuleset(params, 88);
     };
 
     await makeWriter().forkFromTemplate({
@@ -885,7 +924,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
       params
     ) => {
       putParams = params;
-      return {};
+      return recordRuleset(params);
     };
 
     await makeWriter().forkFromTemplate({
@@ -920,14 +959,26 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
     // Source (monorepo) HAS the queue ruleset; target (node) has none → POST.
     routeHandlers["GET /repos/{owner}/{repo}/rulesets"] = (params) =>
       params.repo === "cogni" ? [{ id: 77, name: "main-merge-queue" }] : [];
-    routeHandlers["GET /repos/{owner}/{repo}/rulesets/{ruleset_id}"] = () => ({
-      name: "main-merge-queue",
-      target: "branch",
-      enforcement: "active",
-      conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
-      rules: [{ type: "merge_queue", parameters: { merge_method: "SQUASH" } }],
-    });
-    routeHandlers["POST /repos/{owner}/{repo}/rulesets"] = () => ({ id: 99 });
+    routeHandlers["GET /repos/{owner}/{repo}/rulesets/{ruleset_id}"] = (
+      params
+    ) =>
+      // Only the SOURCE monorepo serves the queue ruleset. The TARGET node repo hits
+      // this same route for the protection READBACK, which must see what was stored.
+      params.repo !== "cogni"
+        ? readStoredRuleset(params)
+        : {
+            name: "main-merge-queue",
+            target: "branch",
+            enforcement: "active",
+            conditions: {
+              ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] },
+            },
+            rules: [
+              { type: "merge_queue", parameters: { merge_method: "SQUASH" } },
+            ],
+          };
+    routeHandlers["POST /repos/{owner}/{repo}/rulesets"] = (params) =>
+      recordRuleset(params, 99);
 
     await makeWriter().forkFromTemplate({
       templateOwner: "Cogni-DAO",
@@ -971,13 +1022,24 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
     setHappyForkHandlers();
     routeHandlers["GET /repos/{owner}/{repo}/rulesets"] = (params) =>
       params.repo === "cogni" ? [{ id: 77, name: "main-merge-queue" }] : [];
-    routeHandlers["GET /repos/{owner}/{repo}/rulesets/{ruleset_id}"] = () => ({
-      name: "main-merge-queue",
-      target: "branch",
-      enforcement: "active",
-      conditions: { ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] } },
-      rules: [{ type: "merge_queue", parameters: { merge_method: "SQUASH" } }],
-    });
+    routeHandlers["GET /repos/{owner}/{repo}/rulesets/{ruleset_id}"] = (
+      params
+    ) =>
+      // Only the SOURCE monorepo serves the queue ruleset. The TARGET node repo hits
+      // this same route for the protection READBACK, which must see what was stored.
+      params.repo !== "cogni"
+        ? readStoredRuleset(params)
+        : {
+            name: "main-merge-queue",
+            target: "branch",
+            enforcement: "active",
+            conditions: {
+              ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] },
+            },
+            rules: [
+              { type: "merge_queue", parameters: { merge_method: "SQUASH" } },
+            ],
+          };
     routeHandlers["POST /repos/{owner}/{repo}/rulesets"] = (params) =>
       params.name === MERGE_QUEUE_RULESET_NAME
         ? Promise.reject(
@@ -986,7 +1048,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
               "Invalid rule 'merge_queue': unsupported on this plan"
             )
           )
-        : { id: 88 };
+        : recordRuleset(params, 88);
 
     // Resolves (no throw) despite the queue write failing.
     const result = await makeWriter().forkFromTemplate({
@@ -1038,7 +1100,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
         ? Promise.reject(
             statusError(403, "Resource not accessible by integration")
           )
-        : { id: 88 };
+        : recordRuleset(params, 88);
 
     await expect(
       makeWriter().forkFromTemplate({
@@ -1118,6 +1180,7 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
       "PATCH /repos/{owner}/{repo}",
       "GET /repos/{owner}/{repo}/rulesets",
       "POST /repos/{owner}/{repo}/rulesets",
+      "GET /repos/{owner}/{repo}/rulesets/{ruleset_id}",
     ]);
   });
 
@@ -3065,5 +3128,200 @@ describe("rulesetGetToPutPayload", () => {
     expect(put.conditions.ref_name.include).toEqual(["~DEFAULT_BRANCH"]);
     expect(put.rules).toEqual([]);
     expect(put.bypass_actors).toEqual([]);
+  });
+});
+
+describe("diffRulesetAgainstPolicy — protection readback", () => {
+  // The review's core objection to the first implementation: the tests stopped at the
+  // SUBMITTED payload, so they could not detect GitHub storing something other than
+  // what we sent. A 2xx is not proof of protection. These pin the comparator that
+  // turns the write into a proof.
+  const policy = nodeMainPolicyRulesetPayload(TEST_NODE_REPO_POLICY);
+
+  // What a faithful GitHub read of our own payload looks like: same rules, plus the
+  // read-only envelope GitHub adds. The comparator must ignore the envelope.
+  const faithfulReadback = () => ({
+    id: 42,
+    node_id: "RS_kwDO",
+    source: "cogni-dao/levelup",
+    source_type: "Repository",
+    created_at: "2026-08-27T00:00:00Z",
+    updated_at: "2026-08-27T00:00:00Z",
+    _links: { self: { href: "https://api.github.com/..." } },
+    current_user_can_bypass: "never",
+    name: policy.name,
+    target: policy.target,
+    enforcement: policy.enforcement,
+    conditions: structuredClone(policy.conditions),
+    rules: structuredClone(policy.rules),
+    bypass_actors: [],
+  });
+
+  it("accepts a faithful readback, ignoring GitHub's read-only envelope", () => {
+    expect(
+      diffRulesetAgainstPolicy(faithfulReadback() as never, policy)
+    ).toEqual([]);
+  });
+
+  it("compares required contexts as a set, not by order", () => {
+    const shuffled = faithfulReadback();
+    const checks = shuffled.rules.find(
+      (rule: { type: string }) => rule.type === "required_status_checks"
+    ) as { parameters: { required_status_checks: unknown[] } };
+    checks.parameters.required_status_checks.reverse();
+    expect(diffRulesetAgainstPolicy(shuffled as never, policy)).toEqual([]);
+  });
+
+  it("catches a ruleset stored as evaluate instead of active", () => {
+    const weakened = { ...faithfulReadback(), enforcement: "evaluate" };
+    expect(
+      diffRulesetAgainstPolicy(weakened as never, policy).join(" ")
+    ).toContain("enforcement");
+  });
+
+  it("catches a dropped required context", () => {
+    const partial = faithfulReadback();
+    const checks = partial.rules.find(
+      (rule: { type: string }) => rule.type === "required_status_checks"
+    ) as { parameters: { required_status_checks: { context: string }[] } };
+    const dropped = checks.parameters.required_status_checks.pop();
+    expect(
+      diffRulesetAgainstPolicy(partial as never, policy).join(" ")
+    ).toContain(`required contexts missing: ${dropped?.context}`);
+  });
+
+  it("catches a silently dropped pull_request rule — main pushable without a PR", () => {
+    const noPr = faithfulReadback();
+    noPr.rules = noPr.rules.filter(
+      (rule: { type: string }) => rule.type !== "pull_request"
+    );
+    expect(diffRulesetAgainstPolicy(noPr as never, policy).join(" ")).toContain(
+      "pull_request rule is absent"
+    );
+  });
+
+  it("catches a bypass actor, which would make protection escapable", () => {
+    const escapable = {
+      ...faithfulReadback(),
+      bypass_actors: [{ actor_id: 1, actor_type: "OrganizationAdmin" }],
+    };
+    expect(
+      diffRulesetAgainstPolicy(escapable as never, policy).join(" ")
+    ).toContain("bypass actor");
+  });
+
+  it("catches a ruleset that no longer targets the default branch", () => {
+    const misTargeted = faithfulReadback();
+    misTargeted.conditions = {
+      ref_name: { include: ["refs/heads/dev"], exclude: [] },
+    };
+    expect(
+      diffRulesetAgainstPolicy(misTargeted as never, policy).join(" ")
+    ).toContain("~DEFAULT_BRANCH");
+  });
+});
+
+describe("forkFromTemplate — protection is the last fallible step", () => {
+  // The zero-bypass PR ruleset makes any further direct `main` update impossible,
+  // including the identity `upsertRef` a retry would redo. So if ANY fallible step
+  // ran after the protection write and failed, the node would be stranded: the retry
+  // cannot re-run identity, and whatever failed never completed. Merge-queue
+  // replication is the only such step, and it must come first.
+  const routesOf = (predicate: (route: string) => boolean) =>
+    requests.map((request) => request.route).filter(predicate);
+
+  it("replicates the merge queue BEFORE writing the protection ruleset", async () => {
+    setHappyForkHandlers();
+    routeHandlers["GET /repos/{owner}/{repo}/rulesets"] = (params) =>
+      params.repo === "cogni"
+        ? [{ id: 77, name: MERGE_QUEUE_RULESET_NAME }]
+        : [];
+    routeHandlers["GET /repos/{owner}/{repo}/rulesets/{ruleset_id}"] = (
+      params
+    ) =>
+      params.repo !== "cogni"
+        ? readStoredRuleset(params)
+        : {
+            name: MERGE_QUEUE_RULESET_NAME,
+            target: "branch",
+            enforcement: "active",
+            conditions: {
+              ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] },
+            },
+            rules: [
+              { type: "merge_queue", parameters: { merge_method: "SQUASH" } },
+            ],
+          };
+
+    await makeWriter().forkFromTemplate({
+      templateOwner: "Cogni-DAO",
+      owner: "Cogni-DAO",
+      slug: "atlas",
+      nodeId: "11111111-1111-4111-8111-111111111111",
+      chainId: 8453,
+      mergeQueueSourceOwner: "Cogni-DAO",
+      mergeQueueSourceRepo: "cogni",
+    });
+
+    const writes = requests.filter(
+      (request) => request.route === "POST /repos/{owner}/{repo}/rulesets"
+    );
+    const names = writes.map((request) => request.params.name);
+    expect(names).toEqual([
+      MERGE_QUEUE_RULESET_NAME,
+      NODE_MAIN_POLICY_RULESET_NAME,
+    ]);
+  });
+
+  it("leaves main unprotected — so a retry can still re-form it — when the queue write fails", async () => {
+    setHappyForkHandlers();
+    routeHandlers["GET /repos/{owner}/{repo}/rulesets"] = (params) =>
+      params.repo === "cogni"
+        ? [{ id: 77, name: MERGE_QUEUE_RULESET_NAME }]
+        : [];
+    routeHandlers["GET /repos/{owner}/{repo}/rulesets/{ruleset_id}"] = (
+      params
+    ) =>
+      params.repo !== "cogni"
+        ? readStoredRuleset(params)
+        : {
+            name: MERGE_QUEUE_RULESET_NAME,
+            target: "branch",
+            enforcement: "active",
+            conditions: {
+              ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] },
+            },
+            rules: [
+              { type: "merge_queue", parameters: { merge_method: "SQUASH" } },
+            ],
+          };
+    // A queue write failure that is NOT the optional plan-limitation 422.
+    routeHandlers["POST /repos/{owner}/{repo}/rulesets"] = (params) =>
+      params.name === MERGE_QUEUE_RULESET_NAME
+        ? Promise.reject(statusError(500, "GitHub is having a moment"))
+        : recordRuleset(params, 88);
+
+    await expect(
+      makeWriter().forkFromTemplate({
+        templateOwner: "Cogni-DAO",
+        owner: "Cogni-DAO",
+        slug: "atlas",
+        nodeId: "11111111-1111-4111-8111-111111111111",
+        chainId: 8453,
+        mergeQueueSourceOwner: "Cogni-DAO",
+        mergeQueueSourceRepo: "cogni",
+      })
+    ).rejects.toBeTruthy();
+
+    // The protection ruleset was never written, so `main` is still directly
+    // updatable and the whole formation is safely retryable.
+    expect(
+      routesOf((route) => route === "POST /repos/{owner}/{repo}/rulesets")
+        .length
+    ).toBe(1); // the failed queue attempt only
+    const policyWrites = requests.filter(
+      (request) => request.params.name === NODE_MAIN_POLICY_RULESET_NAME
+    );
+    expect(policyWrites).toEqual([]);
   });
 });

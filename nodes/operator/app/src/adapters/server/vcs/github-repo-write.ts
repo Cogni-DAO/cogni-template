@@ -564,6 +564,103 @@ export function nodeMainPolicyRulesetPayload(
 }
 
 /**
+ * Compare a ruleset READ BACK from GitHub against the payload we wrote, and return a
+ * human-readable list of every material difference (empty = the repo really is
+ * protected exactly as the policy demands).
+ *
+ * Compares only what the policy actually asserts — enforcement, default-branch
+ * targeting, the pull_request rule, the required-status-check contexts as a SET, and
+ * that there are no bypass actors. GitHub's read envelope (id, source, timestamps,
+ * `_links`, `current_user_can_bypass`) and any additive rule GitHub itself injects are
+ * deliberately ignored: this is a "the policy holds" check, not a byte-equality check
+ * that would fail on every harmless GitHub-side addition.
+ *
+ * Contexts are compared as a set because GitHub does not promise to preserve order.
+ * Pure; exported for unit tests.
+ */
+export function diffRulesetAgainstPolicy(
+  active: RulesetResponse,
+  expected: RulesetWritePayload
+): readonly string[] {
+  const problems: string[] = [];
+
+  if (active?.enforcement !== expected.enforcement) {
+    problems.push(
+      `enforcement is ${JSON.stringify(active?.enforcement)}, expected ${JSON.stringify(expected.enforcement)}`
+    );
+  }
+
+  const include = active?.conditions?.ref_name?.include ?? [];
+  if (!include.includes("~DEFAULT_BRANCH")) {
+    problems.push(
+      `conditions.ref_name.include is ${JSON.stringify(include)}, expected it to target ~DEFAULT_BRANCH`
+    );
+  }
+
+  const activeRules = Array.isArray(active?.rules) ? active.rules : [];
+  const ruleByType = (
+    rules: ReadonlyArray<{ type?: string; parameters?: unknown }>,
+    type: string
+  ) => rules.find((rule) => rule?.type === type);
+
+  const expectedPr = ruleByType(expected.rules, "pull_request");
+  const activePr = ruleByType(activeRules, "pull_request");
+  if (expectedPr && !activePr) {
+    problems.push(
+      "pull_request rule is absent — main can be pushed without a PR"
+    );
+  } else if (expectedPr && activePr) {
+    const want = expectedPr.parameters as Record<string, unknown>;
+    const got = (activePr.parameters ?? {}) as Record<string, unknown>;
+    for (const key of Object.keys(want)) {
+      if (JSON.stringify(got[key]) !== JSON.stringify(want[key])) {
+        problems.push(
+          `pull_request.${key} is ${JSON.stringify(got[key])}, expected ${JSON.stringify(want[key])}`
+        );
+      }
+    }
+  }
+
+  const expectedChecks = ruleByType(expected.rules, "required_status_checks");
+  const activeChecks = ruleByType(activeRules, "required_status_checks");
+  if (expectedChecks && !activeChecks) {
+    problems.push(
+      "required_status_checks rule is absent — main can merge with no CI"
+    );
+  } else if (expectedChecks && activeChecks) {
+    const contextsOf = (rule: { parameters?: unknown }) =>
+      (
+        (
+          (rule.parameters ?? {}) as {
+            required_status_checks?: ReadonlyArray<{ context?: string }>;
+          }
+        ).required_status_checks ?? []
+      )
+        .map((check) => check?.context)
+        .filter((context): context is string => typeof context === "string");
+    const want = new Set(contextsOf(expectedChecks));
+    const got = new Set(contextsOf(activeChecks));
+    const missing = [...want].filter((context) => !got.has(context));
+    const extra = [...got].filter((context) => !want.has(context));
+    if (missing.length > 0) {
+      problems.push(`required contexts missing: ${missing.join(", ")}`);
+    }
+    if (extra.length > 0) {
+      problems.push(`unexpected required contexts: ${extra.join(", ")}`);
+    }
+  }
+
+  const bypass = active?.bypass_actors ?? [];
+  if (bypass.length > 0) {
+    problems.push(
+      `${bypass.length} bypass actor(s) present, expected none — protection would be escapable`
+    );
+  }
+
+  return problems;
+}
+
+/**
  * Transform a GET ruleset response into the POST/PUT body, copying the source
  * verbatim for the fields a write accepts (name, target, enforcement, conditions,
  * rules, bypass_actors) and dropping the read-only envelope (id, source, `*_at`,
@@ -1761,17 +1858,17 @@ export class GitHubRepoWriter implements DeployPlanePort {
       }
     );
     await this.upsertRef(octokit, owner, slug, "main", commit.sha);
-    // Born protected: GitHub itself requires a PR plus the exact standard checks
-    // before any subsequent main update. This policy is unconditional; omitting a
-    // queue source must never mint an unprotected node.
     await this.ensureCanonicalRepoSettings(octokit, owner, slug);
-    await this.ensureNodeMainPolicyRuleset(
-      octokit,
-      owner,
-      slug,
-      nodeRepoPolicy
-    );
 
+    // PROTECTION_IS_THE_LAST_FALLIBLE_STEP. The zero-bypass PR ruleset makes any
+    // further direct `main` update impossible — including the `upsertRef` above on a
+    // retry. So every fallible initialization step that still needs an unprotected
+    // `main` MUST run before the protection write; otherwise a failure after
+    // protection (or a lost response) strands the node permanently half-formed: the
+    // retry cannot re-run identity, and the queue was never replicated.
+    // Merge-queue replication is the only such step, and it is explicitly optional
+    // (a missing monorepo queue ruleset is a clean skip), so a failure here leaves an
+    // UNPROTECTED repo the retry can still fully re-form.
     if (input.mergeQueueSourceOwner && input.mergeQueueSourceRepo) {
       const sourceOctokit = await this.getOctokit(
         input.mergeQueueSourceOwner,
@@ -1793,6 +1890,16 @@ export class GitHubRepoWriter implements DeployPlanePort {
         slug
       );
     }
+
+    // Born protected, and PROVEN so: GitHub requires a PR plus the exact standard
+    // checks before any subsequent main update. Unconditional — omitting a queue
+    // source must never mint an unprotected node.
+    await this.ensureNodeMainPolicyRuleset(
+      octokit,
+      owner,
+      slug,
+      nodeRepoPolicy
+    );
     return { cloneUrl, headSha: commit.sha };
   }
 
@@ -3261,20 +3368,49 @@ export class GitHubRepoWriter implements DeployPlanePort {
     ).find((ruleset) => ruleset.name === policy.ruleset.name);
     const payload = nodeMainPolicyRulesetPayload(policy);
 
-    if (existing) {
-      await this.requestRaw(
-        octokit,
-        "PUT /repos/{owner}/{repo}/rulesets/{ruleset_id}",
-        { owner, repo, ruleset_id: existing.id, ...payload }
+    const rulesetId = existing
+      ? ((
+          await this.requestRaw(
+            octokit,
+            "PUT /repos/{owner}/{repo}/rulesets/{ruleset_id}",
+            { owner, repo, ruleset_id: existing.id, ...payload }
+          )
+        )?.id ?? existing.id)
+      : (
+          await this.requestRaw(
+            octokit,
+            "POST /repos/{owner}/{repo}/rulesets",
+            { owner, repo, ...payload }
+          )
+        )?.id;
+
+    if (typeof rulesetId !== "number") {
+      throw new Error(
+        `node ${owner}/${repo} protection write returned no ruleset id; cannot prove the repo is protected`
       );
-      return;
     }
 
-    await this.requestRaw(octokit, "POST /repos/{owner}/{repo}/rulesets", {
-      owner,
-      repo,
-      ...payload,
-    });
+    // READBACK_IS_THE_PROOF. A 2xx only proves GitHub ACCEPTED the request — not that
+    // the ACTIVE ruleset carries the exact target, enforcement, PR rule, required
+    // contexts and zero bypass actors. GitHub can normalize, silently drop a rule it
+    // does not recognise, or leave a pre-existing ruleset partially updated, and every
+    // one of those states reports 2xx while the node is NOT protected. A node whose
+    // protection we merely requested is indistinguishable from one that is protected,
+    // which is precisely the failure this whole feature exists to prevent — so read
+    // the active ruleset back and compare it to what we sent.
+    const { data: active } = await octokit.request(
+      "GET /repos/{owner}/{repo}/rulesets/{ruleset_id}",
+      { owner, repo, ruleset_id: rulesetId }
+    );
+    const mismatches = diffRulesetAgainstPolicy(
+      active as RulesetResponse,
+      payload
+    );
+    if (mismatches.length > 0) {
+      throw new Error(
+        `node ${owner}/${repo} protection readback mismatch: ${mismatches.join("; ")}`
+      );
+    }
   }
 
   /**
@@ -3366,12 +3502,18 @@ export class GitHubRepoWriter implements DeployPlanePort {
    * but not statically assignable to them. Typing `route` as `string` selects the
    * generic overload whose body is `RequestParameters`, accepting the dynamic payload.
    */
+  /**
+   * Escape hatch for routes Octokit's generated types do not cover (rulesets).
+   * Returns the response body so callers can READ BACK what GitHub actually stored;
+   * existing callers that ignore it are unaffected.
+   */
   private async requestRaw(
     octokit: Octokit,
     route: string,
     params: Record<string, unknown>
-  ): Promise<void> {
-    await octokit.request(route, params);
+  ): Promise<{ id?: number } | undefined> {
+    const response = await octokit.request(route, params);
+    return response?.data as { id?: number } | undefined;
   }
 
   private async ensureActionsEnabled(
