@@ -772,6 +772,13 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
       "POST /repos/{owner}/{repo}/forks": () => {
         throw new Error("fork creation reached");
       },
+      // Formation now pre-flights the template repo policy before minting, so this
+      // wholesale handler map has to serve it or the drift assertion never runs.
+      "GET /repos/{owner}/{repo}/contents/{path}": () => ({
+        type: "file",
+        encoding: "base64",
+        content: Buffer.from(TEST_NODE_REPO_POLICY_JSON).toString("base64"),
+      }),
     };
 
     await expect(
@@ -822,6 +829,13 @@ describe("GitHubRepoWriter.forkFromTemplate", () => {
           ],
         };
       },
+      // Formation now pre-flights the template repo policy before minting, so this
+      // wholesale handler map has to serve it or the drift assertion never runs.
+      "GET /repos/{owner}/{repo}/contents/{path}": () => ({
+        type: "file",
+        encoding: "base64",
+        content: Buffer.from(TEST_NODE_REPO_POLICY_JSON).toString("base64"),
+      }),
     };
 
     await expect(
