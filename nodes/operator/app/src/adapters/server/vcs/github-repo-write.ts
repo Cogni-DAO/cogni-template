@@ -4,8 +4,9 @@
 /**
  * Module: `@adapters/server/vcs/github-repo-write`
  * Purpose: Operator-only helper that mints node repos, commits files, and opens pull requests via the GitHub App.
- *   At formation it also replicates the monorepo's merge gate onto the node verbatim: branch
- *   protection, canonical repo settings (squash-only, auto-merge, is_template:false), and the `merge_queue` ruleset.
+ *   At formation it also installs the node merge gate: the canonical default-branch
+ *   PR/check ruleset, repo settings (squash-only,
+ *   auto-merge, is_template:false), and the `merge_queue` ruleset.
  * Scope: Thin Octokit calls behind node formation and candidate-flight prep.
  *   Does not belong in `VcsCapability` because that capability is shared with poly/resy/node-template stubs
  *   and these write ops are operator-only.
@@ -77,6 +78,11 @@ import {
   makeNodeLocalMatcher,
   parseNodeLocalPaths,
 } from "@/shared/node-app-scaffold/node-local-paths";
+import {
+  NODE_REPO_POLICY_PATH,
+  type NodeRepoPolicy,
+  parseNodeRepoPolicy,
+} from "@/shared/node-repo-policy";
 import { EVENT_NAMES, makeLogger } from "@/shared/observability";
 
 export interface GitHubRepoWriterConfig {
@@ -236,14 +242,13 @@ export interface ForkFromTemplateInput {
   /** One-line node mission (`intent.mission`); a starter seed is emitted when omitted. */
   readonly mission?: string;
   /**
-   * Repo whose `main` branch-protection is copied VERBATIM onto the new node repo
-   * (the deployment monorepo — `NODE_SUBMODULE_PARENT_*`). The node inherits the
-   * EXACT required-status-check set + flags the monorepo enforces, so there is one
-   * SSOT for protection and the operator invents no node-specific policy. Omit to
-   * skip protection (e.g. a test that doesn't exercise it).
+   * Repo whose optional `merge_queue` ruleset is copied onto the new node repo
+   * (the deployment monorepo — `NODE_SUBMODULE_PARENT_*`). The required PR/check
+   * ruleset is always installed from the node CI contract; these fields only keep
+   * the queue mechanism aligned with the deployment repo.
    */
-  readonly protectionSourceOwner?: string;
-  readonly protectionSourceRepo?: string;
+  readonly mergeQueueSourceOwner?: string;
+  readonly mergeQueueSourceRepo?: string;
 }
 
 /** One entry in a `POST /git/trees` payload; `sha: null` deletes the path from `base_tree`. */
@@ -466,77 +471,6 @@ export function qualifyUpstreamPrRefs(
   return subject.replace(/(^|[^\w/-])#(\d+)\b/g, `$1${owner}/${repo}#$2`);
 }
 
-/** Subset of GET branches/{branch}/protection that we replicate onto a node repo. */
-interface ProtectionResponse {
-  readonly required_status_checks?: {
-    readonly strict?: boolean;
-    readonly contexts?: readonly string[];
-  } | null;
-  readonly enforce_admins?: { readonly enabled?: boolean } | null;
-  readonly required_pull_request_reviews?: {
-    readonly dismiss_stale_reviews?: boolean;
-    readonly require_code_owner_reviews?: boolean;
-    readonly required_approving_review_count?: number;
-  } | null;
-  readonly required_linear_history?: { readonly enabled?: boolean };
-  readonly allow_force_pushes?: { readonly enabled?: boolean };
-  readonly allow_deletions?: { readonly enabled?: boolean };
-  readonly required_conversation_resolution?: { readonly enabled?: boolean };
-  readonly lock_branch?: { readonly enabled?: boolean };
-  readonly allow_fork_syncing?: { readonly enabled?: boolean };
-}
-
-/**
- * Transform a GET branch-protection response into the flat PUT payload, copying
- * the source config verbatim for the fields we replicate. The GET nests each flag
- * under `{enabled}`; PUT wants flat booleans, and `required_status_checks` /
- * `enforce_admins` / `required_pull_request_reviews` / `restrictions` are required
- * (nullable). `restrictions` is intentionally NOT replicated — the canonical
- * monorepo config has none (push open) and the GET→PUT user/team/app shape is
- * lossy. Pure; exported for unit tests.
- */
-export function protectionGetToPutPayload(src: ProtectionResponse): {
-  required_status_checks: { strict: boolean; contexts: string[] } | null;
-  enforce_admins: boolean;
-  required_pull_request_reviews: {
-    dismiss_stale_reviews: boolean;
-    require_code_owner_reviews: boolean;
-    required_approving_review_count: number;
-  } | null;
-  restrictions: null;
-  required_linear_history: boolean;
-  allow_force_pushes: boolean;
-  allow_deletions: boolean;
-  required_conversation_resolution: boolean;
-  lock_branch: boolean;
-  allow_fork_syncing: boolean;
-} {
-  const rsc = src.required_status_checks;
-  const prr = src.required_pull_request_reviews;
-  return {
-    required_status_checks: rsc
-      ? { strict: rsc.strict ?? false, contexts: [...(rsc.contexts ?? [])] }
-      : null,
-    enforce_admins: src.enforce_admins?.enabled ?? false,
-    required_pull_request_reviews: prr
-      ? {
-          dismiss_stale_reviews: prr.dismiss_stale_reviews ?? false,
-          require_code_owner_reviews: prr.require_code_owner_reviews ?? false,
-          required_approving_review_count:
-            prr.required_approving_review_count ?? 0,
-        }
-      : null,
-    restrictions: null,
-    required_linear_history: src.required_linear_history?.enabled ?? false,
-    allow_force_pushes: src.allow_force_pushes?.enabled ?? false,
-    allow_deletions: src.allow_deletions?.enabled ?? false,
-    required_conversation_resolution:
-      src.required_conversation_resolution?.enabled ?? false,
-    lock_branch: src.lock_branch?.enabled ?? false,
-    allow_fork_syncing: src.allow_fork_syncing?.enabled ?? false,
-  };
-}
-
 /** The canonical name of the merge-queue ruleset (matches infra/github/merge-queue-ruleset.json). */
 export const MERGE_QUEUE_RULESET_NAME = "main-merge-queue";
 
@@ -574,6 +508,156 @@ export interface RulesetWritePayload {
     actor_type: string;
     bypass_mode: string;
   }>;
+}
+
+/**
+ * Canonical protection for every spawned node's default branch.
+ *
+ * NODE_REPO_BORN_PROTECTED: all changes arrive through a pull request and the
+ * standard CI set must report before GitHub accepts the ref update. The required
+ * checks all run on `merge_group`, so this composes with the separate merge-queue
+ * ruleset without deadlocking the queue. Zero bypass actors means neither the
+ * operator App nor a repo admin silently escapes node-owner governance.
+ */
+export function nodeMainPolicyRulesetPayload(
+  policy: NodeRepoPolicy
+): RulesetWritePayload {
+  const { ruleset } = policy;
+  return {
+    name: ruleset.name,
+    target: "branch",
+    enforcement: ruleset.enforcement,
+    conditions: {
+      ref_name: { include: ["~DEFAULT_BRANCH"], exclude: [] },
+    },
+    rules: [
+      {
+        type: "pull_request",
+        parameters: {
+          allowed_merge_methods: ruleset.pullRequest.allowedMergeMethods,
+          dismiss_stale_reviews_on_push:
+            ruleset.pullRequest.dismissStaleReviewsOnPush,
+          require_code_owner_review: ruleset.pullRequest.requireCodeOwnerReview,
+          require_last_push_approval:
+            ruleset.pullRequest.requireLastPushApproval,
+          required_approving_review_count:
+            ruleset.pullRequest.requiredApprovingReviewCount,
+          required_review_thread_resolution:
+            ruleset.pullRequest.requiredReviewThreadResolution,
+        },
+      },
+      {
+        type: "required_status_checks",
+        parameters: {
+          do_not_enforce_on_create:
+            ruleset.requiredStatusChecks.doNotEnforceOnCreate,
+          required_status_checks: ruleset.requiredStatusChecks.contexts.map(
+            (context) => ({ context })
+          ),
+          strict_required_status_checks_policy:
+            ruleset.requiredStatusChecks.strict,
+        },
+      },
+    ],
+    bypass_actors: [],
+  };
+}
+
+/**
+ * Compare a ruleset READ BACK from GitHub against the payload we wrote, and return a
+ * human-readable list of every material difference (empty = the repo really is
+ * protected exactly as the policy demands).
+ *
+ * Compares only what the policy actually asserts — enforcement, default-branch
+ * targeting, the pull_request rule, the required-status-check contexts as a SET, and
+ * that there are no bypass actors. GitHub's read envelope (id, source, timestamps,
+ * `_links`, `current_user_can_bypass`) and any additive rule GitHub itself injects are
+ * deliberately ignored: this is a "the policy holds" check, not a byte-equality check
+ * that would fail on every harmless GitHub-side addition.
+ *
+ * Contexts are compared as a set because GitHub does not promise to preserve order.
+ * Pure; exported for unit tests.
+ */
+export function diffRulesetAgainstPolicy(
+  active: RulesetResponse,
+  expected: RulesetWritePayload
+): readonly string[] {
+  const problems: string[] = [];
+
+  if (active?.enforcement !== expected.enforcement) {
+    problems.push(
+      `enforcement is ${JSON.stringify(active?.enforcement)}, expected ${JSON.stringify(expected.enforcement)}`
+    );
+  }
+
+  const include = active?.conditions?.ref_name?.include ?? [];
+  if (!include.includes("~DEFAULT_BRANCH")) {
+    problems.push(
+      `conditions.ref_name.include is ${JSON.stringify(include)}, expected it to target ~DEFAULT_BRANCH`
+    );
+  }
+
+  const activeRules = Array.isArray(active?.rules) ? active.rules : [];
+  const ruleByType = (
+    rules: ReadonlyArray<{ type?: string; parameters?: unknown }>,
+    type: string
+  ) => rules.find((rule) => rule?.type === type);
+
+  const expectedPr = ruleByType(expected.rules, "pull_request");
+  const activePr = ruleByType(activeRules, "pull_request");
+  if (expectedPr && !activePr) {
+    problems.push(
+      "pull_request rule is absent — main can be pushed without a PR"
+    );
+  } else if (expectedPr && activePr) {
+    const want = expectedPr.parameters as Record<string, unknown>;
+    const got = (activePr.parameters ?? {}) as Record<string, unknown>;
+    for (const key of Object.keys(want)) {
+      if (JSON.stringify(got[key]) !== JSON.stringify(want[key])) {
+        problems.push(
+          `pull_request.${key} is ${JSON.stringify(got[key])}, expected ${JSON.stringify(want[key])}`
+        );
+      }
+    }
+  }
+
+  const expectedChecks = ruleByType(expected.rules, "required_status_checks");
+  const activeChecks = ruleByType(activeRules, "required_status_checks");
+  if (expectedChecks && !activeChecks) {
+    problems.push(
+      "required_status_checks rule is absent — main can merge with no CI"
+    );
+  } else if (expectedChecks && activeChecks) {
+    const contextsOf = (rule: { parameters?: unknown }) =>
+      (
+        (
+          (rule.parameters ?? {}) as {
+            required_status_checks?: ReadonlyArray<{ context?: string }>;
+          }
+        ).required_status_checks ?? []
+      )
+        .map((check) => check?.context)
+        .filter((context): context is string => typeof context === "string");
+    const want = new Set(contextsOf(expectedChecks));
+    const got = new Set(contextsOf(activeChecks));
+    const missing = [...want].filter((context) => !got.has(context));
+    const extra = [...got].filter((context) => !want.has(context));
+    if (missing.length > 0) {
+      problems.push(`required contexts missing: ${missing.join(", ")}`);
+    }
+    if (extra.length > 0) {
+      problems.push(`unexpected required contexts: ${extra.join(", ")}`);
+    }
+  }
+
+  const bypass = active?.bypass_actors ?? [];
+  if (bypass.length > 0) {
+    problems.push(
+      `${bypass.length} bypass actor(s) present, expected none — protection would be escapable`
+    );
+  }
+
+  return problems;
 }
 
 /**
@@ -1620,6 +1704,35 @@ export class GitHubRepoWriter implements DeployPlanePort {
   ): Promise<{ cloneUrl: string; headSha: string }> {
     const { templateOwner, owner, slug } = input;
     const tplOctokit = await this.getOctokit(templateOwner, TEMPLATE_SLUG);
+    // PRE-FLIGHT ONLY. Read at floating template `main` purely to fail BEFORE minting
+    // a repo we could never protect. It is deliberately NOT the authority for the
+    // ruleset write: template `main` can move between here and the fork, and the
+    // 422-reuse path can hand back a fork based on a much older commit. The policy
+    // that is actually applied is re-read at the fork's exact base SHA below, so the
+    // required contexts always match the workflows the fork really inherited.
+    const policyText = await this.readFileAtRef(
+      tplOctokit,
+      templateOwner,
+      TEMPLATE_SLUG,
+      NODE_REPO_POLICY_PATH,
+      "main"
+    );
+    if (!policyText) {
+      throw deployPlaneError(
+        "template_repo_policy_missing",
+        `${templateOwner}/${TEMPLATE_SLUG}@main is missing ${NODE_REPO_POLICY_PATH}`,
+        409
+      );
+    }
+    try {
+      parseNodeRepoPolicy(policyText);
+    } catch (error) {
+      throw deployPlaneError(
+        "template_repo_policy_invalid",
+        `${templateOwner}/${TEMPLATE_SLUG}@main has an invalid ${NODE_REPO_POLICY_PATH}: ${String(error)}`,
+        409
+      );
+    }
 
     // Candidate/preview may mint from an env-local mirror so their GitHub App needs no
     // Cogni-DAO installation. That mirror must still be byte-identical to canonical main,
@@ -1678,6 +1791,37 @@ export class GitHubRepoWriter implements DeployPlanePort {
     }
     await this.ensureActionsEnabled(octokit, owner, slug);
     const { baseCommitSha, baseTreeSha } = base;
+
+    // POLICY_IS_BOUND_TO_THE_INHERITED_TREE. Re-read the policy from the FORK at the
+    // exact commit it is based on. The required contexts we are about to enforce must
+    // come from the same revision as the workflows that will emit them — otherwise a
+    // template `main` that moved between the pre-flight read and the fork (or a reused
+    // older fork) yields a ruleset requiring a context this repo's workflows never
+    // produce, which deadlocks the new node's default branch on its very first PR.
+    const forkPolicyText = await this.readFileAtRef(
+      octokit,
+      owner,
+      slug,
+      NODE_REPO_POLICY_PATH,
+      baseCommitSha
+    );
+    if (!forkPolicyText) {
+      throw deployPlaneError(
+        "template_repo_policy_missing",
+        `${owner}/${slug}@${baseCommitSha} is missing ${NODE_REPO_POLICY_PATH}`,
+        409
+      );
+    }
+    let nodeRepoPolicy: NodeRepoPolicy;
+    try {
+      nodeRepoPolicy = parseNodeRepoPolicy(forkPolicyText);
+    } catch (error) {
+      throw deployPlaneError(
+        "template_repo_policy_invalid",
+        `${owner}/${slug}@${baseCommitSha} has an invalid ${NODE_REPO_POLICY_PATH}: ${String(error)}`,
+        409
+      );
+    }
     const repoSpecSha = await this.createBlob(
       octokit,
       owner,
@@ -1750,22 +1894,21 @@ export class GitHubRepoWriter implements DeployPlanePort {
       }
     );
     await this.upsertRef(octokit, owner, slug, "main", commit.sha);
-    // Born protected: copy the monorepo's branch protection VERBATIM onto the new
-    // node repo, so its `main` enforces the EXACT required checks the network does.
-    // A node without protection makes the operator's merge-on-green hollow; fail
-    // loud — an unprotected node is not a formed node.
-    if (input.protectionSourceOwner && input.protectionSourceRepo) {
+    await this.ensureCanonicalRepoSettings(octokit, owner, slug);
+
+    // PROTECTION_IS_THE_LAST_FALLIBLE_STEP. The zero-bypass PR ruleset makes any
+    // further direct `main` update impossible — including the `upsertRef` above on a
+    // retry. So every fallible initialization step that still needs an unprotected
+    // `main` MUST run before the protection write; otherwise a failure after
+    // protection (or a lost response) strands the node permanently half-formed: the
+    // retry cannot re-run identity, and the queue was never replicated.
+    // Merge-queue replication is the only such step, and it is explicitly optional
+    // (a missing monorepo queue ruleset is a clean skip), so a failure here leaves an
+    // UNPROTECTED repo the retry can still fully re-form.
+    if (input.mergeQueueSourceOwner && input.mergeQueueSourceRepo) {
       const sourceOctokit = await this.getOctokit(
-        input.protectionSourceOwner,
-        input.protectionSourceRepo
-      );
-      await this.replicateBranchProtection(
-        sourceOctokit,
-        input.protectionSourceOwner,
-        input.protectionSourceRepo,
-        octokit,
-        owner,
-        slug
+        input.mergeQueueSourceOwner,
+        input.mergeQueueSourceRepo
       );
       // Born with the monorepo's merge mechanism too: canonical repo settings
       // (squash-only, auto-merge on, delete-on-merge — auto-merge is REQUIRED for
@@ -1774,16 +1917,25 @@ export class GitHubRepoWriter implements DeployPlanePort {
       // from the monorepo. The queue is admin-opt-in on the monorepo, so when it
       // is not yet enabled there this is a clean skip (the node mirrors the
       // monorepo: born queue-less). See docs/spec/merge-authority.md.
-      await this.ensureCanonicalRepoSettings(octokit, owner, slug);
       await this.replicateMergeQueue(
         sourceOctokit,
-        input.protectionSourceOwner,
-        input.protectionSourceRepo,
+        input.mergeQueueSourceOwner,
+        input.mergeQueueSourceRepo,
         octokit,
         owner,
         slug
       );
     }
+
+    // Born protected, and PROVEN so: GitHub requires a PR plus the exact standard
+    // checks before any subsequent main update. Unconditional — omitting a queue
+    // source must never mint an unprotected node.
+    await this.ensureNodeMainPolicyRuleset(
+      octokit,
+      owner,
+      slug,
+      nodeRepoPolicy
+    );
     return { cloneUrl, headSha: commit.sha };
   }
 
@@ -3204,51 +3356,6 @@ export class GitHubRepoWriter implements DeployPlanePort {
   }
 
   /**
-   * Copy the monorepo's `main` branch-protection VERBATIM onto the new node repo.
-   * PROTECTION_HAS_ONE_SSOT: the node inherits the EXACT required-status-check set
-   * + flags the deployment monorepo enforces — the operator invents no node-specific
-   * policy. This is the merge-on-green backstop GitHub enforces independently of the
-   * operator's `/vcs/merge` gate. Reads the source via the App's `administration`
-   * read and writes the node via the same privilege used by {@link ensureActionsEnabled}.
-   * Fails loud if the source is unprotected (the monorepo MUST be the canonical
-   * protected repo). Idempotent: the PUT converges on re-run.
-   */
-  private async replicateBranchProtection(
-    sourceOctokit: Octokit,
-    sourceOwner: string,
-    sourceRepo: string,
-    targetOctokit: Octokit,
-    targetOwner: string,
-    targetRepo: string
-  ): Promise<void> {
-    let source: ProtectionResponse;
-    try {
-      const { data } = await sourceOctokit.request(
-        "GET /repos/{owner}/{repo}/branches/{branch}/protection",
-        { owner: sourceOwner, repo: sourceRepo, branch: "main" }
-      );
-      source = data as ProtectionResponse;
-    } catch (err) {
-      if ((err as { status?: number })?.status === 404) {
-        throw new Error(
-          `replicateBranchProtection: source ${sourceOwner}/${sourceRepo}@main is unprotected — ` +
-            `the deployment monorepo must be branch-protected before nodes can inherit it`
-        );
-      }
-      throw err;
-    }
-    await targetOctokit.request(
-      "PUT /repos/{owner}/{repo}/branches/{branch}/protection",
-      {
-        owner: targetOwner,
-        repo: targetRepo,
-        branch: "main",
-        ...protectionGetToPutPayload(source),
-      }
-    );
-  }
-
-  /**
    * Set a node repo's canonical repo settings — mirrors `setup-main-branch.sh` step 1:
    *   - Merge settings: squash-only, auto-merge enabled, delete-branch-on-merge.
    *     `allow_auto_merge` is REQUIRED for the merge-queue path (`mergePr` enables
@@ -3272,6 +3379,74 @@ export class GitHubRepoWriter implements DeployPlanePort {
       allow_auto_merge: true,
       is_template: false,
     });
+  }
+
+  /**
+   * Create or repair the exact PR + standard-CI ruleset on a spawned node.
+   * Idempotent by stable name: POST once, then PUT the full canonical payload on
+   * every retry so drift (including an added bypass actor or dropped check) is
+   * removed. Errors deliberately propagate: a 403 means the operator App lacks
+   * `administration:write`, and formation must fail rather than report a repo born
+   * without an independent GitHub merge backstop.
+   */
+  private async ensureNodeMainPolicyRuleset(
+    octokit: Octokit,
+    owner: string,
+    repo: string,
+    policy: NodeRepoPolicy
+  ): Promise<void> {
+    const { data: rulesets } = await octokit.request(
+      "GET /repos/{owner}/{repo}/rulesets",
+      { owner, repo }
+    );
+    const existing = (
+      rulesets as ReadonlyArray<{ id: number; name: string }>
+    ).find((ruleset) => ruleset.name === policy.ruleset.name);
+    const payload = nodeMainPolicyRulesetPayload(policy);
+
+    const rulesetId = existing
+      ? ((
+          await this.requestRaw(
+            octokit,
+            "PUT /repos/{owner}/{repo}/rulesets/{ruleset_id}",
+            { owner, repo, ruleset_id: existing.id, ...payload }
+          )
+        )?.id ?? existing.id)
+      : (
+          await this.requestRaw(
+            octokit,
+            "POST /repos/{owner}/{repo}/rulesets",
+            { owner, repo, ...payload }
+          )
+        )?.id;
+
+    if (typeof rulesetId !== "number") {
+      throw new Error(
+        `node ${owner}/${repo} protection write returned no ruleset id; cannot prove the repo is protected`
+      );
+    }
+
+    // READBACK_IS_THE_PROOF. A 2xx only proves GitHub ACCEPTED the request — not that
+    // the ACTIVE ruleset carries the exact target, enforcement, PR rule, required
+    // contexts and zero bypass actors. GitHub can normalize, silently drop a rule it
+    // does not recognise, or leave a pre-existing ruleset partially updated, and every
+    // one of those states reports 2xx while the node is NOT protected. A node whose
+    // protection we merely requested is indistinguishable from one that is protected,
+    // which is precisely the failure this whole feature exists to prevent — so read
+    // the active ruleset back and compare it to what we sent.
+    const { data: active } = await octokit.request(
+      "GET /repos/{owner}/{repo}/rulesets/{ruleset_id}",
+      { owner, repo, ruleset_id: rulesetId }
+    );
+    const mismatches = diffRulesetAgainstPolicy(
+      active as RulesetResponse,
+      payload
+    );
+    if (mismatches.length > 0) {
+      throw new Error(
+        `node ${owner}/${repo} protection readback mismatch: ${mismatches.join("; ")}`
+      );
+    }
   }
 
   /**
@@ -3346,13 +3521,12 @@ export class GitHubRepoWriter implements DeployPlanePort {
     } catch (err) {
       // QUEUE_IS_BEST_EFFORT: the `merge_queue` ruleset rule is an organization /
       // GitHub-Team feature — a node minted under a PERSONAL account (or a plan
-      // without it) returns 403/422 (verified against GitHub: same payload accepted
-      // on an org repo, rejected on a personal one). The queue is an enhancement, not
-      // the merge-on-green backstop (branch protection is), so a node that cannot
-      // carry it is still a formed node: skip, don't fail formation. Other errors
-      // (auth, network) are real — rethrow.
+      // without it) returns 422. The queue is an enhancement, not the merge-on-green
+      // backstop (the PR/check ruleset is), so that plan limitation may skip. A 403
+      // is an App permission failure and MUST propagate; formation cannot guess that
+      // authorization failed merely because the queue is optional.
       const status = (err as { status?: number })?.status;
-      if (status === 403 || status === 422) return;
+      if (status === 422) return;
       throw err;
     }
   }
@@ -3364,12 +3538,18 @@ export class GitHubRepoWriter implements DeployPlanePort {
    * but not statically assignable to them. Typing `route` as `string` selects the
    * generic overload whose body is `RequestParameters`, accepting the dynamic payload.
    */
+  /**
+   * Escape hatch for routes Octokit's generated types do not cover (rulesets).
+   * Returns the response body so callers can READ BACK what GitHub actually stored;
+   * existing callers that ignore it are unaffected.
+   */
   private async requestRaw(
     octokit: Octokit,
     route: string,
     params: Record<string, unknown>
-  ): Promise<void> {
-    await octokit.request(route, params);
+  ): Promise<{ id?: number } | undefined> {
+    const response = await octokit.request(route, params);
+    return response?.data as { id?: number } | undefined;
   }
 
   private async ensureActionsEnabled(
