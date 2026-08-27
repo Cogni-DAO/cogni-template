@@ -338,7 +338,9 @@ describe("OpenFgaAuthorizationAdapter", () => {
       apiUrl: "http://openfga.test",
       storeId: "store",
       client,
-      timeoutMs: 10,
+      // The WRITE deadline is what this test drives — writes no longer share the
+      // hot-path check deadline, so pin it here rather than inheriting a default.
+      writeTimeoutMs: 10,
       writeMaxRetries: 2,
       writeRetryBackoffMs: 0,
     });
@@ -457,5 +459,56 @@ describe("OpenFgaAuthorizationAdapter", () => {
       code: "authz_write_unavailable",
     });
     expect(attempts).toBe(3); // initial + 2 retries
+  });
+});
+
+describe("OpenFGA write deadline", () => {
+  // bug: approving a developer on a freshly spawned node returned
+  // authz_write_unavailable because all three write attempts shared the 1500ms
+  // deadline tuned for the hot-path check. The write is cold-path and must not fail
+  // a human's one-and-only click; the check must stay fast. Pin both halves.
+  const tuple = {
+    user: "user:u1",
+    relation: "developer",
+    object: "node:n1",
+  } as never;
+
+  it("gives writes a longer deadline than checks by default", async () => {
+    const adapter = new OpenFgaAuthorizationAdapter({
+      writeMaxRetries: 0,
+      client: {
+        async check(): Promise<{ allowed: boolean }> {
+          return { allowed: true };
+        },
+        // Settles after the 1500ms CHECK deadline but inside the 5000ms WRITE one.
+        writeTuples: () =>
+          new Promise((_resolve, reject) => {
+            setTimeout(() => reject(new Error("late")), 2_500);
+          }),
+        async deleteTuples(): Promise<void> {},
+      } as never,
+    });
+    const decision = await adapter.writeRelation(tuple);
+    // It must have been allowed to run past 1500ms rather than being cut at it.
+    expect(decision.code).toBe("authz_write_unavailable");
+    expect(decision.reason).toContain("late");
+    expect(decision.reason).not.toContain("timed out after 1500ms");
+  });
+
+  it("honours an explicit writeTimeoutMs", async () => {
+    const adapter = new OpenFgaAuthorizationAdapter({
+      writeMaxRetries: 0,
+      writeTimeoutMs: 50,
+      client: {
+        async check(): Promise<{ allowed: boolean }> {
+          return { allowed: true };
+        },
+        writeTuples: () => new Promise(() => {}),
+        async deleteTuples(): Promise<void> {},
+      } as never,
+    });
+    const decision = await adapter.writeRelation(tuple);
+    expect(decision.code).toBe("authz_write_unavailable");
+    expect(decision.reason).toContain("timed out after 50ms");
   });
 });
