@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Cogni-DAO
 
 /**
- * Module: `@app/api/auth/attest/callback`
+ * Module: `@app/api/auth/attest/callback/github`
  * Purpose: GitHub's authorization response for one in-flight broker request.
  * Scope: Matches `state` against the signed broker cookie, exchanges the code (PKCE),
  *   reads the authenticated GitHub identity, and hands off to the confirm screen.

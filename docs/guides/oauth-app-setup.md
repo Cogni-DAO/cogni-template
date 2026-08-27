@@ -33,7 +33,7 @@ A client is one client _secret_. Share it between production and a 48h throwaway
 
 > _"Apps with only one redirect URI have wildcard matching enabled. This is a legacy behavior of GitHub that is now visible and controllable."_
 
-An app registered as `https://test.cognidao.org/api/auth/` worked for **every** sub-path while it was the only URI. Adding a second URI switched the app to exact matching, and `/api/auth/attest/callback` began failing with:
+An app registered as `https://test.cognidao.org/api/auth/` worked for **every** sub-path while it was the only URI. Adding a second URI switched the app to exact matching, and `/api/auth/attest/callback/github` began failing with:
 
 > **Be careful!** The `redirect_uri` is not associated with this application.
 
@@ -51,12 +51,12 @@ The registration looks untouched and correct throughout. This cost a failed huma
 
 Auth callbacks live under `/api/auth/`. That path tree sits outside the proxy's session gate, which is why they work unauthenticated.
 
-| route                        | provider | purpose                                                                         |
-| ---------------------------- | -------- | ------------------------------------------------------------------------------- |
-| `/api/auth/callback/github`  | GitHub   | sign-in                                                                         |
-| `/api/auth/callback/google`  | Google   | sign-in                                                                         |
-| `/api/auth/callback/discord` | Discord  | sign-in                                                                         |
-| `/api/auth/attest/callback`  | GitHub   | **identity broker** — attests a GitHub account for a relying node (`task.5024`) |
+| route                              | provider | purpose                                                                         |
+| ---------------------------------- | -------- | ------------------------------------------------------------------------------- |
+| `/api/auth/callback/github`        | GitHub   | sign-in                                                                         |
+| `/api/auth/callback/google`        | Google   | sign-in                                                                         |
+| `/api/auth/callback/discord`       | Discord  | sign-in                                                                         |
+| `/api/auth/attest/callback/github` | GitHub   | **identity broker** — attests a GitHub account for a relying node (`task.5024`) |
 
 Grouping the broker under `/api/auth/` buys tidiness, **not** free registration. Every new auth route costs one settings edit at the provider. Budget for it.
 
@@ -77,9 +77,9 @@ For deployed environments the GitHub env secret is only a provision-time seed �
 
 ```
 https://test.cognidao.org/api/auth/callback/github
-https://test.cognidao.org/api/auth/attest/callback
+https://test.cognidao.org/api/auth/attest/callback/github
 http://localhost:3000/api/auth/callback/github
-http://localhost:3000/api/auth/attest/callback
+http://localhost:3000/api/auth/attest/callback/github
 ```
 
 Adding preview later means adding its two URLs here too — 6 of 10 slots.
@@ -110,9 +110,9 @@ A GitHub OAuth App holds up to 10 redirect URIs, so one non-prod app covers loca
    Then **Add redirect URI** for every remaining non-prod route, all at once:
 
    ```
-   http://localhost:3000/api/auth/attest/callback
+   http://localhost:3000/api/auth/attest/callback/github
    https://test.cognidao.org/api/auth/callback/github
-   https://test.cognidao.org/api/auth/attest/callback
+   https://test.cognidao.org/api/auth/attest/callback/github
    ```
 
    > Add them **now**, not later. Registering one URI and adding a second afterwards is

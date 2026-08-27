@@ -51,7 +51,7 @@ describe("github authorize URL", () => {
   const url = new URL(
     buildGithubAuthorizeUrl({
       clientId: "client-id",
-      redirectUri: "https://cognidao.org/api/auth/attest/callback",
+      redirectUri: "https://cognidao.org/api/auth/attest/callback/github",
       state: "state-value",
       codeChallenge: "challenge-value",
     })
@@ -106,7 +106,7 @@ describe("github code exchange", () => {
       clientSecret: "client-secret",
       code: "code",
       codeVerifier: "verifier",
-      redirectUri: "https://cognidao.org/api/auth/attest/callback",
+      redirectUri: "https://cognidao.org/api/auth/attest/callback/github",
       fetchImpl: fetchImpl as unknown as typeof fetch,
     });
 
@@ -127,7 +127,7 @@ describe("github code exchange", () => {
         clientSecret: "s",
         code: "code",
         codeVerifier: "verifier",
-        redirectUri: "https://cognidao.org/api/auth/attest/callback",
+        redirectUri: "https://cognidao.org/api/auth/attest/callback/github",
         fetchImpl: fetchImpl as unknown as typeof fetch,
       })
     ).rejects.toBeInstanceOf(GithubOauthError);
@@ -187,7 +187,7 @@ describe("broker configuration", () => {
 
   it("pins one exact redirect URI so GitHub exact-matching is satisfiable", () => {
     expect(brokerRedirectUri({ APP_BASE_URL: "https://cognidao.org" })).toBe(
-      "https://cognidao.org/api/auth/attest/callback"
+      "https://cognidao.org/api/auth/attest/callback/github"
     );
   });
 
@@ -209,7 +209,7 @@ describe("broker configuration", () => {
    */
   it.each([
     "app/(app)/identity/attest/route.ts",
-    "app/api/auth/attest/callback/route.ts",
+    "app/api/auth/attest/callback/github/route.ts",
     "app/api/auth/attest/confirm/route.ts",
   ])("%s never builds a redirect from request.url", (relative) => {
     const source = readFileSync(join(SRC_ROOT, relative), "utf8");
@@ -239,7 +239,7 @@ describe("broker configuration", () => {
     // These are DISTINCT registrations. A shared `/api/auth/` prefix does not cover
     // both once the app holds more than one redirect URI.
     expect(brokerUri).toBe(
-      "https://test.cognidao.org/api/auth/attest/callback"
+      "https://test.cognidao.org/api/auth/attest/callback/github"
     );
     expect(brokerUri).not.toBe("https://test.cognidao.org/api/auth/");
     expect(brokerUri).not.toBe(
@@ -257,7 +257,7 @@ describe("no operator session in the broker flow", () => {
   const BROKER_SOURCES = [
     "app/(app)/identity/attest/route.ts",
     "app/(app)/identity/attest/confirm/page.tsx",
-    "app/api/auth/attest/callback/route.ts",
+    "app/api/auth/attest/callback/github/route.ts",
     "app/api/auth/attest/confirm/route.ts",
     "app/_facades/identity/attestation-broker.server.ts",
     "features/identity/services/issue-identity-attestation.ts",
@@ -279,7 +279,7 @@ describe("no operator session in the broker flow", () => {
    */
   it.each([
     "app/(app)/identity/attest/route.ts",
-    "app/api/auth/attest/callback/route.ts",
+    "app/api/auth/attest/callback/github/route.ts",
     "app/api/auth/attest/confirm/route.ts",
   ])("%s emits a queryable feature marker", (relative) => {
     const source = readFileSync(join(SRC_ROOT, relative), "utf8");
@@ -288,7 +288,7 @@ describe("no operator session in the broker flow", () => {
 
   it.each([
     "app/(app)/identity/attest/route.ts",
-    "app/api/auth/attest/callback/route.ts",
+    "app/api/auth/attest/callback/github/route.ts",
     "app/api/auth/attest/confirm/route.ts",
   ])("%s never logs a broker secret", (relative) => {
     const source = readFileSync(join(SRC_ROOT, relative), "utf8");

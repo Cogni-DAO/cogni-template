@@ -9,7 +9,7 @@
  * Invariants: no operator session is ever consulted; a mismatched/absent `state` never
  *   reaches an exchange; the access token never appears in any response.
  * Side-effects: none (fully mocked)
- * Links: /api/auth/attest/callback route, task.5024
+ * Links: /api/auth/attest/callback/github route, task.5024
  * @public
  */
 
@@ -56,7 +56,7 @@ vi.mock("@/bootstrap/http/rateLimiter", () => ({
   TokenBucketRateLimiter: vi.fn(),
 }));
 
-import { GET } from "@/app/api/auth/attest/callback/route";
+import { GET } from "@/app/api/auth/attest/callback/github/route";
 import {
   BROKER_STATE_COOKIE,
   decodeBrokerState,
@@ -76,7 +76,7 @@ const PENDING = {
 
 function request(query: string): NextRequest {
   return new NextRequest(
-    `https://cognidao.org/api/auth/attest/callback${query}`
+    `https://cognidao.org/api/auth/attest/callback/github${query}`
   );
 }
 
@@ -87,7 +87,7 @@ async function seedPendingCookie(): Promise<void> {
   );
 }
 
-describe("/api/auth/attest/callback contract tests", () => {
+describe("/api/auth/attest/callback/github contract tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cookieStore.store.clear();
@@ -107,7 +107,7 @@ describe("/api/auth/attest/callback contract tests", () => {
       expect.objectContaining({
         code: "auth-code",
         codeVerifier: "pkce-verifier",
-        redirectUri: "https://cognidao.org/api/auth/attest/callback",
+        redirectUri: "https://cognidao.org/api/auth/attest/callback/github",
       })
     );
 

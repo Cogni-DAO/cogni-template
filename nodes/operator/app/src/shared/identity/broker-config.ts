@@ -24,8 +24,17 @@
  * @public
  */
 
-/** Registered callback path for the identity broker. */
-export const BROKER_CALLBACK_PATH = "/api/auth/attest/callback";
+/**
+ * Registered callback path for the identity broker.
+ *
+ * Provider-suffixed on purpose, mirroring NextAuth's `/api/auth/callback/{provider}`.
+ * The broker proves a CLAIMANT identity — someone who authored commits — so it applies
+ * to GitHub (and one day GitLab), NOT to sign-in-only providers like Google or Apple.
+ * Those need `/api/auth/callback/{provider}` and nothing here. Naming it explicitly
+ * keeps the OAuth-app registration self-documenting and leaves room for a second
+ * forge without a migration.
+ */
+export const BROKER_CALLBACK_PATH = "/api/auth/attest/callback/github";
 
 interface BrokerEnv {
   readonly APP_BASE_URL?: string | undefined;
