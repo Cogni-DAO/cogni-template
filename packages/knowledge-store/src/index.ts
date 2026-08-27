@@ -119,6 +119,8 @@ export {
   classifyResolutionStrategy,
   type ResolverTarget,
 } from "./domain/resolver-dispatch.js";
+// Write-boundary text normalisation (bug.5062)
+export { stripDangerousControlChars } from "./domain/sanitize.js";
 // Domain types & schemas
 export {
   type Citation,

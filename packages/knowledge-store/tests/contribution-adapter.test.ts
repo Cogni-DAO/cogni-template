@@ -328,6 +328,47 @@ describe("DoltgresKnowledgeContributionAdapter", () => {
     ).toBe(true);
   });
 
+  it("strips dangerous control chars from content + title on the insert-edit write (bug.5062)", async () => {
+    const fake = new FakeSql();
+    const chr = (code: number): string => String.fromCharCode(code);
+    // Newline is legitimate markdown and must survive; the form feed (0x0c),
+    // bell (0x07), and NUL (0x00) must be stripped before storage.
+    const dirtyContent = `keep${chr(0x0a)}drop${chr(0x0c)}end${chr(0x00)}`;
+    const dirtyTitle = `Title${chr(0x07)} bell`;
+
+    await adapterFor(fake).appendCommit({
+      contributionId: "contrib-agent-1-abc123",
+      principal: { id: "agent-1", kind: "agent" },
+      message: "insert dirty content",
+      edits: [
+        {
+          op: "insert",
+          entry: {
+            id: "row-dirty",
+            domain: "meta",
+            title: dirtyTitle,
+            content: dirtyContent,
+          },
+        },
+      ],
+    });
+
+    const insert = fake.conn.queries.find((q) =>
+      q.startsWith("INSERT INTO knowledge (")
+    );
+    expect(insert).toBeDefined();
+    const sql = insert as string;
+    // No raw dangerous control bytes reached the SQL...
+    expect(sql).not.toContain(chr(0x0c));
+    expect(sql).not.toContain(chr(0x07));
+    expect(sql).not.toContain(chr(0x00));
+    // ...the stripped fragments are now adjacent...
+    expect(sql).toContain("dropend");
+    expect(sql).toContain("Title bell");
+    // ...and the legitimate newline is preserved.
+    expect(sql).toContain(`keep${chr(0x0a)}drop`);
+  });
+
   it("applies a cite edit as a citations insert + cited-row confidence recompute", async () => {
     const fake = new FakeSql();
 

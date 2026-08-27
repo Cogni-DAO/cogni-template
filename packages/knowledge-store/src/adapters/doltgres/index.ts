@@ -18,6 +18,7 @@
 
 import type { Sql } from "postgres";
 import { initializeConfidence } from "../../domain/confidence-policy.js";
+import { stripDangerousControlChars } from "../../domain/sanitize.js";
 import type {
   Citation,
   CitationType,
@@ -89,8 +90,8 @@ function knowledgeInsertColumns(entry: NewKnowledge): SqlColumnValue[] {
     { column: "id", value: entry.id },
     { column: "domain", value: entry.domain },
     { column: "entity_id", value: entry.entityId ?? undefined },
-    { column: "title", value: entry.title },
-    { column: "content", value: entry.content },
+    { column: "title", value: stripDangerousControlChars(entry.title) },
+    { column: "content", value: stripDangerousControlChars(entry.content) },
     { column: "entry_type", value: entry.entryType ?? undefined },
     { column: "confidence_pct", value: confidence },
     { column: "source_type", value: entry.sourceType },
@@ -113,7 +114,14 @@ function knowledgeUpdateColumns(
     // NO_NULL_CONFIDENCE_WRITES: never write confidence_pct = NULL. A nullish
     // value on update preserves the row's policy-managed confidence.
     if (key === "confidencePct" && entry[key] == null) return;
-    columns.push({ column, value: entry[key] });
+    const raw = entry[key];
+    // PRESERVE_MARKDOWN_WHITESPACE: strip dangerous control chars from the
+    // free-text fields on write (bug.5062), same as the insert path.
+    const value =
+      (key === "title" || key === "content") && typeof raw === "string"
+        ? stripDangerousControlChars(raw)
+        : raw;
+    columns.push({ column, value });
   };
 
   push("domain", "domain");
