@@ -106,6 +106,13 @@ export type {
   UpcomingRun,
 } from "./governance-status.port";
 export type {
+  IdentityAttestationGithubIdentity,
+  IdentityAttestationJwtClaims,
+  IdentityAttestationNode,
+  IdentityAttestationRepositoryPort,
+  IdentityAttestationSignerPort,
+} from "./identity-attestation.port";
+export type {
   LangfuseReaderPort,
   LangfuseTraceQuery,
   LangfuseTraceSummary,

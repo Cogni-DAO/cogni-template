@@ -61,6 +61,11 @@ export const SUBSTRATE_RESERVED_KEYS: ReadonlySet<string> = new Set<string>([
   "METRICS_TOKEN", // Prometheus scrape → /api/metrics auth
   "GH_WEBHOOK_SECRET", // GitHub App webhook HMAC (dual-plane: must byte-match the App)
   "POLY_WALLET_AEAD_KEY_HEX", // poly wallet AEAD key (clobber = wallet decryption loss)
+  // Operator-only Ed25519 seed signing every fleet identity attestation. Its
+  // public half is published at /.well-known/jwks.json and pinned by every
+  // relying node, so a self-serve write does not fail loudly — it silently
+  // invalidates every attestation on every node at once (task.5024).
+  "IDENTITY_ATTESTATION_PRIVATE_KEY",
 ]);
 
 /**

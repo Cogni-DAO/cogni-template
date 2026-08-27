@@ -364,6 +364,23 @@ export const serverSchema = z.object({
   POSTHOG_API_KEY: optionalString,
   POSTHOG_HOST: optionalUrl,
   POSTHOG_PROJECT_ID: optionalString,
+
+  // Fleet identity attestations (task.5024): operator-only base64 Ed25519 seed.
+  // Optional in schema for build/local; issuance 503s when unset. APP_BASE_URL
+  // is the configured canonical issuer.
+  IDENTITY_ATTESTATION_PRIVATE_KEY: optionalString,
+
+  // GitHub OAuth client used by the identity broker to AUTHENTICATE a GitHub
+  // account for a relying node. One credential pair PER ENVIRONMENT — never per
+  // node (a node fleet cannot be served by GitHub's callback-URL cardinality, and
+  // distributing the secret to every node makes one node compromise fleet-wide).
+  // Falls back to the sign-in OAuth app when a dedicated broker app is not
+  // registered; the only requirement is that the broker callback path is covered
+  // by the app's registered callback URL.
+  GH_IDENTITY_OAUTH_CLIENT_ID: optionalString,
+  GH_IDENTITY_OAUTH_CLIENT_SECRET: optionalString,
+  GH_OAUTH_CLIENT_ID: optionalString,
+  GH_OAUTH_CLIENT_SECRET: optionalString,
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {

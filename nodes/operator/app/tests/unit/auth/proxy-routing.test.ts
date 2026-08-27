@@ -134,6 +134,41 @@ describe("proxy — page-level routing", () => {
     expectSignInRedirectTo(res, "/profile");
   });
 
+  /**
+   * task.5024: the identity broker must NOT be session-gated. It was, and that is
+   * precisely how an ambient operator session came to decide which GitHub account a
+   * node bound — the confused deputy that bound the wrong account on the 2026-08-19
+   * candidate. The attested account now comes from a fresh GitHub authorization, so
+   * an anonymous visitor must reach the broker and the request must survive intact.
+   */
+  it("lets an unauthenticated visitor reach the identity attestation broker", async () => {
+    mockGetToken.mockResolvedValue(null);
+    const path = `/identity/attest?node_id=node&nonce=nonce&return_to=${encodeURIComponent("https://node.example/profile")}`;
+
+    const res = await proxy(makeRequest(path));
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("lets an unauthenticated visitor reach the broker confirm screen", async () => {
+    mockGetToken.mockResolvedValue(null);
+
+    const res = await proxy(makeRequest("/identity/attest/confirm"));
+
+    expect(res.status).toBe(200);
+  });
+
+  it("lets GitHub's redirect reach the broker callback without a session", async () => {
+    mockGetToken.mockResolvedValue(null);
+
+    const res = await proxy(
+      makeRequest("/api/auth/attest/callback/github?code=c&state=s")
+    );
+
+    expect(res.status).toBe(200);
+  });
+
   it.each([
     "/dashboard",
     "/knowledge",
