@@ -80,6 +80,12 @@ export interface OpenFgaAuthorizationAdapterConfig {
   readonly authorizationModelId?: string;
   readonly apiToken?: string;
   readonly timeoutMs?: number;
+  /**
+   * Per-attempt deadline for write/delete, ms (default 5000). Deliberately separate
+   * from `timeoutMs`: checks are hot-path and must fail fast, writes are cold-path
+   * and must not fail a human's one-and-only click.
+   */
+  readonly writeTimeoutMs?: number;
   /** Retries for idempotent write/delete on a transient failure (default 2). */
   readonly writeMaxRetries?: number;
   /** Fixed backoff between write retries, ms (default 100 — matches OpenFGA SDK). */
@@ -96,6 +102,16 @@ interface PlannedSubcheck {
 }
 
 const DEFAULT_TIMEOUT_MS = 1_500;
+// Writes get a LONGER per-attempt deadline than checks. 1500ms is tuned for the
+// hot-path check, which runs on nearly every request against a warm connection. A
+// write is the opposite: rare, so it routinely pays cold-connection cost (new pool
+// entry + a Postgres round trip on OpenFGA's datastore), and retrying under the same
+// 1500ms budget just fails three times for the same reason it failed once. Observed
+// 2026-08-27 on production: approving a developer on a freshly spawned node returned
+// `authz_write_unavailable` after all three attempts crossed 1500ms; the identical
+// click succeeded seconds later on a warm connection. Same cold/warm split as the
+// identity broker in bug.5063.
+const DEFAULT_WRITE_TIMEOUT_MS = 5_000;
 // Writes (approve/deny/revoke) are deliberate, low-frequency, and idempotent
 // (onDuplicateWrites/onMissingDeletes: ignore) — safe to retry. Checks are hot-path
 // and stay fail-closed-fast (no retry). Default 2 retries ≈ OpenFGA SDK's 3-attempt
@@ -312,11 +328,13 @@ async function withRetry<T>(
 export class OpenFgaAuthorizationAdapter implements AuthorizationPort {
   private readonly client: OpenFgaCheckClient;
   private readonly timeoutMs: number;
+  private readonly writeTimeoutMs: number;
   private readonly writeMaxRetries: number;
   private readonly writeRetryBackoffMs: number;
 
   constructor(config: OpenFgaAuthorizationAdapterConfig) {
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.writeTimeoutMs = config.writeTimeoutMs ?? DEFAULT_WRITE_TIMEOUT_MS;
     this.writeMaxRetries = config.writeMaxRetries ?? DEFAULT_WRITE_MAX_RETRIES;
     this.writeRetryBackoffMs =
       config.writeRetryBackoffMs ?? DEFAULT_WRITE_RETRY_BACKOFF_MS;
@@ -378,7 +396,7 @@ export class OpenFgaAuthorizationAdapter implements AuthorizationPort {
             client.writeTuples([tuple], {
               conflict: { onDuplicateWrites: "ignore" },
             }),
-            this.timeoutMs,
+            this.writeTimeoutMs,
             "write"
           ),
         this.writeMaxRetries,
@@ -414,7 +432,7 @@ export class OpenFgaAuthorizationAdapter implements AuthorizationPort {
             client.deleteTuples([tuple], {
               conflict: { onMissingDeletes: "ignore" },
             }),
-            this.timeoutMs,
+            this.writeTimeoutMs,
             "delete"
           ),
         this.writeMaxRetries,
