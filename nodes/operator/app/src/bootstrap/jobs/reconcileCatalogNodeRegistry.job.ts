@@ -25,6 +25,7 @@ import { createOperatorDeployPlane } from "@/bootstrap/capabilities/operator-dep
 import { getContainer } from "@/bootstrap/container";
 import type { CatalogNodeOwnerProjection } from "@/ports";
 import { serverEnv } from "@/shared/env/server-env";
+import { resolveNodeCatalogSource } from "@/shared/node-registry/catalog-source";
 
 export interface CatalogNodeRegistryJobSummary {
   readonly projected: number;
@@ -36,15 +37,18 @@ export async function runCatalogNodeRegistryReconcileJob(): Promise<CatalogNodeR
   const env = serverEnv();
   const container = getContainer();
   const { log, authorization } = container;
-  const parentOwner = env.NODE_SUBMODULE_PARENT_OWNER;
-  const parentRepo = env.NODE_SUBMODULE_PARENT_REPO;
+  // Same source as the identity broker: the repo whose catalog defines this env's
+  // nodes, which on candidate-a/preview is NOT the submodule pin-PR target (bug.5073).
+  const source = resolveNodeCatalogSource(env);
   const sourceRef = env.APP_BUILD_SHA ?? "main";
 
-  if (!parentOwner || !parentRepo) {
+  if (!source) {
     throw new Error(
-      "catalog registry reconcile requires NODE_SUBMODULE_PARENT_OWNER + NODE_SUBMODULE_PARENT_REPO"
+      "catalog registry reconcile requires NODE_REGISTRY_CATALOG_* or NODE_SUBMODULE_PARENT_*"
     );
   }
+  const parentOwner = source.owner;
+  const parentRepo = source.repo;
   if (!authorization) {
     throw new Error(
       "catalog registry reconcile requires an environment-local OpenFGA authorization adapter"
