@@ -3,10 +3,12 @@
 
 /**
  * Module: `@components/kit/auth/SignInDialog`
- * Purpose: Modal dialog presenting sign-in options: Ethereum wallet, GitHub, Google.
+ * Purpose: Modal dialog presenting the sign-in options this deployment actually offers.
  * Scope: Client component that fetches available providers and renders sign-in options; does not manage session state or implement OAuth flow directly.
- * Invariants: Only renders providers that are actually configured server-side.
- *   Filters out "credentials" (SIWE) since wallet flow is handled separately.
+ * Invariants: Renders exactly what `/api/auth/providers` advertises — never a hardcoded
+ *   provider list. A node that configures a provider gets a button for it with no code
+ *   change, and a provider it does not configure is never advertised.
+ *   Filters out "credentials" (SIWE) since the wallet flow is handled separately.
  * Side-effects: IO (fetch /api/auth/providers, signIn redirect)
  * Links: src/components/kit/auth/WalletConnectButton.tsx, src/auth.ts
  * @public
@@ -25,25 +27,32 @@ import { signIn } from "next-auth/react";
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
 import {
+  DiscordIcon,
   EthereumIcon,
   GitHubIcon,
   GoogleIcon,
 } from "@/components/kit/data-display/ProviderIcons";
 import { Button } from "@/components/kit/inputs/Button";
 
-/** Provider metadata for rendering sign-in buttons */
-const OAUTH_PROVIDERS = [
-  {
-    id: "github",
-    label: "Continue with GitHub",
-    icon: GitHubIcon,
-  },
-  {
-    id: "google",
-    label: "Continue with Google",
-    icon: GoogleIcon,
-  },
-] as const;
+/**
+ * Presentation for providers we ship artwork for. This is a LOOKUP, never a filter —
+ * an id missing from here still renders, using the display name NextAuth returns.
+ * Hardcoding the render list instead is what hid Discord on every node while
+ * advertising GitHub on nodes that never register it (bug.5074).
+ */
+const PROVIDER_META: Record<
+  string,
+  { readonly label: string; readonly icon: typeof GitHubIcon }
+> = {
+  github: { label: "Continue with GitHub", icon: GitHubIcon },
+  google: { label: "Continue with Google", icon: GoogleIcon },
+  discord: { label: "Continue with Discord", icon: DiscordIcon },
+};
+
+interface OauthProvider {
+  readonly id: string;
+  readonly name: string;
+}
 
 interface SignInDialogProps {
   readonly open: boolean;
@@ -60,11 +69,10 @@ export function SignInDialog({
   onWalletConnect,
   callbackUrl = "/chat",
 }: SignInDialogProps): ReactElement {
-  // Optimistic: show all known OAuth buttons immediately to avoid pop-in lag.
-  // The fetch narrows the set if a provider isn't configured server-side.
-  const [availableProviders, setAvailableProviders] = useState<Set<string>>(
-    () => new Set(OAUTH_PROVIDERS.map((p) => p.id))
-  );
+  // Starts empty and fills from the server. There is nothing to be optimistic WITH:
+  // which providers exist is per-deployment, so guessing renders buttons that vanish
+  // (or worse, ones that cannot work).
+  const [providers, setProviders] = useState<readonly OauthProvider[]>([]);
 
   useEffect(() => {
     if (!open) return;
@@ -72,15 +80,16 @@ export function SignInDialog({
     let cancelled = false;
     fetch("/api/auth/providers")
       .then((res) => res.json())
-      .then((providers: Record<string, { id: string }>) => {
+      .then((fetched: Record<string, { id: string; name: string }>) => {
         if (cancelled) return;
-        const ids = new Set(
-          Object.keys(providers).filter((id) => id !== "credentials")
+        setProviders(
+          Object.values(fetched)
+            .filter((provider) => provider.id !== "credentials")
+            .map((provider) => ({ id: provider.id, name: provider.name }))
         );
-        setAvailableProviders(ids);
       })
       .catch(() => {
-        // If provider fetch fails, keep the optimistic set
+        // Wallet sign-in still works; advertising an unconfirmed provider does not.
       });
 
     return () => {
@@ -109,20 +118,22 @@ export function SignInDialog({
             Ethereum Wallet
           </Button>
 
-          {/* OAuth options — only if provider is configured */}
-          {OAUTH_PROVIDERS.filter((p) => availableProviders.has(p.id)).map(
-            (provider) => (
+          {/* Every OAuth provider this deployment actually configured */}
+          {providers.map((provider) => {
+            const meta = PROVIDER_META[provider.id];
+            const Icon = meta?.icon;
+            return (
               <Button
                 key={provider.id}
                 variant="outline"
                 className="h-12 justify-start gap-3 text-sm"
                 onClick={() => signIn(provider.id, { callbackUrl })}
               >
-                <provider.icon className="size-5" />
-                {provider.label}
+                {Icon ? <Icon className="size-5" /> : null}
+                {meta?.label ?? `Continue with ${provider.name}`}
               </Button>
-            )
-          )}
+            );
+          })}
         </div>
       </DialogContent>
     </Dialog>
