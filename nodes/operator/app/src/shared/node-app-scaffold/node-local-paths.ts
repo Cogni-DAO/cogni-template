@@ -38,6 +38,15 @@ export const DEFAULT_NODE_LOCAL_PATHS: readonly string[] = [
   // Home/landing feature surface (components, copy, hero).
   "app/src/features/home/**",
   // Branding / theme / visual identity.
+  //
+  // `tailwind.css` holds the node's DESIGN TOKENS — brand hue, accent stops, radii. It
+  // was missing from this floor, and node-template shipped no `.cogni/sync-manifest.yaml`
+  // at all, so the floor WAS the whole Tier-3 set and every sync rewrote every fork's
+  // palette to node-template's: levelup went hue 150 (its own #349866) -> 217 on
+  // 2026-08-28, poly lost its green the same way (task.5016). A missing manifest fails
+  // back to this list silently, so the floor itself has to be safe — being right only
+  // when the manifest is present is how this recurs.
+  "app/src/styles/tailwind.css",
   "app/src/styles/branding/**",
   "app/src/app/branding/**",
   "public/branding/**",

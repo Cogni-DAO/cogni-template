@@ -100,3 +100,33 @@ describe("DEFAULT_NODE_LOCAL_PATHS boundary — node owns its face, not the shel
     expect(matches("app/src/app/(public)/propose/merge/page.tsx")).toBe(false);
   });
 });
+
+describe("floor carries node identity even with no manifest (regression)", () => {
+  // node-template shipped NO `.cogni/sync-manifest.yaml`, so this floor silently WAS the
+  // entire Tier-3 set — and it omitted the design-token file. Every sync therefore
+  // rewrote every fork's palette to node-template's (levelup hue 150 -> 217, poly's
+  // green, task.5016). The manifest now exists, but a missing or malformed one falls
+  // back here without a sound, so the floor must be independently safe.
+  const IDENTITY_CRITICAL = [
+    "app/src/styles/tailwind.css",
+    "app/src/app/(public)/page.tsx",
+    ".cogni/repo-spec.yaml",
+  ] as const;
+
+  it.each(IDENTITY_CRITICAL)("floor carves %s", (path) => {
+    expect(DEFAULT_NODE_LOCAL_PATHS).toContain(path);
+  });
+
+  it("a fork's design tokens survive a manifest that is absent or garbage", () => {
+    for (const manifest of [
+      null,
+      undefined,
+      "",
+      "%%%not yaml%%%",
+      "node_local: 3",
+    ]) {
+      const matcher = makeNodeLocalMatcher(parseNodeLocalPaths(manifest));
+      expect(matcher("app/src/styles/tailwind.css")).toBe(true);
+    }
+  });
+});
