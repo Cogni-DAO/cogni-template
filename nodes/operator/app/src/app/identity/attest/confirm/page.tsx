@@ -66,7 +66,7 @@ export default async function IdentityAttestationConfirmPage() {
       {/* Deliberately NOT the operator app shell. Someone signing in to a node has no
           operator account and must not be shown one — no sidebar, no treasury, no admin.
           This is a Cogni identity page, not the operator product. */}
-      <p className="font-semibold text-sm tracking-widest text-muted-foreground uppercase">
+      <p className="font-semibold text-muted-foreground text-sm uppercase tracking-widest">
         Cogni
       </p>
 
