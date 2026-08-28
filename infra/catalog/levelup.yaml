@@ -7,7 +7,7 @@ image_tag_suffix: "-levelup"
 migrator_tag_suffix: "-levelup-migrate"
 source_repo: https://github.com/cogni-dao/levelup.git
 image_repository: ghcr.io/cogni-dao/levelup
-source_sha: 0fb85427d2917fc0ddeecb61680b4efd6c377441
+source_sha: 880122832758a3420d23b862213e34862e466974
 candidate_a_branch: deploy/candidate-a-levelup
 preview_branch: deploy/preview-levelup
 production_branch: deploy/production-levelup
