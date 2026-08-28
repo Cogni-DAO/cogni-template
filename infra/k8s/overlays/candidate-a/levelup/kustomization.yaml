@@ -13,8 +13,8 @@ namePrefix: levelup-
 
 images:
   - name: ghcr.io/cogni-dao/cogni-template
-    newName: ghcr.io/cogni-dao/levelup
-    digest: "sha256:d675d64bff9a2d6f6c83bc1ea592be7c9fbcefa9a460347668f10eb8e395e020"
+    newName: ghcr.io/cogni-dao/cogni-template
+    digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
 
 patches:
   - target:
