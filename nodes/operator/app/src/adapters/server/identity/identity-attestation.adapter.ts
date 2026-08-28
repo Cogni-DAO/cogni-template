@@ -120,7 +120,17 @@ export class OperatorIdentityAttestationRepository
       }
     }
 
-    const nodes = await this.catalogNodes();
+    // A catalog read failure must not escape as a 500 on the interactive auth path.
+    // On preview the App is not installed on the configured repo, so this threw
+    // `GitHub App not installed ... (HTTP 404)` straight through the broker route
+    // (bug.5073). Returning null keeps the caller's fail-CLOSED `unknown_node`, which
+    // is the honest answer: this operator cannot verify the node.
+    let nodes: CatalogNodes;
+    try {
+      nodes = await this.catalogNodes();
+    } catch {
+      return null;
+    }
     const matches = nodes.filter((candidate) => candidate.nodeId === nodeId);
     if (matches.length === 0) return null;
     if (matches.length > 1) {

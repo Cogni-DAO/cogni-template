@@ -14,6 +14,7 @@ import { createOperatorDeployPlane } from "@/bootstrap/capabilities/operator-dep
 import { getContainer, resolveServiceDb } from "@/bootstrap/container";
 import { nodes } from "@/shared/db/schema";
 import { serverEnv } from "@/shared/env/server-env";
+import { resolveNodeCatalogSource } from "@/shared/node-registry/catalog-source";
 
 /**
  * Service-role read of one node row for the identity broker (bug.5063).
@@ -45,17 +46,18 @@ async function findNodeRow(nodeId: string) {
 
 export function resolveIdentityAttestationDependencies(signingKey: KeyObject) {
   const env = serverEnv();
-  const parentOwner = env.NODE_SUBMODULE_PARENT_OWNER;
-  const parentRepo = env.NODE_SUBMODULE_PARENT_REPO;
-  if (!parentOwner || !parentRepo) {
+  // Which repo's catalog names this env's nodes — NOT the submodule pin-PR target.
+  // candidate-a/preview point the latter at a throwaway org they do not deploy from.
+  const source = resolveNodeCatalogSource(env);
+  if (!source) {
     throw new Error(
-      "identity attestation requires NODE_SUBMODULE_PARENT_OWNER + NODE_SUBMODULE_PARENT_REPO"
+      "identity attestation requires NODE_REGISTRY_CATALOG_* or NODE_SUBMODULE_PARENT_*"
     );
   }
   return {
     repository: new OperatorIdentityAttestationRepository(
       createOperatorDeployPlane(env),
-      { parentOwner, parentRepo },
+      { parentOwner: source.owner, parentRepo: source.repo },
       findNodeRow
     ),
     signer: new JoseIdentityAttestationSigner(signingKey),

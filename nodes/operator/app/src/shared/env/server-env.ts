@@ -208,6 +208,10 @@ export const serverSchema = z.object({
   // Required env-scoped deployment parent for submodule pin PRs and node-ref flights.
   NODE_SUBMODULE_PARENT_OWNER: optionalString,
   NODE_SUBMODULE_PARENT_REPO: optionalString,
+  // Which repo's infra/catalog/ defines this env's nodes. Defaults to the submodule
+  // parent; set separately where the pin-PR target is a throwaway org (bug.5073).
+  NODE_REGISTRY_CATALOG_OWNER: optionalString,
+  NODE_REGISTRY_CATALOG_REPO: optionalString,
 
   // MVP node-capacity ceiling (merge-authority): the operator refuses to birth a new node once the
   // network has this many `nodes/<slug>` submodules deployed. Config, never hardcoded; tunable per env.
