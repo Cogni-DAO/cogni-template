@@ -5,7 +5,7 @@
  * Module: `@/auth`
  * Purpose: NextAuth.js configuration and export.
  * Scope: App-wide authentication configuration. Does not handle client-side session management.
- * Invariants: SIWE + OAuth resolve to canonical user_id via user_bindings ; NO_AUTO_MERGE enforced on link-intent conflicts ; atomic new-user tx (user + binding + event)
+ * Invariants: SIWE + OAuth resolve to canonical user_id via user_bindings ; NO_AUTO_MERGE enforced on link-intent conflicts ; atomic new-user tx (user + binding + event) ; GITHUB_ISSUER_PINNED — the GitHub provider must declare the RFC 9207 issuer or openid-client rejects every callback
  * Side-effects: IO
  * Notes: Handles session creation, validation, and persistence.
  * Links: docs/spec/authentication.md
@@ -48,6 +48,24 @@ export const authSecret =
 const getLog = () => makeLogger({ module: "auth" });
 
 const LINK_INTENT_TTL = 5 * 60; // 5 minutes — must match route.ts
+
+/**
+ * RFC 9207 issuer identifier GitHub returns as `iss` on the OAuth redirect.
+ *
+ * GitHub enabled Authorization Server Issuer Identification in April 2026, so every
+ * authorization response now carries `iss=https://github.com/login/oauth`. openid-client
+ * reacts to the parameter's mere presence — `if ('iss' in params) assertIssuerConfiguration(
+ * this.issuer, 'issuer')` — and next-auth's GitHub provider declares no `issuer`, so
+ * `new Issuer({ issuer: undefined, ... })` made that assert throw
+ * `TypeError: issuer must be configured on the issuer`. next-auth wrapped it as
+ * `OAuthCallbackError` and bounced the browser to `/?error=OAuthCallback`: from April 2026
+ * until this constant landed, EVERY GitHub sign-in on EVERY env failed (bug.5071).
+ *
+ * The value must byte-match what GitHub sends; a wrong one fails loudly and specifically
+ * (`iss mismatch, expected X, got: Y`) rather than silently. Google needs no equivalent —
+ * its provider discovers `wellKnown`, which populates `issuer` already.
+ */
+const GITHUB_OAUTH_ISSUER = "https://github.com/login/oauth";
 
 /**
  * Create a link transaction row in the DB. Called by the link initiation route
@@ -267,6 +285,7 @@ export const authOptions: NextAuthOptions = {
           GitHub({
             clientId: process.env.GH_OAUTH_CLIENT_ID,
             clientSecret: process.env.GH_OAUTH_CLIENT_SECRET,
+            issuer: GITHUB_OAUTH_ISSUER,
           }),
         ]
       : []),
