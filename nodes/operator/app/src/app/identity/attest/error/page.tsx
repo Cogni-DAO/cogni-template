@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Cogni-DAO
 
 /**
- * Module: `@app/(app)/identity/attest/error`
+ * Module: `@app/identity/attest/error`
  * Purpose: Terminal failure surface for the identity broker, so every rejected leg lands
  *   on a page that says what happened instead of a blank redirect.
  * Scope: Renders a known code. Holds no state and never retries.

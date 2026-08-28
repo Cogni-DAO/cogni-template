@@ -4,7 +4,7 @@
 // SPDX-FileCopyrightText: 2026 Cogni-DAO
 
 /**
- * Module: `@app/(app)/identity/attest/confirm/actions`
+ * Module: `@app/identity/attest/confirm/actions`
  * Purpose: The three terminal actions on the account-intent gate, with a real pending
  *   state — submitting posts a full navigation, so without this the screen sits inert
  *   after the click and reads as broken.
@@ -24,7 +24,13 @@ import { useState } from "react";
 
 import { Button } from "@/components";
 
-export function ConfirmActions({ login }: { login: string }) {
+export function ConfirmActions({
+  login,
+  mode,
+}: {
+  login: string;
+  mode: "signin" | "link";
+}) {
   const [pending, setPending] = useState<string | null>(null);
 
   return (
@@ -46,7 +52,7 @@ export function ConfirmActions({ login }: { login: string }) {
         value="confirm"
       >
         {pending === "confirm" ? <Spinner /> : null}
-        Link {login}
+        {mode === "signin" ? "Continue" : `Link ${login}`}
       </Button>
       <Button
         disabled={pending !== null}

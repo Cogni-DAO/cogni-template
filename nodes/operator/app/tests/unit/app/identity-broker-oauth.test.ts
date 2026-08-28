@@ -211,7 +211,7 @@ describe("broker configuration", () => {
    * Redirect targets must come from the configured public origin.
    */
   it.each([
-    "app/(app)/identity/attest/route.ts",
+    "app/identity/attest/route.ts",
     "app/api/auth/attest/callback/[provider]/route.ts",
     "app/api/auth/attest/confirm/route.ts",
   ])("%s never builds a redirect from request.url", (relative) => {
@@ -278,9 +278,9 @@ describe("broker configuration", () => {
  */
 describe("no operator session in the broker flow", () => {
   const BROKER_SOURCES = [
-    "app/(app)/identity/attest/route.ts",
-    "app/(app)/identity/attest/confirm/page.tsx",
-    "app/(app)/identity/attest/confirm/actions.tsx",
+    "app/identity/attest/route.ts",
+    "app/identity/attest/confirm/page.tsx",
+    "app/identity/attest/confirm/actions.tsx",
     "app/api/auth/attest/callback/[provider]/route.ts",
     "app/api/auth/attest/confirm/route.ts",
     "app/_facades/identity/attestation-broker.server.ts",
@@ -302,7 +302,7 @@ describe("no operator session in the broker flow", () => {
    * a feature event, and none may log the code, token, PKCE verifier, or cookie.
    */
   it.each([
-    "app/(app)/identity/attest/route.ts",
+    "app/identity/attest/route.ts",
     "app/api/auth/attest/callback/[provider]/route.ts",
     "app/api/auth/attest/confirm/route.ts",
   ])("%s emits a queryable feature marker", (relative) => {
@@ -311,7 +311,7 @@ describe("no operator session in the broker flow", () => {
   });
 
   it.each([
-    "app/(app)/identity/attest/route.ts",
+    "app/identity/attest/route.ts",
     "app/api/auth/attest/callback/[provider]/route.ts",
     "app/api/auth/attest/confirm/route.ts",
   ])("%s never logs a broker secret", (relative) => {
@@ -359,7 +359,7 @@ describe("broker perimeter stays session-free", () => {
     ).toContain("/api/auth/");
     // The form lives in the client actions component, not the server page.
     const confirmForm = readFileSync(
-      join(SRC_ROOT, "app/(app)/identity/attest/confirm/actions.tsx"),
+      join(SRC_ROOT, "app/identity/attest/confirm/actions.tsx"),
       "utf8"
     );
     expect(confirmForm).toContain('action="/api/auth/attest/confirm"');

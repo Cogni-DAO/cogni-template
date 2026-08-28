@@ -44,6 +44,24 @@
  * provider-generic. Tracked in the follow-up on task.5024 — do not "fix" this by
  * widening the list, which would sign a claim v1 cannot represent.
  */
+/**
+ * The node paths a relying node may be returned to, and what each one MEANS.
+ *
+ * `/profile` is the LINK leg — an already-signed-in node user attaching GitHub.
+ * `/auth/attest/complete` is the SIGN-IN leg (task.5042) — a caller with no session,
+ * who therefore cannot be sent anywhere behind that node's auth gate.
+ *
+ * A closed set, never a prefix: a node must not be able to nominate an arbitrary
+ * landing page for a signed attestation. The pair also tells the confirm screen which
+ * verb the human is actually looking at.
+ */
+export const ATTESTATION_LINK_PATH = "/profile";
+export const ATTESTATION_SIGNIN_PATH = "/auth/attest/complete";
+export const ATTESTATION_RETURN_PATHS: readonly string[] = [
+  ATTESTATION_LINK_PATH,
+  ATTESTATION_SIGNIN_PATH,
+];
+
 export const ATTESTABLE_PROVIDERS = ["github"] as const;
 
 export type AttestableProvider = (typeof ATTESTABLE_PROVIDERS)[number];

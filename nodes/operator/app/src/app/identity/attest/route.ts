@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Cogni-DAO
 
 /**
- * Module: `@app/(app)/identity/attest`
+ * Module: `@app/identity/attest`
  * Purpose: Entry leg of the operator identity broker — validates a node's
  *   `identity.attestation.v1` request and starts a REAL GitHub authorization for it.
  * Scope: Validates protocol + node_id + nonce + target_origin + return_to, stashes the

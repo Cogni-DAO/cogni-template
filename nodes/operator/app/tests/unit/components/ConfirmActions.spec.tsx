@@ -20,7 +20,7 @@
  *   - ONE_SUBMIT: one click disables all three, so a double-click cannot race two
  *     terminal actions against one consume-once broker cookie.
  * Side-effects: none
- * Links: src/app/(app)/identity/attest/confirm/actions.tsx, task.5024
+ * Links: src/app/identity/attest/confirm/actions.tsx, task.5024
  * @vitest-environment jsdom
  */
 
@@ -28,7 +28,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 
-import { ConfirmActions } from "@/app/(app)/identity/attest/confirm/actions";
+import { ConfirmActions } from "@/app/identity/attest/confirm/actions";
 
 const LOGIN = "@flock-leader";
 const CONFIRM = `Link ${LOGIN}`;
@@ -43,7 +43,7 @@ function button(name: string): HTMLButtonElement {
  */
 function renderGate(): { form: HTMLFormElement; submits: () => number } {
   let submits = 0;
-  render(<ConfirmActions login={LOGIN} />);
+  render(<ConfirmActions login={LOGIN} mode="link" />);
   const form = button(CONFIRM).closest("form") as HTMLFormElement;
   form.addEventListener("submit", (event) => {
     event.preventDefault();
