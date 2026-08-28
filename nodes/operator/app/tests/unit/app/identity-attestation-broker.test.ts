@@ -82,12 +82,29 @@ describe("validateAttestationReturnTo", () => {
     ).toBe("https://node-template.cognidao.org/profile");
   });
 
+  it("accepts the sign-in completion path — a signing-in caller has no session yet", () => {
+    // task.5042. `/profile` sits behind the node's auth gate, so returning a
+    // wallet-less first-time visitor there would bounce them and destroy the
+    // fragment carrying the attestation.
+    expect(
+      validateAttestationReturnTo(
+        "https://node-template.cognidao.org/auth/attest/complete",
+        "https://node-template.cognidao.org"
+      )
+    ).toBe("https://node-template.cognidao.org/auth/attest/complete");
+  });
+
   it.each([
     "https://evil.example/profile",
     "https://node-template.cognidao.org.evil.example/profile",
     "https://node-template.cognidao.org/profile?next=https://evil.example",
     "https://node-template.cognidao.org/profile#evil",
     "https://node-template.cognidao.org/other",
+    // The allowlist is a SET, not a prefix — deeper paths under an allowed one
+    // must not ride in on it.
+    "https://node-template.cognidao.org/auth/attest/complete/evil",
+    "https://node-template.cognidao.org/auth",
+    "https://evil.example/auth/attest/complete",
     "not-a-url",
   ])("rejects non-canonical return target %s", (returnTo) => {
     expect(

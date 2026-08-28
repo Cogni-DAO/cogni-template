@@ -60,7 +60,23 @@ function canonicalOrigin(configured: string | undefined): string | null {
   return parsed.success ? parsed.data : null;
 }
 
-/** Exact allowlist check: canonical registered-node origin plus `/profile`. */
+/**
+ * Where a relying node may ask to be returned to, as a CLOSED SET of exact paths.
+ *
+ * `/profile` is the LINK leg: an already-signed-in user attaching GitHub to their
+ * account. `/auth/attest/complete` is the SIGN-IN leg (task.5042) — a caller with no
+ * session yet, who therefore cannot be sent to a page behind the node's auth gate.
+ *
+ * A set, never a prefix or a pattern. The whole value of this check is that a node
+ * cannot nominate an arbitrary landing page for a signed attestation, and prefix
+ * matching would hand that back.
+ */
+const ATTESTATION_RETURN_PATHS: readonly string[] = [
+  "/profile",
+  "/auth/attest/complete",
+];
+
+/** Exact allowlist check: canonical registered-node origin plus an allowed path. */
 export function validateAttestationReturnTo(
   returnTo: string,
   expectedNodeOrigin: string
@@ -72,7 +88,7 @@ export function validateAttestationReturnTo(
     const url = new URL(returnTo);
     if (
       url.origin !== expectedNodeOrigin ||
-      url.pathname !== "/profile" ||
+      !ATTESTATION_RETURN_PATHS.includes(url.pathname) ||
       url.search ||
       url.hash ||
       url.username ||
@@ -80,7 +96,7 @@ export function validateAttestationReturnTo(
     ) {
       return null;
     }
-    return `${expectedNodeOrigin}/profile`;
+    return `${expectedNodeOrigin}${url.pathname}`;
   } catch {
     return null;
   }
