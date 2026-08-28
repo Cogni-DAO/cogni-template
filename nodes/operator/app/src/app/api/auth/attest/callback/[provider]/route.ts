@@ -23,12 +23,21 @@
  * @public
  */
 
+import {
+  IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256,
+  IdentityAttestationRequestSchema,
+} from "@cogni/node-contracts";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import {
+  AttestationBrokerError,
+  issueBrowserIdentityAttestation,
+} from "@/app/_facades/identity/attestation-broker.server";
 import { authSecret } from "@/auth";
 import { getNodeId } from "@/shared/config";
 import { serverEnv } from "@/shared/env";
 import {
+  ATTESTATION_SIGNIN_PATH,
   brokerRedirectUri,
   brokerUrl,
   isAttestableProvider,
@@ -156,6 +165,58 @@ export async function GET(
     },
     "Identity broker authenticated a GitHub account; awaiting human confirmation"
   );
+
+  // SIGN-IN: the operator renders NOTHING. A person signing in to a node has no
+  // operator account and must never be shown an operator page — the browser transits
+  // this origin because GitHub allows one registered callback, and that is the only
+  // reason it is here. Sign now and hand straight back; the NODE asks the human to
+  // confirm, on its own domain, in its own branding.
+  //
+  // Safe to sign before the human confirms, for sign-in only: the attestation is
+  // single-use, 10-minute, audience-bound to one node, and cookie-bound at the node, so
+  // it cannot mint a session by existing. Intent is still explicit — it just happens one
+  // hop later, on the node. The reverse is NOT true for LINK, where a silent bind writes
+  // a permanent NO_AUTO_MERGE row against an existing account; that leg keeps its
+  // operator-side gate until its confirmation moves to the node too.
+  if (brokerState.returnTo.endsWith(ATTESTATION_SIGNIN_PATH)) {
+    const parsed = IdentityAttestationRequestSchema.safeParse({
+      protocol: IDENTITY_ATTESTATION_V1_PROTOCOL_SHA256,
+      nodeId: brokerState.nodeId,
+      nonce: brokerState.nonce,
+      targetOrigin: brokerState.targetOrigin,
+    });
+    if (!parsed.success) {
+      cookieStore.delete(BROKER_STATE_COOKIE);
+      return failure("invalid_request");
+    }
+    try {
+      const issued = await issueBrowserIdentityAttestation({
+        github,
+        request: parsed.data,
+        returnTo: brokerState.returnTo,
+      });
+      cookieStore.delete(BROKER_STATE_COOKIE);
+      brokerLog().info(
+        {
+          event: EVENT_NAMES.IDENTITY_BROKER_COMPLETE,
+          nodeId: brokerState.nodeId,
+          nodeSlug: brokerState.nodeSlug,
+          githubId: github.id,
+          githubLogin: github.login,
+          targetOrigin: brokerState.targetOrigin,
+          leg: "signin",
+        },
+        "Identity broker issued a sign-in attestation; node owns the confirmation"
+      );
+      return NextResponse.redirect(issued.redirectUrl, { status: 303 });
+    } catch (error) {
+      cookieStore.delete(BROKER_STATE_COOKIE);
+      if (error instanceof AttestationBrokerError) {
+        return failure(error.code);
+      }
+      throw error;
+    }
+  }
 
   return NextResponse.redirect(brokerUrl(env, "/identity/attest/confirm"));
 }

@@ -40,6 +40,7 @@ import {
 import type { IdentityAttestationGithubIdentity } from "@/ports";
 import { serverEnv } from "@/shared/env";
 import { importAttestationSigningKey } from "@/shared/identity/attestation-keys";
+import { ATTESTATION_RETURN_PATHS } from "@/shared/identity/broker-config";
 import { baseDomain } from "@/shared/node-registry/resolve";
 
 export type AttestationBrokerErrorCode =
@@ -59,22 +60,6 @@ function canonicalOrigin(configured: string | undefined): string | null {
   const parsed = IdentityAttestationOriginSchema.safeParse(configured);
   return parsed.success ? parsed.data : null;
 }
-
-/**
- * Where a relying node may ask to be returned to, as a CLOSED SET of exact paths.
- *
- * `/profile` is the LINK leg: an already-signed-in user attaching GitHub to their
- * account. `/auth/attest/complete` is the SIGN-IN leg (task.5042) — a caller with no
- * session yet, who therefore cannot be sent to a page behind the node's auth gate.
- *
- * A set, never a prefix or a pattern. The whole value of this check is that a node
- * cannot nominate an arbitrary landing page for a signed attestation, and prefix
- * matching would hand that back.
- */
-const ATTESTATION_RETURN_PATHS: readonly string[] = [
-  "/profile",
-  "/auth/attest/complete",
-];
 
 /** Exact allowlist check: canonical registered-node origin plus an allowed path. */
 export function validateAttestationReturnTo(

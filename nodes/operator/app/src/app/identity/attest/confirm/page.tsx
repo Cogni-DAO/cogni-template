@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Cogni-DAO
 
 /**
- * Module: `@app/(app)/identity/attest/confirm`
+ * Module: `@app/identity/attest/confirm`
  * Purpose: The account-intent gate. Shows which GitHub account GitHub authenticated and
  *   which node is asking, and requires a deliberate click before anything is signed.
  * Scope: Renders the broker cookie's resolved state. Signs nothing.
@@ -23,6 +23,7 @@ import { cookies } from "next/headers";
 
 import { authSecret } from "@/auth";
 import { PageContainer, SectionCard } from "@/components";
+import { ATTESTATION_SIGNIN_PATH } from "@/shared/identity/broker-config";
 import {
   BROKER_STATE_COOKIE,
   decodeBrokerState,
@@ -51,25 +52,40 @@ export default async function IdentityAttestationConfirmPage() {
     );
   }
 
-  const { github, nodeSlug } = brokerState;
+  const { github, nodeSlug, returnTo } = brokerState;
   const login = github.login ? `@${github.login}` : `id ${github.id}`;
+  // The node picks its landing path, and the two paths mean different things: the
+  // sign-in leg lands on the public completion page, the link leg on /profile. That is
+  // the only signal for which verb this human is actually looking at.
+  const mode: "signin" | "link" = returnTo.endsWith(ATTESTATION_SIGNIN_PATH)
+    ? "signin"
+    : "link";
 
   return (
-    <PageContainer maxWidth="sm">
-      <SectionCard title="Link account">
-        {/* The pairing IS the question. Identity, direction, destination — one line,
-            one glance, no prose to wade through under a security prompt. */}
-        <div className="space-y-1">
-          <p className="font-semibold text-2xl tracking-tight">{login}</p>
-          <p className="text-muted-foreground text-sm">→ {nodeSlug}</p>
-        </div>
+    <main className="flex min-h-screen flex-col items-center justify-center gap-8 p-6">
+      {/* Deliberately NOT the operator app shell. Someone signing in to a node has no
+          operator account and must not be shown one — no sidebar, no treasury, no admin.
+          This is a Cogni identity page, not the operator product. */}
+      <p className="font-semibold text-sm tracking-widest text-muted-foreground uppercase">
+        Cogni
+      </p>
 
-        <ConfirmActions login={login} />
-
-        <p className="text-muted-foreground text-xs">
-          Only your public GitHub identity is shared.
+      {/* Three lines, because a human under a security prompt reads the identity, the
+          destination, and the verb — nothing else. GitHub can name the account; only we
+          can name the node they are entering. That sentence is this page's whole job. */}
+      <div className="space-y-2 text-center">
+        <p className="font-semibold text-3xl tracking-tight">{login}</p>
+        <p className="text-muted-foreground">
+          {mode === "signin" ? "signing in to" : "linking to"}{" "}
+          <span className="text-foreground">{nodeSlug}</span>
         </p>
-      </SectionCard>
-    </PageContainer>
+      </div>
+
+      <ConfirmActions login={login} mode={mode} />
+
+      <p className="text-muted-foreground text-xs">
+        Only your public GitHub identity is shared.
+      </p>
+    </main>
   );
 }
