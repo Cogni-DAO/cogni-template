@@ -50,6 +50,12 @@ const bodySchema = z.object({
   port: z.number().int().positive().max(65535).default(3000),
   /** Custom hostnames for the provider ingress to accept (CNAME targets). */
   hosts: z.array(z.string().min(1)).max(5).optional(),
+  /**
+   * Connection + secret env for the workload (shared-substrate DSNs, AUTH_SECRET,
+   * LITELLM_*). SCOPED_CREDS_ONLY: node-scoped / budget-capped values — these reach the
+   * compute provider. v0 replaces caller-supplied env with server-side OpenBao sourcing.
+   */
+  env: z.record(z.string().regex(/^[A-Z][A-Z0-9_]*$/), z.string()).optional(),
 });
 
 export const POST = wrapRouteHandlerWithLogging(
@@ -65,7 +71,7 @@ export const POST = wrapRouteHandlerWithLogging(
         { status: 400 }
       );
     }
-    const { nodeId, sourceSha, port, hosts } = parsed.data;
+    const { nodeId, sourceSha, port, hosts, env: workloadEnv } = parsed.data;
 
     const gate = await resolveNodeAndAuthorize({
       id: nodeId,
@@ -120,13 +126,9 @@ export const POST = wrapRouteHandlerWithLogging(
       image: prepared.image,
       port,
       publicUrl,
-      secrets: {
-        appDbPassword: randomBytes(24).toString("hex"),
-        serviceDbPassword: randomBytes(24).toString("hex"),
-        authSecret: randomBytes(32).toString("hex"),
-        schedulerApiToken: randomBytes(32).toString("hex"),
-        billingIngestToken: randomBytes(32).toString("hex"),
-      },
+      // AUTH_SECRET default keeps a bare workload bootable; real deployments override via
+      // `env` with shared-substrate wiring (SCOPED_CREDS_ONLY).
+      env: { AUTH_SECRET: randomBytes(32).toString("hex"), ...workloadEnv },
       ...(hosts ? { hosts } : {}),
     });
 

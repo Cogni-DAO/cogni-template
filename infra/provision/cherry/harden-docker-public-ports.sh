@@ -52,6 +52,21 @@ iptables -A DOCKER-USER -m conntrack --ctstate ESTABLISHED,RELATED -m comment --
 iptables -A DOCKER-USER -s "$POD_CIDR" -m comment --comment "$TAG:pod-cidr" -j ACCEPT
 iptables -A DOCKER-USER -s "$SVC_CIDR" -m comment --comment "$TAG:svc-cidr" -j ACCEPT
 iptables -A DOCKER-USER -s 127.0.0.0/8 -m comment --comment "$TAG:loopback" -j ACCEPT
+
+# Decentralized-compute egress allowlist (task.5044): node-app workloads running on
+# external compute (e.g. Akash providers) dial the shared substrate on these same
+# internal ports. One CIDR per line in $ALLOWLIST_FILE (comments/# allowed); each gets
+# an ACCEPT ahead of the public DROP. Empty/absent file = no external compute allowed.
+ALLOWLIST_FILE="/etc/cogni/compute-egress-allowlist"
+if [ -f "$ALLOWLIST_FILE" ]; then
+  while IFS= read -r cidr; do
+    case "$cidr" in ""|\#*) continue ;; esac
+    iptables -A DOCKER-USER -s "$cidr" -p tcp -m multiport --dports "$INTERNAL_PORTS" \
+      -m comment --comment "$TAG:compute-egress-allow" -j ACCEPT
+    echo "[harden] compute-egress allow: $cidr -> $INTERNAL_PORTS"
+  done < "$ALLOWLIST_FILE"
+fi
+
 iptables -A DOCKER-USER -i "$PUBLIC_IFACE" -p tcp -m multiport --dports "$INTERNAL_PORTS" -m comment --comment "$TAG:drop-public" -j DROP
 
 DEBIAN_FRONTEND=noninteractive apt-get install -y iptables-persistent >/dev/null

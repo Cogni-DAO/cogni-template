@@ -48,6 +48,12 @@ export interface AkashComputeAdapterConfig {
   bidTimeoutMs?: number;
   /** Bid poll interval in ms. */
   bidPollIntervalMs?: number;
+  /**
+   * Provider addresses to prefer when leasing (e.g. providers whose egress IPs the shared
+   * substrate's firewall allowlists). Preferred providers win over cheaper strangers; when
+   * none of them bid, the cheapest open bid is leased.
+   */
+  preferredProviders?: readonly string[];
   /** SDL pricing knobs (max price per block per service). */
   pricing?: AkashSdlOptions;
   /** API base URL; defaults to the public Console API. */
@@ -224,9 +230,15 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     );
   }
 
-  /** Poll `/v1/bids` until at least one open bid arrives; return the cheapest bid's identity. */
+  /**
+   * Poll `/v1/bids` and pick a bid. With `preferredProviders` configured, hold out for a
+   * preferred bid until the window closes (preferred providers may bid later than
+   * strangers), then fall back to the cheapest open bid; without it, cheapest-first as
+   * soon as any bid lands. NO_BIDS when the window elapses with zero open bids.
+   */
   private async awaitCheapestBid(dseq: string): Promise<ConsoleBidId> {
     const deadline = Date.now() + this.bidTimeoutMs;
+    let bestFallback: ConsoleBidId | undefined;
     for (;;) {
       const bids = await this.request<ConsoleBid[]>(
         "GET",
@@ -235,16 +247,24 @@ export class AkashComputeAdapter implements ComputeResourcePort {
       const open = (bids ?? []).filter(
         (b) => b.bid?.id?.provider && (b.bid?.state ?? "open") === "open"
       );
-      if (open.length > 0) {
-        open.sort(
-          (a, b) =>
-            Number(a.bid?.price?.amount ?? Number.POSITIVE_INFINITY) -
-            Number(b.bid?.price?.amount ?? Number.POSITIVE_INFINITY)
-        );
-        const id = open[0]?.bid?.id;
-        if (id) return id;
+      open.sort(
+        (a, b) =>
+          Number(a.bid?.price?.amount ?? Number.POSITIVE_INFINITY) -
+          Number(b.bid?.price?.amount ?? Number.POSITIVE_INFINITY)
+      );
+      const preferred = this.config.preferredProviders?.length
+        ? open.find((b) =>
+            this.config.preferredProviders?.includes(b.bid?.id?.provider ?? "")
+          )
+        : undefined;
+      if (preferred?.bid?.id) return preferred.bid.id;
+      const cheapest = open[0]?.bid?.id;
+      if (cheapest) {
+        if (!this.config.preferredProviders?.length) return cheapest;
+        bestFallback = cheapest; // keep waiting for a preferred bid until the window closes
       }
       if (Date.now() >= deadline) {
+        if (bestFallback) return bestFallback;
         throw new AkashComputeError(
           "NO_BIDS",
           `no provider bids for dseq ${dseq} within ${this.bidTimeoutMs}ms`
