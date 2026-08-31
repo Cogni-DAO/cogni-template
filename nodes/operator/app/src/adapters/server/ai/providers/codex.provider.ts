@@ -30,15 +30,12 @@ import type { CodexMcpConfig } from "../codex/codex-mcp-config";
  * These are hardcoded because they come from the user's ChatGPT subscription,
  * not from a discovery API.
  */
+// Curated to the newest of each tier (general / mini / codex); older 5.1–5.3
+// variants pruned to keep the model picker legible.
 const CODEX_MODELS = [
   { id: "gpt-5.4", label: "GPT-5.4" },
   { id: "gpt-5.4-mini", label: "GPT-5.4 Mini" },
   { id: "gpt-5.3-codex", label: "GPT-5.3 Codex" },
-  { id: "gpt-5.3-codex-spark", label: "GPT-5.3 Codex Spark" },
-  { id: "gpt-5.2-codex", label: "GPT-5.2 Codex" },
-  { id: "gpt-5.1-codex", label: "GPT-5.1 Codex" },
-  { id: "gpt-5.1-codex-mini", label: "GPT-5.1 Codex Mini" },
-  { id: "gpt-5.1-codex-max", label: "GPT-5.1 Codex Max" },
 ] as const;
 
 /** Map of Codex model ID → display label. Used by the adapter to set resolvedDisplayName. */
