@@ -11,7 +11,7 @@
  *   posthog-js never touches the server bundle.
  * Invariants:
  *   - Config (project key + hosts) is resolved server-side and passed as props (see
- *     `@shared/observability/posthog-browser-config`); this component never reads
+ *     `@shared/env/posthog-browser-config`); this component never reads
  *     `process.env` for the key — runtime env is not build-inlined in this repo.
  *   - `api_host` is `/ingest` (reverse-proxy rewrite in `next.config.ts`), dodging
  *     ad-blockers; `ui_host` points at the PostHog app for toolbar/deep links.
@@ -19,7 +19,7 @@
  *     (and remounts) from re-initializing the singleton.
  *   - Missing `apiKey` (e.g. local dev) is a safe no-op — children still render.
  * Side-effects: initializes the global posthog-js singleton in the browser.
- * Links: ./layout.tsx, @shared/observability/posthog-browser-config,
+ * Links: ./layout.tsx, @shared/env/posthog-browser-config,
  *   https://posthog.com/docs/libraries/next-js
  * @public
  */
