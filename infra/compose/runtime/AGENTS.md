@@ -108,6 +108,7 @@ docker compose --project-name cogni-runtime logs -f app
 - Alloy writes to Grafana Cloud Loki
 - Environment variables: `DEPLOY_ENVIRONMENT`, `LOKI_WRITE_URL`, `LOKI_USERNAME`, `LOKI_PASSWORD`
 - Metrics: App exposes `/api/metrics` (auth via `METRICS_TOKEN`); Alloy scrapes app + scheduler-worker + OpenFGA + cAdvisor + node exporter and ships to Mimir (via `PROMETHEUS_*`)
+- **k3s scrape addressing**: app + scheduler-worker run as k3s pods (deploy-infra.sh `INFRA_SERVICES` excludes them from compose), so Alloy scrapes them at `host.docker.internal:<nodePort>` — operator app `:30000`, scheduler-worker `:30900` — NOT the compose DNS names `app:3000`/`scheduler-worker:9000` (dead since the k3s migration #785). OpenFGA stays compose, still scraped at `openfga:2112`. Alloy needs `extra_hosts: host.docker.internal:host-gateway` (Linux has no built-in resolution); the worker Service is published as a NodePort for this. Same host:port pattern the edge Caddy uses.
 - Verify in Alloy UI (http://127.0.0.1:12345) and Grafana Cloud
 
 **Doltgres (knowledge plane):**
