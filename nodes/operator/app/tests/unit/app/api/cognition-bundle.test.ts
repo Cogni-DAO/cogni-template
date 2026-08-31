@@ -124,8 +124,11 @@ describe("renderBundleMarkdown", () => {
     expect(g).toContain("ONE blocking command");
     expect(g).toContain("no harness-specific monitor/background");
     // (1) CI: exact one-liner + the --required trap.
-    expect(g).toContain("gh pr checks <PR> --watch --fail-fast");
+    expect(g).toContain("gh pr checks {PR} --watch --fail-fast");
     expect(g).toContain("NOT --required");
+    // Placeholders are brace-form so the ONLY angle brackets are real tags —
+    // an angle-bracket placeholder (<PR>) would collide with the tag grammar.
+    expect(g).not.toMatch(/<(PR|candidate|target|node)>/);
     // (2)/(3) flight + deploy: /version.buildSha is the ground-truth verdict.
     expect(g).toContain(".buildSha");
     expect(g).toContain("only ground truth");

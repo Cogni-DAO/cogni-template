@@ -46,9 +46,9 @@ export const SESSION_BOOTSTRAP_INVARIANTS: readonly string[] = [
  * without prose parsing. Deliberately terse: five tagged atoms, no run-on prose.
  */
 export const SESSION_WATCH_GATE = `<watch-gate rule="ONE blocking command; its exit code or matched value IS the verdict — no harness-specific monitor/background/notification primitive, never fire-and-forget, re-read the ground-truth signal before reporting">
-  <ci-green>gh pr checks <PR> --watch --fail-fast → 0=all pass · 8=pending · nonzero=fail. NOT --required (build/static live outside it). Re-read gh pr checks <PR> after — finished ≠ green.</ci-green>
-  <flight-landed>poll curl -s <candidate>/version until .buildSha == PR-head SHA, then /validate-candidate. host: test.cognidao.org (or <node>-test.cognidao.org).</flight-landed>
-  <deploy-landed>poll curl -s <target>/version until .buildSha == promoted SHA. host: [<node>-]{preview,}.cognidao.org.</deploy-landed>
+  <ci-green>gh pr checks {PR} --watch --fail-fast → 0=all pass · 8=pending · nonzero=fail. NOT --required (build/static live outside it). Re-read gh pr checks {PR} after — finished ≠ green.</ci-green>
+  <flight-landed>poll curl -s {candidate}/version until .buildSha == PR-head SHA, then /validate-candidate. host: test.cognidao.org (or {node}-test.cognidao.org).</flight-landed>
+  <deploy-landed>poll curl -s {target}/version until .buildSha == promoted SHA. host: {node-}{preview,}cognidao.org.</deploy-landed>
   <truth>/version.buildSha is the only ground truth — CI and workflow "success" can lie.</truth>
 </watch-gate>`;
 
