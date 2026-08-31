@@ -1,8 +1,36 @@
 import path from "node:path";
 import type { NextConfig } from "next";
 
+// PostHog ingest hosts for the `/ingest` reverse-proxy rewrite (adblock-dodge pattern).
+// Hardcoded to PostHog US Cloud — the project this deployment already runs (same host
+// as the server-side POSTHOG_HOST). These are public, non-sensitive endpoints; rewrite
+// destinations are frozen at build time anyway, so a runtime-only value can't drive them.
+const POSTHOG_INGEST_HOST = "https://us.i.posthog.com";
+const POSTHOG_ASSETS_HOST = "https://us-assets.i.posthog.com";
+
 const nextConfig: NextConfig = {
   output: "standalone",
+  // Required by the posthog-js reverse proxy so trailing-slash redirects don't 308
+  // the `/ingest/*` API calls.
+  skipTrailingSlashRedirect: true,
+  // Reverse-proxy PostHog through our own origin so ad-blockers don't drop analytics.
+  // The browser SDK's `api_host` points at `/ingest` (see posthog-provider.client.tsx).
+  async rewrites() {
+    return [
+      {
+        source: "/ingest/static/:path*",
+        destination: `${POSTHOG_ASSETS_HOST}/static/:path*`,
+      },
+      {
+        source: "/ingest/:path*",
+        destination: `${POSTHOG_INGEST_HOST}/:path*`,
+      },
+      {
+        source: "/ingest/flags",
+        destination: `${POSTHOG_INGEST_HOST}/flags`,
+      },
+    ];
+  },
   transpilePackages: ["@cogni/node-app", "@cogni/node-ui-kit"],
   // In monorepo: tell Next.js where the workspace root is so standalone output
   // includes shared packages and resolves node_modules correctly.

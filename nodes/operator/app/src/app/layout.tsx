@@ -12,7 +12,7 @@
  *   - `initialState` MUST be sourced from `cookieToInitialState(wagmiConfig, cookie)` —
  *     anything else triggers React hydration-mismatch warnings on authed loads.
  * Side-effects: reads request headers (Next.js dynamic API).
- * Links: ./providers.client, @/shared/web3/wagmi.config, docs/spec/architecture.md §SSR-unsafe libraries
+ * Links: ./providers.client, ./posthog-provider.client, @/shared/web3/wagmi.config, docs/spec/architecture.md §SSR-unsafe libraries
  * @public
  */
 
@@ -27,7 +27,9 @@ import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
 import { cookieToInitialState } from "wagmi";
 
+import { resolvePostHogBrowserConfig } from "@/shared/env/posthog-browser-config";
 import { wagmiConfig } from "@/shared/web3/wagmi.config";
+import { PostHogProvider } from "./posthog-provider.client";
 import { Providers } from "./providers.client";
 
 const manrope = Manrope({
@@ -71,22 +73,32 @@ export default async function RootLayout({
     await readCookieHeaderSafely()
   );
 
+  // Resolve the browser analytics config server-side (runtime env is not build-inlined
+  // in this repo) and hand it to the client posthog-js provider as props.
+  const posthog = resolvePostHogBrowserConfig();
+
   return (
     <html lang="en" className={manrope.className} suppressHydrationWarning>
       <head>
         <Script src="/theme-init.js" strategy="beforeInteractive" />
       </head>
       <body className="min-h-dvh bg-background text-foreground antialiased">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          disableTransitionOnChange
+        <PostHogProvider
+          apiKey={posthog.apiKey}
+          apiHost={posthog.apiHost}
+          uiHost={posthog.uiHost}
         >
-          <Providers initialState={initialState}>
-            <div id="main">{children}</div>
-          </Providers>
-        </ThemeProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="dark"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <Providers initialState={initialState}>
+              <div id="main">{children}</div>
+            </Providers>
+          </ThemeProvider>
+        </PostHogProvider>
       </body>
     </html>
   );
