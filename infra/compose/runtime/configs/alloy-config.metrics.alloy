@@ -257,12 +257,22 @@ loki.process "k8s_pod_logs" {
 // =============================================================================
 // Prometheus Metrics: App Scraping
 // =============================================================================
-// Scrapes /api/metrics from app and ships to Grafana Cloud Mimir.
+// Scrapes /api/metrics from the operator app and ships to Grafana Cloud Mimir.
 // Only use this config when PROMETHEUS_* and METRICS_TOKEN are deployed.
+//
+// TARGET = host.docker.internal:30000, NOT the compose DNS name `app:3000`.
+// In every env that uses this metrics config (candidate-a / preview / production)
+// the operator app runs as a k3s pod, not a compose service — deploy-infra.sh
+// starts only infra services in compose (INFRA_SERVICES excludes `app`). The pod
+// is fronted by NodePort 30000 (infra/k8s/overlays/*/operator sets nodePort:30000),
+// the same host:port the edge Caddy dials as OPERATOR_UPSTREAM=host.docker.internal:30000.
+// `app:3000` resolved only in the pre-k3s all-compose era and was silently orphaned
+// by the k3s migration (#785) — that is why this scrape read up=0. The alloy service
+// gets `extra_hosts: host.docker.internal:host-gateway` so this name resolves.
 
 prometheus.scrape "app_metrics" {
   targets = [
-    {"__address__" = "app:3000"},
+    {"__address__" = "host.docker.internal:30000"},
   ]
   forward_to      = [prometheus.relabel.app_metrics.receiver]
   scrape_interval = "15s"
@@ -290,11 +300,18 @@ prometheus.relabel "app_metrics" {
 // =============================================================================
 // Prometheus Metrics: Scheduler-Worker Scraping
 // =============================================================================
-// Scrapes /metrics from scheduler-worker health server (port 9000, no auth).
+// Scrapes /metrics from the scheduler-worker health server (no auth).
 // Worker exposes Temporal activity duration/errors + Node.js process metrics.
+//
+// TARGET = host.docker.internal:30900, NOT the compose DNS name `scheduler-worker:9000`.
+// Same root cause as app_metrics: the worker runs as a k3s pod (deploy-infra.sh's
+// INFRA_SERVICES excludes `scheduler-worker`), so the compose name never resolves.
+// Its k8s Service was ClusterIP-only, so — unlike the operator app — it had no
+// host-reachable address at all; infra/k8s/base/scheduler-worker/service.yaml now
+// publishes the :9000 health port as NodePort 30900 for the compose alloy to reach.
 
 prometheus.scrape "worker_metrics" {
-  targets         = [{"__address__" = "scheduler-worker:9000"}]
+  targets         = [{"__address__" = "host.docker.internal:30900"}]
   forward_to      = [prometheus.relabel.worker_metrics.receiver]
   scrape_interval = "15s"
   scrape_timeout  = "10s"
