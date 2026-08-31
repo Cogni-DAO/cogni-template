@@ -12,7 +12,10 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { renderBundleMarkdown } from "@/app/api/v1/cognition/_bundle";
+import {
+  renderBundleMarkdown,
+  SESSION_BOOTSTRAP_INVARIANTS,
+} from "@/app/api/v1/cognition/_bundle";
 
 const baseInput = {
   node: "4ff8eac1-4eba-4ed0-931b-b1fe4f64713d",
@@ -100,6 +103,44 @@ describe("renderBundleMarkdown", () => {
     expect(markdown.indexOf("## Orientation — recall this first")).toBeLessThan(
       markdown.indexOf("## Tooling invariants")
     );
+  });
+
+  // The bootstrap is served to every harness (Claude Code, Codex, OpenAI, plain
+  // curl). The "how to watch an async gate" contract must therefore be a portable
+  // shell recipe — not a Claude-only Monitor/background primitive. Pin it here so
+  // a future refactor can't silently drop the harness-agnostic guidance.
+  it("carries a harness-agnostic watch recipe for every async CI/CD gate", () => {
+    const watch = SESSION_BOOTSTRAP_INVARIANTS.find((line) =>
+      line.startsWith("Watch every async gate")
+    );
+    expect(
+      watch,
+      "a dedicated async-gate watch invariant must exist"
+    ).toBeDefined();
+    const text = watch as string;
+    // Portable, not harness-specific: a blocking shell command is the verdict.
+    expect(text).toContain("blocking foreground command");
+    expect(text).toContain(
+      "no harness-specific monitor/background/notification primitive"
+    );
+    // (1) PR CI: the exact gh one-liner, --fail-fast, and the --required trap.
+    expect(text).toContain("gh pr checks <PR> --watch --fail-fast");
+    expect(text).toContain("do NOT add `--required`");
+    // (2)/(3) flight + deploy: /version.buildSha is the ground-truth verdict.
+    expect(text).toContain("/version");
+    expect(text).toContain(".buildSha");
+    // Never fire-and-forget; a "done"/exit-0 notification is not the verdict.
+    expect(text).toContain("silence is not success");
+  });
+
+  it("keeps the CICD-sequence invariant free of the CI watch mechanics it delegates", () => {
+    const cicd = SESSION_BOOTSTRAP_INVARIANTS.find((line) =>
+      line.startsWith("Follow the CICD checklist")
+    );
+    // The step order lives in invariant 3; the *how to watch* lives in invariant
+    // 4. Don't duplicate the gh one-liner across both.
+    expect(cicd).toBeDefined();
+    expect(cicd).not.toContain("--fail-fast");
   });
 
   it("prompts seeding an orientation entry when none exists", () => {
