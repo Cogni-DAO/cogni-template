@@ -15,6 +15,7 @@ import {
   initializeConfidence,
   recomputeConfidence as recomputeConfidenceByPolicy,
 } from "../../domain/confidence-policy.js";
+import { stripDangerousControlChars } from "../../domain/sanitize.js";
 import type {
   Citation,
   CitationType,
@@ -170,8 +171,8 @@ export class FakeKnowledgeStoreAdapter implements KnowledgeStorePort {
       id: entry.id,
       domain: entry.domain,
       entityId: entry.entityId ?? null,
-      title: entry.title,
-      content: entry.content,
+      title: stripDangerousControlChars(entry.title),
+      content: stripDangerousControlChars(entry.content),
       entryType: entry.entryType ?? "finding",
       confidencePct: initializeConfidence(entry).confidencePct,
       sourceType: entry.sourceType,
@@ -211,8 +212,12 @@ export class FakeKnowledgeStoreAdapter implements KnowledgeStorePort {
       ...existing,
       ...(update.domain !== undefined && { domain: update.domain }),
       ...(update.entityId !== undefined && { entityId: update.entityId }),
-      ...(update.title !== undefined && { title: update.title }),
-      ...(update.content !== undefined && { content: update.content }),
+      ...(update.title !== undefined && {
+        title: stripDangerousControlChars(update.title),
+      }),
+      ...(update.content !== undefined && {
+        content: stripDangerousControlChars(update.content),
+      }),
       ...(update.entryType !== undefined && { entryType: update.entryType }),
       ...(update.confidencePct !== undefined && {
         confidencePct: update.confidencePct,
