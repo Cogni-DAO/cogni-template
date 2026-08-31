@@ -33,6 +33,7 @@ import type { ProvisionSpec } from "@cogni/ai-tools";
 const POSTGRES_IMAGE = "postgres:15";
 const REDIS_IMAGE = "redis:7-alpine";
 const DOLTGRES_IMAGE = "dolthub/doltgresql:0.57.3";
+const TEMPORAL_IMAGE = "temporalio/auto-setup:1.29.1";
 
 export interface NodeWorkloadSecrets {
   /** Password for the app DB role (`app_<node>`). */
@@ -156,8 +157,7 @@ export function buildNodeWorkloadSpec(input: NodeWorkloadInput): ProvisionSpec {
     APP_BASE_URL: input.publicUrl,
     SCHEDULER_API_TOKEN: s.schedulerApiToken,
     BILLING_INGEST_TOKEN: s.billingIngestToken,
-    // Boot-required non-empty strings; Temporal is not part of the v000 workload and
-    // /readyz treats it as non-fatal (deep=1 only).
+    // Colocated auto-setup Temporal (node forks' /readyz treats connectivity as fatal).
     TEMPORAL_ADDRESS: "temporal:7233",
     TEMPORAL_NAMESPACE: "default",
     // Public RPC satisfies payments config checks when the node's repo-spec activates rails.
@@ -245,6 +245,22 @@ export function buildNodeWorkloadSpec(input: NodeWorkloadInput): ProvisionSpec {
         storageMi: 2048,
         // Its own SDL service — port 5432 doesn't collide with db's service.
         expose: [{ port: 5432, as: 5432, global: false }],
+      },
+      {
+        name: "temporal",
+        image: TEMPORAL_IMAGE,
+        env: {
+          DB: "postgres12",
+          POSTGRES_SEEDS: "db",
+          DB_PORT: "5432",
+          POSTGRES_USER: "postgres",
+          POSTGRES_PWD: s.appDbPassword,
+          DEFAULT_NAMESPACE: "default",
+        },
+        cpuUnits: 0.25,
+        memoryMi: 512,
+        storageMi: 512,
+        expose: [{ port: 7233, as: 7233, global: false }],
       },
       {
         name: "init",
