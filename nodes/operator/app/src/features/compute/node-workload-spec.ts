@@ -141,6 +141,9 @@ export function buildNodeWorkloadSpec(input: NodeWorkloadInput): ProvisionSpec {
   const appEnv: Record<string, string> = {
     APP_ENV: "production",
     NODE_ENV: "production",
+    // repo-spec.yaml ships in the image at /app (node-at-root); the container can't
+    // construct without it (getNodeId at bootstrap).
+    COGNI_REPO_PATH: "/app",
     DEPLOY_ENVIRONMENT: input.logPush?.env ?? "akash",
     NODE_NAME: input.slug,
     DATABASE_URL: databaseUrl,
