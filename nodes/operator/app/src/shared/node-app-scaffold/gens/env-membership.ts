@@ -91,6 +91,35 @@ function isNodeFormationEnv(value: string): value is NodeFormationEnv {
   return (ENV_ORDER as readonly string[]).includes(value);
 }
 
+/**
+ * Rank an env by ingest capability. GitHub App webhooks are delivered to PRODUCTION only
+ * (one App, one webhook URL), so a node's ability to receive a Git receipt is strictly
+ * ordered by how close its activity authority sits to production.
+ */
+export function envRank(env: NodeFormationEnv): number {
+  return ENV_ORDER.indexOf(env);
+}
+
+/**
+ * Re-emit the catalog row's `activity_env:` line, preserving any trailing comment.
+ *
+ * Deliberately a line rewrite rather than a YAML round-trip: these catalog rows carry
+ * load-bearing comments that a serializer would drop, and `setCatalogEnvs` already
+ * established the in-place-line idiom (including the horizontal-whitespace-only trailing
+ * class that keeps the file's final newline intact — bug.5073).
+ */
+export function setCatalogActivityEnv(
+  catalogYaml: string,
+  env: NodeFormationEnv
+): string {
+  if (!ACTIVITY_ENV_LINE_RE.test(catalogYaml)) {
+    throw new Error(
+      "catalog row is missing a valid `activity_env: <env>` line; cannot set it."
+    );
+  }
+  return catalogYaml.replace(ACTIVITY_ENV_LINE_RE, `activity_env: ${env}`);
+}
+
 /** Re-emit the catalog row's `envs:` flow-sequence line with `envs`, canonically ordered + de-duped. */
 export function setCatalogEnvs(
   catalogYaml: string,

@@ -17,6 +17,10 @@
  *     full decommission is a separate lifecycle operation.
  *   - ACTIVITY_AUTHORITY_STAYS_DEPLOYED — removing the current `activity_env` is rejected. V1 does not
  *     claim an atomic cross-environment authority transfer; that needs a future fenced protocol.
+ *   - ACTIVITY_FOLLOWS_INGEST — adding an env that outranks the current `activity_env` moves the
+ *     activity authority with it. Webhooks reach production only, and the receiving operator routes a
+ *     repo only when `activityEnv === DEPLOY_ENVIRONMENT`, so a promoted node that keeps a lower
+ *     activity authority can never earn a receipt (bug.5079). Authority only ever moves upward.
  *   - IDEMPOTENT — requesting the state that already holds (env already present on add / already absent on
  *     remove) yields an EMPTY op list (`{ kind: "no_changes" }`), so the adapter opens no PR.
  *   - DELETE_VIA_SHA_NULL — file removals are emitted as `{ op: "delete", path }`; the adapter maps these
@@ -34,9 +38,11 @@ import {
 import {
   addCatalogEnv,
   dropCatalogEnv,
+  envRank,
   envRemovalViolation,
   parseCatalogActivityEnv,
   parseCatalogEnvs,
+  setCatalogActivityEnv,
   setCatalogEnvs,
 } from "./env-membership";
 import type { NodeFormationEnv } from "./envs";
@@ -146,7 +152,7 @@ export function buildEnvDeltaPlan(input: {
   const activityEnv = parseCatalogActivityEnv(current.catalog);
 
   if (present) {
-    return planAdd({ slug, env, currentEnvs, current });
+    return planAdd({ slug, env, currentEnvs, activityEnv, current });
   }
   return planRemove({ slug, env, currentEnvs, activityEnv, current });
 }
@@ -155,9 +161,10 @@ function planAdd(args: {
   slug: string;
   env: NodeFormationEnv;
   currentEnvs: NodeFormationEnv[];
+  activityEnv: NodeFormationEnv;
   current: EnvPlanCurrent;
 }): EnvDeltaResult {
-  const { slug, env, currentEnvs, current } = args;
+  const { slug, env, currentEnvs, activityEnv, current } = args;
 
   // Idempotent: already present → no PR.
   if (currentEnvs.includes(env)) {
@@ -165,6 +172,16 @@ function planAdd(args: {
   }
 
   const nextEnvs = addCatalogEnv(currentEnvs, env);
+  // The authority is the HIGHEST env the node will be deployed to — not merely a comparison
+  // against the env being added. Comparing against the added env alone moves a node that is
+  // already in production down to `preview` when preview is added later, which still cannot
+  // ingest. Taking the max is monotonic by construction: it never demotes, because the
+  // current authority is itself a member of `nextEnvs`.
+  const nextActivityEnv = nextEnvs.reduce(
+    (highest, candidate) =>
+      envRank(candidate) > envRank(highest) ? candidate : highest,
+    activityEnv
+  );
 
   const templateOverlay = current.templateOverlayByEnv[env];
   const templateExternalSecret = current.templateExternalSecretByEnv?.[env];
@@ -188,7 +205,21 @@ function planAdd(args: {
     {
       op: "upsert",
       path: CATALOG_PATH(slug),
-      content: setCatalogEnvs(current.catalog, nextEnvs),
+      // ACTIVITY_FOLLOWS_INGEST — a promotion carries the activity authority with it.
+      // GitHub App webhooks are delivered to PRODUCTION only, and the receiving operator
+      // routes a repo only when `activityEnv === DEPLOY_ENVIRONMENT`
+      // (attribution-profile-resolver.selectLocalAttributionNodes). Adding an env without
+      // moving `activity_env` therefore produces a node that is deployed and serving but
+      // structurally unable to earn a receipt: its webhooks land in production and are
+      // dropped `unclaimed` — fail-closed, correct, and completely silent. That is
+      // bug.5079, which stranded `levelup` in production with zero receipts.
+      content:
+        nextActivityEnv === activityEnv
+          ? setCatalogEnvs(current.catalog, nextEnvs)
+          : setCatalogActivityEnv(
+              setCatalogEnvs(current.catalog, nextEnvs),
+              nextActivityEnv
+            ),
     },
     {
       op: "upsert",
