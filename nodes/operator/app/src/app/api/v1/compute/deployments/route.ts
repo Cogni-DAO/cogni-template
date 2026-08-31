@@ -110,12 +110,23 @@ export const POST = wrapRouteHandlerWithLogging(
       sourceSha,
     });
 
+    const publicUrl = hosts?.[0]
+      ? `https://${hosts[0]}`
+      : `https://${node.slug}-akash.invalid`; // replaced once the provider URI is CNAMEd
+
     const spec = buildNodeWorkloadSpec({
       slug: node.slug,
+      nodeId: node.nodeId,
       image: prepared.image,
       port,
-      dbPassword: randomBytes(24).toString("hex"),
-      authSecret: randomBytes(32).toString("hex"),
+      publicUrl,
+      secrets: {
+        appDbPassword: randomBytes(24).toString("hex"),
+        serviceDbPassword: randomBytes(24).toString("hex"),
+        authSecret: randomBytes(32).toString("hex"),
+        schedulerApiToken: randomBytes(32).toString("hex"),
+        billingIngestToken: randomBytes(32).toString("hex"),
+      },
       ...(hosts ? { hosts } : {}),
     });
 
