@@ -6,26 +6,77 @@
 # Scope: Defines model aliases, provider routing (openrouter/ prefix), and database settings
 # Notes: All models route through OpenRouter; free tier models may hit rate limits without API key
 # Links: https://docs.litellm.ai/docs/providers/openrouter
+#
+# Curation policy (refreshed 2026-08-27, validated against OpenRouter /models):
+#   - Prioritize FAST (flash) + OPEN-WEIGHT (OSS) models — what users actually pick.
+#   - Every model verified for `tools` + `reasoning` support via the OpenRouter API.
+#   - Premium frontier tiers (Opus/Fable/GPT-5.x-pro) intentionally OMITTED — high cost, low use.
+#     Add back explicitly if a workload needs them.
+# Pricing shown is $/1M tokens (input → output) at time of curation.
 
 model_list:
-  # ===== FREE MODEL =====
-  # gpt-4o-mini designated as the default free model for cost control
-  # Note: 4o-mini is NOT actually free... we are making it available, so free tier users can use it.
-  # All other models are paid and require explicit selection
-  - model_name: gpt-4o-mini
+  # ===== FLASH / FAST TIER (default picks) =====
+
+  # OpenAI gpt-oss 120B — OpenAI's open-weight model. Effectively free-cost, reasoning-capable.
+  # Designated default_free: capable OSS reasoning at ~$0.04/1M in.  ($0.037 → $0.17, 131K)
+  - model_name: gpt-oss-120b
     litellm_params:
-      model: openrouter/openai/gpt-4o-mini-2024-07-18
+      model: openrouter/openai/gpt-oss-120b
       api_key: "os.environ/OPENROUTER_API_KEY"
     model_info:
-      display_name: "GPT-4o Mini"
+      display_name: "GPT-OSS 120B"
       is_free: true
       provider_key: "openai"
       metadata:
         cogni:
           default_free: true
 
-  # ===== PAID MODELS =====
-  # DeepSeek
+  # DeepSeek V4 Flash — cheapest 1M-context flash in the fleet.  ($0.078 → $0.156, 1M)
+  - model_name: deepseek-v4-flash
+    litellm_params:
+      model: openrouter/deepseek/deepseek-v4-flash
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "DeepSeek V4 Flash"
+      is_free: false
+      provider_key: "deepseek"
+      metadata:
+        cogni:
+          default_flash: true
+
+  # NVIDIA Nemotron 3.5 Lightning — ultra-low-latency OSS, 1M context.  ($0.08 → $0.20, 262K)
+  - model_name: nemotron-lightning
+    litellm_params:
+      model: openrouter/nvidia/nemotron-3.5-lightning
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Nemotron 3.5 Lightning"
+      is_free: false
+      provider_key: "nvidia"
+
+  # Google Gemini 3.7 Flash — best-quality flash (closed, ZDR).  ($0.375 → $1.875, 1M)
+  - model_name: gemini-3.7-flash
+    litellm_params:
+      model: openrouter/google/gemini-3.7-flash
+      api_key: "os.environ/OPENROUTER_API_KEY"
+      extra_body:
+        provider:
+          zdr: true
+      cache_control_injection_points:
+        - location: message
+          role: system
+    model_info:
+      display_name: "Gemini 3.7 Flash"
+      is_free: false
+      is_zdr: true
+      provider_key: "google"
+      metadata:
+        cogni:
+          default_preferred: true
+
+  # ===== THINKING / REASONING TIER (open-weight) =====
+
+  # DeepSeek V3.2 — cheapest strong reasoner, designated default_thinking.  ($0.26 → $0.38, 164K)
   - model_name: deepseek-v3.2
     litellm_params:
       model: openrouter/deepseek/deepseek-v3.2
@@ -38,147 +89,27 @@ model_list:
         cogni:
           default_thinking: true
 
-  - model_name: kimi-k2.5
+  # Qwen 3 Next 80B Thinking — OSS reasoning, high value.  ($0.15 → $1.20, 262K)
+  - model_name: qwen3-next-thinking
     litellm_params:
-      model: openrouter/moonshotai/kimi-k2.5
+      model: openrouter/qwen/qwen3-next-80b-a3b-thinking
       api_key: "os.environ/OPENROUTER_API_KEY"
     model_info:
-      display_name: "Kimi K2.5"
+      display_name: "Qwen 3 Next 80B Thinking"
       is_free: false
-      provider_key: "kimi"
-      metadata:
-        cogni:
-          fallback_thinking: true
+      provider_key: "qwen"
 
-  # Minimax
-  - model_name: minimax-m2
+  # MiniMax M3 — OSS, 1M context, reasoning.  ($0.30 → $1.20, 1M)
+  - model_name: minimax-m3
     litellm_params:
-      model: openrouter/minimax/minimax-m2
+      model: openrouter/minimax/minimax-m3
       api_key: "os.environ/OPENROUTER_API_KEY"
     model_info:
-      display_name: "Minimax M2"
+      display_name: "Minimax M3"
       is_free: false
       provider_key: "minimax"
 
-  - model_name: gpt-5.2
-    litellm_params:
-      model: openrouter/openai/gpt-5.2
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "GPT-5.2"
-      is_free: false
-      provider_key: "openai"
-
-  - model_name: gpt-5
-    litellm_params:
-      model: openrouter/openai/gpt-5
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "GPT-5"
-      is_free: false
-      provider_key: "openai"
-
-  # Anthropic (ZDR-enabled: Zero Data Retention - provider won't log/train on data)
-  - model_name: claude-sonnet-4.5
-    litellm_params:
-      model: openrouter/anthropic/claude-sonnet-4.5
-      api_key: "os.environ/OPENROUTER_API_KEY"
-      extra_body:
-        provider:
-          zdr: true
-      # OpenRouter prompt caching (Anthropic): requires cache_control breakpoints.
-      # Inject markers automatically so callers don’t need to emit
-      # multipart content blocks explicitly.
-      #
-      # NOTE: This injects `{cache_control:{type:"ephemeral"}}` (OpenRouter default TTL ~5m).
-      # For 1h TTL, the caller must send `ttl:"1h"` in cache_control.
-      cache_control_injection_points:
-        - location: message
-          role: system
-    model_info:
-      display_name: "Claude Sonnet 4.5"
-      is_free: false
-      is_zdr: true
-      provider_key: "anthropic"
-
-  - model_name: claude-opus-4.5
-    litellm_params:
-      model: openrouter/anthropic/claude-opus-4.5
-      api_key: "os.environ/OPENROUTER_API_KEY"
-      extra_body:
-        provider:
-          zdr: true
-      # OpenRouter prompt caching (Anthropic): auto-inject cache_control breakpoints.
-      cache_control_injection_points:
-        - location: message
-          role: system
-    model_info:
-      display_name: "Claude Opus 4.5"
-      is_free: false
-      is_zdr: true
-      provider_key: "anthropic"
-
-  - model_name: deepseek-v3.1
-    litellm_params:
-      model: openrouter/deepseek/deepseek-v3.1
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "DeepSeek V3.1"
-      is_free: false
-      provider_key: "deepseek"
-
-  # Google (ZDR-enabled: Zero Data Retention)
-  - model_name: gemini-2.5-flash
-    litellm_params:
-      model: openrouter/google/gemini-2.5-flash
-      api_key: "os.environ/OPENROUTER_API_KEY"
-      extra_body:
-        provider:
-          zdr: true
-      # OpenRouter prompt caching (Gemini/OpenRouter): cache_control breakpoints can
-      # increase cache hit rate when the prefix is stable.
-      cache_control_injection_points:
-        - location: message
-          role: system
-    model_info:
-      display_name: "Gemini 2.5 Flash"
-      is_free: false
-      is_zdr: true
-      provider_key: "google"
-
-  - model_name: gemini-3-pro
-    litellm_params:
-      model: openrouter/google/gemini-3-pro-preview
-      api_key: "os.environ/OPENROUTER_API_KEY"
-      extra_body:
-        provider:
-          zdr: true
-      cache_control_injection_points:
-        - location: message
-          role: system
-    model_info:
-      display_name: "Gemini 3 Pro"
-      is_free: false
-      is_zdr: true
-      provider_key: "google"
-
-  - model_name: gemini-3-flash
-    litellm_params:
-      model: openrouter/google/gemini-3-flash-preview
-      api_key: "os.environ/OPENROUTER_API_KEY"
-      extra_body:
-        provider:
-          zdr: true
-      cache_control_injection_points:
-        - location: message
-          role: system
-    model_info:
-      display_name: "Gemini 3 Flash"
-      is_free: false
-      is_zdr: true
-      provider_key: "google"
-
-  # Kimi (MoonshotAI)
+  # Kimi K2 Thinking — Moonshot OSS reasoner, fallback_thinking.  ($0.60 → $2.50, 262K)
   - model_name: kimi-k2-thinking
     litellm_params:
       model: openrouter/moonshotai/kimi-k2-thinking
@@ -187,42 +118,26 @@ model_list:
       display_name: "Kimi K2 Thinking"
       is_free: false
       provider_key: "kimi"
-
-  # Qwen
-  - model_name: qwen3-vl-8b
-    litellm_params:
-      model: openrouter/qwen/qwen3-vl-8b-thinking
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "Qwen 3 VL 8B"
-      is_free: false
-      provider_key: "qwen"
-
-  # XAI (Grok)
-  - model_name: grok-4.1-fast
-    litellm_params:
-      model: openrouter/x-ai/grok-4.1-fast
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "Grok 4.1 Fast"
-      is_free: false
-      provider_key: "xai"
-
-  # Meta (Llama)
-  - model_name: llama-3.3-70b
-    litellm_params:
-      model: openrouter/meta-llama/llama-3.3-70b-instruct
-      api_key: "os.environ/OPENROUTER_API_KEY"
-    model_info:
-      display_name: "Llama 3.3 70B"
-      is_free: false
-      provider_key: "meta"
       metadata:
         cogni:
-          default_flash: true
+          fallback_thinking: true
 
-  # ===== EMBEDDING MODELS =====
-  # Used by memory_search for semantic vector search
+  # ===== CLOSED FLASH (one, kept intentionally cheap) =====
+
+  # OpenAI GPT-5.6 Luna — fast/cost-efficient tier of the GPT-5.6 series, 1.05M context.
+  # Cheaper + far larger context than gpt-5-mini; capable closed reasoner for when OSS isn't
+  # enough. Terra/Sol tiers omitted (2→12 / 2→10 $/1M — premium, low use).  ($0.20 → $1.20, 1.05M)
+  - model_name: gpt-5.6-luna
+    litellm_params:
+      model: openrouter/openai/gpt-5.6-luna
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "GPT-5.6 Luna"
+      is_free: false
+      provider_key: "openai"
+
+  # ===== EMBEDDING MODEL (infrastructure, not a user chat choice) =====
+  # Used by memory_search for semantic vector search — required, do not remove.
   # Uses openai/ prefix + api_base to avoid openrouter/ embedding routing bugs (BerriAI/litellm#19016)
   - model_name: text-embedding-3-small
     litellm_params:
