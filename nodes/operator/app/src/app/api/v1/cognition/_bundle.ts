@@ -33,12 +33,24 @@ import type {
 export const SESSION_BOOTSTRAP_INVARIANTS: readonly string[] = [
   "ONE work item + ONE node per session — it is your plan and your checklist. Claim it, then write the definition of done as an ordered checklist in `outcome` BEFORE you act; heartbeat; link your PR. You are not done until every box is checked and proven; coordination.nextAction is authoritative and may add boxes.",
   "Cite before you act. Recall first — your <slug>-agent-orientation, then skills/guides → this hub (/api/v1/knowledge?domain=) → our code (node-template, operator) → external OSS; merged + your own open branch. Refine in place over adding new. Every checklist step names the skill/guide/entry it follows; an uncited step is the exception you justify.",
-  "Follow the CICD checklist exactly — recall it, never improvise the mechanism: branch → CI green → flight to candidate THROUGH the operator (POST /api/v1/vcs/flight — never a personal `gh` dispatch) → /validate-candidate → operator merge (POST /api/v1/vcs/merge) → promote. NEVER enter the merge queue or enable auto-merge before validate passes.",
-  "Watch every async gate with ONE blocking foreground command whose exit code or matched value IS the verdict — no harness-specific monitor/background/notification primitive is required (a shell command that blocks is the common ground every harness runs), and never fire-and-forget: silence is not success, a 'done'/exit-0 notification is not a verdict — re-read the ground-truth signal before you speak. (1) PR CI → green: `gh pr checks <PR> --watch --fail-fast` (exit 0 = every check passed, 8 = still pending, nonzero = a check failed; do NOT add `--required` — build/static failures live outside it and still block flight), then re-read `gh pr checks <PR>` once — 'finished' ≠ 'green'. (2) flight landed / (3) deploy landed: poll `curl -s <host>/version` until `.buildSha` equals your target SHA (candidate `test.cognidao.org`, preview/prod `[<node>-]{preview,}.cognidao.org`) — `/version.buildSha` is the only ground truth; CI and workflow 'success' can lie.",
+  "Follow the CICD checklist exactly — recall it, never improvise the mechanism: branch → CI green → flight to candidate THROUGH the operator (POST /api/v1/vcs/flight — never a personal `gh` dispatch) → /validate-candidate → operator merge (POST /api/v1/vcs/merge) → promote. NEVER enter the merge queue or enable auto-merge before validate passes. Watch each async gate (CI, flight, deploy) the ONE portable way — see <watch-gate> below.",
   "Done = before→after behavior proven on the live candidate, NOT a SHA deployed. Capture the BROKEN signal, flight, then read the FIXED behavior back from Loki at that SHA. 'Request reached the build' is deploy proof, not function. The /validate-candidate scorecard is the merge gate; reprove prod-facing changes in preview/prod.",
   "Persist what outlives the session in the durable substrate, never a doc that rots: plan + status → the work item; durable strategy/why → operator Dolt, linked to the item (specRefs / cite edge). Specs hold contracts + invariants only — never a rollout plan.",
   "Drive autonomously; interrupt a human only for the irreversible, outward-facing, or out-of-scope — never for approval you already hold, never to merge/promote something unvalidated. When you ask: one scorecard → the single decision → a clickable link.",
 ];
+
+/**
+ * How to watch an async CI/CD gate — the ONE portable technique, tagged for
+ * machine parse + recall. Code-owned (survives an empty hub) and XML-structured
+ * so any harness (Claude, Codex, OpenAI, plain shell) extracts the exact command
+ * without prose parsing. Deliberately terse: five tagged atoms, no run-on prose.
+ */
+export const SESSION_WATCH_GATE = `<watch-gate rule="ONE blocking command; its exit code or matched value IS the verdict — no harness-specific monitor/background/notification primitive, never fire-and-forget, re-read the ground-truth signal before reporting">
+  <ci-green>gh pr checks <PR> --watch --fail-fast → 0=all pass · 8=pending · nonzero=fail. NOT --required (build/static live outside it). Re-read gh pr checks <PR> after — finished ≠ green.</ci-green>
+  <flight-landed>poll curl -s <candidate>/version until .buildSha == PR-head SHA, then /validate-candidate. host: test.cognidao.org (or <node>-test.cognidao.org).</flight-landed>
+  <deploy-landed>poll curl -s <target>/version until .buildSha == promoted SHA. host: [<node>-]{preview,}.cognidao.org.</deploy-landed>
+  <truth>/version.buildSha is the only ground truth — CI and workflow "success" can lie.</truth>
+</watch-gate>`;
 
 const COGNITION_ENTRY_TYPES: ReadonlySet<string> = new Set([
   "skill",
@@ -162,6 +174,10 @@ export function renderBundleMarkdown(input: RenderBundleInput): string {
     invariants,
     "",
     `_Your candidate (flight + validate target): \`https://${candidateHost}\` · Loki namespace \`cogni-candidate-a\`._`,
+    "",
+    "## Watch an async gate — CI · flight · deploy",
+    "",
+    SESSION_WATCH_GATE,
     "",
     "## Skills index (recall full content from the hub before acting)",
     "",
