@@ -163,14 +163,17 @@ export function buildNodeWorkloadSpec(input: NodeWorkloadInput): ProvisionSpec {
     LITELLM_MASTER_KEY: input.llm?.masterKey ?? "unconfigured",
   };
 
+  // The pump source travels base64 in env and is materialized to a file at start —
+  // zero shell-quoting/escaping of code (js/incomplete-sanitization safe by construction).
   const appCommand = input.logPush
     ? [
         "/bin/sh",
         "-c",
-        `node /app/app/server.js 2>&1 | node -e "${lokiPumpJs().replace(/"/g, '\\"')}"`,
+        'printf %s "$LOKI_PUMP_B64" | base64 -d > /tmp/loki-pump.js && node /app/app/server.js 2>&1 | node /tmp/loki-pump.js',
       ]
     : undefined;
   if (input.logPush) {
+    appEnv.LOKI_PUMP_B64 = Buffer.from(lokiPumpJs(), "utf8").toString("base64");
     appEnv.LOKI_PUSH_URL = input.logPush.url;
     appEnv.LOKI_PUSH_USER = input.logPush.username;
     appEnv.LOKI_PUSH_PASSWORD = input.logPush.password;
