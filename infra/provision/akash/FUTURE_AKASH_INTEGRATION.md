@@ -1,5 +1,13 @@
 # Future Akash Integration Plan
 
+> **Status update (2026-08-31, task.5044):** Akash deployment shipped v1 WITHOUT this
+> bridge stack. The Akash **Console managed-wallet API** (console-api.akash.network,
+> `x-api-key`, USD billing, no Cosmos wallet) powers `AkashComputeAdapter`
+> (`nodes/operator/app/src/adapters/server/compute/`) — the EVM→Cosmos split below is
+> bypassed, not solved. This document remains the plan for the **crypto-native
+> self-custody path** (DAO/agent programmatically funds deployments on-chain), which is
+> the vNext after pass-through billing.
+
 ## Overview
 
 This document outlines the integration plan for Akash Network deployment using OSS building blocks for a complete crypto-native infrastructure stack.

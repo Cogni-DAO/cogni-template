@@ -16,7 +16,14 @@
 
 // Compute-substrate capability (per cicd-platform-boundary spec § typed operator control plane;
 // read half — provider-agnostic balance awareness; sibling of DeployCapability)
-export type { ComputeBalance, ComputeResourcePort } from "./compute";
+export type {
+  ComputeBalance,
+  ComputeResourcePort,
+  ProvisionOutput,
+  ProvisionServiceSpec,
+  ProvisionSpec,
+  ProvisionState,
+} from "./compute";
 // Deploy capability (per cicd-platform-boundary spec § typed operator control plane; sibling of VcsCapability)
 export type {
   DeployCapability,
