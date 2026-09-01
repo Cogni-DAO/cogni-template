@@ -36,7 +36,7 @@ Next.js application source implementing hexagonal architecture for a fully web3-
 
 ## Public Surface
 
-- **Exports:** Next.js application
+- **Exports:** Next.js application plus the dedicated `compute-workload-controller.ts` process entry
 - **Routes (if any):** All app routes via app/
 - **Env/Config keys:** Via shared/env/ schemas
 - **Files considered API:** app/ routes, features/ exports, components/ exports

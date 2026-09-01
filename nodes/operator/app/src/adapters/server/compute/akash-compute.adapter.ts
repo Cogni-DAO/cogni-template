@@ -54,10 +54,7 @@ import {
   screenBids,
 } from "./akash-provider-screen";
 import { type AkashSdlOptions, buildAkashSdl } from "./akash-sdl";
-import {
-  createDefaultProviderOutcomeStore,
-  type ProviderOutcomeStore,
-} from "./provider-outcome-store";
+import type { ProviderOutcomeStore } from "./provider-outcome-store";
 
 const PROVIDER = "akash";
 const MICRO = 1_000_000;
@@ -128,8 +125,8 @@ export interface AkashComputeAdapterConfig {
   bootPollIntervalMs?: number;
   /** Max providers tried per provision() before a terminal error. Default 3. */
   maxProviderAttempts?: number;
-  /** Boot-outcome persistence; defaults to the Postgres-backed store (lazy app-role client). */
-  outcomeStore?: ProviderOutcomeStore;
+  /** Injected boot-outcome persistence; composition roots choose durable or no-op storage. */
+  outcomeStore: ProviderOutcomeStore;
   /** SDL pricing knobs (max price per block per service). */
   pricing?: AkashSdlOptions;
   /** API base URL; defaults to the public Console API. */
@@ -242,8 +239,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     this.maxProviderAttempts = config.maxProviderAttempts ?? 3;
     this.preferredCountryCodes =
       config.preferredCountryCodes ?? DEFAULT_SUBSTRATE_COUNTRY_CODES;
-    this.outcomeStore =
-      config.outcomeStore ?? createDefaultProviderOutcomeStore();
+    this.outcomeStore = config.outcomeStore;
     // uakt ceiling per block per service; managed wallets escrow USD but bid in chain denom.
     // signedBy anchors audited-only screening on-chain (AUDITED_PROVIDERS_ONLY).
     this.sdlOptions = {
@@ -315,20 +311,28 @@ export class AkashComputeAdapter implements ComputeResourcePort {
       "GET",
       `/v1/deployments/${encodeURIComponent(p.leaseId)}`
     );
-    const leases = detail?.leases ?? [];
-    const endpoints = leases.flatMap((lease) => {
-      const direct = lease.status?.uris ?? [];
-      const perService = Object.values(lease.status?.services ?? {}).flatMap(
-        (svc) => svc.uris ?? []
-      );
-      return [...direct, ...perService];
-    });
-    return {
-      provider: PROVIDER,
-      leaseId: p.leaseId,
-      state: mapState(detail?.deployment?.state, leases),
-      endpoints: [...new Set(endpoints)],
-    };
+    return provisionOutputFromDetail(p.leaseId, detail);
+  }
+
+  /** Update an existing deployment in place; Console keeps the same opaque resource id. */
+  async update(p: {
+    resourceId: string;
+    env: string;
+    spec: ProvisionSpec;
+    idempotencyKey: string;
+  }): Promise<ProvisionOutput> {
+    // Console exposes no idempotency-key field. The controller persists this key before IO
+    // and blocks replay on an unknown outcome; known-handle PUT itself is idempotent.
+    void p.env;
+    void p.idempotencyKey;
+    const sdl = buildAkashSdl(p.spec, this.sdlOptions);
+    await this.request<ConsoleDeploymentDetail>(
+      "PUT",
+      `/v1/deployments/${encodeURIComponent(p.resourceId)}`,
+      { data: { sdl } },
+      this.writeTimeoutMs
+    );
+    return this.awaitBootServing(p.resourceId);
   }
 
   async release(p: { leaseId: string }): Promise<void> {
@@ -632,7 +636,8 @@ export class AkashComputeAdapter implements ComputeResourcePort {
         }
         throw new AkashComputeError(
           "HTTP_ERROR",
-          `Console ${method} ${path} failed: ${response.status} ${response.statusText}${detail ? ` — ${detail}` : ""}`
+          `Console ${method} ${path} failed: ${response.status} ${response.statusText}${detail ? ` — ${detail}` : ""}`,
+          response.status
         );
       }
       const json = (await response.json().catch(() => undefined)) as
@@ -691,9 +696,30 @@ export type AkashComputeErrorCode =
 export class AkashComputeError extends Error {
   constructor(
     public readonly code: AkashComputeErrorCode,
-    message: string
+    message: string,
+    public readonly httpStatus?: number
   ) {
     super(message);
     this.name = "AkashComputeError";
   }
+}
+
+function provisionOutputFromDetail(
+  resourceId: string,
+  detail: ConsoleDeploymentDetail | undefined
+): ProvisionOutput {
+  const leases = detail?.leases ?? [];
+  const endpoints = leases.flatMap((lease) => {
+    const direct = lease.status?.uris ?? [];
+    const perService = Object.values(lease.status?.services ?? {}).flatMap(
+      (svc) => svc.uris ?? []
+    );
+    return [...direct, ...perService];
+  });
+  return {
+    provider: PROVIDER,
+    leaseId: resourceId,
+    state: mapState(detail?.deployment?.state, leases),
+    endpoints: [...new Set(endpoints)],
+  };
 }
