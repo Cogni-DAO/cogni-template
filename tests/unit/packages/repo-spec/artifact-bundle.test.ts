@@ -20,7 +20,7 @@ import { describe, expect, it } from "vitest";
 
 const SOURCE_SHA = "a".repeat(40);
 const APP_IMAGE = `ghcr.io/example/node@sha256:${"1".repeat(64)}`;
-const TRADER_IMAGE = `ghcr.io/example/node-paper-trader@sha256:${"2".repeat(64)}`;
+const WORKER_IMAGE = `ghcr.io/example/node-worker@sha256:${"2".repeat(64)}`;
 
 function multiServiceSpec() {
   return buildTestRepoSpec({
@@ -33,10 +33,10 @@ function multiServiceSpec() {
           visibility: "public",
         },
         {
-          name: "paper-trader",
+          name: "worker",
           artifact: {
-            name: "paper-trader",
-            dockerfile: "services/paper-trader/Dockerfile",
+            name: "worker",
+            dockerfile: "services/worker/Dockerfile",
           },
           port: 9100,
           visibility: "private",
@@ -46,37 +46,54 @@ function multiServiceSpec() {
   });
 }
 
+function completeBundle() {
+  return buildNodeArtifactBundle({
+    spec: multiServiceSpec(),
+    sourceSha: SOURCE_SHA,
+    repository: "example/node",
+    artifacts: [
+      { artifact: "app", sourceSha: SOURCE_SHA, image: APP_IMAGE },
+      { artifact: "worker", sourceSha: SOURCE_SHA, image: WORKER_IMAGE },
+    ],
+  });
+}
+
 describe("node artifact bundle", () => {
-  it("assembles and resolves the complete service set at one source SHA", () => {
-    const spec = multiServiceSpec();
-    const bundle = buildNodeArtifactBundle({
-      spec,
-      sourceSha: SOURCE_SHA,
-      repository: "example/node",
+  it("emits one source identity, artifact digest authority, and service refs", () => {
+    const bundle = completeBundle();
+
+    expect(bundle).toEqual({
+      schema_version: 1,
+      node_id: TEST_NODE_IDS.default,
+      source: { repository: "example/node", sha: SOURCE_SHA },
       artifacts: [
-        { artifact: "app", sourceSha: SOURCE_SHA, image: APP_IMAGE },
-        {
-          artifact: "paper-trader",
-          sourceSha: SOURCE_SHA,
-          image: TRADER_IMAGE,
-        },
+        { name: "app", image: APP_IMAGE },
+        { name: "worker", image: WORKER_IMAGE },
+      ],
+      services: [
+        { name: "app", artifact: "app" },
+        { name: "worker", artifact: "worker" },
       ],
     });
 
-    const resolved = resolveNodeArtifactBundle(spec, bundle, {
+    const resolved = resolveNodeArtifactBundle(multiServiceSpec(), bundle, {
       sourceSha: SOURCE_SHA,
       repository: "example/node",
     });
     expect(resolved).toMatchObject({
       nodeId: TEST_NODE_IDS.default,
-      sourceSha: SOURCE_SHA,
-      repository: "example/node",
+      source: { repository: "example/node", sha: SOURCE_SHA },
+      artifacts: bundle.artifacts,
     });
     expect(
-      resolved.services.map(({ service, image }) => [service.name, image])
+      resolved.services.map(({ service, artifact, image }) => [
+        service.name,
+        artifact,
+        image,
+      ])
     ).toEqual([
-      ["app", APP_IMAGE],
-      ["paper-trader", TRADER_IMAGE],
+      ["app", "app", APP_IMAGE],
+      ["worker", "worker", WORKER_IMAGE],
     ]);
   });
 
@@ -106,58 +123,11 @@ describe("node artifact bundle", () => {
       artifacts: [{ artifact: "app", sourceSha: SOURCE_SHA, image: APP_IMAGE }],
     });
 
-    expect(bundle.services).toHaveLength(2);
-    expect(new Set(bundle.services.map((service) => service.image))).toEqual(
-      new Set([APP_IMAGE])
-    );
-  });
-
-  it("rejects a reused artifact identity mapped to different image digests", () => {
-    const spec = buildTestRepoSpec({
-      deployment: {
-        services: [
-          {
-            name: "app",
-            artifact: { name: "app" },
-            port: 3200,
-            visibility: "public",
-          },
-          {
-            name: "worker",
-            artifact: { name: "app" },
-            port: 9100,
-            visibility: "private",
-          },
-        ],
-      },
-    });
-
-    expect(() =>
-      resolveNodeArtifactBundle(
-        spec,
-        {
-          schema_version: 1,
-          node_id: TEST_NODE_IDS.default,
-          source_sha: SOURCE_SHA,
-          repository: "example/node",
-          services: [
-            {
-              service: "app",
-              artifact: "app",
-              source_sha: SOURCE_SHA,
-              image: APP_IMAGE,
-            },
-            {
-              service: "worker",
-              artifact: "app",
-              source_sha: SOURCE_SHA,
-              image: TRADER_IMAGE,
-            },
-          ],
-        },
-        { sourceSha: SOURCE_SHA, repository: "example/node" }
-      )
-    ).toThrow(/One artifact identity must resolve to one image digest/);
+    expect(bundle.artifacts).toEqual([{ name: "app", image: APP_IMAGE }]);
+    expect(bundle.services).toEqual([
+      { name: "app", artifact: "app" },
+      { name: "worker", artifact: "app" },
+    ]);
   });
 
   it.each([
@@ -172,24 +142,9 @@ describe("node artifact bundle", () => {
       message: /Repository mismatch/,
     },
   ])("rejects a complete bundle with $name", ({ expected, message }) => {
-    const spec = multiServiceSpec();
-    const bundle = buildNodeArtifactBundle({
-      spec,
-      sourceSha: SOURCE_SHA,
-      repository: "example/node",
-      artifacts: [
-        { artifact: "app", sourceSha: SOURCE_SHA, image: APP_IMAGE },
-        {
-          artifact: "paper-trader",
-          sourceSha: SOURCE_SHA,
-          image: TRADER_IMAGE,
-        },
-      ],
-    });
-
-    expect(() => resolveNodeArtifactBundle(spec, bundle, expected)).toThrow(
-      message
-    );
+    expect(() =>
+      resolveNodeArtifactBundle(multiServiceSpec(), completeBundle(), expected)
+    ).toThrow(message);
   });
 
   it("supports the omission default as one app artifact", () => {
@@ -200,31 +155,24 @@ describe("node artifact bundle", () => {
       repository: "example/node",
       artifacts: [{ artifact: "app", sourceSha: SOURCE_SHA, image: APP_IMAGE }],
     });
-    expect(bundle.services).toEqual([
-      {
-        service: "app",
-        artifact: "app",
-        source_sha: SOURCE_SHA,
-        image: APP_IMAGE,
-      },
-    ]);
+    expect(bundle).toMatchObject({
+      source: { repository: "example/node", sha: SOURCE_SHA },
+      artifacts: [{ name: "app", image: APP_IMAGE }],
+      services: [{ name: "app", artifact: "app" }],
+    });
   });
 
   it.each([
     {
       name: "missing matrix leg",
       artifacts: [{ artifact: "app", sourceSha: SOURCE_SHA, image: APP_IMAGE }],
-      message: /Missing artifact for service paper-trader/,
+      message: /Missing artifact for service worker/,
     },
     {
       name: "undeclared artifact",
       artifacts: [
         { artifact: "app", sourceSha: SOURCE_SHA, image: APP_IMAGE },
-        {
-          artifact: "paper-trader",
-          sourceSha: SOURCE_SHA,
-          image: TRADER_IMAGE,
-        },
+        { artifact: "worker", sourceSha: SOURCE_SHA, image: WORKER_IMAGE },
         { artifact: "surprise", sourceSha: SOURCE_SHA, image: APP_IMAGE },
       ],
       message: /Undeclared built artifact/,
@@ -234,9 +182,9 @@ describe("node artifact bundle", () => {
       artifacts: [
         { artifact: "app", sourceSha: SOURCE_SHA, image: APP_IMAGE },
         {
-          artifact: "paper-trader",
+          artifact: "worker",
           sourceSha: "b".repeat(40),
-          image: TRADER_IMAGE,
+          image: WORKER_IMAGE,
         },
       ],
       message: /Source SHA mismatch/,
@@ -249,11 +197,7 @@ describe("node artifact bundle", () => {
           sourceSha: SOURCE_SHA,
           image: "ghcr.io/example/node:latest",
         },
-        {
-          artifact: "paper-trader",
-          sourceSha: SOURCE_SHA,
-          image: TRADER_IMAGE,
-        },
+        { artifact: "worker", sourceSha: SOURCE_SHA, image: WORKER_IMAGE },
       ],
       message: /Invalid bundle/,
     },
@@ -266,5 +210,22 @@ describe("node artifact bundle", () => {
         artifacts,
       })
     ).toThrow(message);
+  });
+
+  it("rejects dangling service artifact refs before resolution", () => {
+    const bundle = completeBundle();
+    expect(() =>
+      resolveNodeArtifactBundle(
+        multiServiceSpec(),
+        {
+          ...bundle,
+          services: [
+            bundle.services[0],
+            { name: "worker", artifact: "missing" },
+          ],
+        },
+        { sourceSha: SOURCE_SHA, repository: "example/node" }
+      )
+    ).toThrow(/Service references missing artifact/);
   });
 });

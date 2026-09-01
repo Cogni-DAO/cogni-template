@@ -5,7 +5,7 @@
  * Module: `@cogni/repo-spec/artifact-bundle`
  * Purpose: Define and atomically resolve the source-SHA artifact bundle emitted by node CI.
  * Scope: Pure schemas and assembly. Does not read git, registries, files, or deployment state.
- * Invariants: EXACT_SERVICE_COVERAGE, ONE_SOURCE_SHA, DIGEST_PINNED, ATOMIC_OR_NOTHING.
+ * Invariants: EXACT_SERVICE_COVERAGE, EXACT_ARTIFACT_COVERAGE, ONE_SOURCE_SHA, DIGEST_PINNED, ATOMIC_OR_NOTHING.
  * Side-effects: none
  * Links: story.5016, task.5065, docs/spec/node-ci-cd-contract.md
  * @public
@@ -26,6 +26,12 @@ const sourceShaSchema = z
 const logicalNameSchema = z
   .string()
   .regex(/^[a-z][a-z0-9-]{0,62}$/, "name must be a DNS-safe lowercase token");
+const repositorySchema = z
+  .string()
+  .regex(
+    /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/,
+    "repository must be GitHub owner/name"
+  );
 const digestImageSchema = z
   .string()
   .regex(
@@ -33,12 +39,33 @@ const digestImageSchema = z
     "image must be an immutable OCI sha256 digest reference"
   );
 
+export const nodeArtifactBundleSourceSchema = z
+  .object({
+    repository: repositorySchema,
+    sha: sourceShaSchema,
+  })
+  .strict();
+
+export type NodeArtifactBundleSource = z.infer<
+  typeof nodeArtifactBundleSourceSchema
+>;
+
+export const nodeArtifactBundleArtifactSchema = z
+  .object({
+    name: logicalNameSchema,
+    image: digestImageSchema,
+  })
+  .strict();
+
+export type NodeArtifactBundleArtifact = z.infer<
+  typeof nodeArtifactBundleArtifactSchema
+>;
+
 export const nodeArtifactBundleServiceSchema = z
   .object({
-    service: logicalNameSchema,
+    name: logicalNameSchema,
+    /** Logical ref into this bundle's `artifacts` set. */
     artifact: logicalNameSchema,
-    source_sha: sourceShaSchema,
-    image: digestImageSchema,
   })
   .strict();
 
@@ -50,42 +77,47 @@ export const nodeArtifactBundleSchema = z
   .object({
     schema_version: z.literal(1),
     node_id: z.string().uuid(),
-    source_sha: sourceShaSchema,
-    repository: z
-      .string()
-      .regex(
-        /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/,
-        "repository must be GitHub owner/name"
-      ),
+    source: nodeArtifactBundleSourceSchema,
+    artifacts: z.array(nodeArtifactBundleArtifactSchema).min(1).max(8),
     services: z.array(nodeArtifactBundleServiceSchema).min(1).max(8),
   })
   .strict()
   .superRefine((bundle, ctx) => {
-    const serviceNames = bundle.services.map((service) => service.service);
+    const artifactNames = bundle.artifacts.map((artifact) => artifact.name);
+    if (new Set(artifactNames).size !== artifactNames.length) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Duplicate bundle artifact names",
+      });
+    }
+
+    const serviceNames = bundle.services.map((service) => service.name);
     if (new Set(serviceNames).size !== serviceNames.length) {
       ctx.addIssue({
         code: "custom",
         message: "Duplicate bundle service names",
       });
     }
-    const imageByArtifact = new Map<string, string>();
+
+    const referencedArtifacts = new Set(
+      bundle.services.map((service) => service.artifact)
+    );
     bundle.services.forEach((service, index) => {
-      if (service.source_sha !== bundle.source_sha) {
+      if (!artifactNames.includes(service.artifact)) {
         ctx.addIssue({
           code: "custom",
-          path: ["services", index, "source_sha"],
-          message: "Every bundled service must have the bundle source SHA",
+          path: ["services", index, "artifact"],
+          message: `Service references missing artifact: ${service.artifact}`,
         });
       }
-      const priorImage = imageByArtifact.get(service.artifact);
-      if (priorImage && priorImage !== service.image) {
+    });
+    bundle.artifacts.forEach((artifact, index) => {
+      if (!referencedArtifacts.has(artifact.name)) {
         ctx.addIssue({
           code: "custom",
-          path: ["services", index, "image"],
-          message: "One artifact identity must resolve to one image digest",
+          path: ["artifacts", index, "name"],
+          message: `Unreferenced bundled artifact: ${artifact.name}`,
         });
-      } else {
-        imageByArtifact.set(service.artifact, service.image);
       }
     });
   });
@@ -100,14 +132,16 @@ export interface BuiltNodeArtifact {
 
 export interface ResolvedNodeServiceArtifact {
   readonly service: NodeServiceConfig;
-  readonly sourceSha: string;
+  /** Logical ref carried into the declared workload service. */
+  readonly artifact: string;
+  /** Resolved only for the legacy direct-provider compatibility mapper. */
   readonly image: string;
 }
 
 export interface ResolvedNodeArtifactBundle {
   readonly nodeId: string;
-  readonly sourceSha: string;
-  readonly repository: string;
+  readonly source: NodeArtifactBundleSource;
+  readonly artifacts: readonly NodeArtifactBundleArtifact[];
   readonly services: readonly ResolvedNodeServiceArtifact[];
 }
 
@@ -147,11 +181,11 @@ export function buildNodeArtifactBundle(input: {
     throw new Error("[artifact-bundle] Duplicate built artifact identities");
   }
 
-  const declaredArtifacts = new Set(
-    services.map((service) => service.artifact.name)
-  );
+  const declaredArtifactNames = [
+    ...new Set(services.map((service) => service.artifact.name)),
+  ];
   const extra = input.artifacts.find(
-    (artifact) => !declaredArtifacts.has(artifact.artifact)
+    (artifact) => !declaredArtifactNames.includes(artifact.artifact)
   );
   if (extra) {
     throw new Error(
@@ -159,11 +193,14 @@ export function buildNodeArtifactBundle(input: {
     );
   }
 
-  const bundledServices = services.map((service) => {
-    const built = byArtifact.get(service.artifact.name);
+  const artifacts = declaredArtifactNames.map((artifactName) => {
+    const built = byArtifact.get(artifactName);
     if (!built) {
+      const service = services.find(
+        (candidate) => candidate.artifact.name === artifactName
+      );
       throw new Error(
-        `[artifact-bundle] Missing artifact for service ${service.name}: ${service.artifact.name}`
+        `[artifact-bundle] Missing artifact for service ${service?.name ?? "unknown"}: ${artifactName}`
       );
     }
     if (built.sourceSha !== input.sourceSha) {
@@ -171,26 +208,24 @@ export function buildNodeArtifactBundle(input: {
         `[artifact-bundle] Source SHA mismatch for artifact ${built.artifact}`
       );
     }
-    return {
-      service: service.name,
-      artifact: service.artifact.name,
-      source_sha: built.sourceSha,
-      image: built.image,
-    };
+    return { name: built.artifact, image: built.image };
   });
 
   return parseNodeArtifactBundle({
     schema_version: 1,
     node_id: extractNodeId(input.spec),
-    source_sha: input.sourceSha,
-    repository: input.repository,
-    services: bundledServices,
+    source: { repository: input.repository, sha: input.sourceSha },
+    artifacts,
+    services: services.map((service) => ({
+      name: service.name,
+      artifact: service.artifact.name,
+    })),
   });
 }
 
 /**
  * Resolve a CI bundle against the declaration at the same source revision.
- * Exact service+artifact equality is checked before any ProvisionSpec assembly.
+ * Exact service+artifact equality is checked before any workload assembly.
  */
 export function resolveNodeArtifactBundle(
   spec: RepoSpec,
@@ -198,14 +233,14 @@ export function resolveNodeArtifactBundle(
   expected: ExpectedNodeArtifactBundleIdentity
 ): ResolvedNodeArtifactBundle {
   const bundle = parseNodeArtifactBundle(input);
-  if (bundle.source_sha !== expected.sourceSha) {
+  if (bundle.source.sha !== expected.sourceSha) {
     throw new Error(
-      `[artifact-bundle] Source SHA mismatch: expected ${expected.sourceSha}, received ${bundle.source_sha}`
+      `[artifact-bundle] Source SHA mismatch: expected ${expected.sourceSha}, received ${bundle.source.sha}`
     );
   }
-  if (bundle.repository !== expected.repository) {
+  if (bundle.source.repository !== expected.repository) {
     throw new Error(
-      `[artifact-bundle] Repository mismatch: expected ${expected.repository}, received ${bundle.repository}`
+      `[artifact-bundle] Repository mismatch: expected ${expected.repository}, received ${bundle.source.repository}`
     );
   }
   const nodeId = extractNodeId(spec);
@@ -217,13 +252,25 @@ export function resolveNodeArtifactBundle(
 
   const declaredServices = extractNodeServices(spec);
   const byService = new Map(
-    bundle.services.map((service) => [service.service, service] as const)
+    bundle.services.map((service) => [service.name, service] as const)
   );
   if (bundle.services.length !== declaredServices.length) {
     throw new Error(
       `[artifact-bundle] Service coverage mismatch: declared ${declaredServices.length}, bundled ${bundle.services.length}`
     );
   }
+
+  const declaredArtifacts = new Set(
+    declaredServices.map((service) => service.artifact.name)
+  );
+  if (bundle.artifacts.length !== declaredArtifacts.size) {
+    throw new Error(
+      `[artifact-bundle] Artifact coverage mismatch: declared ${declaredArtifacts.size}, bundled ${bundle.artifacts.length}`
+    );
+  }
+  const byArtifact = new Map(
+    bundle.artifacts.map((artifact) => [artifact.name, artifact] as const)
+  );
 
   const services = declaredServices.map((service) => {
     const bundled = byService.get(service.name);
@@ -237,17 +284,29 @@ export function resolveNodeArtifactBundle(
         `[artifact-bundle] Artifact mismatch for service ${service.name}: expected ${service.artifact.name}, received ${bundled.artifact}`
       );
     }
-    return {
-      service,
-      sourceSha: bundled.source_sha,
-      image: bundled.image,
-    };
+    const artifact = byArtifact.get(bundled.artifact);
+    if (!artifact) {
+      // Defensive only: bundle schema already rejects dangling refs.
+      throw new Error(
+        `[artifact-bundle] Missing bundled artifact: ${bundled.artifact}`
+      );
+    }
+    return { service, artifact: artifact.name, image: artifact.image };
   });
+
+  const extraArtifact = bundle.artifacts.find(
+    (artifact) => !declaredArtifacts.has(artifact.name)
+  );
+  if (extraArtifact) {
+    throw new Error(
+      `[artifact-bundle] Undeclared bundled artifact: ${extraArtifact.name}`
+    );
+  }
 
   return {
     nodeId,
-    sourceSha: bundle.source_sha,
-    repository: bundle.repository,
+    source: bundle.source,
+    artifacts: bundle.artifacts,
     services,
   };
 }
