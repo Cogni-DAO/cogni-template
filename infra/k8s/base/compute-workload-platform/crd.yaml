@@ -111,6 +111,10 @@ spec:
                   x-kubernetes-validations:
                     - rule: "self.services.filter(s, s.visibility == 'public').size() == 1"
                       message: exactly one workload service must be public
+                    - rule: "self.services.filter(s, s.visibility == 'public').all(s, has(s.readinessPath))"
+                      message: the public workload service must declare readinessPath
+                    - rule: "self.services.filter(s, s.visibility == 'private').all(s, !has(s.readinessPath))"
+                      message: private workload services must not declare public readinessPath
                     - rule: "self.services.all(s, s.bindings.all(k, s.bindings[k] != s.name && self.services.exists(t, t.name == s.bindings[k])))"
                       message: every binding must target a different declared sibling service
                   properties:
@@ -153,6 +157,14 @@ spec:
                             items: { type: string, maxLength: 4096 }
                           port: { type: integer, minimum: 1, maximum: 65535 }
                           visibility: { type: string, enum: [public, private] }
+                          readinessPath:
+                            type: string
+                            minLength: 1
+                            maxLength: 256
+                            pattern: "^/[A-Za-z0-9._~/:@+,-]*$"
+                            x-kubernetes-validations:
+                              - rule: "!self.contains('//') && !self.contains('/./') && !self.contains('/../') && !self.endsWith('/.') && !self.endsWith('/..')"
+                                message: readinessPath must not contain empty or traversal segments
                           bindings:
                             type: object
                             maxProperties: 16
@@ -290,6 +302,7 @@ spec:
                           DnsReconcileFailed,
                           DnsOwnershipChanged,
                           EndpointVerificationFailed,
+                          ReadinessDeclarationInvalid,
                           MutationClaimConflict,
                           WalletAllocationBlocked,
                           MutationOutcomeUnknown,

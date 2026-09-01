@@ -6,6 +6,8 @@ import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 
+import { isValidComputeReadinessPath } from "@/ports/compute-workload.types";
+
 function isPrivateAddress(address: string): boolean {
   const normalized = address.toLowerCase();
   if (normalized === "::1" || normalized === "::") return true;
@@ -38,9 +40,10 @@ function isPrivateAddress(address: string): boolean {
  * Fetch `/version` with DNS resolution performed by the actual socket lookup callback.
  * Every answer must be globally routable; redirects and IP-literal endpoints are rejected.
  */
-export async function safeVersionProbe(
+async function safeHttpProbe(
   endpoint: string,
-  expectedSourceSha?: string,
+  path: string,
+  expectedSourceSha: string | undefined,
   timeoutMs = 5_000
 ): Promise<boolean> {
   const raw =
@@ -62,7 +65,7 @@ export async function safeVersionProbe(
     url.hostname.endsWith(".local")
   )
     return false;
-  url.pathname = `${url.pathname.replace(/\/$/, "")}/version`;
+  url.pathname = path;
   url.search = "";
   url.hash = "";
 
@@ -101,6 +104,11 @@ export async function safeVersionProbe(
           resolve(false);
           return;
         }
+        if (!expectedSourceSha) {
+          response.resume();
+          resolve(true);
+          return;
+        }
         let body = "";
         response.setEncoding("utf8");
         response.on("data", (chunk: string) => {
@@ -108,7 +116,6 @@ export async function safeVersionProbe(
         });
         response.on("end", () => {
           if (body.length > 16_384) return resolve(false);
-          if (!expectedSourceSha) return resolve(true);
           try {
             const parsed = JSON.parse(body) as { buildSha?: unknown };
             resolve(parsed.buildSha === expectedSourceSha);
@@ -122,4 +129,24 @@ export async function safeVersionProbe(
     request.on("error", () => resolve(false));
     request.end();
   });
+}
+
+export async function safeVersionProbe(
+  endpoint: string,
+  expectedSourceSha?: string,
+  timeoutMs = 5_000
+): Promise<boolean> {
+  return safeHttpProbe(endpoint, "/version", expectedSourceSha, timeoutMs);
+}
+
+/** Bounded SSRF-safe HTTP 2xx application-readiness probe. */
+export async function safeReadinessProbe(
+  endpoint: string,
+  path: string,
+  timeoutMs = 5_000
+): Promise<boolean> {
+  if (!isValidComputeReadinessPath(path)) {
+    return false;
+  }
+  return safeHttpProbe(endpoint, path, undefined, timeoutMs);
 }

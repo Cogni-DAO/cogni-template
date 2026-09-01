@@ -16,7 +16,10 @@ import {
 } from "@/ports/compute-workload-lifecycle.port";
 import type { ComputeWorkloadSecretResolverPort } from "@/ports/compute-workload-secret-resolver.port";
 import type { ComputeWorkloadStatePort } from "@/ports/compute-workload-state.port";
-import { reconcileComputeWorkload } from "./compute-workload-reconciler";
+import {
+  type ComputeWorkloadReconcileDeps,
+  reconcileComputeWorkload,
+} from "./compute-workload-reconciler";
 
 const NODE_ID = "123e4567-e89b-12d3-a456-426614174001";
 const SHA = "a".repeat(40);
@@ -64,6 +67,7 @@ function workload(overrides: Partial<ComputeWorkload> = {}): ComputeWorkload {
             artifact: "app",
             port: 3000,
             visibility: "public",
+            readinessPath: "/deployment-proof",
             bindings: {},
             bindHost: "0.0.0.0",
             secretRefs: [
@@ -221,7 +225,8 @@ function lifecycle(): ComputeWorkloadLifecyclePort &
     | "recoverCreate"
     | "update"
     | "delete"
-    | "verifySource",
+    | "verifySource"
+    | "verifyReadiness",
     ReturnType<typeof vi.fn>
   > {
   return {
@@ -253,6 +258,7 @@ function lifecycle(): ComputeWorkloadLifecyclePort &
     })),
     delete: vi.fn(async () => {}),
     verifySource: vi.fn(async () => true),
+    verifyReadiness: vi.fn(async () => true),
   };
 }
 
@@ -262,6 +268,7 @@ async function run(
   overrides: {
     dns?: ComputeWorkloadDnsPort;
     secretResolver?: ComputeWorkloadSecretResolverPort;
+    recordReadinessTransition?: ComputeWorkloadReconcileDeps["recordReadinessTransition"];
   } = {}
 ) {
   const dns = overrides.dns ?? {
@@ -275,6 +282,8 @@ async function run(
       async (input) => (input.serviceName === "app" ? BOOTABLE_APP_ENV : {})
     ),
   };
+  const recordReadinessTransition =
+    overrides.recordReadinessTransition ?? vi.fn();
   await reconcileComputeWorkload(
     {
       lifecycle: port,
@@ -285,10 +294,11 @@ async function run(
       leaderEpoch: "7:test-controller",
       assertLeadership: async (epoch) => epoch === "7:test-controller",
       now: () => NOW,
+      recordReadinessTransition,
     },
     state.current
   );
-  return { dns, secretResolver };
+  return { dns, secretResolver, recordReadinessTransition };
 }
 
 describe("reconcileComputeWorkload", () => {
@@ -327,8 +337,15 @@ describe("reconcileComputeWorkload", () => {
       endpoints: ["https://sample-node-test.cognidao.org"],
       expectedSourceSha: SHA,
     });
+    expect(port.verifyReadiness).toHaveBeenCalledWith({
+      endpoints: ["https://sample-node-test.cognidao.org"],
+      path: "/deployment-proof",
+    });
     expect(port.create).toHaveBeenCalledTimes(1);
     const env = port.create.mock.calls[0]?.[0].spec.services[0]?.env;
+    expect(port.create.mock.calls[0]?.[0].spec.services[0]).toMatchObject({
+      readinessPath: "/deployment-proof",
+    });
     expect(env).toMatchObject({
       SCHEDULER_API_TOKEN: "scheduler-token",
       BILLING_INGEST_TOKEN: "billing-token",
@@ -342,6 +359,84 @@ describe("reconcileComputeWorkload", () => {
     const port = lifecycle();
     await run(state, port);
     expect(port.create).not.toHaveBeenCalled();
+  });
+
+  it("fails an invalid or missing public readiness declaration before provider IO", async () => {
+    const declared = workload();
+    const publicService = declared.spec.workload.services[0];
+    if (!publicService) throw new Error("public fixture missing");
+    const { readinessPath: _missing, ...withoutReadiness } = publicService;
+    const state = new MemoryState(
+      workload({
+        spec: {
+          ...declared.spec,
+          workload: {
+            ...declared.spec.workload,
+            services: [withoutReadiness],
+          },
+        },
+      })
+    );
+    const port = lifecycle();
+
+    await run(state, port);
+
+    expect(state.current.status?.phase).toBe("Failed");
+    expect(state.current.status?.failure?.reason).toBe(
+      "ReadinessDeclarationInvalid"
+    );
+    expect(port.create).not.toHaveBeenCalled();
+    expect(port.observe).not.toHaveBeenCalled();
+  });
+
+  it("keeps provider-active distinct from app Ready and records redacted readiness transitions", async () => {
+    const state = new MemoryState(workload({ status: status(1, "active") }));
+    const port = lifecycle();
+    port.verifyReadiness.mockResolvedValue(false);
+    const recordReadinessTransition = vi.fn();
+
+    await run(state, port, { recordReadinessTransition });
+    expect(state.current.status?.resource?.state).toBe("active");
+    expect(state.current.status?.phase).toBe("Progressing");
+    expect(state.current.status?.conditions[0]).toMatchObject({
+      status: "False",
+      reason: "ReadinessFailed",
+      observedGeneration: 1,
+    });
+    expect(recordReadinessTransition).toHaveBeenCalledWith({
+      nodeId: NODE_ID,
+      environment: "candidate-a",
+      sourceSha: SHA,
+      leaseId: "lease-42",
+      readinessPath: "/deployment-proof",
+      outcomeCode: "ReadinessFailed",
+    });
+    expect(state.events.at(-1)).toMatchObject({
+      type: "Warning",
+      reason: "ReadinessFailed",
+    });
+    expect(state.events.at(-1)?.message).toContain(
+      "readinessPath=/deployment-proof outcomeCode=ReadinessFailed"
+    );
+
+    await run(state, port, { recordReadinessTransition });
+    expect(recordReadinessTransition).toHaveBeenCalledTimes(1);
+
+    port.verifyReadiness.mockResolvedValue(true);
+    await run(state, port, { recordReadinessTransition });
+    expect(state.current.status?.phase).toBe("Ready");
+    expect(state.current.status?.conditions[0]).toMatchObject({
+      status: "True",
+      reason: "ReadinessPassed",
+      observedGeneration: 1,
+    });
+    expect(recordReadinessTransition).toHaveBeenLastCalledWith(
+      expect.objectContaining({ outcomeCode: "ReadinessPassed" })
+    );
+    expect(state.events.at(-1)).toMatchObject({
+      type: "Normal",
+      reason: "ReadinessPassed",
+    });
   });
 
   it("adopts exactly one post-baseline dseq after an unknown POST outcome", async () => {
@@ -395,6 +490,46 @@ describe("reconcileComputeWorkload", () => {
     expect(port.create).toHaveBeenCalledTimes(1);
     expect(state.current.status?.phase).toBe("Unknown");
     expect(state.current.status?.failure?.message).not.toContain("POST");
+  });
+
+  it("persists a closed known handle before a fresh recovery allocation can start", async () => {
+    const state = new MemoryState(workload());
+    const firstProcess = lifecycle();
+    firstProcess.create.mockImplementationOnce(
+      async (input: Parameters<ComputeWorkloadLifecyclePort["create"]>[0]) => {
+        await input.onPrepared("41");
+        await input.onAllocated({
+          provider: "external",
+          leaseId: "lease-41",
+          state: "pending",
+          endpoints: [],
+        });
+        throw new ComputeLifecycleError("transient", "ProviderTransient", true);
+      }
+    );
+
+    await run(state, firstProcess);
+    expect(firstProcess.create).toHaveBeenCalledTimes(1);
+    expect(state.current.status?.resource?.id).toBe("lease-41");
+
+    firstProcess.observe.mockResolvedValueOnce({
+      provider: "external",
+      leaseId: "lease-41",
+      state: "closed",
+      endpoints: [],
+    });
+    await run(state, firstProcess);
+    expect(firstProcess.create).toHaveBeenCalledTimes(1);
+    expect(state.current.status?.resource).toMatchObject({
+      id: "lease-41",
+      state: "closed",
+    });
+    expect(state.current.status?.conditions[0]?.reason).toBe("ResourceClosed");
+
+    const restartedProcess = lifecycle();
+    await run(state, restartedProcess);
+    expect(restartedProcess.create).toHaveBeenCalledTimes(1);
+    expect(state.current.status?.attempt?.operation).toBe("recover");
   });
 
   it("blocks every other workload create behind a durable unknown wallet allocation across restart ordering", async () => {

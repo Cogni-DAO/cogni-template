@@ -95,6 +95,40 @@ describe("ComputeWorkloadLifecycleAdapter", () => {
     );
   });
 
+  it("requires bounded HTTP 2xx at the declared application readiness path", async () => {
+    const fetchImpl = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response("not ready", { status: 503 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    const lifecycle = new ComputeWorkloadLifecycleAdapter(
+      { balances: async () => [] },
+      fetchImpl
+    );
+
+    await expect(
+      lifecycle.verifyReadiness({
+        endpoints: ["one.example", "https://two.example/"],
+        path: "/deployment-proof",
+      })
+    ).resolves.toBe(true);
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      "https://two.example/deployment-proof",
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
+    for (const path of [
+      "/readyz?leak=true",
+      "/%2e%2e/private",
+      "/readyz\\private",
+      "/safe/../private",
+    ]) {
+      await expect(
+        lifecycle.verifyReadiness({ endpoints: ["one.example"], path })
+      ).resolves.toBe(false);
+    }
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
   it("serializes wallet allocations so each create gets a fresh pre-POST baseline", async () => {
     let releaseFirst: (() => void) | undefined;
     const firstGate = new Promise<void>((resolve) => {
