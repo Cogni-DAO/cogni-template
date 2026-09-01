@@ -310,8 +310,12 @@ const readinessHttpPathSchema = z
   .string()
   .min(1)
   .max(256)
+  .regex(
+    /^\/[A-Za-z0-9._~/:@+,-]*$/,
+    "readiness HTTP path contains unsupported characters"
+  )
   .superRefine((path, ctx) => {
-    if (!path.startsWith("/") || path.startsWith("//")) {
+    if (path.startsWith("//")) {
       ctx.addIssue({
         code: "custom",
         message:
@@ -320,26 +324,12 @@ const readinessHttpPathSchema = z
       return;
     }
 
-    let decoded: string;
-    try {
-      decoded = decodeURIComponent(path);
-    } catch {
-      ctx.addIssue({
-        code: "custom",
-        message: "readiness HTTP path contains invalid percent encoding",
-      });
-      return;
-    }
-
     if (
-      /[?#\\]/.test(path) ||
-      /[?#\\]/.test(decoded) ||
-      decoded.split("/").some((segment) => segment === "." || segment === "..")
+      path.split("/").some((segment) => segment === "." || segment === "..")
     ) {
       ctx.addIssue({
         code: "custom",
-        message:
-          "readiness HTTP path must not contain a query, fragment, backslash, or traversal segment",
+        message: "readiness HTTP path must not contain a traversal segment",
       });
     }
   });
@@ -475,6 +465,13 @@ export const nodeDeploymentSchema = z
       });
     }
     deployment.services.forEach((service, index) => {
+      if (service.visibility === "private" && service.readiness_probe) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["services", index, "readiness_probe"],
+          message: "readiness_probe supports public HTTP readiness only in v0",
+        });
+      }
       Object.entries(service.bindings).forEach(([envName, target]) => {
         if (target === service.name) {
           ctx.addIssue({
