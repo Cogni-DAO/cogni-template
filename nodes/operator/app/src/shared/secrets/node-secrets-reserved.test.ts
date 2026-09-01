@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  isExternalWorkloadSecretKey,
   isNodeOwnedSecretKey,
   SUBSTRATE_RESERVED_KEYS,
 } from "./node-secrets-reserved.data";
@@ -39,5 +40,34 @@ describe("node-secrets reserved-key guard (gate 2)", () => {
     // Denylist invariant: a key absent from the set is allowed by default.
     expect(SUBSTRATE_RESERVED_KEYS.has("X_OAUTH_CLIENT_ID")).toBe(false);
     expect(isNodeOwnedSecretKey("ANYTHING_NOT_RESERVED")).toBe(true);
+  });
+});
+
+describe("external-workload secret boundary", () => {
+  it("allows format-valid node-owned keys without an operator allowlist", () => {
+    expect(isExternalWorkloadSecretKey("SOME_BRAND_NEW_VENDOR_KEY")).toBe(true);
+    expect(isExternalWorkloadSecretKey("AUTH_SECRET")).toBe(true);
+    expect(isExternalWorkloadSecretKey("DATABASE_URL")).toBe(true);
+    expect(isExternalWorkloadSecretKey("LITELLM_VIRTUAL_KEY")).toBe(true);
+  });
+
+  it.each([
+    "LITELLM_MASTER_KEY",
+    "GH_REVIEW_APP_PRIVATE_KEY_BASE64",
+    "IDENTITY_ATTESTATION_PRIVATE_KEY",
+    "APP_DB_PASSWORD",
+    "POLY_WALLET_AEAD_KEY_HEX",
+    "CLOUDFLARE_API_TOKEN",
+  ])("denies fleet, custody, or substrate-only key %s", (key) => {
+    expect(isExternalWorkloadSecretKey(key)).toBe(false);
+  });
+
+  it.each([
+    "",
+    "lowercase",
+    "NOT-SHELL-SAFE",
+    "0_STARTS_WITH_DIGIT",
+  ])("denies malformed logical key %s", (key) => {
+    expect(isExternalWorkloadSecretKey(key)).toBe(false);
   });
 });

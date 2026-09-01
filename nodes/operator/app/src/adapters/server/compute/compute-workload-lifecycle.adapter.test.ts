@@ -4,7 +4,7 @@
 import type { ComputeResourcePort, ProvisionSpec } from "@cogni/ai-tools";
 import { describe, expect, it, vi } from "vitest";
 
-import { ComputeLifecycleError } from "@/ports/compute-workload-lifecycle.port";
+import { ComputeLifecycleError } from "@/ports";
 
 import { AkashComputeError } from "./akash-compute.adapter";
 import { ComputeWorkloadLifecycleAdapter } from "./compute-workload-lifecycle.adapter";
@@ -68,7 +68,7 @@ describe("ComputeWorkloadLifecycleAdapter", () => {
     );
   });
 
-  it("requires the exact source SHA from a serving endpoint", async () => {
+  it("requires exact source identity and fixed /readyz health on the same endpoint", async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()
       .mockResolvedValueOnce(
@@ -76,7 +76,8 @@ describe("ComputeWorkloadLifecycleAdapter", () => {
       )
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ buildSha: "expected" }), { status: 200 })
-      );
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
     const lifecycle = new ComputeWorkloadLifecycleAdapter(
       { balances: async () => [] },
       fetchImpl
@@ -93,40 +94,31 @@ describe("ComputeWorkloadLifecycleAdapter", () => {
       "https://two.example/version",
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     );
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      3,
+      "https://two.example/readyz",
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    );
   });
 
-  it("requires bounded HTTP 2xx at the declared application readiness path", async () => {
+  it("does not report source verified while fixed /readyz is unhealthy", async () => {
     const fetchImpl = vi
       .fn<typeof fetch>()
-      .mockResolvedValueOnce(new Response("not ready", { status: 503 }))
-      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ buildSha: "expected" }), { status: 200 })
+      )
+      .mockResolvedValueOnce(new Response(null, { status: 503 }));
     const lifecycle = new ComputeWorkloadLifecycleAdapter(
       { balances: async () => [] },
       fetchImpl
     );
 
     await expect(
-      lifecycle.verifyReadiness({
-        endpoints: ["one.example", "https://two.example/"],
-        path: "/deployment-proof",
+      lifecycle.verifySource({
+        endpoints: ["https://one.example"],
+        expectedSourceSha: "expected",
       })
-    ).resolves.toBe(true);
-    expect(fetchImpl).toHaveBeenNthCalledWith(
-      2,
-      "https://two.example/deployment-proof",
-      expect.objectContaining({ signal: expect.any(AbortSignal) })
-    );
-    for (const path of [
-      "/readyz?leak=true",
-      "/%2e%2e/private",
-      "/readyz\\private",
-      "/safe/../private",
-    ]) {
-      await expect(
-        lifecycle.verifyReadiness({ endpoints: ["one.example"], path })
-      ).resolves.toBe(false);
-    }
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    ).resolves.toBe(false);
   });
 
   it("serializes wallet allocations so each create gets a fresh pre-POST baseline", async () => {

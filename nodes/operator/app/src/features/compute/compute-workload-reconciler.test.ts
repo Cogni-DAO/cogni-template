@@ -5,17 +5,15 @@ import { describe, expect, it, vi } from "vitest";
 import {
   COMPUTE_WORKLOAD_ATTEMPT_ANNOTATION,
   COMPUTE_WORKLOAD_FINALIZER,
+  ComputeLifecycleError,
   type ComputeWorkload,
+  type ComputeWorkloadDnsPort,
+  type ComputeWorkloadLifecyclePort,
+  type ComputeWorkloadSecretResolverPort,
+  type ComputeWorkloadStatePort,
   type ComputeWorkloadStatus,
   decodeAttemptReceipt,
-} from "@/ports/compute-workload.types";
-import type { ComputeWorkloadDnsPort } from "@/ports/compute-workload-dns.port";
-import {
-  ComputeLifecycleError,
-  type ComputeWorkloadLifecyclePort,
-} from "@/ports/compute-workload-lifecycle.port";
-import type { ComputeWorkloadSecretResolverPort } from "@/ports/compute-workload-secret-resolver.port";
-import type { ComputeWorkloadStatePort } from "@/ports/compute-workload-state.port";
+} from "@/ports";
 import {
   type ComputeWorkloadReconcileDeps,
   reconcileComputeWorkload,
@@ -29,7 +27,7 @@ const BOOTABLE_APP_ENV = {
   AUTH_SECRET: "auth-secret",
   DATABASE_URL: "postgresql://app@candidate.vm.example/app",
   DATABASE_SERVICE_URL: "postgresql://service@candidate.vm.example/app",
-  LITELLM_MASTER_KEY: "sk-virtual",
+  LITELLM_VIRTUAL_KEY: "sk-virtual",
   SCHEDULER_API_TOKEN: "scheduler-token",
   BILLING_INGEST_TOKEN: "billing-token",
 };
@@ -47,6 +45,7 @@ function workload(overrides: Partial<ComputeWorkload> = {}): ComputeWorkload {
       labels: {
         "cogni.io/node-id": NODE_ID,
         "cogni.io/environment": "candidate-a",
+        "cogni.io/node": "sample-node",
       },
       finalizers: [COMPUTE_WORKLOAD_FINALIZER],
     },
@@ -65,9 +64,9 @@ function workload(overrides: Partial<ComputeWorkload> = {}): ComputeWorkload {
           {
             name: "app",
             artifact: "app",
+            runtimeProfile: "cogni-node-app-v1",
             port: 3000,
             visibility: "public",
-            readinessPath: "/deployment-proof",
             bindings: {},
             bindHost: "0.0.0.0",
             secretRefs: [
@@ -225,8 +224,7 @@ function lifecycle(): ComputeWorkloadLifecyclePort &
     | "recoverCreate"
     | "update"
     | "delete"
-    | "verifySource"
-    | "verifyReadiness",
+    | "verifySource",
     ReturnType<typeof vi.fn>
   > {
   return {
@@ -258,7 +256,6 @@ function lifecycle(): ComputeWorkloadLifecyclePort &
     })),
     delete: vi.fn(async () => {}),
     verifySource: vi.fn(async () => true),
-    verifyReadiness: vi.fn(async () => true),
   };
 }
 
@@ -292,6 +289,7 @@ async function run(
       dns,
       secretResolver,
       environment: "candidate-a",
+      deploymentDomain: "test.cognidao.org",
       leaderEpoch: "7:test-controller",
       assertLeadership: async (epoch) => epoch === "7:test-controller",
       now: () => NOW,
@@ -339,15 +337,8 @@ describe("reconcileComputeWorkload", () => {
       endpoints: ["https://sample-node-test.cognidao.org"],
       expectedSourceSha: SHA,
     });
-    expect(port.verifyReadiness).toHaveBeenCalledWith({
-      endpoints: ["https://sample-node-test.cognidao.org"],
-      path: "/deployment-proof",
-    });
     expect(port.create).toHaveBeenCalledTimes(1);
     const env = port.create.mock.calls[0]?.[0].spec.services[0]?.env;
-    expect(port.create.mock.calls[0]?.[0].spec.services[0]).toMatchObject({
-      readinessPath: "/deployment-proof",
-    });
     expect(env).toMatchObject({
       SCHEDULER_API_TOKEN: "scheduler-token",
       BILLING_INGEST_TOKEN: "billing-token",
@@ -363,38 +354,10 @@ describe("reconcileComputeWorkload", () => {
     expect(port.create).not.toHaveBeenCalled();
   });
 
-  it("fails an invalid or missing public readiness declaration before provider IO", async () => {
-    const declared = workload();
-    const publicService = declared.spec.workload.services[0];
-    if (!publicService) throw new Error("public fixture missing");
-    const { readinessPath: _missing, ...withoutReadiness } = publicService;
-    const state = new MemoryState(
-      workload({
-        spec: {
-          ...declared.spec,
-          workload: {
-            ...declared.spec.workload,
-            services: [withoutReadiness],
-          },
-        },
-      })
-    );
-    const port = lifecycle();
-
-    await run(state, port);
-
-    expect(state.current.status?.phase).toBe("Failed");
-    expect(state.current.status?.failure?.reason).toBe(
-      "ReadinessDeclarationInvalid"
-    );
-    expect(port.create).not.toHaveBeenCalled();
-    expect(port.observe).not.toHaveBeenCalled();
-  });
-
   it("keeps provider-active distinct from app Ready and records redacted readiness transitions", async () => {
     const state = new MemoryState(workload({ status: status(1, "active") }));
     const port = lifecycle();
-    port.verifyReadiness.mockResolvedValue(false);
+    port.verifySource.mockResolvedValue(false);
     const recordReadinessTransition = vi.fn();
 
     await run(state, port, { recordReadinessTransition });
@@ -410,7 +373,7 @@ describe("reconcileComputeWorkload", () => {
       environment: "candidate-a",
       sourceSha: SHA,
       leaseId: "lease-42",
-      readinessPath: "/deployment-proof",
+      healthEndpoint: "/readyz",
       outcomeCode: "ReadinessFailed",
     });
     expect(state.events.at(-1)).toMatchObject({
@@ -418,13 +381,13 @@ describe("reconcileComputeWorkload", () => {
       reason: "ReadinessFailed",
     });
     expect(state.events.at(-1)?.message).toContain(
-      "readinessPath=/deployment-proof outcomeCode=ReadinessFailed"
+      "healthEndpoint=/readyz outcomeCode=ReadinessFailed"
     );
 
     await run(state, port, { recordReadinessTransition });
     expect(recordReadinessTransition).toHaveBeenCalledTimes(1);
 
-    port.verifyReadiness.mockResolvedValue(true);
+    port.verifySource.mockResolvedValue(true);
     await run(state, port, { recordReadinessTransition });
     expect(state.current.status?.phase).toBe("Ready");
     expect(state.current.status?.conditions[0]).toMatchObject({
@@ -607,6 +570,7 @@ describe("reconcileComputeWorkload", () => {
         labels: {
           "cogni.io/node-id": secondId,
           "cogni.io/environment": "candidate-a",
+          "cogni.io/node": "sample-node",
         },
       },
       spec: { ...workload().spec, nodeId: secondId },
@@ -789,7 +753,7 @@ describe("reconcileComputeWorkload", () => {
             ...declared.spec.bundle,
             source: {
               ...declared.spec.bundle.source,
-              repository: "cogni-dao/sample-node",
+              repository: "cogni-dao/shared-node-runtime",
             },
             artifacts: [
               ...declared.spec.bundle.artifacts,
@@ -835,19 +799,20 @@ describe("reconcileComputeWorkload", () => {
     );
     const port = lifecycle();
     const resolver = {
-      resolve: vi.fn(async (input: { serviceName: string }) =>
-        input.serviceName === "app"
-          ? {
-              AUTH_SECRET: secretValue,
-              DATABASE_URL: "postgresql://app@candidate.vm.example/app",
-              DATABASE_SERVICE_URL:
-                "postgresql://service@candidate.vm.example/app",
-              DOLTGRES_URL: "postgresql://app@candidate.vm.example/knowledge",
-              LITELLM_MASTER_KEY: "sk-virtual",
-              SCHEDULER_API_TOKEN: "scheduler-token",
-              BILLING_INGEST_TOKEN: "billing-token",
-            }
-          : {}
+      resolve: vi.fn(
+        async (input: { serviceName: string; nodeSlug: string }) =>
+          input.serviceName === "app"
+            ? {
+                AUTH_SECRET: secretValue,
+                DATABASE_URL: "postgresql://app@candidate.vm.example/app",
+                DATABASE_SERVICE_URL:
+                  "postgresql://service@candidate.vm.example/app",
+                DOLTGRES_URL: "postgresql://app@candidate.vm.example/knowledge",
+                LITELLM_VIRTUAL_KEY: "sk-virtual",
+                SCHEDULER_API_TOKEN: "scheduler-token",
+                BILLING_INGEST_TOKEN: "billing-token",
+              }
+            : {}
       ),
     };
     await run(state, port, { secretResolver: resolver });
@@ -868,8 +833,74 @@ describe("reconcileComputeWorkload", () => {
     expect(spec.services[1]?.expose).toEqual([
       { port: 9100, as: 9100, global: false },
     ]);
+    expect(resolver.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({ nodeSlug: "sample-node" })
+    );
     expect(JSON.stringify(state.current)).not.toContain(secretValue);
     expect(JSON.stringify(state.events)).not.toContain(secretValue);
+  });
+
+  it("does not infer Cogni compatibility behavior from a generic service named app", async () => {
+    const declared = workload();
+    const app = declared.spec.workload.services[0];
+    if (!app) throw new Error("app fixture missing");
+    const { runtimeProfile: _profile, ...genericApp } = app;
+    const state = new MemoryState(
+      workload({
+        spec: {
+          ...declared.spec,
+          workload: {
+            ...declared.spec.workload,
+            services: [{ ...genericApp, secretRefs: [] }],
+          },
+        },
+      })
+    );
+    const port = lifecycle();
+
+    await run(state, port, {
+      secretResolver: { resolve: vi.fn(async () => ({})) },
+    });
+
+    expect(port.create).toHaveBeenCalledTimes(1);
+    expect(port.create.mock.calls[0]?.[0].spec.services[0]?.env).toEqual({
+      HOST: "0.0.0.0",
+      HOSTNAME: "0.0.0.0",
+      PORT: "3000",
+    });
+  });
+
+  it("rejects a sibling public hostname before provider or DNS writes", async () => {
+    const declared = workload();
+    const state = new MemoryState(
+      workload({
+        spec: {
+          ...declared.spec,
+          workload: {
+            ...declared.spec.workload,
+            publicHost: "operator-test.cognidao.org",
+          },
+        },
+      })
+    );
+    const port = lifecycle();
+    const dns = {
+      reconcile: vi.fn<ComputeWorkloadDnsPort["reconcile"]>(async () => {}),
+      deleteOwned: vi.fn<ComputeWorkloadDnsPort["deleteOwned"]>(
+        async () => "deleted" as const
+      ),
+    };
+
+    await run(state, port, { dns });
+
+    expect(state.current.status?.failure?.reason).toBe(
+      "PublicHostOwnershipMismatch"
+    );
+    expect(port.create).not.toHaveBeenCalled();
+    expect(port.update).not.toHaveBeenCalled();
+    expect(port.delete).not.toHaveBeenCalled();
+    expect(dns.reconcile).not.toHaveBeenCalled();
+    expect(dns.deleteOwned).not.toHaveBeenCalled();
   });
 
   it("rejects ownership drift before provider IO", async () => {

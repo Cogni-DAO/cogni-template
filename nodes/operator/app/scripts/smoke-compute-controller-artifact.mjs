@@ -19,7 +19,9 @@ const result = spawnSync(
 const output = `${result.stdout ?? ""}\n${result.stderr ?? ""}`;
 if (
   result.status === 0 ||
-  !output.includes("POD_NAMESPACE and CONTROLLER_ENVIRONMENT are required") ||
+  !output.includes(
+    "POD_NAMESPACE, CONTROLLER_ENVIRONMENT, and DEPLOYMENT_DOMAIN are required"
+  ) ||
   output.includes("Dynamic require")
 ) {
   process.stderr.write(output);

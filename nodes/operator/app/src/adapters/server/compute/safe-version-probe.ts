@@ -6,8 +6,6 @@ import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { isIP } from "node:net";
 
-import { isValidComputeReadinessPath } from "@/ports/compute-workload.types";
-
 function isPrivateAddress(address: string): boolean {
   const normalized = address.toLowerCase();
   if (normalized === "::1" || normalized === "::") return true;
@@ -140,13 +138,9 @@ export async function safeVersionProbe(
 }
 
 /** Bounded SSRF-safe HTTP 2xx application-readiness probe. */
-export async function safeReadinessProbe(
+export async function safeReadyzProbe(
   endpoint: string,
-  path: string,
   timeoutMs = 5_000
 ): Promise<boolean> {
-  if (!isValidComputeReadinessPath(path)) {
-    return false;
-  }
-  return safeHttpProbe(endpoint, path, undefined, timeoutMs);
+  return safeHttpProbe(endpoint, "/readyz", undefined, timeoutMs);
 }

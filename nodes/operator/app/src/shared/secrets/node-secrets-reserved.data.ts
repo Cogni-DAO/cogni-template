@@ -77,3 +77,57 @@ export const SUBSTRATE_RESERVED_KEYS: ReadonlySet<string> = new Set<string>([
 export function isNodeOwnedSecretKey(key: string): boolean {
   return !SUBSTRATE_RESERVED_KEYS.has(key);
 }
+
+/**
+ * Fleet, custody, and substrate-control credentials that may never cross into
+ * an externally hosted workload, even when a CR declares the logical key.
+ * Node-owned application keys are intentionally allowed by default; the
+ * node/env OpenBao namespace is the authority, not an operator code allowlist.
+ */
+export const EXTERNAL_WORKLOAD_DENIED_KEYS: ReadonlySet<string> = new Set([
+  "AKASH_CONSOLE_API_KEY",
+  "CLOUDFLARE_API_TOKEN",
+  "CLOUDFLARE_ZONE_ID",
+  "LITELLM_MASTER_KEY",
+  "OPENROUTER_API_KEY",
+  "IDENTITY_ATTESTATION_PRIVATE_KEY",
+  "GH_REVIEW_APP_ID",
+  "GH_REVIEW_APP_PRIVATE_KEY_BASE64",
+  "GH_GRAFANA_PARENT_SA_TOKEN",
+  "POLY_WALLET_AEAD_KEY_HEX",
+  "POLY_WALLET_AEAD_KEY_ID",
+  "PRIVY_APP_ID",
+  "PRIVY_APP_SECRET",
+  "PRIVY_AUTH_PRIVATE_KEY",
+  "PRIVY_SIGNING_KEY",
+  "PRIVY_USER_WALLETS_APP_SECRET",
+  "PRIVY_USER_WALLETS_SIGNING_KEY",
+  "DOLTHUB_OWNER",
+  "DOLTHUB_CREDENTIALS",
+  "DOLTHUB_TOKEN",
+  "DOLTHUB_API_TOKEN",
+  "DOLT_CREDS_JWK",
+  "DOLT_CREDS_KEYID",
+  "DISCORD_BOT_TOKEN",
+  "APP_DB_PASSWORD",
+  "APP_DB_SERVICE_PASSWORD",
+  "APP_DB_READONLY_PASSWORD",
+  "DOLTGRES_PASSWORD",
+  "DOLTGRES_READER_PASSWORD",
+  "DOLTGRES_WRITER_PASSWORD",
+  "POSTGRES_ROOT_PASSWORD",
+  "TEMPORAL_DB_PASSWORD",
+  "SSH_DEPLOY_KEY",
+  "GHCR_DEPLOY_TOKEN",
+  "ACTIONS_AUTOMATION_BOT_PAT",
+  "GIT_READ_TOKEN",
+]);
+
+const NODE_SECRET_KEY_PATTERN = /^[A-Z_][A-Z0-9_]{0,127}$/;
+
+/** Declared key is format-safe and not an operator/fleet custody credential. */
+export function isExternalWorkloadSecretKey(key: string): boolean {
+  return (
+    NODE_SECRET_KEY_PATTERN.test(key) && !EXTERNAL_WORKLOAD_DENIED_KEYS.has(key)
+  );
+}

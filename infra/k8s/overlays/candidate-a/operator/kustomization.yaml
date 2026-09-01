@@ -38,8 +38,11 @@ patches:
         path: /spec/template/spec/containers/0/env/1/value
         value: candidate-a
       - op: replace
-        path: /spec/template/spec/containers/0/env/4/value
-        value: candidate-a-node-secrets-writer
+        path: /spec/template/spec/containers/0/env/2/value
+        value: test.cognidao.org
+      - op: replace
+        path: /spec/template/spec/containers/0/env/3/value
+        value: akash16yr3wxt97ae045a06kr3ycde9srcgpg8syjxxm
   - target:
       kind: ConfigMap
       name: node-app-config

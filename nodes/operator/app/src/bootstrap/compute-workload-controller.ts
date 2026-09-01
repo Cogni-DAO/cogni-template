@@ -15,25 +15,17 @@ import pLimit from "p-limit";
 import pino from "pino";
 import { Counter, Gauge, Histogram, Registry } from "prom-client";
 
-import { AkashComputeAdapter } from "@/adapters/server/compute/akash-compute.adapter";
 import {
+  AkashComputeAdapter,
   CloudflareComputeWorkloadDnsAdapter,
-  DormantComputeWorkloadDnsAdapter,
-} from "@/adapters/server/compute/compute-workload-dns.adapter";
-import {
   ComputeWorkloadLifecycleAdapter,
-  DormantComputeWorkloadLifecycleAdapter,
-} from "@/adapters/server/compute/compute-workload-lifecycle.adapter";
-import {
   ComputeWorkloadSecretResolverAdapter,
-  LiteLlmVirtualKeyMinter,
-} from "@/adapters/server/compute/compute-workload-secret-resolver.adapter";
-import {
+  DormantComputeWorkloadDnsAdapter,
+  DormantComputeWorkloadLifecycleAdapter,
   KubernetesComputeWorkloadStateAdapter,
   KubernetesLeaseLeaderElector,
   renewLeadershipOrFence,
-} from "@/adapters/server/compute/kubernetes-compute-workload.adapter";
-import { OpenBaoSecretsAdapter } from "@/adapters/server/secrets/openbao-secrets.adapter";
+} from "@/adapters/server";
 import { reconcileComputeWorkload } from "@/features/compute/compute-workload-reconciler";
 
 // biome-ignore lint/style/noProcessEnv: dedicated process composition root validates its own minimal env
@@ -43,14 +35,18 @@ const log = pino({ level: runtimeEnv.LOG_LEVEL ?? "info" }).child({
 });
 const namespace = runtimeEnv.POD_NAMESPACE;
 const environment = runtimeEnv.CONTROLLER_ENVIRONMENT;
+const deploymentDomain = runtimeEnv.DEPLOYMENT_DOMAIN;
 const apiKeyFile =
   runtimeEnv.AKASH_CONSOLE_API_KEY_FILE ??
   "/var/run/secrets/compute/AKASH_CONSOLE_API_KEY";
 const credentialFile = (name: string) => `/var/run/secrets/compute/${name}`;
-if (!namespace || !environment) {
-  throw new Error("POD_NAMESPACE and CONTROLLER_ENVIRONMENT are required");
+if (!namespace || !environment || !deploymentDomain) {
+  throw new Error(
+    "POD_NAMESPACE, CONTROLLER_ENVIRONMENT, and DEPLOYMENT_DOMAIN are required"
+  );
 }
 const controllerEnvironment: string = environment;
+const controllerDeploymentDomain: string = deploymentDomain;
 
 const registry = new Registry();
 const reconcileTotal = new Counter({
@@ -109,11 +105,18 @@ const preferredProviders = (runtimeEnv.AKASH_PREFERRED_PROVIDERS ?? "")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
+const allowedProviders = (runtimeEnv.AKASH_ALLOWED_PROVIDERS ?? "")
+  .split(",")
+  .map((value) => value.trim())
+  .filter(Boolean);
 const lifecycle = apiKey
   ? new ComputeWorkloadLifecycleAdapter(
       new AkashComputeAdapter({
         apiKey,
         timeoutMs: 15_000,
+        // An empty configured boundary intentionally rejects every provider.
+        // Provider-enabled environments must opt in their reachable accounts.
+        allowedProviders,
         ...(preferredProviders.length > 0 ? { preferredProviders } : {}),
         outcomeStore: {
           record: async () => {},
@@ -126,13 +129,10 @@ const readCredential = (name: string) =>
   readFile(credentialFile(name), "utf8")
     .then((value) => value.trim())
     .catch(() => "");
-const [cloudflareToken, cloudflareZoneId, liteLlmMasterKey] = await Promise.all(
-  [
-    readCredential("CLOUDFLARE_API_TOKEN"),
-    readCredential("CLOUDFLARE_ZONE_ID"),
-    readCredential("LITELLM_MASTER_KEY"),
-  ]
-);
+const [cloudflareToken, cloudflareZoneId] = await Promise.all([
+  readCredential("CLOUDFLARE_API_TOKEN"),
+  readCredential("CLOUDFLARE_ZONE_ID"),
+]);
 const dns =
   cloudflareToken && cloudflareZoneId
     ? new CloudflareComputeWorkloadDnsAdapter({
@@ -140,20 +140,9 @@ const dns =
         zoneId: cloudflareZoneId,
       })
     : new DormantComputeWorkloadDnsAdapter();
-const openBao = new OpenBaoSecretsAdapter({
-  addr: runtimeEnv.OPENBAO_ADDR ?? "http://openbao.openbao.svc:8200",
-  role: runtimeEnv.OPENBAO_NODE_SECRETS_WRITER_ROLE ?? "unconfigured",
-  readServiceAccountToken: () =>
-    readFile("/var/run/secrets/openbao/token", "utf8").then((value) =>
-      value.trim()
-    ),
-});
-const liteLlmBaseUrl = runtimeEnv.LITELLM_BASE_URL ?? "";
 const secretResolver = new ComputeWorkloadSecretResolverAdapter(
-  openBao,
-  liteLlmMasterKey && liteLlmBaseUrl
-    ? new LiteLlmVirtualKeyMinter(liteLlmBaseUrl, liteLlmMasterKey)
-    : undefined
+  core,
+  namespace
 );
 if (!apiKey) {
   log.warn(
@@ -267,6 +256,7 @@ async function reconcileAll(): Promise<void> {
                 dns,
                 secretResolver,
                 environment: controllerEnvironment,
+                deploymentDomain: controllerDeploymentDomain,
                 leaderEpoch,
                 assertLeadership: (epoch) => leader.stillHolds(epoch),
                 now: () => new Date(),

@@ -23,11 +23,9 @@
  *     uptime7d > 0.95 + activeLeases > 0, no 2σ price underbids) — pure logic in
  *     ./akash-provider-screen. Metadata-read failure fails open (signedBy stays the hard gate).
  *   - BOOT_SLO_OR_CLOSE (task.5051): after lease, the workload must serve `/version` and its
- *     declared application-readiness path within `bootSloMs` (default 5min), or the deployment
- *     is closed (escrow refunds), the provider is
- *     recorded as an SLO failure (24h blacklist, 3 strikes permanent — derived from
- *     compute_provider_outcomes), and provisioning retries on the next screened provider up to
- *     `maxProviderAttempts` (default 3) before a terminal BOOT_SLO_TIMEOUT.
+ *     fixed `/readyz` health endpoint within `bootSloMs` (default 5min), or the deployment
+ *     is closed (escrow refunds) and the provider is recorded as an SLO failure. The
+ *     controller begins any later allocation only from a new durable recovery receipt.
  *   - OUTCOME_STORE_IS_ADVISORY: outcome persistence is best-effort — a store failure never
  *     fails a live provision and never blocks screening (empty history).
  * Side-effects: IO (HTTPS requests to the Akash Console API + workload ingress; provision()
@@ -47,8 +45,6 @@ import type {
   ProvisionSpec,
   ProvisionState,
 } from "@cogni/ai-tools";
-import { isValidComputeReadinessPath } from "@/ports/compute-workload.types";
-
 import {
   type AkashProviderInfo,
   type ProviderOutcomeStats,
@@ -57,38 +53,10 @@ import {
 } from "./akash-provider-screen";
 import { type AkashSdlOptions, buildAkashSdl } from "./akash-sdl";
 import type { ProviderOutcomeStore } from "./provider-outcome-store";
-import { safeReadinessProbe, safeVersionProbe } from "./safe-version-probe";
+import { safeReadyzProbe, safeVersionProbe } from "./safe-version-probe";
 
 const PROVIDER = "akash";
 const MICRO = 1_000_000;
-
-/** Narrow adapter capability view; the canonical wire field is owned by repo-spec. */
-type ReadinessAwareProvisionService = ProvisionSpec["services"][number] & {
-  readonly readinessPath?: string;
-};
-type ReadinessAwareProvisionSpec = Omit<ProvisionSpec, "services"> & {
-  readonly services: readonly ReadinessAwareProvisionService[];
-};
-
-function declaredReadinessPath(spec: ProvisionSpec): string | undefined {
-  const declared = (spec as ReadinessAwareProvisionSpec).services
-    .map((service) => service.readinessPath)
-    .filter((path): path is string => path !== undefined);
-  if (declared.length > 1) {
-    throw new AkashComputeError(
-      "UNEXPECTED_SHAPE",
-      "at most one service may declare application readiness"
-    );
-  }
-  const path = declared[0];
-  if (path && !isValidComputeReadinessPath(path)) {
-    throw new AkashComputeError(
-      "UNEXPECTED_SHAPE",
-      "declared application readiness path is invalid"
-    );
-  }
-  return path;
-}
 
 /** Overclock Labs audit account — the `signedBy` anchor Console itself screens on. */
 export const AKASH_OVERCLOCK_AUDITOR =
@@ -144,6 +112,11 @@ export interface AkashComputeAdapterConfig {
    */
   preferredProviders?: readonly string[];
   /**
+   * Optional operator-owned hard provider boundary. When present, only these
+   * provider accounts may be leased; an empty list rejects every bid.
+   */
+  allowedProviders?: readonly string[];
+  /**
    * Country codes ranked as substrate-co-located (latency preference). Defaults to the
    * EU set around the shared substrate.
    */
@@ -154,7 +127,7 @@ export interface AkashComputeAdapterConfig {
   bootSloMs?: number;
   /** Poll interval while awaiting boot, in ms. Default 10s. */
   bootPollIntervalMs?: number;
-  /** Max providers tried per provision() before a terminal error. Default 3. */
+  /** Legacy ComputeResourcePort provision sequence bound. The controller does not use it. */
   maxProviderAttempts?: number;
   /** Injected boot-outcome persistence; composition roots choose durable or no-op storage. */
   outcomeStore: ProviderOutcomeStore;
@@ -312,24 +285,20 @@ export class AkashComputeAdapter implements ComputeResourcePort {
   }
 
   /**
-   * Provision with the provider quality mandate (task.5051): screen bids, lease, then hold
-   * the boot SLO. An SLO miss closes the deployment (escrow refunds), records the failure
-   * (24h blacklist / 3 strikes permanent), and retries the next screened provider up to
-   * `maxProviderAttempts` before a terminal BOOT_SLO_TIMEOUT.
+   * Legacy ComputeResourcePort compatibility path. The controller never calls this method;
+   * it uses provisionWithAllocation so every allocation/recovery has its own durable receipt.
    */
   async provision(p: {
     env: string;
     spec: ProvisionSpec;
   }): Promise<ProvisionOutput> {
     const sdl = buildAkashSdl(p.spec, this.sdlOptions);
-    const readinessPath = declaredReadinessPath(p.spec);
     const screening = await this.loadScreeningContext();
     const tried = new Set<string>();
     for (let attempt = 1; attempt <= this.maxProviderAttempts; attempt++) {
       const result = await this.provisionOnce(
         sdl,
         p.spec.name,
-        readinessPath,
         screening,
         tried
       );
@@ -355,11 +324,9 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     void p.env;
     void p.idempotencyKey;
     const sdl = buildAkashSdl(p.spec, this.sdlOptions);
-    const readinessPath = declaredReadinessPath(p.spec);
     const result = await this.provisionOnce(
       sdl,
       p.spec.name,
-      readinessPath,
       await this.loadScreeningContext(),
       new Set<string>(),
       onAllocated
@@ -441,7 +408,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
       { data: { sdl } },
       this.writeTimeoutMs
     );
-    return this.awaitBootServing(p.resourceId, declaredReadinessPath(p.spec));
+    return this.awaitBootServing(p.resourceId);
   }
 
   async release(p: { leaseId: string }): Promise<void> {
@@ -476,7 +443,6 @@ export class AkashComputeAdapter implements ComputeResourcePort {
   private async provisionOnce(
     sdl: string,
     workload: string,
-    readinessPath: string | undefined,
     screening: ScreeningContext,
     tried: Set<string>,
     onAllocated?: (resource: ProvisionOutput) => Promise<void>
@@ -555,11 +521,11 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     }
 
     // Boot SLO: the lease is paying from here — the workload must PROVE registry egress by
-    // serving /version plus declared app readiness before the deadline, or the lease closes
+    // serving /version plus fixed /readyz before the deadline, or the lease closes
     // and the provider is struck.
     const leasedAt = Date.now();
     try {
-      const output = await this.awaitBootServing(String(dseq), readinessPath);
+      const output = await this.awaitBootServing(String(dseq));
       await this.recordOutcome({
         computeProvider: PROVIDER,
         providerAccount: provider,
@@ -594,7 +560,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
 
   /**
    * Poll `/v1/bids`, screen each wave (quality filter + blacklist + price-outlier + ranking
-   * in ./akash-provider-screen), and pick a provider. An allowlisted (preferred) provider
+   * in ./akash-provider-screen), and pick a provider. A preferred provider
    * that passes screening leases immediately; otherwise the window runs out and the
    * best-ranked screened bid wins. NO_BIDS when zero bids ever arrive; NO_ELIGIBLE_BIDS when
    * bids arrived but screening rejected them all.
@@ -606,6 +572,9 @@ export class AkashComputeAdapter implements ComputeResourcePort {
   ): Promise<ConsoleBidId> {
     const deadline = Date.now() + this.bidTimeoutMs;
     const preferred = this.config.preferredProviders ?? [];
+    const allowed = this.config.allowedProviders
+      ? new Set(this.config.allowedProviders)
+      : undefined;
     let sawAnyBid = false;
     for (;;) {
       const bids = await this.request<ConsoleBid[]>(
@@ -629,7 +598,9 @@ export class AkashComputeAdapter implements ComputeResourcePort {
         });
       }
       const ranked = screenBids({
-        bids: screenable,
+        bids: allowed
+          ? screenable.filter((bid) => allowed.has(bid.provider))
+          : screenable,
         providers: screening.providers,
         outcomes: screening.outcomes,
         preferredProviders: preferred,
@@ -638,7 +609,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
         nowMs: Date.now(),
       });
       const best = ranked[0];
-      // An allowlisted provider that survived screening wins immediately; anyone else
+      // A preferred provider that survived screening wins immediately; anyone else
       // waits out the window so late (often better) bids can compete.
       if (best && preferred.includes(best.provider)) {
         const id = byProvider.get(best.provider);
@@ -667,13 +638,10 @@ export class AkashComputeAdapter implements ComputeResourcePort {
 
   /**
    * Hold the boot SLO: poll deployment status and require one endpoint to serve `/version`
-   * plus the declared readiness path. Status/probe failures are tolerated inside the window;
+   * plus fixed `/readyz`. Status/probe failures are tolerated inside the window;
    * the deadline is the arbiter.
    */
-  private async awaitBootServing(
-    dseq: string,
-    readinessPath: string | undefined
-  ): Promise<ProvisionOutput> {
+  private async awaitBootServing(dseq: string): Promise<ProvisionOutput> {
     const deadline = Date.now() + this.bootSloMs;
     for (;;) {
       const output = await this.status({ leaseId: dseq }).catch(() => null);
@@ -681,9 +649,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
         for (const endpoint of output.endpoints) {
           const sourceServing = await this.probeVersion(endpoint);
           const applicationReady =
-            !readinessPath ||
-            (sourceServing &&
-              (await this.probeReadiness(endpoint, readinessPath)));
+            sourceServing && (await this.probeReadiness(endpoint));
           if (sourceServing && applicationReady) return output;
         }
       }
@@ -716,18 +682,15 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     }
   }
 
-  /** Unauthenticated bounded GET of the declared public application-readiness path. */
-  private async probeReadiness(
-    endpoint: string,
-    path: string
-  ): Promise<boolean> {
-    if (!this.config.fetchImpl) return safeReadinessProbe(endpoint, path);
+  /** Unauthenticated bounded GET of the platform-standard `/readyz`. */
+  private async probeReadiness(endpoint: string): Promise<boolean> {
+    if (!this.config.fetchImpl) return safeReadyzProbe(endpoint);
     const base = endpoint.startsWith("http") ? endpoint : `http://${endpoint}`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
     try {
       const url = new URL(base);
-      url.pathname = path;
+      url.pathname = "/readyz";
       url.search = "";
       url.hash = "";
       const response = await this.fetchImpl(url.toString(), {

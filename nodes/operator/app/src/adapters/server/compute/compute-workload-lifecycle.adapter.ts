@@ -6,14 +6,13 @@ import type {
   ProvisionOutput,
   ProvisionSpec,
 } from "@cogni/ai-tools";
-import { isValidComputeReadinessPath } from "@/ports/compute-workload.types";
 import {
   ComputeLifecycleError,
   type ComputeWorkloadLifecyclePort,
-} from "@/ports/compute-workload-lifecycle.port";
+} from "@/ports";
 
 import { AkashComputeError } from "./akash-compute.adapter";
-import { safeReadinessProbe, safeVersionProbe } from "./safe-version-probe";
+import { safeReadyzProbe, safeVersionProbe } from "./safe-version-probe";
 
 interface UpdatableComputeResourcePort extends ComputeResourcePort {
   allocationCursor?(): Promise<string>;
@@ -190,7 +189,10 @@ export class ComputeWorkloadLifecycleAdapter
   }): Promise<boolean> {
     for (const endpoint of input.endpoints) {
       if (!this.fetchImpl) {
-        if (await safeVersionProbe(endpoint, input.expectedSourceSha))
+        if (
+          (await safeVersionProbe(endpoint, input.expectedSourceSha)) &&
+          (await safeReadyzProbe(endpoint))
+        )
           return true;
         continue;
       }
@@ -206,42 +208,12 @@ export class ComputeWorkloadLifecycleAdapter
         );
         if (!response.ok) continue;
         const version = (await response.json()) as { buildSha?: unknown };
-        if (version.buildSha === input.expectedSourceSha) return true;
-      } catch {
-        // A probe is recomputable observed state; the next reconcile retries.
-      } finally {
-        clearTimeout(timeout);
-      }
-    }
-    return false;
-  }
-
-  async verifyReadiness(input: {
-    endpoints: readonly string[];
-    path: string;
-  }): Promise<boolean> {
-    if (!isValidComputeReadinessPath(input.path)) {
-      return false;
-    }
-    for (const endpoint of input.endpoints) {
-      if (!this.fetchImpl) {
-        if (await safeReadinessProbe(endpoint, input.path)) return true;
-        continue;
-      }
-      const base = endpoint.startsWith("http")
-        ? endpoint
-        : `http://${endpoint}`;
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5_000);
-      try {
-        const url = new URL(base);
-        url.pathname = input.path;
-        url.search = "";
-        url.hash = "";
-        const response = await this.fetchImpl(url.toString(), {
-          signal: controller.signal,
-        });
-        if (response.ok) return true;
+        if (version.buildSha !== input.expectedSourceSha) continue;
+        const ready = await this.fetchImpl(
+          `${base.replace(/\/$/, "")}/readyz`,
+          { signal: controller.signal }
+        );
+        if (ready.ok) return true;
       } catch {
         // A probe is recomputable observed state; the next reconcile retries.
       } finally {
@@ -280,9 +252,6 @@ export class DormantComputeWorkloadLifecycleAdapter
     return this.unavailable();
   }
   verifySource(): Promise<boolean> {
-    return Promise.resolve(false);
-  }
-  verifyReadiness(): Promise<boolean> {
     return Promise.resolve(false);
   }
 }
