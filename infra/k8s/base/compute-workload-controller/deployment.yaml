@@ -68,6 +68,10 @@ spec:
             sources:
               - secret:
                   name: operator-env-secrets
+                  # AKASH_CONSOLE_API_KEY is catalog-optional. The controller remains
+                  # observable but dormant when it is absent; an ordinary k3s rollout
+                  # must never be broken by enabling the reusable controller substrate.
+                  optional: true
                   items:
                     - key: AKASH_CONSOLE_API_KEY
                       path: AKASH_CONSOLE_API_KEY
