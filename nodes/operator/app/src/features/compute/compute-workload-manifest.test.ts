@@ -35,6 +35,7 @@ const bundle: ResolvedNodeArtifactBundle = {
         },
         port: 3200,
         visibility: "public",
+        readinessPath: "/deployment-proof",
         bindings: { WORKER_URL: "worker" },
         secretRefs: [{ key: "DATABASE_URL" }, { key: "LITELLM_VIRTUAL_KEY" }],
         bindHost: "0.0.0.0",
@@ -95,6 +96,7 @@ describe("buildComputeWorkloadManifest", () => {
         artifact: "web",
         port: 3200,
         visibility: "public",
+        readinessPath: "/deployment-proof",
         bindings: { WORKER_URL: "worker" },
         bindHost: "0.0.0.0",
         secretRefs: [{ key: "DATABASE_URL" }, { key: "LITELLM_VIRTUAL_KEY" }],
@@ -112,6 +114,9 @@ describe("buildComputeWorkloadManifest", () => {
     expect(manifest.spec.workload.services[0]).not.toHaveProperty("image");
     expect(manifest.spec.workload.services[0]).not.toHaveProperty("env");
     expect(manifest.spec.workload.services[0]).not.toHaveProperty("expose");
+    expect(manifest.spec.workload.services[1]).not.toHaveProperty(
+      "readinessPath"
+    );
   });
 
   it("rejects a mutable OCI bundle tag", () => {

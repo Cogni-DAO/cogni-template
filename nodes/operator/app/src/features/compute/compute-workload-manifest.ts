@@ -68,6 +68,9 @@ export function buildComputeWorkloadManifest(
       ...(service.args ? { args: service.args } : {}),
       port: service.port,
       visibility: service.visibility,
+      ...(service.readinessPath
+        ? { readinessPath: service.readinessPath }
+        : {}),
       bindings: service.bindings,
       bindHost: service.bindHost,
       ...service.resources,
