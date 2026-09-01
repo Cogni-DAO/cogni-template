@@ -352,7 +352,7 @@ describe("OpenFgaAuthorizationAdapter", () => {
     expect(attempts).toBe(1); // no racing retry
   });
 
-  it("treats a 409 write conflict as success — the tuple already converged to present (bug.5082)", async () => {
+  it("retries a 409 serialization conflict and succeeds on the clean retry — never assumes the end-state (bug.5082)", async () => {
     let attempts = 0;
     const client = {
       async check(): Promise<{ allowed: boolean }> {
@@ -360,7 +360,10 @@ describe("OpenFgaAuthorizationAdapter", () => {
       },
       async writeTuples(): Promise<void> {
         attempts += 1;
-        throw Object.assign(new Error("write conflict"), { statusCode: 409 });
+        // The self-race conflict; the retry runs cleanly (the racing writer has committed →
+        // onDuplicateWrites:ignore no-ops it here).
+        if (attempts === 1)
+          throw Object.assign(new Error("write conflict"), { statusCode: 409 });
       },
       async deleteTuples(): Promise<void> {},
     } satisfies OpenFgaWriteClient;
@@ -377,16 +380,18 @@ describe("OpenFgaAuthorizationAdapter", () => {
       decision: "success",
       code: "authz_write_success",
     });
-    expect(attempts).toBe(1); // 409 is neither retried nor a failure
+    expect(attempts).toBe(2); // 409 retried, not assumed-success
   });
 
-  it("treats a 409 delete conflict as success — the tuple already converged to absent (bug.5082)", async () => {
+  it("a persistent 409 delete fails CLOSED — a revoke never reports a false success (bug.5082)", async () => {
+    let attempts = 0;
     const client = {
       async check(): Promise<{ allowed: boolean }> {
         return { allowed: true };
       },
       async writeTuples(): Promise<void> {},
       async deleteTuples(): Promise<void> {
+        attempts += 1;
         throw Object.assign(new Error("write conflict"), { statusCode: 409 });
       },
     } satisfies OpenFgaWriteClient;
@@ -399,10 +404,13 @@ describe("OpenFgaAuthorizationAdapter", () => {
       writeRetryBackoffMs: 0,
     });
 
+    // Assuming a 409-delete converged to "absent" would fail OPEN (privilege retained while the
+    // UI says revoked). Exhausted retries must surface unavailable, not a fabricated success.
     await expect(authz.deleteRelation(retryTuple)).resolves.toMatchObject({
-      decision: "success",
-      code: "authz_write_success",
+      decision: "failure",
+      code: "authz_write_unavailable",
     });
+    expect(attempts).toBe(3); // initial + 2 retries, then fail closed
   });
 
   it("retries the delete path too", async () => {

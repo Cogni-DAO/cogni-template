@@ -121,15 +121,17 @@ const DEFAULT_TIMEOUT_MS = 1_500;
 // Prefer raising this / warming the connection over retrying — retry across our own timeout
 // races an un-cancelled in-flight write (bug.5082).
 const DEFAULT_WRITE_TIMEOUT_MS = 8_000;
-// Writes (approve/deny/revoke) retry ONLY a DEFINITIVELY-TERMINATED transient failure — a
-// thrown transport error (ECONNRESET/refused) or a returned 5xx/429, where the prior attempt
-// is provably done and a retry cannot race it. Our own `withTimeout` firing is NOT retryable:
-// `withTimeout` is a `Promise.race` that abandons — never cancels — the underlying request, so
-// a retry issues the identical tuple while the first write is still in flight → two concurrent
-// inserts hit OpenFGA's datastore serialization guard → HTTP 409, surfaced as a spurious
-// `authz_write_unavailable`. `onDuplicateWrites: ignore` only dedups a SEQUENTIAL pre-existing
-// tuple, not a CONCURRENT insert (bug.5082, prod 2026-09-01). Checks stay fail-closed-fast (no
-// retry). Default 2 retries ≈ OpenFGA SDK's 3-attempt policy; 100ms backoff = its min_wait_in_ms.
+// Writes (approve/deny/revoke) retry a DEFINITIVELY-TERMINATED failure — a thrown transport
+// error (ECONNRESET/refused), a returned 5xx/429, or a returned HTTP 409 (OpenFGA's datastore
+// serialization conflict from two concurrent writes touching the same tuple) — where the prior
+// attempt is provably done and a retry cannot race it. The self-inflicted 409 the incident
+// produced (bug.5082, prod 2026-09-01) now heals on the clean retry: the racing writer has
+// committed, so `onDuplicateWrites: ignore` no-ops the retry to a 200. Retry recovers the
+// end-state; it never ASSUMES it (a 409 does not prove THIS op's intent won — assuming success
+// on a delete would fail OPEN on a revoke). Our own `withTimeout` firing is the ONE non-retryable
+// failure: `withTimeout` is a `Promise.race` that abandons — never cancels — the underlying
+// request, so retrying it is what issues the concurrent duplicate that MADE the 409. Checks stay
+// fail-closed-fast (no retry). Default 2 retries ≈ OpenFGA SDK's 3-attempt policy; 100ms backoff.
 const DEFAULT_WRITE_MAX_RETRIES = 2;
 const DEFAULT_WRITE_RETRY_BACKOFF_MS = 100;
 
@@ -352,25 +354,23 @@ function httpStatusOf(error: unknown): number | undefined {
 }
 
 /**
- * Retryable ONLY when the prior attempt is provably finished, so a retry cannot race it.
- * A timeout is our own `Promise.race` abandoning a still-in-flight request (never cancelled),
- * so retrying it issues a concurrent duplicate → 409 (bug.5082): explicitly NOT retryable.
- * Everything else `isTransientError` allows (thrown transport error, returned 5xx/429) means
- * the SDK call has already settled — safe to retry.
+ * Retryable ONLY when the prior attempt is provably FINISHED (a response was received or the
+ * call threw), so a retry cannot race a still-live request. Two cases and one exception:
+ *  - our own `OpenFgaTimeoutError` is NEVER retryable: `withTimeout` is a `Promise.race` that
+ *    abandons — never cancels — the in-flight request, so retrying it issues a concurrent
+ *    duplicate → HTTP 409 (bug.5082). Fail closed instead.
+ *  - HTTP 409 IS retryable: OpenFGA maps a datastore serialization conflict (two concurrent
+ *    writes touching the same tuple) to 409; the transaction rolled back and the response
+ *    returned, so re-running the single-tuple write is safe and idempotent. On retry the racing
+ *    writer has committed, so `onDuplicateWrites`/`onMissingDeletes: ignore` makes it a 200
+ *    no-op. This is OpenFGA's prescribed 409 recovery — retry, never assume the end-state (a
+ *    409 does NOT prove the tuple converged the way THIS op intended; assuming success on a
+ *    delete would fail OPEN on a revoke). Exhausted retries fail closed as `authz_write_unavailable`.
+ *  - everything else `isTransientError` already allows (thrown transport error, returned 5xx/429).
  */
 function isRetryableWriteError(error: unknown): boolean {
   if (error instanceof OpenFgaTimeoutError) return false;
-  return isTransientError(error);
-}
-
-/**
- * A 409 on write/delete means the datastore already CONVERGED to the tuple's desired end-state:
- * a concurrent insert of the same tuple (approve) or a concurrent delete (revoke) won the race,
- * so the tuple is present/absent exactly as intended. RBAC cares about the end-state, not which
- * request wrote it — treat it as success, not a spurious `authz_write_unavailable` (bug.5082).
- */
-function isConvergedWriteConflict(error: unknown): boolean {
-  return httpStatusOf(error) === 409;
+  return isTransientError(error) || httpStatusOf(error) === 409;
 }
 
 export class OpenFgaAuthorizationAdapter implements AuthorizationPort {
@@ -453,10 +453,6 @@ export class OpenFgaAuthorizationAdapter implements AuthorizationPort {
       );
       return { decision: "success", code: "authz_write_success" };
     } catch (error) {
-      // A 409 means the tuple already converged to present (concurrent insert won) — success.
-      if (isConvergedWriteConflict(error)) {
-        return { decision: "success", code: "authz_write_success" };
-      }
       // Surface the underlying cause (timeout vs connection-refused vs OpenFGA 4xx).
       // A bare `catch {}` here turns every write failure into an indistinguishable
       // `authz_write_unavailable`, which forces deep spelunking during an outage.
@@ -494,10 +490,6 @@ export class OpenFgaAuthorizationAdapter implements AuthorizationPort {
       );
       return { decision: "success", code: "authz_write_success" };
     } catch (error) {
-      // A 409 means the tuple already converged to absent (concurrent delete won) — success.
-      if (isConvergedWriteConflict(error)) {
-        return { decision: "success", code: "authz_write_success" };
-      }
       return {
         decision: "failure",
         code: "authz_write_unavailable",
