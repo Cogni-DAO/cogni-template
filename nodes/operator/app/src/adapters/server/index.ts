@@ -82,6 +82,14 @@ export {
   type AkashComputeErrorCode,
 } from "./compute/akash-compute.adapter";
 export {
+  type AkashGatewayRequest,
+  type AkashGatewayTransport,
+  AkashWalletComputeAdapter,
+  type AkashWalletComputeAdapterConfig,
+  AkashWalletComputeError,
+  type AkashWalletComputeErrorCode,
+} from "./compute/akash-wallet-compute.adapter";
+export {
   CherryComputeAdapter,
   type CherryComputeAdapterConfig,
   CherryComputeError,
