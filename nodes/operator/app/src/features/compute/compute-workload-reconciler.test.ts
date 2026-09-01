@@ -649,6 +649,28 @@ describe("reconcileComputeWorkload", () => {
     expect(state.current.status?.failure?.reason).toBe("SecretPolicyRejected");
   });
 
+  it("retries missing ESO materialization before provider IO", async () => {
+    const state = new MemoryState(workload());
+    const port = lifecycle();
+    await run(state, port, {
+      secretResolver: {
+        resolve: vi.fn(async () => {
+          throw new ComputeLifecycleError(
+            "transient",
+            "SecretResolverUnavailable",
+            true
+          );
+        }),
+      },
+    });
+    expect(port.create).not.toHaveBeenCalled();
+    expect(state.wallet).toBeUndefined();
+    expect(state.current.status?.failure).toMatchObject({
+      reason: "SecretResolverUnavailable",
+      retryable: true,
+    });
+  });
+
   it("fails closed when a required legacy app secret is missing", async () => {
     const state = new MemoryState(workload());
     const port = lifecycle();

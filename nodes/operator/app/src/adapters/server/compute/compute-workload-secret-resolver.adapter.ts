@@ -8,6 +8,19 @@ import {
 } from "@/ports";
 import { isExternalWorkloadSecretKey } from "@/shared/secrets/node-secrets-reserved.data";
 
+function decodeSecretValue(encoded: string): string | undefined {
+  if (
+    !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(
+      encoded
+    )
+  )
+    return undefined;
+  const bytes = Buffer.from(encoded, "base64");
+  const decoded = bytes.toString("utf8");
+  if (!decoded || !bytes.equals(Buffer.from(decoded, "utf8"))) return undefined;
+  return decoded;
+}
+
 export class ComputeWorkloadSecretResolverAdapter
   implements ComputeWorkloadSecretResolverPort
 {
@@ -40,10 +53,17 @@ export class ComputeWorkloadSecretResolverAdapter
           this.namespace
         );
         stored = Object.fromEntries(
-          Object.entries(response.body.data ?? {}).map(([key, value]) => [
-            key,
-            Buffer.from(value, "base64").toString("utf8"),
-          ])
+          Object.entries(response.body.data ?? {}).map(([key, value]) => {
+            const decoded = decodeSecretValue(value);
+            if (decoded === undefined) {
+              throw new ComputeLifecycleError(
+                "transient",
+                "SecretResolverUnavailable",
+                true
+              );
+            }
+            return [key, decoded];
+          })
         );
       } catch (error) {
         if (error instanceof ComputeLifecycleError) throw error;
@@ -59,9 +79,9 @@ export class ComputeWorkloadSecretResolverAdapter
       const value = stored[key];
       if (!value) {
         throw new ComputeLifecycleError(
-          "terminal",
-          "SecretReferenceMissing",
-          false
+          "transient",
+          "SecretResolverUnavailable",
+          true
         );
       }
       result[key] = value;

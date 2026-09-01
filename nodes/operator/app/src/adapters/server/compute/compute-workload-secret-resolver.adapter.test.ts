@@ -77,7 +77,7 @@ describe("ComputeWorkloadSecretResolverAdapter", () => {
     ).resolves.toEqual({ LITELLM_VIRTUAL_KEY: "sk-virtual" });
   });
 
-  it("fails closed when substrate custody has not materialized a declared key", async () => {
+  it("retries when ESO has not materialized a declared key yet", async () => {
     const resolver = new ComputeWorkloadSecretResolverAdapter(
       {
         readNamespacedSecret: vi.fn(async () => ({ body: { data: {} } })),
@@ -87,7 +87,11 @@ describe("ComputeWorkloadSecretResolverAdapter", () => {
 
     await expect(
       resolver.resolve({ ...scope, refs: [{ key: "LITELLM_VIRTUAL_KEY" }] })
-    ).rejects.toMatchObject({ reason: "SecretReferenceMissing" });
+    ).rejects.toMatchObject({
+      kind: "transient",
+      reason: "SecretResolverUnavailable",
+      retryable: true,
+    });
   });
 
   it("treats a not-yet-materialized compute Secret as transient", async () => {
@@ -96,6 +100,28 @@ describe("ComputeWorkloadSecretResolverAdapter", () => {
         readNamespacedSecret: vi.fn(async () => {
           throw Object.assign(new Error("not found"), { statusCode: 404 });
         }),
+      } as never,
+      "cogni-candidate-a"
+    );
+
+    await expect(
+      resolver.resolve({ ...scope, refs: [{ key: "AUTH_SECRET" }] })
+    ).rejects.toMatchObject({
+      kind: "transient",
+      reason: "SecretResolverUnavailable",
+      retryable: true,
+    });
+  });
+
+  it.each([
+    "",
+    "not base64!",
+  ])("fails closed on invalid materialized value %j", async (encoded) => {
+    const resolver = new ComputeWorkloadSecretResolverAdapter(
+      {
+        readNamespacedSecret: vi.fn(async () => ({
+          body: { data: { AUTH_SECRET: encoded } },
+        })),
       } as never,
       "cogni-candidate-a"
     );
