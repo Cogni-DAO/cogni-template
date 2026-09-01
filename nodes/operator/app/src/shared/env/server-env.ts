@@ -255,6 +255,18 @@ export const serverSchema = z.object({
   // allowlists (harden-docker-public-ports.sh compute-egress-allowlist). The adapter holds
   // the bid window for these before falling back to the cheapest stranger.
   AKASH_PREFERRED_PROVIDERS: optionalString,
+  // Cloudflare DNS write credential — APP-SIDE per-lease compute DNS reconcile (task.5053).
+  // POST /api/v1/compute/deployments upserts each custom `<slug>-akash` host's CNAME to the
+  // lease's provider ingress; DELETE prunes it. Same value class as the env-scoped GH Actions
+  // secrets consumed by scripts/ci/reconcile-node-dns.sh (the CI plane stays GH-scoped).
+  // Optional: unset → DNS reconcile reports `dns_unconfigured`; deployments still succeed.
+  CLOUDFLARE_API_TOKEN: optionalString,
+  CLOUDFLARE_ZONE_ID: optionalString,
+  // Stable Host-preserving CNAME origin override (DEV2 finding, task.5049): custom hosts serve
+  // via the Akash provider's SHARED ingress (host-based routing), so a stable origin beats a
+  // per-lease hostname. Unset → fall back to the lease's provider-generated endpoint hostname,
+  // re-pointed on every deploy by the idempotent reconcile.
+  AKASH_INGRESS_ORIGIN: optionalString,
   COMPUTE_BALANCE_QUERY_TIMEOUT_MS: z.coerce
     .number()
     .int()

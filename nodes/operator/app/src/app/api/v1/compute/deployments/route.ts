@@ -135,8 +135,14 @@ export const POST = wrapRouteHandlerWithLogging(
     });
 
     const workload = await compute.provision({ env: "shared", spec });
+    // task.5053: upsert each custom `<slug>-akash` host's CNAME to the lease's provider
+    // ingress. Best-effort (never throws) — the lease result always reaches the caller.
+    const dns = await getContainer().computeDnsReconciler.reconcileDeploy({
+      hosts: hosts ?? [],
+      endpoints: workload.endpoints,
+    });
     return NextResponse.json(
-      { nodeId: node.nodeId, slug: node.slug, sourceSha, workload },
+      { nodeId: node.nodeId, slug: node.slug, sourceSha, workload, dns },
       { status: 201 }
     );
   }

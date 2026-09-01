@@ -87,6 +87,15 @@ export {
   CherryComputeError,
   type CherryComputeErrorCode,
 } from "./compute/cherry-compute.adapter";
+export {
+  type ComputeDnsReconcileResult,
+  ComputeDnsReconciler,
+  type ComputeDnsReconcilerConfig,
+  type ComputeDnsRecordAction,
+  type ComputeDnsRecordResult,
+  type ComputeDnsSkipReason,
+  type SkippedHost,
+} from "./compute/compute-dns.adapter";
 // Connection broker adapter
 export {
   ConnectionDecryptionError,

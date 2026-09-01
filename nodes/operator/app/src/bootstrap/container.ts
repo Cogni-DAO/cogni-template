@@ -88,6 +88,7 @@ import type { Logger } from "pino";
 import {
   ALCHEMY_ADAPTER_VERSION,
   AlchemyWebhookNormalizer,
+  type ComputeDnsReconciler,
   type Database,
   DrizzleAiTelemetryAdapter,
   DrizzleConnectionBrokerAdapter,
@@ -150,6 +151,7 @@ import {
 import { createToolBindings } from "@/bootstrap/ai/tool-bindings";
 import { createBoundToolSource } from "@/bootstrap/ai/tool-source.factory";
 import { createComputeCapability } from "@/bootstrap/capabilities/compute";
+import { createComputeDnsReconciler } from "@/bootstrap/capabilities/compute-dns";
 import { createDeployCapability } from "@/bootstrap/capabilities/deploy";
 import {
   createMetricsCapability,
@@ -276,6 +278,8 @@ export interface Container {
   metricsCapability: MetricsCapability;
   /** Compute-substrate balance reads (story.5011) — stub (empty) until CHERRY_AUTH_TOKEN is on the runtime */
   computeCapability: ComputeResourcePort;
+  /** Per-lease compute DNS reconcile (task.5053) — reports dns_unconfigured until CLOUDFLARE_* is on the runtime */
+  computeDnsReconciler: ComputeDnsReconciler;
   /** Web search capability for AI tools - requires TAVILY_API_KEY to be configured */
   webSearchCapability: WebSearchCapability;
   /** Repo capability for AI tools - requires COGNI_REPO_PATH */
@@ -657,6 +661,9 @@ function createContainer(): Container {
   // ComputeResourcePort balance reads (requires CHERRY_AUTH_TOKEN; empty stub otherwise)
   const computeCapability = createComputeCapability(env);
 
+  // Per-lease compute DNS reconcile (requires CLOUDFLARE_API_TOKEN/CLOUDFLARE_ZONE_ID; skips otherwise)
+  const computeDnsReconciler = createComputeDnsReconciler(env);
+
   // WebSearchCapability for AI tools (requires TAVILY_API_KEY)
   const webSearchCapability = createWebSearchCapability(env);
 
@@ -1027,6 +1034,7 @@ function createContainer(): Container {
     scheduleManager,
     metricsCapability,
     computeCapability,
+    computeDnsReconciler,
     webSearchCapability,
     repoCapability,
     vcsCapability,

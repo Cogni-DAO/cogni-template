@@ -35,7 +35,8 @@ async function gateAndLease(
   request: Request,
   userId: string
 ): Promise<
-  { ok: true; leaseId: string } | { ok: false; response: NextResponse }
+  | { ok: true; leaseId: string; slug: string }
+  | { ok: false; response: NextResponse }
 > {
   if (!context) {
     throw new Error("context required for dynamic routes");
@@ -65,7 +66,7 @@ async function gateAndLease(
     };
   }
   const { leaseId } = await context.params;
-  return { ok: true, leaseId };
+  return { ok: true, leaseId, slug: gate.node.slug };
 }
 
 export const GET = wrapRouteHandlerWithLogging<Ctx>(
@@ -105,6 +106,11 @@ export const DELETE = wrapRouteHandlerWithLogging<Ctx>(
       );
     }
     await compute.release({ leaseId: gated.leaseId });
-    return NextResponse.json({ released: true, leaseId: gated.leaseId });
+    // task.5053: prune the node's `<slug>-akash` CNAME now that the lease is closed.
+    // Best-effort (never throws) — the release result always reaches the caller.
+    const dns = await getContainer().computeDnsReconciler.reconcileRelease({
+      slug: gated.slug,
+    });
+    return NextResponse.json({ released: true, leaseId: gated.leaseId, dns });
   }
 );
