@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-// SPDX-FileCopyrightText: 2026 Cogni-DAO
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
  * Module: `@cogni/operator-wallet/tests/helpers/fake-cosmos-signer`
- * Purpose: Deterministic in-memory CosmosSignerPort for unit tests — a fixed local
- *   secp256k1 key so signatures can be cross-checked against cosmjs DirectSecp256k1Wallet.
- * Scope: Test helper only. Never used in production; key material is a public test vector.
+ * Purpose: Deterministic in-memory CosmosSignerPort for unit tests — a fixed local secp256k1 key so signatures can be cross-checked against cosmjs DirectSecp256k1Wallet.
+ * Scope: Test helper only. Does not run in production; key material is a public test vector, not a secret.
  * Invariants: Same key every run (privkey = sha256 of a fixed label); low-s signatures.
  * Side-effects: none
  * Links: packages/operator-wallet/src/port/cosmos-signer.port.ts

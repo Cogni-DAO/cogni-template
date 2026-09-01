@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-// SPDX-FileCopyrightText: 2026 Cogni-DAO
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
  * Module: `@cogni/operator-wallet/domain/cosmos-address`
- * Purpose: Pure Cosmos bech32 address derivation from a compressed secp256k1 public key
- *   (`bech32(prefix, ripemd160(sha256(pubkey)))` — the standard Cosmos-SDK scheme).
- * Scope: Address math only. No key material, no IO, no chain queries.
+ * Purpose: Pure Cosmos bech32 address derivation from a compressed secp256k1 public key (`bech32(prefix, ripemd160(sha256(pubkey)))` — the standard Cosmos-SDK scheme).
+ * Scope: Address math only. Does not hold key material, perform IO, or query chains.
  * Invariants: Derivation matches `@cosmjs/proto-signing` `DirectSecp256k1Wallet`
  *   for the same key (cross-checked in tests and on live akashnet-2 by task.5059).
  * Side-effects: none

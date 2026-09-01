@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-// SPDX-FileCopyrightText: 2026 Cogni-DAO
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
  * Module: `@cogni/operator-wallet/tests/cosmos-address`
- * Purpose: Unit tests for Cosmos bech32 address derivation — cross-checked against
- *   cosmjs DirectSecp256k1Wallet for the same key.
- * Scope: Tests deriveCosmosAddress() only. No IO, no chain access.
+ * Purpose: Unit tests for Cosmos bech32 address derivation — cross-checked against cosmjs DirectSecp256k1Wallet for the same key.
+ * Scope: Tests deriveCosmosAddress() only. Does not perform IO or touch a chain.
  * Invariants: Derivation must byte-match DirectSecp256k1Wallet for any prefix.
  * Side-effects: none
  * Links: packages/operator-wallet/src/domain/cosmos-address.ts

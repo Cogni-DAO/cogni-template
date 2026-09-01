@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-// SPDX-FileCopyrightText: 2026 Cogni-DAO
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
  * Module: `@cogni/operator-wallet/adapters/privy/cosmos-signer`
- * Purpose: Privy raw-sign Cosmos signer adapter — ships 32-byte digests to Privy's
- *   `raw_sign` REST endpoint; the wallet key never leaves Privy.
- * Scope: Implements CosmosSignerPort over Privy's REST API (no SDK dependency).
- *   Does not hold raw key material, load env, or manage process lifecycle.
+ * Purpose: Privy raw-sign Cosmos signer adapter — ships 32-byte digests to Privy's `raw_sign` REST endpoint; the wallet key never leaves Privy.
+ * Scope: Implements CosmosSignerPort over Privy's REST API. Does not use the Privy SDK, hold raw key material, load env, or manage process lifecycle.
  * Invariants:
  *   - KEY_NEVER_IN_APP — only digests leave the process; only signatures come back.
  *   - DIGEST_ONLY, LOW_S_SIGNATURES — see CosmosSignerPort.

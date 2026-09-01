@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-// SPDX-FileCopyrightText: 2026 Cogni-DAO
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
  * Module: `@cogni/operator-wallet/tests/secp256k1-signature`
- * Purpose: Unit tests for signature shape helpers — low-s normalization vectors,
- *   DER→r||s parsing, backend signature coercion, and pubkey hex parsing.
- * Scope: Pure byte-level transforms only. No key custody, no IO.
+ * Purpose: Unit tests for signature shape helpers — low-s normalization vectors, DER→r||s parsing, backend signature coercion, and pubkey hex parsing.
+ * Scope: Pure byte-level transforms only. Does not test key custody or perform IO.
  * Invariants: normalizeToLowS is idempotent; outputs are always 64 bytes.
  * Side-effects: none
  * Links: packages/operator-wallet/src/domain/secp256k1-signature.ts

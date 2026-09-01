@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-// SPDX-FileCopyrightText: 2026 Cogni-DAO
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
  * Module: `@cogni/operator-wallet/port/cosmos-signer`
- * Purpose: Cosmos signer port — narrow, typed interface for raw-digest secp256k1 signing
- *   used by Cosmos-SDK chains (SIGN_MODE_DIRECT signs sha256(SignDoc bytes)).
- * Scope: Defines the signer interface + domain error types. Does not implement custody
- *   logic, hold key material, or build transactions.
+ * Purpose: Cosmos signer port — narrow, typed interface for raw-digest secp256k1 signing used by Cosmos-SDK chains (SIGN_MODE_DIRECT signs sha256(SignDoc bytes)).
+ * Scope: Defines the signer interface + domain error types. Does not implement custody logic, hold key material, or build transactions.
  * Invariants:
  *   - KEY_NEVER_IN_APP — implementations never expose raw private key material.
  *   - DIGEST_ONLY — the only signable input is a 32-byte digest; no message/typed-data surface.

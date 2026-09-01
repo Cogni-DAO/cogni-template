@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-// SPDX-FileCopyrightText: 2026 Cogni-DAO
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
  * Module: `@cogni/operator-wallet/tests/direct-signer-bridge`
- * Purpose: Unit tests for the CosmosSignerPort → cosmjs OfflineDirectSigner bridge —
- *   digest routing, signature verification, and byte-equality with DirectSecp256k1Wallet.
- * Scope: Fake local signer only; no Privy, no chain access.
+ * Purpose: Unit tests for the CosmosSignerPort → cosmjs OfflineDirectSigner bridge — digest routing, signature verification, and byte-equality with DirectSecp256k1Wallet.
+ * Scope: Fake local signer only. Does not call Privy or touch a chain.
  * Invariants: Bridge signatures must verify against sha256(SignDoc bytes) and
  *   byte-match cosmjs's own wallet for the same key/doc (RFC6979 determinism).
  * Side-effects: none

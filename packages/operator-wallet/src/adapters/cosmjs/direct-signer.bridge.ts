@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-// SPDX-FileCopyrightText: 2026 Cogni-DAO
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
  * Module: `@cogni/operator-wallet/adapters/cosmjs/direct-signer.bridge`
- * Purpose: Bridge a CosmosSignerPort into a cosmjs `OfflineDirectSigner` so any
- *   Stargate/Akash client can sign SIGN_MODE_DIRECT transactions through the port.
- * Scope: Digest routing only — `signDirect` hashes the SignDoc bytes (sha256) and
- *   delegates to `port.signDigest`. Does not build transactions or broadcast.
+ * Purpose: Bridge a CosmosSignerPort into a cosmjs `OfflineDirectSigner` so any Stargate/Akash client can sign SIGN_MODE_DIRECT transactions through the port.
+ * Scope: Digest routing only — `signDirect` hashes the SignDoc bytes (sha256) and delegates to `port.signDigest`. Does not build transactions or broadcast.
  * Invariants:
  *   - KEY_NEVER_IN_APP — only the 32-byte digest reaches the port.
  *   - LOW_S_SIGNATURES — the port contract guarantees 64-byte low-s `r||s`,
  *     which is exactly the fixed-length signature cosmjs expects.
- * Side-effects: none directly (delegates IO to the injected port)
+ * Side-effects: none (delegates IO to the injected port)
  * Links: work items task.5059 (pipeline proven on live akashnet-2), task.5060
  * @public
  */

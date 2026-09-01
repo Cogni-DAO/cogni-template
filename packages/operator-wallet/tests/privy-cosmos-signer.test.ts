@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-// SPDX-FileCopyrightText: 2026 Cogni-DAO
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
  * Module: `@cogni/operator-wallet/tests/privy-cosmos-signer`
- * Purpose: Unit tests for the Privy raw-sign Cosmos adapter — request shape,
- *   signature coercion (fixed/DER/recovery-byte), pubkey caching, and error
- *   containment (no secret material or raw responses in thrown errors).
- * Scope: Injected fetchImpl only — no live Privy calls.
+ * Purpose: Unit tests for the Privy raw-sign Cosmos adapter — request shape, signature coercion (fixed/DER/recovery-byte), pubkey caching, and error containment.
+ * Scope: Injected fetchImpl only. Does not make live Privy calls.
  * Invariants: NO_SECRET_LEAKAGE — assertions prove credentials never leak into errors.
  * Side-effects: none
  * Links: packages/operator-wallet/src/adapters/privy/privy-cosmos-signer.adapter.ts

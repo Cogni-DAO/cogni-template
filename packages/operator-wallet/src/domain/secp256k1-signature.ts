@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-// SPDX-FileCopyrightText: 2026 Cogni-DAO
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
  * Module: `@cogni/operator-wallet/domain/secp256k1-signature`
- * Purpose: Pure secp256k1 signature/pubkey shape helpers for Cosmos signing —
- *   low-s normalization, DER→`r||s` parsing, and signature/pubkey byte coercion.
- * Scope: Byte-level transforms only. No key material, no IO, no chain logic.
+ * Purpose: Pure secp256k1 signature/pubkey shape helpers for Cosmos signing — low-s normalization, DER→`r||s` parsing, and signature/pubkey byte coercion.
+ * Scope: Byte-level transforms only. Does not hold key material, perform IO, or contain chain logic.
  * Invariants:
  *   - LOW_S_SIGNATURES — `normalizeToLowS` is idempotent and always returns s <= n/2.
  *   - Output signatures are exactly 64 bytes (`r||s`, 32B each).
