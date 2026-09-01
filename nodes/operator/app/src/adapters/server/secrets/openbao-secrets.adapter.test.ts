@@ -31,15 +31,15 @@ describe("OpenBaoSecretsAdapter", () => {
       }
       if (u.includes("/cogni/metadata/")) return jsonResponse({}, 404);
       // data write — KV v2 requires the `data/` infix in the URL.
-      expect(u).toBe(`${ADDR}/v1/cogni/data/candidate-a/poly`);
+      expect(u).toBe(`${ADDR}/v1/cogni/data/candidate-a/sample-node`);
       expect(init?.method).toBe("POST");
       return jsonResponse({ data: { version: 1 } });
     });
 
     const result = await makeAdapter(fetchImpl).writeSecret({
-      nodeSlug: "poly",
+      nodeSlug: "sample-node",
       env: "candidate-a",
-      key: "POLYGON_RPC_URL",
+      key: "EVM_RPC_URL",
       value: "https://rpc.example",
       op: "set",
     });
@@ -47,7 +47,7 @@ describe("OpenBaoSecretsAdapter", () => {
     expect(result).toEqual({
       written: true,
       version: 1,
-      path: "cogni/candidate-a/poly/POLYGON_RPC_URL",
+      path: "cogni/candidate-a/sample-node/EVM_RPC_URL",
     });
     // Login carried the projected SA token, not a caller credential.
     const loginCall = fetchImpl.mock.calls.find(([u]) =>
@@ -66,7 +66,7 @@ describe("OpenBaoSecretsAdapter", () => {
         return jsonResponse({ auth: { client_token: "s.client" } });
       }
       if (u.includes("/cogni/metadata/")) return jsonResponse({}, 200);
-      expect(u).toBe(`${ADDR}/v1/cogni/data/candidate-a/poly`);
+      expect(u).toBe(`${ADDR}/v1/cogni/data/candidate-a/sample-node`);
       expect(init?.method).toBe("PATCH");
       expect(init?.headers).toMatchObject({
         "content-type": "application/merge-patch+json",
@@ -75,7 +75,7 @@ describe("OpenBaoSecretsAdapter", () => {
     });
 
     const result = await makeAdapter(fetchImpl).writeSecret({
-      nodeSlug: "poly",
+      nodeSlug: "sample-node",
       env: "candidate-a",
       key: "POLYGON_RPC_URL",
       value: "https://rpc.example",
@@ -95,7 +95,7 @@ describe("OpenBaoSecretsAdapter", () => {
       return jsonResponse({ data: { version: 1 } });
     });
     await makeAdapter(fetchImpl).writeSecret({
-      nodeSlug: "poly",
+      nodeSlug: "sample-node",
       env: "candidate-a",
       key: "POLYGON_RPC_URL",
       value: "super-secret-value",
@@ -107,7 +107,7 @@ describe("OpenBaoSecretsAdapter", () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse({}, 403));
     await expect(
       makeAdapter(fetchImpl).writeSecret({
-        nodeSlug: "poly",
+        nodeSlug: "sample-node",
         env: "candidate-a",
         key: "POLYGON_RPC_URL",
         value: "x",
@@ -123,14 +123,14 @@ describe("OpenBaoSecretsAdapter", () => {
       if (u.endsWith("/auth/kubernetes/login")) {
         return jsonResponse({ auth: { client_token: "s.client" } });
       }
-      expect(u).toBe(`${ADDR}/v1/cogni/data/candidate-a/poly`);
+      expect(u).toBe(`${ADDR}/v1/cogni/data/candidate-a/sample-node`);
       return jsonResponse({
         data: { data: { AUTH_SECRET: "private-value", NON_STRING: 7 } },
       });
     });
     await expect(
       makeAdapter(fetchImpl).readNodeSecrets({
-        nodeSlug: "poly",
+        nodeSlug: "sample-node",
         env: "candidate-a",
       })
     ).resolves.toEqual({ AUTH_SECRET: "private-value" });
