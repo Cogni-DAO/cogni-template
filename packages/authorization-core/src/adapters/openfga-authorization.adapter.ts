@@ -86,7 +86,11 @@ export interface OpenFgaAuthorizationAdapterConfig {
    * and must not fail a human's one-and-only click.
    */
   readonly writeTimeoutMs?: number;
-  /** Retries for idempotent write/delete on a transient failure (default 2). */
+  /**
+   * Retries for write/delete on a DEFINITIVELY-TERMINATED transient failure (default 2).
+   * A timeout (our own abandon-not-cancel deadline) is never retried — it would race the
+   * in-flight write and manufacture a 409 (bug.5082).
+   */
   readonly writeMaxRetries?: number;
   /** Fixed backoff between write retries, ms (default 100 — matches OpenFGA SDK). */
   readonly writeRetryBackoffMs?: number;
@@ -111,11 +115,23 @@ const DEFAULT_TIMEOUT_MS = 1_500;
 // `authz_write_unavailable` after all three attempts crossed 1500ms; the identical
 // click succeeded seconds later on a warm connection. Same cold/warm split as the
 // identity broker in bug.5063.
-const DEFAULT_WRITE_TIMEOUT_MS = 5_000;
-// Writes (approve/deny/revoke) are deliberate, low-frequency, and idempotent
-// (onDuplicateWrites/onMissingDeletes: ignore) — safe to retry. Checks are hot-path
-// and stay fail-closed-fast (no retry). Default 2 retries ≈ OpenFGA SDK's 3-attempt
-// policy; 100ms backoff = its min_wait_in_ms.
+// Generous single-attempt deadline. A cold write pays connection-establish + a Postgres
+// round trip on OpenFGA's datastore (observed p99 5–10s on the cross-VM Compose hop); the
+// deadline must cover ONE cold attempt because a timed-out write is NOT retried (see below).
+// Prefer raising this / warming the connection over retrying — retry across our own timeout
+// races an un-cancelled in-flight write (bug.5082).
+const DEFAULT_WRITE_TIMEOUT_MS = 8_000;
+// Writes (approve/deny/revoke) retry a DEFINITIVELY-TERMINATED failure — a thrown transport
+// error (ECONNRESET/refused), a returned 5xx/429, or a returned HTTP 409 (OpenFGA's datastore
+// serialization conflict from two concurrent writes touching the same tuple) — where the prior
+// attempt is provably done and a retry cannot race it. The self-inflicted 409 the incident
+// produced (bug.5082, prod 2026-09-01) now heals on the clean retry: the racing writer has
+// committed, so `onDuplicateWrites: ignore` no-ops the retry to a 200. Retry recovers the
+// end-state; it never ASSUMES it (a 409 does not prove THIS op's intent won — assuming success
+// on a delete would fail OPEN on a revoke). Our own `withTimeout` firing is the ONE non-retryable
+// failure: `withTimeout` is a `Promise.race` that abandons — never cancels — the underlying
+// request, so retrying it is what issues the concurrent duplicate that MADE the 409. Checks stay
+// fail-closed-fast (no retry). Default 2 retries ≈ OpenFGA SDK's 3-attempt policy; 100ms backoff.
 const DEFAULT_WRITE_MAX_RETRIES = 2;
 const DEFAULT_WRITE_RETRY_BACKOFF_MS = 100;
 
@@ -310,7 +326,8 @@ const sleep = (ms: number): Promise<void> =>
 async function withRetry<T>(
   fn: () => Promise<T>,
   maxRetries: number,
-  backoffMs: number
+  backoffMs: number,
+  isRetryable: (error: unknown) => boolean = isTransientError
 ): Promise<T> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -318,11 +335,42 @@ async function withRetry<T>(
       return await fn();
     } catch (error) {
       lastError = error;
-      if (attempt === maxRetries || !isTransientError(error)) throw error;
+      if (attempt === maxRetries || !isRetryable(error)) throw error;
       await sleep(backoffMs);
     }
   }
   throw lastError;
+}
+
+/** HTTP status carried by an OpenFGA client error (`.statusCode`), else a hand-set `.status`. */
+function httpStatusOf(error: unknown): number | undefined {
+  if (error && typeof error === "object") {
+    const status =
+      (error as { statusCode?: unknown; status?: unknown }).statusCode ??
+      (error as { status?: unknown }).status;
+    if (typeof status === "number") return status;
+  }
+  return undefined;
+}
+
+/**
+ * Retryable ONLY when the prior attempt is provably FINISHED (a response was received or the
+ * call threw), so a retry cannot race a still-live request. Two cases and one exception:
+ *  - our own `OpenFgaTimeoutError` is NEVER retryable: `withTimeout` is a `Promise.race` that
+ *    abandons — never cancels — the in-flight request, so retrying it issues a concurrent
+ *    duplicate → HTTP 409 (bug.5082). Fail closed instead.
+ *  - HTTP 409 IS retryable: OpenFGA maps a datastore serialization conflict (two concurrent
+ *    writes touching the same tuple) to 409; the transaction rolled back and the response
+ *    returned, so re-running the single-tuple write is safe and idempotent. On retry the racing
+ *    writer has committed, so `onDuplicateWrites`/`onMissingDeletes: ignore` makes it a 200
+ *    no-op. This is OpenFGA's prescribed 409 recovery — retry, never assume the end-state (a
+ *    409 does NOT prove the tuple converged the way THIS op intended; assuming success on a
+ *    delete would fail OPEN on a revoke). Exhausted retries fail closed as `authz_write_unavailable`.
+ *  - everything else `isTransientError` already allows (thrown transport error, returned 5xx/429).
+ */
+function isRetryableWriteError(error: unknown): boolean {
+  if (error instanceof OpenFgaTimeoutError) return false;
+  return isTransientError(error) || httpStatusOf(error) === 409;
 }
 
 export class OpenFgaAuthorizationAdapter implements AuthorizationPort {
@@ -400,7 +448,8 @@ export class OpenFgaAuthorizationAdapter implements AuthorizationPort {
             "write"
           ),
         this.writeMaxRetries,
-        this.writeRetryBackoffMs
+        this.writeRetryBackoffMs,
+        isRetryableWriteError
       );
       return { decision: "success", code: "authz_write_success" };
     } catch (error) {
@@ -436,7 +485,8 @@ export class OpenFgaAuthorizationAdapter implements AuthorizationPort {
             "delete"
           ),
         this.writeMaxRetries,
-        this.writeRetryBackoffMs
+        this.writeRetryBackoffMs,
+        isRetryableWriteError
       );
       return { decision: "success", code: "authz_write_success" };
     } catch (error) {
