@@ -31,7 +31,8 @@ const repositorySchema = z
   .regex(
     /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/,
     "repository must be GitHub owner/name"
-  );
+  )
+  .transform((repository) => repository.toLowerCase());
 const digestImageSchema = z
   .string()
   .regex(
@@ -238,9 +239,10 @@ export function resolveNodeArtifactBundle(
       `[artifact-bundle] Source SHA mismatch: expected ${expected.sourceSha}, received ${bundle.source.sha}`
     );
   }
-  if (bundle.source.repository !== expected.repository) {
+  const expectedRepository = expected.repository.toLowerCase();
+  if (bundle.source.repository !== expectedRepository) {
     throw new Error(
-      `[artifact-bundle] Repository mismatch: expected ${expected.repository}, received ${bundle.source.repository}`
+      `[artifact-bundle] Repository mismatch: expected ${expectedRepository}, received ${bundle.source.repository}`
     );
   }
   const nodeId = extractNodeId(spec);

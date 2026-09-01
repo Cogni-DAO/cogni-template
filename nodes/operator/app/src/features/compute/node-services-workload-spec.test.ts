@@ -25,6 +25,8 @@ const spec = parseRepoSpec({
         port: 3200,
         visibility: "public",
         bindings: { WORKER_URL: "worker" },
+        secret_refs: [{ key: "APP_TOKEN" }],
+        resources: { cpu_units: 1, memory_mi: 2048, storage_mi: 4096 },
       },
       {
         name: "worker",
@@ -81,6 +83,7 @@ describe("buildNodeServicesWorkloadSpec", () => {
         },
       ],
       env: { WORKER_URL: "http://worker:9100" },
+      secretRefs: [{ key: "APP_TOKEN" }],
     });
     expect(workload.services[1]).toMatchObject({
       name: "worker",

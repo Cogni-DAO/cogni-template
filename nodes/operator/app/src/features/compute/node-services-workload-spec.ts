@@ -11,7 +11,7 @@
  * @internal
  */
 
-import type { ProvisionSpec } from "@cogni/ai-tools";
+import type { ProvisionServiceSpec, ProvisionSpec } from "@cogni/ai-tools";
 import type { ResolvedNodeArtifactBundle } from "@cogni/repo-spec";
 
 export interface NodeServicesWorkloadInput {
@@ -29,10 +29,20 @@ export interface LegacyCogniAppCompatibilityInput
   readonly publicUrl: string;
 }
 
+export interface NodeServicesProvisionServiceSpec extends ProvisionServiceSpec {
+  /** Value-free requirements resolved server-side before provider I/O. */
+  readonly secretRefs: readonly { readonly key: string }[];
+}
+
+export interface NodeServicesWorkloadSpec
+  extends Omit<ProvisionSpec, "services"> {
+  readonly services: readonly NodeServicesProvisionServiceSpec[];
+}
+
 /** Build one generic co-located workload from the validated complete bundle. */
 export function buildNodeServicesWorkloadSpec(
   input: NodeServicesWorkloadInput
-): ProvisionSpec {
+): NodeServicesWorkloadSpec {
   return {
     name: input.slug,
     services: input.bundle.services.map(({ service, image }) => {
@@ -55,6 +65,7 @@ export function buildNodeServicesWorkloadSpec(
       return {
         name: service.name,
         image,
+        secretRefs: service.secretRefs,
         // This generic layer accepts no caller-provided values. Every value is
         // deterministically derived from the Git service/topology declaration.
         env: {
@@ -90,7 +101,7 @@ export function buildNodeServicesWorkloadSpec(
  */
 export function buildLegacyCogniAppWorkloadSpec(
   input: LegacyCogniAppCompatibilityInput
-): ProvisionSpec {
+): NodeServicesWorkloadSpec {
   const workload = buildNodeServicesWorkloadSpec(input);
   const app = workload.services.find((service) => service.name === "app");
   if (!app || app.expose?.[0]?.global !== true) {
