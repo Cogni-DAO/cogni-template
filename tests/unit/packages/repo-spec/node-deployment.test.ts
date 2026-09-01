@@ -245,6 +245,25 @@ describe("node deployment repo-spec", () => {
     ).toThrow(/public service must declare readiness_probe/);
   });
 
+  it("rejects an ignored private readiness probe in v0", () => {
+    expect(() =>
+      buildTestRepoSpec({
+        deployment: {
+          services: [
+            APP,
+            {
+              ...APP,
+              name: "worker",
+              artifact: { name: "worker" },
+              visibility: "private",
+              readiness_probe: { http_get: { path: "/livez" } },
+            },
+          ],
+        },
+      })
+    ).toThrow(/public HTTP readiness only in v0/);
+  });
+
   it.each([
     "health",
     "https://other.example/health",
@@ -340,12 +359,16 @@ describe("node deployment repo-spec", () => {
   });
 
   it("does not infer statefulness from a generic service name", () => {
+    const { readiness_probe: _publicReadiness, ...privateService } = APP;
     expect(() =>
       parseRepoSpec({
         node_id: "00000000-0000-4000-8000-000000000001",
         governance: {},
         deployment: {
-          services: [APP, { ...APP, name: "redis", visibility: "private" }],
+          services: [
+            APP,
+            { ...privateService, name: "redis", visibility: "private" },
+          ],
         },
       })
     ).not.toThrow();
