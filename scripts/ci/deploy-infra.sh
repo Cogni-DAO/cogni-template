@@ -738,7 +738,10 @@ mint_db_reader_token() {
 }
 
 openbao_get_field() {
-  local svc="$1" key="$2" tok val attempt
+  # NOTE: tok/val MUST be initialized — the whole remote script runs under `set -u`,
+  # so if every mint attempt fails (the `continue` path never assigns val) the final
+  # `printf "$val"` would abort with `val: unbound variable` (bug.5081 follow-up).
+  local svc="$1" key="$2" tok="" val="" attempt
   # Retry with a generous timeout. Under deploy-time VM load a single `kubectl exec`
   # into openbao can exceed a tight timeout; the old `timeout 10 ... 2>/dev/null || true`
   # then silently yielded an EMPTY value, tripping the downstream `[[ -n ]]` fatal
