@@ -67,7 +67,6 @@ function isRetryableStatus(status: number): boolean {
   return RETRYABLE_TRANSIENT_4XX.has(status);
 }
 
-
 function authHeaders(token: string): HeadersInit {
   return {
     "Content-Type": "application/json",
