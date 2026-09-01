@@ -139,7 +139,7 @@ const LEGACY_DEFAULT_DEPLOYMENT: NodeDeploymentSpec = {
       bindings: {},
       secret_refs: [],
       bind_host: "0.0.0.0",
-      resources: { cpu_units: 0.5, memory_mi: 1024, storage_mi: 2048 },
+      resources: { cpu_units: 2, memory_mi: 2048, storage_mi: 4096 },
     },
   ],
 };
