@@ -4,8 +4,8 @@
 /**
  * Module: `@adapters/server/ingestion/http-epochs-read`
  * Purpose: HTTP READ of a FOREIGN owning node's ledger epochs from the operator gateway
- *   (`GET {nodeUrl}/api/internal/attribution/epochs?nodeId=…`). The read twin of
- *   `http-receipt-delivery` — mirrors its shape exactly (nodeId → nodeUrl lookup, Bearer
+ *   (`GET {nodeUrl}/api/internal/attribution/epochs`). The read twin of
+ *   `http-receipt-delivery` — mirrors its shape exactly (slug → nodeUrl lookup, Bearer
  *   SCHEDULER_API_TOKEN, retryable-vs-permanent status classification, structured error logging).
  * Scope: HTTP read client for FOREIGN (remote) owning nodes; does not touch a DB. The operator's
  *   own-node epochs read stays a local store read in the gateway route (OPERATOR_AGGREGATES_ARE_DERIVED:
@@ -13,7 +13,8 @@
  *   internal HTTP API).
  * Invariants:
  *   - NO_DB_IN_READ: only fetch(); the owning node reads its OWN ledger.
- *   - nodeId is resolved against COGNI_NODE_ENDPOINTS at call time; unknown → throw (fail fast).
+ *   - NODE_RESOLUTION_IS_A_DB_READ: the in-cluster URL is the pure `internalNodeAppUrl(slug)`
+ *     convention, never a static endpoint map (the map was removed from the operator app).
  *   - Bearer SCHEDULER_API_TOKEN attached to every request (MVP dispatch identity, same as receipt
  *     delivery + graph dispatch; the per-node principal is the hardening — task.5033).
  *   - 4xx (except transient 404/408/409/429) → permanent; 5xx/network → retryable. Throws on non-2xx.
@@ -29,12 +30,11 @@ import {
   type InternalListEpochsOutput,
   internalListEpochsOperation,
 } from "@cogni/node-contracts";
+import { internalNodeAppUrl } from "@/shared/node-registry/resolve";
 import type { EpochsRead } from "@/ports";
 import type { Logger } from "@/shared/observability";
 
 export interface HttpEpochsReadDeps {
-  /** nodeId → base URL, parsed from COGNI_NODE_ENDPOINTS. */
-  readonly nodeEndpoints: ReadonlyMap<string, string>;
   /** Bearer token for the internal dispatch identity (SCHEDULER_API_TOKEN). */
   readonly schedulerApiToken: string;
   readonly logger: Logger;
@@ -67,20 +67,6 @@ function isRetryableStatus(status: number): boolean {
   return RETRYABLE_TRANSIENT_4XX.has(status);
 }
 
-function resolveNodeUrl(
-  nodeEndpoints: ReadonlyMap<string, string>,
-  nodeId: string
-): string {
-  const url = nodeEndpoints.get(nodeId);
-  if (!url) {
-    throw new EpochsReadError(
-      `Unknown nodeId "${nodeId}" — not in COGNI_NODE_ENDPOINTS`,
-      0,
-      false
-    );
-  }
-  return url.replace(/\/$/, "");
-}
 
 function authHeaders(token: string): HeadersInit {
   return {
@@ -98,16 +84,18 @@ async function readErrorText(response: Response): Promise<string> {
 }
 
 export function createHttpEpochsRead(deps: HttpEpochsReadDeps): EpochsRead {
-  const { nodeEndpoints, schedulerApiToken, logger } = deps;
+  const { schedulerApiToken, logger } = deps;
 
   return {
     async listEpochsForForeignNode(
-      nodeId,
+      slug,
       page
     ): Promise<InternalListEpochsOutput> {
-      const base = resolveNodeUrl(nodeEndpoints, nodeId);
+      // NODE_RESOLUTION_IS_A_DB_READ — the in-cluster URL is the pure
+      // `http://<slug>-node-app:3000` convention, never a static endpoint map.
+      const base = internalNodeAppUrl(slug);
       const query = new URLSearchParams({
-        nodeId,
+        slug,
         limit: String(page.limit),
         offset: String(page.offset),
       });
@@ -124,7 +112,7 @@ export function createHttpEpochsRead(deps: HttpEpochsReadDeps): EpochsRead {
         logger.error(
           {
             event: "attribution.epochs_read_failed",
-            nodeId,
+            slug,
             url,
             err: String(err),
             retryable: true,
@@ -144,7 +132,7 @@ export function createHttpEpochsRead(deps: HttpEpochsReadDeps): EpochsRead {
         logger.error(
           {
             event: "attribution.epochs_read_failed",
-            nodeId,
+            slug,
             url,
             status: response.status,
             errorText,

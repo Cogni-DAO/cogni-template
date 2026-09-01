@@ -84,7 +84,7 @@ export const GET = wrapRouteHandlerWithLogging<{
             limit,
             offset,
           })
-        : await container.epochsRead.listEpochsForForeignNode(node.nodeId, {
+        : await container.epochsRead.listEpochsForForeignNode(node.slug, {
             limit,
             offset,
           });

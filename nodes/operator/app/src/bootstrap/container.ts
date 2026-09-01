@@ -983,7 +983,6 @@ function createContainer(): Container {
   // (bug.5008). Same resolution + auth as receipt delivery; the operator holds no cross-node DB
   // creds, so it derives foreign epoch aggregates over the node's internal HTTP API.
   const epochsRead = createHttpEpochsRead({
-    nodeEndpoints: parseNodeEndpoints(env.COGNI_NODE_ENDPOINTS),
     schedulerApiToken: env.SCHEDULER_API_TOKEN,
     logger: log.child({ component: "http-epochs-read" }),
   });

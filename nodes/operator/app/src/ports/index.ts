@@ -220,7 +220,6 @@ export {
   type PaymentRailMisconfigurationCode,
   PaymentRailMisconfiguredPortError,
 } from "./payment-rail-guard.port";
-export type { EpochsRead } from "./epochs-read.port";
 export type {
   ReceiptDelivery,
   ReceiptDeliveryTarget,

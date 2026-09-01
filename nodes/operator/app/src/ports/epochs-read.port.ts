@@ -22,10 +22,11 @@ export interface EpochsRead {
   /**
    * GET the given node's epochs from its `/api/internal/attribution/epochs`. Resolves with the
    * node's own epoch page on 2xx; throws (classified retryable-vs-permanent) otherwise, or if
-   * `nodeId` is not present in COGNI_NODE_ENDPOINTS.
+   * the node's app is unreachable. The in-cluster URL is derived from `slug` by
+   * convention (`internalNodeAppUrl`), mirroring the receipt-delivery write twin.
    */
   listEpochsForForeignNode(
-    nodeId: string,
+    slug: string,
     page: { limit: number; offset: number }
   ): Promise<InternalListEpochsOutput>;
 }
