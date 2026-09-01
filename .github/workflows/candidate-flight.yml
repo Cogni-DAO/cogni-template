@@ -363,13 +363,17 @@ jobs:
           set -euo pipefail
           for required in \
             "app-src/infra/k8s/overlays/candidate-a/${NODE}" \
-            "app-src/infra/catalog/${NODE}.yaml" \
-            "app-src/nodes/${NODE}/k8s/external-secrets/candidate-a"; do
+            "app-src/infra/catalog/${NODE}.yaml"; do
             if [ ! -e "$required" ]; then
               echo "::error::Missing deploy-shape input at head_sha: $required"
               exit 1
             fi
           done
+          if [ "$DEPLOYMENT_PROVIDER" = "k3s" ] && \
+             [ ! -d "app-src/nodes/${NODE}/k8s/external-secrets/candidate-a" ]; then
+            echo "::error::Missing k3s external-secret input for ${NODE}"
+            exit 1
+          fi
 
           git clone "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" deploy-branch
           cd deploy-branch
@@ -390,10 +394,12 @@ jobs:
             "infra/k8s/overlays/candidate-a/${NODE}/"
           mkdir -p infra/catalog
           cp "../app-src/infra/catalog/${NODE}.yaml" "infra/catalog/${NODE}.yaml"
-          mkdir -p "nodes/${NODE}/k8s/external-secrets/candidate-a"
-          rsync -a --delete \
-            "../app-src/nodes/${NODE}/k8s/external-secrets/candidate-a/" \
-            "nodes/${NODE}/k8s/external-secrets/candidate-a/"
+          if [ "$DEPLOYMENT_PROVIDER" = "k3s" ]; then
+            mkdir -p "nodes/${NODE}/k8s/external-secrets/candidate-a"
+            rsync -a --delete \
+              "../app-src/nodes/${NODE}/k8s/external-secrets/candidate-a/" \
+              "nodes/${NODE}/k8s/external-secrets/candidate-a/"
+          fi
 
           git add -A
           if git diff --cached --quiet; then
