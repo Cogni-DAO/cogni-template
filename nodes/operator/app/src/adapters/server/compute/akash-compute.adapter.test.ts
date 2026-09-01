@@ -120,7 +120,7 @@ describe("AkashComputeAdapter", () => {
           data: { sdl: string; deposit: number };
         };
         expect(body.data.sdl).toContain('version: "2.0"');
-        expect(body.data.deposit).toBe(5);
+        expect(body.data.deposit).toBe(0.5);
         return jsonResponse({
           data: { dseq: "123456", manifest: [{ name: "dcloud" }] },
         });

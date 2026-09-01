@@ -138,7 +138,10 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     this.fetchImpl = config.fetchImpl ?? fetch;
     this.sleep = config.sleepImpl ?? defaultSleep;
     this.writeTimeoutMs = config.writeTimeoutMs ?? 30_000;
-    this.deployDepositUsd = config.deployDepositUsd ?? 5;
+    // Default to the Console MINIMUM: idle escrow stays small and trial/thin wallets can
+    // deploy (a $5 default 402'd on prod against the $0.50 trial — task.5044). Escrow is a
+    // refundable float, not the spend cap; top-ups/auto-reload govern lease lifetime.
+    this.deployDepositUsd = config.deployDepositUsd ?? 0.5;
     this.bidTimeoutMs = config.bidTimeoutMs ?? 90_000;
     this.bidPollIntervalMs = config.bidPollIntervalMs ?? 3_000;
     // uakt ceiling per block per service; managed wallets escrow USD but bid in chain denom.
