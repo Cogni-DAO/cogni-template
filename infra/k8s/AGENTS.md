@@ -52,9 +52,7 @@ k8s/
 ├── base/                    # Kustomize bases
 │   ├── node-app/            # Shared base for operator, poly, resy
 │   ├── openfga-external/    # Operator opt-in bridge to Compose OpenFGA
-│   ├── scheduler-worker/    # Temporal worker service
-│   └── compute-workload-controller/ # External workload reconciler + namespace RBAC
-├── platform/compute-workload/ # Provider-neutral CRD applied by a deploy-branch child app
+│   └── scheduler-worker/    # Temporal worker service
 ├── overlays/                # Environment-specific patches
 │   ├── staging/{app}/       # Per-app staging overlays (image digests, NodePorts)
 │   └── production/{app}/    # Per-app production overlays
@@ -71,7 +69,6 @@ k8s/
 - **ROLLBACK_BY_REVERT**: Git revert restores previous digest
 - **NO_SECRETS_IN_MANIFESTS**: All secrets SOPS-encrypted at rest
 - **CATALOG_DRIVEN**: ApplicationSet reads `infra/catalog/*.yaml`, not hardcoded lists
-- **EXTERNAL_STATUS_ONLY**: ComputeWorkload spec remains Git/Argo-owned; its controller writes status/finalizers only
 
 ## Change Protocol
 
