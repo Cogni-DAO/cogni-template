@@ -26,8 +26,9 @@ const BOOTABLE_APP_ENV = {
   AUTH_SECRET: "auth-secret",
   DATABASE_URL: "postgresql://app@candidate.vm.example/app",
   DATABASE_SERVICE_URL: "postgresql://service@candidate.vm.example/app",
-  DOLTGRES_URL: "postgresql://app@candidate.vm.example/knowledge",
   LITELLM_MASTER_KEY: "sk-virtual",
+  SCHEDULER_API_TOKEN: "scheduler-token",
+  BILLING_INGEST_TOKEN: "billing-token",
 };
 
 function workload(overrides: Partial<ComputeWorkload> = {}): ComputeWorkload {
@@ -69,8 +70,9 @@ function workload(overrides: Partial<ComputeWorkload> = {}): ComputeWorkload {
               { key: "AUTH_SECRET" },
               { key: "DATABASE_URL" },
               { key: "DATABASE_SERVICE_URL" },
-              { key: "DOLTGRES_URL" },
               { key: "LITELLM_VIRTUAL_KEY" },
+              { key: "SCHEDULER_API_TOKEN" },
+              { key: "BILLING_INGEST_TOKEN" },
             ],
             cpuUnits: 0.5,
             memoryMi: 512,
@@ -326,6 +328,12 @@ describe("reconcileComputeWorkload", () => {
       expectedSourceSha: SHA,
     });
     expect(port.create).toHaveBeenCalledTimes(1);
+    const env = port.create.mock.calls[0]?.[0].spec.services[0]?.env;
+    expect(env).toMatchObject({
+      SCHEDULER_API_TOKEN: "scheduler-token",
+      BILLING_INGEST_TOKEN: "billing-token",
+    });
+    expect(env).not.toHaveProperty("DOLTGRES_URL");
   });
 
   it("aborts before provider IO when the resourceVersion CAS loses", async () => {
@@ -493,6 +501,25 @@ describe("reconcileComputeWorkload", () => {
     expect(state.current.status?.failure?.reason).toBe("SecretPolicyRejected");
   });
 
+  it("fails closed when a required legacy app secret is missing", async () => {
+    const state = new MemoryState(workload());
+    const port = lifecycle();
+    await run(state, port, {
+      secretResolver: {
+        resolve: vi.fn(async () => {
+          const { BILLING_INGEST_TOKEN: _missing, ...incomplete } =
+            BOOTABLE_APP_ENV;
+          return incomplete;
+        }),
+      },
+    });
+    expect(port.create).not.toHaveBeenCalled();
+    expect(state.wallet).toBeUndefined();
+    expect(state.current.status?.failure?.reason).toBe(
+      "SecretReferenceMissing"
+    );
+  });
+
   it("updates the known resource in place for a new generation", async () => {
     const state = new MemoryState(
       workload({
@@ -596,7 +623,15 @@ describe("reconcileComputeWorkload", () => {
               {
                 ...appService,
                 bindings: { ECHO_SIDECAR_URL: "echo-sidecar" },
-                secretRefs: [{ key: "AUTH_SECRET" }],
+                secretRefs: [
+                  { key: "AUTH_SECRET" },
+                  { key: "DATABASE_URL" },
+                  { key: "DATABASE_SERVICE_URL" },
+                  { key: "DOLTGRES_URL" },
+                  { key: "LITELLM_VIRTUAL_KEY" },
+                  { key: "SCHEDULER_API_TOKEN" },
+                  { key: "BILLING_INGEST_TOKEN" },
+                ],
               },
               {
                 name: "echo-sidecar",
@@ -625,6 +660,8 @@ describe("reconcileComputeWorkload", () => {
                 "postgresql://service@candidate.vm.example/app",
               DOLTGRES_URL: "postgresql://app@candidate.vm.example/knowledge",
               LITELLM_MASTER_KEY: "sk-virtual",
+              SCHEDULER_API_TOKEN: "scheduler-token",
+              BILLING_INGEST_TOKEN: "billing-token",
             }
           : {}
       ),
@@ -635,6 +672,7 @@ describe("reconcileComputeWorkload", () => {
       HOST: "0.0.0.0",
       ECHO_SIDECAR_URL: "http://echo-sidecar:9100",
       AUTH_SECRET: secretValue,
+      DOLTGRES_URL: "postgresql://app@candidate.vm.example/knowledge",
       NODE_NAME: "sample-node",
       COGNI_REPO_PATH: "/app",
       NEXTAUTH_URL: "https://sample-node-test.cognidao.org",
