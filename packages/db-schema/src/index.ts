@@ -16,6 +16,7 @@ export * from "./ai-threads";
 export * from "./attribution";
 export * from "./auth";
 export * from "./billing";
+export * from "./compute";
 export * from "./connections";
 export * from "./identity";
 // poly-copy-trade relocated to nodes/poly/app/src/shared/db/copy-trade.ts (task.0322)

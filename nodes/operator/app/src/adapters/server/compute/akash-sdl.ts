@@ -28,6 +28,12 @@ export interface AkashSdlOptions {
   readonly pricingDenom: string;
   /** MAX price per block per service, in `pricingDenom` micro-units (a ceiling — providers bid below). */
   readonly pricingAmount: number;
+  /**
+   * Audit-anchor accounts for `placement.signedBy.allOf` — only providers whose attributes
+   * every listed auditor signed may bid (on-chain audited-only screening; task.5051).
+   * Empty/omitted → open placement (no anchor).
+   */
+  readonly auditors?: readonly string[];
 }
 
 const PLACEMENT = "dcloud";
@@ -90,7 +96,14 @@ export function buildAkashSdl(
     services,
     profiles: {
       compute: computeProfiles,
-      placement: { [PLACEMENT]: { pricing } },
+      placement: {
+        [PLACEMENT]: {
+          ...(opts.auditors && opts.auditors.length > 0
+            ? { signedBy: { allOf: [...opts.auditors] } }
+            : {}),
+          pricing,
+        },
+      },
     },
     deployment,
   });
