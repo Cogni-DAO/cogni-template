@@ -296,9 +296,9 @@ export const nodeServiceResourcesSchema = z
   .object({
     // Broad sanity bounds prevent malformed requests; environment/provider
     // admission policy owns practical quotas and may be much smaller.
-    cpu_units: z.number().min(0.1).max(64).default(0.5),
-    memory_mi: z.number().int().min(128).max(262144).default(1024),
-    storage_mi: z.number().int().min(128).max(1048576).default(2048),
+    cpu_units: z.number().min(0.1).max(64),
+    memory_mi: z.number().int().min(128).max(262144),
+    storage_mi: z.number().int().min(128).max(1048576),
   })
   .strict();
 
