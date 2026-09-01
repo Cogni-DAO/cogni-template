@@ -31,6 +31,7 @@ function multiServiceSpec() {
           artifact: { name: "app" },
           port: 3200,
           visibility: "public",
+          resources: { cpu_units: 1, memory_mi: 2048, storage_mi: 4096 },
         },
         {
           name: "worker",
@@ -40,6 +41,7 @@ function multiServiceSpec() {
           },
           port: 9100,
           visibility: "private",
+          resources: { cpu_units: 0.5, memory_mi: 1024, storage_mi: 2048 },
         },
       ],
     },
@@ -95,6 +97,7 @@ describe("node artifact bundle", () => {
       ["app", "app", APP_IMAGE],
       ["worker", "worker", WORKER_IMAGE],
     ]);
+    expect(resolved.services[0]?.service.secretRefs).toEqual([]);
   });
 
   it("builds one artifact once and maps it to multiple services", () => {
@@ -106,12 +109,14 @@ describe("node artifact bundle", () => {
             artifact: { name: "app" },
             port: 3200,
             visibility: "public",
+            resources: { cpu_units: 1, memory_mi: 2048, storage_mi: 4096 },
           },
           {
             name: "worker",
             artifact: { name: "app" },
             port: 9100,
             visibility: "private",
+            resources: { cpu_units: 0.5, memory_mi: 1024, storage_mi: 2048 },
           },
         ],
       },
@@ -160,6 +165,25 @@ describe("node artifact bundle", () => {
       artifacts: [{ name: "app", image: APP_IMAGE }],
       services: [{ name: "app", artifact: "app" }],
     });
+  });
+
+  it("canonicalizes GitHub repository identity case", () => {
+    const bundle = buildNodeArtifactBundle({
+      spec: multiServiceSpec(),
+      sourceSha: SOURCE_SHA,
+      repository: "Example/Node",
+      artifacts: [
+        { artifact: "app", sourceSha: SOURCE_SHA, image: APP_IMAGE },
+        { artifact: "worker", sourceSha: SOURCE_SHA, image: WORKER_IMAGE },
+      ],
+    });
+    expect(bundle.source.repository).toBe("example/node");
+    expect(() =>
+      resolveNodeArtifactBundle(multiServiceSpec(), bundle, {
+        sourceSha: SOURCE_SHA,
+        repository: "EXAMPLE/NODE",
+      })
+    ).not.toThrow();
   });
 
   it.each([

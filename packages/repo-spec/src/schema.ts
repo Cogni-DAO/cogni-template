@@ -244,6 +244,21 @@ const serviceNameSchema = z
     "service and artifact names must be DNS-safe lowercase tokens (max 63 chars)"
   );
 
+const serviceEnvKeySchema = z
+  .string()
+  .regex(
+    /^[A-Z][A-Z0-9_]{0,63}$/,
+    "service environment keys must be uppercase names"
+  );
+
+export const nodeServiceSecretRefSchema = z
+  .object({ key: serviceEnvKeySchema })
+  .strict();
+
+export type NodeServiceSecretRefSpec = z.infer<
+  typeof nodeServiceSecretRefSchema
+>;
+
 const relativeBuildPathSchema = z
   .string()
   .min(1)
@@ -313,21 +328,23 @@ export const nodeServiceSpecSchema = z
      * cannot carry arbitrary URLs or secrets.
      */
     bindings: z
-      .record(
-        z
-          .string()
-          .regex(
-            /^[A-Z][A-Z0-9_]{0,63}$/,
-            "binding keys must be uppercase environment variable names"
-          ),
-        serviceNameSchema
-      )
+      .record(serviceEnvKeySchema, serviceNameSchema)
       .refine((bindings) => Object.keys(bindings).length <= 16, {
         message: "A service may declare at most 16 sibling bindings",
       })
       .default({}),
+    /** Value-free logical secret needs; scope is derived outside Git. */
+    secret_refs: z
+      .array(nodeServiceSecretRefSchema)
+      .max(32)
+      .refine(
+        (refs) => new Set(refs.map((ref) => ref.key)).size === refs.length,
+        "secret_refs keys must be unique"
+      )
+      .default([]),
     bind_host: z.literal("0.0.0.0").default("0.0.0.0"),
-    resources: nodeServiceResourcesSchema.default({}),
+    /** Explicit for every declared service; environment policy owns recommended sizes. */
+    resources: nodeServiceResourcesSchema,
   })
   .strict();
 
@@ -370,6 +387,17 @@ export const nodeDeploymentSchema = z
         });
       } else {
         artifactsByName.set(service.artifact.name, service.artifact);
+      }
+      const bindingKeys = new Set(Object.keys(service.bindings));
+      const conflictingSecret = service.secret_refs.find((ref) =>
+        bindingKeys.has(ref.key)
+      );
+      if (conflictingSecret) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["services", index, "secret_refs"],
+          message: `${conflictingSecret.key} cannot be both a sibling binding and a secret ref`,
+        });
       }
     });
     if (

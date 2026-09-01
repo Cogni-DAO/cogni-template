@@ -114,6 +114,7 @@ export interface NodeServiceConfig {
   readonly port: number;
   readonly visibility: "public" | "private";
   readonly bindings: Readonly<Record<string, string>>;
+  readonly secretRefs: readonly { readonly key: string }[];
   readonly bindHost: "0.0.0.0";
   readonly internalUrl: string;
   readonly resources: {
@@ -136,6 +137,7 @@ const LEGACY_DEFAULT_DEPLOYMENT: NodeDeploymentSpec = {
       port: 3200,
       visibility: "public",
       bindings: {},
+      secret_refs: [],
       bind_host: "0.0.0.0",
       resources: { cpu_units: 0.5, memory_mi: 1024, storage_mi: 2048 },
     },
@@ -182,6 +184,7 @@ export function extractNodeServices(
     port: service.port,
     visibility: service.visibility,
     bindings: service.bindings,
+    secretRefs: service.secret_refs,
     bindHost: service.bind_host,
     internalUrl: `http://${service.name}:${service.port}`,
     resources: {
