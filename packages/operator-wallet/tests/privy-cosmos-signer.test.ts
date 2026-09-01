@@ -117,6 +117,20 @@ describe("PrivyCosmosSigner.getPublicKey", () => {
     const signer = new PrivyCosmosSigner(makeConfig({ fetchImpl }));
     await expect(signer.getPublicKey()).rejects.toThrow(SignatureFormatError);
   });
+
+  it("re-fetches after a failed pubkey fetch (cache resets on failure)", async () => {
+    const fake = await FakeCosmosSigner.create();
+    const pubkeyHex = toHex(await fake.getPublicKey());
+    const { fetchImpl, calls } = fakeFetch([
+      { status: 500, json: { error: "transient" } },
+      { json: { id: WALLET_ID, public_key: pubkeyHex } },
+    ]);
+    const signer = new PrivyCosmosSigner(makeConfig({ fetchImpl }));
+
+    await expect(signer.getPublicKey()).rejects.toThrow(SignerRequestError);
+    expect(toHex(await signer.getPublicKey())).toBe(pubkeyHex);
+    expect(calls).toHaveLength(2);
+  });
 });
 
 describe("PrivyCosmosSigner.signDigest", () => {
@@ -142,6 +156,9 @@ describe("PrivyCosmosSigner.signDigest", () => {
       params: { hash: `0x${toHex(DIGEST)}` },
     });
 
+    // No authorization signature unless the hook is configured.
+    expect(calls[0]?.headers["privy-authorization-signature"]).toBeUndefined();
+
     // Returned signature verifies against the digest + wallet pubkey.
     const ok = await Secp256k1.verifySignature(
       Secp256k1Signature.fromFixedLength(result),
@@ -149,6 +166,35 @@ describe("PrivyCosmosSigner.signDigest", () => {
       await fake.getPublicKey()
     );
     expect(ok).toBe(true);
+  });
+
+  it("attaches privy-authorization-signature when the hook is provided", async () => {
+    const fake = await FakeCosmosSigner.create();
+    const signature = await fake.signDigest(DIGEST);
+    const { fetchImpl, calls } = fakeFetch([
+      { json: { data: { signature: `0x${toHex(signature)}` } } },
+    ]);
+    const seen: Array<{ url: string; body: string }> = [];
+    const signer = new PrivyCosmosSigner(
+      makeConfig({
+        fetchImpl,
+        publicKeyHex: toHex(await fake.getPublicKey()),
+        getAuthorizationSignature: async (input) => {
+          seen.push(input);
+          return "test-authorization-signature";
+        },
+      })
+    );
+
+    await signer.signDigest(DIGEST);
+    expect(calls[0]?.headers["privy-authorization-signature"]).toBe(
+      "test-authorization-signature"
+    );
+    expect(seen).toHaveLength(1);
+    expect(seen[0]?.url).toBe(
+      `https://api.privy.io/v1/wallets/${WALLET_ID}/raw_sign`
+    );
+    expect(seen[0]?.body).toBe(calls[0]?.body);
   });
 
   it("handles DER-encoded and 65-byte (recovery byte) response signatures", async () => {

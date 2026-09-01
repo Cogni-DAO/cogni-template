@@ -62,13 +62,17 @@ export function normalizeToLowS(sig64: Uint8Array): Uint8Array {
  */
 export function derToFixed64(der: Uint8Array): Uint8Array {
   if (der[0] !== 0x30) throw new SignatureFormatError("not a DER sequence");
-  let offset = 2; // 0x30, seq-len (assume short form; sigs are < 128 bytes)
+  // Short-form sequence length must cover exactly the rest of the input.
+  if (der[1] !== der.length - 2) {
+    throw new SignatureFormatError("DER sequence length mismatch");
+  }
+  let offset = 2; // 0x30, seq-len (short form; sigs are < 128 bytes)
   const readInt = (): Uint8Array => {
     if (der[offset] !== 0x02) {
       throw new SignatureFormatError("expected DER integer");
     }
     const len = der[offset + 1];
-    if (len === undefined) {
+    if (len === undefined || offset + 2 + len > der.length) {
       throw new SignatureFormatError("truncated DER integer");
     }
     let bytes = der.slice(offset + 2, offset + 2 + len);
@@ -83,6 +87,9 @@ export function derToFixed64(der: Uint8Array): Uint8Array {
   };
   const r = readInt();
   const s = readInt();
+  if (offset !== der.length) {
+    throw new SignatureFormatError("trailing bytes after DER signature");
+  }
   const out = new Uint8Array(64);
   out.set(r, 0);
   out.set(s, 32);
@@ -98,7 +105,9 @@ export function derToFixed64(der: Uint8Array): Uint8Array {
  */
 export function toFixed64LowS(signature: Uint8Array): Uint8Array {
   let sig = signature;
-  if (sig[0] === 0x30 && sig.length !== 64 && sig.length !== 65) {
+  // DER dispatch requires BOTH the sequence tag and a consistent sequence
+  // length, so a fixed r||s that merely starts with 0x30 is never misparsed.
+  if (sig[0] === 0x30 && sig[1] === sig.length - 2) {
     sig = derToFixed64(sig);
   }
   if (sig.length === 65) sig = sig.slice(0, 64); // drop recovery byte if present

@@ -106,6 +106,31 @@ describe("derToFixed64", () => {
       "not a DER sequence"
     );
   });
+
+  it("rejects truncated DER input", () => {
+    const der = derEncode(0x1234_5678n, 0x0abc_def0n);
+
+    // Chopped last byte: outer sequence length no longer matches.
+    expect(() => derToFixed64(der.slice(0, der.length - 1))).toThrow(
+      "DER sequence length mismatch"
+    );
+
+    // Consistent outer length but the s integer claims more bytes than exist:
+    // 30 06 | 02 01 05 | 02 02 07  (s says 2 bytes, only 1 present)
+    const truncatedInt = new Uint8Array([
+      0x30, 0x06, 0x02, 0x01, 0x05, 0x02, 0x02, 0x07,
+    ]);
+    expect(() => derToFixed64(truncatedInt)).toThrow("truncated DER integer");
+
+    // Trailing garbage after s with a bumped outer length.
+    const trailing = new Uint8Array(der.length + 1);
+    trailing.set(der, 0);
+    trailing[der.length] = 0x00;
+    trailing[1] = (der[1] ?? 0) + 1;
+    expect(() => derToFixed64(trailing)).toThrow(
+      "trailing bytes after DER signature"
+    );
+  });
 });
 
 describe("toFixed64LowS", () => {

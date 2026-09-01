@@ -10,12 +10,16 @@
  *   - DIGEST_ONLY, LOW_S_SIGNATURES — see CosmosSignerPort.
  *   - NO_SECRET_LEAKAGE — thrown errors are built from status codes and static
  *     labels; credentials and raw response bodies never appear in errors or logs.
+ * Notes: A wallet protected by a Privy authorization key REQUIRES the
+ *   `getAuthorizationSignature` hook (sent as `privy-authorization-signature`,
+ *   mirroring PRIVY_SIGNED_REQUESTS in the EVM adapter); an unprotected wallet
+ *   can sign with app-id + secret alone.
  * Side-effects: IO (Privy REST API calls)
  * Links: docs/spec/operator-wallet.md, work items task.5059 (live raw_sign proof), task.5060
  * @public
  */
 
-import { toBase64, toHex, toUtf8 } from "@cosmjs/encoding";
+import { fromHex, toBase64, toHex, toUtf8 } from "@cosmjs/encoding";
 
 import {
   parseCompressedPubkeyHex,
@@ -47,6 +51,17 @@ export interface PrivyCosmosSignerConfig {
   fetchImpl?: typeof fetch;
   /** Per-request timeout in milliseconds. Defaults to 10s. */
   timeoutMs?: number;
+  /**
+   * Optional Privy authorization-signature hook, sent as the
+   * `privy-authorization-signature` header when provided. REQUIRED for wallets
+   * protected by a Privy authorization key; unprotected wallets can sign with
+   * app-id + secret alone. The hook receives the full request URL and the
+   * serialized JSON body ("" for GET requests).
+   */
+  getAuthorizationSignature?: (input: {
+    url: string;
+    body: string;
+  }) => Promise<string>;
 }
 
 /**
@@ -59,6 +74,9 @@ export class PrivyCosmosSigner implements CosmosSignerPort {
   private readonly headers: Record<string, string>;
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;
+  private readonly getAuthorizationSignature:
+    | ((input: { url: string; body: string }) => Promise<string>)
+    | undefined;
   private pubkeyPromise: Promise<Uint8Array> | undefined;
 
   constructor(config: PrivyCosmosSignerConfig) {
@@ -68,8 +86,9 @@ export class PrivyCosmosSigner implements CosmosSignerPort {
       "privy-app-id": config.appId,
       "Content-Type": "application/json",
     };
-    this.fetchImpl = config.fetchImpl ?? fetch;
+    this.fetchImpl = config.fetchImpl ?? fetch.bind(globalThis);
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    this.getAuthorizationSignature = config.getAuthorizationSignature;
     if (config.publicKeyHex !== undefined) {
       const pubkey = parseCompressedPubkeyHex(config.publicKeyHex);
       this.pubkeyPromise = Promise.resolve(pubkey);
@@ -104,7 +123,7 @@ export class PrivyCosmosSigner implements CosmosSignerPort {
     }
     let sigBytes: Uint8Array;
     try {
-      sigBytes = hexToBytes(sigHex);
+      sigBytes = fromHex(sigHex.replace(/^0x/, ""));
     } catch {
       throw new SignatureFormatError("raw_sign signature is not valid hex");
     }
@@ -136,14 +155,25 @@ export class PrivyCosmosSigner implements CosmosSignerPort {
     label: string,
     body?: unknown
   ): Promise<unknown> {
+    const url = `${PRIVY_API_BASE}${path}`;
+    const serializedBody =
+      body === undefined ? undefined : JSON.stringify(body);
+    const headers = { ...this.headers };
+    if (this.getAuthorizationSignature) {
+      headers["privy-authorization-signature"] =
+        await this.getAuthorizationSignature({
+          url,
+          body: serializedBody ?? "",
+        });
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), this.timeoutMs);
     let res: Response;
     try {
-      res = await this.fetchImpl(`${PRIVY_API_BASE}${path}`, {
+      res = await this.fetchImpl(url, {
         method,
-        headers: this.headers,
-        body: body === undefined ? undefined : JSON.stringify(body),
+        headers,
+        body: serializedBody,
         signal: controller.signal,
       });
     } catch (error) {
@@ -172,17 +202,4 @@ export class PrivyCosmosSigner implements CosmosSignerPort {
       );
     }
   }
-}
-
-/** Strict hex decode ("0x"-prefixed or not) without echoing the input into errors. */
-function hexToBytes(hex: string): Uint8Array {
-  const clean = hex.replace(/^0x/, "");
-  if (clean.length % 2 !== 0 || !/^[0-9a-fA-F]*$/.test(clean)) {
-    throw new Error("invalid hex");
-  }
-  const out = new Uint8Array(clean.length / 2);
-  for (let i = 0; i < out.length; i++) {
-    out[i] = Number.parseInt(clean.slice(i * 2, i * 2 + 2), 16);
-  }
-  return out;
 }
