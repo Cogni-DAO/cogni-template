@@ -182,11 +182,12 @@ If the service needs node identity (`node_id`, `scope_id`, `chain_id`) or govern
 
 **Health check ownership (where to define probes):**
 
-| Environment    | Where to Define        | Notes                                                |
-| -------------- | ---------------------- | ---------------------------------------------------- |
-| Kubernetes     | K8s manifests          | `livenessProbe`, `readinessProbe` in pod spec        |
-| Docker Compose | `healthcheck:` in YAML | Only if needed for `depends_on: condition:`          |
-| Dockerfile     | **Do NOT define**      | No `HEALTHCHECK` instruction — defer to orchestrator |
+| Environment    | Where to Define                  | Notes                                                                                                                   |
+| -------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Kubernetes     | K8s manifests                    | `livenessProbe`, `readinessProbe` in pod spec                                                                           |
+| Docker Compose | `healthcheck:` in YAML           | Only if needed for `depends_on: condition:`                                                                             |
+| Dockerfile     | **Do NOT define**                | No `HEALTHCHECK` instruction — defer to orchestrator                                                                    |
+| Akash lane     | **No orchestrator probes exist** | operator workload-health reconcile consumes `/readyz` + `/version` ([health-probes.md](../spec/health-probes.md) Inv 6) |
 
 > **Dockerfile HEALTHCHECK is forbidden:** It bakes probe logic into the image, preventing orchestrator-specific tuning. Probes belong in deployment manifests (K8s) or compose files, not the image.
 
@@ -404,7 +405,7 @@ volumes:
 
 ### 9. Repo Integration
 
-> **Production runs on k3s via Argo CD.** Docker Compose is local-dev only. A new service reaches production only after it's wired into the CI target list, the k8s base, and the Argo catalog — all three are required. Missing any one silently green-lights CI and never deploys.
+> **Operator-monorepo services + state infra run on k3s via Argo CD; NODE apps run on Akash** (`AKASH_IS_NODE_APP_TARGET`, [ci-cd.md](../spec/ci-cd.md) Axioms 23–26 — gated north star). Docker Compose is local-dev only. A new operator service reaches production only after it's wired into the CI target list, the k8s base, and the Argo catalog — all three are required. Missing any one silently green-lights CI and never deploys.
 
 #### 9a. Wire into the PR build matrix
 
@@ -458,6 +459,15 @@ Some shared infra is a **third-party base + a thin customization** rather than a
 - **k8s plane skips it:** `infra` is in `ALL_TARGETS` (build) but not `NODE_TARGETS`; overlay/promotion/Argo/gitops-coverage loops skip `type:infra` via `image-tags.sh:is_infra_target`. No overlay, ApplicationSet, or `wait-for-argocd` entry.
 
 A new infra image is then a **one-file catalog drop** — same plug-n-play path as a service.
+
+#### 9b-akash. Node app-adjacent sidecars — extra service in the same Akash lease
+
+A **node** (own repo, `FORK_FREEDOM`) that needs a companion process next to its app — e.g. poly's paper-trader — is a **fourth class**, and it involves **zero operator-monorepo wiring**:
+
+- **Declared by the node:** the node's own CI publishes a second image from the same `source_repo/sourceSha` (e.g. `ghcr.io/cogni-dao/<node>-paper-trader:sha-<sha>`) in its build manifest. Reference contract: `cogni-dao/poly#10`.
+- **Deployed by the operator compute lane:** the sidecar renders as an **additional service in the same Akash lease** — the SDL renderer (`akash-sdl.ts`, `INTERNAL_EXPOSE_IS_MESH`) meshes non-global exposes by service name, so the app reaches it at `http://<service>:<port>` with **no public expose, Service, or Ingress** (`SIDECAR_IS_SDL_SERVICE`, ci-cd.md Axiom 25).
+- **Explicitly NOT:** a §1–8 operator service, a catalog/AppSet/overlay entry, or a k8s pod-injection (that lane was closed with PR #1884).
+- **Boundary unchanged:** only app-tier processes qualify — databases/queues/model gateways stay on the state substrate (`APP_ONLY_NO_INFRA`, Axiom 24).
 
 #### 9c. Dev stack (local Docker Compose)
 

@@ -14,6 +14,8 @@ tags: [deployment, k3s, argo-cd, ci-cd, infrastructure]
 
 # Multi-Node Deployment — k3s + Argo CD
 
+> **Scope note:** this doc covers the **legacy k3s app lane + state substrate**. Node apps target Akash via the operator compute API per [ci-cd.md](../spec/ci-cd.md) Axiom 23 (`AKASH_IS_NODE_APP_TARGET`, gated on story.5016); the k3s cluster remains the state substrate (`CHERRY_IS_STATE_SUBSTRATE`, Axiom 24).
+
 ## Architecture
 
 ```

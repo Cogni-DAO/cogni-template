@@ -20,7 +20,7 @@ Everything about how the system runs. Split by responsibility, not by tool.
 - [grafana/](grafana/): Grafana Cloud dashboards and alerting resources as code
 - [images/](images/): Infra-owned Docker image build contexts
 - [provision/](provision/): Substrate/bootstrap (OpenTofu, cloud-init)
-- [akash/](akash/): Future Akash SDL renderer
+- [akash/](akash/): Akash pointer README — the SDL renderer SHIPPED as TypeScript (`nodes/operator/app/src/adapters/server/compute/akash-sdl.ts`, task.5044); node apps target Akash per ci-cd.md Axiom 23
 
 ## Boundaries
 
