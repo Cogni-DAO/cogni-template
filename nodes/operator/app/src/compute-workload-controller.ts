@@ -16,7 +16,10 @@ import pino from "pino";
 import { Counter, Gauge, Histogram, Registry } from "prom-client";
 
 import { AkashComputeAdapter } from "@/adapters/server/compute/akash-compute.adapter";
-import { ComputeWorkloadLifecycleAdapter } from "@/adapters/server/compute/compute-workload-lifecycle.adapter";
+import {
+  ComputeWorkloadLifecycleAdapter,
+  DormantComputeWorkloadLifecycleAdapter,
+} from "@/adapters/server/compute/compute-workload-lifecycle.adapter";
 import {
   KubernetesComputeWorkloadStateAdapter,
   KubernetesLeaseLeaderElector,
@@ -37,6 +40,7 @@ const apiKeyFile =
 if (!namespace || !environment) {
   throw new Error("POD_NAMESPACE and CONTROLLER_ENVIRONMENT are required");
 }
+const controllerEnvironment: string = environment;
 
 const registry = new Registry();
 const reconcileTotal = new Counter({
@@ -88,21 +92,32 @@ const leader = new KubernetesLeaseLeaderElector(
   identity
 );
 
-const apiKey = (await readFile(apiKeyFile, "utf8")).trim();
-if (!apiKey) throw new Error("compute provider API key file is empty");
+const apiKey = await readFile(apiKeyFile, "utf8")
+  .then((value) => value.trim())
+  .catch(() => "");
 const preferredProviders = (runtimeEnv.AKASH_PREFERRED_PROVIDERS ?? "")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
-const compute = new AkashComputeAdapter({
-  apiKey,
-  ...(preferredProviders.length > 0 ? { preferredProviders } : {}),
-  outcomeStore: {
-    record: async () => {},
-    stats: async () => new Map(),
-  },
-});
-const lifecycle = new ComputeWorkloadLifecycleAdapter(compute);
+const lifecycle = apiKey
+  ? new ComputeWorkloadLifecycleAdapter(
+      new AkashComputeAdapter({
+        apiKey,
+        timeoutMs: 15_000,
+        ...(preferredProviders.length > 0 ? { preferredProviders } : {}),
+        outcomeStore: {
+          record: async () => {},
+          stats: async () => new Map(),
+        },
+      })
+    )
+  : new DormantComputeWorkloadLifecycleAdapter();
+if (!apiKey) {
+  log.warn(
+    { reason: "ProviderCredentialMissing" },
+    "compute_workload_controller_dormant"
+  );
+}
 
 let kubeReachable = false;
 let shuttingDown = false;
@@ -134,7 +149,10 @@ async function renewLeadership(): Promise<void> {
       kubeReachable = false;
       leaderGauge.set(0);
       log.fatal(
-        { err: cause },
+        {
+          reason: "LeadershipLost",
+          causeType: cause instanceof Error ? cause.name : "unknown",
+        },
         "compute_workload_leadership_lost_process_fenced"
       );
       // Immediate fencing is intentional. In-flight mutations already have a durable
@@ -146,7 +164,13 @@ async function renewLeadership(): Promise<void> {
   } catch (error) {
     kubeReachable = false;
     leaderGauge.set(0);
-    log.error({ err: error }, "compute_workload_leader_renew_failed");
+    log.error(
+      {
+        reason: "LeaderRenewFailed",
+        causeType: error instanceof Error ? error.name : "unknown",
+      },
+      "compute_workload_leader_renew_failed"
+    );
   }
 }
 
@@ -182,6 +206,8 @@ async function reconcileAll(): Promise<void> {
       resources.map((resource) =>
         reconcileLimit(async () => {
           if (!leader.isLeader() || shuttingDown) return;
+          const leaderEpoch = leader.currentEpoch();
+          if (!leaderEpoch) return;
           const started = Date.now();
           const labels = {
             namespace: resource.metadata.namespace,
@@ -192,7 +218,14 @@ async function reconcileAll(): Promise<void> {
           };
           try {
             await reconcileComputeWorkload(
-              { lifecycle, state, environment, now: () => new Date() },
+              {
+                lifecycle,
+                state,
+                environment: controllerEnvironment,
+                leaderEpoch,
+                assertLeadership: (epoch) => leader.stillHolds(epoch),
+                now: () => new Date(),
+              },
               resource
             );
             reconcileTotal.inc({ result: "success" });
@@ -203,7 +236,12 @@ async function reconcileAll(): Promise<void> {
           } catch (error) {
             reconcileTotal.inc({ result: "error" });
             log.error(
-              { err: error, ...labels, durationMs: Date.now() - started },
+              {
+                reason: "ReconcileFailed",
+                causeType: error instanceof Error ? error.name : "unknown",
+                ...labels,
+                durationMs: Date.now() - started,
+              },
               "compute_workload_reconcile_failed"
             );
           } finally {
@@ -214,7 +252,13 @@ async function reconcileAll(): Promise<void> {
     );
   } catch (error) {
     kubeReachable = false;
-    log.error({ err: error }, "compute_workload_list_failed");
+    log.error(
+      {
+        reason: "ListFailed",
+        causeType: error instanceof Error ? error.name : "unknown",
+      },
+      "compute_workload_list_failed"
+    );
   } finally {
     reconciling = false;
   }

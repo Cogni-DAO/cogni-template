@@ -30,22 +30,26 @@ function declaredWorkload(): ComputeWorkload {
     apiVersion: "compute.cogni.io/v1alpha1",
     kind: "ComputeWorkload",
     metadata: {
-      name: "poly",
+      name: "123e4567-e89b-12d3-a456-426614174001",
       namespace: "cogni-candidate-a",
       uid: "123e4567-e89b-12d3-a456-426614174000",
       generation: 1,
+      resourceVersion: "1",
     },
     spec: {
       nodeId: "123e4567-e89b-12d3-a456-426614174001",
       environment: "candidate-a",
-      sourceSha: "a".repeat(40),
-      artifactDigests: { app: digest },
+      bundle: {
+        ref: `ghcr.io/cogni-dao/poly-bundle@sha256:${"c".repeat(64)}`,
+        source: { repository: "cogni-dao/poly", sha: "a".repeat(40) },
+        artifacts: [{ name: "app", image: `ghcr.io/cogni-dao/poly@${digest}` }],
+      },
       workload: {
         name: "poly",
         services: [
           {
             name: "app",
-            image: `ghcr.io/cogni-dao/poly@${digest}`,
+            artifact: "app",
             command: ["node"],
             args: ["server.mjs"],
             env: { PAPER_TRADER_URL: "http://paper-trader:9100" },
@@ -63,7 +67,7 @@ describe("ComputeWorkload Kubernetes contract", () => {
   it("admits generic env/args fields and preserves service bindings over the API wire", async () => {
     const crd = parse(
       await readFile(
-        "../../../infra/k8s/platform/compute-workload/crd.yaml",
+        "../../../infra/k8s/base/compute-workload-platform/crd.yaml",
         "utf8"
       )
     ) as {
@@ -94,6 +98,9 @@ describe("ComputeWorkload Kubernetes contract", () => {
     expect(services.maxItems).toBe(8);
     expect(services.items.properties).toHaveProperty("env");
     expect(services.items.properties).toHaveProperty("args");
+    expect(
+      (schema.properties.spec.properties as Record<string, unknown>).bundle
+    ).toBeDefined();
 
     const resource = declaredWorkload();
     const custom = {
@@ -113,6 +120,47 @@ describe("ComputeWorkload Kubernetes contract", () => {
       args: ["server.mjs"],
       env: { PAPER_TRADER_URL: "http://paper-trader:9100" },
     });
+  });
+
+  it("claims a provider mutation with metadata.resourceVersion CAS", async () => {
+    const patchNamespacedCustomObject = vi.fn(async () => ({ body: {} }));
+    const custom = {
+      patchNamespacedCustomObject,
+    } as unknown as CustomObjectsApi;
+    const state = new KubernetesComputeWorkloadStateAdapter(
+      custom,
+      {} as CoreV1Api,
+      "cogni-candidate-a",
+      "test-controller"
+    );
+    await expect(
+      state.claimAttempt({
+        resource: declaredWorkload(),
+        receipt: '{"key":"one"}',
+      })
+    ).resolves.toBe(true);
+    expect(patchNamespacedCustomObject).toHaveBeenCalledWith(
+      "compute.cogni.io",
+      "v1alpha1",
+      "cogni-candidate-a",
+      "computeworkloads",
+      "123e4567-e89b-12d3-a456-426614174001",
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          resourceVersion: "1",
+          annotations: { "compute.cogni.io/last-attempt": '{"key":"one"}' },
+        }),
+      }),
+      undefined,
+      "compute-workload-controller",
+      undefined,
+      expect.any(Object)
+    );
+
+    patchNamespacedCustomObject.mockRejectedValueOnce(apiError(409));
+    await expect(
+      state.claimAttempt({ resource: declaredWorkload(), receipt: "other" })
+    ).resolves.toBe(false);
   });
 });
 
@@ -205,6 +253,36 @@ describe("KubernetesLeaseLeaderElector", () => {
         }),
       })
     );
+  });
+
+  it("guards dispatch with the live holder identity and lease-transition epoch", async () => {
+    const lease: V1Lease = {
+      metadata: { resourceVersion: "9" },
+      spec: {
+        holderIdentity: "pod-a",
+        renewTime: new Date("2026-09-01T12:00:00.000Z"),
+        leaseDurationSeconds: 30,
+        leaseTransitions: 4,
+      },
+    };
+    const api = {
+      readNamespacedLease: vi.fn(async () => ({ body: lease })),
+      replaceNamespacedLease: vi.fn(async () => ({ body: lease })),
+    } as unknown as CoordinationV1Api;
+    const elector = new KubernetesLeaseLeaderElector(
+      api,
+      "cogni-candidate-a",
+      "compute-workload-controller",
+      "pod-a"
+    );
+    await elector.acquireOrRenew(new Date("2026-09-01T12:00:05.000Z"));
+    expect(elector.currentEpoch()).toBe("4:pod-a");
+    await expect(
+      elector.stillHolds("4:pod-a", new Date("2026-09-01T12:00:06.000Z"))
+    ).resolves.toBe(true);
+    await expect(
+      elector.stillHolds("3:pod-a", new Date("2026-09-01T12:00:06.000Z"))
+    ).resolves.toBe(false);
   });
 });
 

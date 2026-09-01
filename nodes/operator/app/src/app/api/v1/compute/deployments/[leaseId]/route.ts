@@ -22,7 +22,6 @@ import { NextResponse } from "next/server";
 
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { resolveNodeAndAuthorize } from "@/app/_lib/node-rbac";
-import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 
 export const runtime = "nodejs";
@@ -77,15 +76,14 @@ export const GET = wrapRouteHandlerWithLogging<Ctx>(
     // RBAC gate first — 501-vs-200 must not leak provider config to ungranted principals.
     const gated = await gateAndLease(context, request, sessionUser.id);
     if (!gated.ok) return gated.response;
-    const compute = getContainer().computeCapability;
-    if (!compute.status) {
-      return NextResponse.json(
-        { error: "compute_write_unsupported" },
-        { status: 501 }
-      );
-    }
-    const workload = await compute.status({ leaseId: gated.leaseId });
-    return NextResponse.json({ workload });
+    return NextResponse.json(
+      {
+        error: "gitops_required",
+        message:
+          "observe the owner-bound ComputeWorkload status through the GitOps control plane",
+      },
+      { status: 409 }
+    );
   }
 );
 
@@ -97,14 +95,13 @@ export const DELETE = wrapRouteHandlerWithLogging<Ctx>(
   async (_ctx, request, sessionUser, context) => {
     const gated = await gateAndLease(context, request, sessionUser.id);
     if (!gated.ok) return gated.response;
-    const compute = getContainer().computeCapability;
-    if (!compute.release) {
-      return NextResponse.json(
-        { error: "compute_write_unsupported" },
-        { status: 501 }
-      );
-    }
-    await compute.release({ leaseId: gated.leaseId });
-    return NextResponse.json({ released: true, leaseId: gated.leaseId });
+    return NextResponse.json(
+      {
+        error: "gitops_required",
+        message:
+          "remove the owner-bound ComputeWorkload declaration in Git to release compute",
+      },
+      { status: 409 }
+    );
   }
 );

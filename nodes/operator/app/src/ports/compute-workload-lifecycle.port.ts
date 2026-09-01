@@ -17,10 +17,18 @@ export type ComputeLifecycleFailureKind =
 export class ComputeLifecycleError extends Error {
   constructor(
     public readonly kind: ComputeLifecycleFailureKind,
-    message: string,
+    /** Stable redacted code safe for CR status, Events, and structured logs. */
+    public readonly reason:
+      | "ProviderCredentialMissing"
+      | "ProviderNotFound"
+      | "ProviderTransient"
+      | "ProviderRejected"
+      | "ProviderOutcomeUnknown"
+      | "SecretResolverUnavailable"
+      | "EndpointVerificationFailed",
     public readonly retryable: boolean
   ) {
-    super(message);
+    super(reason);
     this.name = "ComputeLifecycleError";
   }
 }
@@ -32,7 +40,15 @@ export interface ComputeWorkloadLifecyclePort {
     spec: ProvisionSpec;
     /** Durable controller key. Providers may support it; the controller always records it first. */
     idempotencyKey: string;
+    /** Persist the provider-opaque baseline before POST. */
+    onPrepared(allocationCursor: string): Promise<void>;
+    /** Persist the opaque provider handle immediately after allocation, before convergence. */
+    onAllocated(resource: ProvisionOutput): Promise<void>;
   }): Promise<ProvisionOutput>;
+  /** Resolve an uncertain create against the durable pre-POST baseline. */
+  recoverCreate(input: {
+    allocationCursor: string;
+  }): Promise<ProvisionOutput | null>;
   update(input: {
     resourceId: string;
     environment: string;
