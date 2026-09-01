@@ -306,6 +306,59 @@ export type NodeServiceResourcesSpec = z.infer<
   typeof nodeServiceResourcesSchema
 >;
 
+const readinessHttpPathSchema = z
+  .string()
+  .min(1)
+  .max(256)
+  .superRefine((path, ctx) => {
+    if (!path.startsWith("/") || path.startsWith("//")) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "readiness HTTP path must be an absolute path beginning with one slash",
+      });
+      return;
+    }
+
+    let decoded: string;
+    try {
+      decoded = decodeURIComponent(path);
+    } catch {
+      ctx.addIssue({
+        code: "custom",
+        message: "readiness HTTP path contains invalid percent encoding",
+      });
+      return;
+    }
+
+    if (
+      /[?#\\]/.test(path) ||
+      /[?#\\]/.test(decoded) ||
+      decoded.split("/").some((segment) => segment === "." || segment === "..")
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "readiness HTTP path must not contain a query, fragment, backslash, or traversal segment",
+      });
+    }
+  });
+
+/** K8s-shaped, provider-neutral readiness signal for one service. */
+export const nodeServiceReadinessProbeSchema = z
+  .object({
+    http_get: z
+      .object({
+        path: readinessHttpPathSchema,
+      })
+      .strict(),
+  })
+  .strict();
+
+export type NodeServiceReadinessProbeSpec = z.infer<
+  typeof nodeServiceReadinessProbeSchema
+>;
+
 /**
  * One app-tier service declared by a sovereign node.
  *
@@ -342,6 +395,8 @@ export const nodeServiceSpecSchema = z
         "secret_refs keys must be unique"
       )
       .default([]),
+    /** Optional application-level readiness; provider/controller owns cadence. */
+    readiness_probe: nodeServiceReadinessProbeSchema.optional(),
     bind_host: z.literal("0.0.0.0").default("0.0.0.0"),
     /** Explicit for every declared service; environment policy owns recommended sizes. */
     resources: nodeServiceResourcesSchema,
@@ -400,6 +455,9 @@ export const nodeDeploymentSchema = z
         });
       }
     });
+    const publicServiceIndex = deployment.services.findIndex(
+      (service) => service.visibility === "public"
+    );
     if (
       deployment.services.filter((service) => service.visibility === "public")
         .length !== 1
@@ -407,6 +465,13 @@ export const nodeDeploymentSchema = z
       ctx.addIssue({
         code: "custom",
         message: "deployment.services must contain exactly one public service",
+      });
+    } else if (!deployment.services[publicServiceIndex]?.readiness_probe) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["services", publicServiceIndex, "readiness_probe"],
+        message:
+          "The public service must declare readiness_probe.http_get.path",
       });
     }
     deployment.services.forEach((service, index) => {

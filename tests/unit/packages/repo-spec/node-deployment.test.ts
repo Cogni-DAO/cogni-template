@@ -20,6 +20,7 @@ const APP = {
   artifact: { name: "app" },
   port: 3200,
   visibility: "public",
+  readiness_probe: { http_get: { path: "/readyz" } },
   resources: { cpu_units: 1, memory_mi: 2048, storage_mi: 4096 },
 } as const;
 
@@ -38,6 +39,7 @@ describe("node deployment repo-spec", () => {
         visibility: "public",
         bindings: {},
         secretRefs: [],
+        readinessPath: "/readyz",
         bindHost: "0.0.0.0",
         internalUrl: "http://app:3200",
         resources: {
@@ -194,6 +196,74 @@ describe("node deployment repo-spec", () => {
     expect(extractNodeServices(spec)[0]?.secretRefs).toEqual([
       { key: "APP_TOKEN" },
     ]);
+  });
+
+  it("carries an optional provider-neutral HTTP readiness path", () => {
+    const spec = buildTestRepoSpec({
+      deployment: {
+        services: [
+          {
+            ...APP,
+            readiness_probe: { http_get: { path: "/deployment-proof" } },
+          },
+        ],
+      },
+    });
+
+    expect(extractNodeServices(spec)[0]?.readinessPath).toBe(
+      "/deployment-proof"
+    );
+  });
+
+  it("keeps private readiness optional while public readiness is explicit", () => {
+    const { readiness_probe: _publicReadiness, ...privateService } = APP;
+    const spec = buildTestRepoSpec({
+      deployment: {
+        services: [
+          APP,
+          {
+            ...privateService,
+            name: "worker",
+            artifact: { name: "worker" },
+            visibility: "private",
+          },
+        ],
+      },
+    });
+
+    expect(
+      extractNodeServices(spec).map((service) => service.readinessPath)
+    ).toEqual(["/readyz", undefined]);
+  });
+
+  it("rejects an explicit public service without readiness", () => {
+    const { readiness_probe: _readinessProbe, ...appWithoutReadiness } = APP;
+    expect(() =>
+      buildTestRepoSpec({
+        deployment: { services: [appWithoutReadiness] },
+      })
+    ).toThrow(/public service must declare readiness_probe/);
+  });
+
+  it.each([
+    "health",
+    "https://other.example/health",
+    "//other.example/health",
+    "/health?deep=true",
+    "/health#fragment",
+    "/../secret",
+    "/%2e%2e/secret",
+    "/health\\nested",
+  ])("rejects unsafe readiness path %s", (path) => {
+    expect(() =>
+      parseRepoSpec({
+        node_id: "00000000-0000-4000-8000-000000000001",
+        governance: {},
+        deployment: {
+          services: [{ ...APP, readiness_probe: { http_get: { path } } }],
+        },
+      })
+    ).toThrow(/Invalid repo-spec structure/);
   });
 
   it.each([
