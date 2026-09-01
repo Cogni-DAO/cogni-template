@@ -342,6 +342,30 @@ describe("AkashComputeAdapter failure containment", () => {
     expect(deletes).toEqual([`${BASE}/v1/deployments/88`]);
   });
 
+  it("closes the deployment when the create response omits the manifest", async () => {
+    const deletes: string[] = [];
+    const fetchImpl = vi.fn<typeof fetch>(async (url, init) => {
+      const u = String(url);
+      if (u.endsWith("/v1/deployments") && init?.method === "POST") {
+        // dseq present (escrow on-chain) but manifest missing → must refund, not strand.
+        return jsonResponse({ data: { dseq: "55" } });
+      }
+      if (init?.method === "DELETE") {
+        deletes.push(u);
+        return jsonResponse({ data: { success: true } });
+      }
+      return jsonResponse({ data: [] });
+    });
+
+    const err = await makeAdapter(fetchImpl)
+      .provision({ env: "t", spec: SPEC })
+      .catch((e: unknown) => e);
+
+    expect((err as AkashComputeError).code).toBe("UNEXPECTED_SHAPE");
+    expect((err as AkashComputeError).message).toContain("55");
+    expect(deletes).toEqual([`${BASE}/v1/deployments/55`]);
+  });
+
   it("returns pending instead of throwing when the post-lease status read fails", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (url, init) => {
       const u = String(url);

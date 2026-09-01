@@ -187,16 +187,23 @@ export class AkashComputeAdapter implements ComputeResourcePort {
       this.writeTimeoutMs
     );
     const dseq = created?.dseq;
-    if (!dseq || created?.manifest === undefined) {
+    if (!dseq) {
       throw new AkashComputeError(
         "UNEXPECTED_SHAPE",
-        "Console POST /v1/deployments returned no dseq/manifest"
+        "Console POST /v1/deployments returned no dseq"
       );
     }
 
-    // Escrow is deposited from here on — never strand it: a bid/lease failure closes the
-    // deployment (refunding escrow) before rethrowing, and every error names the dseq.
+    // A dseq means the deployment (and its escrow) exists on-chain — never strand it: from
+    // here every failure path (missing manifest, no bids, lease error) closes the deployment
+    // (refunding escrow) before rethrowing, and every error names the dseq.
     try {
+      if (created?.manifest === undefined) {
+        throw new AkashComputeError(
+          "UNEXPECTED_SHAPE",
+          "Console POST /v1/deployments returned no manifest"
+        );
+      }
       const bid = await this.awaitCheapestBid(dseq);
       await this.request(
         "POST",
