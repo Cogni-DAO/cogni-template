@@ -37,4 +37,20 @@ describe("resolvePostHogBrowserConfig", () => {
     });
     expect(cfg.apiKey).toBeUndefined();
   });
+
+  it("ignores a materialized placeholder override and falls back to the real key (bug: candidate-a phc_placeholder_test)", () => {
+    const cfg = resolvePostHogBrowserConfig({
+      NEXT_PUBLIC_POSTHOG_KEY: "phc_placeholder_test",
+      POSTHOG_API_KEY: "phc_real_key",
+    });
+    expect(cfg.apiKey).toBe("phc_real_key");
+  });
+
+  it("returns undefined when the only key is a placeholder (disabled, never a dead token)", () => {
+    const cfg = resolvePostHogBrowserConfig({
+      NEXT_PUBLIC_POSTHOG_KEY: "phc_placeholder_test",
+      POSTHOG_API_KEY: "PLACEHOLDER",
+    });
+    expect(cfg.apiKey).toBeUndefined();
+  });
 });

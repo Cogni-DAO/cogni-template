@@ -10,8 +10,17 @@
  * Invariants:
  *   - Browser SDK reuses the PostHog **project** key (`phc_...`). `POSTHOG_API_KEY` is
  *     already such a key and is delivered to the pod at runtime, so no separate secret
- *     is required. `NEXT_PUBLIC_POSTHOG_KEY` is an optional, non-secret override for
- *     deployments that want a distinct client key.
+ *     is required. `NEXT_PUBLIC_POSTHOG_KEY` is an OPTIONAL, non-secret override for
+ *     deployments that want a distinct client key — it is intentionally NOT declared in
+ *     the secrets catalog, so materialization never seeds a `phc_placeholder_*` dummy
+ *     for it (see PLACEHOLDER guard below).
+ *   - PLACEHOLDER GUARD (bug: candidate-a served `phc_placeholder_test`): secret
+ *     materialization is create-if-absent and seeds a non-empty `phc_placeholder_*`
+ *     value when the bank has no real one. A non-empty placeholder would otherwise
+ *     shadow the real key and the browser would init with a DEAD token (404 on
+ *     `/ingest/array/<key>/config.js`, `window.posthog` never loads). So a candidate
+ *     that is empty OR matches `/placeholder/i` is treated as ABSENT and we fall
+ *     through to the next real key.
  *   - This repo delivers env at runtime (ESO `envFrom`), not build-time inlining, so the
  *     key is resolved here on the server and passed into the client component as a prop
  *     (mirrors the wagmi `initialState` pattern in `layout.tsx`). A naive browser-side
@@ -38,15 +47,28 @@ export interface PostHogBrowserConfig {
 const DEFAULT_UI_HOST = "https://us.posthog.com";
 
 /**
+ * A candidate is a USABLE PostHog project key only if it is a non-empty string that is
+ * not a materialized placeholder. `phc_placeholder_*` (create-if-absent seeding) is a
+ * live, non-empty dummy that must never shadow the real key — reject it here.
+ */
+function isUsableKey(value: string | undefined): value is string {
+  return (
+    typeof value === "string" && value.length > 0 && !/placeholder/i.test(value)
+  );
+}
+
+/**
  * Resolve the browser analytics config from the environment.
- * Prefers the explicit public override, then falls back to the server project key,
- * so browser telemetry works out-of-the-box wherever `POSTHOG_API_KEY` is already set.
+ * Prefers the explicit public override, then falls back to the server project key —
+ * skipping any empty/placeholder candidate — so browser telemetry works out-of-the-box
+ * wherever a real `POSTHOG_API_KEY` is set, even when a placeholder was materialized.
  */
 export function resolvePostHogBrowserConfig(
   env: Record<string, string | undefined> = process.env
 ): PostHogBrowserConfig {
-  const rawKey = env.NEXT_PUBLIC_POSTHOG_KEY ?? env.POSTHOG_API_KEY;
-  const apiKey = rawKey && rawKey.length > 0 ? rawKey : undefined;
+  const apiKey = [env.NEXT_PUBLIC_POSTHOG_KEY, env.POSTHOG_API_KEY].find(
+    isUsableKey
+  );
   const uiHost = env.NEXT_PUBLIC_POSTHOG_UI_HOST ?? DEFAULT_UI_HOST;
 
   return {
