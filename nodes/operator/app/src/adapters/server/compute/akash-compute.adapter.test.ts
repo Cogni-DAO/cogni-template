@@ -70,7 +70,7 @@ interface HarnessOpts {
   bids?: (dseq: string, wave: number) => unknown[];
   /** Which workload hosts answer /version with 200. Default: all. */
   serving?: (host: string) => boolean;
-  /** Which workload hosts answer the declared readiness path with 2xx. Default: all. */
+  /** Which workload hosts answer fixed /readyz with 2xx. Default: all. */
   ready?: (host: string) => boolean;
 }
 
@@ -120,7 +120,7 @@ function harness(opts: HarnessOpts = {}) {
       const ok = opts.serving ? opts.serving(host) : true;
       return new Response("{}", { status: ok ? 200 : 503 });
     }
-    if (u.endsWith("/deployment-proof")) {
+    if (u.endsWith("/readyz")) {
       const host = new URL(u).host;
       const ok = opts.ready ? opts.ready(host) : true;
       return new Response(null, { status: ok ? 204 : 503 });
@@ -178,7 +178,6 @@ const SPEC = {
       expose: [
         { port: 3000, as: 80, global: true, hosts: ["toks4.example.org"] },
       ],
-      readinessPath: "/deployment-proof",
     },
     {
       name: "echo-sidecar",
@@ -368,7 +367,7 @@ describe("AkashComputeAdapter", () => {
       if (value === "http://updated.prov.akash.pub/version") {
         return jsonResponse({ buildSha: "ignored-by-provider-boot-check" });
       }
-      if (value === "http://updated.prov.akash.pub/deployment-proof") {
+      if (value === "http://updated.prov.akash.pub/readyz") {
         return new Response(null, { status: 204 });
       }
       throw new Error(`unhandled ${init?.method ?? "GET"} ${value}`);
@@ -531,6 +530,44 @@ describe("AkashComputeAdapter preferredProviders", () => {
       preferredProviders: ["akash1preferred"],
     }).provision({ env: "t", spec: SPEC });
     expect(h.leased.map((l) => l.provider)).toEqual(["akash1stranger"]);
+  });
+});
+
+describe("AkashComputeAdapter allowedProviders", () => {
+  const allowed = "akash16yr3wxt97ae045a06kr3ycde9srcgpg8syjxxm";
+  const stranger = "akash1froggy";
+
+  it("leases only the reachable operator-allowed provider", async () => {
+    const h = harness({
+      providers: [providerEntry(allowed), providerEntry(stranger)],
+      bids: (dseq) => [
+        bidEntry(dseq, stranger, "1"),
+        bidEntry(dseq, allowed, "900"),
+      ],
+    });
+
+    await makeAdapter(h.fetchImpl, {
+      bidTimeoutMs: 0,
+      allowedProviders: [allowed],
+    }).provision({ env: "t", spec: SPEC });
+
+    expect(h.leased).toEqual([{ dseq: "1", provider: allowed }]);
+  });
+
+  it("fails closed without leasing a fallback when no allowed provider bids", async () => {
+    const h = harness({
+      providers: [providerEntry(allowed), providerEntry(stranger)],
+      bids: (dseq) => [bidEntry(dseq, stranger, "1")],
+    });
+
+    await expect(
+      makeAdapter(h.fetchImpl, {
+        bidTimeoutMs: 0,
+        allowedProviders: [allowed],
+      }).provision({ env: "t", spec: SPEC })
+    ).rejects.toMatchObject({ code: "NO_ELIGIBLE_BIDS" });
+    expect(h.leased).toEqual([]);
+    expect(h.deletes).toHaveLength(1);
   });
 });
 

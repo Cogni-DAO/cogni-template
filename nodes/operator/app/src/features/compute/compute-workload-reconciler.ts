@@ -7,22 +7,20 @@ import type { ProvisionOutput, ProvisionSpec } from "@cogni/ai-tools";
 import {
   COMPUTE_WORKLOAD_ATTEMPT_ANNOTATION,
   COMPUTE_WORKLOAD_FINALIZER,
+  ComputeLifecycleError,
   type ComputeWorkload,
   type ComputeWorkloadAttempt,
   type ComputeWorkloadAttemptReceipt,
+  type ComputeWorkloadDnsPort,
+  type ComputeWorkloadLifecyclePort,
+  type ComputeWorkloadSecretResolverPort,
+  type ComputeWorkloadStatePort,
   type ComputeWorkloadStatus,
   computeWorkloadIdempotencyKey,
   decodeAttemptReceipt,
   encodeAttemptReceipt,
-  isValidComputeReadinessPath,
-} from "@/ports/compute-workload.types";
-import type { ComputeWorkloadDnsPort } from "@/ports/compute-workload-dns.port";
-import {
-  ComputeLifecycleError,
-  type ComputeWorkloadLifecyclePort,
-} from "@/ports/compute-workload-lifecycle.port";
-import type { ComputeWorkloadSecretResolverPort } from "@/ports/compute-workload-secret-resolver.port";
-import type { ComputeWorkloadStatePort } from "@/ports/compute-workload-state.port";
+} from "@/ports";
+import { hostForNode } from "@/shared/node-registry/resolve";
 import { buildNodeAppIdentityEnv } from "./node-workload-spec";
 
 const MAX_MUTATION_RETRIES = 3;
@@ -34,6 +32,7 @@ export interface ComputeWorkloadReconcileDeps {
   readonly dns: ComputeWorkloadDnsPort;
   readonly secretResolver: ComputeWorkloadSecretResolverPort;
   readonly environment: string;
+  readonly deploymentDomain: string;
   readonly leaderEpoch: string;
   readonly assertLeadership: (epoch: string) => Promise<boolean>;
   readonly now: () => Date;
@@ -42,7 +41,7 @@ export interface ComputeWorkloadReconcileDeps {
     environment: string;
     sourceSha: string;
     leaseId: string;
-    readinessPath: string;
+    healthEndpoint: "/readyz";
     outcomeCode: "ReadinessPassed" | "ReadinessFailed";
   }) => void;
   readonly recordRecoveryLimit: (input: {
@@ -73,8 +72,6 @@ const SAFE_MESSAGES: Readonly<Record<string, string>> = {
   DnsOwnershipChanged:
     "external workload DNS record no longer matches controller ownership",
   EndpointVerificationFailed: "workload source verification did not succeed",
-  ReadinessDeclarationInvalid:
-    "the public service readiness declaration is invalid",
   MutationClaimConflict: "another controller writer claimed this generation",
   WalletAllocationBlocked:
     "another uncertain wallet allocation must be resolved before creating more compute",
@@ -83,14 +80,16 @@ const SAFE_MESSAGES: Readonly<Record<string, string>> = {
   OrphanRisk:
     "a mutation receipt exists without a durable resource handle; automatic create is blocked",
   OwnershipMismatch: "resource ownership does not match this controller",
+  PublicHostOwnershipMismatch:
+    "public host does not match the operator-owned node hostname",
   RetryLimitExceeded: "known-outcome retry limit was exceeded",
   RecoveryLimitExceeded:
     "generation recovery limit was reached; further allocation is blocked",
   FinalizationBlocked: "external resource finalization has not completed",
   ServingVerificationPending:
     "waiting for the workload to serve the expected source revision",
-  ReadinessPassed: "declared application readiness probe succeeded",
-  ReadinessFailed: "declared application readiness probe did not succeed",
+  ReadinessPassed: "fixed application health endpoint succeeded",
+  ReadinessFailed: "fixed application health endpoint did not succeed",
   ResourceClosed: "external resource closure was durably observed",
   ResourceMissing: "external resource absence was durably observed",
 };
@@ -166,7 +165,7 @@ const LEGACY_COGNI_APP_REQUIRED_ENV = [
   "AUTH_SECRET",
   "DATABASE_URL",
   "DATABASE_SERVICE_URL",
-  "LITELLM_MASTER_KEY",
+  "LITELLM_VIRTUAL_KEY",
   "SCHEDULER_API_TOKEN",
   "BILLING_INGEST_TOKEN",
 ] as const;
@@ -174,15 +173,22 @@ const LEGACY_COGNI_APP_REQUIRED_ENV = [
 /** Explicit node-app compatibility policy; generic/private services do not inherit it. */
 function legacyCogniAppEnv(input: {
   resource: ComputeWorkload;
-  serviceName: string;
-  visibility: "public" | "private";
+  runtimeProfile: "cogni-node-app-v1" | undefined;
   bindings: Readonly<Record<string, string>>;
   secrets: Readonly<Record<string, string>>;
 }): Record<string, string> {
-  if (input.serviceName !== "app" || input.visibility !== "public") {
+  if (input.runtimeProfile !== "cogni-node-app-v1") {
     return { ...input.bindings, ...input.secrets };
   }
   if (LEGACY_COGNI_APP_REQUIRED_ENV.some((key) => !input.secrets[key])) {
+    throw new ComputeLifecycleError(
+      "terminal",
+      "SecretReferenceMissing",
+      false
+    );
+  }
+  const { LITELLM_VIRTUAL_KEY: virtualKey, ...legacySecrets } = input.secrets;
+  if (!virtualKey) {
     throw new ComputeLifecycleError(
       "terminal",
       "SecretReferenceMissing",
@@ -198,7 +204,10 @@ function legacyCogniAppEnv(input: {
       COGNI_REPO_SHA: input.resource.spec.bundle.source.sha,
       ...sharedSubstrateEnv(input.resource.spec.environment, input.secrets),
       ...input.bindings,
-      ...input.secrets,
+      ...legacySecrets,
+      // Named compatibility only: the value remains the node-scoped virtual
+      // key; the operator's LiteLLM master key never enters this process.
+      LITELLM_MASTER_KEY: virtualKey,
     },
   });
 }
@@ -219,10 +228,6 @@ async function toProvisionSpec(
       service.port,
     ])
   );
-  const sourceSlug = resource.spec.bundle.source.repository.split("/")[1];
-  if (!sourceSlug || sourceSlug !== resource.spec.workload.name) {
-    throw new ComputeLifecycleError("terminal", "ProviderRejected", false);
-  }
   const services = await Promise.all(
     resource.spec.workload.services.map(async (service) => {
       const image = artifacts.get(service.artifact);
@@ -231,7 +236,7 @@ async function toProvisionSpec(
       }
       const secrets = await deps.secretResolver.resolve({
         nodeId: resource.spec.nodeId,
-        nodeSlug: sourceSlug,
+        nodeSlug: resource.spec.workload.name,
         environment: resource.spec.environment,
         serviceName: service.name,
         sourceSha: resource.spec.bundle.source.sha,
@@ -245,8 +250,7 @@ async function toProvisionSpec(
       );
       const runtimeEnv = legacyCogniAppEnv({
         resource,
-        serviceName: service.name,
-        visibility: service.visibility,
+        runtimeProfile: service.runtimeProfile,
         bindings: bindingEnv,
         secrets,
       });
@@ -261,9 +265,6 @@ async function toProvisionSpec(
         },
         ...(service.command ? { command: service.command } : {}),
         ...(service.args ? { args: service.args } : {}),
-        ...(service.readinessPath
-          ? { readinessPath: service.readinessPath }
-          : {}),
         cpuUnits: service.cpuUnits,
         memoryMi: service.memoryMi,
         storageMi: service.storageMi,
@@ -298,7 +299,6 @@ async function emitReadinessTransition(
   deps: ComputeWorkloadReconcileDeps,
   resource: ComputeWorkload,
   leaseId: string,
-  readinessPath: string,
   outcomeCode: "ReadinessPassed" | "ReadinessFailed"
 ): Promise<void> {
   const previous = resource.status?.conditions.find(
@@ -310,7 +310,7 @@ async function emitReadinessTransition(
     environment: resource.spec.environment,
     sourceSha: resource.spec.bundle.source.sha,
     leaseId,
-    readinessPath,
+    healthEndpoint: "/readyz" as const,
     outcomeCode,
   };
   deps.recordReadinessTransition(fields);
@@ -377,24 +377,17 @@ function ownershipFailure(
     resource.spec.environment !== environment ||
     resource.metadata.name !== resource.spec.nodeId ||
     labels["cogni.io/environment"] !== resource.spec.environment ||
-    labels["cogni.io/node-id"] !== resource.spec.nodeId
+    labels["cogni.io/node-id"] !== resource.spec.nodeId ||
+    labels["cogni.io/node"] !== resource.spec.workload.name
   );
 }
 
-function readinessDeclarationInvalid(resource: ComputeWorkload): boolean {
-  const publicServices = resource.spec.workload.services.filter(
-    (service) => service.visibility === "public"
-  );
-  if (
-    publicServices.length !== 1 ||
-    !publicServices[0]?.readinessPath ||
-    !isValidComputeReadinessPath(publicServices[0].readinessPath)
-  ) {
-    return true;
-  }
-  return resource.spec.workload.services.some(
-    (service) => service.visibility === "private" && service.readinessPath
-  );
+export function computeWorkloadPublicHost(
+  slug: string,
+  deploymentDomain: string
+): string {
+  const domain = deploymentDomain.toLowerCase().replace(/^\.+|\.+$/g, "");
+  return hostForNode(slug, false, domain);
 }
 
 function generationRecoveryCount(resource: ComputeWorkload): number {
@@ -1104,25 +1097,11 @@ async function observeAndReport(
     return "error";
   }
   if (!dnsTarget) return "error";
-  const sourceVerified = await deps.lifecycle.verifySource({
+  const ready = await deps.lifecycle.verifySource({
     endpoints: [`https://${resource.spec.workload.publicHost}`],
     expectedSourceSha: resource.spec.bundle.source.sha,
   });
-  const publicService = resource.spec.workload.services.find(
-    (service) => service.visibility === "public"
-  );
-  const readinessPath = publicService?.readinessPath;
-  const readinessVerified =
-    sourceVerified && readinessPath
-      ? await deps.lifecycle.verifyReadiness({
-          endpoints: [`https://${resource.spec.workload.publicHost}`],
-          path: readinessPath,
-        })
-      : false;
-  const ready = sourceVerified && readinessVerified;
-  const readinessOutcome = readinessVerified
-    ? "ReadinessPassed"
-    : "ReadinessFailed";
+  const readinessOutcome = ready ? "ReadinessPassed" : "ReadinessFailed";
   const now = deps.now().toISOString();
   await deps.state.patchStatus({
     resource,
@@ -1145,24 +1124,16 @@ async function observeAndReport(
         : {}),
       recoveryCount: resource.status?.recoveryCount ?? 0,
       conditions: [
-        condition(
-          resource,
-          now,
-          ready ? "True" : "False",
-          sourceVerified ? readinessOutcome : "ServingVerificationPending"
-        ),
+        condition(resource, now, ready ? "True" : "False", readinessOutcome),
       ],
     },
   });
-  if (sourceVerified && readinessPath) {
-    await emitReadinessTransition(
-      deps,
-      resource,
-      observed.leaseId,
-      readinessPath,
-      readinessOutcome
-    );
-  }
+  await emitReadinessTransition(
+    deps,
+    resource,
+    observed.leaseId,
+    readinessOutcome
+  );
   return "active";
 }
 
@@ -1364,7 +1335,13 @@ export async function reconcileComputeWorkload(
     });
     return;
   }
-  if (readinessDeclarationInvalid(resource)) {
+  if (
+    resource.spec.workload.publicHost !==
+    computeWorkloadPublicHost(
+      resource.spec.workload.name,
+      deps.deploymentDomain
+    )
+  ) {
     const now = deps.now().toISOString();
     await deps.state.patchStatus({
       resource,
@@ -1372,16 +1349,16 @@ export async function reconcileComputeWorkload(
         ...baseStatus(resource),
         phase: "Failed",
         failure: {
-          reason: "ReadinessDeclarationInvalid",
-          message: safeMessage("ReadinessDeclarationInvalid"),
+          reason: "PublicHostOwnershipMismatch",
+          message: safeMessage("PublicHostOwnershipMismatch"),
           retryable: false,
         },
         conditions: [
-          condition(resource, now, "False", "ReadinessDeclarationInvalid"),
+          condition(resource, now, "False", "PublicHostOwnershipMismatch"),
         ],
       },
     });
-    await emit(deps, resource, "Warning", "ReadinessDeclarationInvalid");
+    await emit(deps, resource, "Warning", "PublicHostOwnershipMismatch");
     return;
   }
 

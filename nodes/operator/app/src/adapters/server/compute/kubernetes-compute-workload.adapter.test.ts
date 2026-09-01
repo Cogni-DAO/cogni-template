@@ -11,9 +11,9 @@ import type {
   V1Lease,
 } from "@kubernetes/client-node";
 import { describe, expect, it, vi } from "vitest";
-import { parse } from "yaml";
+import { parse, parseDocument } from "yaml";
 
-import type { ComputeWorkload } from "@/ports/compute-workload.types";
+import type { ComputeWorkload } from "@/ports";
 
 import {
   KubernetesComputeWorkloadStateAdapter,
@@ -39,6 +39,7 @@ function declaredWorkload(): ComputeWorkload {
       labels: {
         "cogni.io/node-id": "123e4567-e89b-12d3-a456-426614174001",
         "cogni.io/environment": "candidate-a",
+        "cogni.io/node": "sample-node",
       },
     },
     spec: {
@@ -62,11 +63,11 @@ function declaredWorkload(): ComputeWorkload {
           {
             name: "app",
             artifact: "app",
+            runtimeProfile: "cogni-node-app-v1",
             command: ["node"],
             args: ["server.mjs"],
             port: 3000,
             visibility: "public",
-            readinessPath: "/deployment-proof",
             bindings: { ECHO_SIDECAR_URL: "echo-sidecar" },
             bindHost: "0.0.0.0",
             cpuUnits: 0.5,
@@ -96,6 +97,7 @@ describe("ComputeWorkload Kubernetes contract", () => {
       "../../../infra/k8s/base/compute-workload-platform/crd.yaml",
       "utf8"
     );
+    expect(parseDocument(crdYaml, { uniqueKeys: true }).errors).toEqual([]);
     const crd = parse(crdYaml) as {
       spec: {
         versions: {
@@ -124,21 +126,18 @@ describe("ComputeWorkload Kubernetes contract", () => {
     expect(services.maxItems).toBe(8);
     expect(services.items.properties).toHaveProperty("bindings");
     expect(services.items.properties).toHaveProperty("args");
-    expect(services.items.properties).toHaveProperty("readinessPath");
+    expect(services.items.properties).toHaveProperty("runtimeProfile");
     expect(crdYaml).toContain(
       "self.services.filter(s, s.visibility == 'public').size() == 1"
     );
     expect(crdYaml).toContain(
-      "the public workload service must declare readinessPath"
-    );
-    expect(crdYaml).toContain(
-      "private workload services must not declare public readinessPath"
+      "runtimeProfile is allowed only on the public service"
     );
     expect(crdYaml).toContain(
       "every binding must target a different declared sibling service"
     );
     expect(crdYaml).toContain(
-      "workload name must equal the immutable source repository slug"
+      "cogni.io/node label must equal spec.workload.name"
     );
     expect(
       (schema.properties.spec.properties as Record<string, unknown>).bundle
@@ -160,7 +159,7 @@ describe("ComputeWorkload Kubernetes contract", () => {
     const [roundTripped] = await state.list();
     expect(roundTripped?.spec.workload.services[0]).toMatchObject({
       args: ["server.mjs"],
-      readinessPath: "/deployment-proof",
+      runtimeProfile: "cogni-node-app-v1",
       bindings: { ECHO_SIDECAR_URL: "echo-sidecar" },
     });
   });

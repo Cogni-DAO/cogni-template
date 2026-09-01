@@ -38,23 +38,18 @@ spec:
                 fieldRef: { fieldPath: metadata.namespace }
             - name: CONTROLLER_ENVIRONMENT
               value: replace-in-overlay
+            - name: DEPLOYMENT_DOMAIN
+              value: replace-in-overlay
+            - name: AKASH_ALLOWED_PROVIDERS
+              value: ""
             - name: AKASH_CONSOLE_API_KEY_FILE
               value: /var/run/secrets/compute/AKASH_CONSOLE_API_KEY
-            - name: OPENBAO_ADDR
-              value: http://openbao.openbao.svc:8200
-            - name: OPENBAO_NODE_SECRETS_WRITER_ROLE
-              value: replace-in-overlay
-            - name: LITELLM_BASE_URL
-              value: http://operator-litellm-external:4000
           ports:
             - name: metrics
               containerPort: 9090
           volumeMounts:
             - name: compute-provider-credentials
               mountPath: /var/run/secrets/compute
-              readOnly: true
-            - name: openbao-token
-              mountPath: /var/run/secrets/openbao
               readOnly: true
           resources:
             requests: { cpu: 50m, memory: 96Mi }
@@ -88,12 +83,3 @@ spec:
                       path: CLOUDFLARE_API_TOKEN
                     - key: CLOUDFLARE_ZONE_ID
                       path: CLOUDFLARE_ZONE_ID
-                    - key: LITELLM_MASTER_KEY
-                      path: LITELLM_MASTER_KEY
-        - name: openbao-token
-          projected:
-            sources:
-              - serviceAccountToken:
-                  path: token
-                  audience: cogni-openbao
-                  expirationSeconds: 3600

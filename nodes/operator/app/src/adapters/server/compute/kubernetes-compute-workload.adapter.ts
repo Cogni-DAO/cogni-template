@@ -12,9 +12,9 @@ import {
 } from "@kubernetes/client-node";
 import type {
   ComputeWorkload,
+  ComputeWorkloadStatePort,
   ComputeWorkloadStatus,
-} from "@/ports/compute-workload.types";
-import type { ComputeWorkloadStatePort } from "@/ports/compute-workload-state.port";
+} from "@/ports";
 
 const GROUP = "compute.cogni.io";
 const VERSION = "v1alpha1";

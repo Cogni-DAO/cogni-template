@@ -7,8 +7,7 @@ import {
   type TargetedDnsPort,
 } from "@cogni/dns-ops";
 
-import type { ComputeWorkloadDnsPort } from "@/ports/compute-workload-dns.port";
-import { ComputeLifecycleError } from "@/ports/compute-workload-lifecycle.port";
+import { ComputeLifecycleError, type ComputeWorkloadDnsPort } from "@/ports";
 
 const CNAME_TTL_SECONDS = 300;
 

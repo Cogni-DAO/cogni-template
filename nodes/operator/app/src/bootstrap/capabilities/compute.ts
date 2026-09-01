@@ -23,8 +23,11 @@
 
 import type { ComputeResourcePort } from "@cogni/ai-tools";
 
-import { AkashComputeAdapter, CherryComputeAdapter } from "@/adapters/server";
-import { createDefaultProviderOutcomeStore } from "@/adapters/server/compute/provider-outcome-store";
+import {
+  AkashComputeAdapter,
+  CherryComputeAdapter,
+  createDefaultProviderOutcomeStore,
+} from "@/adapters/server";
 import type { ServerEnv } from "@/shared/env";
 
 /**
