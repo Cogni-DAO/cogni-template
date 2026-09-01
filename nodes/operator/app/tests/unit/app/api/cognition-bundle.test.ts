@@ -12,7 +12,11 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { renderBundleMarkdown } from "@/app/api/v1/cognition/_bundle";
+import {
+  renderBundleMarkdown,
+  SESSION_BOOTSTRAP_INVARIANTS,
+  SESSION_WATCH_GATE,
+} from "@/app/api/v1/cognition/_bundle";
 
 const baseInput = {
   node: "4ff8eac1-4eba-4ed0-931b-b1fe4f64713d",
@@ -100,6 +104,61 @@ describe("renderBundleMarkdown", () => {
     expect(markdown.indexOf("## Orientation — recall this first")).toBeLessThan(
       markdown.indexOf("## Tooling invariants")
     );
+  });
+
+  // The bundle is served to every harness (Claude Code, Codex, OpenAI, plain
+  // shell) and auto-injected into a fresh session. So the "how to watch an async
+  // gate" contract must be (a) portable — one blocking shell command, no
+  // Claude-only Monitor/background primitive — and (b) XML-tagged so any model
+  // parses + recalls the exact command without prose parsing. Pin both here.
+  it("exposes a portable, XML-tagged watch-gate the render inlines", () => {
+    const g = SESSION_WATCH_GATE;
+    // Tag-structured: five parseable atoms, not a prose run-on.
+    expect(g).toContain("<watch-gate");
+    expect(g).toContain("</watch-gate>");
+    expect(g).toContain("<ci-green>");
+    expect(g).toContain("<flight-landed>");
+    expect(g).toContain("<deploy-landed>");
+    expect(g).toContain("<truth>");
+    // Portable, harness-neutral rule lives on the opening tag.
+    expect(g).toContain("ONE blocking command");
+    expect(g).toContain("no harness-specific monitor/background");
+    // (1) CI: exact one-liner + the --required trap.
+    expect(g).toContain("gh pr checks {PR} --watch --fail-fast");
+    expect(g).toContain("NOT --required");
+    // Verified against PR #2075: `static` IS a required check, so the reason to
+    // avoid --required is the gates it OMITS (e.g. build), not static. Don't let
+    // the stale "build/static live outside required" claim creep back.
+    expect(g).not.toMatch(/build\/static/);
+    // --watch blocks to a terminal state and never returns 8; exit 8 (pending)
+    // belongs only to the one-shot re-read. Guard against re-mislabeling it.
+    expect(g).toMatch(/one-shot 8=pending/);
+    // Poll must be bounded + fail loud — never an unbounded/​silent hang.
+    expect(g).toMatch(/[Bb]ound/);
+    expect(g).toContain("FAILED");
+    // Placeholders are brace-form so the ONLY angle brackets are real tags —
+    // an angle-bracket placeholder (<PR>) would collide with the tag grammar.
+    expect(g).not.toMatch(/<(PR|candidate|target|node)>/);
+    // (2)/(3) flight + deploy: /version.buildSha is the ground-truth verdict.
+    expect(g).toContain(".buildSha");
+    expect(g).toContain("only ground truth");
+    // Terse by contract: the whole block must stay short enough to recall.
+    expect(g.length).toBeLessThan(1000);
+    // The render actually inlines it under a discoverable header.
+    const markdown = renderBundleMarkdown(baseInput);
+    expect(markdown).toContain("## Watch an async gate — CI · flight · deploy");
+    expect(markdown).toContain(SESSION_WATCH_GATE);
+  });
+
+  it("keeps the CICD-sequence invariant free of the watch mechanics it delegates", () => {
+    const cicd = SESSION_BOOTSTRAP_INVARIANTS.find((line) =>
+      line.startsWith("Follow the CICD checklist")
+    );
+    // The step order lives in the invariant; the *how to watch* lives in the
+    // <watch-gate> block. The invariant points at it, never duplicates the cmd.
+    expect(cicd).toBeDefined();
+    expect(cicd).not.toContain("--fail-fast");
+    expect(cicd).toContain("<watch-gate>");
   });
 
   it("prompts seeding an orientation entry when none exists", () => {

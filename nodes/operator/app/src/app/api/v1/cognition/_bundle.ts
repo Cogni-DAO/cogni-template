@@ -33,11 +33,24 @@ import type {
 export const SESSION_BOOTSTRAP_INVARIANTS: readonly string[] = [
   "ONE work item + ONE node per session — it is your plan and your checklist. Claim it, then write the definition of done as an ordered checklist in `outcome` BEFORE you act; heartbeat; link your PR. You are not done until every box is checked and proven; coordination.nextAction is authoritative and may add boxes.",
   "Cite before you act. Recall first — your <slug>-agent-orientation, then skills/guides → this hub (/api/v1/knowledge?domain=) → our code (node-template, operator) → external OSS; merged + your own open branch. Refine in place over adding new. Every checklist step names the skill/guide/entry it follows; an uncited step is the exception you justify.",
-  "Follow the CICD checklist exactly — recall it, never improvise the mechanism: branch → CI green (`gh pr checks <PR> --watch --fail-fast`; gate on exit 0 — never on narrative, 'watcher armed' is not green) → flight to candidate THROUGH the operator (POST /api/v1/vcs/flight — never a personal `gh` dispatch) → /validate-candidate → operator merge (POST /api/v1/vcs/merge) → promote. NEVER enter the merge queue or enable auto-merge before validate passes.",
+  "Follow the CICD checklist exactly — recall it, never improvise the mechanism: branch → CI green → flight to candidate THROUGH the operator (POST /api/v1/vcs/flight — never a personal `gh` dispatch) → /validate-candidate → operator merge (POST /api/v1/vcs/merge) → promote. NEVER enter the merge queue or enable auto-merge before validate passes. Watch each async gate (CI, flight, deploy) the ONE portable way — see <watch-gate> below.",
   "Done = before→after behavior proven on the live candidate, NOT a SHA deployed. Capture the BROKEN signal, flight, then read the FIXED behavior back from Loki at that SHA. 'Request reached the build' is deploy proof, not function. The /validate-candidate scorecard is the merge gate; reprove prod-facing changes in preview/prod.",
   "Persist what outlives the session in the durable substrate, never a doc that rots: plan + status → the work item; durable strategy/why → operator Dolt, linked to the item (specRefs / cite edge). Specs hold contracts + invariants only — never a rollout plan.",
   "Drive autonomously; interrupt a human only for the irreversible, outward-facing, or out-of-scope — never for approval you already hold, never to merge/promote something unvalidated. When you ask: one scorecard → the single decision → a clickable link.",
 ];
+
+/**
+ * How to watch an async CI/CD gate — the ONE portable technique, tagged for
+ * machine parse + recall. Code-owned (survives an empty hub) and XML-structured
+ * so any harness (Claude, Codex, OpenAI, plain shell) extracts the exact command
+ * without prose parsing. Deliberately terse: five tagged atoms, no run-on prose.
+ */
+export const SESSION_WATCH_GATE = `<watch-gate rule="ONE blocking command; its exit code or matched value IS the verdict — no harness-specific monitor/background/notification primitive, never fire-and-forget, re-read the ground-truth signal before reporting">
+  <ci-green>gh pr checks {PR} --watch --fail-fast — blocks; 0=all pass, nonzero=failed. NOT --required (omits real gates, e.g. build). Re-read after (one-shot 8=pending) — finished ≠ green.</ci-green>
+  <flight-landed>poll curl -s {candidate}/version until .buildSha == PR-head SHA → then /validate-candidate. Bound it; no match = flight FAILED, report not hang. host: test.cognidao.org ({node}-test… non-operator).</flight-landed>
+  <deploy-landed>poll curl -s {target}/version until .buildSha == promoted SHA; bound, report on no-match. host: {node-}{preview,}cognidao.org.</deploy-landed>
+  <truth>/version.buildSha is the only ground truth — CI and workflow "success" can lie.</truth>
+</watch-gate>`;
 
 const COGNITION_ENTRY_TYPES: ReadonlySet<string> = new Set([
   "skill",
@@ -161,6 +174,10 @@ export function renderBundleMarkdown(input: RenderBundleInput): string {
     invariants,
     "",
     `_Your candidate (flight + validate target): \`https://${candidateHost}\` · Loki namespace \`cogni-candidate-a\`._`,
+    "",
+    "## Watch an async gate — CI · flight · deploy",
+    "",
+    SESSION_WATCH_GATE,
     "",
     "## Skills index (recall full content from the hub before acting)",
     "",
