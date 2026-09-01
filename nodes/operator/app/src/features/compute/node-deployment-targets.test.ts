@@ -33,6 +33,42 @@ describe("resolveDeploymentTargets", () => {
     });
   });
 
+  it("never expands a node-ref flight to sibling catalog rows", () => {
+    const catalogRows = [
+      { name: "operator", type: "node" },
+      {
+        name: "toks4",
+        type: "node",
+        deployment_provider: { "candidate-a": "akash" },
+      },
+    ];
+
+    expect(
+      resolveDeploymentTargets({
+        catalogRows,
+        environment: "candidate-a",
+        flightTargets: ["operator"],
+      })
+    ).toEqual({
+      deployment: ["operator"],
+      substrate: ["operator"],
+      external: [],
+      providers: { operator: "k3s" },
+    });
+    expect(
+      resolveDeploymentTargets({
+        catalogRows,
+        environment: "candidate-a",
+        flightTargets: ["toks4"],
+      })
+    ).toEqual({
+      deployment: ["toks4"],
+      substrate: [],
+      external: ["toks4"],
+      providers: { toks4: "akash" },
+    });
+  });
+
   it("fails closed for a target absent from the reviewed catalog", () => {
     expect(() =>
       resolveDeploymentTargets({
