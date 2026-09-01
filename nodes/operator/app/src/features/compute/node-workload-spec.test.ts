@@ -29,7 +29,7 @@ describe("buildNodeWorkloadSpec", () => {
     });
   });
 
-  it("caller env overrides defaults; canonical URL + repo path always set", () => {
+  it("preserves caller env while canonical identity config stays authoritative", () => {
     const env = buildNodeWorkloadSpec(BASE_INPUT).services[0]?.env ?? {};
     expect(env.AUTH_SECRET).toBe("caller-secret");
     expect(env.DATABASE_URL).toBe("postgresql://x");

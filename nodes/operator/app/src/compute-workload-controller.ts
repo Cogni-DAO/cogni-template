@@ -17,14 +17,23 @@ import { Counter, Gauge, Histogram, Registry } from "prom-client";
 
 import { AkashComputeAdapter } from "@/adapters/server/compute/akash-compute.adapter";
 import {
+  CloudflareComputeWorkloadDnsAdapter,
+  DormantComputeWorkloadDnsAdapter,
+} from "@/adapters/server/compute/compute-workload-dns.adapter";
+import {
   ComputeWorkloadLifecycleAdapter,
   DormantComputeWorkloadLifecycleAdapter,
 } from "@/adapters/server/compute/compute-workload-lifecycle.adapter";
+import {
+  ComputeWorkloadSecretResolverAdapter,
+  LiteLlmVirtualKeyMinter,
+} from "@/adapters/server/compute/compute-workload-secret-resolver.adapter";
 import {
   KubernetesComputeWorkloadStateAdapter,
   KubernetesLeaseLeaderElector,
   renewLeadershipOrFence,
 } from "@/adapters/server/compute/kubernetes-compute-workload.adapter";
+import { OpenBaoSecretsAdapter } from "@/adapters/server/secrets/openbao-secrets.adapter";
 import { reconcileComputeWorkload } from "@/features/compute/compute-workload-reconciler";
 
 // biome-ignore lint/style/noProcessEnv: dedicated process composition root validates its own minimal env
@@ -37,6 +46,7 @@ const environment = runtimeEnv.CONTROLLER_ENVIRONMENT;
 const apiKeyFile =
   runtimeEnv.AKASH_CONSOLE_API_KEY_FILE ??
   "/var/run/secrets/compute/AKASH_CONSOLE_API_KEY";
+const credentialFile = (name: string) => `/var/run/secrets/compute/${name}`;
 if (!namespace || !environment) {
   throw new Error("POD_NAMESPACE and CONTROLLER_ENVIRONMENT are required");
 }
@@ -112,6 +122,39 @@ const lifecycle = apiKey
       })
     )
   : new DormantComputeWorkloadLifecycleAdapter();
+const readCredential = (name: string) =>
+  readFile(credentialFile(name), "utf8")
+    .then((value) => value.trim())
+    .catch(() => "");
+const [cloudflareToken, cloudflareZoneId, liteLlmMasterKey] = await Promise.all(
+  [
+    readCredential("CLOUDFLARE_API_TOKEN"),
+    readCredential("CLOUDFLARE_ZONE_ID"),
+    readCredential("LITELLM_MASTER_KEY"),
+  ]
+);
+const dns =
+  cloudflareToken && cloudflareZoneId
+    ? new CloudflareComputeWorkloadDnsAdapter({
+        apiToken: cloudflareToken,
+        zoneId: cloudflareZoneId,
+      })
+    : new DormantComputeWorkloadDnsAdapter();
+const openBao = new OpenBaoSecretsAdapter({
+  addr: runtimeEnv.OPENBAO_ADDR ?? "http://openbao.openbao.svc:8200",
+  role: runtimeEnv.OPENBAO_NODE_SECRETS_WRITER_ROLE ?? "unconfigured",
+  readServiceAccountToken: () =>
+    readFile("/var/run/secrets/openbao/token", "utf8").then((value) =>
+      value.trim()
+    ),
+});
+const liteLlmBaseUrl = runtimeEnv.LITELLM_BASE_URL ?? "";
+const secretResolver = new ComputeWorkloadSecretResolverAdapter(
+  openBao,
+  liteLlmMasterKey && liteLlmBaseUrl
+    ? new LiteLlmVirtualKeyMinter(liteLlmBaseUrl, liteLlmMasterKey)
+    : undefined
+);
 if (!apiKey) {
   log.warn(
     { reason: "ProviderCredentialMissing" },
@@ -221,6 +264,8 @@ async function reconcileAll(): Promise<void> {
               {
                 lifecycle,
                 state,
+                dns,
+                secretResolver,
                 environment: controllerEnvironment,
                 leaderEpoch,
                 assertLeadership: (epoch) => leader.stillHolds(epoch),

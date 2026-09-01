@@ -7,6 +7,7 @@ import {
   type CoreV1Event,
   type CustomObjectsApi,
   PatchUtils,
+  type V1ConfigMap,
   type V1Lease,
 } from "@kubernetes/client-node";
 import type {
@@ -18,6 +19,7 @@ import type { ComputeWorkloadStatePort } from "@/ports/compute-workload-state.po
 const GROUP = "compute.cogni.io";
 const VERSION = "v1alpha1";
 const PLURAL = "computeworkloads";
+const ALLOCATION_LEDGER = "compute-workload-allocation-ledger";
 const PATCH_HEADERS = {
   headers: { "content-type": PatchUtils.PATCH_FORMAT_JSON_MERGE_PATCH },
 };
@@ -29,6 +31,29 @@ function statusCode(error: unknown): number | undefined {
     response?: { statusCode?: number };
   };
   return candidate.statusCode ?? candidate.response?.statusCode;
+}
+
+interface WalletAllocationRecord {
+  readonly attemptKey: string;
+  readonly workloadUid: string;
+  readonly allocationCursor?: string;
+}
+
+function parseWalletAllocation(
+  raw: string | undefined
+): WalletAllocationRecord | undefined {
+  if (!raw) return undefined;
+  try {
+    const value = JSON.parse(raw) as Partial<WalletAllocationRecord>;
+    if (
+      typeof value.attemptKey !== "string" ||
+      typeof value.workloadUid !== "string"
+    )
+      return undefined;
+    return value as WalletAllocationRecord;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Kubernetes API adapter: Git/Argo owns spec; this adapter owns metadata guards + status. */
@@ -74,7 +99,7 @@ export class KubernetesComputeWorkloadStateAdapter
           metadata: {
             resourceVersion,
             annotations: {
-              ["compute.cogni.io/last-attempt"]: input.receipt,
+              "compute.cogni.io/last-attempt": input.receipt,
             },
           },
         },
@@ -88,6 +113,158 @@ export class KubernetesComputeWorkloadStateAdapter
       if (statusCode(error) === 409) return false;
       throw error;
     }
+  }
+
+  async claimWalletAllocation(input: {
+    attemptKey: string;
+    workloadUid: string;
+  }): Promise<
+    | { state: "claimed"; allocationCursor?: string }
+    | { state: "owned"; allocationCursor?: string }
+    | { state: "blocked"; ownerAttemptKey: string }
+  > {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const current = await this.readWalletLedger(true);
+      const active = parseWalletAllocation(current.data?.active);
+      if (active?.attemptKey === input.attemptKey) {
+        return {
+          state: "owned",
+          ...(active.allocationCursor
+            ? { allocationCursor: active.allocationCursor }
+            : {}),
+        };
+      }
+      if (active) {
+        return { state: "blocked", ownerAttemptKey: active.attemptKey };
+      }
+      try {
+        await this.core.replaceNamespacedConfigMap(
+          ALLOCATION_LEDGER,
+          this.namespace,
+          {
+            metadata: {
+              name: ALLOCATION_LEDGER,
+              namespace: this.namespace,
+              ...(current.metadata?.resourceVersion
+                ? { resourceVersion: current.metadata.resourceVersion }
+                : {}),
+            },
+            data: {
+              ...(current.data ?? {}),
+              active: JSON.stringify(input),
+            },
+          }
+        );
+        return { state: "claimed" };
+      } catch (error) {
+        if (statusCode(error) !== 409) throw error;
+      }
+    }
+    return { state: "blocked", ownerAttemptKey: "concurrent-writer" };
+  }
+
+  async prepareWalletAllocation(input: {
+    attemptKey: string;
+    allocationCursor: string;
+  }): Promise<void> {
+    await this.mutateWalletAllocation(input.attemptKey, (active) => ({
+      ...active,
+      allocationCursor: input.allocationCursor,
+    }));
+  }
+
+  async completeWalletAllocation(input: { attemptKey: string }): Promise<void> {
+    await this.mutateWalletAllocation(input.attemptKey, () => undefined, true);
+  }
+
+  private async mutateWalletAllocation(
+    attemptKey: string,
+    mutate: (
+      active: WalletAllocationRecord
+    ) => WalletAllocationRecord | undefined,
+    ignoreDifferentOwner = false
+  ): Promise<void> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const current = await this.readWalletLedger(false);
+      const active = parseWalletAllocation(current.data?.active);
+      if (!active) return;
+      if (active.attemptKey !== attemptKey) {
+        if (ignoreDifferentOwner) return;
+        throw new Error("wallet allocation ledger ownership mismatch");
+      }
+      const next = mutate(active);
+      const data = { ...(current.data ?? {}) };
+      if (next) data.active = JSON.stringify(next);
+      else delete data.active;
+      try {
+        await this.core.replaceNamespacedConfigMap(
+          ALLOCATION_LEDGER,
+          this.namespace,
+          {
+            metadata: {
+              name: ALLOCATION_LEDGER,
+              namespace: this.namespace,
+              ...(current.metadata?.resourceVersion
+                ? { resourceVersion: current.metadata.resourceVersion }
+                : {}),
+            },
+            data,
+          }
+        );
+        return;
+      } catch (error) {
+        if (statusCode(error) !== 409) throw error;
+      }
+    }
+    throw new Error("wallet allocation ledger CAS retry limit exceeded");
+  }
+
+  private async readWalletLedger(
+    createIfMissing: boolean
+  ): Promise<V1ConfigMap> {
+    try {
+      return this.assertWalletLedger(
+        (
+          await this.core.readNamespacedConfigMap(
+            ALLOCATION_LEDGER,
+            this.namespace
+          )
+        ).body
+      );
+    } catch (error) {
+      if (statusCode(error) !== 404 || !createIfMissing) throw error;
+      try {
+        return this.assertWalletLedger(
+          (
+            await this.core.createNamespacedConfigMap(this.namespace, {
+              metadata: { name: ALLOCATION_LEDGER, namespace: this.namespace },
+              data: {},
+            })
+          ).body
+        );
+      } catch (createError) {
+        if (statusCode(createError) !== 409) throw createError;
+        return this.assertWalletLedger(
+          (
+            await this.core.readNamespacedConfigMap(
+              ALLOCATION_LEDGER,
+              this.namespace
+            )
+          ).body
+        );
+      }
+    }
+  }
+
+  private assertWalletLedger(resource: V1ConfigMap): V1ConfigMap {
+    if (
+      resource.metadata?.name !== ALLOCATION_LEDGER ||
+      (resource.metadata.namespace !== undefined &&
+        resource.metadata.namespace !== this.namespace)
+    ) {
+      throw new Error("wallet allocation ledger identity mismatch");
+    }
+    return resource;
   }
 
   async patchMetadata(input: {

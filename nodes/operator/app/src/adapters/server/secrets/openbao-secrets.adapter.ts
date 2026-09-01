@@ -35,6 +35,7 @@ export interface OpenBaoSecretsAdapterDeps {
   readonly readServiceAccountToken: () => Promise<string>;
   /** Defaults to global `fetch`; injected in unit tests. */
   readonly fetchImpl?: typeof fetch;
+  readonly timeoutMs?: number;
 }
 
 interface KvWriteResponse {
@@ -46,12 +47,14 @@ export class OpenBaoSecretsAdapter implements OperatorSecretsPlanePort {
   private readonly role: string;
   private readonly readServiceAccountToken: () => Promise<string>;
   private readonly fetchImpl: typeof fetch;
+  private readonly timeoutMs: number;
 
   constructor(deps: OpenBaoSecretsAdapterDeps) {
     this.addr = deps.addr.replace(/\/+$/, "");
     this.role = deps.role;
     this.readServiceAccountToken = deps.readServiceAccountToken;
     this.fetchImpl = deps.fetchImpl ?? fetch;
+    this.timeoutMs = deps.timeoutMs ?? 5_000;
   }
 
   async writeSecret(
@@ -70,14 +73,39 @@ export class OpenBaoSecretsAdapter implements OperatorSecretsPlanePort {
     return { written: true, version, path };
   }
 
+  async readNodeSecrets(input: {
+    readonly nodeSlug: string;
+    readonly env: string;
+  }): Promise<Readonly<Record<string, string>> | null> {
+    const token = await this.login();
+    const res = await this.fetchWithTimeout(
+      `${this.addr}/v1/cogni/data/${input.env}/${input.nodeSlug}`,
+      { method: "GET", headers: { "x-vault-token": token } }
+    );
+    if (res.status === 404) return null;
+    if (!res.ok) throw httpError("openbao_read_failed", res.status);
+    const body = (await res.json()) as {
+      data?: { data?: Record<string, unknown> };
+    };
+    const raw = body.data?.data ?? {};
+    return Object.fromEntries(
+      Object.entries(raw).filter(
+        (entry): entry is [string, string] => typeof entry[1] === "string"
+      )
+    );
+  }
+
   /** Kubernetes-auth self-login → short-lived client token. */
   private async login(): Promise<string> {
     const jwt = await this.readServiceAccountToken();
-    const res = await this.fetchImpl(`${this.addr}/v1/auth/kubernetes/login`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ role: this.role, jwt }),
-    });
+    const res = await this.fetchWithTimeout(
+      `${this.addr}/v1/auth/kubernetes/login`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ role: this.role, jwt }),
+      }
+    );
     if (!res.ok) {
       throw httpError("openbao_login_failed", res.status);
     }
@@ -95,7 +123,7 @@ export class OpenBaoSecretsAdapter implements OperatorSecretsPlanePort {
     env: string,
     nodeSlug: string
   ): Promise<boolean> {
-    const res = await this.fetchImpl(
+    const res = await this.fetchWithTimeout(
       `${this.addr}/v1/cogni/metadata/${env}/${nodeSlug}`,
       { method: "GET", headers: { "x-vault-token": token } }
     );
@@ -110,7 +138,7 @@ export class OpenBaoSecretsAdapter implements OperatorSecretsPlanePort {
     key: string,
     value: string
   ): Promise<number> {
-    const res = await this.fetchImpl(`${this.addr}/v1/${dataPath}`, {
+    const res = await this.fetchWithTimeout(`${this.addr}/v1/${dataPath}`, {
       method: "POST",
       headers: { "content-type": "application/json", "x-vault-token": token },
       body: JSON.stringify({ data: { [key]: value } }),
@@ -124,7 +152,7 @@ export class OpenBaoSecretsAdapter implements OperatorSecretsPlanePort {
     key: string,
     value: string
   ): Promise<number> {
-    const res = await this.fetchImpl(`${this.addr}/v1/${dataPath}`, {
+    const res = await this.fetchWithTimeout(`${this.addr}/v1/${dataPath}`, {
       method: "PATCH",
       headers: {
         "content-type": "application/merge-patch+json",
@@ -133,6 +161,22 @@ export class OpenBaoSecretsAdapter implements OperatorSecretsPlanePort {
       body: JSON.stringify({ data: { [key]: value } }),
     });
     return readVersion(res, "openbao_patch_failed");
+  }
+
+  private async fetchWithTimeout(
+    input: string,
+    init: RequestInit
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      return await this.fetchImpl(input, {
+        ...init,
+        signal: controller.signal,
+      });
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }
 
