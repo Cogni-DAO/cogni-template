@@ -275,6 +275,11 @@ async function reconcileAll(): Promise<void> {
                     observation,
                     "compute_workload_readiness_transition"
                   ),
+                recordRecoveryLimit: (observation) =>
+                  log.error(
+                    observation,
+                    "compute_workload_recovery_limit_exceeded"
+                  ),
               },
               resource
             );
