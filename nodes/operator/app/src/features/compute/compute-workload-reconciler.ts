@@ -140,8 +140,9 @@ const LEGACY_COGNI_APP_REQUIRED_ENV = [
   "AUTH_SECRET",
   "DATABASE_URL",
   "DATABASE_SERVICE_URL",
-  "DOLTGRES_URL",
   "LITELLM_MASTER_KEY",
+  "SCHEDULER_API_TOKEN",
+  "BILLING_INGEST_TOKEN",
 ] as const;
 
 /** Explicit node-app compatibility policy; generic/private services do not inherit it. */
