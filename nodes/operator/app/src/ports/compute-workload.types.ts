@@ -41,23 +41,21 @@ export interface ComputeWorkloadSecretRef {
 export interface DeclaredProvisionServiceSpec {
   readonly name: string;
   readonly artifact: string;
-  readonly env?: Readonly<Record<string, string>>;
   readonly secretRefs?: readonly ComputeWorkloadSecretRef[];
   readonly command?: readonly string[];
   readonly args?: readonly string[];
+  readonly port: number;
+  readonly visibility: "public" | "private";
+  readonly bindings: Readonly<Record<string, string>>;
+  readonly bindHost: "0.0.0.0";
   readonly cpuUnits: number;
   readonly memoryMi: number;
   readonly storageMi: number;
-  readonly expose?: readonly {
-    readonly port: number;
-    readonly as: number;
-    readonly global: boolean;
-    readonly hosts?: readonly string[];
-  }[];
 }
 
 export interface DeclaredProvisionSpec {
   readonly name: string;
+  readonly publicHost: string;
   readonly services: readonly DeclaredProvisionServiceSpec[];
 }
 
@@ -122,6 +120,11 @@ export interface ComputeWorkloadStatus {
     readonly id: string;
     readonly state: ProvisionState;
     readonly endpoints: readonly string[];
+  };
+  /** Exact CNAME value owned by this CR; used for fail-closed finalization. */
+  readonly dns?: {
+    readonly hostname: string;
+    readonly target: string;
   };
   readonly attempt?: ComputeWorkloadAttempt;
   readonly recoveryCount?: number;

@@ -15,17 +15,22 @@ import {
   decodeAttemptReceipt,
   encodeAttemptReceipt,
 } from "@/ports/compute-workload.types";
+import type { ComputeWorkloadDnsPort } from "@/ports/compute-workload-dns.port";
 import {
   ComputeLifecycleError,
   type ComputeWorkloadLifecyclePort,
 } from "@/ports/compute-workload-lifecycle.port";
+import type { ComputeWorkloadSecretResolverPort } from "@/ports/compute-workload-secret-resolver.port";
 import type { ComputeWorkloadStatePort } from "@/ports/compute-workload-state.port";
+import { buildNodeAppIdentityEnv } from "./node-workload-spec";
 
 const MAX_MUTATION_RETRIES = 3;
 
 export interface ComputeWorkloadReconcileDeps {
   readonly lifecycle: ComputeWorkloadLifecyclePort;
   readonly state: ComputeWorkloadStatePort;
+  readonly dns: ComputeWorkloadDnsPort;
+  readonly secretResolver: ComputeWorkloadSecretResolverPort;
   readonly environment: string;
   readonly leaderEpoch: string;
   readonly assertLeadership: (epoch: string) => Promise<boolean>;
@@ -41,8 +46,18 @@ const SAFE_MESSAGES: Readonly<Record<string, string>> = {
   ProviderOutcomeUnknown:
     "external provider mutation outcome is unknown; automatic replay is blocked",
   SecretResolverUnavailable: "declared runtime secrets cannot yet be resolved",
+  SecretPolicyRejected:
+    "declared runtime secret is not approved for external compute",
+  SecretReferenceMissing:
+    "declared runtime secret is not available in the node scope",
+  DnsCredentialMissing: "external workload DNS credential is not configured",
+  DnsReconcileFailed: "external workload DNS reconciliation did not succeed",
+  DnsOwnershipChanged:
+    "external workload DNS record no longer matches controller ownership",
   EndpointVerificationFailed: "workload source verification did not succeed",
   MutationClaimConflict: "another controller writer claimed this generation",
+  WalletAllocationBlocked:
+    "another uncertain wallet allocation must be resolved before creating more compute",
   MutationOutcomeUnknown:
     "external provider mutation outcome is unknown; automatic replay is blocked",
   OrphanRisk:
@@ -74,10 +89,11 @@ function condition(
   };
 }
 
-function baseStatus(
-  resource: ComputeWorkload
-): Pick<ComputeWorkloadStatus, "desiredGeneration"> {
-  return { desiredGeneration: resource.metadata.generation };
+function baseStatus(resource: ComputeWorkload) {
+  return {
+    desiredGeneration: resource.metadata.generation,
+    ...(resource.status?.dns ? { dns: resource.status.dns } : {}),
+  };
 }
 
 function observedIdentity(resource: ComputeWorkload) {
@@ -93,37 +109,147 @@ function resourceStatus(output: ProvisionOutput) {
   };
 }
 
-function toProvisionSpec(resource: ComputeWorkload): ProvisionSpec {
+function sharedSubstrateEnv(
+  environment: string,
+  secrets: Readonly<Record<string, string>>
+): Record<string, string> {
+  const databaseUrl = secrets.DATABASE_URL;
+  if (!databaseUrl) return {};
+  try {
+    const host = new URL(databaseUrl).hostname;
+    if (!host) return {};
+    return {
+      APP_ENV: "production",
+      DEPLOY_ENVIRONMENT: environment,
+      TEMPORAL_ADDRESS: `${host}:7233`,
+      TEMPORAL_NAMESPACE: `cogni-${environment}`,
+      TEMPORAL_TASK_QUEUE: "scheduler-tasks",
+      REDIS_URL: `redis://${host}:6379`,
+      LITELLM_BASE_URL: `http://${host}:4000`,
+    };
+  } catch {
+    throw new ComputeLifecycleError(
+      "terminal",
+      "SecretReferenceMissing",
+      false
+    );
+  }
+}
+
+const LEGACY_COGNI_APP_REQUIRED_ENV = [
+  "AUTH_SECRET",
+  "DATABASE_URL",
+  "DATABASE_SERVICE_URL",
+  "DOLTGRES_URL",
+  "LITELLM_MASTER_KEY",
+] as const;
+
+/** Explicit node-app compatibility policy; generic/private services do not inherit it. */
+function legacyCogniAppEnv(input: {
+  resource: ComputeWorkload;
+  serviceName: string;
+  visibility: "public" | "private";
+  bindings: Readonly<Record<string, string>>;
+  secrets: Readonly<Record<string, string>>;
+}): Record<string, string> {
+  if (input.serviceName !== "app" || input.visibility !== "public") {
+    return { ...input.bindings, ...input.secrets };
+  }
+  if (LEGACY_COGNI_APP_REQUIRED_ENV.some((key) => !input.secrets[key])) {
+    throw new ComputeLifecycleError(
+      "terminal",
+      "SecretReferenceMissing",
+      false
+    );
+  }
+  return buildNodeAppIdentityEnv({
+    slug: input.resource.spec.workload.name,
+    publicUrl: `https://${input.resource.spec.workload.publicHost}`,
+    env: {
+      APP_ENV: "production",
+      DEPLOY_ENVIRONMENT: input.resource.spec.environment,
+      COGNI_REPO_SHA: input.resource.spec.bundle.source.sha,
+      ...sharedSubstrateEnv(input.resource.spec.environment, input.secrets),
+      ...input.bindings,
+      ...input.secrets,
+    },
+  });
+}
+
+async function toProvisionSpec(
+  deps: ComputeWorkloadReconcileDeps,
+  resource: ComputeWorkload
+): Promise<ProvisionSpec> {
   const artifacts = new Map(
     resource.spec.bundle.artifacts.map((artifact) => [
       artifact.name,
       artifact.image,
     ])
   );
-  const services = resource.spec.workload.services.map((service) => {
-    if ((service.secretRefs?.length ?? 0) > 0) {
-      throw new ComputeLifecycleError(
-        "terminal",
-        "SecretResolverUnavailable",
-        false
+  const servicePorts = new Map(
+    resource.spec.workload.services.map((service) => [
+      service.name,
+      service.port,
+    ])
+  );
+  const sourceSlug = resource.spec.bundle.source.repository.split("/")[1];
+  if (!sourceSlug || sourceSlug !== resource.spec.workload.name) {
+    throw new ComputeLifecycleError("terminal", "ProviderRejected", false);
+  }
+  const services = await Promise.all(
+    resource.spec.workload.services.map(async (service) => {
+      const image = artifacts.get(service.artifact);
+      if (!image) {
+        throw new ComputeLifecycleError("terminal", "ProviderRejected", false);
+      }
+      const secrets = await deps.secretResolver.resolve({
+        nodeId: resource.spec.nodeId,
+        nodeSlug: sourceSlug,
+        environment: resource.spec.environment,
+        serviceName: service.name,
+        sourceSha: resource.spec.bundle.source.sha,
+        refs: service.secretRefs ?? [],
+      });
+      const bindingEnv = Object.fromEntries(
+        Object.entries(service.bindings).map(([envName, target]) => [
+          envName,
+          `http://${target}:${servicePorts.get(target) ?? 0}`,
+        ])
       );
-    }
-    const image = artifacts.get(service.artifact);
-    if (!image) {
-      throw new ComputeLifecycleError("terminal", "ProviderRejected", false);
-    }
-    return {
-      name: service.name,
-      image,
-      ...(service.env ? { env: service.env } : {}),
-      ...(service.command ? { command: service.command } : {}),
-      ...(service.args ? { args: service.args } : {}),
-      cpuUnits: service.cpuUnits,
-      memoryMi: service.memoryMi,
-      storageMi: service.storageMi,
-      ...(service.expose ? { expose: service.expose } : {}),
-    };
-  });
+      const runtimeEnv = legacyCogniAppEnv({
+        resource,
+        serviceName: service.name,
+        visibility: service.visibility,
+        bindings: bindingEnv,
+        secrets,
+      });
+      return {
+        name: service.name,
+        image,
+        env: {
+          HOST: service.bindHost,
+          HOSTNAME: service.bindHost,
+          PORT: String(service.port),
+          ...runtimeEnv,
+        },
+        ...(service.command ? { command: service.command } : {}),
+        ...(service.args ? { args: service.args } : {}),
+        cpuUnits: service.cpuUnits,
+        memoryMi: service.memoryMi,
+        storageMi: service.storageMi,
+        expose: [
+          {
+            port: service.port,
+            as: service.visibility === "public" ? 80 : service.port,
+            global: service.visibility === "public",
+            ...(service.visibility === "public"
+              ? { hosts: [resource.spec.workload.publicHost] }
+              : {}),
+          },
+        ],
+      };
+    })
+  );
   return { name: resource.spec.workload.name, services } as ProvisionSpec;
 }
 
@@ -327,8 +453,50 @@ async function mutate(
 
   let allocated: ComputeWorkloadStatus["resource"] | undefined;
   let activeAttempt = attempt;
+  const walletMutation = operation !== "update";
+  if (walletMutation) {
+    const wallet = await deps.state.claimWalletAllocation({
+      attemptKey: attempt.key,
+      workloadUid: resource.metadata.uid,
+    });
+    if (wallet.state === "blocked") {
+      const now = deps.now().toISOString();
+      await deps.state.patchStatus({
+        resource,
+        status: {
+          ...baseStatus(resource),
+          phase: "Progressing",
+          attempt,
+          recoveryCount: resource.status?.recoveryCount ?? 0,
+          failure: {
+            reason: "WalletAllocationBlocked",
+            message: safeMessage("WalletAllocationBlocked"),
+            retryable: true,
+          },
+          conditions: [
+            condition(resource, now, "False", "WalletAllocationBlocked"),
+          ],
+        },
+      });
+      return;
+    }
+    if (wallet.allocationCursor) {
+      activeAttempt = {
+        ...activeAttempt,
+        outcome: "prepared",
+        allocationCursor: wallet.allocationCursor,
+      };
+      await patchReceipt(deps, resource, attemptReceipt(activeAttempt));
+      await recoverUncertainAllocation(
+        deps,
+        resource,
+        attemptReceipt(activeAttempt)
+      );
+      return;
+    }
+  }
   try {
-    const spec = toProvisionSpec(resource);
+    const spec = await toProvisionSpec(deps, resource);
     const output =
       operation === "update"
         ? await deps.lifecycle.update({
@@ -348,6 +516,10 @@ async function mutate(
                 allocationCursor,
               };
               await patchReceipt(deps, resource, attemptReceipt(activeAttempt));
+              await deps.state.prepareWalletAllocation({
+                attemptKey: activeAttempt.key,
+                allocationCursor,
+              });
               await deps.state.patchStatus({
                 resource,
                 status: {
@@ -399,6 +571,9 @@ async function mutate(
                   ],
                 },
               });
+              await deps.state.completeWalletAllocation({
+                attemptKey: allocatedAttempt.key,
+              });
             },
           });
     const completedAt = deps.now().toISOString();
@@ -415,6 +590,11 @@ async function mutate(
         id: output.leaseId,
       })
     );
+    if (walletMutation) {
+      await deps.state.completeWalletAllocation({
+        attemptKey: completedAttempt.key,
+      });
+    }
     await deps.state.patchStatus({
       resource,
       status: {
@@ -473,6 +653,11 @@ async function mutate(
         allocated
       );
       return;
+    }
+    if (walletMutation) {
+      await deps.state.completeWalletAllocation({
+        attemptKey: failedAttempt.key,
+      });
     }
     const terminal = !failure.retryable;
     await deps.state.patchStatus({
@@ -569,6 +754,26 @@ async function finalize(
 ): Promise<void> {
   const finalizers = resource.metadata.finalizers ?? [];
   if (!finalizers.includes(COMPUTE_WORKLOAD_FINALIZER)) return;
+  if (resource.status?.dns) {
+    try {
+      await deps.dns.deleteOwned({
+        hostname: resource.status.dns.hostname,
+        expectedTarget: resource.status.dns.target,
+      });
+    } catch (error) {
+      const failure = lifecycleError(error, false);
+      await writeUnknown(
+        deps,
+        resource,
+        failure.reason === "DnsOwnershipChanged"
+          ? failure.reason
+          : "FinalizationBlocked",
+        resource.status?.attempt,
+        current
+      );
+      return;
+    }
+  }
   if (!current) {
     if (resource.metadata.annotations?.[COMPUTE_WORKLOAD_ATTEMPT_ANNOTATION]) {
       await writeUnknown(deps, resource, "OrphanRisk");
@@ -641,8 +846,77 @@ async function observeAndReport(
   }
   if (observed.state === "closed") return "closed";
   if (observed.state !== "active") return "pending";
+  let dnsTarget: string | undefined;
+  try {
+    dnsTarget = endpointHostname(observed.endpoints);
+    // Persist exact cleanup ownership before the DNS write. A crash can leave a
+    // record behind, but never an untracked record the finalizer would ignore.
+    await deps.state.patchStatus({
+      resource,
+      status: {
+        ...baseStatus(resource),
+        ...observedIdentity(resource),
+        phase: "Progressing",
+        observedGeneration: resource.metadata.generation,
+        resource: resourceStatus(observed),
+        ...(dnsTarget
+          ? {
+              dns: {
+                hostname: resource.spec.workload.publicHost,
+                target: dnsTarget,
+              },
+            }
+          : {}),
+        ...(attempt ? { attempt } : {}),
+        recoveryCount: resource.status?.recoveryCount ?? 0,
+        conditions: [
+          condition(
+            resource,
+            deps.now().toISOString(),
+            "False",
+            "ServingVerificationPending"
+          ),
+        ],
+      },
+    });
+    await deps.dns.reconcile({
+      hostname: resource.spec.workload.publicHost,
+      target: dnsTarget,
+    });
+  } catch (error) {
+    const failure = lifecycleError(error, false);
+    const now = deps.now().toISOString();
+    await deps.state.patchStatus({
+      resource,
+      status: {
+        ...baseStatus(resource),
+        ...observedIdentity(resource),
+        phase: failure.retryable ? "Progressing" : "Failed",
+        observedGeneration: resource.metadata.generation,
+        resource: resourceStatus(observed),
+        ...(dnsTarget
+          ? {
+              dns: {
+                hostname: resource.spec.workload.publicHost,
+                target: dnsTarget,
+              },
+            }
+          : {}),
+        ...(attempt ? { attempt } : {}),
+        recoveryCount: resource.status?.recoveryCount ?? 0,
+        failure: {
+          reason: failure.reason,
+          message: safeMessage(failure.reason),
+          retryable: failure.retryable,
+        },
+        conditions: [condition(resource, now, "False", failure.reason)],
+      },
+    });
+    return "error";
+  }
+  if (!dnsTarget) return "error";
   const verified = await deps.lifecycle.verifySource({
-    endpoints: observed.endpoints,
+    endpoints: [`https://${resource.spec.workload.publicHost}`],
     expectedSourceSha: resource.spec.bundle.source.sha,
   });
   const now = deps.now().toISOString();
@@ -654,6 +928,10 @@ async function observeAndReport(
       phase: verified ? "Ready" : "Progressing",
       observedGeneration: resource.metadata.generation,
       resource: resourceStatus(observed),
+      dns: {
+        hostname: resource.spec.workload.publicHost,
+        target: dnsTarget,
+      },
       ...(attempt
         ? {
             attempt: verified
@@ -673,6 +951,20 @@ async function observeAndReport(
     },
   });
   return "active";
+}
+
+function endpointHostname(endpoints: readonly string[]): string {
+  for (const endpoint of endpoints) {
+    try {
+      const value = endpoint.includes("://") ? endpoint : `http://${endpoint}`;
+      const hostname = new URL(value).hostname.toLowerCase().replace(/\.$/, "");
+      if (hostname && !/^\d{1,3}(?:\.\d{1,3}){3}$/.test(hostname))
+        return hostname;
+    } catch {
+      // Try the next provider-reported endpoint.
+    }
+  }
+  throw new ComputeLifecycleError("transient", "DnsReconcileFailed", true);
 }
 
 function attemptFromReceipt(
@@ -705,6 +997,50 @@ async function recoverUncertainAllocation(
       attemptFromReceipt(receipt)
     );
     return;
+  }
+  const wallet = await deps.state.claimWalletAllocation({
+    attemptKey: receipt.key,
+    workloadUid: resource.metadata.uid,
+  });
+  if (wallet.state === "blocked") {
+    const attempt = attemptFromReceipt(receipt);
+    const now = deps.now().toISOString();
+    await deps.state.patchStatus({
+      resource,
+      status: {
+        ...baseStatus(resource),
+        phase: "Progressing",
+        attempt,
+        recoveryCount: resource.status?.recoveryCount ?? 0,
+        failure: {
+          reason: "WalletAllocationBlocked",
+          message: safeMessage("WalletAllocationBlocked"),
+          retryable: true,
+        },
+        conditions: [
+          condition(resource, now, "False", "WalletAllocationBlocked"),
+        ],
+      },
+    });
+    return;
+  }
+  if (
+    wallet.allocationCursor &&
+    wallet.allocationCursor !== receipt.allocationCursor
+  ) {
+    await writeUnknown(
+      deps,
+      resource,
+      "ProviderOutcomeUnknown",
+      attemptFromReceipt(receipt)
+    );
+    return;
+  }
+  if (!wallet.allocationCursor) {
+    await deps.state.prepareWalletAllocation({
+      attemptKey: receipt.key,
+      allocationCursor: receipt.allocationCursor,
+    });
   }
   let adopted: ProvisionOutput | null;
   try {
@@ -761,6 +1097,7 @@ async function recoverUncertainAllocation(
       ],
     },
   });
+  await deps.state.completeWalletAllocation({ attemptKey: adoptedAttempt.key });
   if (adopted.state === "active") {
     await observeAndReport(
       deps,
@@ -787,6 +1124,11 @@ export async function reconcileComputeWorkload(
       }
     : undefined;
   const current = resource.status?.resource ?? receiptResource;
+  if (current && receipt?.resource) {
+    // Handle persistence is the wallet-wide commit point. Clear a stale slot left by a
+    // crash after the per-resource receipt but before ledger completion.
+    await deps.state.completeWalletAllocation({ attemptKey: receipt.key });
+  }
 
   if (resource.metadata.deletionTimestamp) {
     await finalize(deps, resource, current);

@@ -69,6 +69,21 @@ export interface NodeWorkloadInput {
   readonly logPush?: NodeWorkloadLogPush;
 }
 
+export function buildNodeAppIdentityEnv(input: {
+  slug: string;
+  publicUrl: string;
+  env: Readonly<Record<string, string>>;
+}): Record<string, string> {
+  return {
+    ...input.env,
+    NODE_NAME: input.slug,
+    COGNI_REPO_PATH: "/app",
+    AUTH_TRUST_HOST: "true",
+    NEXTAUTH_URL: input.publicUrl,
+    APP_BASE_URL: input.publicUrl,
+  };
+}
+
 /** Inline stdin→Loki batch pusher, run behind the app's stdout pipe (node builtins only). */
 function lokiPumpJs(): string {
   return [
@@ -89,16 +104,11 @@ function lokiPumpJs(): string {
 
 /** Build the app-only workload spec for one node wired to shared infra. */
 export function buildNodeWorkloadSpec(input: NodeWorkloadInput): ProvisionSpec {
-  const appEnv: Record<string, string> = {
-    NODE_NAME: input.slug,
-    // repo-spec.yaml ships in the image at /app (node-at-root); the container can't
-    // construct without it (getNodeId at bootstrap).
-    COGNI_REPO_PATH: "/app",
-    AUTH_TRUST_HOST: "true",
-    NEXTAUTH_URL: input.publicUrl,
-    APP_BASE_URL: input.publicUrl,
-    ...input.env,
-  };
+  const appEnv = buildNodeAppIdentityEnv({
+    slug: input.slug,
+    publicUrl: input.publicUrl,
+    env: input.env,
+  });
 
   // The pump source travels base64 in env and is materialized to a file at start —
   // zero shell-quoting/escaping of code (js/incomplete-sanitization safe by construction).

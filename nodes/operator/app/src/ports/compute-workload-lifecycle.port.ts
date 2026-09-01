@@ -25,6 +25,11 @@ export class ComputeLifecycleError extends Error {
       | "ProviderRejected"
       | "ProviderOutcomeUnknown"
       | "SecretResolverUnavailable"
+      | "SecretPolicyRejected"
+      | "SecretReferenceMissing"
+      | "DnsCredentialMissing"
+      | "DnsReconcileFailed"
+      | "DnsOwnershipChanged"
       | "EndpointVerificationFailed",
     public readonly retryable: boolean
   ) {

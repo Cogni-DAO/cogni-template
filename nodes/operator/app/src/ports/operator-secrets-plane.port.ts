@@ -44,4 +44,9 @@ export interface WriteNodeSecretResult {
 
 export interface OperatorSecretsPlanePort {
   writeSecret(input: WriteNodeSecretInput): Promise<WriteNodeSecretResult>;
+  /** Read the node/env bucket. Callers must enforce an independent exposure policy. */
+  readNodeSecrets(input: {
+    readonly nodeSlug: string;
+    readonly env: string;
+  }): Promise<Readonly<Record<string, string>> | null>;
 }

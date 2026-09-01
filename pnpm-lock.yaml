@@ -367,6 +367,9 @@ importers:
       '@cogni/db-schema':
         specifier: workspace:*
         version: link:../../../packages/db-schema
+      '@cogni/dns-ops':
+        specifier: workspace:*
+        version: link:../../../packages/dns-ops
       '@cogni/financial-ledger':
         specifier: workspace:*
         version: link:../../../packages/financial-ledger

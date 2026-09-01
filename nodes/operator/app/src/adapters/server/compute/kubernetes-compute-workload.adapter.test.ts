@@ -7,6 +7,7 @@ import type {
   CoordinationV1Api,
   CoreV1Api,
   CustomObjectsApi,
+  V1ConfigMap,
   V1Lease,
 } from "@kubernetes/client-node";
 import { describe, expect, it, vi } from "vitest";
@@ -35,6 +36,10 @@ function declaredWorkload(): ComputeWorkload {
       uid: "123e4567-e89b-12d3-a456-426614174000",
       generation: 1,
       resourceVersion: "1",
+      labels: {
+        "cogni.io/node-id": "123e4567-e89b-12d3-a456-426614174001",
+        "cogni.io/environment": "candidate-a",
+      },
     },
     spec: {
       nodeId: "123e4567-e89b-12d3-a456-426614174001",
@@ -42,20 +47,41 @@ function declaredWorkload(): ComputeWorkload {
       bundle: {
         ref: `ghcr.io/cogni-dao/poly-bundle@sha256:${"c".repeat(64)}`,
         source: { repository: "cogni-dao/poly", sha: "a".repeat(40) },
-        artifacts: [{ name: "app", image: `ghcr.io/cogni-dao/poly@${digest}` }],
+        artifacts: [
+          { name: "app", image: `ghcr.io/cogni-dao/poly@${digest}` },
+          {
+            name: "paper-trader",
+            image: `ghcr.io/cogni-dao/paper-trader@${digest}`,
+          },
+        ],
       },
       workload: {
         name: "poly",
+        publicHost: "poly-test.cognidao.org",
         services: [
           {
             name: "app",
             artifact: "app",
             command: ["node"],
             args: ["server.mjs"],
-            env: { PAPER_TRADER_URL: "http://paper-trader:9100" },
+            port: 3000,
+            visibility: "public",
+            bindings: { PAPER_TRADER_URL: "paper-trader" },
+            bindHost: "0.0.0.0",
             cpuUnits: 0.5,
             memoryMi: 512,
             storageMi: 1024,
+          },
+          {
+            name: "paper-trader",
+            artifact: "paper-trader",
+            port: 9100,
+            visibility: "private",
+            bindings: {},
+            bindHost: "0.0.0.0",
+            cpuUnits: 0.25,
+            memoryMi: 256,
+            storageMi: 512,
           },
         ],
       },
@@ -64,13 +90,12 @@ function declaredWorkload(): ComputeWorkload {
 }
 
 describe("ComputeWorkload Kubernetes contract", () => {
-  it("admits generic env/args fields and preserves service bindings over the API wire", async () => {
-    const crd = parse(
-      await readFile(
-        "../../../infra/k8s/base/compute-workload-platform/crd.yaml",
-        "utf8"
-      )
-    ) as {
+  it("admits bounded topology fields and preserves service bindings over the API wire", async () => {
+    const crdYaml = await readFile(
+      "../../../infra/k8s/base/compute-workload-platform/crd.yaml",
+      "utf8"
+    );
+    const crd = parse(crdYaml) as {
       spec: {
         versions: {
           schema: { openAPIV3Schema: Record<string, unknown> };
@@ -96,8 +121,17 @@ describe("ComputeWorkload Kubernetes contract", () => {
     const services =
       schema.properties.spec.properties.workload.properties.services;
     expect(services.maxItems).toBe(8);
-    expect(services.items.properties).toHaveProperty("env");
+    expect(services.items.properties).toHaveProperty("bindings");
     expect(services.items.properties).toHaveProperty("args");
+    expect(crdYaml).toContain(
+      "self.services.filter(s, s.visibility == 'public').size() == 1"
+    );
+    expect(crdYaml).toContain(
+      "every binding must target a different declared sibling service"
+    );
+    expect(crdYaml).toContain(
+      "workload name must equal the immutable source repository slug"
+    );
     expect(
       (schema.properties.spec.properties as Record<string, unknown>).bundle
     ).toBeDefined();
@@ -118,7 +152,7 @@ describe("ComputeWorkload Kubernetes contract", () => {
     const [roundTripped] = await state.list();
     expect(roundTripped?.spec.workload.services[0]).toMatchObject({
       args: ["server.mjs"],
-      env: { PAPER_TRADER_URL: "http://paper-trader:9100" },
+      bindings: { PAPER_TRADER_URL: "paper-trader" },
     });
   });
 
@@ -161,6 +195,114 @@ describe("ComputeWorkload Kubernetes contract", () => {
     await expect(
       state.claimAttempt({ resource: declaredWorkload(), receipt: "other" })
     ).resolves.toBe(false);
+  });
+
+  it("holds one durable wallet-wide allocation across competing workload reconciles", async () => {
+    let ledger = {
+      metadata: {
+        name: "compute-workload-allocation-ledger",
+        namespace: "cogni-candidate-a",
+        resourceVersion: "1",
+      },
+      data: {} as Record<string, string>,
+    };
+    const core = {
+      readNamespacedConfigMap: vi.fn(async () => ({
+        body: structuredClone(ledger),
+      })),
+      replaceNamespacedConfigMap: vi.fn(async (_name, _namespace, body) => {
+        ledger = {
+          metadata: {
+            ...ledger.metadata,
+            resourceVersion: String(
+              Number(ledger.metadata.resourceVersion) + 1
+            ),
+          },
+          data: { ...(body.data ?? {}) },
+        };
+        return { body: structuredClone(ledger) };
+      }),
+    } as unknown as CoreV1Api;
+    const state = new KubernetesComputeWorkloadStateAdapter(
+      {} as CustomObjectsApi,
+      core,
+      "cogni-candidate-a",
+      "test-controller"
+    );
+
+    await expect(
+      state.claimWalletAllocation({ attemptKey: "a", workloadUid: "uid-a" })
+    ).resolves.toEqual({ state: "claimed" });
+    await state.prepareWalletAllocation({
+      attemptKey: "a",
+      allocationCursor: "41",
+    });
+    await expect(
+      state.claimWalletAllocation({ attemptKey: "a", workloadUid: "uid-a" })
+    ).resolves.toEqual({ state: "owned", allocationCursor: "41" });
+    await expect(
+      state.claimWalletAllocation({ attemptKey: "b", workloadUid: "uid-b" })
+    ).resolves.toEqual({ state: "blocked", ownerAttemptKey: "a" });
+    await state.completeWalletAllocation({ attemptKey: "a" });
+    await expect(
+      state.claimWalletAllocation({ attemptKey: "b", workloadUid: "uid-b" })
+    ).resolves.toEqual({ state: "claimed" });
+  });
+
+  it("creates the runtime ledger outside Argo ownership before first allocation", async () => {
+    let ledger:
+      | {
+          metadata: {
+            name: string;
+            namespace: string;
+            resourceVersion: string;
+          };
+          data: Record<string, string>;
+        }
+      | undefined;
+    const core = {
+      readNamespacedConfigMap: vi.fn(async () => {
+        if (!ledger) throw apiError(404);
+        return { body: structuredClone(ledger) };
+      }),
+      createNamespacedConfigMap: vi.fn(
+        async (_namespace: string, body: V1ConfigMap) => {
+          ledger = {
+            metadata: {
+              name: body.metadata?.name ?? "",
+              namespace: body.metadata?.namespace ?? "",
+              resourceVersion: "1",
+            },
+            data: {},
+          };
+          return { body: structuredClone(ledger) };
+        }
+      ),
+      replaceNamespacedConfigMap: vi.fn(
+        async (_name: string, _namespace: string, body: V1ConfigMap) => {
+          ledger = {
+            metadata: {
+              name: body.metadata?.name ?? "",
+              namespace: body.metadata?.namespace ?? "",
+              resourceVersion: "2",
+            },
+            data: { ...(body.data ?? {}) },
+          };
+          return { body: structuredClone(ledger) };
+        }
+      ),
+    } as unknown as CoreV1Api;
+    const state = new KubernetesComputeWorkloadStateAdapter(
+      {} as CustomObjectsApi,
+      core,
+      "cogni-candidate-a",
+      "test-controller"
+    );
+
+    await expect(
+      state.claimWalletAllocation({ attemptKey: "a", workloadUid: "uid-a" })
+    ).resolves.toEqual({ state: "claimed" });
+    expect(core.createNamespacedConfigMap).toHaveBeenCalledOnce();
   });
 });
 

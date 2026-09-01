@@ -94,6 +94,16 @@ metadata.generation`; uncertain mutations fail closed rather than blindly duplic
     silently is a contract violation of this axiom, not an operational surprise. Health
     endpoints contract: [`health-probes.md`](./health-probes.md).
 
+### Story.5016 GitOps corrections
+
+The legacy Akash exceptions in Axioms 18, 21, and 23 are superseded by Axiom 26:
+
+- Every node/runtime keeps the existing GitHub Actions → per-node deploy branch → Argo lane. An external-compute selection materializes a provider-neutral `ComputeWorkload`; it never calls a deployment REST route from CI.
+- The normal environment hostname has exactly one catalog-selected writer. The k3s DNS writer skips external-compute rows; the controller owns that same hostname while the CR exists, persists the exact CNAME value, and removes it only when the live value still matches. There is no `*-akash` hostname.
+- `POST /api/v1/compute/deployments` is tombstoned with `409 gitops_required`; it cannot bypass the durable coordinator or become a second desired-state authority.
+- The managed provider credential/account is environment-dedicated and single-writer. Before allocation, the controller CAS-claims a durable wallet-wide ledger and persists the provider high-water cursor. A prepared/unknown allocation blocks every later CREATE across workloads, restarts, and leader changes until exactly one new handle is adopted or the ambiguity is resolved. Console/manual/other-environment writes invalidate cursor-based deployment proof.
+- Ad-hoc cluster writes (`kubectl apply/patch/edit`, direct Argo mutation, or SSH config edits) invalidate deployment proof. Recovery is committed to Git and reconciled through existing workflows/Argo. `provision-env` remains the sole auditable bootstrap authority, not a normal reconciliation path.
+
 ## Branch And Deploy-State Model
 
 ```text

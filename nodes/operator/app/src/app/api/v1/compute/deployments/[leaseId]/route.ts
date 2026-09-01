@@ -3,18 +3,16 @@
 
 /**
  * Module: `@app/api/v1/compute/deployments/[leaseId]`
- * Purpose: GET — poll one provisioned compute workload's state + serving endpoints.
- *   DELETE — release the workload (unspent escrow returns to the shared account). task.5044.
- * Scope: Thin HTTP shell over the injected ComputeResourcePort write half. `leaseId` is the
- *   opaque handle returned by POST ../deployments.
+ * Purpose: Authenticated compatibility tombstone for former imperative status/release routes.
+ * Scope: Owner-gated 409 response directing lifecycle changes through Git/ComputeWorkload.
  * Invariants:
  *   - DEVELOPER_GATED: requires `node.flight` on the node named by `?nodeId=` — v1 has no
  *     lease→node registry, so the caller re-presents the node scope; any flight-granted
  *     principal on that node can read/release (acceptable under the v0 shared-account billing
  *     model; the vNext compute_resources table makes this ownership-scoped).
- *   - WRITE_HALF_OPTIONAL: 501 compute_write_unsupported when no workload-capable provider.
- * Side-effects: IO (authz check, provider API read; DELETE closes a live lease)
- * Links: ../route.ts (provision), adapters/server/compute/akash-compute.adapter.ts
+ *   - SINGLE_WRITER: neither verb touches a provider or bypasses the durable controller ledger.
+ * Side-effects: IO (authz check only)
+ * Links: ../route.ts, docs/spec/ci-cd.md Axiom 26
  * @public
  */
 
