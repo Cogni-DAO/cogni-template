@@ -181,9 +181,9 @@ const SPEC = {
       readinessPath: "/deployment-proof",
     },
     {
-      name: "paper-trader",
-      image: "ghcr.io/cogni-dao/poly-paper-trader@sha256:abc",
-      command: ["python", "-m", "paper_trader"],
+      name: "echo-sidecar",
+      image: "ghcr.io/example/echo-sidecar@sha256:abc",
+      command: ["node", "server.mjs"],
       args: ["--host", "0.0.0.0", "--port", "9100"],
       cpuUnits: 0.25,
       memoryMi: 512,
@@ -207,24 +207,24 @@ describe("buildAkashSdl", () => {
     // global expose on app; private sibling routes only to app by service name
     expect(sdl).toContain("global: true");
     expect(sdl).toContain("service: app");
-    expect(sdl).not.toContain("service: paper-trader");
+    expect(sdl).not.toContain("service: echo-sidecar");
     const rendered = parseYaml(sdl) as {
       services: Record<
         string,
         { args?: string[]; expose?: { to: Record<string, unknown>[] }[] }
       >;
     };
-    expect(rendered.services["paper-trader"]?.args).toEqual([
+    expect(rendered.services["echo-sidecar"]?.args).toEqual([
       "--host",
       "0.0.0.0",
       "--port",
       "9100",
     ]);
-    expect(rendered.services["paper-trader"]?.expose?.[0]?.to).toEqual([
+    expect(rendered.services["echo-sidecar"]?.expose?.[0]?.to).toEqual([
       { service: "app" },
     ]);
     expect(
-      rendered.services["paper-trader"]?.expose?.[0]?.to
+      rendered.services["echo-sidecar"]?.expose?.[0]?.to
     ).not.toContainEqual({ global: true });
   });
 

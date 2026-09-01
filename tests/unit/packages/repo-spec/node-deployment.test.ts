@@ -56,13 +56,13 @@ describe("node deployment repo-spec", () => {
         services: [
           APP,
           {
-            name: "paper-trader",
+            name: "echo-sidecar",
             artifact: {
-              name: "paper-trader",
-              context: "services/paper-trader",
-              dockerfile: "services/paper-trader/Dockerfile",
+              name: "echo-sidecar",
+              context: "services/echo-sidecar",
+              dockerfile: "services/echo-sidecar/Dockerfile",
             },
-            command: ["python", "-m", "paper_trader"],
+            command: ["node", "server.mjs"],
             args: ["--host", "0.0.0.0", "--port", "9100"],
             port: 9100,
             visibility: "private",
@@ -77,20 +77,20 @@ describe("node deployment repo-spec", () => {
     });
 
     expect(extractNodeServices(spec)[1]).toEqual({
-      name: "paper-trader",
+      name: "echo-sidecar",
       artifact: {
-        name: "paper-trader",
-        context: "services/paper-trader",
-        dockerfile: "services/paper-trader/Dockerfile",
+        name: "echo-sidecar",
+        context: "services/echo-sidecar",
+        dockerfile: "services/echo-sidecar/Dockerfile",
       },
-      command: ["python", "-m", "paper_trader"],
+      command: ["node", "server.mjs"],
       args: ["--host", "0.0.0.0", "--port", "9100"],
       port: 9100,
       visibility: "private",
       bindings: {},
       secretRefs: [],
       bindHost: "0.0.0.0",
-      internalUrl: "http://paper-trader:9100",
+      internalUrl: "http://echo-sidecar:9100",
       resources: { cpuUnits: 2, memoryMi: 16384, storageMi: 65536 },
     });
   });
@@ -149,10 +149,10 @@ describe("node deployment repo-spec", () => {
     const spec = buildTestRepoSpec({
       deployment: {
         services: [
-          { ...APP, bindings: { PAPER_TRADER_URL: "paper-trader" } },
+          { ...APP, bindings: { ECHO_SIDECAR_URL: "echo-sidecar" } },
           {
-            name: "paper-trader",
-            artifact: { name: "paper-trader" },
+            name: "echo-sidecar",
+            artifact: { name: "echo-sidecar" },
             port: 9100,
             visibility: "private",
             resources: {
@@ -166,10 +166,10 @@ describe("node deployment repo-spec", () => {
     });
 
     expect(extractNodeServices(spec)[0]?.bindings).toEqual({
-      PAPER_TRADER_URL: "paper-trader",
+      ECHO_SIDECAR_URL: "echo-sidecar",
     });
     expect(extractNodeServices(spec)[1]?.internalUrl).toBe(
-      "http://paper-trader:9100"
+      "http://echo-sidecar:9100"
     );
   });
 
@@ -261,7 +261,7 @@ describe("node deployment repo-spec", () => {
     },
     {
       name: "missing binding target",
-      services: [{ ...APP, bindings: { PAPER_TRADER_URL: "paper-trader" } }],
+      services: [{ ...APP, bindings: { ECHO_SIDECAR_URL: "echo-sidecar" } }],
       message: /binding target is not declared/,
     },
     {
