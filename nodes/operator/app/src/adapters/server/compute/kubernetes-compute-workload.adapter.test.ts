@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: 2026 Cogni-DAO
 
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type {
   CoordinationV1Api,
@@ -93,8 +95,13 @@ function declaredWorkload(): ComputeWorkload {
 
 describe("ComputeWorkload Kubernetes contract", () => {
   it("admits bounded topology fields and preserves service bindings over the API wire", async () => {
+    // File-relative, never CWD-relative: the unit job and local runs invoke
+    // vitest from different working directories.
     const crdYaml = await readFile(
-      "../../../infra/k8s/base/compute-workload-platform/crd.yaml",
+      join(
+        fileURLToPath(new URL(".", import.meta.url)),
+        "../../../../../../../infra/k8s/base/compute-workload-platform/crd.yaml"
+      ),
       "utf8"
     );
     expect(parseDocument(crdYaml, { uniqueKeys: true }).errors).toEqual([]);
