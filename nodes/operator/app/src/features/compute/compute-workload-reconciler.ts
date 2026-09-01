@@ -26,6 +26,7 @@ import type { ComputeWorkloadStatePort } from "@/ports/compute-workload-state.po
 import { buildNodeAppIdentityEnv } from "./node-workload-spec";
 
 const MAX_MUTATION_RETRIES = 3;
+const MAX_RECOVERY_ATTEMPTS = 3;
 
 export interface ComputeWorkloadReconcileDeps {
   readonly lifecycle: ComputeWorkloadLifecyclePort;
@@ -43,6 +44,14 @@ export interface ComputeWorkloadReconcileDeps {
     leaseId: string;
     readinessPath: string;
     outcomeCode: "ReadinessPassed" | "ReadinessFailed";
+  }) => void;
+  readonly recordRecoveryLimit: (input: {
+    nodeId: string;
+    environment: string;
+    sourceSha: string;
+    leaseId: string;
+    recoveryCount: number;
+    outcomeCode: "RecoveryLimitExceeded";
   }) => void;
 }
 
@@ -75,6 +84,8 @@ const SAFE_MESSAGES: Readonly<Record<string, string>> = {
     "a mutation receipt exists without a durable resource handle; automatic create is blocked",
   OwnershipMismatch: "resource ownership does not match this controller",
   RetryLimitExceeded: "known-outcome retry limit was exceeded",
+  RecoveryLimitExceeded:
+    "generation recovery limit was reached; further allocation is blocked",
   FinalizationBlocked: "external resource finalization has not completed",
   ServingVerificationPending:
     "waiting for the workload to serve the expected source revision",
@@ -384,6 +395,73 @@ function readinessDeclarationInvalid(resource: ComputeWorkload): boolean {
   return resource.spec.workload.services.some(
     (service) => service.visibility === "private" && service.readinessPath
   );
+}
+
+function generationRecoveryCount(resource: ComputeWorkload): number {
+  if (resource.status?.desiredGeneration !== resource.metadata.generation) {
+    return 0;
+  }
+  const attemptOrdinal =
+    resource.status.attempt?.operation === "recover"
+      ? resource.status.attempt.ordinal
+      : 0;
+  return Math.max(resource.status.recoveryCount ?? 0, attemptOrdinal);
+}
+
+async function recoverBounded(
+  deps: ComputeWorkloadReconcileDeps,
+  resource: ComputeWorkload
+): Promise<void> {
+  const completed = generationRecoveryCount(resource);
+  if (completed >= MAX_RECOVERY_ATTEMPTS) {
+    const now = deps.now().toISOString();
+    const current = resource.status?.resource;
+    await deps.state.patchStatus({
+      resource,
+      status: {
+        ...baseStatus(resource),
+        ...observedIdentity(resource),
+        phase: "Failed",
+        observedGeneration: resource.metadata.generation,
+        ...(current ? { resource: current } : {}),
+        ...(resource.status?.attempt
+          ? { attempt: resource.status.attempt }
+          : {}),
+        recoveryCount: completed,
+        failure: {
+          reason: "RecoveryLimitExceeded",
+          message: safeMessage("RecoveryLimitExceeded"),
+          retryable: false,
+        },
+        conditions: [
+          condition(resource, now, "False", "RecoveryLimitExceeded"),
+        ],
+      },
+    });
+    if (resource.status?.failure?.reason !== "RecoveryLimitExceeded") {
+      const fields = {
+        nodeId: resource.spec.nodeId,
+        environment: resource.spec.environment,
+        sourceSha: resource.spec.bundle.source.sha,
+        leaseId: current?.id ?? "unknown",
+        recoveryCount: completed,
+        outcomeCode: "RecoveryLimitExceeded" as const,
+      };
+      deps.recordRecoveryLimit(fields);
+      await deps.state
+        .event({
+          resource,
+          type: "Warning",
+          reason: "RecoveryLimitExceeded",
+          message: Object.entries(fields)
+            .map(([key, value]) => `${key}=${value}`)
+            .join(" "),
+        })
+        .catch(() => {});
+    }
+    return;
+  }
+  await mutate(deps, resource, "recover", completed + 1);
 }
 
 function attemptReceipt(
@@ -1367,12 +1445,7 @@ export async function reconcileComputeWorkload(
     priorAttempt.outcome !== "succeeded"
   ) {
     if (current.state === "closed") {
-      await mutate(
-        deps,
-        resource,
-        "recover",
-        (resource.status?.recoveryCount ?? 0) + 1
-      );
+      await recoverBounded(deps, resource);
       return;
     }
     const state = await observeAndReport(deps, resource, current, priorAttempt);
@@ -1401,12 +1474,7 @@ export async function reconcileComputeWorkload(
   }
 
   if (current.state === "closed") {
-    await mutate(
-      deps,
-      resource,
-      "recover",
-      (resource.status?.recoveryCount ?? 0) + 1
-    );
+    await recoverBounded(deps, resource);
     return;
   }
   await observeAndReport(deps, resource, current);
