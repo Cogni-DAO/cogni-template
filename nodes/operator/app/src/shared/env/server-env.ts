@@ -197,15 +197,23 @@ export const serverSchema = z.object({
   GH_REVIEW_APP_ID: optionalString,
   GH_REVIEW_APP_PRIVATE_KEY_BASE64: optionalString,
 
+  // Optional candidate-only catalog/workflow identity. This App is capability-scoped:
+  // Contents read + Actions write, selected repos only, never merge/publish authority.
+  // The pair is atomic in createCatalogControlDeployPlane; unset falls back to GH_REVIEW_APP_*.
+  GH_CANDIDATE_CONTROL_APP_ID: optionalString,
+  GH_CANDIDATE_CONTROL_APP_PRIVATE_KEY_BASE64: optionalString,
+
   // Node-formation Publish: where new node repos are minted + where the node-template lives.
   // Env-scoped, NOT derived from the operator's own monorepo org (the submodule-PR target) — a
-  // test/candidate operator must have zero access to Cogni-DAO, so mint-owner is set explicitly
-  // per env (prod → Cogni-DAO; candidate/preview → a throwaway org like `cogni-nodes-test`). The
+  // test/candidate operator must have zero code/admin/package WRITE access to Cogni-DAO, so
+  // mint-owner is set explicitly per env (prod → Cogni-DAO; candidate/preview → a throwaway org
+  // like `cogni-nodes-test`). The read+Actions-only candidate control App above is the narrow
+  // exception and is never used for mint/publish/merge. The
   // publish route fails closed (503) when unset, so no env can accidentally mint into its monorepo.
   NODE_MINT_OWNER: optionalString,
   NODE_TEMPLATE_OWNER: optionalString,
 
-  // Required env-scoped deployment parent for submodule pin PRs and node-ref flights.
+  // Required env-scoped deployment parent for node formation/env-membership writes.
   NODE_SUBMODULE_PARENT_OWNER: optionalString,
   NODE_SUBMODULE_PARENT_REPO: optionalString,
   // Which repo's infra/catalog/ defines this env's nodes. Defaults to the submodule

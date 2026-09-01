@@ -30,11 +30,13 @@ import { z } from "zod";
 
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { resolveNodeAndAuthorize } from "@/app/_lib/node-rbac";
-import { createOperatorDeployPlane } from "@/bootstrap/capabilities/operator-deploy-plane";
+import { createCatalogControlDeployPlane } from "@/bootstrap/capabilities/operator-deploy-plane";
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { buildNodeWorkloadSpec } from "@/features/compute/node-workload-spec";
+import type { DeployPlanePort } from "@/ports";
 import { serverEnv } from "@/shared/env";
+import { resolveNodeCatalogSource } from "@/shared/node-registry/catalog-source";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -101,7 +103,8 @@ export const POST = wrapRouteHandlerWithLogging(
     }
 
     const env = serverEnv();
-    if (!env.NODE_SUBMODULE_PARENT_OWNER || !env.NODE_SUBMODULE_PARENT_REPO) {
+    const catalogSource = resolveNodeCatalogSource(env);
+    if (!catalogSource) {
       return NextResponse.json(
         { error: "deploy_plane_unconfigured" },
         { status: 503 }
@@ -109,10 +112,18 @@ export const POST = wrapRouteHandlerWithLogging(
     }
 
     // NODE_REF_ARTIFACT_GATE: resolve + verify the CI-published image for this sourceSha.
-    const deployPlane = createOperatorDeployPlane(env);
+    let deployPlane: DeployPlanePort;
+    try {
+      deployPlane = createCatalogControlDeployPlane(env);
+    } catch {
+      return NextResponse.json(
+        { error: "deploy_plane_unconfigured" },
+        { status: 503 }
+      );
+    }
     const prepared = await deployPlane.prepareNodeRefCandidateFlight({
-      parentOwner: env.NODE_SUBMODULE_PARENT_OWNER,
-      parentRepo: env.NODE_SUBMODULE_PARENT_REPO,
+      parentOwner: catalogSource.owner,
+      parentRepo: catalogSource.repo,
       nodeId: node.nodeId,
       slug: node.slug,
       sourceSha,

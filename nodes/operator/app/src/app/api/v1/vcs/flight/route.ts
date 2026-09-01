@@ -28,12 +28,13 @@ import { flightOperation } from "@cogni/node-contracts";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
-import { createOperatorDeployPlane } from "@/bootstrap/capabilities/operator-deploy-plane";
+import { createCatalogControlDeployPlane } from "@/bootstrap/capabilities/operator-deploy-plane";
 import { getContainer, resolveServiceDb } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import type { DeployPlanePort, PreparedNodeRefCandidateFlight } from "@/ports";
 import { nodes } from "@/shared/db/nodes";
 import { type ServerEnv, serverEnv } from "@/shared/env";
+import { resolveNodeCatalogSource } from "@/shared/node-registry/catalog-source";
 import {
   EVENT_NAMES,
   logEvent,
@@ -216,19 +217,17 @@ async function authorizeNodeFlight(params: {
   };
 }
 
-function getNodeRefParentRepo(env: ServerEnv): {
+function getNodeRefControlRepo(env: ServerEnv): {
   readonly owner: string;
   readonly repo: string;
 } {
-  if (!env.NODE_SUBMODULE_PARENT_OWNER || !env.NODE_SUBMODULE_PARENT_REPO) {
+  const source = resolveNodeCatalogSource(env);
+  if (!source) {
     throw new Error(
-      "operator not configured for node-ref flight: NODE_SUBMODULE_PARENT_OWNER + NODE_SUBMODULE_PARENT_REPO required"
+      "operator not configured for node-ref flight: NODE_REGISTRY_CATALOG_* or NODE_SUBMODULE_PARENT_* required"
     );
   }
-  return {
-    owner: env.NODE_SUBMODULE_PARENT_OWNER,
-    repo: env.NODE_SUBMODULE_PARENT_REPO,
-  };
+  return source;
 }
 
 export const POST = wrapRouteHandlerWithLogging(
@@ -310,7 +309,7 @@ export const POST = wrapRouteHandlerWithLogging(
 
       let deployPlane: DeployPlanePort;
       try {
-        deployPlane = createOperatorDeployPlane(env);
+        deployPlane = createCatalogControlDeployPlane(env);
       } catch (error) {
         const message =
           error instanceof Error
@@ -326,9 +325,9 @@ export const POST = wrapRouteHandlerWithLogging(
         return NextResponse.json({ error: message }, { status: 503 });
       }
 
-      let parentRepo: ReturnType<typeof getNodeRefParentRepo>;
+      let controlRepo: ReturnType<typeof getNodeRefControlRepo>;
       try {
-        parentRepo = getNodeRefParentRepo(env);
+        controlRepo = getNodeRefControlRepo(env);
       } catch (error) {
         const message =
           error instanceof Error
@@ -349,8 +348,8 @@ export const POST = wrapRouteHandlerWithLogging(
       let prepared: PreparedNodeRefCandidateFlight;
       try {
         prepared = await deployPlane.prepareNodeRefCandidateFlight({
-          parentOwner: parentRepo.owner,
-          parentRepo: parentRepo.repo,
+          parentOwner: controlRepo.owner,
+          parentRepo: controlRepo.repo,
           nodeId: node.id,
           slug: node.slug,
           sourceSha: nodeRef.sourceSha,
@@ -398,8 +397,8 @@ export const POST = wrapRouteHandlerWithLogging(
       // needs a GitHub Actions webhook or polling listener before those states are observable.
       try {
         const dispatch = await deployPlane.dispatchNodeRefCandidateFlight({
-          owner: parentRepo.owner,
-          repo: parentRepo.repo,
+          owner: controlRepo.owner,
+          repo: controlRepo.repo,
           slug: prepared.slug,
           sourceSha: prepared.sourceSha,
         });

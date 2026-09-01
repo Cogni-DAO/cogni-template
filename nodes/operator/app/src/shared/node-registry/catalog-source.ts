@@ -18,6 +18,8 @@
  *   - BACKWARD_COMPATIBLE_DEFAULT: unset falls back to the submodule parent, so
  *     production — which already points at the real repo and therefore already worked —
  *     is unchanged whether or not its overlay sets the new pair.
+ *   - PAIR_IS_ATOMIC: a partial catalog override fails closed. Never combine one override
+ *     field with one fallback field into a repository identity that nobody configured.
  * Side-effects: none
  * Links: bug.5073, src/bootstrap/identity-attestation.ts, src/bootstrap/jobs/reconcileCatalogNodeRegistry.job.ts
  * @public
@@ -43,9 +45,17 @@ export interface NodeCatalogSource {
 export function resolveNodeCatalogSource(
   env: NodeCatalogSourceEnv
 ): NodeCatalogSource | null {
-  const owner =
-    env.NODE_REGISTRY_CATALOG_OWNER || env.NODE_SUBMODULE_PARENT_OWNER;
-  const repo = env.NODE_REGISTRY_CATALOG_REPO || env.NODE_SUBMODULE_PARENT_REPO;
-  if (!owner || !repo) return null;
-  return { owner, repo };
+  const overrideOwner = env.NODE_REGISTRY_CATALOG_OWNER;
+  const overrideRepo = env.NODE_REGISTRY_CATALOG_REPO;
+  if (overrideOwner || overrideRepo) {
+    return overrideOwner && overrideRepo
+      ? { owner: overrideOwner, repo: overrideRepo }
+      : null;
+  }
+
+  const fallbackOwner = env.NODE_SUBMODULE_PARENT_OWNER;
+  const fallbackRepo = env.NODE_SUBMODULE_PARENT_REPO;
+  return fallbackOwner && fallbackRepo
+    ? { owner: fallbackOwner, repo: fallbackRepo }
+    : null;
 }

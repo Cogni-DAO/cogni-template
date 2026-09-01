@@ -75,6 +75,15 @@ patches:
       - op: add
         path: /data/NODE_SUBMODULE_PARENT_REPO
         value: "cogni-monorepo"
+      # Deployment catalog + candidate-flight control repo. Keep this distinct from
+      # NODE_SUBMODULE_PARENT_*: candidate node-formation writes stay isolated in the
+      # throwaway org, while real node artifacts are resolved and flighted from the hub.
+      - op: add
+        path: /data/NODE_REGISTRY_CATALOG_OWNER
+        value: "Cogni-DAO"
+      - op: add
+        path: /data/NODE_REGISTRY_CATALOG_REPO
+        value: "cogni"
       - op: add
         path: /data/OPENFGA_API_URL
         value: "http://operator-openfga-external:8080"

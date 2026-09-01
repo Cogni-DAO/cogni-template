@@ -29,7 +29,9 @@ export interface CandidateFlightDispatchResult {
 }
 
 export interface PrepareNodeRefCandidateFlightInput {
+  /** Monorepo owner whose merged catalog and in-repo artifacts are authoritative. */
   readonly parentOwner: string;
+  /** Monorepo repo whose merged catalog and candidate-flight workflow are authoritative. */
   readonly parentRepo: string;
   readonly nodeId: string;
   readonly slug: string;

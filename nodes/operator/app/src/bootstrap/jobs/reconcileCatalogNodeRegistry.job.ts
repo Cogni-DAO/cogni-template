@@ -21,7 +21,7 @@ import type { AuthorizationPort } from "@cogni/authorization-core";
 
 import { DrizzleCatalogNodeRegistryAdapter } from "@/adapters/server";
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
-import { createOperatorDeployPlane } from "@/bootstrap/capabilities/operator-deploy-plane";
+import { createCatalogControlDeployPlane } from "@/bootstrap/capabilities/operator-deploy-plane";
 import { getContainer } from "@/bootstrap/container";
 import type { CatalogNodeOwnerProjection } from "@/ports";
 import { serverEnv } from "@/shared/env/server-env";
@@ -76,7 +76,9 @@ export async function runCatalogNodeRegistryReconcileJob(): Promise<CatalogNodeR
       },
       "Starting catalog node registry reconcile"
     );
-    const definitions = await createOperatorDeployPlane(env).listCatalogNodes({
+    const definitions = await createCatalogControlDeployPlane(
+      env
+    ).listCatalogNodes({
       parentOwner,
       parentRepo,
       sourceRef,

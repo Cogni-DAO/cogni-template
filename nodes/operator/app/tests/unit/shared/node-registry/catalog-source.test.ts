@@ -53,4 +53,21 @@ describe("resolveNodeCatalogSource (bug.5073)", () => {
       resolveNodeCatalogSource({ NODE_SUBMODULE_PARENT_OWNER: "cogni-dao" })
     ).toBeNull();
   });
+
+  it("fails closed on a partial override instead of mixing it with the fallback pair", () => {
+    expect(
+      resolveNodeCatalogSource({
+        NODE_REGISTRY_CATALOG_OWNER: "cogni-dao",
+        NODE_SUBMODULE_PARENT_OWNER: "cogni-test-org",
+        NODE_SUBMODULE_PARENT_REPO: "cogni-monorepo",
+      })
+    ).toBeNull();
+    expect(
+      resolveNodeCatalogSource({
+        NODE_REGISTRY_CATALOG_REPO: "cogni",
+        NODE_SUBMODULE_PARENT_OWNER: "cogni-test-org",
+        NODE_SUBMODULE_PARENT_REPO: "cogni-monorepo",
+      })
+    ).toBeNull();
+  });
 });
