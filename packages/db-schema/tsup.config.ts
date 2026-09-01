@@ -20,6 +20,7 @@ export const tsupConfig = defineConfig({
     "src/scheduling.ts",
     "src/auth.ts",
     "src/billing.ts",
+    "src/compute.ts",
     "src/ai.ts",
     "src/ai-threads.ts",
     "src/identity.ts",
