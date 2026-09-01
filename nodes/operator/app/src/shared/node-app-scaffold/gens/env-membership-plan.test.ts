@@ -20,6 +20,7 @@ import {
   appsetsKustomizationPath,
   buildEnvDeltaPlan,
   CATALOG_PATH,
+  type EnvDeltaResult,
   type EnvPlanCurrent,
   EnvPlanError,
   type EnvPlanOp,
@@ -333,5 +334,102 @@ describe("buildEnvDeltaPlan — TEMPLATE_NODE_IMMUTABLE", () => {
         current: baseCurrent(["candidate-a", "preview"]),
       }).kind
     ).toBe("no_changes");
+  });
+});
+
+describe("ACTIVITY_FOLLOWS_INGEST (bug.5079)", () => {
+  const catalogOf = (plan: EnvDeltaResult): string => {
+    if (!("ops" in plan)) return "";
+    for (const op of plan.ops) {
+      if (op.op === "upsert" && op.path.includes("infra/catalog/")) {
+        return op.content;
+      }
+    }
+    return "";
+  };
+
+  /** baseCurrent seeds templates only for the given envs (+preview); production needs its own. */
+  const currentWithProduction = (envs: readonly string[]): EnvPlanCurrent => {
+    const base = baseCurrent(envs);
+    return {
+      ...base,
+      templateOverlayByEnv: {
+        ...base.templateOverlayByEnv,
+        production: TEMPLATE_OVERLAY,
+      },
+      templateExternalSecretByEnv: {
+        ...base.templateExternalSecretByEnv,
+        production: TEMPLATE_EXTERNAL_SECRET,
+      },
+      appsetsKustomizationByEnv: {
+        ...base.appsetsKustomizationByEnv,
+        production: kustWith("production", ["operator"]),
+      },
+    };
+  };
+
+  it("promoting candidate-a → production moves the activity authority with it", () => {
+    const plan = buildEnvDeltaPlan({
+      slug: SLUG,
+      env: "production",
+      present: true,
+      current: currentWithProduction(["candidate-a"]),
+    });
+
+    // Without this, the node deploys and serves in production while its webhooks — which
+    // GitHub delivers to production ONLY — are dropped `unclaimed`, silently, forever.
+    expect(catalogOf(plan)).toContain("activity_env: production");
+    expect(catalogOf(plan)).not.toContain("activity_env: candidate-a");
+  });
+
+  it("promoting to preview moves authority up from candidate-a", () => {
+    const plan = buildEnvDeltaPlan({
+      slug: SLUG,
+      env: "preview",
+      present: true,
+      current: baseCurrent(["candidate-a"]),
+    });
+
+    expect(catalogOf(plan)).toContain("activity_env: preview");
+  });
+
+  it("carries a trailing comment across the activity_env rewrite", () => {
+    // ACTIVITY_ENV_LINE_RE matches the trailing comment, so a naive whole-line replace
+    // deletes it. These rows carry load-bearing comments and a silent drop in a generated
+    // PR is exactly what nobody notices.
+    const base = baseCurrent(["candidate-a"]);
+    const current = {
+      ...currentWithProduction(["candidate-a"]),
+      catalog: base.catalog.replace(
+        "activity_env: candidate-a",
+        "activity_env: candidate-a # birth authority, moves on promotion"
+      ),
+    };
+
+    const plan = buildEnvDeltaPlan({
+      slug: SLUG,
+      env: "production",
+      present: true,
+      current,
+    });
+
+    expect(catalogOf(plan)).toContain(
+      "activity_env: production # birth authority, moves on promotion"
+    );
+  });
+
+  it("takes the HIGHEST deployed env, not just the one being added", () => {
+    // The subtle case my first rule got wrong: this node is already in production, and
+    // adding `preview` must not pull its authority DOWN to preview — preview cannot ingest
+    // either. Authority is max(nextEnvs), which is monotonic by construction.
+    const plan = buildEnvDeltaPlan({
+      slug: SLUG,
+      env: "preview",
+      present: true,
+      current: currentWithProduction(["candidate-a", "production"]),
+    });
+
+    expect(catalogOf(plan)).toContain("activity_env: production");
+    expect(catalogOf(plan)).not.toContain("activity_env: preview");
   });
 });

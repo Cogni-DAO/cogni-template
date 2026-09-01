@@ -85,7 +85,9 @@ production_branch: deploy/production-${slug}
 # task.5017/5025 — per-env node-set (deploy ⊆ provisioned). A wizard birth enters
 # candidate-a only; preview/production are explicit post-validation transitions.
 envs: [candidate-a]
-# task.5025 generation 1 — candidate-a is the fixed activity authority; v1 has no cutover verb.
+# Birth authority. A node is born into candidate-a only, so this is the only valid value
+# here. It is NOT fixed for life: promoting the node moves it (ACTIVITY_FOLLOWS_INGEST in
+# env-membership-plan.ts), because production is the only env that receives webhooks.
 activity_env: candidate-a
 # Stable binding only; the reconciler resolves an env-local users.id by wallet.
 owner_wallet: "${input.ownerWallet}"

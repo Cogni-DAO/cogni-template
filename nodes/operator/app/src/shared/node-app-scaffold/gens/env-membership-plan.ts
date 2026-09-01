@@ -17,6 +17,21 @@
  *     full decommission is a separate lifecycle operation.
  *   - ACTIVITY_AUTHORITY_STAYS_DEPLOYED — removing the current `activity_env` is rejected. V1 does not
  *     claim an atomic cross-environment authority transfer; that needs a future fenced protocol.
+ *   - ACTIVITY_FOLLOWS_INGEST — a promotion carries the activity authority with it: `activity_env`
+ *     becomes the highest env the node will be deployed to. Webhooks reach production ONLY, and the
+ *     receiving operator routes a repo only when `activityEnv === DEPLOY_ENVIRONMENT`, so a promoted
+ *     node that keeps a lower authority can never earn a receipt (bug.5079).
+ *
+ *     WHY THIS IS SAFE WITHOUT THE DEFERRED FENCED CUTOVER: the protocol was deferred because moving
+ *     authority could strand a ledger. It cannot here — production is the only env that can ingest a
+ *     Git receipt, so any authority BELOW production has an empty Git ledger by construction. There is
+ *     nothing to strand. This reasoning is load-bearing: if webhooks are ever delivered to more than
+ *     one environment, this move stops being safe and the fenced protocol becomes required. Removing
+ *     the active authority stays rejected (ACTIVITY_AUTHORITY_STAYS_DEPLOYED) — that direction CAN
+ *     strand a production ledger, and this change does not touch it.
+ *
+ *     Known cosmetic residue: a node may hold an empty scheduled epoch in its old authority env, which
+ *     is orphaned by the move. It carries no receipts and no value (bug.5079).
  *   - IDEMPOTENT — requesting the state that already holds (env already present on add / already absent on
  *     remove) yields an EMPTY op list (`{ kind: "no_changes" }`), so the adapter opens no PR.
  *   - DELETE_VIA_SHA_NULL — file removals are emitted as `{ op: "delete", path }`; the adapter maps these
@@ -34,9 +49,11 @@ import {
 import {
   addCatalogEnv,
   dropCatalogEnv,
+  envRank,
   envRemovalViolation,
   parseCatalogActivityEnv,
   parseCatalogEnvs,
+  setCatalogActivityEnv,
   setCatalogEnvs,
 } from "./env-membership";
 import type { NodeFormationEnv } from "./envs";
@@ -146,7 +163,7 @@ export function buildEnvDeltaPlan(input: {
   const activityEnv = parseCatalogActivityEnv(current.catalog);
 
   if (present) {
-    return planAdd({ slug, env, currentEnvs, current });
+    return planAdd({ slug, env, currentEnvs, activityEnv, current });
   }
   return planRemove({ slug, env, currentEnvs, activityEnv, current });
 }
@@ -155,9 +172,10 @@ function planAdd(args: {
   slug: string;
   env: NodeFormationEnv;
   currentEnvs: NodeFormationEnv[];
+  activityEnv: NodeFormationEnv;
   current: EnvPlanCurrent;
 }): EnvDeltaResult {
-  const { slug, env, currentEnvs, current } = args;
+  const { slug, env, currentEnvs, activityEnv, current } = args;
 
   // Idempotent: already present → no PR.
   if (currentEnvs.includes(env)) {
@@ -165,6 +183,16 @@ function planAdd(args: {
   }
 
   const nextEnvs = addCatalogEnv(currentEnvs, env);
+  // The authority is the HIGHEST env the node will be deployed to — not merely a comparison
+  // against the env being added. Comparing against the added env alone moves a node that is
+  // already in production down to `preview` when preview is added later, which still cannot
+  // ingest. Taking the max is monotonic by construction: it never demotes, because the
+  // current authority is itself a member of `nextEnvs`.
+  const nextActivityEnv = nextEnvs.reduce(
+    (highest, candidate) =>
+      envRank(candidate) > envRank(highest) ? candidate : highest,
+    activityEnv
+  );
 
   const templateOverlay = current.templateOverlayByEnv[env];
   const templateExternalSecret = current.templateExternalSecretByEnv?.[env];
@@ -188,7 +216,19 @@ function planAdd(args: {
     {
       op: "upsert",
       path: CATALOG_PATH(slug),
-      content: setCatalogEnvs(current.catalog, nextEnvs),
+      // ACTIVITY_FOLLOWS_INGEST — see the module header for why this needs no fenced
+      // cutover: only production can ingest, so a sub-production authority is provably
+      // empty. Without this, a promoted node is deployed and serving yet structurally
+      // unable to earn a receipt — its webhooks land in production and are dropped
+      // `unclaimed`, fail-closed and silent. That is bug.5079, which left `levelup` live
+      // in production with zero receipts.
+      content:
+        nextActivityEnv === activityEnv
+          ? setCatalogEnvs(current.catalog, nextEnvs)
+          : setCatalogActivityEnv(
+              setCatalogEnvs(current.catalog, nextEnvs),
+              nextActivityEnv
+            ),
     },
     {
       op: "upsert",
