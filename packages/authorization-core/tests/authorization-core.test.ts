@@ -320,7 +320,7 @@ describe("OpenFgaAuthorizationAdapter", () => {
     expect(attempts).toBe(2);
   });
 
-  it("retries the actual timeout path (slow first attempt, fast retry) — the incident", async () => {
+  it("does NOT retry its own timeout — a timed-out write is still in flight, retry would race it (bug.5082)", async () => {
     let attempts = 0;
     const client = {
       async check(): Promise<{ allowed: boolean }> {
@@ -328,8 +328,10 @@ describe("OpenFgaAuthorizationAdapter", () => {
       },
       async writeTuples(): Promise<void> {
         attempts += 1;
-        // Attempt 1 exceeds the 10ms deadline (cold-path spike); the retry is instant.
-        if (attempts === 1) await new Promise((r) => setTimeout(r, 40));
+        // The write exceeds the 10ms deadline. `withTimeout` abandons — never cancels — this
+        // request, so a retry would issue the identical tuple concurrently → 409. Fail closed
+        // instead; the cure for cold-path latency is a generous deadline, not a racing retry.
+        await new Promise((r) => setTimeout(r, 40));
       },
       async deleteTuples(): Promise<void> {},
     } satisfies OpenFgaWriteClient;
@@ -338,9 +340,35 @@ describe("OpenFgaAuthorizationAdapter", () => {
       apiUrl: "http://openfga.test",
       storeId: "store",
       client,
-      // The WRITE deadline is what this test drives — writes no longer share the
-      // hot-path check deadline, so pin it here rather than inheriting a default.
       writeTimeoutMs: 10,
+      writeMaxRetries: 2,
+      writeRetryBackoffMs: 0,
+    });
+
+    await expect(authz.writeRelation(retryTuple)).resolves.toMatchObject({
+      decision: "failure",
+      code: "authz_write_unavailable",
+    });
+    expect(attempts).toBe(1); // no racing retry
+  });
+
+  it("treats a 409 write conflict as success — the tuple already converged to present (bug.5082)", async () => {
+    let attempts = 0;
+    const client = {
+      async check(): Promise<{ allowed: boolean }> {
+        return { allowed: true };
+      },
+      async writeTuples(): Promise<void> {
+        attempts += 1;
+        throw Object.assign(new Error("write conflict"), { statusCode: 409 });
+      },
+      async deleteTuples(): Promise<void> {},
+    } satisfies OpenFgaWriteClient;
+
+    const authz = new OpenFgaAuthorizationAdapter({
+      apiUrl: "http://openfga.test",
+      storeId: "store",
+      client,
       writeMaxRetries: 2,
       writeRetryBackoffMs: 0,
     });
@@ -349,7 +377,32 @@ describe("OpenFgaAuthorizationAdapter", () => {
       decision: "success",
       code: "authz_write_success",
     });
-    expect(attempts).toBe(2);
+    expect(attempts).toBe(1); // 409 is neither retried nor a failure
+  });
+
+  it("treats a 409 delete conflict as success — the tuple already converged to absent (bug.5082)", async () => {
+    const client = {
+      async check(): Promise<{ allowed: boolean }> {
+        return { allowed: true };
+      },
+      async writeTuples(): Promise<void> {},
+      async deleteTuples(): Promise<void> {
+        throw Object.assign(new Error("write conflict"), { statusCode: 409 });
+      },
+    } satisfies OpenFgaWriteClient;
+
+    const authz = new OpenFgaAuthorizationAdapter({
+      apiUrl: "http://openfga.test",
+      storeId: "store",
+      client,
+      writeMaxRetries: 2,
+      writeRetryBackoffMs: 0,
+    });
+
+    await expect(authz.deleteRelation(retryTuple)).resolves.toMatchObject({
+      decision: "success",
+      code: "authz_write_success",
+    });
   });
 
   it("retries the delete path too", async () => {
