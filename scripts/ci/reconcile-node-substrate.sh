@@ -8,9 +8,11 @@
 # secret-materialize (the SOLE OpenBao writer) runs BEFORE this and owns every
 # per-node value, including the per-node DB creds + DSNs at cogni/<env>/<node>.
 # This phase is READ-ONLY on OpenBao: it holds an <env>-db-reader token, reads the
-# node's per-node DB passwords, applies the node-domain ExternalSecret leaf, updates
-# edge/DB inventory, and runs the idempotent per-node DB provisioner (one node per
-# invocation). It performs zero OpenBao writes (no bao kv put/patch), does not
+# node's per-node DB passwords, updates the shared DB inventory, and runs the
+# idempotent per-node DB provisioner (one node per invocation). For k3s placement
+# it also applies the node-domain ExternalSecret leaf. For k3s placement it
+# updates the edge route; external placements leave that app surface alone. It performs
+# zero OpenBao writes (no bao kv put/patch), does not
 # promote images, and does not run the broad deploy-infra compose reconcile.
 # See docs/guides/vm-secrets-repair.md.
 
@@ -210,16 +212,29 @@ node_envs="$(yq -r '.envs[]' "$node_catalog_file")"
 grep -qxF "$DEPLOY_ENVIRONMENT" <<<"$node_envs" \
   || fail "'$TARGET_NODE' is not in the '$DEPLOY_ENVIRONMENT' node-set (envs: $(yq -r '.envs | join(",")' "$node_catalog_file")) — add the env to infra/catalog/${TARGET_NODE}.yaml to deploy it here"
 
+catalog_provider="$(deployment_provider_for_target "$TARGET_NODE" "$DEPLOY_ENVIRONMENT")"
+DEPLOYMENT_PROVIDER="${DEPLOYMENT_PROVIDER:-$catalog_provider}"
+[[ "$DEPLOYMENT_PROVIDER" =~ ^(k3s|akash)$ ]] \
+  || fail "unsupported deployment provider '$DEPLOYMENT_PROVIDER' for ${TARGET_NODE}/${DEPLOY_ENVIRONMENT}"
+[[ "$DEPLOYMENT_PROVIDER" == "$catalog_provider" ]] \
+  || fail "deployment provider mismatch for ${TARGET_NODE}/${DEPLOY_ENVIRONMENT}: workflow='$DEPLOYMENT_PROVIDER', catalog='$catalog_provider'"
+
 node_db="$(node_database_for_target "$TARGET_NODE")"
+node_id="$(node_id_for_target "$TARGET_NODE")"
 node_host="$(host_for_node "$TARGET_NODE" "$DOMAIN")"
-node_port="$(node_port_for_target "$TARGET_NODE")"
-edge_slug="$(printf '%s' "$TARGET_NODE" | tr '[:lower:]-' '[:upper:]_')"
-if is_primary_host "$TARGET_NODE"; then
-  edge_key="${edge_slug}_UPSTREAM"
-  edge_value="host.docker.internal:${node_port}"
-else
-  edge_key="${edge_slug}_DOMAIN"
-  edge_value="$node_host"
+node_port=""
+edge_key=""
+edge_value=""
+if [[ "$DEPLOYMENT_PROVIDER" == "k3s" ]]; then
+  node_port="$(node_port_for_target "$TARGET_NODE")"
+  edge_slug="$(printf '%s' "$TARGET_NODE" | tr '[:lower:]-' '[:upper:]_')"
+  if is_primary_host "$TARGET_NODE"; then
+    edge_key="${edge_slug}_UPSTREAM"
+    edge_value="host.docker.internal:${node_port}"
+  else
+    edge_key="${edge_slug}_DOMAIN"
+    edge_value="$node_host"
+  fi
 fi
 
 read -r -a SSH_OPTS_ARR <<< "$SSH_OPTS_RAW"
@@ -258,6 +273,35 @@ bao_get_field() {
     bao kv get -format=json 'cogni/${DEPLOY_ENVIRONMENT}/${svc}'" \
     2>/dev/null | jq -r --arg k "$k" '.data.data[$k] // empty' 2>/dev/null || true
 }
+
+# A node key is an ordinary source:agent value materialized above. Register that
+# exact value against the shared LiteLLM proxy before any deploy-state writer can
+# run. The operator master remains in the operator bank and reaches the fixed
+# remote helper only over stdin — never argv, logs, temp files, Git, or a workload.
+CURRENT_ROW="litellm_node_key"
+litellm_master_key="$(bao_get_field operator LITELLM_MASTER_KEY)"
+litellm_virtual_key="$(bao_get_field "$TARGET_NODE" LITELLM_VIRTUAL_KEY)"
+[[ -n "$litellm_master_key" ]] \
+  || fail "operator-only LiteLLM master absent at cogni/${DEPLOY_ENVIRONMENT}/operator/LITELLM_MASTER_KEY"
+[[ -n "$litellm_virtual_key" ]] \
+  || fail "per-node LiteLLM virtual key absent at cogni/${DEPLOY_ENVIRONMENT}/${TARGET_NODE}/LITELLM_VIRTUAL_KEY — secret-materialize must run first"
+# The pinned LiteLLM revision logs raw key-generation payloads at debug level.
+# Fail closed before sending either credential when debug could be enabled.
+remote "set -euo pipefail
+  runtime_env=/opt/cogni-template-runtime/.env
+  runtime_compose=/opt/cogni-template-runtime/docker-compose.yml
+  if grep -Eiq '^(DEBUG|DETAILED_DEBUG)=(1|true|yes)([[:space:]]*)$' \"\$runtime_env\" 2>/dev/null ||
+     grep -Eq -- '(^|[[:space:]])--(debug|detailed_debug)([[:space:]]|$)' \"\$runtime_compose\" 2>/dev/null; then
+    echo 'LiteLLM debug logging must be disabled before node-key registration' >&2
+    exit 1
+  fi"
+copy_to_remote "$REPO_ROOT/scripts/ci/reconcile-litellm-node-key.remote.py" "/tmp/reconcile-litellm-node-key.remote.py"
+printf '%s\n%s\n' "$litellm_master_key" "$litellm_virtual_key" | \
+  "$SSH_BIN" "${SSH_OPTS_ARR[@]}" "root@${VM_HOST}" \
+    python3 /tmp/reconcile-litellm-node-key.remote.py \
+      "${LITELLM_ADMIN_BASE_URL:-http://127.0.0.1:4000}" \
+      "$DEPLOY_ENVIRONMENT" "$TARGET_NODE" "$node_id"
+mark_row litellm_node_key updated "registered exact pre-materialized node key with fixed v0 budget"
 
 # Read THIS node's app + service DB passwords from OpenBao (materialize wrote them
 # as source:agent). Fail loud if absent — materialize runs before this phase
@@ -366,8 +410,10 @@ else
 fi
 
 CURRENT_ROW="caddyfile"
-caddy_tmp="$(mktemp)"
-COGNI_CATALOG_ROOT="$COGNI_CATALOG_ROOT" bash "$REPO_ROOT/scripts/ci/render-caddyfile.sh" > "$caddy_tmp"
+caddy_tmp=""
+if [[ "$DEPLOYMENT_PROVIDER" == "k3s" ]]; then
+  caddy_tmp="$(mktemp)"
+  COGNI_CATALOG_ROOT="$COGNI_CATALOG_ROOT" bash "$REPO_ROOT/scripts/ci/render-caddyfile.sh" > "$caddy_tmp"
 # The primary node (operator) renders as the bare {$DOMAIN} block with a
 # {$<SLUG>_UPSTREAM:app:3000} default — the host.docker.internal:<port> value is
 # the per-env edge .env override, NOT the template default. Only non-primary
@@ -381,12 +427,15 @@ fi
 if ! "$caddy_route_ok"; then
   fail "rendered Caddyfile missing route for ${node_host} (edge_key=${edge_key})"
 fi
-copy_to_remote "$caddy_tmp" "/tmp/Caddyfile.${DEPLOY_ENVIRONMENT}.${TARGET_NODE}.tmpl"
-mark_row caddyfile updated "rendered + staged Caddyfile route for ${node_host}"
+  copy_to_remote "$caddy_tmp" "/tmp/Caddyfile.${DEPLOY_ENVIRONMENT}.${TARGET_NODE}.tmpl"
+  mark_row caddyfile updated "rendered + staged Caddyfile route for ${node_host}"
 
-# Shared VM-side edge-Caddy reconcile helper (same logic deploy-infra runs):
-# start-if-down + hash-gated force-recreate. Staged here, invoked in the heredoc.
-copy_to_remote "$REPO_ROOT/scripts/ci/reconcile-edge-caddy.remote.sh" "/tmp/reconcile-edge-caddy.remote.sh"
+  # Shared VM-side edge-Caddy reconcile helper (same logic deploy-infra runs):
+  # start-if-down + hash-gated force-recreate. Staged here, invoked in the heredoc.
+  copy_to_remote "$REPO_ROOT/scripts/ci/reconcile-edge-caddy.remote.sh" "/tmp/reconcile-edge-caddy.remote.sh"
+else
+  mark_row caddyfile skipped "provider=${DEPLOYMENT_PROVIDER}: edge route is provider-owned"
+fi
 
 # Born-observable: re-push the Alloy runtime config (the nodeId→`node` Loki
 # stream-label promotion, task.5028) + the shared hash-gated restart helper, so
@@ -446,16 +495,18 @@ remote "set -euo pipefail
   caddyfile=/opt/cogni-template-edge/configs/Caddyfile.tmpl
   runtime_compose=(docker compose --project-name cogni-runtime --env-file \"\$runtime_env\" -f /opt/cogni-template-runtime/docker-compose.yml)
 
-  mkdir -p /opt/cogni-template-edge/configs
-  mv '/tmp/Caddyfile.${DEPLOY_ENVIRONMENT}.${TARGET_NODE}.tmpl' \"\$caddyfile\"
+  if [ '${DEPLOYMENT_PROVIDER}' = 'k3s' ]; then
+    mkdir -p /opt/cogni-template-edge/configs
+    mv '/tmp/Caddyfile.${DEPLOY_ENVIRONMENT}.${TARGET_NODE}.tmpl' \"\$caddyfile\"
 
-  touch \"\$edge_env\"
-  if grep -qE '^${edge_key}=' \"\$edge_env\"; then
-    sed -i.bak 's|^${edge_key}=.*$|${edge_key}=${edge_value}|' \"\$edge_env\"
-  else
-    printf '%s=%s\n' '${edge_key}' '${edge_value}' >> \"\$edge_env\"
+    touch \"\$edge_env\"
+    if grep -qE '^${edge_key}=' \"\$edge_env\"; then
+      sed -i.bak 's|^${edge_key}=.*$|${edge_key}=${edge_value}|' \"\$edge_env\"
+    else
+      printf '%s=%s\n' '${edge_key}' '${edge_value}' >> \"\$edge_env\"
+    fi
+    rm -f \"\$edge_env.bak\"
   fi
-  rm -f \"\$edge_env.bak\"
 
   touch \"\$runtime_env\"
   current=\$(awk -F= '/^COGNI_NODE_DBS=/ {print substr(\$0, length(\"COGNI_NODE_DBS=\") + 1)}' \"\$runtime_env\" | tail -1)
@@ -479,11 +530,13 @@ remote "set -euo pipefail
   # to empty — Caddy's env is frozen at container start). The hash-gate means an
   # unchanged Caddyfile + edge .env is a no-op, so per-flight reconciles no longer
   # bounce the shared edge for every sibling (task.5078 follow-up, now folded).
-  EDGE_COMPOSE_BIN=\"docker compose --project-name cogni-edge --env-file \$edge_env -f /opt/cogni-template-edge/docker-compose.yml\" \\
-  CADDYFILE=\"\$caddyfile\" \\
-  EDGE_ENV_FILE=\"\$edge_env\" \\
-  HASH_DIR=/var/lib/cogni \\
-    bash /tmp/reconcile-edge-caddy.remote.sh >/dev/null
+  if [ '${DEPLOYMENT_PROVIDER}' = 'k3s' ]; then
+    EDGE_COMPOSE_BIN=\"docker compose --project-name cogni-edge --env-file \$edge_env -f /opt/cogni-template-edge/docker-compose.yml\" \\
+    CADDYFILE=\"\$caddyfile\" \\
+    EDGE_ENV_FILE=\"\$edge_env\" \\
+    HASH_DIR=/var/lib/cogni \\
+      bash /tmp/reconcile-edge-caddy.remote.sh >/dev/null
+  fi
 
   # Alloy node-label reconcile — stage the fresh config (rsync's restart-on-change
   # half) then the SAME hash-gated restart deploy-infra runs. Born-observable on
@@ -518,6 +571,6 @@ remote "set -euo pipefail
       ${dg_pw_env} doltgres-provision >/dev/null
 ${dolt_mirror_reconcile_snippet}  fi"
 
-mark_row remote_reconcile updated "edge route, DB inventory, and DB provisioners reconciled on VM"
+mark_row remote_reconcile updated "provider=${DEPLOYMENT_PROVIDER}; shared DB inventory and provisioners reconciled on VM"
 log "substrate ready inputs reconciled for ${TARGET_NODE} (${DEPLOY_ENVIRONMENT})"
 write_summary success

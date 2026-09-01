@@ -182,6 +182,34 @@ env "${BASE_ENV[@]}" CHECK_DNS=true \
   CF_CURL="$FAKEBIN/cf-curl" bash scripts/ci/assert-target-substrate.sh >"$TMPROOT/scoped-dns.out"
 grep -q "Node substrate ready for node-template" "$TMPROOT/scoped-dns.out"
 
+# External placement retains the shared namespace/AppSet/ESO/DB substrate while
+# intentionally requiring no local Deployment, Service, NodePort, DNS, or Caddy.
+AKASH_CATALOG="$TMPROOT/akash-catalog"
+cp -r infra/catalog "$AKASH_CATALOG"
+yq -i '.deployment_provider = {"candidate-a": "akash"}' "$AKASH_CATALOG/node-template.yaml"
+mv "$REMOTE_ROOT/opt/cogni-template-edge/.env" "$REMOTE_ROOT/opt/cogni-template-edge/.env.akash-test"
+env "${BASE_ENV[@]}" COGNI_CATALOG_ROOT="$AKASH_CATALOG" \
+  DEPLOYMENT_PROVIDER=akash CHECK_DNS=true \
+  FAKE_MISSING_DEPLOYMENT=1 FAKE_MISSING_SERVICE=1 FAKE_MISSING_LIVE_CADDY_ROUTE=1 \
+  bash scripts/ci/assert-target-substrate.sh >"$TMPROOT/akash-success.out"
+grep -q "provider=akash; all checks passed" "$TMPROOT/akash-success.out"
+mv "$REMOTE_ROOT/opt/cogni-template-edge/.env.akash-test" "$REMOTE_ROOT/opt/cogni-template-edge/.env"
+
+if env "${BASE_ENV[@]}" COGNI_CATALOG_ROOT="$AKASH_CATALOG" \
+  DEPLOYMENT_PROVIDER=akash FAKE_MISSING_EXTERNAL_SECRET=1 \
+  bash scripts/ci/assert-target-substrate.sh >"$TMPROOT/akash-missing-es.out" 2>&1; then
+  echo "expected Akash substrate without ESO projection to fail" >&2
+  exit 1
+fi
+grep -q "node ExternalSecret missing" "$TMPROOT/akash-missing-es.out"
+
+if env "${BASE_ENV[@]}" DEPLOYMENT_PROVIDER=akash \
+  bash scripts/ci/assert-target-substrate.sh >"$TMPROOT/provider-mismatch.out" 2>&1; then
+  echo "expected workflow/catalog provider mismatch to fail" >&2
+  exit 1
+fi
+grep -q "deployment provider mismatch" "$TMPROOT/provider-mismatch.out"
+
 if env TARGET=node-template DEPLOY_ENVIRONMENT=candidate-a VM_HOST="" DOMAIN=test.cognidao.org \
   APP_SOURCE_DIR=. COGNI_CATALOG_ROOT=infra/catalog CHECK_DNS=false \
   ASSERT_TARGET_SUBSTRATE_SSH_BIN="$FAKEBIN/ssh" bash scripts/ci/assert-target-substrate.sh >"$TMPROOT/missing-vm.out" 2>&1; then

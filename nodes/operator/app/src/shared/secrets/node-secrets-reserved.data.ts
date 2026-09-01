@@ -60,6 +60,7 @@ export const SUBSTRATE_RESERVED_KEYS: ReadonlySet<string> = new Set<string>([
   "INTERNAL_OPS_TOKEN", // deploy → governance schedule sync auth
   "METRICS_TOKEN", // Prometheus scrape → /api/metrics auth
   "GH_WEBHOOK_SECRET", // GitHub App webhook HMAC (dual-plane: must byte-match the App)
+  "LITELLM_VIRTUAL_KEY", // per-node budgeted LiteLLM credential (substrate-registered with the proxy)
   "POLY_WALLET_AEAD_KEY_HEX", // poly wallet AEAD key (clobber = wallet decryption loss)
   // Operator-only Ed25519 seed signing every fleet identity attestation. Its
   // public half is published at /.well-known/jwks.json and pinned by every

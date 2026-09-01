@@ -15,7 +15,8 @@
     "test:external:dolthub": "vitest run --config vitest.external-dolthub.config.mts",
     "test:external:dolthub:roundtrip": "vitest run --config vitest.external-dolthub-roundtrip.config.mts",
     "test:external:money": "vitest run --config vitest.external-money.config.mts",
-    "import:work-items": "tsx scripts/import-work-items-via-api.ts"
+    "import:work-items": "tsx scripts/import-work-items-via-api.ts",
+    "materialize:compute-workload": "pnpm --filter @cogni/repo-spec build && tsx scripts/materialize-compute-workload.ts"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.12.10",

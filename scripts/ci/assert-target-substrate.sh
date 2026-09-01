@@ -52,6 +52,15 @@ for catalog_node in "${NODE_TARGETS[@]}"; do
 done
 "$contains_node" || fail "target '$node' is not a type=node catalog target"
 
+local catalog_provider
+local provider
+catalog_provider="$(deployment_provider_for_target "$node" "$DEPLOY_ENVIRONMENT")"
+provider="${DEPLOYMENT_PROVIDER:-$catalog_provider}"
+[[ "$provider" =~ ^(k3s|akash)$ ]] \
+  || fail "unsupported deployment provider '$provider' for ${node}/${DEPLOY_ENVIRONMENT}"
+[ "$provider" = "$catalog_provider" ] \
+  || fail "deployment provider mismatch for ${node}/${DEPLOY_ENVIRONMENT}: workflow='$provider', catalog='$catalog_provider'"
+
 overlay_dir="${APP_SOURCE_DIR}/infra/k8s/overlays/${DEPLOY_ENVIRONMENT}/${node}"
 appset_file="${APP_SOURCE_DIR}/infra/k8s/argocd/appsets/${DEPLOY_ENVIRONMENT}/${DEPLOY_ENVIRONMENT}-${node}-applicationset.yaml"
 
@@ -60,15 +69,19 @@ appset_file="${APP_SOURCE_DIR}/infra/k8s/argocd/appsets/${DEPLOY_ENVIRONMENT}/${
 
 node_db="$(node_database_for_target "$node")" || exit 1
 node_host="$(host_for_node "$node" "$domain")"
-node_port="$(node_port_for_target "$node")" || exit 1
-edge_key="$(printf '%s' "$node" | tr '[:lower:]-' '[:upper:]_')"
-if is_primary_host "$node"; then
-  edge_key="${edge_key}_UPSTREAM"
-else
-  edge_key="${edge_key}_DOMAIN"
+node_port=""
+edge_key=""
+if [ "$provider" = "k3s" ]; then
+  node_port="$(node_port_for_target "$node")" || exit 1
+  edge_key="$(printf '%s' "$node" | tr '[:lower:]-' '[:upper:]_')"
+  if is_primary_host "$node"; then
+    edge_key="${edge_key}_UPSTREAM"
+  else
+    edge_key="${edge_key}_DOMAIN"
+  fi
 fi
 
-if [ "$check_dns" = "true" ]; then
+if [ "$provider" = "k3s" ] && [ "$check_dns" = "true" ]; then
   : "${CLOUDFLARE_API_TOKEN:?CLOUDFLARE_API_TOKEN required for node substrate DNS check}"
   : "${CLOUDFLARE_ZONE_ID:?CLOUDFLARE_ZONE_ID required for node substrate DNS check}"
   : "${FORK_DOMAIN_ROOT:?FORK_DOMAIN_ROOT required for node substrate DNS check}"
@@ -95,6 +108,7 @@ node_port="$6"
 app_wait_attempts="$7"
 app_wait_sleep_seconds="$8"
 remote_root="${9:-}"
+provider="${10:-k3s}"
 
 namespace="cogni-${env_name}"
 app_name="${env_name}-${node}"
@@ -153,56 +167,77 @@ else
   mark_fail "Argo Application missing after AppSet reconcile: $app_name"
 fi
 
-if kubectl -n "$namespace" get deployment "$workload_name" >/dev/null 2>&1; then
+if [ "$provider" = "k3s" ] && kubectl -n "$namespace" get deployment "$workload_name" >/dev/null 2>&1; then
   mark_ok "Deployment exists: $workload_name"
-else
+elif [ "$provider" = "k3s" ]; then
   mark_fail "Deployment missing: $workload_name"
 fi
 
-if kubectl -n "$namespace" get service "$workload_name" >/dev/null 2>&1; then
+if [ "$provider" = "k3s" ] && kubectl -n "$namespace" get service "$workload_name" >/dev/null 2>&1; then
   service_node_port="$(kubectl -n "$namespace" get service "$workload_name" -o jsonpath='{.spec.ports[0].nodePort}' 2>/dev/null || true)"
   if [ "$service_node_port" = "$node_port" ]; then
     mark_ok "Service NodePort matches catalog: $workload_name -> $node_port"
   else
     mark_fail "Service NodePort mismatch for $workload_name: got '${service_node_port:-none}', want $node_port"
   fi
-else
+elif [ "$provider" = "k3s" ]; then
   mark_fail "Service missing: $workload_name"
 fi
 
-consumed_secret_names="$(
-  kubectl -n "$namespace" get deployment "$workload_name" \
-    -o jsonpath='{.spec.template.spec.containers[*].envFrom[*].secretRef.name}{" "}{.spec.template.spec.initContainers[*].envFrom[*].secretRef.name}{" "}{.spec.template.spec.containers[*].env[*].valueFrom.secretKeyRef.name}{" "}{.spec.template.spec.initContainers[*].env[*].valueFrom.secretKeyRef.name}' \
-    2>/dev/null | tr ' ' '\n' | sed '/^$/d' | sort -u
-)"
-if [ -z "$consumed_secret_names" ]; then
-  mark_fail "Deployment has no consumed Secret refs: $workload_name"
-else
-  while IFS= read -r consumed_secret; do
-    [ -n "$consumed_secret" ] || continue
-    if [ "$consumed_secret" = "${node}-node-app-secrets" ]; then
-      mark_fail "Deployment consumes legacy plain Secret ${consumed_secret}; expected ${expected_secret_name}"
-    elif [ "$consumed_secret" != "$expected_secret_name" ]; then
-      mark_fail "Deployment consumes unexpected Secret ${consumed_secret}; expected ${expected_secret_name}"
-    fi
-
-    if kubectl -n "$namespace" get secret "$consumed_secret" >/dev/null 2>&1; then
-      mark_ok "Deployment-consumed Secret exists: $consumed_secret"
-    else
-      mark_fail "ESO-synced Secret missing: $consumed_secret"
-    fi
-
-    if kubectl -n "$namespace" get externalsecret "$consumed_secret" >/dev/null 2>&1; then
-      ready_status="$(kubectl -n "$namespace" get externalsecret "$consumed_secret" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
-      if [ "$ready_status" = "True" ]; then
-        mark_ok "Deployment-consumed ExternalSecret Ready=True: $consumed_secret"
-      else
-        mark_fail "Deployment-consumed ExternalSecret not Ready=True: $consumed_secret"
+if [ "$provider" = "k3s" ]; then
+  consumed_secret_names="$(
+    kubectl -n "$namespace" get deployment "$workload_name" \
+      -o jsonpath='{.spec.template.spec.containers[*].envFrom[*].secretRef.name}{" "}{.spec.template.spec.initContainers[*].envFrom[*].secretRef.name}{" "}{.spec.template.spec.containers[*].env[*].valueFrom.secretKeyRef.name}{" "}{.spec.template.spec.initContainers[*].env[*].valueFrom.secretKeyRef.name}' \
+      2>/dev/null | tr ' ' '\n' | sed '/^$/d' | sort -u
+  )"
+  if [ -z "$consumed_secret_names" ]; then
+    mark_fail "Deployment has no consumed Secret refs: $workload_name"
+  else
+    while IFS= read -r consumed_secret; do
+      [ -n "$consumed_secret" ] || continue
+      if [ "$consumed_secret" = "${node}-node-app-secrets" ]; then
+        mark_fail "Deployment consumes legacy plain Secret ${consumed_secret}; expected ${expected_secret_name}"
+      elif [ "$consumed_secret" != "$expected_secret_name" ]; then
+        mark_fail "Deployment consumes unexpected Secret ${consumed_secret}; expected ${expected_secret_name}"
       fi
-    else
-      mark_fail "ExternalSecret missing for Deployment-consumed Secret: $consumed_secret"
-    fi
-  done <<< "$consumed_secret_names"
+
+      if kubectl -n "$namespace" get secret "$consumed_secret" >/dev/null 2>&1; then
+        mark_ok "Deployment-consumed Secret exists: $consumed_secret"
+      else
+        mark_fail "ESO-synced Secret missing: $consumed_secret"
+      fi
+
+      if kubectl -n "$namespace" get externalsecret "$consumed_secret" >/dev/null 2>&1; then
+        ready_status="$(kubectl -n "$namespace" get externalsecret "$consumed_secret" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
+        if [ "$ready_status" = "True" ]; then
+          mark_ok "Deployment-consumed ExternalSecret Ready=True: $consumed_secret"
+        else
+          mark_fail "Deployment-consumed ExternalSecret not Ready=True: $consumed_secret"
+        fi
+      else
+        mark_fail "ExternalSecret missing for Deployment-consumed Secret: $consumed_secret"
+      fi
+    done <<< "$consumed_secret_names"
+  fi
+fi
+
+# Every placement retains the canonical OpenBao → ESO node projection during
+# substrate reconcile. External compute later receives a second, narrow Secret
+# containing only declared refs; this full Secret is never controller-readable.
+if kubectl -n "$namespace" get secret "$expected_secret_name" >/dev/null 2>&1; then
+  mark_ok "ESO-synced node Secret exists: $expected_secret_name"
+else
+  mark_fail "ESO-synced node Secret missing: $expected_secret_name"
+fi
+if kubectl -n "$namespace" get externalsecret "$expected_secret_name" >/dev/null 2>&1; then
+  ready_status="$(kubectl -n "$namespace" get externalsecret "$expected_secret_name" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || true)"
+  if [ "$ready_status" = "True" ]; then
+    mark_ok "node ExternalSecret Ready=True: $expected_secret_name"
+  else
+    mark_fail "node ExternalSecret not Ready=True: $expected_secret_name"
+  fi
+else
+  mark_fail "node ExternalSecret missing: $expected_secret_name"
 fi
 
 # DSN keys must be materialized into the node Secret (reconcile seeds all three
@@ -219,17 +254,17 @@ if kubectl -n "$namespace" get secret "$expected_secret_name" >/dev/null 2>&1; t
   done
 fi
 
-if [ -f "$edge_env" ]; then
+if [ "$provider" = "k3s" ] && [ -f "$edge_env" ]; then
   if grep -Eq "^${edge_key}=" "$edge_env"; then
     mark_ok "edge env carries $edge_key for $node_host"
   else
     mark_fail "edge env missing $edge_key in $edge_env"
   fi
-else
+elif [ "$provider" = "k3s" ]; then
   mark_fail "edge env file missing: $edge_env"
 fi
 
-if [ -f "$caddyfile" ]; then
+if [ "$provider" = "k3s" ] && [ -f "$caddyfile" ]; then
   # The primary node (edge_key=*_UPSTREAM) renders as the bare {$DOMAIN} block with a
   # {$<SLUG>_UPSTREAM:app:3000} default — host.docker.internal:<port> is the per-env
   # edge .env override, NOT the rendered-template default. Only non-primary nodes bake
@@ -245,11 +280,11 @@ if [ -f "$caddyfile" ]; then
   else
     mark_fail "Caddyfile missing route for ${node_host} / node_port ${node_port}"
   fi
-else
+elif [ "$provider" = "k3s" ]; then
   mark_fail "Caddyfile missing: $caddyfile"
 fi
 
-if "${edge_compose[@]}" ps -q caddy >/dev/null 2>&1; then
+if [ "$provider" = "k3s" ] && "${edge_compose[@]}" ps -q caddy >/dev/null 2>&1; then
   mark_ok "Caddy compose service exists"
   live_config="$("${edge_compose[@]}" exec -T caddy wget -qO- http://127.0.0.1:2019/config/ </dev/null 2>/dev/null || true)"
   if printf '%s' "$live_config" | grep -Fq "$node_host" && printf '%s' "$live_config" | grep -Fq "host.docker.internal:${node_port}"; then
@@ -257,7 +292,7 @@ if "${edge_compose[@]}" ps -q caddy >/dev/null 2>&1; then
   else
     mark_fail "live Caddy config missing ${node_host} / host.docker.internal:${node_port}"
   fi
-else
+elif [ "$provider" = "k3s" ]; then
   mark_fail "Caddy compose service not present"
 fi
 
@@ -296,7 +331,7 @@ if [ "$failed" -ne 0 ]; then
   exit 1
 fi
 
-echo "Node substrate ready for ${node} in ${env_name}: all checks passed."
+echo "Node substrate ready for ${node} in ${env_name}: provider=${provider}; all checks passed."
 REMOTE
 
 local ssh_opts=()
@@ -305,7 +340,7 @@ probe_log=$(mktemp)
 set +e
 "$ssh_bin" "${ssh_opts[@]}" "root@${vm_host}" bash -s -- \
   "$DEPLOY_ENVIRONMENT" "$node" "$node_db" "$node_host" "$edge_key" "$node_port" \
-  "$app_wait_attempts" "$app_wait_sleep_seconds" "$remote_root" < "$remote_script" 2>&1 | tee "$probe_log"
+  "$app_wait_attempts" "$app_wait_sleep_seconds" "$remote_root" "$provider" < "$remote_script" 2>&1 | tee "$probe_log"
 ssh_rc=${PIPESTATUS[0]}
 set -e
 if grep -Eq '(^|\r)(\[FAIL\]|::error::assert-target-substrate:)' "$probe_log"; then

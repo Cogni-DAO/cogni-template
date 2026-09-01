@@ -181,6 +181,17 @@
       "minItems": 1,
       "uniqueItems": true
     },
+    "deployment_provider": {
+      "type": "object",
+      "description": "Operator-owned per-environment placement policy. Omitted environments retain the existing k3s runtime; `akash` materializes a provider-neutral ComputeWorkload on the management cluster. The node repo still owns service topology through repo-spec.",
+      "propertyNames": {
+        "enum": ["candidate-a", "preview", "production"]
+      },
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["k3s", "akash"]
+      }
+    },
     "activity_env": {
       "type": "string",
       "enum": ["candidate-a", "preview", "production"],
