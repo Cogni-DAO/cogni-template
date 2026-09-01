@@ -251,6 +251,10 @@ export const serverSchema = z.object({
   // account bills every Akash workload in USD (v0). Optional: unset → Akash provider absent
   // from the compute capability (graceful degradation, same contract as CHERRY_AUTH_TOKEN).
   AKASH_CONSOLE_API_KEY: optionalString,
+  // Comma-separated Akash provider addresses whose egress IPs the substrate firewall
+  // allowlists (harden-docker-public-ports.sh compute-egress-allowlist). The adapter holds
+  // the bid window for these before falling back to the cheapest stranger.
+  AKASH_PREFERRED_PROVIDERS: optionalString,
   COMPUTE_BALANCE_QUERY_TIMEOUT_MS: z.coerce
     .number()
     .int()

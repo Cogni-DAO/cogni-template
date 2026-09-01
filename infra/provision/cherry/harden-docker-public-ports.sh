@@ -55,15 +55,33 @@ iptables -A DOCKER-USER -s 127.0.0.0/8 -m comment --comment "$TAG:loopback" -j A
 
 # Decentralized-compute egress allowlist (task.5044): node-app workloads running on
 # external compute (e.g. Akash providers) dial the shared substrate on these same
-# internal ports. One CIDR per line in $ALLOWLIST_FILE (comments/# allowed); each gets
-# an ACCEPT ahead of the public DROP. Empty/absent file = no external compute allowed.
+# internal ports. One entry per line in $ALLOWLIST_FILE: `CIDR` or `CIDR:port,port`
+# (comments/# allowed); each gets an ACCEPT ahead of the public DROP, scoped to the
+# named ports (default: all internal ports). Empty/absent file = no external compute.
+# Provider egress IPs are multi-tenant — grant only the ports the workload dials.
+# NOTE: this file is VM-local hand-managed state for v0; the platform home is a
+# catalog field rendered by an existing generator (task.5044 follow-up).
 ALLOWLIST_FILE="/etc/cogni/compute-egress-allowlist"
 if [ -f "$ALLOWLIST_FILE" ]; then
-  while IFS= read -r cidr; do
-    case "$cidr" in ""|\#*) continue ;; esac
-    iptables -A DOCKER-USER -s "$cidr" -p tcp -m multiport --dports "$INTERNAL_PORTS" \
-      -m comment --comment "$TAG:compute-egress-allow" -j ACCEPT
-    echo "[harden] compute-egress allow: $cidr -> $INTERNAL_PORTS"
+  while IFS= read -r line; do
+    case "$line" in ""|\#*) continue ;; esac
+    cidr="${line%%:*}"
+    ports="$INTERNAL_PORTS"
+    case "$line" in *:*) ports="${line#*:}" ;; esac
+    # Validate before touching iptables: a malformed line must NEVER abort the script
+    # between the old-rule delete and the DROP append (that would fail OPEN).
+    case "$cidr" in
+      *[!0-9./]*|"") echo "[harden] WARN: skipping invalid CIDR: $line" >&2; continue ;;
+    esac
+    case "$ports" in
+      *[!0-9,]*|"") echo "[harden] WARN: skipping invalid ports: $line" >&2; continue ;;
+    esac
+    if iptables -A DOCKER-USER -s "$cidr" -p tcp -m multiport --dports "$ports" \
+      -m comment --comment "$TAG:compute-egress-allow" -j ACCEPT; then
+      echo "[harden] compute-egress allow: $cidr -> $ports"
+    else
+      echo "[harden] WARN: iptables rejected allowlist line: $line" >&2
+    fi
   done < "$ALLOWLIST_FILE"
 fi
 

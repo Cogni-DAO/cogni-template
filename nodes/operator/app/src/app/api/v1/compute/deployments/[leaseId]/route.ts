@@ -74,6 +74,9 @@ export const GET = wrapRouteHandlerWithLogging<Ctx>(
     auth: { mode: "required", getSessionUser },
   },
   async (_ctx, request, sessionUser, context) => {
+    // RBAC gate first — 501-vs-200 must not leak provider config to ungranted principals.
+    const gated = await gateAndLease(context, request, sessionUser.id);
+    if (!gated.ok) return gated.response;
     const compute = getContainer().computeCapability;
     if (!compute.status) {
       return NextResponse.json(
@@ -81,8 +84,6 @@ export const GET = wrapRouteHandlerWithLogging<Ctx>(
         { status: 501 }
       );
     }
-    const gated = await gateAndLease(context, request, sessionUser.id);
-    if (!gated.ok) return gated.response;
     const workload = await compute.status({ leaseId: gated.leaseId });
     return NextResponse.json({ workload });
   }
@@ -94,6 +95,8 @@ export const DELETE = wrapRouteHandlerWithLogging<Ctx>(
     auth: { mode: "required", getSessionUser },
   },
   async (_ctx, request, sessionUser, context) => {
+    const gated = await gateAndLease(context, request, sessionUser.id);
+    if (!gated.ok) return gated.response;
     const compute = getContainer().computeCapability;
     if (!compute.release) {
       return NextResponse.json(
@@ -101,8 +104,6 @@ export const DELETE = wrapRouteHandlerWithLogging<Ctx>(
         { status: 501 }
       );
     }
-    const gated = await gateAndLease(context, request, sessionUser.id);
-    if (!gated.ok) return gated.response;
     await compute.release({ leaseId: gated.leaseId });
     return NextResponse.json({ released: true, leaseId: gated.leaseId });
   }

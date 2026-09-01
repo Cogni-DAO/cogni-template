@@ -125,10 +125,10 @@ export interface ComputeResourcePort {
   balances(): Promise<readonly ComputeBalance[]>;
 
   /**
-   * Deploy a workload on provider compute. Resolves once the workload is accepted and leased
-   * (state `active`); `endpoints` may still be empty — poll `status()` until the provider
-   * reports serving URIs. `env` is a placement/labeling hint (e.g. "candidate-a"), not a
-   * provider region.
+   * Deploy a workload on provider compute. Resolves once the lease is CREATED — the returned
+   * state is commonly still `pending` and `endpoints` empty; poll `status()` until the
+   * provider reports serving URIs. `env` is a placement/labeling hint (e.g. "candidate-a"),
+   * not a provider region.
    */
   provision?(p: { env: string; spec: ProvisionSpec }): Promise<ProvisionOutput>;
 

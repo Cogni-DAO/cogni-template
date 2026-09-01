@@ -40,8 +40,13 @@ const MICRO = 1_000_000;
 export interface AkashComputeAdapterConfig {
   /** Akash Console API key (Settings → API Keys), sent as `x-api-key`. */
   apiKey: string;
-  /** Per-request timeout in milliseconds. */
+  /** Per-request timeout for reads, in milliseconds. */
   timeoutMs: number;
+  /**
+   * Timeout for write calls (`/v1/deployments`, `/v1/leases` — on-chain txs that routinely
+   * exceed a read budget; an aborted create can orphan a server-side deployment). Default 30s.
+   */
+  writeTimeoutMs?: number;
   /** USD escrow deposited per deployment (Console minimum 0.5). */
   deployDepositUsd?: number;
   /** How long to wait for provider bids before failing, in ms. */
@@ -120,6 +125,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
   private readonly sleep: (ms: number) => Promise<void>;
+  private readonly writeTimeoutMs: number;
   private readonly deployDepositUsd: number;
   private readonly bidTimeoutMs: number;
   private readonly bidPollIntervalMs: number;
@@ -131,6 +137,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     ).replace(/\/$/, "");
     this.fetchImpl = config.fetchImpl ?? fetch;
     this.sleep = config.sleepImpl ?? defaultSleep;
+    this.writeTimeoutMs = config.writeTimeoutMs ?? 30_000;
     this.deployDepositUsd = config.deployDepositUsd ?? 5;
     this.bidTimeoutMs = config.bidTimeoutMs ?? 90_000;
     this.bidPollIntervalMs = config.bidPollIntervalMs ?? 3_000;
@@ -158,9 +165,10 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     return (wallets ?? []).map((wallet) => ({
       provider: PROVIDER,
       accountId: String(wallet.address ?? wallet.id ?? "unknown"),
-      // Managed wallets denominate the deployment allowance in uusdc micro-units → USD.
-      // A self-custody uakt allowance is reported as AKT so we never mislabel currency.
-      currency: wallet.denom === "uakt" ? "AKT" : "USD",
+      // Managed wallets denominate the allowance in USD micro-units (`uact`/`uusdc`); a
+      // self-custody `uakt` allowance is AKT. Any other denom is surfaced verbatim rather
+      // than silently mislabeled as USD.
+      currency: currencyForDenom(wallet.denom),
       remaining: Number(wallet.creditAmount ?? 0) / MICRO,
       asOf,
       estimatedDaysRemaining: null,
@@ -175,7 +183,8 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     const created = await this.request<{ dseq?: string; manifest?: unknown }>(
       "POST",
       "/v1/deployments",
-      { data: { sdl, deposit: this.deployDepositUsd } }
+      { data: { sdl, deposit: this.deployDepositUsd } },
+      this.writeTimeoutMs
     );
     const dseq = created?.dseq;
     if (!dseq || created?.manifest === undefined) {
@@ -185,21 +194,51 @@ export class AkashComputeAdapter implements ComputeResourcePort {
       );
     }
 
-    const bid = await this.awaitCheapestBid(dseq);
-    await this.request("POST", "/v1/leases", {
-      manifest: created.manifest,
-      leases: [
+    // Escrow is deposited from here on — never strand it: a bid/lease failure closes the
+    // deployment (refunding escrow) before rethrowing, and every error names the dseq.
+    try {
+      const bid = await this.awaitCheapestBid(dseq);
+      await this.request(
+        "POST",
+        "/v1/leases",
         {
-          dseq: String(bid.dseq ?? dseq),
-          gseq: bid.gseq ?? 1,
-          oseq: bid.oseq ?? 1,
-          provider: bid.provider,
+          manifest: created.manifest,
+          leases: [
+            {
+              dseq: String(bid.dseq ?? dseq),
+              gseq: bid.gseq ?? 1,
+              oseq: bid.oseq ?? 1,
+              provider: bid.provider,
+            },
+          ],
         },
-      ],
-    });
+        this.writeTimeoutMs
+      );
+    } catch (error) {
+      await this.release({ leaseId: String(dseq) }).catch(() => {
+        // best-effort close; the original error (now dseq-tagged) is the one that matters
+      });
+      if (error instanceof AkashComputeError) {
+        throw new AkashComputeError(
+          error.code,
+          `${error.message} (deployment ${dseq} closed, escrow refunding)`
+        );
+      }
+      throw error;
+    }
 
-    // One immediate status read — endpoints usually trail the lease; callers poll status().
-    return this.status({ leaseId: String(dseq) });
+    // The lease exists and is paying from here — a failed/slow status read must NOT throw
+    // (the caller would lose the only handle to a live lease). Fall back to `pending`.
+    try {
+      return await this.status({ leaseId: String(dseq) });
+    } catch {
+      return {
+        provider: PROVIDER,
+        leaseId: String(dseq),
+        state: "pending",
+        endpoints: [],
+      };
+    }
   }
 
   async status(p: { leaseId: string }): Promise<ProvisionOutput> {
@@ -226,7 +265,9 @@ export class AkashComputeAdapter implements ComputeResourcePort {
   async release(p: { leaseId: string }): Promise<void> {
     await this.request(
       "DELETE",
-      `/v1/deployments/${encodeURIComponent(p.leaseId)}`
+      `/v1/deployments/${encodeURIComponent(p.leaseId)}`,
+      undefined,
+      this.writeTimeoutMs
     );
   }
 
@@ -278,13 +319,12 @@ export class AkashComputeAdapter implements ComputeResourcePort {
   private async request<T>(
     method: string,
     path: string,
-    body?: unknown
+    body?: unknown,
+    timeoutOverrideMs?: number
   ): Promise<T | undefined> {
+    const timeoutMs = timeoutOverrideMs ?? this.config.timeoutMs;
     const controller = new AbortController();
-    const timeoutId = setTimeout(
-      () => controller.abort(),
-      this.config.timeoutMs
-    );
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await this.fetchImpl(`${this.baseUrl}${path}`, {
         method,
@@ -297,10 +337,22 @@ export class AkashComputeAdapter implements ComputeResourcePort {
         signal: controller.signal,
       });
       if (!response.ok) {
+        // NEVER include raw response text: 4xx bodies can echo request input, and the SDL
+        // carries workload secrets — only a parsed, known `message`/`error` field survives.
         const text = await response.text().catch(() => "");
+        let detail = "";
+        try {
+          const parsed = JSON.parse(text) as {
+            message?: string;
+            error?: string;
+          };
+          detail = String(parsed.message ?? parsed.error ?? "").slice(0, 200);
+        } catch {
+          // non-JSON body: drop it
+        }
         throw new AkashComputeError(
           "HTTP_ERROR",
-          `Console ${method} ${path} failed: ${response.status} ${text.slice(0, 300)}`
+          `Console ${method} ${path} failed: ${response.status} ${response.statusText}${detail ? ` — ${detail}` : ""}`
         );
       }
       const json = (await response.json().catch(() => undefined)) as
@@ -316,7 +368,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
       if (error instanceof Error && error.name === "AbortError") {
         throw new AkashComputeError(
           "TIMEOUT",
-          `Console ${method} ${path} timeout after ${this.config.timeoutMs}ms`
+          `Console ${method} ${path} timeout after ${timeoutMs}ms`
         );
       }
       throw new AkashComputeError(
@@ -327,6 +379,13 @@ export class AkashComputeAdapter implements ComputeResourcePort {
       clearTimeout(timeoutId);
     }
   }
+}
+
+function currencyForDenom(denom: string | undefined): string {
+  if (denom === "uakt") return "AKT";
+  if (denom === undefined || denom === "uact" || denom === "uusdc")
+    return "USD";
+  return denom; // unknown chain denom: label honestly, never pretend USD
 }
 
 function mapState(

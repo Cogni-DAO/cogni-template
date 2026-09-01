@@ -235,3 +235,167 @@ describe("AkashComputeAdapter", () => {
     expect((err as AkashComputeError).code).toBe("HTTP_ERROR");
   });
 });
+
+describe("AkashComputeAdapter preferredProviders", () => {
+  const bid = (provider: string, amount: string) => ({
+    bid: {
+      id: { dseq: "77", gseq: 1, oseq: 1, provider },
+      state: "open",
+      price: { denom: "uakt", amount },
+    },
+  });
+
+  function provisionFetch(bidWaves: unknown[][], leased: string[]) {
+    let wave = 0;
+    return vi.fn<typeof fetch>(async (url, init) => {
+      const u = String(url);
+      if (u.endsWith("/v1/deployments") && init?.method === "POST") {
+        return jsonResponse({ data: { dseq: "77", manifest: [] } });
+      }
+      if (u.includes("/v1/bids")) {
+        const bids = bidWaves[Math.min(wave, bidWaves.length - 1)];
+        wave += 1;
+        return jsonResponse({ data: bids });
+      }
+      if (u.endsWith("/v1/leases") && init?.method === "POST") {
+        const body = JSON.parse(String(init.body)) as {
+          leases: { provider: string }[];
+        };
+        leased.push(body.leases[0]?.provider ?? "");
+        return jsonResponse({ data: {} });
+      }
+      if (init?.method === "DELETE")
+        return jsonResponse({ data: { success: true } });
+      return jsonResponse({
+        data: {
+          deployment: { state: "active" },
+          leases: [{ state: "active" }],
+        },
+      });
+    });
+  }
+
+  it("leases the preferred provider over a cheaper stranger", async () => {
+    const leased: string[] = [];
+    const fetchImpl = provisionFetch(
+      [[bid("akash1stranger", "100"), bid("akash1preferred", "900")]],
+      leased
+    );
+    await makeAdapter(fetchImpl, {
+      bidTimeoutMs: 1000,
+      preferredProviders: ["akash1preferred"],
+    }).provision({ env: "t", spec: SPEC });
+    expect(leased).toEqual(["akash1preferred"]);
+  });
+
+  it("waits past a stranger-only wave and takes the preferred bid on a later poll", async () => {
+    const leased: string[] = [];
+    const fetchImpl = provisionFetch(
+      [
+        [bid("akash1stranger", "100")],
+        [bid("akash1stranger", "100"), bid("akash1preferred", "900")],
+      ],
+      leased
+    );
+    await makeAdapter(fetchImpl, {
+      bidTimeoutMs: 60_000,
+      preferredProviders: ["akash1preferred"],
+    }).provision({ env: "t", spec: SPEC });
+    expect(leased).toEqual(["akash1preferred"]);
+  });
+
+  it("falls back to the cheapest stranger when the window closes without a preferred bid", async () => {
+    const leased: string[] = [];
+    const fetchImpl = provisionFetch(
+      [[bid("akash1stranger", "100"), bid("akash1pricier", "500")]],
+      leased
+    );
+    await makeAdapter(fetchImpl, {
+      bidTimeoutMs: 0,
+      preferredProviders: ["akash1preferred"],
+    }).provision({ env: "t", spec: SPEC });
+    expect(leased).toEqual(["akash1stranger"]);
+  });
+});
+
+describe("AkashComputeAdapter failure containment", () => {
+  it("closes the deployment (refund) and names the dseq when no bids arrive", async () => {
+    const deletes: string[] = [];
+    const fetchImpl = vi.fn<typeof fetch>(async (url, init) => {
+      const u = String(url);
+      if (u.endsWith("/v1/deployments") && init?.method === "POST") {
+        return jsonResponse({ data: { dseq: "88", manifest: [] } });
+      }
+      if (init?.method === "DELETE") {
+        deletes.push(u);
+        return jsonResponse({ data: { success: true } });
+      }
+      return jsonResponse({ data: [] }); // bids: always empty
+    });
+
+    const err = await makeAdapter(fetchImpl)
+      .provision({ env: "t", spec: SPEC })
+      .catch((e: unknown) => e);
+
+    expect((err as AkashComputeError).code).toBe("NO_BIDS");
+    expect((err as AkashComputeError).message).toContain("88");
+    expect(deletes).toEqual([`${BASE}/v1/deployments/88`]);
+  });
+
+  it("returns pending instead of throwing when the post-lease status read fails", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (url, init) => {
+      const u = String(url);
+      if (u.endsWith("/v1/deployments") && init?.method === "POST") {
+        return jsonResponse({ data: { dseq: "99", manifest: [] } });
+      }
+      if (u.includes("/v1/bids")) {
+        return jsonResponse({
+          data: [
+            {
+              bid: {
+                id: { dseq: "99", gseq: 1, oseq: 1, provider: "akash1p" },
+                state: "open",
+                price: { denom: "uakt", amount: "5" },
+              },
+            },
+          ],
+        });
+      }
+      if (u.endsWith("/v1/leases") && init?.method === "POST") {
+        return jsonResponse({ data: {} });
+      }
+      return jsonResponse({ error: "boom" }, 500); // status read fails
+    });
+
+    const out = await makeAdapter(fetchImpl).provision({
+      env: "t",
+      spec: SPEC,
+    });
+    expect(out).toEqual({
+      provider: "akash",
+      leaseId: "99",
+      state: "pending",
+      endpoints: [],
+    });
+  });
+
+  it("never echoes raw response bodies in HTTP_ERROR (only parsed message fields)", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () =>
+        new Response(
+          '{"message":"invalid manifest","echo":"AUTH_SECRET=supersecret"}',
+          {
+            status: 422,
+            statusText: "Unprocessable Entity",
+          }
+        )
+    );
+    const err = await makeAdapter(fetchImpl)
+      .balances()
+      .catch((e: unknown) => e);
+    const msg = (err as AkashComputeError).message;
+    expect(msg).toContain("422");
+    expect(msg).toContain("invalid manifest");
+    expect(msg).not.toContain("supersecret");
+  });
+});

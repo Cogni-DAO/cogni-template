@@ -20,7 +20,9 @@
  *   - LOG_PUMP_IS_V000_EXCEPTION: piping app stdout through an inline Loki pusher is the
  *     zero-image-change stopgap; the proper env-gated transport in node-template is v0
  *     scope. Labels mirror Alloy ({env, service:"app", node:<nodeId>}) so the operator
- *     observability proxy reads decentralized-compute lines unmodified.
+ *     observability proxy reads decentralized-compute lines unmodified. NOTE: the deploy
+ *     route does not wire `logPush` yet (operator-admin drivers do); route wiring lands
+ *     with server-side env sourcing (v0).
  * Side-effects: none (pure)
  * Links: ProvisionSpec (@cogni/ai-tools), AkashComputeAdapter (adapters/server/compute),
  *   infra/k8s/overlays/<env>/<node>/ (the ExternalName wiring this mirrors),

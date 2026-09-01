@@ -11,7 +11,9 @@
  *   - PROVIDER_AGNOSTIC boundary: SDL never escapes this dir — callers hand in ProvisionSpec,
  *     the adapter submits the rendered YAML, and only ProvisionOutput comes back.
  *   - INTERNAL_EXPOSE_IS_MESH: a non-global expose renders `to: [service: <sibling>]` for every
- *     sibling, so co-located services (node-app ↔ postgres) reach each other by service name.
+ *     sibling, so co-located services reach each other by service name. (Generic translator
+ *     capability — node workloads themselves are APP-ONLY per node-workload-spec; infra
+ *     sidecars on decentralized compute are the rejected anti-pattern.)
  * Side-effects: none (pure)
  * Links: ProvisionSpec (@cogni/ai-tools), https://akash.network/docs (SDL reference),
  *   infra/akash/README.md (catalog-driven renderer is the vNext home; task.5044)

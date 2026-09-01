@@ -53,10 +53,15 @@ export function createComputeCapability(env: ServerEnv): ComputeResourcePort {
     );
   }
   if (env.AKASH_CONSOLE_API_KEY) {
+    const preferredProviders = (env.AKASH_PREFERRED_PROVIDERS ?? "")
+      .split(",")
+      .map((p) => p.trim())
+      .filter(Boolean);
     adapters.push(
       new AkashComputeAdapter({
         apiKey: env.AKASH_CONSOLE_API_KEY,
         timeoutMs: env.COMPUTE_BALANCE_QUERY_TIMEOUT_MS,
+        ...(preferredProviders.length > 0 ? { preferredProviders } : {}),
       })
     );
   }

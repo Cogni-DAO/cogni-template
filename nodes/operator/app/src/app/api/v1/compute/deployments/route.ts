@@ -73,6 +73,8 @@ export const POST = wrapRouteHandlerWithLogging(
     }
     const { nodeId, sourceSha, port, hosts, env: workloadEnv } = parsed.data;
 
+    // RBAC gate FIRST — provider-configured state (501 vs 201) is not disclosed to
+    // principals without the node grant.
     const gate = await resolveNodeAndAuthorize({
       id: nodeId,
       userId: sessionUser.id,
