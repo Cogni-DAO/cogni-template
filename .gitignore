@@ -59,6 +59,7 @@ next-env.d.ts
 packages/*/dist
 nodes/*/packages/*/dist
 nodes/*/graphs/dist
+nodes/*/app/dist-controller
 
 # Terraform
 *.tfstate

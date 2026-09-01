@@ -315,6 +315,49 @@ describe("AkashComputeAdapter", () => {
     await expect(adapter.release({ leaseId: "42" })).resolves.toBeUndefined();
   });
 
+  it("updates a known deployment in place with Console PUT and preserves its handle", async () => {
+    let putBody: unknown;
+    const fetchImpl = vi.fn<typeof fetch>(async (url, init) => {
+      const value = String(url);
+      if (value === `${BASE}/v1/deployments/42` && init?.method === "PUT") {
+        putBody = JSON.parse(String(init.body));
+        return jsonResponse({ data: { dseq: "42" } });
+      }
+      if (value === `${BASE}/v1/deployments/42`) {
+        return jsonResponse({
+          data: {
+            deployment: { state: "active" },
+            leases: [
+              {
+                state: "active",
+                status: { uris: ["updated.prov.akash.pub"] },
+              },
+            ],
+          },
+        });
+      }
+      if (value === "http://updated.prov.akash.pub/version") {
+        return jsonResponse({ buildSha: "ignored-by-provider-boot-check" });
+      }
+      throw new Error(`unhandled ${init?.method ?? "GET"} ${value}`);
+    });
+
+    const output = await makeAdapter(fetchImpl).update({
+      resourceId: "42",
+      env: "candidate-a",
+      spec: SPEC,
+      idempotencyKey: "durable-controller-key",
+    });
+
+    expect(output.leaseId).toBe("42");
+    expect(output.state).toBe("active");
+    expect(putBody).toMatchObject({ data: { sdl: expect.any(String) } });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      `${BASE}/v1/deployments/42`,
+      expect.objectContaining({ method: "PUT" })
+    );
+  });
+
   it("throws HTTP_ERROR with a stable code on non-2xx responses", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () =>
       jsonResponse({ error: "unauthorized" }, 401)
@@ -326,6 +369,7 @@ describe("AkashComputeAdapter", () => {
 
     expect(err).toBeInstanceOf(AkashComputeError);
     expect((err as AkashComputeError).code).toBe("HTTP_ERROR");
+    expect((err as AkashComputeError).httpStatus).toBe(401);
   });
 });
 

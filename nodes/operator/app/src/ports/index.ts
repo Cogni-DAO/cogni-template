@@ -79,6 +79,25 @@ export type {
   CatalogNodeRegistryReconcileSummary,
 } from "./catalog-node-registry.port";
 export type { Clock } from "./clock.port";
+export {
+  COMPUTE_WORKLOAD_ATTEMPT_ANNOTATION,
+  COMPUTE_WORKLOAD_FINALIZER,
+  type ComputeWorkload,
+  type ComputeWorkloadAttempt,
+  type ComputeWorkloadCondition,
+  type ComputeWorkloadPhase,
+  type ComputeWorkloadSpec,
+  type ComputeWorkloadStatus,
+  computeWorkloadIdempotencyKey,
+  type DeclaredProvisionServiceSpec,
+  type DeclaredProvisionSpec,
+} from "./compute-workload.types";
+export {
+  ComputeLifecycleError,
+  type ComputeLifecycleFailureKind,
+  type ComputeWorkloadLifecyclePort,
+} from "./compute-workload-lifecycle.port";
+export type { ComputeWorkloadStatePort } from "./compute-workload-state.port";
 export type {
   ConnectionBrokerPort,
   ConnectionScope,
