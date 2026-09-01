@@ -91,6 +91,11 @@
       "then": {
         "required": ["image_repository"]
       }
+    },
+    {
+      "$comment": "task.5052 — compute_egress_cidrs is env-scoped through the row's own envs[]: the renderer unions declarations across rows deployed to an env, so a row declaring egress CIDRs must declare envs.",
+      "if": { "required": ["compute_egress_cidrs"] },
+      "then": { "required": ["envs"] }
     }
   ],
   "properties": {
@@ -185,6 +190,29 @@
       "type": "string",
       "pattern": "^0x[0-9a-fA-F]{40}$",
       "description": "Stable cross-environment owner binding. Each environment resolves or creates its own users.id by this wallet, then projects the OpenFGA node#admin ownership tuple; env-local user IDs are never copied through git."
+    },
+    "compute_egress_cidrs": {
+      "type": "array",
+      "description": "task.5052 (story.5016) — egress CIDRs of the decentralized-compute infrastructure (e.g. Akash provider NAT) that hosts THIS row's workload, allowed to reach the env VM's substrate ports (5432,5435,6379,4000,7233). Lives on the workload's own row — NOT per-env and NOT a shared infra row — because an egress IP is a property of where the workload runs: the per-env allowlist is the union of compute_egress_cidrs across rows whose envs[] contains that env, so decommissioning the workload (or trimming an env from envs[]) closes its holes with it. Rendered by scripts/ci/render-compute-egress-allowlist.sh into the allowlist consumed by infra/provision/cherry/harden-docker-public-ports.sh. Absent/empty = fail-closed: no external compute reaches the substrate ports. Provider egress NATs are multi-tenant — declare the narrowest CIDR (usually /32).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cidr", "comment"],
+        "properties": {
+          "cidr": {
+            "type": "string",
+            "pattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}/([0-9]|[12][0-9]|3[0-2])$",
+            "description": "IPv4 CIDR (prefix length required; use /32 for a single egress IP)."
+          },
+          "comment": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[^\\n]+$",
+            "description": "Single-line provenance: which provider(s) egress via this CIDR and the work item that added it."
+          }
+        }
+      },
+      "uniqueItems": true
     },
     "is_primary_host": {
       "type": "boolean",
