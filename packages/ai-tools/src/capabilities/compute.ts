@@ -66,6 +66,8 @@ export interface ProvisionServiceSpec {
   readonly command?: readonly string[];
   /** Optional arguments passed to the image entrypoint or command. */
   readonly args?: readonly string[];
+  /** Optional application-level HTTP readiness signal; cadence stays provider-owned. */
+  readonly readinessPath?: string;
   /** Fractional vCPU units (e.g. 0.5). */
   readonly cpuUnits: number;
   /** Memory in Mi. */
