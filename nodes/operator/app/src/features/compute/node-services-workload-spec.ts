@@ -76,6 +76,9 @@ export function buildNodeServicesWorkloadSpec(
         },
         ...(service.command ? { command: service.command } : {}),
         ...(service.args ? { args: service.args } : {}),
+        ...(service.readinessPath
+          ? { readinessPath: service.readinessPath }
+          : {}),
         ...service.resources,
         expose: [
           {
