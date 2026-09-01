@@ -51,6 +51,16 @@ export const CI_CONTRACT_PATHS = [
   ".github/workflows/pr-build.yml",
   ".github/workflows/pr-lint.yaml",
   "scripts/check-node-ci-workflow.mjs",
+  // Atomic node service bundle (task.5065/task.5066): pr-build.yml invokes these
+  // helpers and the repo-spec bundle schema to publish the per-SHA OCI artifact
+  // bundle the operator materializer consumes. The workflow and its helpers must
+  // travel as one set — overwriting pr-build.yml without them breaks every fork's
+  // build (canonical_missing is the loud guard; never ship the workflow alone).
+  "scripts/ci/detect-node-build-targets.mjs",
+  "scripts/ci/write-node-build-fragment.mjs",
+  "scripts/ci/write-node-build-manifest.mjs",
+  "scripts/ci/record-node-bundle-publication.mjs",
+  "packages/repo-spec/src/artifact-bundle.ts",
 ] as const;
 
 /**
