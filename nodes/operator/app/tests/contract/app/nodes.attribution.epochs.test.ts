@@ -255,7 +255,10 @@ describe("GET /api/v1/nodes/[id]/attribution/epochs", () => {
     await testApiHandler({
       appHandler: epochsHandler,
       params: { id: FOREIGN_NODE_SLUG },
-      query: { limit: "50", offset: "0" },
+      // `url`, not `query` — next-test-api-route-handler v5 ignores a `query` option, so the
+      // route saw no search params and fell back to the contract default (limit 100). The
+      // pagination assertion below was passing vacuously.
+      url: "/api/v1/nodes/foreign-node/attribution/epochs?limit=50&offset=0",
       async test({ fetch }) {
         const res = await fetch({ method: "GET" });
         expect(res.status).toBe(200);
@@ -263,9 +266,11 @@ describe("GET /api/v1/nodes/[id]/attribution/epochs", () => {
         expect(() => listEpochsOperation.output.parse(body)).not.toThrow();
         expect(body.total).toBe(1);
         expect(body.epochs[0].id).toBe("1");
-        // Proxied to the resolved foreign nodeId with the parsed pagination — NOT a local store read.
+        // Proxied by the resolved foreign node's SLUG — that is what derives the in-cluster
+        // URL (`internalNodeAppUrl`), mirroring the receipt-delivery write twin — with the
+        // parsed pagination, and NOT a local store read.
         expect(mockEpochsRead.listEpochsForForeignNode).toHaveBeenCalledWith(
-          FOREIGN_NODE_ID,
+          FOREIGN_NODE_SLUG,
           { limit: 50, offset: 0 }
         );
         expect(mockStore.listEpochs).not.toHaveBeenCalled();
