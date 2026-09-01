@@ -582,7 +582,10 @@ describe("reconcileComputeWorkload", () => {
             },
             artifacts: [
               ...declared.spec.bundle.artifacts,
-              { name: "paper-trader", image: IMAGE.replace("poly@", "paper@") },
+              {
+                name: "echo-sidecar",
+                image: IMAGE.replace("poly@", "echo-sidecar@"),
+              },
             ],
           },
           workload: {
@@ -592,12 +595,12 @@ describe("reconcileComputeWorkload", () => {
             services: [
               {
                 ...appService,
-                bindings: { PAPER_TRADER_URL: "paper-trader" },
+                bindings: { SIDECAR_URL: "echo-sidecar" },
                 secretRefs: [{ key: "AUTH_SECRET" }],
               },
               {
-                name: "paper-trader",
-                artifact: "paper-trader",
+                name: "echo-sidecar",
+                artifact: "echo-sidecar",
                 port: 9100,
                 visibility: "private",
                 bindings: {},
@@ -630,7 +633,7 @@ describe("reconcileComputeWorkload", () => {
     const spec = port.create.mock.calls[0]?.[0].spec;
     expect(spec.services[0]?.env).toMatchObject({
       HOST: "0.0.0.0",
-      PAPER_TRADER_URL: "http://paper-trader:9100",
+      SIDECAR_URL: "http://echo-sidecar:9100",
       AUTH_SECRET: secretValue,
       NODE_NAME: "toks4",
       COGNI_REPO_PATH: "/app",

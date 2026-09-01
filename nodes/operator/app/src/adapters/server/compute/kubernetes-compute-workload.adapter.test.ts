@@ -50,8 +50,8 @@ function declaredWorkload(): ComputeWorkload {
         artifacts: [
           { name: "app", image: `ghcr.io/cogni-dao/poly@${digest}` },
           {
-            name: "paper-trader",
-            image: `ghcr.io/cogni-dao/paper-trader@${digest}`,
+            name: "echo-sidecar",
+            image: `ghcr.io/cogni-dao/echo-sidecar@${digest}`,
           },
         ],
       },
@@ -66,15 +66,15 @@ function declaredWorkload(): ComputeWorkload {
             args: ["server.mjs"],
             port: 3000,
             visibility: "public",
-            bindings: { PAPER_TRADER_URL: "paper-trader" },
+            bindings: { SIDECAR_URL: "echo-sidecar" },
             bindHost: "0.0.0.0",
             cpuUnits: 0.5,
             memoryMi: 512,
             storageMi: 1024,
           },
           {
-            name: "paper-trader",
-            artifact: "paper-trader",
+            name: "echo-sidecar",
+            artifact: "echo-sidecar",
             port: 9100,
             visibility: "private",
             bindings: {},
@@ -152,7 +152,7 @@ describe("ComputeWorkload Kubernetes contract", () => {
     const [roundTripped] = await state.list();
     expect(roundTripped?.spec.workload.services[0]).toMatchObject({
       args: ["server.mjs"],
-      bindings: { PAPER_TRADER_URL: "paper-trader" },
+      bindings: { SIDECAR_URL: "echo-sidecar" },
     });
   });
 
