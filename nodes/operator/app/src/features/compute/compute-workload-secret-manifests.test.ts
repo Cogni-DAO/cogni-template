@@ -81,17 +81,27 @@ describe("buildComputeSecretResources", () => {
     ).toEqual([]);
   });
 
-  it.each([
-    "LITELLM_MASTER_KEY",
-    "PRIVY_APP_SECRET",
-    "UNREVIEWED_KEY",
-  ])("rejects denied or unknown ref %s before render", (key) => {
-    expect(() =>
-      buildComputeSecretResources({
-        slug: "toks4",
-        environment: "candidate-a",
-        secretRefs: [{ key }],
-      })
-    ).toThrow("secret refs rejected");
+  it.each(["LITELLM_MASTER_KEY", "PRIVY_APP_SECRET"])(
+    "rejects fleet-custody ref %s before render",
+    (key) => {
+      expect(() =>
+        buildComputeSecretResources({
+          slug: "toks4",
+          environment: "candidate-a",
+          secretRefs: [{ key }],
+        })
+      ).toThrow("secret refs rejected");
+    }
+  );
+
+  it("projects a novel node-owned key — the node's OpenBao namespace is the authority, not a code allowlist", () => {
+    const resources = buildComputeSecretResources({
+      slug: "toks4",
+      environment: "candidate-a",
+      secretRefs: [{ key: "SOME_BRAND_NEW_VENDOR_KEY" }],
+    });
+    expect(resources.map((r) => r.file)).toContain(
+      "compute-env-external-secret.yaml"
+    );
   });
 });
