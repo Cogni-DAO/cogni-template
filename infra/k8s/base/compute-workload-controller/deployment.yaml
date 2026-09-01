@@ -19,10 +19,6 @@ spec:
       labels:
         app.kubernetes.io/name: compute-workload-controller
         app.kubernetes.io/part-of: cogni
-      annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/port: "9090"
-        prometheus.io/path: /metrics
     spec:
       serviceAccountName: compute-workload-controller
       securityContext:

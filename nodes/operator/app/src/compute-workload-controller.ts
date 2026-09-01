@@ -20,6 +20,7 @@ import { ComputeWorkloadLifecycleAdapter } from "@/adapters/server/compute/compu
 import {
   KubernetesComputeWorkloadStateAdapter,
   KubernetesLeaseLeaderElector,
+  renewLeadershipOrFence,
 } from "@/adapters/server/compute/kubernetes-compute-workload.adapter";
 import { reconcileComputeWorkload } from "@/features/compute/compute-workload-reconciler";
 
@@ -129,7 +130,17 @@ createServer(async (request, response) => {
 
 async function renewLeadership(): Promise<void> {
   try {
-    await leader.acquireOrRenew();
+    await renewLeadershipOrFence(leader, (cause) => {
+      kubeReachable = false;
+      leaderGauge.set(0);
+      log.fatal(
+        { err: cause },
+        "compute_workload_leadership_lost_process_fenced"
+      );
+      // Immediate fencing is intentional. In-flight mutations already have a durable
+      // attempt marker, so restart fails closed instead of allowing two leaders to write.
+      process.exit(1);
+    });
     kubeReachable = true;
     leaderGauge.set(leader.isLeader() ? 1 : 0);
   } catch (error) {
