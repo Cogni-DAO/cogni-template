@@ -30,7 +30,7 @@ import {
   type InternalListEpochsOutput,
   internalListEpochsOperation,
 } from "@cogni/node-contracts";
-import type { EpochsRead } from "@/ports";
+import { type EpochsRead, EpochsReadError } from "@/ports";
 import { internalNodeAppUrl } from "@/shared/node-registry/resolve";
 import type { Logger } from "@/shared/observability";
 
@@ -38,21 +38,6 @@ export interface HttpEpochsReadDeps {
   /** Bearer token for the internal dispatch identity (SCHEDULER_API_TOKEN). */
   readonly schedulerApiToken: string;
   readonly logger: Logger;
-}
-
-/**
- * Error raised by the epochs-read client. `retryable` mirrors http-receipt-delivery's classification
- * so a caller (or a future retry path) can decide whether a retry is worthwhile.
- */
-export class EpochsReadError extends Error {
-  constructor(
-    message: string,
-    readonly status: number,
-    readonly retryable: boolean
-  ) {
-    super(message);
-    this.name = "EpochsReadError";
-  }
 }
 
 /**

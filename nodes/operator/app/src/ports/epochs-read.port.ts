@@ -30,3 +30,22 @@ export interface EpochsRead {
     page: { limit: number; offset: number }
   ): Promise<InternalListEpochsOutput>;
 }
+
+/**
+ * Failure contract for {@link EpochsRead}. Lives on the PORT, not the adapter: a route must be
+ * able to classify the failure (a node that does not expose the internal read is a known state,
+ * not a fault — bug.5083), and `app/` may import ports but never `adapters/server/*`.
+ *
+ * `retryable` mirrors http-receipt-delivery's classification so a caller, or a future retry path,
+ * can decide whether another attempt is worthwhile.
+ */
+export class EpochsReadError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly retryable: boolean
+  ) {
+    super(message);
+    this.name = "EpochsReadError";
+  }
+}
