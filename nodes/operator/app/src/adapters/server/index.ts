@@ -95,6 +95,7 @@ export {
   type ComputeDnsRecordResult,
   type ComputeDnsSkipReason,
   type SkippedHost,
+  zoneRootOf,
 } from "./compute/compute-dns.adapter";
 // Connection broker adapter
 export {

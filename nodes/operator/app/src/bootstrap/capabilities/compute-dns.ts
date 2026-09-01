@@ -16,8 +16,7 @@
  * @internal
  */
 
-import { ComputeDnsReconciler } from "@/adapters/server";
-import { zoneRootOf } from "@/adapters/server/compute/compute-dns-plan";
+import { ComputeDnsReconciler, zoneRootOf } from "@/adapters/server";
 import type { ServerEnv } from "@/shared/env";
 import { baseDomain } from "@/shared/node-registry/resolve";
 

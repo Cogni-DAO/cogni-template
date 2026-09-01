@@ -43,6 +43,7 @@ import {
 } from "./compute-dns-plan";
 
 export type { ComputeDnsSkipReason, SkippedHost } from "./compute-dns-plan";
+export { zoneRootOf } from "./compute-dns-plan";
 
 /** TTL matching the CI writer (scripts/ci/lib/cloudflare-dns.sh). */
 const CNAME_TTL_SECONDS = 300;
