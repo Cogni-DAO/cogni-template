@@ -270,6 +270,11 @@ async function reconcileAll(): Promise<void> {
                 leaderEpoch,
                 assertLeadership: (epoch) => leader.stillHolds(epoch),
                 now: () => new Date(),
+                recordReadinessTransition: (observation) =>
+                  log.info(
+                    observation,
+                    "compute_workload_readiness_transition"
+                  ),
               },
               resource
             );

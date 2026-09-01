@@ -70,6 +70,8 @@ interface HarnessOpts {
   bids?: (dseq: string, wave: number) => unknown[];
   /** Which workload hosts answer /version with 200. Default: all. */
   serving?: (host: string) => boolean;
+  /** Which workload hosts answer the declared readiness path with 2xx. Default: all. */
+  ready?: (host: string) => boolean;
 }
 
 /**
@@ -117,6 +119,11 @@ function harness(opts: HarnessOpts = {}) {
       const host = new URL(u).host;
       const ok = opts.serving ? opts.serving(host) : true;
       return new Response("{}", { status: ok ? 200 : 503 });
+    }
+    if (u.endsWith("/deployment-proof")) {
+      const host = new URL(u).host;
+      const ok = opts.ready ? opts.ready(host) : true;
+      return new Response(null, { status: ok ? 204 : 503 });
     }
     const statusMatch = u.match(/\/v1\/deployments\/(\d+)$/);
     if (statusMatch) {
@@ -171,6 +178,7 @@ const SPEC = {
       expose: [
         { port: 3000, as: 80, global: true, hosts: ["toks4.example.org"] },
       ],
+      readinessPath: "/deployment-proof",
     },
     {
       name: "echo-sidecar",
@@ -359,6 +367,9 @@ describe("AkashComputeAdapter", () => {
       }
       if (value === "http://updated.prov.akash.pub/version") {
         return jsonResponse({ buildSha: "ignored-by-provider-boot-check" });
+      }
+      if (value === "http://updated.prov.akash.pub/deployment-proof") {
+        return new Response(null, { status: 204 });
       }
       throw new Error(`unhandled ${init?.method ?? "GET"} ${value}`);
     });
@@ -566,6 +577,28 @@ describe("AkashComputeAdapter boot SLO", () => {
         outcome: "boot_ok",
         leaseId: "2",
       }),
+    ]);
+  });
+
+  it("closes and retries when /version serves but application readiness fails", async () => {
+    const h = harness({
+      providers,
+      bids: threeBids,
+      serving: () => true,
+      ready: (host) => host.startsWith("d2."),
+    });
+    const { records, store } = memStore();
+
+    const out = await makeAdapter(h.fetchImpl, {
+      bootSloMs: 0,
+      outcomeStore: store,
+    }).provision({ env: "t", spec: SPEC });
+
+    expect(h.deletes).toEqual([`${BASE}/v1/deployments/1`]);
+    expect(out.leaseId).toBe("2");
+    expect(records.map((record) => record.outcome)).toEqual([
+      "slo_timeout",
+      "boot_ok",
     ]);
   });
 

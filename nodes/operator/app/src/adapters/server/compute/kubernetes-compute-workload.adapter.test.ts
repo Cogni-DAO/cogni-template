@@ -66,6 +66,7 @@ function declaredWorkload(): ComputeWorkload {
             args: ["server.mjs"],
             port: 3000,
             visibility: "public",
+            readinessPath: "/deployment-proof",
             bindings: { ECHO_SIDECAR_URL: "echo-sidecar" },
             bindHost: "0.0.0.0",
             cpuUnits: 0.5,
@@ -123,8 +124,15 @@ describe("ComputeWorkload Kubernetes contract", () => {
     expect(services.maxItems).toBe(8);
     expect(services.items.properties).toHaveProperty("bindings");
     expect(services.items.properties).toHaveProperty("args");
+    expect(services.items.properties).toHaveProperty("readinessPath");
     expect(crdYaml).toContain(
       "self.services.filter(s, s.visibility == 'public').size() == 1"
+    );
+    expect(crdYaml).toContain(
+      "the public workload service must declare readinessPath"
+    );
+    expect(crdYaml).toContain(
+      "private workload services must not declare public readinessPath"
     );
     expect(crdYaml).toContain(
       "every binding must target a different declared sibling service"
@@ -152,6 +160,7 @@ describe("ComputeWorkload Kubernetes contract", () => {
     const [roundTripped] = await state.list();
     expect(roundTripped?.spec.workload.services[0]).toMatchObject({
       args: ["server.mjs"],
+      readinessPath: "/deployment-proof",
       bindings: { ECHO_SIDECAR_URL: "echo-sidecar" },
     });
   });

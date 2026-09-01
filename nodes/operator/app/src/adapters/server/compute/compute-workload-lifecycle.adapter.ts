@@ -6,14 +6,14 @@ import type {
   ProvisionOutput,
   ProvisionSpec,
 } from "@cogni/ai-tools";
-
+import { isValidComputeReadinessPath } from "@/ports/compute-workload.types";
 import {
   ComputeLifecycleError,
   type ComputeWorkloadLifecyclePort,
 } from "@/ports/compute-workload-lifecycle.port";
 
 import { AkashComputeError } from "./akash-compute.adapter";
-import { safeVersionProbe } from "./safe-version-probe";
+import { safeReadinessProbe, safeVersionProbe } from "./safe-version-probe";
 
 interface UpdatableComputeResourcePort extends ComputeResourcePort {
   allocationCursor?(): Promise<string>;
@@ -215,6 +215,41 @@ export class ComputeWorkloadLifecycleAdapter
     }
     return false;
   }
+
+  async verifyReadiness(input: {
+    endpoints: readonly string[];
+    path: string;
+  }): Promise<boolean> {
+    if (!isValidComputeReadinessPath(input.path)) {
+      return false;
+    }
+    for (const endpoint of input.endpoints) {
+      if (!this.fetchImpl) {
+        if (await safeReadinessProbe(endpoint, input.path)) return true;
+        continue;
+      }
+      const base = endpoint.startsWith("http")
+        ? endpoint
+        : `http://${endpoint}`;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5_000);
+      try {
+        const url = new URL(base);
+        url.pathname = input.path;
+        url.search = "";
+        url.hash = "";
+        const response = await this.fetchImpl(url.toString(), {
+          signal: controller.signal,
+        });
+        if (response.ok) return true;
+      } catch {
+        // A probe is recomputable observed state; the next reconcile retries.
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+    return false;
+  }
 }
 
 /** Healthy dormant runtime used when the catalog-optional provider credential is absent. */
@@ -245,6 +280,9 @@ export class DormantComputeWorkloadLifecycleAdapter
     return this.unavailable();
   }
   verifySource(): Promise<boolean> {
+    return Promise.resolve(false);
+  }
+  verifyReadiness(): Promise<boolean> {
     return Promise.resolve(false);
   }
 }

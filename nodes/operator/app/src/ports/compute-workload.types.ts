@@ -46,6 +46,8 @@ export interface DeclaredProvisionServiceSpec {
   readonly args?: readonly string[];
   readonly port: number;
   readonly visibility: "public" | "private";
+  /** Public HTTP application-readiness proof; path only, never an arbitrary URL. */
+  readonly readinessPath?: string;
   readonly bindings: Readonly<Record<string, string>>;
   readonly bindHost: "0.0.0.0";
   readonly cpuUnits: number;
@@ -153,6 +155,20 @@ export interface ComputeWorkload {
   };
   readonly spec: ComputeWorkloadSpec;
   readonly status?: ComputeWorkloadStatus;
+}
+
+export function isValidComputeReadinessPath(path: string): boolean {
+  if (
+    path.length < 1 ||
+    path.length > 256 ||
+    !/^\/[A-Za-z0-9._~/:@+,-]*$/.test(path) ||
+    path.includes("//")
+  ) {
+    return false;
+  }
+  return !path
+    .split("/")
+    .some((segment) => segment === "." || segment === "..");
 }
 
 export function computeWorkloadIdempotencyKey(input: {

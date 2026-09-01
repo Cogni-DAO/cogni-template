@@ -30,7 +30,8 @@ export class ComputeLifecycleError extends Error {
       | "DnsCredentialMissing"
       | "DnsReconcileFailed"
       | "DnsOwnershipChanged"
-      | "EndpointVerificationFailed",
+      | "EndpointVerificationFailed"
+      | "ReadinessDeclarationInvalid",
     public readonly retryable: boolean
   ) {
     super(reason);
@@ -65,5 +66,10 @@ export interface ComputeWorkloadLifecyclePort {
   verifySource(input: {
     endpoints: readonly string[];
     expectedSourceSha: string;
+  }): Promise<boolean>;
+  /** Provider-independent application proof. Ready requires HTTP 2xx at this path. */
+  verifyReadiness(input: {
+    endpoints: readonly string[];
+    path: string;
   }): Promise<boolean>;
 }
