@@ -56,6 +56,7 @@ export function buildAkashSdl(
     services[svc.name] = {
       image: svc.image,
       ...(svc.command ? { command: [...svc.command] } : {}),
+      ...(svc.args ? { args: [...svc.args] } : {}),
       ...(svc.env
         ? { env: Object.entries(svc.env).map(([k, v]) => `${k}=${v}`) }
         : {}),

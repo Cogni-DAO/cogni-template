@@ -64,6 +64,8 @@ export interface ProvisionServiceSpec {
   readonly env?: Readonly<Record<string, string>>;
   /** Optional container command override. */
   readonly command?: readonly string[];
+  /** Optional arguments passed to the image entrypoint or command. */
+  readonly args?: readonly string[];
   /** Fractional vCPU units (e.g. 0.5). */
   readonly cpuUnits: number;
   /** Memory in Mi. */
