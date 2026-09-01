@@ -38,7 +38,13 @@ The branch model, deploy-state model, and axioms below are the live contract —
 6. **Argo owns reconciliation — on the k3s lane**. CI writes desired state to git; Argo syncs from git. Scope: the state substrate + legacy k3s node apps; compute-API workloads are reconciled by the operator plane instead (Axioms 23/26).
 7. **Affected-only CI is the default**. Required checks should scope to the changed surface where practical.
 8. **Release branches are exceptional only**. They are not the default path for accepted code.
-9. **Direct edits to `deploy/*` are incident-only**. Repair the live environment first when necessary, then mirror the fix back into the normal source-of-truth path.
+9. **`NO_AD_HOC_CLUSTER_WRITES`**. Desired-state recovery is committed to Git and
+   reconciled through the existing workflows and Argo. `kubectl apply/patch/edit`, direct Argo
+   mutation, SSH config edits, and hand-edits to `deploy/*` invalidate deployment proof even
+   during an incident; a live state reached that way is not a verified environment. The existing
+   `provision-env` workflow is the sole named bootstrap authority for cluster/Argo installation
+   and bootstrap-owned config. It must remain auditable and reproducible and is never the normal
+   reconciliation path.
 10. **Agent guidance is part of the control plane**. Prompts, skills, AGENTS files, and workflow docs must not tell agents to PR into or diff against legacy branches.
 11. **Verification is a job-level gate, never a step-level skip** (bug.0321). GitHub treats a skipped step inside a running job as green. Every verification that is allowed to no-op (e.g. empty `promoted_apps`) must be gated at the _job_ level with `needs:` and `if:` so the job surfaces as **skipped (grey)** in the checks list, not as a silent-green success.
 12. **Gate ordering is enforced structurally, not by convention** (bug.0321 Fix 4). When step A must precede step B in the same job, A writes a marker to `$GITHUB_ENV` (e.g. `ARGOCD_SYNC_VERIFIED=true`) and B refuses to run without it. Comments rot at the next refactor; runtime checks don't.
@@ -71,7 +77,32 @@ The branch model, deploy-state model, and axioms below are the live contract —
 23. **`AKASH_IS_NODE_APP_TARGET`** (north star; gate: story.5016 S0–S3). Akash is THE standard node-app deployment target: node apps run as **app-only decentralized-compute workloads** created through the operator compute API (`POST /api/v1/compute/deployments` → `ComputeResourcePort` → `AkashComputeAdapter`, SDL rendered internally by `nodes/operator/app/src/adapters/server/compute/akash-sdl.ts`), and the node wizard's default is `deploy_provider: akash` (born-on-Akash). **Gate:** this axiom is present-tense only once story.5016's provider mandate, egress-allowlist catalog field, DNS reconcile, and server-side env sourcing land; **until then, new node apps still birth on the legacy k3s lane** — but every deploy-plane change must move toward the Akash lane and may not extend the k3s app lane. See [`cicd-platform-boundary.md`](./cicd-platform-boundary.md) for the port/adapter contract.
 24. **`CHERRY_IS_STATE_SUBSTRATE`**. The Cherry VM/k3s cluster is the **state substrate**: postgres, doltgres, redis, temporal, LiteLLM, and the shared scheduler-worker — plus the legacy node-app lane until migration completes. Akash workloads carry no infra: databases, queues, or model gateways as workload sidecars are the rejected anti-pattern (`APP_ONLY_NO_INFRA`, `node-workload-spec.ts`). State stays on Cherry; apps dial it over allowlisted egress with node-scoped, budget-capped credentials only (`SCOPED_CREDS_ONLY`).
 25. **`SIDECAR_IS_SDL_SERVICE`**. An app-adjacent sidecar image (a node publishing a second deployable from the same `source_repo/sourceSha`) ships as an **additional service in the same Akash lease** — the SDL renderer meshes non-global exposes by service name (`INTERNAL_EXPOSE_IS_MESH`), preserving no-public-expose isolation. Sidecars are never injected into k8s pods via overlay/kustomize machinery (that lane was closed with PR #1884; reference contract: `cogni-dao/poly#10`).
-26. **`OPERATOR_OWNS_WORKLOAD_HEALTH`**. Off-k3s there are no orchestrator probes and no Argo selfHeal. For compute-API workloads the **operator plane is the reconciler of record**: it must observe lease state plus each workload's `/readyz` and `/version.buildSha` (the same fail-closed signals as Axiom 19), replace workloads on dead/degraded providers through the provider-screening mandate, and feed provider outcome history/blacklists. A lease dying silently is a contract violation of this axiom, not an operational surprise. Health endpoints contract: [`health-probes.md`](./health-probes.md).
+26. **`OPERATOR_OWNS_WORKLOAD_HEALTH`**. Off-k3s there are no provider-side Argo
+    probes or self-heal. Git/Argo therefore applies provider-neutral
+    `compute.cogni.io/ComputeWorkload` desired state and a **dedicated, leader-elected operator
+    controller process** is the narrow external-state reconciler: observe/create/update/delete,
+    owner-bound finalization, missing/closed-resource recovery, and exact `/version.buildSha`
+    verification. `Ready=True` is valid only for `status.observedGeneration ==
+metadata.generation`; uncertain mutations fail closed rather than blindly duplicating a
+    lease. CR status contains observed state/provenance, never desired state or resolved secret
+    values. Structured logs and Kubernetes Events make current outcomes visible; the controller
+    also exposes `compute_workload_*` on `:9090/metrics`, but the Compose Alloy config does not
+    yet scrape that in-cluster endpoint, so remote metrics ingestion is explicitly not part of
+    this checkpoint. Argo's custom health rule is owned by the existing Argo bootstrap config
+    (`infra/k8s/argocd/argocd-cm-patch.yaml`), so an existing cluster receives it only through
+    the normal `provision-env` bootstrap refresh—not manual `kubectl`/SSH. A lease dying
+    silently is a contract violation of this axiom, not an operational surprise. Health
+    endpoints contract: [`health-probes.md`](./health-probes.md).
+
+### Story.5016 GitOps corrections
+
+The legacy Akash exceptions in Axioms 18, 21, and 23 are superseded by Axiom 26:
+
+- Every node/runtime keeps the existing GitHub Actions → per-node deploy branch → Argo lane. An external-compute selection materializes a provider-neutral `ComputeWorkload`; it never calls a deployment REST route from CI.
+- The normal environment hostname has exactly one catalog-selected writer. The k3s DNS writer skips external-compute rows; the controller owns that same hostname while the CR exists, persists the exact CNAME value, and removes it only when the live value still matches. There is no `*-akash` hostname.
+- `POST /api/v1/compute/deployments` is tombstoned with `409 gitops_required`; it cannot bypass the durable coordinator or become a second desired-state authority.
+- The managed provider credential/account is environment-dedicated and single-writer. Before allocation, the controller CAS-claims a durable wallet-wide ledger and persists the provider high-water cursor. A prepared/unknown allocation blocks every later CREATE across workloads, restarts, and leader changes until exactly one new handle is adopted or the ambiguity is resolved. Console/manual/other-environment writes invalidate cursor-based deployment proof.
+- Ad-hoc cluster writes (`kubectl apply/patch/edit`, direct Argo mutation, or SSH config edits) invalidate deployment proof. Recovery is committed to Git and reconciled through existing workflows/Argo. `provision-env` remains the sole auditable bootstrap authority, not a normal reconciliation path.
 
 ## Branch And Deploy-State Model
 

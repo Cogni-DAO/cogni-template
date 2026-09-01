@@ -87,6 +87,21 @@ export {
   CherryComputeError,
   type CherryComputeErrorCode,
 } from "./compute/cherry-compute.adapter";
+export {
+  CloudflareComputeWorkloadDnsAdapter,
+  DormantComputeWorkloadDnsAdapter,
+} from "./compute/compute-workload-dns.adapter";
+export {
+  ComputeWorkloadLifecycleAdapter,
+  DormantComputeWorkloadLifecycleAdapter,
+} from "./compute/compute-workload-lifecycle.adapter";
+export { ComputeWorkloadSecretResolverAdapter } from "./compute/compute-workload-secret-resolver.adapter";
+export {
+  KubernetesComputeWorkloadStateAdapter,
+  KubernetesLeaseLeaderElector,
+  renewLeadershipOrFence,
+} from "./compute/kubernetes-compute-workload.adapter";
+export { createDefaultProviderOutcomeStore } from "./compute/provider-outcome-store";
 // Connection broker adapter
 export {
   ConnectionDecryptionError,

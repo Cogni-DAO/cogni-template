@@ -70,6 +70,8 @@ interface HarnessOpts {
   bids?: (dseq: string, wave: number) => unknown[];
   /** Which workload hosts answer /version with 200. Default: all. */
   serving?: (host: string) => boolean;
+  /** Which workload hosts answer fixed /readyz with 2xx. Default: all. */
+  ready?: (host: string) => boolean;
 }
 
 /**
@@ -117,6 +119,11 @@ function harness(opts: HarnessOpts = {}) {
       const host = new URL(u).host;
       const ok = opts.serving ? opts.serving(host) : true;
       return new Response("{}", { status: ok ? 200 : 503 });
+    }
+    if (u.endsWith("/readyz")) {
+      const host = new URL(u).host;
+      const ok = opts.ready ? opts.ready(host) : true;
+      return new Response(null, { status: ok ? 204 : 503 });
     }
     const statusMatch = u.match(/\/v1\/deployments\/(\d+)$/);
     if (statusMatch) {
@@ -336,6 +343,52 @@ describe("AkashComputeAdapter", () => {
     await expect(adapter.release({ leaseId: "42" })).resolves.toBeUndefined();
   });
 
+  it("updates a known deployment in place with Console PUT and preserves its handle", async () => {
+    let putBody: unknown;
+    const fetchImpl = vi.fn<typeof fetch>(async (url, init) => {
+      const value = String(url);
+      if (value === `${BASE}/v1/deployments/42` && init?.method === "PUT") {
+        putBody = JSON.parse(String(init.body));
+        return jsonResponse({ data: { dseq: "42" } });
+      }
+      if (value === `${BASE}/v1/deployments/42`) {
+        return jsonResponse({
+          data: {
+            deployment: { state: "active" },
+            leases: [
+              {
+                state: "active",
+                status: { uris: ["updated.prov.akash.pub"] },
+              },
+            ],
+          },
+        });
+      }
+      if (value === "http://updated.prov.akash.pub/version") {
+        return jsonResponse({ buildSha: "ignored-by-provider-boot-check" });
+      }
+      if (value === "http://updated.prov.akash.pub/readyz") {
+        return new Response(null, { status: 204 });
+      }
+      throw new Error(`unhandled ${init?.method ?? "GET"} ${value}`);
+    });
+
+    const output = await makeAdapter(fetchImpl).update({
+      resourceId: "42",
+      env: "candidate-a",
+      spec: SPEC,
+      idempotencyKey: "durable-controller-key",
+    });
+
+    expect(output.leaseId).toBe("42");
+    expect(output.state).toBe("active");
+    expect(putBody).toMatchObject({ data: { sdl: expect.any(String) } });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      `${BASE}/v1/deployments/42`,
+      expect.objectContaining({ method: "PUT" })
+    );
+  });
+
   it("throws HTTP_ERROR with a stable code on non-2xx responses", async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () =>
       jsonResponse({ error: "unauthorized" }, 401)
@@ -347,6 +400,7 @@ describe("AkashComputeAdapter", () => {
 
     expect(err).toBeInstanceOf(AkashComputeError);
     expect((err as AkashComputeError).code).toBe("HTTP_ERROR");
+    expect((err as AkashComputeError).httpStatus).toBe(401);
   });
 });
 
@@ -479,6 +533,44 @@ describe("AkashComputeAdapter preferredProviders", () => {
   });
 });
 
+describe("AkashComputeAdapter allowedProviders", () => {
+  const allowed = "akash16yr3wxt97ae045a06kr3ycde9srcgpg8syjxxm";
+  const stranger = "akash1froggy";
+
+  it("leases only the reachable operator-allowed provider", async () => {
+    const h = harness({
+      providers: [providerEntry(allowed), providerEntry(stranger)],
+      bids: (dseq) => [
+        bidEntry(dseq, stranger, "1"),
+        bidEntry(dseq, allowed, "900"),
+      ],
+    });
+
+    await makeAdapter(h.fetchImpl, {
+      bidTimeoutMs: 0,
+      allowedProviders: [allowed],
+    }).provision({ env: "t", spec: SPEC });
+
+    expect(h.leased).toEqual([{ dseq: "1", provider: allowed }]);
+  });
+
+  it("fails closed without leasing a fallback when no allowed provider bids", async () => {
+    const h = harness({
+      providers: [providerEntry(allowed), providerEntry(stranger)],
+      bids: (dseq) => [bidEntry(dseq, stranger, "1")],
+    });
+
+    await expect(
+      makeAdapter(h.fetchImpl, {
+        bidTimeoutMs: 0,
+        allowedProviders: [allowed],
+      }).provision({ env: "t", spec: SPEC })
+    ).rejects.toMatchObject({ code: "NO_ELIGIBLE_BIDS" });
+    expect(h.leased).toEqual([]);
+    expect(h.deletes).toHaveLength(1);
+  });
+});
+
 describe("AkashComputeAdapter boot SLO", () => {
   const providers = [
     providerEntry("akash1first"),
@@ -522,6 +614,28 @@ describe("AkashComputeAdapter boot SLO", () => {
         outcome: "boot_ok",
         leaseId: "2",
       }),
+    ]);
+  });
+
+  it("closes and retries when /version serves but application readiness fails", async () => {
+    const h = harness({
+      providers,
+      bids: threeBids,
+      serving: () => true,
+      ready: (host) => host.startsWith("d2."),
+    });
+    const { records, store } = memStore();
+
+    const out = await makeAdapter(h.fetchImpl, {
+      bootSloMs: 0,
+      outcomeStore: store,
+    }).provision({ env: "t", spec: SPEC });
+
+    expect(h.deletes).toEqual([`${BASE}/v1/deployments/1`]);
+    expect(out.leaseId).toBe("2");
+    expect(records.map((record) => record.outcome)).toEqual([
+      "slo_timeout",
+      "boot_ok",
     ]);
   });
 
@@ -581,6 +695,61 @@ describe("AkashComputeAdapter boot SLO", () => {
 });
 
 describe("AkashComputeAdapter failure containment", () => {
+  it("adopts exactly one deployment created beyond a durable allocation cursor", async () => {
+    let listWave = 0;
+    const fetchImpl = vi.fn<typeof fetch>(async (url) => {
+      const u = String(url);
+      if (u.includes("/v1/deployments?skip=0&limit=1000")) {
+        listWave++;
+        const dseqs = listWave === 1 ? ["40", "41"] : ["40", "41", "42"];
+        return jsonResponse({
+          data: {
+            deployments: dseqs.map((dseq) => ({
+              deployment: { id: { dseq }, state: "active" },
+              leases: [],
+            })),
+            pagination: { hasMore: false },
+          },
+        });
+      }
+      if (u === `${BASE}/v1/deployments/42`) {
+        return jsonResponse({
+          data: {
+            deployment: { id: { dseq: "42" }, state: "active" },
+            leases: [],
+          },
+        });
+      }
+      throw new Error(`unhandled ${u}`);
+    });
+    const adapter = makeAdapter(fetchImpl);
+    const cursor = await adapter.allocationCursor();
+    expect(cursor).toBe("41");
+    await expect(adapter.findAllocationSince(cursor)).resolves.toMatchObject({
+      leaseId: "42",
+      state: "pending",
+    });
+  });
+
+  it("fails closed when more than one deployment exists beyond the allocation cursor", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse({
+        data: {
+          deployments: ["42", "43"].map((dseq) => ({
+            deployment: { id: { dseq }, state: "active" },
+            leases: [],
+          })),
+          pagination: { hasMore: false },
+        },
+      })
+    );
+    await expect(
+      makeAdapter(fetchImpl).findAllocationSince("41")
+    ).rejects.toMatchObject({
+      code: "AMBIGUOUS_ADOPTION",
+    });
+  });
+
   it("closes the deployment when the create response omits the manifest", async () => {
     const deletes: string[] = [];
     const fetchImpl = vi.fn<typeof fetch>(async (url, init) => {
@@ -626,7 +795,7 @@ describe("AkashComputeAdapter failure containment", () => {
     expect(out.state).toBe("active");
   });
 
-  it("never echoes raw response bodies in HTTP_ERROR (only parsed message fields)", async () => {
+  it("never echoes raw response bodies or parsed provider messages in HTTP_ERROR", async () => {
     const fetchImpl = vi.fn<typeof fetch>(
       async () =>
         new Response(
@@ -642,7 +811,7 @@ describe("AkashComputeAdapter failure containment", () => {
       .catch((e: unknown) => e);
     const msg = (err as AkashComputeError).message;
     expect(msg).toContain("422");
-    expect(msg).toContain("invalid manifest");
+    expect(msg).not.toContain("invalid manifest");
     expect(msg).not.toContain("supersecret");
   });
 });

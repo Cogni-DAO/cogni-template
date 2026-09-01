@@ -8,8 +8,10 @@ namespace: cogni-candidate-a
 resources:
   - ../../../base/node-app
   - ../../../base/openfga-external
+  - ../../../base/compute-workload-controller
   - external-secret.yaml
   - ./secrets-writer-sa.yaml
+  - ./compute-workload-platform-application.yaml
 
 namePrefix: operator-
 
@@ -18,7 +20,29 @@ images:
     newName: ghcr.io/cogni-dao/cogni-template
     digest: "sha256:0250cc2e6c01a80172d19b00583b65c50990b27849ca16815e75d2d899511b53"
 
+replacements:
+  - source:
+      kind: Application
+      name: compute-workload-platform
+      fieldPath: spec.destination.namespace
+    targets:
+      - select: { kind: Application, name: compute-workload-platform }
+        fieldPaths: [metadata.namespace]
+
 patches:
+  - target:
+      kind: Deployment
+      name: compute-workload-controller
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/env/1/value
+        value: candidate-a
+      - op: replace
+        path: /spec/template/spec/containers/0/env/2/value
+        value: test.cognidao.org
+      - op: replace
+        path: /spec/template/spec/containers/0/env/3/value
+        value: akash16yr3wxt97ae045a06kr3ycde9srcgpg8syjxxm
   - target:
       kind: ConfigMap
       name: node-app-config
