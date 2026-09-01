@@ -14,6 +14,7 @@
 import type {
   GateConfig,
   KnowledgeSpec,
+  NodeDeploymentSpec,
   NodeRegistryEntry,
   OperatorWalletSpec,
   RepoSpec,
@@ -100,6 +101,47 @@ export interface NodeScheduleConfig {
 
 export type KnowledgeConfig = KnowledgeSpec;
 
+export interface NodeServiceConfig {
+  readonly name: string;
+  readonly artifact: {
+    readonly name: string;
+    readonly context: string;
+    readonly dockerfile: string;
+    readonly target?: string;
+  };
+  readonly command?: readonly string[];
+  readonly args?: readonly string[];
+  readonly port: number;
+  readonly visibility: "public" | "private";
+  readonly bindings: Readonly<Record<string, string>>;
+  readonly bindHost: "0.0.0.0";
+  readonly internalUrl: string;
+  readonly resources: {
+    readonly cpuUnits: number;
+    readonly memoryMi: number;
+    readonly storageMi: number;
+  };
+}
+
+const LEGACY_DEFAULT_DEPLOYMENT: NodeDeploymentSpec = {
+  services: [
+    {
+      name: "app",
+      artifact: {
+        name: "app",
+        context: ".",
+        dockerfile: "Dockerfile",
+        target: "runner",
+      },
+      port: 3200,
+      visibility: "public",
+      bindings: {},
+      bind_host: "0.0.0.0",
+      resources: { cpu_units: 0.5, memory_mi: 1024, storage_mi: 2048 },
+    },
+  ],
+};
+
 // ---------------------------------------------------------------------------
 // Identity accessors
 // ---------------------------------------------------------------------------
@@ -115,6 +157,39 @@ export function extractNodeId(spec: RepoSpec): string {
  */
 export function extractNodeName(spec: RepoSpec): string {
   return spec.intent?.name ?? spec.node_id;
+}
+
+/**
+ * Resolve the node's app-tier service declaration.
+ *
+ * Existing repo-specs intentionally need no migration: omission produces the
+ * same single public Next.js app shape used by node-template today.
+ */
+export function extractNodeServices(
+  spec: RepoSpec
+): readonly NodeServiceConfig[] {
+  const deployment = spec.deployment ?? LEGACY_DEFAULT_DEPLOYMENT;
+  return deployment.services.map((service) => ({
+    name: service.name,
+    artifact: {
+      name: service.artifact.name,
+      context: service.artifact.context,
+      dockerfile: service.artifact.dockerfile,
+      ...(service.artifact.target ? { target: service.artifact.target } : {}),
+    },
+    ...(service.command ? { command: service.command } : {}),
+    ...(service.args ? { args: service.args } : {}),
+    port: service.port,
+    visibility: service.visibility,
+    bindings: service.bindings,
+    bindHost: service.bind_host,
+    internalUrl: `http://${service.name}:${service.port}`,
+    resources: {
+      cpuUnits: service.resources.cpu_units,
+      memoryMi: service.resources.memory_mi,
+      storageMi: service.resources.storage_mi,
+    },
+  }));
 }
 
 /** One-line node mission from `intent.mission`, or null when undeclared. */
