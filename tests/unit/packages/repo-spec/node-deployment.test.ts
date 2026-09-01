@@ -250,6 +250,16 @@ describe("node deployment repo-spec", () => {
       message: /Invalid repo-spec structure/,
     },
     {
+      name: "more than 32 args",
+      services: [{ ...APP, args: Array.from({ length: 33 }, () => "arg") }],
+      message: /Invalid repo-spec structure/,
+    },
+    {
+      name: "arg longer than 1024 characters",
+      services: [{ ...APP, args: ["a".repeat(1025)] }],
+      message: /Invalid repo-spec structure/,
+    },
+    {
       name: "missing binding target",
       services: [{ ...APP, bindings: { PAPER_TRADER_URL: "paper-trader" } }],
       message: /binding target is not declared/,
