@@ -32,6 +32,9 @@ interface NodeAkashPreset {
   readonly acceptProvider: string;
   /** Known-bad provider(s): underbid + fail image pulls. NEVER accept; never fall back to cheapest. */
   readonly rejectProviders: readonly string[];
+  /** Production sizing. The renderer DEFAULT (0.5 vCPU/1024Mi) starves a Next.js SSR user endpoint
+   *  (~2s /readyz). These are real user-facing sites — size for production. */
+  readonly resources: { readonly cpuUnits: number; readonly memoryMi: number; readonly storageMi: number };
 }
 
 // Refine here as nodes move to the crypto rail. One preset per node.
@@ -45,11 +48,16 @@ const NODES: Record<string, NodeAkashPreset> = {
     envFile: ".context/toks4-akash-env.json",
     acceptProvider: "akash16yr3wxt97ae045a06kr3ycde9srcgpg8syjxxm", // provider.zencloud.eu (audited)
     rejectProviders: ["akash1s3hq36mpas4nmkqasn7fgwhs9968cgl3u5esnw"], // froggy-servers (dud)
+    resources: { cpuUnits: 2, memoryMi: 2048, storageMi: 4096 }, // production endpoint (was 0.5/1024/2048 → ~2s /readyz)
   },
 };
 
-// Max price ceiling per block (providers bid below); uakt micro-units. Matches the managed adapter default.
-const PRICING = { pricingDenom: "uakt", pricingAmount: 10000 } as const;
+// Max price ceiling per block (providers bid below). MUST be uact (ACT): current Akash
+// mainnet denominates deployment escrow + leases in ACT, not AKT — a raw uakt SDL is
+// rejected at deposit ("Deposit invalid"). The managed Console adapter gets away with uakt
+// because its backend converts AKT->ACT server-side; the self-custody path submits the raw
+// denom, so it must be uact. Ceiling is generous (providers bid ~3 uact/block); you pay the bid.
+const PRICING = { pricingDenom: "uact", pricingAmount: 10000 } as const;
 
 function main(): void {
   const slug = process.argv[2] ?? "toks4";
@@ -69,6 +77,7 @@ function main(): void {
     publicUrl: `https://${preset.host}`,
     hosts: [preset.host],
     env,
+    resources: preset.resources,
   });
   const sdl = buildAkashSdl(spec, PRICING);
 
