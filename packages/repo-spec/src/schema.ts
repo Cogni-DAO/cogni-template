@@ -326,7 +326,7 @@ export const nodeServiceSpecSchema = z
     name: serviceNameSchema,
     artifact: nodeServiceArtifactSchema,
     command: z.array(z.string().min(1).max(1024)).min(1).max(32).optional(),
-    args: z.array(z.string().max(4096)).max(64).optional(),
+    args: z.array(z.string().max(1024)).max(32).optional(),
     port: z.number().int().min(1).max(65535),
     visibility: z.enum(["public", "private"]),
     /** Explicit non-provider compatibility selector; absent stays generic. */
