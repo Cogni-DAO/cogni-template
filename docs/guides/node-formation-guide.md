@@ -14,6 +14,8 @@ tags: [web3, setup, dao]
 
 # Node Formation — DAO Setup Guide
 
+> **Deploy-target note:** the AppSet/overlay footprint minted below is the **legacy k3s lane**. Standard: born-on-Akash (no k3s footprint), per [ci-cd.md](../spec/ci-cd.md) Axiom 23 (`AKASH_IS_NODE_APP_TARGET`, gated on story.5016).
+
 > Source: docs/spec/node-formation.md
 
 ## When to Use This

@@ -14,6 +14,8 @@ tags: [deployment, infra, node, argo, kustomize]
 
 # Create a New Node (Deploy)
 
+> **⚠️ LEGACY LANE.** This checklist is the k3s birth path (overlays ×3 + AppSets ×3 + deploy branches). The standard is **born-on-Akash** — wizard `deploy_provider: akash`, no k3s footprint — per [ci-cd.md](../spec/ci-cd.md) Axiom 23 (`AKASH_IS_NODE_APP_TARGET`, gated on story.5016). Until that gate lands this guide is still what runs; do not extend it with new machinery.
+
 ## When to Use This
 
 You have a node app under `nodes/<node>/app` (a Next.js node) and you want it to **deploy across the environment matrix**: `candidate-a`, `preview`, `production`.

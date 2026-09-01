@@ -14,7 +14,6 @@ Operational procedures and documentation for deployment, rollback, and incident 
 ## Pointers
 
 - [INFRASTRUCTURE_SETUP.md](INFRASTRUCTURE_SETUP.md): VM provisioning, DNS, GitHub secrets (disaster recovery)
-- [DEPLOYMENT_ARCHITECTURE.md](DEPLOYMENT_ARCHITECTURE.md): Architecture overview
 - [grafana-postgres-readonly.md](grafana-postgres-readonly.md): Grafana Cloud Postgres datasource + read-only role procedure
 - [github-org-rename-cutover.md](github-org-rename-cutover.md): GitHub organization rename cutover checklist
 - [production-operator-eso-cutover.md](production-operator-eso-cutover.md): Production operator OpenBao/ESO cutover and custody checks

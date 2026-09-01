@@ -272,6 +272,6 @@ _(none)_
 ## Related
 
 - [Node CI/CD Contract](../NODE_CI_CD_CONTRACT.md) — CI/CD invariants, portability, Jenkins path
-- [Deployment Architecture](../../docs/runbooks/DEPLOYMENT_ARCHITECTURE.md) — VM provisioning, Docker Compose stack
+- [CD Pipeline E2E](./cd-pipeline-e2e.md) — runtime deployment architecture (k3s + Compose)
 - [Packages Architecture](./packages-architecture.md) — Pure library boundaries
 - [Services Architecture](./services-architecture.md) — Deployable service contracts

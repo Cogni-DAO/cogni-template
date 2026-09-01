@@ -16,6 +16,8 @@ tags: [web3, setup, dao]
 
 # Node Formation Design
 
+> **Deploy-target note:** the per-env overlays + per-node AppSets in this spec are the **legacy k3s lane** footprint. The standard birth path is wizard `deploy_provider: akash` (no k3s footprint), per [ci-cd.md](./ci-cd.md) Axiom 23 (`AKASH_IS_NODE_APP_TARGET`, gated on story.5016); this spec's repo-mint/identity/pin contracts are lane-independent and survive.
+
 ## Context
 
 A Cogni DAO node has three lifecycle phases with distinct trust domains:

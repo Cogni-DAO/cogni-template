@@ -13,7 +13,6 @@ Immutable VM provisioning with SSH deploy key management, Docker/Docker Compose 
 
 ## Pointers
 
-- [DEPLOYMENT_ARCHITECTURE.md](../../../../docs/runbooks/DEPLOYMENT_ARCHITECTURE.md): Architecture overview
 - [INFRASTRUCTURE_SETUP.md](../../../../docs/runbooks/INFRASTRUCTURE_SETUP.md): Setup guide
 
 ## Boundaries

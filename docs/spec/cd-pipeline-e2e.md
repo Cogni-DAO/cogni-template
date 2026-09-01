@@ -52,7 +52,7 @@ Single VM per environment. Two runtimes coexist:
 
 The operator app runs on k3s alongside the node apps. Uniformity is the point:
 
-1. **Uniform deploy path** — all apps deploy the same way: image build → deploy-state update → Argo sync
+1. **Uniform deploy path (k3s lane)** — k3s-lane apps deploy the same way: image build → deploy-state update → Argo sync. _This uniformity is scoped to the k3s lane: Akash-lane node apps deploy via the operator compute API with no deploy-state/Argo step ([ci-cd.md](./ci-cd.md) Axiom 23 (`AKASH_IS_NODE_APP_TARGET`, gated on story.5016))._
 2. **Uniform networking** — all apps are k3s Services, reachable by ClusterIP
 3. **LiteLLM routing** — `COGNI_NODE_ENDPOINTS` can use k3s service DNS or NodePort routes consistently
 4. **Self-healing** — Argo restarts crashed operator, not just nodes

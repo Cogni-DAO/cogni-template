@@ -16,6 +16,8 @@ tags: [infra, multi-tenant, akash, node-formation]
 
 # Node Launch — Zero-Touch Provisioning
 
+> **⚠️ COMPUTE SECTIONS SUPERSEDED.** This spec's namespace-per-node-on-shared-k3s shape (`NAMESPACE_ISOLATION`, `ClusterProvider`/`CherryK3sProvider`/`AkashSdlProvider`) predates the shipped design: node workloads run on **Akash via `ComputeResourcePort` → `AkashComputeAdapter`** (task.5044; [ci-cd.md](./ci-cd.md) Axiom 23 (`AKASH_IS_NODE_APP_TARGET`, gated on story.5016)). Read [cicd-platform-boundary.md](./cicd-platform-boundary.md) for the live port contract; the non-compute sections (identity, DAO, payments) still apply.
+
 ## Context
 
 Today, launching a Cogni node after DAO formation requires 7+ manual steps: SSH keygen, OpenTofu apply, DNS records, GitHub secrets, repo fork, payment activation, and a git push. Each step is individually automatable but no orchestration exists to chain them.

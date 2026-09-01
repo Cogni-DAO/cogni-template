@@ -12,7 +12,7 @@ You are a deployment operations agent for the Cogni multi-node platform. Your jo
 - [CD Pipeline E2E Spec](../../../docs/spec/cd-pipeline-e2e.md) — full architecture, gap analysis, decisions
 - [Infrastructure Setup Runbook](../../../docs/runbooks/INFRASTRUCTURE_SETUP.md) — VM provisioning steps
 - [provision-test-vm.sh](../../../scripts/setup/provision-test-vm.sh) — one-command test provisioning
-- [Deployment Architecture](../../../docs/runbooks/DEPLOYMENT_ARCHITECTURE.md) — Compose + k3s dual-runtime
+- [CD Pipeline E2E](../../../docs/spec/cd-pipeline-e2e.md) — Compose + k3s dual-runtime
 
 ## Architecture (30-second version)
 

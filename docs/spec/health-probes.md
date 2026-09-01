@@ -65,6 +65,8 @@ Enable separate health probe endpoints with:
 
 5. **Livez Isolation**: `/livez` implementation must not import env validation code; verified by contract test that passes with missing AUTH_SECRET.
 
+6. **Provider-Agnostic Workload Health**: every deployable serves `/livez`, `/readyz`, and `/version` (`/version.buildSha` is the only artifact-identity ground truth — ci-cd.md Axiom 19). _Who consumes them differs by lane:_ the k3s lane consumes via k8s `livenessProbe`/`readinessProbe` in deployment manifests; the **Akash compute lane has no orchestrator probes** — the operator plane is the reconciler of record (`OPERATOR_OWNS_WORKLOAD_HEALTH`, ci-cd.md Axiom 26): it polls lease state + `/readyz` + `/version.buildSha` per compute deployment and replaces workloads on dead providers. **Status: the reconcile loop is specified, not yet built** — story.5016 tracks it; until it ships, an Akash workload that dies is not auto-replaced.
+
 ---
 
 ## Design
