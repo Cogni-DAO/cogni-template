@@ -76,6 +76,12 @@ export {
   type LangfuseSpanHandle,
 } from "./ai-telemetry/langfuse.adapter";
 export {
+  AkashComputeAdapter,
+  type AkashComputeAdapterConfig,
+  AkashComputeError,
+  type AkashComputeErrorCode,
+} from "./compute/akash-compute.adapter";
+export {
   CherryComputeAdapter,
   type CherryComputeAdapterConfig,
   CherryComputeError,
