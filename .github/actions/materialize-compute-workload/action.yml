@@ -1,0 +1,73 @@
+name: Materialize ComputeWorkload
+description: Resolve a trusted OCI node bundle and replace one ephemeral checkout overlay.
+
+inputs:
+  app_source_root:
+    { required: true, description: "Absolute application source checkout" }
+  node: { required: true, description: "Catalog node slug" }
+  source_sha: { required: true, description: "Exact node source SHA" }
+  source_repository:
+    { required: true, description: "Canonical GitHub owner/name" }
+  domain: { required: true, description: "Environment domain" }
+  ghcr_username: { required: true, description: "GHCR reader username" }
+  ghcr_token: { required: true, description: "GHCR reader token" }
+
+runs:
+  using: composite
+  steps:
+    - name: Set up ORAS
+      uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2.0.1
+
+    - name: Login to GHCR
+      shell: bash
+      env:
+        GHCR_USERNAME: ${{ inputs.ghcr_username }}
+        GHCR_TOKEN: ${{ inputs.ghcr_token }}
+      run: |
+        set -euo pipefail
+        printf '%s' "$GHCR_TOKEN" | oras login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+
+    - name: Set up pnpm
+      uses: pnpm/action-setup@c5ba7f7862a0f64c1b1a05fbac13e0b8e86ba08c # v4
+      with:
+        version: 9.12.2
+
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: "22"
+        cache: pnpm
+        cache-dependency-path: ${{ inputs.app_source_root }}/pnpm-lock.yaml
+
+    - name: Install typed materializer dependencies
+      shell: bash
+      working-directory: ${{ inputs.app_source_root }}
+      run: pnpm install --frozen-lockfile
+
+    - name: Materialize immutable desired state
+      shell: bash
+      working-directory: ${{ inputs.app_source_root }}
+      env:
+        APP_SOURCE_ROOT: ${{ inputs.app_source_root }}
+        NODE: ${{ inputs.node }}
+        SOURCE_SHA: ${{ inputs.source_sha }}
+        BUNDLE_REPOSITORY: ghcr.io/${{ inputs.source_repository }}
+        DOMAIN: ${{ inputs.domain }}
+        COMPUTE_OVERLAY: ${{ runner.temp }}/compute-workload-overlay
+        COGNI_CATALOG_ROOT: infra/catalog
+      run: |
+        set -euo pipefail
+        # shellcheck source=scripts/ci/lib/image-tags.sh
+        . scripts/ci/lib/image-tags.sh
+        public_host=$(host_for_node "$NODE" "$DOMAIN")
+        pnpm --filter operator materialize:compute-workload \
+          --catalog "${APP_SOURCE_ROOT}/infra/catalog/${NODE}.yaml" \
+          --environment candidate-a \
+          --repo-spec "${APP_SOURCE_ROOT}/nodes/${NODE}/.cogni/repo-spec.yaml" \
+          --bundle-repository "$BUNDLE_REPOSITORY" \
+          --source-sha "$SOURCE_SHA" \
+          --public-host "$public_host" \
+          --output-dir "$COMPUTE_OVERLAY"
+        rsync -a --delete \
+          "${COMPUTE_OVERLAY}/" \
+          "infra/k8s/overlays/candidate-a/${NODE}/"

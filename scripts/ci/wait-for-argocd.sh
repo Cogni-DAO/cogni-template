@@ -100,6 +100,13 @@ if [ -z "$NODE_TARGETS_CSV" ]; then
   echo "[ERROR] wait-for-argocd: no type:node targets from catalog — refusing to resolve deployments with an empty node list" >&2
   exit 1
 fi
+EXTERNAL_NODE_TARGETS=()
+for node in "${NODE_TARGETS[@]}"; do
+  if [ "$(deployment_provider_for_target "$node" "$DEPLOY_ENVIRONMENT")" = "akash" ]; then
+    EXTERNAL_NODE_TARGETS+=("$node")
+  fi
+done
+EXTERNAL_NODE_TARGETS_CSV=$(IFS=','; printf '%s' "${EXTERNAL_NODE_TARGETS[*]}")
 
 # SCP a remote script to the VM and execute it. Avoids heredoc quoting issues
 # and ensures all shell variables resolve on the remote.
@@ -123,12 +130,22 @@ EXPECTED_SHA=$(printf '%s' "$EXPECTED_SHA" | tr '[:upper:]' '[:lower:]')
 GH_TOKEN="${GH_TOKEN:-}"
 GH_REPO="${GH_REPO:-}"
 NODE_TARGETS_CSV="${NODE_TARGETS_CSV:-}"
+EXTERNAL_NODE_TARGETS_CSV="${EXTERNAL_NODE_TARGETS_CSV:-}"
 
 if [ -z "$NODE_TARGETS_CSV" ]; then
   echo "[ERROR] wait-for-argocd remote: NODE_TARGETS_CSV is required" >&2
   exit 1
 fi
 IFS=',' read -r -a NODE_TARGETS <<< "$NODE_TARGETS_CSV"
+IFS=',' read -r -a EXTERNAL_NODE_TARGETS <<< "$EXTERNAL_NODE_TARGETS_CSV"
+
+is_external_node() {
+  local candidate="$1" external
+  for external in "${EXTERNAL_NODE_TARGETS[@]}"; do
+    [ -n "$external" ] && [ "$candidate" = "$external" ] && return 0
+  done
+  return 1
+}
 
 ANCESTRY_CACHE_REV=""
 ANCESTRY_CACHE_RESULT=1
@@ -178,6 +195,12 @@ fi
 resolve_deployment() {
   local app_name="$1"  # {env}-{app}
   local app="${app_name#${DEPLOY_ENVIRONMENT}-}" node
+  if is_external_node "$app"; then
+    # External placement has no local Deployment/ReplicaSet. Readiness is
+    # checked directly from the controller-owned ComputeWorkload status below.
+    echo ""
+    return 0
+  fi
   case "$app" in
     scheduler-worker)
       echo "scheduler-worker"
@@ -226,6 +249,39 @@ deployment_sync_ready() {
     return 0
   fi
   [ "$status" = "Synced" ]
+}
+
+# Read-only fallback until the existing provision-env bootstrap refresh has
+# installed ComputeWorkload custom health in Argo's shared argocd-cm. Exactly
+# one CR may carry a node slug in an environment namespace; Ready must describe
+# the current generation, not a stale successful reconcile.
+compute_workload_ready() {
+  local app="$1" namespace="cogni-${DEPLOY_ENVIRONMENT}"
+  local rows name generation observed ready ready_generation
+  rows=$(kubectl -n "$namespace" get computeworkloads.compute.cogni.io \
+    -l "cogni.io/node=${app}" \
+    -o jsonpath='{range .items[*]}{.metadata.name}{"\\n"}{end}' 2>/dev/null || true)
+  if [ "$(printf '%s\n' "$rows" | sed '/^$/d' | wc -l | tr -d ' ')" != "1" ]; then
+    return 1
+  fi
+  name=$(printf '%s\n' "$rows" | sed '/^$/d')
+  read -r generation observed ready ready_generation < <(
+    kubectl -n "$namespace" get computeworkload "$name" \
+      -o jsonpath='{.metadata.generation} {.status.observedGeneration} {range .status.conditions[?(@.type=="Ready")]}{.status} {.observedGeneration}{end}' \
+      2>/dev/null || true
+  )
+  [ -n "$generation" ] &&
+    [ "$generation" = "$observed" ] &&
+    [ "$ready" = "True" ] &&
+    [ "$generation" = "$ready_generation" ]
+}
+
+compute_workload_state() {
+  local app="$1" namespace="cogni-${DEPLOY_ENVIRONMENT}"
+  kubectl -n "$namespace" get computeworkloads.compute.cogni.io \
+    -l "cogni.io/node=${app}" \
+    -o jsonpath='{range .items[*]}{.metadata.name}{" generation="}{.metadata.generation}{" observed="}{.status.observedGeneration}{" phase="}{.status.phase}{" ready="}{range .status.conditions[?(@.type=="Ready")]}{.status}{" readyObserved="}{.observedGeneration}{" reason="}{.reason}{end}{"\\n"}{end}' \
+    2>/dev/null || true
 }
 
 # Assert the Deployment's new ReplicaSet has reached desired count and is
@@ -356,9 +412,11 @@ wait_for_app() {
   local deadline=$((SECONDS + timeout_seconds))
   local next_kick=$((SECONDS + ACTIVE_SYNC_AFTER))
   local kick_count=0
-  local deployment deployment_status
+  local deployment deployment_status app external=false
 
   deployment=$(resolve_deployment "$app_name")
+  app="${app_name#${DEPLOY_ENVIRONMENT}-}"
+  is_external_node "$app" && external=true
 
   while [ $SECONDS -lt "$deadline" ]; do
     REV=$(get_app_revision "$app_name")
@@ -375,6 +433,12 @@ wait_for_app() {
     can_proceed_to_rollout_check() {
       local health="$1"
       local phase="$2"
+      if [ "$external" = "true" ]; then
+        # Before the declarative bootstrap refresh, Argo may report Unknown for
+        # this CR. The controller status remains the authoritative live gate.
+        compute_workload_ready "$app"
+        return $?
+      fi
       [ "$health" = "Healthy" ] && return 0
       [ "$health" = "Progressing" ] && [ "$phase" = "Succeeded" ] && return 0
       return 1
@@ -390,7 +454,11 @@ wait_for_app() {
       # Axiom 19. We deliberately do NOT wait for the old RS to fully drain
       # — that's not part of the contract and false-fails on slow terminations.
       if rollout_check "$app_name"; then
-        echo "  ✅ ${app_name} at ${REV:0:8} (Healthy + new RS available)"
+        if [ "$external" = "true" ]; then
+          echo "  ✅ ${app_name} at ${REV:0:8} (ComputeWorkload Ready at current generation; Argo health=${HEALTH})"
+        else
+          echo "  ✅ ${app_name} at ${REV:0:8} (Healthy + new RS available)"
+        fi
         return 0
       fi
       # rollout_check failed: new ReplicaSet exists but updated/available
@@ -405,6 +473,8 @@ wait_for_app() {
 
     if [ -n "$deployment" ]; then
       echo "    ${app_name}: rev=${REV:0:8} expected=${EXPECTED_SHA:0:8} health=${HEALTH} phase=${SYNC_PHASE} deployment=${deployment} deploymentStatus=${deployment_status:-<missing>} (waiting...)"
+    elif [ "$external" = "true" ]; then
+      echo "    ${app_name}: rev=${REV:0:8} expected=${EXPECTED_SHA:0:8} health=${HEALTH} phase=${SYNC_PHASE} compute=$(compute_workload_state "$app") (waiting...)"
     else
       echo "    ${app_name}: rev=${REV:0:8} expected=${EXPECTED_SHA:0:8} health=${HEALTH} phase=${SYNC_PHASE} (waiting...)"
     fi
@@ -428,6 +498,9 @@ wait_for_app() {
   kubectl -n argocd get application "$app_name" \
     -o jsonpath='{range .status.operationState.syncResult.resources[*]}{.kind}{"/"}{.namespace}{"/"}{.name}{" status="}{.status}{" hook="}{.hookPhase}{" msg="}{.message}{"\n"}{end}' \
     2>&1 | sed 's/^/    /' || true
+  if [ "$external" = "true" ]; then
+    echo "  ▸ ComputeWorkload status: $(compute_workload_state "$app")"
+  fi
   dump_pod_diagnostics "$app_name" "$deployment"
   return 1
 }
@@ -478,7 +551,7 @@ rm -f "$TOKEN_FILE"
 
 # shellcheck disable=SC2086
 ci_ssh_retry ssh $SSH_OPTS root@"$VM_HOST" \
-  "NODE_TARGETS_CSV='$NODE_TARGETS_CSV' GH_TOKEN=\$(cat '$REMOTE_TOKEN_PATH') GH_REPO='$GH_REPO_FOR_COMPARE' bash '$REMOTE_SCRIPT_PATH' '$DEPLOY_ENVIRONMENT' '$EXPECTED_SHA' '$ARGOCD_TIMEOUT' '$ACTIVE_SYNC_AFTER' '$SYNC_KICK_INTERVAL' ${APPS[*]}; RC=\$?; rm -rf '$REMOTE_DIR'; exit \$RC"
+  "NODE_TARGETS_CSV='$NODE_TARGETS_CSV' EXTERNAL_NODE_TARGETS_CSV='$EXTERNAL_NODE_TARGETS_CSV' GH_TOKEN=\$(cat '$REMOTE_TOKEN_PATH') GH_REPO='$GH_REPO_FOR_COMPARE' bash '$REMOTE_SCRIPT_PATH' '$DEPLOY_ENVIRONMENT' '$EXPECTED_SHA' '$ARGOCD_TIMEOUT' '$ACTIVE_SYNC_AFTER' '$SYNC_KICK_INTERVAL' ${APPS[*]}; RC=\$?; rm -rf '$REMOTE_DIR'; exit \$RC"
 
 # Gate-ordering invariant (bug.0321 Fix 4): signal downstream steps in the
 # same job that Argo sync was verified at EXPECTED_SHA. wait-for-candidate-ready.sh

@@ -233,6 +233,34 @@ node_id_for_target() {
   printf '%s' "$node_id"
 }
 
+# Resolve the operator-owned placement policy for one node/environment. The
+# catalog omits this field for the normal k3s path; only explicit external
+# placement moves a workload out of that lane. Keep this reader deliberately
+# thin: the JSON schema + typed operator materializer own the policy contract.
+deployment_provider_for_target() {
+  local target="$1" deploy_env="$2" provider
+  case "$deploy_env" in
+    candidate-a|preview|production) ;;
+    *)
+      echo "[ERROR] deployment-provider: unsupported environment: $deploy_env" >&2
+      return 1
+      ;;
+  esac
+  if [ -z "${_image_tags_type_cache[$target]+x}" ]; then
+    echo "[ERROR] deployment-provider: unknown target: $target" >&2
+    return 1
+  fi
+  provider=$(yq -N ".deployment_provider.\"${deploy_env}\" // \"k3s\"" \
+    "${_image_tags_catalog_root}/${target}.yaml")
+  case "$provider" in
+    k3s|akash) printf '%s' "$provider" ;;
+    *)
+      echo "[ERROR] deployment-provider: invalid provider '$provider' for ${target}/${deploy_env}" >&2
+      return 1
+      ;;
+  esac
+}
+
 # Default node_id for billing-callback attribution — the is_primary_host node
 # (operator). Lets COGNI_DEFAULT_NODE_ID be injected from repo-spec so the
 # LiteLLM callback carries no hardcoded identity. REPO_SPEC_IS_IDENTITY_SSOT.

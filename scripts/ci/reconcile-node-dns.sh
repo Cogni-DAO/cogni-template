@@ -196,6 +196,13 @@ for node in "${NODE_TARGETS[@]}"; do
   # Apex (is_primary_host) is an env-level record provisioned with the VM, not
   # a per-node concern — skip it here.
   is_primary_host "$node" && continue
+  # One hostname has exactly one writer. The k3s edge reconciler must never
+  # overwrite a catalog-selected external workload's controller-owned record.
+  # That controller writes the same host only after the external lease is Ready.
+  [ "$(deployment_provider_for_target "$node" "$DEPLOY_ENV")" = "k3s" ] || {
+    echo "  external ${node}: DNS is controller-owned; leaving it untouched"
+    continue
+  }
   host="$(host_for_node "$node" "$DOMAIN")"
   if $CHECK; then
     content=$(cf_a_record_content "$CLOUDFLARE_API_TOKEN" "$CLOUDFLARE_ZONE_ID" "$host")

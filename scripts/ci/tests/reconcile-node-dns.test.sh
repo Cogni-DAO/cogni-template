@@ -206,6 +206,10 @@ assert_eq "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["ru
   "12345" "Grafana DNS summary carries run correlation in JSON"
 # operator is is_primary_host (apex) — it must NOT get an operator-test record.
 assert_eq "$(count_name operator-test.cognidao.org)" "0" "primary node skipped (no operator-test record)"
+# toks4/candidate-a is catalog-selected for external compute. Its normal host
+# has one writer (the external workload controller), never the k3s edge loop.
+assert_eq "$(count_name toks4-test.cognidao.org)" "0" \
+  "external node skipped (controller exclusively owns the normal host)"
 
 # Re-run is idempotent (no growth).
 bash scripts/ci/reconcile-node-dns.sh candidate-a >/dev/null
