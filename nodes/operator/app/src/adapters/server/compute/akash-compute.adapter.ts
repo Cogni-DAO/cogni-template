@@ -5,8 +5,9 @@
  * Module: `@adapters/server/compute/akash-compute.adapter`
  * Purpose: Akash Console API client implementing ComputeResourcePort — balance read over the
  *   managed (USD-billed) Console wallet PLUS the write half: provision a container workload
- *   (create deployment → await bids → lease cheapest provider), status, release (task.5044).
- * Scope: HTTPS calls to console-api.akash.network with x-api-key auth. Does NOT hold a Cosmos
+ *   (create deployment → screen provider bids → lease → prove boot) (task.5044, task.5051).
+ * Scope: HTTPS calls to console-api.akash.network with x-api-key auth (+ unauthenticated
+ *   /version probes against the leased workload's own ingress). Does NOT hold a Cosmos
  *   key, sign transactions, or settle on-chain — the Console managed wallet bills the shared
  *   operator account in USD (v0 billing model; vNext = per-spawner pass-through + crypto funding).
  * Invariants:
@@ -15,12 +16,26 @@
  *     to callers by contract.
  *   - ADAPTER_SWAPPABLE: implements the provider-blind ComputeResourcePort next to
  *     CherryComputeAdapter; the factory composes them.
- *   - FAIL_LOUD: HTTP / network / timeout / no-bids failures throw AkashComputeError with a
- *     stable code so callers and the awareness surface observe their own failures.
- * Side-effects: IO (HTTPS requests to the Akash Console API; provision() spends real escrow)
+ *   - FAIL_LOUD: HTTP / network / timeout / no-bids / boot-SLO failures throw AkashComputeError
+ *     with a stable code so callers and the awareness surface observe their own failures.
+ *   - AUDITED_PROVIDERS_ONLY (task.5051): the SDL anchors `signedBy.allOf` to the Overclock
+ *     audit account and bids are screened on Console provider data (audited + online +
+ *     uptime7d > 0.95 + activeLeases > 0, no 2σ price underbids) — pure logic in
+ *     ./akash-provider-screen. Metadata-read failure fails open (signedBy stays the hard gate).
+ *   - BOOT_SLO_OR_CLOSE (task.5051): after lease, the workload must serve `/version` within
+ *     `bootSloMs` (default 5min) or the deployment is closed (escrow refunds), the provider is
+ *     recorded as an SLO failure (24h blacklist, 3 strikes permanent — derived from
+ *     compute_provider_outcomes), and provisioning retries on the next screened provider up to
+ *     `maxProviderAttempts` (default 3) before a terminal BOOT_SLO_TIMEOUT.
+ *   - OUTCOME_STORE_IS_ADVISORY: outcome persistence is best-effort — a store failure never
+ *     fails a live provision and never blocks screening (empty history).
+ * Side-effects: IO (HTTPS requests to the Akash Console API + workload ingress; provision()
+ *   spends real escrow; boot outcomes append to Postgres)
  * Links: ComputeResourcePort (@cogni/ai-tools/capabilities/compute), ./akash-sdl,
+ *   ./akash-provider-screen, ./provider-outcome-store,
  *   https://akash.network/docs/api-documentation/console-api/ (endpoints verified against
- *   github.com/akash-network/console apps/api routes), task.5044
+ *   github.com/akash-network/console apps/api routes), knowledge hub
+ *   `akash-provider-quality-mandate`, task.5044, task.5051
  * @internal
  */
 
@@ -32,10 +47,50 @@ import type {
   ProvisionState,
 } from "@cogni/ai-tools";
 
+import {
+  type AkashProviderInfo,
+  type ProviderOutcomeStats,
+  type ScreenableBid,
+  screenBids,
+} from "./akash-provider-screen";
 import { type AkashSdlOptions, buildAkashSdl } from "./akash-sdl";
+import {
+  createDefaultProviderOutcomeStore,
+  type ProviderOutcomeStore,
+} from "./provider-outcome-store";
 
 const PROVIDER = "akash";
 const MICRO = 1_000_000;
+
+/** Overclock Labs audit account — the `signedBy` anchor Console itself screens on. */
+export const AKASH_OVERCLOCK_AUDITOR =
+  "akash1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63";
+
+/**
+ * Country codes treated as co-located with the shared env substrate (EU; the substrate VM
+ * lives in Lithuania — app↔substrate latency is real, ~25ms/call from BE). Preference only,
+ * never a filter. Coupled to the substrate egress allowlist work (task.5052).
+ */
+const DEFAULT_SUBSTRATE_COUNTRY_CODES: readonly string[] = [
+  "LT",
+  "LV",
+  "EE",
+  "PL",
+  "DE",
+  "NL",
+  "BE",
+  "CZ",
+  "AT",
+  "SK",
+  "SE",
+  "FI",
+  "DK",
+  "FR",
+  "CH",
+];
+
+/** Unauthenticated `/version` probe timeout against the workload's own ingress. */
+const PROBE_TIMEOUT_MS = 5_000;
 
 export interface AkashComputeAdapterConfig {
   /** Akash Console API key (Settings → API Keys), sent as `x-api-key`. */
@@ -45,6 +100,7 @@ export interface AkashComputeAdapterConfig {
   /**
    * Timeout for write calls (`/v1/deployments`, `/v1/leases` — on-chain txs that routinely
    * exceed a read budget; an aborted create can orphan a server-side deployment). Default 30s.
+   * Also used for the large `/v1/providers` index read.
    */
   writeTimeoutMs?: number;
   /** USD escrow deposited per deployment (Console minimum 0.5). */
@@ -55,10 +111,25 @@ export interface AkashComputeAdapterConfig {
   bidPollIntervalMs?: number;
   /**
    * Provider addresses to prefer when leasing (e.g. providers whose egress IPs the shared
-   * substrate's firewall allowlists). Preferred providers win over cheaper strangers; when
-   * none of them bid, the cheapest open bid is leased.
+   * substrate's firewall allowlists). Strongest ranking signal among screened bids; when
+   * none of them bid, the best-ranked screened bid is leased.
    */
   preferredProviders?: readonly string[];
+  /**
+   * Country codes ranked as substrate-co-located (latency preference). Defaults to the
+   * EU set around the shared substrate.
+   */
+  preferredCountryCodes?: readonly string[];
+  /** Audit-anchor accounts for SDL `signedBy.allOf`. Defaults to the Overclock auditor. */
+  auditors?: readonly string[];
+  /** Boot SLO: the leased workload must serve `/version` within this window. Default 300s. */
+  bootSloMs?: number;
+  /** Poll interval while awaiting boot, in ms. Default 10s. */
+  bootPollIntervalMs?: number;
+  /** Max providers tried per provision() before a terminal error. Default 3. */
+  maxProviderAttempts?: number;
+  /** Boot-outcome persistence; defaults to the Postgres-backed store (lazy app-role client). */
+  outcomeStore?: ProviderOutcomeStore;
   /** SDL pricing knobs (max price per block per service). */
   pricing?: AkashSdlOptions;
   /** API base URL; defaults to the public Console API. */
@@ -100,6 +171,17 @@ interface ConsoleBid {
   };
 }
 
+/** Console `GET /v1/providers` entry (only the quality signals we screen on). */
+interface ConsoleProvider {
+  owner?: string;
+  isAudited?: boolean;
+  isOnline?: boolean;
+  isValidVersion?: boolean;
+  uptime7d?: number;
+  leaseCount?: number;
+  ipCountryCode?: string | null;
+}
+
 interface ConsoleLease {
   id?: ConsoleBidId;
   state?: string;
@@ -112,6 +194,12 @@ interface ConsoleLease {
 interface ConsoleDeploymentDetail {
   deployment?: { state?: string };
   leases?: ConsoleLease[];
+}
+
+/** Screening inputs loaded once per provision() (both reads are best-effort). */
+interface ScreeningContext {
+  providers: ReadonlyMap<string, AkashProviderInfo>;
+  outcomes: ReadonlyMap<string, ProviderOutcomeStats>;
 }
 
 const defaultSleep = (ms: number): Promise<void> =>
@@ -129,7 +217,12 @@ export class AkashComputeAdapter implements ComputeResourcePort {
   private readonly deployDepositUsd: number;
   private readonly bidTimeoutMs: number;
   private readonly bidPollIntervalMs: number;
-  private readonly pricing: AkashSdlOptions;
+  private readonly bootSloMs: number;
+  private readonly bootPollIntervalMs: number;
+  private readonly maxProviderAttempts: number;
+  private readonly preferredCountryCodes: readonly string[];
+  private readonly outcomeStore: ProviderOutcomeStore;
+  private readonly sdlOptions: AkashSdlOptions;
 
   constructor(private readonly config: AkashComputeAdapterConfig) {
     this.baseUrl = (
@@ -144,10 +237,18 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     this.deployDepositUsd = config.deployDepositUsd ?? 0.5;
     this.bidTimeoutMs = config.bidTimeoutMs ?? 90_000;
     this.bidPollIntervalMs = config.bidPollIntervalMs ?? 3_000;
+    this.bootSloMs = config.bootSloMs ?? 300_000;
+    this.bootPollIntervalMs = config.bootPollIntervalMs ?? 10_000;
+    this.maxProviderAttempts = config.maxProviderAttempts ?? 3;
+    this.preferredCountryCodes =
+      config.preferredCountryCodes ?? DEFAULT_SUBSTRATE_COUNTRY_CODES;
+    this.outcomeStore =
+      config.outcomeStore ?? createDefaultProviderOutcomeStore();
     // uakt ceiling per block per service; managed wallets escrow USD but bid in chain denom.
-    this.pricing = config.pricing ?? {
-      pricingDenom: "uakt",
-      pricingAmount: 10_000,
+    // signedBy anchors audited-only screening on-chain (AUDITED_PROVIDERS_ONLY).
+    this.sdlOptions = {
+      ...(config.pricing ?? { pricingDenom: "uakt", pricingAmount: 10_000 }),
+      auditors: config.auditors ?? [AKASH_OVERCLOCK_AUDITOR],
     };
   }
 
@@ -178,77 +279,35 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     }));
   }
 
+  /**
+   * Provision with the provider quality mandate (task.5051): screen bids, lease, then hold
+   * the boot SLO. An SLO miss closes the deployment (escrow refunds), records the failure
+   * (24h blacklist / 3 strikes permanent), and retries the next screened provider up to
+   * `maxProviderAttempts` before a terminal BOOT_SLO_TIMEOUT.
+   */
   async provision(p: {
     env: string;
     spec: ProvisionSpec;
   }): Promise<ProvisionOutput> {
-    const sdl = buildAkashSdl(p.spec, this.pricing);
-    const created = await this.request<{ dseq?: string; manifest?: unknown }>(
-      "POST",
-      "/v1/deployments",
-      { data: { sdl, deposit: this.deployDepositUsd } },
-      this.writeTimeoutMs
+    const sdl = buildAkashSdl(p.spec, this.sdlOptions);
+    const screening = await this.loadScreeningContext();
+    const tried = new Set<string>();
+    for (let attempt = 1; attempt <= this.maxProviderAttempts; attempt++) {
+      const result = await this.provisionOnce(
+        sdl,
+        p.spec.name,
+        screening,
+        tried
+      );
+      if (result.kind === "ok") return result.output;
+      // slo_failed: provider recorded + excluded; loop to redeploy on the next one.
+    }
+    throw new AkashComputeError(
+      "BOOT_SLO_TIMEOUT",
+      `workload served no /version within ${this.bootSloMs}ms on ${tried.size} screened provider(s) ` +
+        `[${[...tried].join(", ")}]; giving up after ${this.maxProviderAttempts} attempts ` +
+        "(deployments closed, escrow refunding)"
     );
-    const dseq = created?.dseq;
-    if (!dseq) {
-      throw new AkashComputeError(
-        "UNEXPECTED_SHAPE",
-        "Console POST /v1/deployments returned no dseq"
-      );
-    }
-
-    // A dseq means the deployment (and its escrow) exists on-chain — never strand it: from
-    // here every failure path (missing manifest, no bids, lease error) closes the deployment
-    // (refunding escrow) before rethrowing, and every error names the dseq.
-    try {
-      if (created?.manifest === undefined) {
-        throw new AkashComputeError(
-          "UNEXPECTED_SHAPE",
-          "Console POST /v1/deployments returned no manifest"
-        );
-      }
-      const bid = await this.awaitCheapestBid(dseq);
-      await this.request(
-        "POST",
-        "/v1/leases",
-        {
-          manifest: created.manifest,
-          leases: [
-            {
-              dseq: String(bid.dseq ?? dseq),
-              gseq: bid.gseq ?? 1,
-              oseq: bid.oseq ?? 1,
-              provider: bid.provider,
-            },
-          ],
-        },
-        this.writeTimeoutMs
-      );
-    } catch (error) {
-      await this.release({ leaseId: String(dseq) }).catch(() => {
-        // best-effort close; the original error (now dseq-tagged) is the one that matters
-      });
-      if (error instanceof AkashComputeError) {
-        throw new AkashComputeError(
-          error.code,
-          `${error.message} (deployment ${dseq} closed, escrow refunding)`
-        );
-      }
-      throw error;
-    }
-
-    // The lease exists and is paying from here — a failed/slow status read must NOT throw
-    // (the caller would lose the only handle to a live lease). Fall back to `pending`.
-    try {
-      return await this.status({ leaseId: String(dseq) });
-    } catch {
-      return {
-        provider: PROVIDER,
-        leaseId: String(dseq),
-        state: "pending",
-        endpoints: [],
-      };
-    }
   }
 
   async status(p: { leaseId: string }): Promise<ProvisionOutput> {
@@ -282,14 +341,124 @@ export class AkashComputeAdapter implements ComputeResourcePort {
   }
 
   /**
-   * Poll `/v1/bids` and pick a bid. With `preferredProviders` configured, hold out for a
-   * preferred bid until the window closes (preferred providers may bid later than
-   * strangers), then fall back to the cheapest open bid; without it, cheapest-first as
-   * soon as any bid lands. NO_BIDS when the window elapses with zero open bids.
+   * One create→screen→lease→boot-SLO pass. Terminal failures (no bids, HTTP errors) close
+   * the deployment and throw dseq-tagged; an SLO miss closes + records and returns
+   * `slo_failed` so the caller can retry the next provider.
    */
-  private async awaitCheapestBid(dseq: string): Promise<ConsoleBidId> {
+  private async provisionOnce(
+    sdl: string,
+    workload: string,
+    screening: ScreeningContext,
+    tried: Set<string>
+  ): Promise<{ kind: "ok"; output: ProvisionOutput } | { kind: "slo_failed" }> {
+    const created = await this.request<{ dseq?: string; manifest?: unknown }>(
+      "POST",
+      "/v1/deployments",
+      { data: { sdl, deposit: this.deployDepositUsd } },
+      this.writeTimeoutMs
+    );
+    const dseq = created?.dseq;
+    if (!dseq) {
+      throw new AkashComputeError(
+        "UNEXPECTED_SHAPE",
+        "Console POST /v1/deployments returned no dseq"
+      );
+    }
+
+    // A dseq means the deployment (and its escrow) exists on-chain — never strand it: from
+    // here every failure path (missing manifest, no bids, lease error, SLO miss) closes the
+    // deployment (refunding escrow), and every error names the dseq.
+    let provider: string;
+    try {
+      if (created?.manifest === undefined) {
+        throw new AkashComputeError(
+          "UNEXPECTED_SHAPE",
+          "Console POST /v1/deployments returned no manifest"
+        );
+      }
+      const bid = await this.awaitScreenedBid(dseq, screening, tried);
+      provider = String(bid.provider);
+      await this.request(
+        "POST",
+        "/v1/leases",
+        {
+          manifest: created.manifest,
+          leases: [
+            {
+              dseq: String(bid.dseq ?? dseq),
+              gseq: bid.gseq ?? 1,
+              oseq: bid.oseq ?? 1,
+              provider: bid.provider,
+            },
+          ],
+        },
+        this.writeTimeoutMs
+      );
+    } catch (error) {
+      await this.release({ leaseId: String(dseq) }).catch(() => {
+        // best-effort close; the original error (now dseq-tagged) is the one that matters
+      });
+      if (error instanceof AkashComputeError) {
+        throw new AkashComputeError(
+          error.code,
+          `${error.message} (deployment ${dseq} closed, escrow refunding)`
+        );
+      }
+      throw error;
+    }
+
+    // Boot SLO: the lease is paying from here — the workload must PROVE registry egress by
+    // serving /version before the deadline, or the lease closes and the provider is struck.
+    const leasedAt = Date.now();
+    try {
+      const output = await this.awaitBootServing(String(dseq));
+      await this.recordOutcome({
+        computeProvider: PROVIDER,
+        providerAccount: provider,
+        outcome: "boot_ok",
+        leaseId: String(dseq),
+        workload,
+        bootSeconds: Math.round((Date.now() - leasedAt) / 1000),
+      });
+      return { kind: "ok", output };
+    } catch (error) {
+      if (
+        error instanceof AkashComputeError &&
+        error.code === "BOOT_SLO_TIMEOUT"
+      ) {
+        await this.release({ leaseId: String(dseq) }).catch(() => {
+          // best-effort close; the SLO strike below is what must land
+        });
+        await this.recordOutcome({
+          computeProvider: PROVIDER,
+          providerAccount: provider,
+          outcome: "slo_timeout",
+          leaseId: String(dseq),
+          workload,
+          detail: `no /version within ${this.bootSloMs}ms`,
+        });
+        tried.add(provider);
+        return { kind: "slo_failed" };
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Poll `/v1/bids`, screen each wave (quality filter + blacklist + price-outlier + ranking
+   * in ./akash-provider-screen), and pick a provider. An allowlisted (preferred) provider
+   * that passes screening leases immediately; otherwise the window runs out and the
+   * best-ranked screened bid wins. NO_BIDS when zero bids ever arrive; NO_ELIGIBLE_BIDS when
+   * bids arrived but screening rejected them all.
+   */
+  private async awaitScreenedBid(
+    dseq: string,
+    screening: ScreeningContext,
+    tried: ReadonlySet<string>
+  ): Promise<ConsoleBidId> {
     const deadline = Date.now() + this.bidTimeoutMs;
-    let bestFallback: ConsoleBidId | undefined;
+    const preferred = this.config.preferredProviders ?? [];
+    let sawAnyBid = false;
     for (;;) {
       const bids = await this.request<ConsoleBid[]>(
         "GET",
@@ -298,24 +467,47 @@ export class AkashComputeAdapter implements ComputeResourcePort {
       const open = (bids ?? []).filter(
         (b) => b.bid?.id?.provider && (b.bid?.state ?? "open") === "open"
       );
-      open.sort(
-        (a, b) =>
-          Number(a.bid?.price?.amount ?? Number.POSITIVE_INFINITY) -
-          Number(b.bid?.price?.amount ?? Number.POSITIVE_INFINITY)
-      );
-      const preferred = this.config.preferredProviders?.length
-        ? open.find((b) =>
-            this.config.preferredProviders?.includes(b.bid?.id?.provider ?? "")
-          )
-        : undefined;
-      if (preferred?.bid?.id) return preferred.bid.id;
-      const cheapest = open[0]?.bid?.id;
-      if (cheapest) {
-        if (!this.config.preferredProviders?.length) return cheapest;
-        bestFallback = cheapest; // keep waiting for a preferred bid until the window closes
+      sawAnyBid = sawAnyBid || open.length > 0;
+      const byProvider = new Map<string, ConsoleBidId>();
+      const screenable: ScreenableBid[] = [];
+      for (const b of open) {
+        const id = b.bid?.id;
+        const owner = id?.provider;
+        if (!id || !owner) continue;
+        byProvider.set(owner, id);
+        screenable.push({
+          provider: owner,
+          priceAmount: Number(b.bid?.price?.amount ?? Number.POSITIVE_INFINITY),
+        });
+      }
+      const ranked = screenBids({
+        bids: screenable,
+        providers: screening.providers,
+        outcomes: screening.outcomes,
+        preferredProviders: preferred,
+        preferredCountryCodes: this.preferredCountryCodes,
+        excludedProviders: tried,
+        nowMs: Date.now(),
+      });
+      const best = ranked[0];
+      // An allowlisted provider that survived screening wins immediately; anyone else
+      // waits out the window so late (often better) bids can compete.
+      if (best && preferred.includes(best.provider)) {
+        const id = byProvider.get(best.provider);
+        if (id) return id;
       }
       if (Date.now() >= deadline) {
-        if (bestFallback) return bestFallback;
+        if (best) {
+          const id = byProvider.get(best.provider);
+          if (id) return id;
+        }
+        if (sawAnyBid) {
+          throw new AkashComputeError(
+            "NO_ELIGIBLE_BIDS",
+            `bids arrived for dseq ${dseq} but none passed provider screening ` +
+              "(audited + online + uptime7d > 0.95 + active leases, no blacklist, no 2σ underbids)"
+          );
+        }
         throw new AkashComputeError(
           "NO_BIDS",
           `no provider bids for dseq ${dseq} within ${this.bidTimeoutMs}ms`
@@ -323,6 +515,84 @@ export class AkashComputeAdapter implements ComputeResourcePort {
       }
       await this.sleep(this.bidPollIntervalMs);
     }
+  }
+
+  /**
+   * Hold the boot SLO: poll deployment status and probe each reported endpoint's `/version`
+   * until one serves, or throw BOOT_SLO_TIMEOUT at the deadline. Status-read failures are
+   * tolerated inside the window (the deadline is the arbiter).
+   */
+  private async awaitBootServing(dseq: string): Promise<ProvisionOutput> {
+    const deadline = Date.now() + this.bootSloMs;
+    for (;;) {
+      const output = await this.status({ leaseId: dseq }).catch(() => null);
+      if (output) {
+        for (const endpoint of output.endpoints) {
+          if (await this.probeVersion(endpoint)) return output;
+        }
+      }
+      if (Date.now() >= deadline) {
+        throw new AkashComputeError(
+          "BOOT_SLO_TIMEOUT",
+          `deployment ${dseq} served no /version within ${this.bootSloMs}ms`
+        );
+      }
+      await this.sleep(this.bootPollIntervalMs);
+    }
+  }
+
+  /** Unauthenticated GET `<endpoint>/version` against the workload ingress; true on 2xx. */
+  private async probeVersion(endpoint: string): Promise<boolean> {
+    const base = endpoint.startsWith("http") ? endpoint : `http://${endpoint}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+    try {
+      const response = await this.fetchImpl(
+        `${base.replace(/\/$/, "")}/version`,
+        { method: "GET", signal: controller.signal }
+      );
+      return response.ok;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /** Load provider metadata + outcome history, each best-effort (advisory inputs only). */
+  private async loadScreeningContext(): Promise<ScreeningContext> {
+    const providers = new Map<string, AkashProviderInfo>();
+    const list = await this.request<ConsoleProvider[]>(
+      "GET",
+      "/v1/providers",
+      undefined,
+      this.writeTimeoutMs // the provider index is large; read budget is too tight
+    ).catch(() => undefined);
+    for (const p of list ?? []) {
+      if (!p.owner) continue;
+      providers.set(p.owner, {
+        owner: p.owner,
+        isAudited: p.isAudited === true,
+        isOnline: p.isOnline === true,
+        isValidVersion: p.isValidVersion === true,
+        uptime7d: Number(p.uptime7d ?? 0),
+        activeLeases: Number(p.leaseCount ?? 0),
+        countryCode: p.ipCountryCode ?? null,
+      });
+    }
+    const outcomes = await this.outcomeStore
+      .stats(PROVIDER)
+      .catch(() => new Map<string, ProviderOutcomeStats>());
+    return { providers, outcomes };
+  }
+
+  /** Best-effort outcome append (OUTCOME_STORE_IS_ADVISORY). */
+  private async recordOutcome(
+    rec: Parameters<ProviderOutcomeStore["record"]>[0]
+  ): Promise<void> {
+    await this.outcomeStore.record(rec).catch(() => {
+      // advisory: a history-write failure must never fail a live provision
+    });
   }
 
   /** Single Console API request with x-api-key auth, timeout, and `data`-envelope unwrap. */
@@ -413,7 +683,9 @@ export type AkashComputeErrorCode =
   | "UNEXPECTED_SHAPE"
   | "TIMEOUT"
   | "NETWORK_ERROR"
-  | "NO_BIDS";
+  | "NO_BIDS"
+  | "NO_ELIGIBLE_BIDS"
+  | "BOOT_SLO_TIMEOUT";
 
 /** Stable error codes for the Akash Console path. */
 export class AkashComputeError extends Error {

@@ -31,6 +31,11 @@
       "import": "./dist/billing.js",
       "default": "./dist/billing.js"
     },
+    "./compute": {
+      "types": "./dist/compute.d.ts",
+      "import": "./dist/compute.js",
+      "default": "./dist/compute.js"
+    },
     "./ai": {
       "types": "./dist/ai.d.ts",
       "import": "./dist/ai.js",
