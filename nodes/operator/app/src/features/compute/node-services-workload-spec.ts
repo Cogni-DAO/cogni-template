@@ -32,6 +32,8 @@ export interface LegacyCogniAppCompatibilityInput
 export interface NodeServicesProvisionServiceSpec extends ProvisionServiceSpec {
   /** Value-free requirements resolved server-side before provider I/O. */
   readonly secretRefs: readonly { readonly key: string }[];
+  /** Explicit app compatibility selector; absent means generic runtime behavior. */
+  readonly runtimeProfile?: "cogni-node-app-v1";
 }
 
 export interface NodeServicesWorkloadSpec
@@ -66,6 +68,9 @@ export function buildNodeServicesWorkloadSpec(
         name: service.name,
         image,
         secretRefs: service.secretRefs,
+        ...(service.runtimeProfile
+          ? { runtimeProfile: service.runtimeProfile }
+          : {}),
         // This generic layer accepts no caller-provided values. Every value is
         // deterministically derived from the Git service/topology declaration.
         env: {
@@ -103,17 +108,20 @@ export function buildLegacyCogniAppWorkloadSpec(
   input: LegacyCogniAppCompatibilityInput
 ): NodeServicesWorkloadSpec {
   const workload = buildNodeServicesWorkloadSpec(input);
-  const app = workload.services.find((service) => service.name === "app");
-  if (!app || app.expose?.[0]?.global !== true) {
+  const compatible = workload.services.filter(
+    (service) => service.runtimeProfile === "cogni-node-app-v1"
+  );
+  const app = compatible[0];
+  if (compatible.length !== 1 || !app || app.expose?.[0]?.global !== true) {
     throw new Error(
-      "[node-workload] Legacy Cogni compatibility requires the public app service"
+      "[node-workload] Legacy Cogni compatibility requires exactly one public cogni-node-app-v1 service"
     );
   }
 
   return {
     ...workload,
     services: workload.services.map((service) =>
-      service.name === "app"
+      service.runtimeProfile === "cogni-node-app-v1"
         ? {
             ...service,
             env: {

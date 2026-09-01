@@ -24,6 +24,7 @@ const spec = parseRepoSpec({
         artifact: { name: "app" },
         port: 3200,
         visibility: "public",
+        runtime_profile: "cogni-node-app-v1",
         bindings: { WORKER_URL: "worker" },
         secret_refs: [{ key: "APP_TOKEN" }],
         resources: { cpu_units: 1, memory_mi: 2048, storage_mi: 4096 },
@@ -84,6 +85,7 @@ describe("buildNodeServicesWorkloadSpec", () => {
       ],
       env: { WORKER_URL: "http://worker:9100" },
       secretRefs: [{ key: "APP_TOKEN" }],
+      runtimeProfile: "cogni-node-app-v1",
     });
     expect(workload.services[1]).toMatchObject({
       name: "worker",
@@ -133,5 +135,26 @@ describe("buildNodeServicesWorkloadSpec", () => {
       HOSTNAME: "0.0.0.0",
       PORT: "9100",
     });
+  });
+
+  it("does not infer Cogni compatibility from the public service name", () => {
+    const genericBundle = {
+      ...bundle,
+      services: bundle.services.map(({ service, ...resolved }) => {
+        const { runtimeProfile: _runtimeProfile, ...genericService } = service;
+        return {
+          ...resolved,
+          service: genericService,
+        };
+      }),
+    };
+
+    expect(() =>
+      buildLegacyCogniAppWorkloadSpec({
+        slug: "generic-node",
+        bundle: genericBundle,
+        publicUrl: "https://generic-node.example.org",
+      })
+    ).toThrow(/exactly one public cogni-node-app-v1 service/);
   });
 });
