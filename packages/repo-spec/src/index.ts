@@ -57,6 +57,7 @@ export {
 export {
   type BuiltNodeArtifact,
   buildNodeArtifactBundle,
+  type ExpectedNodeArtifactBundleIdentity,
   type NodeArtifactBundle,
   type NodeArtifactBundleService,
   nodeArtifactBundleSchema,

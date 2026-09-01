@@ -39,26 +39,30 @@ const spec = parseRepoSpec({
   },
 });
 
-const bundle = resolveNodeArtifactBundle(spec, {
-  schema_version: 1,
-  node_id: NODE_ID,
-  source_sha: SOURCE_SHA,
-  repository: "example/poly",
-  services: [
-    {
-      service: "app",
-      artifact: "app",
-      source_sha: SOURCE_SHA,
-      image: APP_IMAGE,
-    },
-    {
-      service: "paper-trader",
-      artifact: "paper-trader",
-      source_sha: SOURCE_SHA,
-      image: TRADER_IMAGE,
-    },
-  ],
-});
+const bundle = resolveNodeArtifactBundle(
+  spec,
+  {
+    schema_version: 1,
+    node_id: NODE_ID,
+    source_sha: SOURCE_SHA,
+    repository: "example/poly",
+    services: [
+      {
+        service: "app",
+        artifact: "app",
+        source_sha: SOURCE_SHA,
+        image: APP_IMAGE,
+      },
+      {
+        service: "paper-trader",
+        artifact: "paper-trader",
+        source_sha: SOURCE_SHA,
+        image: TRADER_IMAGE,
+      },
+    ],
+  },
+  { sourceSha: SOURCE_SHA, repository: "example/poly" }
+);
 
 describe("buildNodeServicesWorkloadSpec", () => {
   it("builds one public app plus one non-global private sibling by digest", () => {
