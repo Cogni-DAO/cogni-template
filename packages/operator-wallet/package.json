@@ -14,6 +14,11 @@
       "types": "./dist/adapters/privy/index.d.ts",
       "import": "./dist/adapters/privy/index.js",
       "default": "./dist/adapters/privy/index.js"
+    },
+    "./adapters/cosmjs": {
+      "types": "./dist/adapters/cosmjs/index.d.ts",
+      "import": "./dist/adapters/cosmjs/index.js",
+      "default": "./dist/adapters/cosmjs/index.js"
     }
   },
   "types": "./dist/index.d.ts",
@@ -26,6 +31,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@cosmjs/crypto": "^0.34.1",
+    "@cosmjs/encoding": "^0.34.1",
+    "@cosmjs/proto-signing": "^0.34.1",
+    "cosmjs-types": "^0.9.0",
     "viem": "^2.0.0"
   },
   "peerDependencies": {

@@ -14,7 +14,11 @@
 import { defineConfig } from "tsup";
 
 export const tsupConfig = defineConfig({
-  entry: ["src/index.ts", "src/adapters/privy/index.ts"],
+  entry: [
+    "src/index.ts",
+    "src/adapters/privy/index.ts",
+    "src/adapters/cosmjs/index.ts",
+  ],
   format: ["esm"],
   dts: false, // tsc -b emits per-file declarations; tsup handles JS only
   clean: false, // preserve .d.ts files from tsc -b (incremental builds)

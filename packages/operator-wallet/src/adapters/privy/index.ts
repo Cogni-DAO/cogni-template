@@ -12,6 +12,10 @@
  */
 
 export {
+  PrivyCosmosSigner,
+  type PrivyCosmosSignerConfig,
+} from "./privy-cosmos-signer.adapter.js";
+export {
   PrivyOperatorWalletAdapter,
   type PrivyOperatorWalletConfig,
 } from "./privy-operator-wallet.adapter.js";

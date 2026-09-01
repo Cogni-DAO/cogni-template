@@ -9,7 +9,7 @@
 
 ## Purpose
 
-Standalone workspace package (`@cogni/operator-wallet`) providing Privy-managed operator wallet custody — submits typed intents to Privy HSM for on-chain signing. No raw key material in the app process.
+Standalone workspace package (`@cogni/operator-wallet`) providing Privy-managed operator wallet custody — submits typed intents to Privy HSM for on-chain signing. No raw key material in the app process. Also hosts the signer-agnostic Cosmos custody seam (`CosmosSignerPort`): raw-digest secp256k1 signing for SIGN_MODE_DIRECT chains (Akash), with a Privy `raw_sign` adapter and a cosmjs `OfflineDirectSigner` bridge (story.5017 Track B).
 
 ## Pointers
 
@@ -33,18 +33,18 @@ Standalone workspace package (`@cogni/operator-wallet`) providing Privy-managed 
 }
 ```
 
-**External deps:** `viem` (ABI encoding, address utils), `@privy-io/node` (HSM wallet SDK), `@0xsplits/splits-sdk` (Split ABI).
+**External deps:** `viem` (ABI encoding, address utils), `@privy-io/node` (HSM wallet SDK), `@0xsplits/splits-sdk` (Split ABI), `@cosmjs/crypto` + `@cosmjs/encoding` (Cosmos address/signature math), `@cosmjs/proto-signing` + `cosmjs-types` (OfflineDirectSigner bridge).
 
 ## Public Surface
 
-- **Exports:** `OperatorWalletPort`, `PrivyOperatorWalletAdapter`, `PrivyOperatorWalletConfig`, `calculateSplitAllocations`, `SPLIT_TOTAL_ALLOCATION`, `OPENROUTER_CRYPTO_FEE_PPM`
+- **Exports:** `OperatorWalletPort`, `PrivyOperatorWalletAdapter`, `PrivyOperatorWalletConfig`, `calculateSplitAllocations`, `SPLIT_TOTAL_ALLOCATION`, `OPENROUTER_CRYPTO_FEE_PPM`; Cosmos: `CosmosSignerPort` + error types, `deriveCosmosAddress`, `normalizeToLowS`/`derToFixed64`/`toFixed64LowS`/`parseCompressedPubkeyHex`, `PrivyCosmosSigner` (subpath `adapters/privy`), `createDirectSignerFromPort` (subpath `adapters/cosmjs`)
 - **Routes:** none
 - **Env/Config keys:** `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_SIGNING_KEY`, `OPERATOR_MAX_TOPUP_USD` (consumed by `apps/operator` bootstrap, not by this package directly)
 
 ## Ports
 
 - **Uses ports:** none (this package _is_ the adapter)
-- **Implements ports:** `OperatorWalletPort`
+- **Implements ports:** `OperatorWalletPort`, `CosmosSignerPort`
 
 ## Responsibilities
 
