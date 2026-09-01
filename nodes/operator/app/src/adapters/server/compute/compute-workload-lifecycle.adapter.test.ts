@@ -24,9 +24,10 @@ const SPEC: ProvisionSpec = {
 
 describe("ComputeWorkloadLifecycleAdapter", () => {
   it("maps an uncertain mutating transport failure to fail-closed unknown_outcome", async () => {
-    const compute: ComputeResourcePort = {
+    const compute = {
       balances: async () => [],
-      provision: vi.fn(async () => {
+      allocationCursor: vi.fn(async () => "41"),
+      provisionWithAllocation: vi.fn(async () => {
         throw new AkashComputeError("TIMEOUT", "provider timeout");
       }),
     };
@@ -37,11 +38,17 @@ describe("ComputeWorkloadLifecycleAdapter", () => {
         environment: "candidate-a",
         spec: SPEC,
         idempotencyKey: "durable-key",
+        onPrepared: async () => {},
+        onAllocated: async () => {},
       })
       .catch((value: unknown) => value);
 
     expect(error).toBeInstanceOf(ComputeLifecycleError);
-    expect(error).toMatchObject({ kind: "unknown_outcome", retryable: false });
+    expect(error).toMatchObject({
+      kind: "unknown_outcome",
+      reason: "ProviderOutcomeUnknown",
+      retryable: false,
+    });
   });
 
   it("maps provider 404 observation to not_found recovery input", async () => {
@@ -86,5 +93,47 @@ describe("ComputeWorkloadLifecycleAdapter", () => {
       "https://two.example/version",
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     );
+  });
+
+  it("serializes wallet allocations so each create gets a fresh pre-POST baseline", async () => {
+    let releaseFirst: (() => void) | undefined;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    let calls = 0;
+    const allocationCursor = vi.fn(async () => String(40 + calls));
+    const provisionWithAllocation = vi.fn(async (_input, onAllocated) => {
+      calls++;
+      if (calls === 1) await firstGate;
+      const output = {
+        provider: "akash",
+        leaseId: String(41 + calls),
+        state: "active" as const,
+        endpoints: [],
+      };
+      await onAllocated(output);
+      return output;
+    });
+    const lifecycle = new ComputeWorkloadLifecycleAdapter({
+      balances: async () => [],
+      allocationCursor,
+      provisionWithAllocation,
+    });
+    const input = {
+      environment: "candidate-a",
+      spec: SPEC,
+      idempotencyKey: "key",
+      onPrepared: async () => {},
+      onAllocated: async () => {},
+    };
+    const first = lifecycle.create(input);
+    await vi.waitFor(() => expect(allocationCursor).toHaveBeenCalledTimes(1));
+    const second = lifecycle.create({ ...input, idempotencyKey: "key-2" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(allocationCursor).toHaveBeenCalledTimes(1);
+    releaseFirst?.();
+    await Promise.all([first, second]);
+    expect(allocationCursor).toHaveBeenCalledTimes(2);
+    expect(provisionWithAllocation).toHaveBeenCalledTimes(2);
   });
 });

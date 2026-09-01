@@ -604,6 +604,61 @@ describe("AkashComputeAdapter boot SLO", () => {
 });
 
 describe("AkashComputeAdapter failure containment", () => {
+  it("adopts exactly one deployment created beyond a durable allocation cursor", async () => {
+    let listWave = 0;
+    const fetchImpl = vi.fn<typeof fetch>(async (url) => {
+      const u = String(url);
+      if (u.includes("/v1/deployments?skip=0&limit=1000")) {
+        listWave++;
+        const dseqs = listWave === 1 ? ["40", "41"] : ["40", "41", "42"];
+        return jsonResponse({
+          data: {
+            deployments: dseqs.map((dseq) => ({
+              deployment: { id: { dseq }, state: "active" },
+              leases: [],
+            })),
+            pagination: { hasMore: false },
+          },
+        });
+      }
+      if (u === `${BASE}/v1/deployments/42`) {
+        return jsonResponse({
+          data: {
+            deployment: { id: { dseq: "42" }, state: "active" },
+            leases: [],
+          },
+        });
+      }
+      throw new Error(`unhandled ${u}`);
+    });
+    const adapter = makeAdapter(fetchImpl);
+    const cursor = await adapter.allocationCursor();
+    expect(cursor).toBe("41");
+    await expect(adapter.findAllocationSince(cursor)).resolves.toMatchObject({
+      leaseId: "42",
+      state: "pending",
+    });
+  });
+
+  it("fails closed when more than one deployment exists beyond the allocation cursor", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () =>
+      jsonResponse({
+        data: {
+          deployments: ["42", "43"].map((dseq) => ({
+            deployment: { id: { dseq }, state: "active" },
+            leases: [],
+          })),
+          pagination: { hasMore: false },
+        },
+      })
+    );
+    await expect(
+      makeAdapter(fetchImpl).findAllocationSince("41")
+    ).rejects.toMatchObject({
+      code: "AMBIGUOUS_ADOPTION",
+    });
+  });
+
   it("closes the deployment when the create response omits the manifest", async () => {
     const deletes: string[] = [];
     const fetchImpl = vi.fn<typeof fetch>(async (url, init) => {
@@ -649,7 +704,7 @@ describe("AkashComputeAdapter failure containment", () => {
     expect(out.state).toBe("active");
   });
 
-  it("never echoes raw response bodies in HTTP_ERROR (only parsed message fields)", async () => {
+  it("never echoes raw response bodies or parsed provider messages in HTTP_ERROR", async () => {
     const fetchImpl = vi.fn<typeof fetch>(
       async () =>
         new Response(
@@ -665,7 +720,7 @@ describe("AkashComputeAdapter failure containment", () => {
       .catch((e: unknown) => e);
     const msg = (err as AkashComputeError).message;
     expect(msg).toContain("422");
-    expect(msg).toContain("invalid manifest");
+    expect(msg).not.toContain("invalid manifest");
     expect(msg).not.toContain("supersecret");
   });
 });

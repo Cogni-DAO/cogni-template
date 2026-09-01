@@ -55,6 +55,7 @@ import {
 } from "./akash-provider-screen";
 import { type AkashSdlOptions, buildAkashSdl } from "./akash-sdl";
 import type { ProviderOutcomeStore } from "./provider-outcome-store";
+import { safeVersionProbe } from "./safe-version-probe";
 
 const PROVIDER = "akash";
 const MICRO = 1_000_000;
@@ -189,8 +190,13 @@ interface ConsoleLease {
 }
 
 interface ConsoleDeploymentDetail {
-  deployment?: { state?: string };
+  deployment?: { id?: { dseq?: string | number }; state?: string };
   leases?: ConsoleLease[];
+}
+
+interface ConsoleDeploymentList {
+  deployments?: ConsoleDeploymentDetail[];
+  pagination?: { hasMore?: boolean; skip?: number; limit?: number };
 }
 
 /** Screening inputs loaded once per provision() (both reads are best-effort). */
@@ -306,6 +312,75 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     );
   }
 
+  /**
+   * Controller-owned create: allocate exactly one dseq, durably publish it, then converge.
+   * Provider retries belong to the level reconciler so every paid allocation has a receipt.
+   */
+  async provisionWithAllocation(
+    p: { env: string; spec: ProvisionSpec; idempotencyKey: string },
+    onAllocated: (resource: ProvisionOutput) => Promise<void>
+  ): Promise<ProvisionOutput> {
+    void p.env;
+    void p.idempotencyKey;
+    const sdl = buildAkashSdl(p.spec, this.sdlOptions);
+    const result = await this.provisionOnce(
+      sdl,
+      p.spec.name,
+      await this.loadScreeningContext(),
+      new Set<string>(),
+      onAllocated
+    );
+    if (result.kind === "ok") return result.output;
+    throw new AkashComputeError(
+      "BOOT_SLO_TIMEOUT",
+      "allocated workload did not satisfy the boot SLO and was closed"
+    );
+  }
+
+  /** Opaque high-water mark used to recover an allocation whose POST response was lost. */
+  async allocationCursor(): Promise<string> {
+    const deployments = await this.listAllDeployments();
+    let max = -1n;
+    for (const item of deployments) {
+      const raw = item.deployment?.id?.dseq;
+      if (raw === undefined || !/^\d+$/.test(String(raw))) continue;
+      const value = BigInt(String(raw));
+      if (value > max) max = value;
+    }
+    return max.toString();
+  }
+
+  /**
+   * Adopt only a unique post-baseline allocation. The controller is the sole wallet writer;
+   * manual/route writes invalidate proof and intentionally force fail-closed ambiguity.
+   */
+  async findAllocationSince(cursor: string): Promise<ProvisionOutput | null> {
+    if (!/^-?\d+$/.test(cursor)) {
+      throw new AkashComputeError(
+        "UNEXPECTED_SHAPE",
+        "invalid allocation cursor"
+      );
+    }
+    const baseline = BigInt(cursor);
+    const candidates = (await this.listAllDeployments())
+      .map((item) => item.deployment?.id?.dseq)
+      .filter(
+        (value): value is string | number =>
+          value !== undefined && /^\d+$/.test(String(value))
+      )
+      .map((value) => String(value))
+      .filter((value) => BigInt(value) > baseline);
+    const unique = [...new Set(candidates)];
+    if (unique.length === 0) return null;
+    if (unique.length > 1) {
+      throw new AkashComputeError(
+        "AMBIGUOUS_ADOPTION",
+        "multiple post-baseline deployments prevent deterministic adoption"
+      );
+    }
+    return this.status({ leaseId: unique[0] as string });
+  }
+
   async status(p: { leaseId: string }): Promise<ProvisionOutput> {
     const detail = await this.request<ConsoleDeploymentDetail>(
       "GET",
@@ -344,6 +419,21 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     );
   }
 
+  private async listAllDeployments(): Promise<ConsoleDeploymentDetail[]> {
+    const deployments: ConsoleDeploymentDetail[] = [];
+    const limit = 1_000;
+    for (let skip = 0; ; skip += limit) {
+      const page = await this.request<ConsoleDeploymentList>(
+        "GET",
+        `/v1/deployments?skip=${skip}&limit=${limit}`,
+        undefined,
+        this.writeTimeoutMs
+      );
+      deployments.push(...(page?.deployments ?? []));
+      if (!page?.pagination?.hasMore) return deployments;
+    }
+  }
+
   /**
    * One create→screen→lease→boot-SLO pass. Terminal failures (no bids, HTTP errors) close
    * the deployment and throw dseq-tagged; an SLO miss closes + records and returns
@@ -353,7 +443,8 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     sdl: string,
     workload: string,
     screening: ScreeningContext,
-    tried: Set<string>
+    tried: Set<string>,
+    onAllocated?: (resource: ProvisionOutput) => Promise<void>
   ): Promise<{ kind: "ok"; output: ProvisionOutput } | { kind: "slo_failed" }> {
     const created = await this.request<{ dseq?: string; manifest?: unknown }>(
       "POST",
@@ -367,6 +458,23 @@ export class AkashComputeAdapter implements ComputeResourcePort {
         "UNEXPECTED_SHAPE",
         "Console POST /v1/deployments returned no dseq"
       );
+    }
+
+    if (onAllocated) {
+      try {
+        await onAllocated({
+          provider: PROVIDER,
+          leaseId: String(dseq),
+          state: "pending",
+          endpoints: [],
+        });
+      } catch {
+        await this.release({ leaseId: String(dseq) }).catch(() => {});
+        throw new AkashComputeError(
+          "UNEXPECTED_SHAPE",
+          "controller could not persist the allocated deployment handle; deployment closed"
+        );
+      }
     }
 
     // A dseq means the deployment (and its escrow) exists on-chain — never strand it: from
@@ -547,6 +655,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
 
   /** Unauthenticated GET `<endpoint>/version` against the workload ingress; true on 2xx. */
   private async probeVersion(endpoint: string): Promise<boolean> {
+    if (!this.config.fetchImpl) return safeVersionProbe(endpoint);
     const base = endpoint.startsWith("http") ? endpoint : `http://${endpoint}`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
@@ -621,22 +730,11 @@ export class AkashComputeAdapter implements ComputeResourcePort {
         signal: controller.signal,
       });
       if (!response.ok) {
-        // NEVER include raw response text: 4xx bodies can echo request input, and the SDL
-        // carries workload secrets — only a parsed, known `message`/`error` field survives.
-        const text = await response.text().catch(() => "");
-        let detail = "";
-        try {
-          const parsed = JSON.parse(text) as {
-            message?: string;
-            error?: string;
-          };
-          detail = String(parsed.message ?? parsed.error ?? "").slice(0, 200);
-        } catch {
-          // non-JSON body: drop it
-        }
+        // Never retain provider bodies: they can echo the SDL and future resolved secrets.
+        await response.body?.cancel().catch(() => {});
         throw new AkashComputeError(
           "HTTP_ERROR",
-          `Console ${method} ${path} failed: ${response.status} ${response.statusText}${detail ? ` — ${detail}` : ""}`,
+          `Console request failed with HTTP ${response.status}`,
           response.status
         );
       }
@@ -658,7 +756,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
       }
       throw new AkashComputeError(
         "NETWORK_ERROR",
-        error instanceof Error ? error.message : "unknown error"
+        "Console network request failed"
       );
     } finally {
       clearTimeout(timeoutId);
@@ -690,7 +788,8 @@ export type AkashComputeErrorCode =
   | "NETWORK_ERROR"
   | "NO_BIDS"
   | "NO_ELIGIBLE_BIDS"
-  | "BOOT_SLO_TIMEOUT";
+  | "BOOT_SLO_TIMEOUT"
+  | "AMBIGUOUS_ADOPTION";
 
 /** Stable error codes for the Akash Console path. */
 export class AkashComputeError extends Error {

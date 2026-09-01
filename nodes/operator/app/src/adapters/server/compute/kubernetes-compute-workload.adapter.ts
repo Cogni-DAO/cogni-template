@@ -53,6 +53,43 @@ export class KubernetesComputeWorkloadStateAdapter
     return body.items ?? [];
   }
 
+  async claimAttempt(input: {
+    resource: ComputeWorkload;
+    receipt: string;
+  }): Promise<boolean> {
+    const resourceVersion = input.resource.metadata.resourceVersion;
+    if (!resourceVersion) {
+      throw new Error(
+        "ComputeWorkload metadata.resourceVersion is required for mutation CAS"
+      );
+    }
+    try {
+      await this.custom.patchNamespacedCustomObject(
+        GROUP,
+        VERSION,
+        this.namespace,
+        PLURAL,
+        input.resource.metadata.name,
+        {
+          metadata: {
+            resourceVersion,
+            annotations: {
+              ["compute.cogni.io/last-attempt"]: input.receipt,
+            },
+          },
+        },
+        undefined,
+        "compute-workload-controller",
+        undefined,
+        PATCH_HEADERS
+      );
+      return true;
+    } catch (error) {
+      if (statusCode(error) === 409) return false;
+      throw error;
+    }
+  }
+
   async patchMetadata(input: {
     resource: ComputeWorkload;
     annotations?: Readonly<Record<string, string | null>>;
@@ -131,6 +168,7 @@ export class KubernetesComputeWorkloadStateAdapter
 /** Lease-based leader election for the dedicated controller Deployment. */
 export class KubernetesLeaseLeaderElector {
   private leader = false;
+  private epoch: string | undefined;
 
   constructor(
     private readonly api: CoordinationV1Api,
@@ -144,6 +182,34 @@ export class KubernetesLeaseLeaderElector {
     return this.leader;
   }
 
+  currentEpoch(): string | undefined {
+    return this.leader ? this.epoch : undefined;
+  }
+
+  /** Live dispatch guard used after the per-resource CAS and immediately before provider I/O. */
+  async stillHolds(epoch: string, now = new Date()): Promise<boolean> {
+    try {
+      const lease = (
+        await this.api.readNamespacedLease(this.name, this.namespace)
+      ).body;
+      const renewedAt = lease.spec?.renewTime
+        ? new Date(lease.spec.renewTime).getTime()
+        : 0;
+      const duration =
+        (lease.spec?.leaseDurationSeconds ?? this.leaseDurationSeconds) * 1000;
+      const live = now.getTime() <= renewedAt + duration;
+      const actualEpoch = `${lease.spec?.leaseTransitions ?? 0}:${lease.spec?.holderIdentity ?? ""}`;
+      return (
+        this.leader &&
+        live &&
+        lease.spec?.holderIdentity === this.identity &&
+        actualEpoch === epoch
+      );
+    } catch {
+      return false;
+    }
+  }
+
   async acquireOrRenew(now = new Date()): Promise<boolean> {
     let existing: V1Lease | undefined;
     try {
@@ -152,6 +218,7 @@ export class KubernetesLeaseLeaderElector {
     } catch (error) {
       if (statusCode(error) !== 404) {
         this.leader = false;
+        this.epoch = undefined;
         throw error;
       }
     }
@@ -169,10 +236,12 @@ export class KubernetesLeaseLeaderElector {
           },
         });
         this.leader = true;
+        this.epoch = `0:${this.identity}`;
         return true;
       } catch (error) {
         if (statusCode(error) !== 409) throw error;
         this.leader = false;
+        this.epoch = undefined;
         return false;
       }
     }
@@ -186,6 +255,7 @@ export class KubernetesLeaseLeaderElector {
     const expired = now.getTime() > renewedAt + duration;
     if (holder !== this.identity && holder && !expired) {
       this.leader = false;
+      this.epoch = undefined;
       return false;
     }
 
@@ -213,10 +283,12 @@ export class KubernetesLeaseLeaderElector {
         },
       });
       this.leader = true;
+      this.epoch = `${(existing.spec?.leaseTransitions ?? 0) + (transitioned ? 1 : 0)}:${this.identity}`;
       return true;
     } catch (error) {
       if (statusCode(error) !== 409) throw error;
       this.leader = false;
+      this.epoch = undefined;
       return false;
     }
   }
