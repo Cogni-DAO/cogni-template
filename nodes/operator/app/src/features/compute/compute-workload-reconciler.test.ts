@@ -269,6 +269,7 @@ async function run(
     dns?: ComputeWorkloadDnsPort;
     secretResolver?: ComputeWorkloadSecretResolverPort;
     recordReadinessTransition?: ComputeWorkloadReconcileDeps["recordReadinessTransition"];
+    recordRecoveryLimit?: ComputeWorkloadReconcileDeps["recordRecoveryLimit"];
   } = {}
 ) {
   const dns = overrides.dns ?? {
@@ -295,6 +296,7 @@ async function run(
       assertLeadership: async (epoch) => epoch === "7:test-controller",
       now: () => NOW,
       recordReadinessTransition,
+      recordRecoveryLimit: overrides.recordRecoveryLimit ?? vi.fn(),
     },
     state.current
   );
@@ -530,6 +532,53 @@ describe("reconcileComputeWorkload", () => {
     await run(state, restartedProcess);
     expect(restartedProcess.create).toHaveBeenCalledTimes(1);
     expect(state.current.status?.attempt?.operation).toBe("recover");
+  });
+
+  it("stops provider creates after three generation-scoped recovery allocations", async () => {
+    const capped = status(1, "closed");
+    const state = new MemoryState(
+      workload({
+        status: {
+          ...capped,
+          recoveryCount: 3,
+          attempt: {
+            key: "recover-3",
+            operation: "recover",
+            ordinal: 3,
+            outcome: "known_failure",
+            retryCount: 0,
+            leaderEpoch: "7:test-controller",
+            startedAt: NOW.toISOString(),
+            completedAt: NOW.toISOString(),
+          },
+        },
+      })
+    );
+    const port = lifecycle();
+    const recordRecoveryLimit = vi.fn();
+
+    await run(state, port, { recordRecoveryLimit });
+
+    expect(port.create).not.toHaveBeenCalled();
+    expect(port.observe).not.toHaveBeenCalled();
+    expect(state.current.status?.phase).toBe("Failed");
+    expect(state.current.status?.resource).toMatchObject({
+      id: "lease-42",
+      state: "closed",
+    });
+    expect(state.current.status?.failure?.reason).toBe("RecoveryLimitExceeded");
+    expect(recordRecoveryLimit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        leaseId: "lease-42",
+        recoveryCount: 3,
+        outcomeCode: "RecoveryLimitExceeded",
+      })
+    );
+    expect(state.events.at(-1)?.reason).toBe("RecoveryLimitExceeded");
+
+    await run(state, port, { recordRecoveryLimit });
+    expect(port.create).not.toHaveBeenCalled();
+    expect(recordRecoveryLimit).toHaveBeenCalledTimes(1);
   });
 
   it("blocks every other workload create behind a durable unknown wallet allocation across restart ordering", async () => {

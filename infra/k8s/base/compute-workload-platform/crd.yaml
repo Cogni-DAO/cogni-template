@@ -309,6 +309,7 @@ spec:
                           OrphanRisk,
                           OwnershipMismatch,
                           RetryLimitExceeded,
+                          RecoveryLimitExceeded,
                           FinalizationBlocked,
                         ]
                     message: { type: string, maxLength: 256 }
