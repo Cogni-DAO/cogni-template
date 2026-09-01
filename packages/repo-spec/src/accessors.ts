@@ -113,6 +113,7 @@ export interface NodeServiceConfig {
   readonly args?: readonly string[];
   readonly port: number;
   readonly visibility: "public" | "private";
+  readonly runtimeProfile?: "cogni-node-app-v1";
   readonly bindings: Readonly<Record<string, string>>;
   readonly secretRefs: readonly { readonly key: string }[];
   readonly bindHost: "0.0.0.0";
@@ -136,6 +137,7 @@ const LEGACY_DEFAULT_DEPLOYMENT: NodeDeploymentSpec = {
       },
       port: 3200,
       visibility: "public",
+      runtime_profile: "cogni-node-app-v1",
       bindings: {},
       secret_refs: [],
       bind_host: "0.0.0.0",
@@ -183,6 +185,9 @@ export function extractNodeServices(
     ...(service.args ? { args: service.args } : {}),
     port: service.port,
     visibility: service.visibility,
+    ...(service.runtime_profile
+      ? { runtimeProfile: service.runtime_profile }
+      : {}),
     bindings: service.bindings,
     secretRefs: service.secret_refs,
     bindHost: service.bind_host,
