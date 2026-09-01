@@ -20,7 +20,7 @@ import { reconcileComputeWorkload } from "./compute-workload-reconciler";
 
 const NODE_ID = "123e4567-e89b-12d3-a456-426614174001";
 const SHA = "a".repeat(40);
-const IMAGE = `ghcr.io/cogni-dao/poly@sha256:${"b".repeat(64)}`;
+const IMAGE = `ghcr.io/cogni-dao/sample-node@sha256:${"b".repeat(64)}`;
 const NOW = new Date("2026-09-01T12:00:00.000Z");
 const BOOTABLE_APP_ENV = {
   AUTH_SECRET: "auth-secret",
@@ -50,13 +50,13 @@ function workload(overrides: Partial<ComputeWorkload> = {}): ComputeWorkload {
       nodeId: NODE_ID,
       environment: "candidate-a",
       bundle: {
-        ref: `ghcr.io/cogni-dao/poly-bundle@sha256:${"c".repeat(64)}`,
-        source: { repository: "cogni-dao/poly", sha: SHA },
+        ref: `ghcr.io/cogni-dao/sample-node-bundle@sha256:${"c".repeat(64)}`,
+        source: { repository: "cogni-dao/sample-node", sha: SHA },
         artifacts: [{ name: "app", image: IMAGE }],
       },
       workload: {
-        name: "poly",
-        publicHost: "poly-test.cognidao.org",
+        name: "sample-node",
+        publicHost: "sample-node-test.cognidao.org",
         services: [
           {
             name: "app",
@@ -97,15 +97,15 @@ function status(
     desiredGeneration: generation,
     observedGeneration: generation,
     observedBundle: {
-      ref: `ghcr.io/cogni-dao/poly-bundle@sha256:${"c".repeat(64)}`,
-      source: { repository: "cogni-dao/poly", sha: SHA },
+      ref: `ghcr.io/cogni-dao/sample-node-bundle@sha256:${"c".repeat(64)}`,
+      source: { repository: "cogni-dao/sample-node", sha: SHA },
       artifacts: [{ name: "app", image: IMAGE }],
     },
     resource: {
       provider: "external",
       id: "lease-42",
       state,
-      endpoints: ["https://poly.example"],
+      endpoints: ["https://sample-node.example"],
     },
     recoveryCount: 0,
     conditions: [],
@@ -227,7 +227,7 @@ function lifecycle(): ComputeWorkloadLifecyclePort &
       provider: "external",
       leaseId: "lease-42",
       state: "active" as const,
-      endpoints: ["https://poly.example"],
+      endpoints: ["https://sample-node.example"],
     })),
     create: vi.fn(
       async (input: Parameters<ComputeWorkloadLifecyclePort["create"]>[0]) => {
@@ -236,7 +236,7 @@ function lifecycle(): ComputeWorkloadLifecyclePort &
           provider: "external",
           leaseId: "lease-42",
           state: "active" as const,
-          endpoints: ["https://poly.example"],
+          endpoints: ["https://sample-node.example"],
         };
         await input.onAllocated(output);
         return output;
@@ -247,7 +247,7 @@ function lifecycle(): ComputeWorkloadLifecyclePort &
       provider: "external",
       leaseId: "lease-42",
       state: "active" as const,
-      endpoints: ["https://poly.example"],
+      endpoints: ["https://sample-node.example"],
     })),
     delete: vi.fn(async () => {}),
     verifySource: vi.fn(async () => true),
@@ -318,11 +318,11 @@ describe("reconcileComputeWorkload", () => {
     await run(state, port, deps);
     expect(state.current.status?.phase).toBe("Ready");
     expect(deps.dns.reconcile).toHaveBeenCalledWith({
-      hostname: "poly-test.cognidao.org",
-      target: "poly.example",
+      hostname: "sample-node-test.cognidao.org",
+      target: "sample-node.example",
     });
     expect(port.verifySource).toHaveBeenCalledWith({
-      endpoints: ["https://poly-test.cognidao.org"],
+      endpoints: ["https://sample-node-test.cognidao.org"],
       expectedSourceSha: SHA,
     });
     expect(port.create).toHaveBeenCalledTimes(1);
@@ -353,13 +353,13 @@ describe("reconcileComputeWorkload", () => {
       provider: "external",
       leaseId: "42",
       state: "active",
-      endpoints: ["https://poly.example"],
+      endpoints: ["https://sample-node.example"],
     });
     port.observe.mockResolvedValueOnce({
       provider: "external",
       leaseId: "42",
       state: "active",
-      endpoints: ["https://poly.example"],
+      endpoints: ["https://sample-node.example"],
     });
     await run(state, port);
     await run(state, port);
@@ -433,13 +433,13 @@ describe("reconcileComputeWorkload", () => {
       provider: "external",
       leaseId: "42",
       state: "active",
-      endpoints: ["https://poly.example"],
+      endpoints: ["https://sample-node.example"],
     });
     firstPort.observe.mockResolvedValueOnce({
       provider: "external",
       leaseId: "42",
       state: "active",
-      endpoints: ["https://poly.example"],
+      endpoints: ["https://sample-node.example"],
     });
     await run(state, firstPort);
     expect(state.wallet).toBeUndefined();
@@ -539,8 +539,8 @@ describe("reconcileComputeWorkload", () => {
         status: {
           ...status(),
           dns: {
-            hostname: "poly-test.cognidao.org",
-            target: "poly.example",
+            hostname: "sample-node-test.cognidao.org",
+            target: "sample-node.example",
           },
         },
       })
@@ -548,8 +548,8 @@ describe("reconcileComputeWorkload", () => {
     const port = lifecycle();
     const deps = await run(state, port);
     expect(deps.dns.deleteOwned).toHaveBeenCalledWith({
-      hostname: "poly-test.cognidao.org",
-      expectedTarget: "poly.example",
+      hostname: "sample-node-test.cognidao.org",
+      expectedTarget: "sample-node.example",
     });
     expect(port.delete).toHaveBeenCalledWith({ resourceId: "lease-42" });
     // closeKnown is durably receipted first; the next level pass observes closed and finalizes.
@@ -578,24 +578,24 @@ describe("reconcileComputeWorkload", () => {
             ...declared.spec.bundle,
             source: {
               ...declared.spec.bundle.source,
-              repository: "cogni-dao/toks4",
+              repository: "cogni-dao/sample-node",
             },
             artifacts: [
               ...declared.spec.bundle.artifacts,
               {
                 name: "echo-sidecar",
-                image: IMAGE.replace("poly@", "echo-sidecar@"),
+                image: IMAGE.replace("sample-node@", "echo-sidecar@"),
               },
             ],
           },
           workload: {
             ...declared.spec.workload,
-            name: "toks4",
-            publicHost: "toks4-test.cognidao.org",
+            name: "sample-node",
+            publicHost: "sample-node-test.cognidao.org",
             services: [
               {
                 ...appService,
-                bindings: { SIDECAR_URL: "echo-sidecar" },
+                bindings: { ECHO_SIDECAR_URL: "echo-sidecar" },
                 secretRefs: [{ key: "AUTH_SECRET" }],
               },
               {
@@ -633,12 +633,12 @@ describe("reconcileComputeWorkload", () => {
     const spec = port.create.mock.calls[0]?.[0].spec;
     expect(spec.services[0]?.env).toMatchObject({
       HOST: "0.0.0.0",
-      SIDECAR_URL: "http://echo-sidecar:9100",
+      ECHO_SIDECAR_URL: "http://echo-sidecar:9100",
       AUTH_SECRET: secretValue,
-      NODE_NAME: "toks4",
+      NODE_NAME: "sample-node",
       COGNI_REPO_PATH: "/app",
-      NEXTAUTH_URL: "https://toks4-test.cognidao.org",
-      APP_BASE_URL: "https://toks4-test.cognidao.org",
+      NEXTAUTH_URL: "https://sample-node-test.cognidao.org",
+      APP_BASE_URL: "https://sample-node-test.cognidao.org",
       TEMPORAL_ADDRESS: "candidate.vm.example:7233",
       LITELLM_BASE_URL: "http://candidate.vm.example:4000",
     });

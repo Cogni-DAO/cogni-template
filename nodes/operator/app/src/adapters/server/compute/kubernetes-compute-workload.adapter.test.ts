@@ -45,10 +45,10 @@ function declaredWorkload(): ComputeWorkload {
       nodeId: "123e4567-e89b-12d3-a456-426614174001",
       environment: "candidate-a",
       bundle: {
-        ref: `ghcr.io/cogni-dao/poly-bundle@sha256:${"c".repeat(64)}`,
-        source: { repository: "cogni-dao/poly", sha: "a".repeat(40) },
+        ref: `ghcr.io/cogni-dao/sample-node-bundle@sha256:${"c".repeat(64)}`,
+        source: { repository: "cogni-dao/sample-node", sha: "a".repeat(40) },
         artifacts: [
-          { name: "app", image: `ghcr.io/cogni-dao/poly@${digest}` },
+          { name: "app", image: `ghcr.io/cogni-dao/sample-node@${digest}` },
           {
             name: "echo-sidecar",
             image: `ghcr.io/cogni-dao/echo-sidecar@${digest}`,
@@ -56,8 +56,8 @@ function declaredWorkload(): ComputeWorkload {
         ],
       },
       workload: {
-        name: "poly",
-        publicHost: "poly-test.cognidao.org",
+        name: "sample-node",
+        publicHost: "sample-node-test.cognidao.org",
         services: [
           {
             name: "app",
@@ -66,7 +66,7 @@ function declaredWorkload(): ComputeWorkload {
             args: ["server.mjs"],
             port: 3000,
             visibility: "public",
-            bindings: { SIDECAR_URL: "echo-sidecar" },
+            bindings: { ECHO_SIDECAR_URL: "echo-sidecar" },
             bindHost: "0.0.0.0",
             cpuUnits: 0.5,
             memoryMi: 512,
@@ -152,7 +152,7 @@ describe("ComputeWorkload Kubernetes contract", () => {
     const [roundTripped] = await state.list();
     expect(roundTripped?.spec.workload.services[0]).toMatchObject({
       args: ["server.mjs"],
-      bindings: { SIDECAR_URL: "echo-sidecar" },
+      bindings: { ECHO_SIDECAR_URL: "echo-sidecar" },
     });
   });
 

@@ -12,7 +12,7 @@ import {
 
 const scope = {
   nodeId: "node-one",
-  nodeSlug: "poly",
+  nodeSlug: "sample-node",
   environment: "candidate-a",
   serviceName: "app",
   sourceSha: "a".repeat(40),
@@ -36,7 +36,7 @@ describe("ComputeWorkloadSecretResolverAdapter", () => {
       resolver.resolve({ ...scope, refs: [{ key: "AUTH_SECRET" }] })
     ).resolves.toEqual({ AUTH_SECRET: "private" });
     expect(readNodeSecrets).toHaveBeenCalledWith({
-      nodeSlug: "poly",
+      nodeSlug: "sample-node",
       env: "candidate-a",
     });
   });
