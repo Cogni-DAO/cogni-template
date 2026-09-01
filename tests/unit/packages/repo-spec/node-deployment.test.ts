@@ -268,6 +268,7 @@ describe("node deployment repo-spec", () => {
     "health",
     "https://other.example/health",
     "//other.example/health",
+    "/health//nested",
     "/health?deep=true",
     "/health#fragment",
     "/../secret",

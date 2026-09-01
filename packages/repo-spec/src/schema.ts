@@ -315,7 +315,7 @@ const readinessHttpPathSchema = z
     "readiness HTTP path contains unsupported characters"
   )
   .superRefine((path, ctx) => {
-    if (path.startsWith("//")) {
+    if (path.includes("//")) {
       ctx.addIssue({
         code: "custom",
         message:
