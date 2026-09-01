@@ -149,7 +149,7 @@ path "cogni/metadata/${DEPLOY_ENV}/_system/*" { capabilities = ["deny"] }
 path "cogni/metadata/${DEPLOY_ENV}/_shared/*" { capabilities = ["deny"] }
 HCL
 bao_exec "write auth/kubernetes/role/${DEPLOY_ENV}-node-secrets-writer \
-  bound_service_account_names=operator-secrets-writer,operator-compute-workload-controller \
+  bound_service_account_names=operator-secrets-writer \
   bound_service_account_namespaces=cogni-${DEPLOY_ENV} \
   audience=cogni-openbao \
   policies=${DEPLOY_ENV}-node-secrets-writer ttl=1h" >/dev/null
