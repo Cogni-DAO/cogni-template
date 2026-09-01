@@ -56,6 +56,7 @@ Does NOT re-export packages with `node:` transitive dependencies.
 - ReceiptDelivery + ReceiptDeliveryTarget (catalog-routed operator→child attribution receipts)
 - IdentityAttestationRepositoryPort, IdentityAttestationSignerPort
 - TreasurySettlementPort, TreasurySettlementOutcome
+- ComputeWorkloadLifecyclePort, ComputeWorkloadStatePort, ComputeWorkload desired/status types
 - Types (ChargeReceiptParams, LlmCaller, BillingAccount, CreditLedgerEntry, etc.)
 
 ### `server.ts` — Server-only barrel
@@ -100,7 +101,7 @@ These tests are separate from edge tests for src/contracts/\*\*
 ## Dependencies
 
 - **Internal:** src/core
-- **External:** none
+- **External:** provider-neutral types from `@cogni/ai-tools`
 
 ## Change Protocol
 
