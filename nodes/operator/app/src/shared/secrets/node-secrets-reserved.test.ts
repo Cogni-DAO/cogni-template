@@ -3,6 +3,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  EXTERNAL_WORKLOAD_DENIED_KEYS,
+  isExternalWorkloadSecretKey,
   isNodeOwnedSecretKey,
   SUBSTRATE_RESERVED_KEYS,
 } from "./node-secrets-reserved.data";
@@ -20,6 +22,7 @@ describe("node-secrets reserved-key guard (gate 2)", () => {
     expect(isNodeOwnedSecretKey("DATABASE_URL")).toBe(false);
     expect(isNodeOwnedSecretKey("DOLTGRES_URL")).toBe(false);
     expect(isNodeOwnedSecretKey("AUTH_SECRET")).toBe(false);
+    expect(isNodeOwnedSecretKey("LITELLM_VIRTUAL_KEY")).toBe(false);
     expect(isNodeOwnedSecretKey("POSTGRES_ROOT_PASSWORD")).toBe(false);
   });
 
@@ -39,5 +42,13 @@ describe("node-secrets reserved-key guard (gate 2)", () => {
     // Denylist invariant: a key absent from the set is allowed by default.
     expect(SUBSTRATE_RESERVED_KEYS.has("X_OAUTH_CLIENT_ID")).toBe(false);
     expect(isNodeOwnedSecretKey("ANYTHING_NOT_RESERVED")).toBe(true);
+  });
+
+  it("allows only reviewed external workload secret references", () => {
+    expect(isExternalWorkloadSecretKey("LITELLM_VIRTUAL_KEY")).toBe(true);
+    expect(isExternalWorkloadSecretKey("DATABASE_URL")).toBe(true);
+    expect(isExternalWorkloadSecretKey("LITELLM_MASTER_KEY")).toBe(false);
+    expect(isExternalWorkloadSecretKey("UNREVIEWED_VENDOR_KEY")).toBe(false);
+    expect(EXTERNAL_WORKLOAD_DENIED_KEYS.has("LITELLM_MASTER_KEY")).toBe(true);
   });
 });

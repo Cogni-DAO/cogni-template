@@ -23,7 +23,7 @@ describe("resolveDeploymentTargets", () => {
       })
     ).toEqual({
       deployment: ["node-template", "toks4"],
-      substrate: ["node-template"],
+      substrate: ["node-template", "toks4"],
       external: ["toks4"],
       providers: {
         "node-template": "k3s",
@@ -63,7 +63,7 @@ describe("resolveDeploymentTargets", () => {
       })
     ).toEqual({
       deployment: ["toks4"],
-      substrate: [],
+      substrate: ["toks4"],
       external: ["toks4"],
       providers: { toks4: "akash" },
     });

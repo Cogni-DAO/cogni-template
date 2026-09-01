@@ -9,7 +9,12 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 cd "$REPO_ROOT"
 
 TMPROOT=$(mktemp -d -t reconcile-node-substrate.XXXXXX)
-trap 'rm -rf "$TMPROOT"' EXIT
+SERVER_PID=""
+cleanup() {
+  [ -z "$SERVER_PID" ] || kill "$SERVER_PID" 2>/dev/null || true
+  rm -rf "$TMPROOT"
+}
+trap cleanup EXIT
 
 FAKEBIN="$TMPROOT/bin"
 REMOTE_ROOT="$TMPROOT/remote"
@@ -51,7 +56,8 @@ put_secret() {
   printf '%s' "$value" > "$BAO_ROOT/cogni/candidate-a/${svc}/${key}"
 }
 
-put_secret node-template LITELLM_MASTER_KEY sk-cogni-existing
+put_secret operator LITELLM_MASTER_KEY sk-cogni-admin-sentinel
+put_secret operator LITELLM_VIRTUAL_KEY sk-cogni-node-sentinel
 put_secret node-template OPENROUTER_API_KEY sk-or-existing
 put_secret node-template POSTHOG_API_KEY phc_existing
 put_secret node-template POSTHOG_HOST https://us.i.posthog.com
@@ -83,6 +89,92 @@ put_secret operator DOLTGRES_PASSWORD doltgres-super-sentinel
 # carries JSON metachars ({,",}) on purpose so the base64 no-injection path is exercised.
 put_secret operator DOLT_CREDS_JWK '{"kty":"OKP","d":"jwk-secret-sentinel"}'
 put_secret operator DOLT_CREDS_KEYID dolt-mirror-keyid-sentinel
+
+# Exact-key LiteLLM fixture. It retains the key only in memory and records only
+# sanitized request metadata, proving create-then-update idempotency without
+# writing either credential to a file or log.
+FAKE_LITELLM_PORT_FILE="$TMPROOT/litellm-port"
+FAKE_LITELLM_LOG="$TMPROOT/litellm-sanitized.log"
+export FAKE_LITELLM_PORT_FILE FAKE_LITELLM_LOG
+python3 -u - <<'PY' &
+import hashlib, http.server, json, os, urllib.parse
+
+rows = {}
+log_path = os.environ["FAKE_LITELLM_LOG"]
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *_args):
+        pass
+
+    def auth_ok(self):
+        return self.headers.get("authorization") == "Bearer sk-cogni-admin-sentinel"
+
+    def send_status(self, status):
+        self.send_response(status)
+        self.send_header("content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(b"{}")
+
+    def do_GET(self):
+        if not self.auth_ok():
+            return self.send_status(401)
+        parsed = urllib.parse.urlparse(self.path)
+        alias = urllib.parse.parse_qs(parsed.query).get("key_alias", [""])[0]
+        if parsed.path != "/key/list":
+            return self.send_status(404)
+        found = [rows[alias]] if alias in rows else []
+        payload = json.dumps({"keys": found, "total_count": len(found)}).encode()
+        self.send_response(200)
+        self.send_header("content-type", "application/json")
+        self.send_header("content-length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def do_POST(self):
+        if not self.auth_ok():
+            return self.send_status(401)
+        length = int(self.headers.get("content-length", "0"))
+        body = json.loads(self.rfile.read(length))
+        key = body.pop("key", "")
+        if self.path == "/key/generate":
+            alias = body["key_alias"]
+            # Deliberate one-time policy drift proves PATCH-style convergence.
+            rows[alias] = {
+                **body,
+                "token": hashlib.sha256(key.encode()).hexdigest(),
+                "max_budget": 1,
+                "allowed_routes": ["llm_api_routes"],
+            }
+            payload = json.dumps({"key": key}).encode()
+        elif self.path == "/key/update":
+            expected_hash = hashlib.sha256(key.encode()).hexdigest()
+            matches = [row for row in rows.values() if row["token"] == expected_hash]
+            if not matches:
+                return self.send_status(404)
+            matches[0].update(body)
+            payload = b"{}"
+        else:
+            return self.send_status(404)
+        with open(log_path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps({"path": self.path, "body": body}, sort_keys=True) + "\n")
+        self.send_response(200)
+        self.send_header("content-type", "application/json")
+        self.send_header("content-length", str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+with open(os.environ["FAKE_LITELLM_PORT_FILE"], "w", encoding="utf-8") as handle:
+    handle.write(str(server.server_port))
+server.serve_forever()
+PY
+SERVER_PID=$!
+for _ in $(seq 1 100); do
+  [ -s "$FAKE_LITELLM_PORT_FILE" ] && break
+  sleep 0.05
+done
+[ -s "$FAKE_LITELLM_PORT_FILE" ] || { echo "fake LiteLLM did not start" >&2; exit 1; }
+FAKE_LITELLM_PORT="$(cat "$FAKE_LITELLM_PORT_FILE")"
 
 cat > "$FAKEBIN/ssh" <<'EOF'
 #!/usr/bin/env bash
@@ -243,10 +335,12 @@ env \
   FAKE_REMOTE_PATH="$FAKEBIN" \
   FAKE_BAO_ROOT="$BAO_ROOT" \
   FAKE_LEGACY_EXTERNAL_SECRET_TARGET="operator-env-secrets" \
+  LITELLM_ADMIN_BASE_URL="http://127.0.0.1:${FAKE_LITELLM_PORT}" \
   SUBSTRATE_RECONCILE_SUMMARY_FILE="$TMPROOT/summary.json" \
   bash scripts/ci/reconcile-node-substrate.sh candidate-a operator > "$TMPROOT/out.txt"
 
 grep -q "substrate ready inputs reconciled for operator" "$TMPROOT/out.txt"
+grep -q "LiteLLM node key created: candidate-a/operator" "$TMPROOT/out.txt"
 grep -q "deleted legacy ExternalSecret env-secrets targeting operator-env-secrets" "$TMPROOT/out.txt"
 grep -q -- "-n cogni-candidate-a delete externalsecret env-secrets" "$REMOTE_ROOT/kubectl.log"
 grep -q -- "-n cogni-candidate-a annotate externalsecret operator-env-secrets force-sync=" "$REMOTE_ROOT/kubectl.log"
@@ -258,7 +352,7 @@ grep -q -- "-n cogni-candidate-a get secret operator-env-secrets" "$REMOTE_ROOT/
 # operator's bank carries the env-wide DOLTGRES superuser SSOT in addition to its
 # per-node DB creds; reconcile must leave all three untouched.
 after_keys="$(cd "$BAO_ROOT/cogni/candidate-a/operator" && printf '%s\n' * | sort | paste -sd, -)"
-if [ "$after_keys" != "APP_DB_PASSWORD,APP_DB_SERVICE_PASSWORD,DOLTGRES_PASSWORD,DOLT_CREDS_JWK,DOLT_CREDS_KEYID" ]; then
+if [ "$after_keys" != "APP_DB_PASSWORD,APP_DB_SERVICE_PASSWORD,DOLTGRES_PASSWORD,DOLT_CREDS_JWK,DOLT_CREDS_KEYID,LITELLM_MASTER_KEY,LITELLM_VIRTUAL_KEY" ]; then
   echo "reconcile must perform ZERO OpenBao writes; operator bank changed to: $after_keys" >&2
   exit 1
 fi
@@ -306,6 +400,7 @@ env \
   FAKE_REMOTE_PATH="$FAKEBIN" \
   FAKE_BAO_ROOT="$BAO_ROOT" \
   FAKE_LEGACY_EXTERNAL_SECRET_TARGET="operator-env-secrets" \
+  LITELLM_ADMIN_BASE_URL="http://127.0.0.1:${FAKE_LITELLM_PORT}" \
   bash scripts/ci/reconcile-node-substrate.sh candidate-a operator > "$TMPROOT/rerun.txt"
 recreate_after="$(grep -c 'up -d --force-recreate doltgres' "$REMOTE_ROOT/docker.log" || true)"
 if [ "$recreate_before" != "$recreate_after" ]; then
@@ -313,6 +408,22 @@ if [ "$recreate_before" != "$recreate_after" ]; then
   exit 1
 fi
 grep -q 'substrate ready inputs reconciled for operator' "$TMPROOT/rerun.txt"
+grep -q 'LiteLLM node key unchanged: candidate-a/operator' "$TMPROOT/rerun.txt"
+python3 - "$FAKE_LITELLM_LOG" <<'PY'
+import json, sys
+rows = [json.loads(line) for line in open(sys.argv[1], encoding="utf-8")]
+assert [row["path"] for row in rows] == ["/key/generate", "/key/update"], rows
+for row in rows:
+    if row["path"] == "/key/generate":
+        assert row["body"]["key_alias"].startswith("cogni:candidate-a:"), row
+        assert row["body"]["key_type"] == "llm_api", row
+    assert row["body"]["max_budget"] == 25, row
+    if "budget_duration" in row["body"]:
+        assert row["body"]["budget_duration"] == "30d", row
+    if "metadata" in row["body"]:
+        assert row["body"]["metadata"]["node_id"], row
+    assert "key" not in row["body"], row
+PY
 
 # Born-observable (bug.5041): the Alloy node-label config is staged to the VM and
 # the shared hash-gated restart helper runs — on EVERY substrate-readiness pass,
@@ -324,7 +435,7 @@ grep -q 'restart alloy' "$REMOTE_ROOT/docker.log" \
 
 # Per-node DB passwords + the doltgres superuser transit the VM-local SSH/docker env
 # (by design), but must NEVER reach CI stdout. The db-reader token must not leak either.
-if grep -q 'sk-or-existing\|pernode-app-pw-sentinel\|pernode-svc-pw-sentinel\|doltgres-super-sentinel\|dolt-token\|writer-token\|jwk-secret-sentinel' "$TMPROOT/out.txt"; then
+if grep -q 'sk-or-existing\|sk-cogni-admin-sentinel\|sk-cogni-node-sentinel\|pernode-app-pw-sentinel\|pernode-svc-pw-sentinel\|doltgres-super-sentinel\|dolt-token\|writer-token\|jwk-secret-sentinel' "$TMPROOT/out.txt"; then
   echo "secret value leaked to output" >&2
   exit 1
 fi
@@ -340,7 +451,7 @@ assert s["target"] == "operator", s["target"]
 assert s["target_type"] == "node", s["target_type"]
 assert s["failed_row_count"] == 0, s["failed_rows"]
 rows = {r["row"] for r in s["rows"]}
-expected = {"reader_token", "db_creds", "externalsecret", "externalsecret_refresh", "caddyfile", "remote_reconcile"}
+expected = {"reader_token", "litellm_node_key", "db_creds", "externalsecret", "externalsecret_refresh", "caddyfile", "remote_reconcile"}
 assert expected <= rows, (expected - rows, rows)
 PY
 if grep -qE 'pernode-app-pw-sentinel|pernode-svc-pw-sentinel|writer-token' "$TMPROOT/summary.json"; then
@@ -360,16 +471,75 @@ env \
   FAKE_REMOTE_ROOT="$REMOTE_ROOT" \
   FAKE_REMOTE_PATH="$FAKEBIN" \
   FAKE_BAO_ROOT="$BAO_ROOT" \
+  LITELLM_ADMIN_BASE_URL="http://127.0.0.1:${FAKE_LITELLM_PORT}" \
   bash scripts/ci/reconcile-node-substrate.sh candidate-a operator > "$TMPROOT/relative-catalog-root.out"
 grep -q "substrate ready inputs reconciled for operator" "$TMPROOT/relative-catalog-root.out"
+
+# Fixture catalogs must live at <tree>/infra/catalog: image-tags.sh derives its
+# spec root as <catalog>/../.. and reads the in-repo operator identity from
+# <tree>/nodes/operator/.cogni/repo-spec.yaml (REPO_SPEC_IS_IDENTITY_SSOT).
+# Minimal tree — catalog copy + a repo-spec carrying only node_id; never a
+# symlink of the live nodes/ directory (yq -i on the catalog must not be able
+# to touch real files).
+make_fixture_catalog() {
+  local tree="$1"
+  mkdir -p "$tree/infra" "$tree/nodes/operator/.cogni"
+  cp -r infra/catalog "$tree/infra/catalog"
+  yq '{"node_id": .node_id}' nodes/operator/.cogni/repo-spec.yaml \
+    > "$tree/nodes/operator/.cogni/repo-spec.yaml"
+}
+
+# External placement runs the exact same secret/DB/Alloy substrate lifecycle,
+# but must not stage or reconcile the VM-local Caddy app route.
+AKASH_CATALOG="$TMPROOT/akash-tree/infra/catalog"
+make_fixture_catalog "$TMPROOT/akash-tree"
+yq -i '.deployment_provider = {"candidate-a": "akash"}' "$AKASH_CATALOG/operator.yaml"
+caddy_before="$(grep -c 'caddy' "$REMOTE_ROOT/docker.log" || true)"
+db_provision_before="$(grep -c ' db-provision' "$REMOTE_ROOT/docker.log" || true)"
+env \
+  VM_HOST=fake \
+  DOMAIN=test.cognidao.org \
+  SSH_OPTS="-i fake-key -o StrictHostKeyChecking=no" \
+  APP_SOURCE_DIR="$TMPROOT/app-src" \
+  COGNI_CATALOG_ROOT="$AKASH_CATALOG" \
+  DEPLOYMENT_PROVIDER=akash \
+  RECONCILE_NODE_SUBSTRATE_SSH_BIN="$FAKEBIN/ssh" \
+  RECONCILE_NODE_SUBSTRATE_SCP_BIN="$FAKEBIN/scp" \
+  FAKE_REMOTE_ROOT="$REMOTE_ROOT" \
+  FAKE_REMOTE_PATH="$FAKEBIN" \
+  FAKE_BAO_ROOT="$BAO_ROOT" \
+  LITELLM_ADMIN_BASE_URL="http://127.0.0.1:${FAKE_LITELLM_PORT}" \
+  SUBSTRATE_RECONCILE_SUMMARY_FILE="$TMPROOT/akash-summary.json" \
+  bash scripts/ci/reconcile-node-substrate.sh candidate-a operator > "$TMPROOT/akash.out"
+caddy_after="$(grep -c 'caddy' "$REMOTE_ROOT/docker.log" || true)"
+db_provision_after="$(grep -c ' db-provision' "$REMOTE_ROOT/docker.log" || true)"
+[ "$caddy_before" = "$caddy_after" ] \
+  || { echo "Akash placement unexpectedly reconciled the k3s Caddy route" >&2; exit 1; }
+[ "$db_provision_after" -gt "$db_provision_before" ] \
+  || { echo "Akash placement skipped common DB provision" >&2; exit 1; }
+# Provider attribution lands in the structured summary (mark_row), not stdout:
+# remote_reconcile ran under provider=akash and the edge Caddy route was
+# skipped as provider-owned.
+python3 - "$TMPROOT/akash-summary.json" <<'PY'
+import json, sys
+s = json.load(open(sys.argv[1]))
+assert s["status"] == "success", s["status"]
+rows = {r["row"]: r for r in s["rows"]}
+remote = rows["remote_reconcile"]
+assert remote["state"] == "updated", remote
+assert "provider=akash; shared DB inventory and provisioners reconciled" in remote.get("message", ""), remote
+caddy = rows["caddyfile"]
+assert caddy["state"] == "skipped", caddy
+assert "provider=akash" in caddy.get("message", ""), caddy
+PY
 
 # task.5017 — deploy ⊆ provisioned: reconciling a node into an env outside its
 # `envs:` node-set must fail loud BEFORE any substrate mutation. Every real catalog node
 # is now all-envs (node-template opted into production in story.5009), so this guard is
 # exercised against a FIXTURE catalog where node-template is restricted to [candidate-a] —
 # testing the enforcement logic with controlled input, decoupled from the live node-set.
-RESTRICTED_CATALOG="$TMPROOT/restricted-catalog"
-cp -r infra/catalog "$RESTRICTED_CATALOG"
+RESTRICTED_CATALOG="$TMPROOT/restricted-tree/infra/catalog"
+make_fixture_catalog "$TMPROOT/restricted-tree"
 yq -i '.envs = ["candidate-a"]' "$RESTRICTED_CATALOG/node-template.yaml"
 set +e
 env \

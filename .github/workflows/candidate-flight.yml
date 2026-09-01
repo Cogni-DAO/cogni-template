@@ -551,6 +551,8 @@ jobs:
       cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: candidate-a
+    env:
+      DEPLOYMENT_PROVIDER: ${{ fromJSON(needs.decide.outputs.deployment_provider_by_target_json)[matrix.node] }}
     steps:
       - name: Checkout workflow source
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -645,6 +647,8 @@ jobs:
       cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: candidate-a
+    env:
+      DEPLOYMENT_PROVIDER: ${{ fromJSON(needs.decide.outputs.deployment_provider_by_target_json)[matrix.node] }}
     steps:
       - name: Checkout workflow source
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4

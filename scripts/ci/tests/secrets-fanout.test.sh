@@ -142,10 +142,14 @@ assert "$r" "PRIVY_USER_WALLETS_APP_ID (service: poly) excluded from non-poly no
 r=0; [[ "$(val_for poly PRIVY_USER_WALLETS_APP_ID)" == "privy-uw-id" ]] || r=1
 assert "$r" "PRIVY_USER_WALLETS_APP_ID reaches poly"
 
-# 6. _shared key passes through identically (same LiteLLM master key all nodes).
+# 6. Existing k3s compatibility retains the shared master fanout while each node
+#    also receives its own budgeted virtual key through source:agent materialize.
+nt_llm_key=$(val_for node-template LITELLM_VIRTUAL_KEY); cn_llm_key=$(val_for poly LITELLM_VIRTUAL_KEY)
+r=0; [[ -n "$nt_llm_key" && -n "$cn_llm_key" && "$nt_llm_key" != "$cn_llm_key" ]] || r=1
+assert "$r" "LITELLM_VIRTUAL_KEY distinct per node"
 r=0; [[ "$(val_for node-template LITELLM_MASTER_KEY)" == "sk-cogni-shared-master" \
    && "$(val_for poly LITELLM_MASTER_KEY)" == "sk-cogni-shared-master" ]] || r=1
-assert "$r" "LITELLM_MASTER_KEY shared value across nodes"
+assert "$r" "LITELLM_MASTER_KEY compatibility value remains shared across k3s nodes"
 
 # 6b. GH_WEBHOOK_SECRET single-App-plane (bug.5012): ONE GitHub App signs all
 #     webhooks for ONE receiver (operator) — the fan-out must pass ONE value

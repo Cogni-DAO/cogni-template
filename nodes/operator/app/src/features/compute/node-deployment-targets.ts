@@ -38,8 +38,11 @@ export function resolveDeploymentTargets(input: {
     providers[target] = provider;
     if (row.type !== "node") continue;
     deployment.push(target);
+    // Every node needs the existing common substrate (generated OpenBao
+    // values plus shared DB/state provisioning), regardless of where its app
+    // containers run. Placement only chooses the app runtime.
+    substrate.push(target);
     if (provider === "akash") external.push(target);
-    else substrate.push(target);
   }
 
   return { deployment, substrate, external, providers };

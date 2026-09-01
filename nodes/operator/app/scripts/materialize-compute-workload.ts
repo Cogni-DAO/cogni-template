@@ -26,6 +26,7 @@ import { parseRepoSpec, resolveNodeArtifactBundle } from "@cogni/repo-spec";
 import { parse, stringify } from "yaml";
 
 import { buildComputeWorkloadManifest } from "@/features/compute/compute-workload-manifest";
+import { buildComputeSecretResources } from "@/features/compute/compute-workload-secret-manifests";
 import {
   buildNodeBundleTagRef,
   NODE_BUNDLE_PAYLOAD_FILE,
@@ -116,17 +117,35 @@ async function main(): Promise<void> {
     bundle,
     publicHost,
   });
+  const secretResources = buildComputeSecretResources({
+    slug: catalogIdentity.slug,
+    environment,
+    secretRefs: bundle.services.flatMap(
+      (service) => service.service.secretRefs
+    ),
+  });
   const kustomization = {
     apiVersion: "kustomize.config.k8s.io/v1beta1",
     kind: "Kustomization",
     namespace: `cogni-${environment}`,
-    resources: ["compute-workload.yaml"],
+    resources: [
+      "compute-workload.yaml",
+      ...secretResources.map((resource) => resource.file),
+    ],
   };
 
   await mkdir(outputDir, { recursive: true });
   await writeAtomically(
     `${outputDir}/compute-workload.yaml`,
     stringify(manifest, { lineWidth: 0 })
+  );
+  await Promise.all(
+    secretResources.map(({ file, manifest: resource }) =>
+      writeAtomically(
+        `${outputDir}/${file}`,
+        stringify(resource, { lineWidth: 0 })
+      )
+    )
   );
   await writeAtomically(
     `${outputDir}/kustomization.yaml`,
