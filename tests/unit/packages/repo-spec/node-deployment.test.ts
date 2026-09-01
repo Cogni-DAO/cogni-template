@@ -166,11 +166,6 @@ describe("node deployment repo-spec", () => {
       message: /exactly one public service/,
     },
     {
-      name: "state infrastructure sidecar",
-      services: [APP, { ...APP, name: "redis", visibility: "private" }],
-      message: /state infrastructure/,
-    },
-    {
       name: "loopback bind",
       services: [{ ...APP, bind_host: "127.0.0.1" }],
       message: /Invalid repo-spec structure/,
@@ -188,5 +183,34 @@ describe("node deployment repo-spec", () => {
         deployment: { services },
       })
     ).toThrow(message);
+  });
+
+  it("does not infer statefulness from a generic service name", () => {
+    expect(() =>
+      parseRepoSpec({
+        node_id: "00000000-0000-4000-8000-000000000001",
+        governance: {},
+        deployment: {
+          services: [APP, { ...APP, name: "redis", visibility: "private" }],
+        },
+      })
+    ).not.toThrow();
+  });
+
+  it("rejects unsupported persistent-state fields structurally", () => {
+    expect(() =>
+      parseRepoSpec({
+        node_id: "00000000-0000-4000-8000-000000000001",
+        governance: {},
+        deployment: {
+          services: [
+            {
+              ...APP,
+              persistent_volume: { size_mi: 1024 },
+            },
+          ],
+        },
+      })
+    ).toThrow(/Invalid repo-spec structure/);
   });
 });

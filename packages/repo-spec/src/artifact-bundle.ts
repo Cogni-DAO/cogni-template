@@ -111,6 +111,12 @@ export interface ResolvedNodeArtifactBundle {
   readonly services: readonly ResolvedNodeServiceArtifact[];
 }
 
+/** Authoritative identity selected by the flight, never trusted from the bundle. */
+export interface ExpectedNodeArtifactBundleIdentity {
+  readonly sourceSha: string;
+  readonly repository: string;
+}
+
 export function parseNodeArtifactBundle(input: unknown): NodeArtifactBundle {
   const result = nodeArtifactBundleSchema.safeParse(input);
   if (!result.success) {
@@ -188,9 +194,20 @@ export function buildNodeArtifactBundle(input: {
  */
 export function resolveNodeArtifactBundle(
   spec: RepoSpec,
-  input: unknown
+  input: unknown,
+  expected: ExpectedNodeArtifactBundleIdentity
 ): ResolvedNodeArtifactBundle {
   const bundle = parseNodeArtifactBundle(input);
+  if (bundle.source_sha !== expected.sourceSha) {
+    throw new Error(
+      `[artifact-bundle] Source SHA mismatch: expected ${expected.sourceSha}, received ${bundle.source_sha}`
+    );
+  }
+  if (bundle.repository !== expected.repository) {
+    throw new Error(
+      `[artifact-bundle] Repository mismatch: expected ${expected.repository}, received ${bundle.repository}`
+    );
+  }
   const nodeId = extractNodeId(spec);
   if (bundle.node_id !== nodeId) {
     throw new Error(

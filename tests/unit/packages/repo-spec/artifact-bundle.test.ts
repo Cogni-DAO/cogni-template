@@ -63,7 +63,10 @@ describe("node artifact bundle", () => {
       ],
     });
 
-    const resolved = resolveNodeArtifactBundle(spec, bundle);
+    const resolved = resolveNodeArtifactBundle(spec, bundle, {
+      sourceSha: SOURCE_SHA,
+      repository: "example/node",
+    });
     expect(resolved).toMatchObject({
       nodeId: TEST_NODE_IDS.default,
       sourceSha: SOURCE_SHA,
@@ -130,27 +133,63 @@ describe("node artifact bundle", () => {
     });
 
     expect(() =>
-      resolveNodeArtifactBundle(spec, {
-        schema_version: 1,
-        node_id: TEST_NODE_IDS.default,
-        source_sha: SOURCE_SHA,
-        repository: "example/node",
-        services: [
-          {
-            service: "app",
-            artifact: "app",
-            source_sha: SOURCE_SHA,
-            image: APP_IMAGE,
-          },
-          {
-            service: "worker",
-            artifact: "app",
-            source_sha: SOURCE_SHA,
-            image: TRADER_IMAGE,
-          },
-        ],
-      })
+      resolveNodeArtifactBundle(
+        spec,
+        {
+          schema_version: 1,
+          node_id: TEST_NODE_IDS.default,
+          source_sha: SOURCE_SHA,
+          repository: "example/node",
+          services: [
+            {
+              service: "app",
+              artifact: "app",
+              source_sha: SOURCE_SHA,
+              image: APP_IMAGE,
+            },
+            {
+              service: "worker",
+              artifact: "app",
+              source_sha: SOURCE_SHA,
+              image: TRADER_IMAGE,
+            },
+          ],
+        },
+        { sourceSha: SOURCE_SHA, repository: "example/node" }
+      )
     ).toThrow(/One artifact identity must resolve to one image digest/);
+  });
+
+  it.each([
+    {
+      name: "stale source SHA",
+      expected: { sourceSha: "b".repeat(40), repository: "example/node" },
+      message: /Source SHA mismatch/,
+    },
+    {
+      name: "wrong repository",
+      expected: { sourceSha: SOURCE_SHA, repository: "example/other" },
+      message: /Repository mismatch/,
+    },
+  ])("rejects a complete bundle with $name", ({ expected, message }) => {
+    const spec = multiServiceSpec();
+    const bundle = buildNodeArtifactBundle({
+      spec,
+      sourceSha: SOURCE_SHA,
+      repository: "example/node",
+      artifacts: [
+        { artifact: "app", sourceSha: SOURCE_SHA, image: APP_IMAGE },
+        {
+          artifact: "paper-trader",
+          sourceSha: SOURCE_SHA,
+          image: TRADER_IMAGE,
+        },
+      ],
+    });
+
+    expect(() => resolveNodeArtifactBundle(spec, bundle, expected)).toThrow(
+      message
+    );
   });
 
   it("supports the omission default as one app artifact", () => {
