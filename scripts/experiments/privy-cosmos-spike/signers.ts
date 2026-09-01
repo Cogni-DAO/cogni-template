@@ -1,17 +1,14 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-// SPDX-FileCopyrightText: 2026 Cogni-DAO
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
  * Module: `@scripts/experiments/privy-cosmos-spike/signers`
- * Purpose: Raw-digest signer abstraction for the task.5059 Privy/Cosmos spike — a local
- *   in-memory secp256k1 signer (proves the pipeline today, keyless) and a Privy
- *   `raw_sign` adapter (the ONLY piece blocked on Privy credentials).
- * Scope: Spike-only. Both signers emit 64-byte low-s `r||s` signatures over a 32-byte
- *   sha256 digest, which is exactly what Cosmos SIGN_MODE_DIRECT needs.
+ * Purpose: Raw-digest signer abstraction for the task.5059 Privy/Cosmos spike — a local in-memory secp256k1 signer (keyless pipeline proof) and a Privy `raw_sign` adapter, both emitting 64-byte low-s r||s signatures over a sha256 digest.
+ * Scope: Spike-only signer seam consumed by main.ts. Does not build transactions or talk to any chain RPC.
  * Invariants: KEY_NEVER_IN_APP — local key is throwaway + in-memory only; Privy key never leaves Privy.
- * Side-effects: IO (Privy REST API for the privy signer), process.env
+ * Side-effects: IO (Privy REST API for the privy signer), process.env, randomness (local throwaway key)
  * Links: work item task.5059 (story.5017), scripts/experiments/privy-cosmos-signer-spike.ts
- * @internal — spike code, not for production use
+ * @internal
  */
 
 import { Random, Secp256k1 } from "@cosmjs/crypto";

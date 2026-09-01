@@ -1,17 +1,15 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-// SPDX-FileCopyrightText: 2026 Cogni-DAO
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
  * Module: `@scripts/experiments/privy-cosmos-spike/main`
- * Purpose: task.5059 spike — prove the full Akash/Cosmos tx pipeline (pubkey -> akash1
- *   address -> live akashnet-2 account/balance query -> SIGN_MODE_DIRECT SignDoc ->
- *   digest-routed signature -> TxRaw) with signing behind a swappable RawDigestSigner,
- *   so the ONLY missing piece for an operator-signed Akash wallet is Privy credentials.
- * Scope: Runnable spike. Default is keyless + read-only (throwaway local key, no broadcast).
+ * Purpose: task.5059 spike — proves the full Akash/Cosmos tx pipeline (pubkey -> akash1 address -> live akashnet-2 query -> SIGN_MODE_DIRECT SignDoc -> digest-routed signature -> TxRaw) behind a swappable RawDigestSigner.
+ * Scope: Runnable spike; default is keyless + read-only (throwaway local key). Does not broadcast unless SPIKE_BROADCAST=1 and does not persist key material.
  * Invariants: no broadcast unless SPIKE_BROADCAST=1; no key material persisted.
- * Side-effects: IO (akashnet-2 RPC; Privy API when SPIKE_SIGNER=privy), process.env, stdout
+ * Side-effects: IO (akashnet-2 RPC; Privy API when SPIKE_SIGNER=privy), process.env, randomness (throwaway local key)
  * Links: work item task.5059 (story.5017), scripts/experiments/privy-cosmos-signer-spike.ts
- * @internal — spike code, not for production use
+ * Notes: Privy leg proven 2026-09-01 on the poly_proto throwaway app (wallet create -> raw_sign -> signature verifies; recorded on task.5059).
+ * @internal
  *
  * Usage:
  *   SPIKE_SIGNER=local pnpm tsx scripts/experiments/privy-cosmos-signer-spike.ts   # keyless proof (today)
