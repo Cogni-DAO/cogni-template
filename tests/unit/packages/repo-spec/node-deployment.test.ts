@@ -36,6 +36,7 @@ describe("node deployment repo-spec", () => {
         },
         port: 3200,
         visibility: "public",
+        runtimeProfile: "cogni-node-app-v1",
         bindings: {},
         secretRefs: [],
         bindHost: "0.0.0.0",
@@ -194,6 +195,42 @@ describe("node deployment repo-spec", () => {
     expect(extractNodeServices(spec)[0]?.secretRefs).toEqual([
       { key: "APP_TOKEN" },
     ]);
+  });
+
+  it("keeps explicit services generic unless they opt into app compatibility", () => {
+    expect(
+      extractNodeServices(
+        buildTestRepoSpec({ deployment: { services: [APP] } })
+      )[0]
+    ).not.toHaveProperty("runtimeProfile");
+
+    const profiled = buildTestRepoSpec({
+      deployment: {
+        services: [{ ...APP, runtime_profile: "cogni-node-app-v1" }],
+      },
+    });
+    expect(extractNodeServices(profiled)[0]?.runtimeProfile).toBe(
+      "cogni-node-app-v1"
+    );
+  });
+
+  it("rejects app compatibility on a private service", () => {
+    expect(() =>
+      buildTestRepoSpec({
+        deployment: {
+          services: [
+            APP,
+            {
+              ...APP,
+              name: "worker",
+              artifact: { name: "worker" },
+              visibility: "private",
+              runtime_profile: "cogni-node-app-v1",
+            },
+          ],
+        },
+      })
+    ).toThrow(/runtime_profile requires the public service/);
   });
 
   it.each([
