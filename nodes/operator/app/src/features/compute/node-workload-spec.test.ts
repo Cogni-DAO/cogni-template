@@ -22,10 +22,11 @@ describe("buildNodeWorkloadSpec", () => {
     expect(app?.image).toBe(BASE_INPUT.image);
     expect(app?.command).toBeUndefined();
     expect(app?.expose).toEqual([{ port: 3200, as: 80, global: true }]);
+    // PRODUCTION_DEFAULT_SIZING — 2 vCPU / 2Gi proven live on toks4 (task.5054).
     expect(app).toMatchObject({
-      cpuUnits: 0.5,
-      memoryMi: 1024,
-      storageMi: 2048,
+      cpuUnits: 2,
+      memoryMi: 2048,
+      storageMi: 4096,
     });
   });
 
@@ -86,12 +87,12 @@ describe("buildNodeWorkloadSpec", () => {
   it("resources override applies", () => {
     const spec = buildNodeWorkloadSpec({
       ...BASE_INPUT,
-      resources: { cpuUnits: 1, memoryMi: 2048, storageMi: 4096 },
+      resources: { cpuUnits: 1, memoryMi: 1024, storageMi: 2048 },
     });
     expect(spec.services[0]).toMatchObject({
       cpuUnits: 1,
-      memoryMi: 2048,
-      storageMi: 4096,
+      memoryMi: 1024,
+      storageMi: 2048,
     });
   });
 });

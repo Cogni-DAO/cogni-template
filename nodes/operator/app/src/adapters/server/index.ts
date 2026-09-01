@@ -87,6 +87,12 @@ export {
   CherryComputeError,
   type CherryComputeErrorCode,
 } from "./compute/cherry-compute.adapter";
+// Budget-capped LiteLLM virtual key for node workloads (task.5054, SCOPED_CREDS_ONLY)
+export {
+  type MintNodeVirtualKeyDeps,
+  type MintNodeVirtualKeyInput,
+  mintNodeVirtualKey,
+} from "./compute/litellm-virtual-key.adapter";
 // Connection broker adapter
 export {
   ConnectionDecryptionError,

@@ -8,7 +8,8 @@
  *   app dials the env VM's postgres/doltgres/redis/temporal/litellm and the cluster
  *   scheduler-worker NodePort — the same endpoints the k8s ExternalName services encode.
  * Scope: Pure spec construction. Does NOT render provider manifests (adapter's job), read
- *   OpenBao, or persist anything. The caller supplies the node's real connection env.
+ *   OpenBao, or persist anything. The deploy route sources the node's real connection env
+ *   server-side (workload-env-source.ts) and passes it in (task.5054).
  * Invariants:
  *   - APP_ONLY_NO_INFRA_ON_DECENTRALIZED_COMPUTE (Derek, 2026-08-31): the workload is the
  *     node-app container ONLY. Databases, Temporal, Redis, LiteLLM stay on the existing
@@ -20,9 +21,8 @@
  *   - LOG_PUMP_IS_V000_EXCEPTION: piping app stdout through an inline Loki pusher is the
  *     zero-image-change stopgap; the proper env-gated transport in node-template is v0
  *     scope. Labels mirror Alloy ({env, service:"app", node:<nodeId>}) so the operator
- *     observability proxy reads decentralized-compute lines unmodified. NOTE: the deploy
- *     route does not wire `logPush` yet (operator-admin drivers do); route wiring lands
- *     with server-side env sourcing (v0).
+ *     observability proxy reads decentralized-compute lines unmodified. The deploy
+ *     route wires `logPush` from cogni/<env>/node-template Loki push creds (task.5054).
  * Side-effects: none (pure)
  * Links: ProvisionSpec (@cogni/ai-tools), AkashComputeAdapter (adapters/server/compute),
  *   infra/k8s/overlays/<env>/<node>/ (the ExternalName wiring this mirrors),
@@ -59,7 +59,7 @@ export interface NodeWorkloadInput {
    * LITELLM_* etc.). SCOPED_CREDS_ONLY — node-scoped and budget-capped values only.
    */
   readonly env: Readonly<Record<string, string>>;
-  /** Workload sizing; defaults suit a standard node (~$2/mo at observed bids). */
+  /** Workload sizing; default is the production sizing proven live (2 vCPU / 2Gi). */
   readonly resources?: {
     readonly cpuUnits: number;
     readonly memoryMi: number;
@@ -118,10 +118,13 @@ export function buildNodeWorkloadSpec(input: NodeWorkloadInput): ProvisionSpec {
     appEnv.LOKI_PUSH_NODE = input.nodeId;
   }
 
+  // PRODUCTION_DEFAULT_SIZING (task.5054, DEV2 finding on task.5049): 0.5 vCPU /
+  // 1024Mi gave ~2s /readyz on a real user endpoint — born-on-Akash nodes are
+  // production sites. 2 vCPU / 2048Mi / 4096Mi is the sizing proven live on toks4.
   const resources = input.resources ?? {
-    cpuUnits: 0.5,
-    memoryMi: 1024,
-    storageMi: 2048,
+    cpuUnits: 2,
+    memoryMi: 2048,
+    storageMi: 4096,
   };
 
   return {

@@ -19,6 +19,7 @@ function makeAdapter(fetchImpl: typeof fetch): OpenBaoSecretsAdapter {
     role: "candidate-a-node-secrets-writer",
     readServiceAccountToken: async () => "projected-sa-jwt",
     fetchImpl,
+    retryDelayMs: 0, // no backoff sleeps in unit tests
   });
 }
 
@@ -114,5 +115,109 @@ describe("OpenBaoSecretsAdapter", () => {
         op: "set",
       })
     ).rejects.toMatchObject({ code: "openbao_login_failed", status: 403 });
+  });
+});
+
+describe("OpenBaoSecretsAdapter.readServiceSecrets (task.5054)", () => {
+  it("logs in then GETs the full KV-v2 bucket (string values only)", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (url, init) => {
+      const u = String(url);
+      if (u.endsWith("/auth/kubernetes/login")) {
+        return jsonResponse({ auth: { client_token: "s.client" } });
+      }
+      expect(u).toBe(`${ADDR}/v1/cogni/data/candidate-a/toks4`);
+      expect(init?.method).toBe("GET");
+      expect(init?.headers).toMatchObject({ "x-vault-token": "s.client" });
+      return jsonResponse({
+        data: {
+          data: {
+            AUTH_SECRET: "s3cret",
+            DATABASE_URL: "postgresql://u:p@vm:5432/db",
+            WEIRD_NUMBER: 42, // non-string dropped
+          },
+        },
+      });
+    });
+
+    const map = await makeAdapter(fetchImpl).readServiceSecrets({
+      service: "toks4",
+      env: "candidate-a",
+    });
+    expect(map).toEqual({
+      AUTH_SECRET: "s3cret",
+      DATABASE_URL: "postgresql://u:p@vm:5432/db",
+    });
+  });
+
+  it("returns null on 404 — positive absence, never retried", async () => {
+    let dataGets = 0;
+    const fetchImpl = vi.fn<typeof fetch>(async (url) => {
+      const u = String(url);
+      if (u.endsWith("/auth/kubernetes/login")) {
+        return jsonResponse({ auth: { client_token: "s.client" } });
+      }
+      dataGets++;
+      return jsonResponse({}, 404);
+    });
+    const map = await makeAdapter(fetchImpl).readServiceSecrets({
+      service: "ghost",
+      env: "candidate-a",
+    });
+    expect(map).toBeNull();
+    expect(dataGets).toBe(1);
+  });
+
+  it("retries a transient 5xx then succeeds (ABSENT_IS_POSITIVE, bug.5081)", async () => {
+    let dataGets = 0;
+    const fetchImpl = vi.fn<typeof fetch>(async (url) => {
+      const u = String(url);
+      if (u.endsWith("/auth/kubernetes/login")) {
+        return jsonResponse({ auth: { client_token: "s.client" } });
+      }
+      dataGets++;
+      if (dataGets < 3) return jsonResponse({}, 503); // OpenBao load-timeout shape
+      return jsonResponse({ data: { data: { AUTH_SECRET: "s3cret" } } });
+    });
+    const map = await makeAdapter(fetchImpl).readServiceSecrets({
+      service: "toks4",
+      env: "candidate-a",
+    });
+    expect(map).toEqual({ AUTH_SECRET: "s3cret" });
+    expect(dataGets).toBe(3);
+  });
+
+  it("throws after exhausting retries — a timeout can't fake an absent bucket", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (url) => {
+      const u = String(url);
+      if (u.endsWith("/auth/kubernetes/login")) {
+        return jsonResponse({ auth: { client_token: "s.client" } });
+      }
+      return jsonResponse({}, 503);
+    });
+    await expect(
+      makeAdapter(fetchImpl).readServiceSecrets({
+        service: "toks4",
+        env: "candidate-a",
+      })
+    ).rejects.toMatchObject({ code: "openbao_read_failed", status: 503 });
+  });
+
+  it("retries login failures too", async () => {
+    let logins = 0;
+    const fetchImpl = vi.fn<typeof fetch>(async (url) => {
+      const u = String(url);
+      if (u.endsWith("/auth/kubernetes/login")) {
+        logins++;
+        if (logins < 2) return jsonResponse({}, 500);
+        return jsonResponse({ auth: { client_token: "s.client" } });
+      }
+      return jsonResponse({ data: { data: { K: "v" } } });
+    });
+    const map = await makeAdapter(fetchImpl).readServiceSecrets({
+      service: "toks4",
+      env: "candidate-a",
+    });
+    expect(map).toEqual({ K: "v" });
+    expect(logins).toBe(2);
   });
 });

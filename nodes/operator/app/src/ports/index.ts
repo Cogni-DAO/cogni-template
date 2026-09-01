@@ -194,6 +194,7 @@ export type {
 } from "./onchain-verifier.port";
 export type {
   OperatorSecretsPlanePort,
+  ReadServiceSecretsInput,
   SecretWriteOp,
   WriteNodeSecretInput,
   WriteNodeSecretResult,
