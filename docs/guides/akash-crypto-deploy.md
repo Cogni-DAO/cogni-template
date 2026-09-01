@@ -1,3 +1,16 @@
+---
+id: akash-crypto-deploy-guide
+type: guide
+title: Akash crypto deploy — agent-orchestrated, human-signed
+status: draft
+trust: draft
+summary: Self-custody crypto funding rail for Akash — agent renders SDL + builds unsigned txs, human signs with their own wallet, agent broadcasts. No key ever enters Cogni (KEY_NEVER_IN_APP).
+read_when: Deploying an Akash workload paid with self-custody crypto (AKT), or wiring an agent-orchestrated deploy where a human approves every signature.
+owner: derekg1729
+created: 2026-08-31
+tags: [akash, compute, crypto, self-custody, cli, task-5049]
+---
+
 # Akash crypto deploy — agent-orchestrated, human-signed
 
 > **Custody in one sentence:** the agent builds, queries, and broadcasts; the **human holds the wallet
