@@ -101,6 +101,7 @@ export type {
   SyncTemplateUpstreamResult,
 } from "./deploy-plane.port";
 export type { EpochsRead } from "./epochs-read.port";
+export { EpochsReadError } from "./epochs-read.port";
 export type {
   GovernanceRun,
   GovernanceStatusPort,

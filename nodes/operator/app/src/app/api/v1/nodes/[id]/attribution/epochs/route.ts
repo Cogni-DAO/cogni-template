@@ -35,6 +35,7 @@ import { resolveNodeAndAuthorize } from "@/app/_lib/node-rbac";
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { listEpochsForNode } from "@/features/attribution/read/epoch-views";
+import { type EpochsRead, EpochsReadError } from "@/ports";
 import { getNodeId } from "@/shared/config";
 
 export const dynamic = "force-dynamic";
@@ -84,11 +85,59 @@ export const GET = wrapRouteHandlerWithLogging<{
             limit,
             offset,
           })
-        : await container.epochsRead.listEpochsForForeignNode(node.slug, {
+        : await readForeignEpochs(container.epochsRead, node.slug, {
             limit,
             offset,
           });
 
+    if ("errorCode" in result) {
+      return NextResponse.json(
+        { error: result.error, errorCode: result.errorCode },
+        { status: result.status }
+      );
+    }
+
     return NextResponse.json(listEpochsOperation.output.parse(result));
   }
 );
+
+/**
+ * A foreign node that does not expose `/api/internal/attribution/epochs` is a KNOWN, permanent
+ * state, not a fault — the receiver ships with node-template and older node images predate it
+ * (bug.5083). Reporting it as a 500 tells an operator the gateway is broken when the honest answer
+ * is "this node cannot serve the read yet"; reporting it as an empty list is the original lie
+ * bug.5008 removed. Both hide the same fact, so name it.
+ *
+ * The adapter still treats 404 as RETRYABLE — a deploy-time race before the node-app has the route
+ * is real — so this only classifies the error the caller ultimately receives.
+ */
+async function readForeignEpochs(
+  epochsRead: {
+    listEpochsForForeignNode: EpochsRead["listEpochsForForeignNode"];
+  },
+  slug: string,
+  page: { limit: number; offset: number }
+): Promise<
+  | Awaited<ReturnType<EpochsRead["listEpochsForForeignNode"]>>
+  | { error: string; errorCode: string; status: number }
+> {
+  try {
+    return await epochsRead.listEpochsForForeignNode(slug, page);
+  } catch (err) {
+    if (err instanceof EpochsReadError && err.status === 404) {
+      return {
+        error: `node '${slug}' does not expose the internal epochs read`,
+        errorCode: "node_internal_read_unsupported",
+        status: 502,
+      };
+    }
+    if (err instanceof EpochsReadError) {
+      return {
+        error: `reading node '${slug}' epochs failed upstream`,
+        errorCode: "node_internal_read_failed",
+        status: 502,
+      };
+    }
+    throw err;
+  }
+}
