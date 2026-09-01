@@ -31,7 +31,6 @@ function multiServiceSpec() {
           artifact: { name: "app" },
           port: 3200,
           visibility: "public",
-          readiness_probe: { http_get: { path: "/readyz" } },
           resources: { cpu_units: 1, memory_mi: 2048, storage_mi: 4096 },
         },
         {
@@ -110,7 +109,6 @@ describe("node artifact bundle", () => {
             artifact: { name: "app" },
             port: 3200,
             visibility: "public",
-            readiness_probe: { http_get: { path: "/readyz" } },
             resources: { cpu_units: 1, memory_mi: 2048, storage_mi: 4096 },
           },
           {

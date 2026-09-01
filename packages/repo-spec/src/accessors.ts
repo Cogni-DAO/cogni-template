@@ -115,7 +115,6 @@ export interface NodeServiceConfig {
   readonly visibility: "public" | "private";
   readonly bindings: Readonly<Record<string, string>>;
   readonly secretRefs: readonly { readonly key: string }[];
-  readonly readinessPath?: string;
   readonly bindHost: "0.0.0.0";
   readonly internalUrl: string;
   readonly resources: {
@@ -139,7 +138,6 @@ const LEGACY_DEFAULT_DEPLOYMENT: NodeDeploymentSpec = {
       visibility: "public",
       bindings: {},
       secret_refs: [],
-      readiness_probe: { http_get: { path: "/readyz" } },
       bind_host: "0.0.0.0",
       resources: { cpu_units: 2, memory_mi: 2048, storage_mi: 4096 },
     },
@@ -187,9 +185,6 @@ export function extractNodeServices(
     visibility: service.visibility,
     bindings: service.bindings,
     secretRefs: service.secret_refs,
-    ...(service.readiness_probe
-      ? { readinessPath: service.readiness_probe.http_get.path }
-      : {}),
     bindHost: service.bind_host,
     internalUrl: `http://${service.name}:${service.port}`,
     resources: {
