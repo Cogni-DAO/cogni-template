@@ -1526,12 +1526,12 @@ path "cogni/metadata/${DEPLOY_ENV}/_system/*" { capabilities = ["deny"] }
 path "cogni/metadata/${DEPLOY_ENV}/_shared/*" { capabilities = ["deny"] }
 HCL
   bao_exec "write auth/kubernetes/role/${DEPLOY_ENV}-node-secrets-writer \
-    bound_service_account_names=operator-secrets-writer \
+    bound_service_account_names=operator-secrets-writer,operator-compute-workload-controller \
     bound_service_account_namespaces=cogni-${DEPLOY_ENV} \
     audience=cogni-openbao \
     policies=${DEPLOY_ENV}-node-secrets-writer \
     ttl=1h" >/dev/null
-  log_info "  ${DEPLOY_ENV}-node-secrets-writer role bound — operator pod self-serve secret writes (SA operator-secrets-writer @ cogni-${DEPLOY_ENV})"
+  log_info "  ${DEPLOY_ENV}-node-secrets-writer role bound — operator + compute controller scoped node secret access @ cogni-${DEPLOY_ENV}"
 else
   log_warn "No root token at $OPENBAO_ROOT_TOKEN_LOCAL — skipping KV mount + auth setup. Re-run provision after recovering init artifacts."
 fi

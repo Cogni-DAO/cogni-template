@@ -115,4 +115,24 @@ describe("OpenBaoSecretsAdapter", () => {
       })
     ).rejects.toMatchObject({ code: "openbao_login_failed", status: 403 });
   });
+
+  it("reads the node/env bucket without putting values in the request URL", async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (url) => {
+      const u = String(url);
+      expect(u).not.toContain("private-value");
+      if (u.endsWith("/auth/kubernetes/login")) {
+        return jsonResponse({ auth: { client_token: "s.client" } });
+      }
+      expect(u).toBe(`${ADDR}/v1/cogni/data/candidate-a/poly`);
+      return jsonResponse({
+        data: { data: { AUTH_SECRET: "private-value", NON_STRING: 7 } },
+      });
+    });
+    await expect(
+      makeAdapter(fetchImpl).readNodeSecrets({
+        nodeSlug: "poly",
+        env: "candidate-a",
+      })
+    ).resolves.toEqual({ AUTH_SECRET: "private-value" });
+  });
 });

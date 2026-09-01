@@ -17,6 +17,15 @@ rules:
   - apiGroups: [""]
     resources: [events]
     verbs: [create, patch]
+  - apiGroups: [""]
+    resources: [configmaps]
+    resourceNames: [compute-workload-allocation-ledger]
+    verbs: [get, update, patch]
+  # Kubernetes cannot resourceName-scope CREATE. The controller creates exactly one
+  # runtime ledger; keeping it out of Git prevents Argo self-heal from erasing receipts.
+  - apiGroups: [""]
+    resources: [configmaps]
+    verbs: [create]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding

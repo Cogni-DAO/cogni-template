@@ -37,6 +37,9 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/1/value
         value: candidate-a
+      - op: replace
+        path: /spec/template/spec/containers/0/env/4/value
+        value: candidate-a-node-secrets-writer
   - target:
       kind: ConfigMap
       name: node-app-config

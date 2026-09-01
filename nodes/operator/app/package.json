@@ -25,6 +25,7 @@
     "@auth/drizzle-adapter": "^1.7.0",
     "@cogni/ai-core": "workspace:*",
     "@cogni/ai-tools": "workspace:*",
+    "@cogni/dns-ops": "workspace:*",
     "@cogni/node-app": "workspace:*",
     "@cogni/node-ui-kit": "workspace:*",
     "@cogni/aragon-osx": "workspace:*",

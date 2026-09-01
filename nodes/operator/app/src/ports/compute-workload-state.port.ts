@@ -13,6 +13,20 @@ export interface ComputeWorkloadStatePort {
     resource: ComputeWorkload;
     receipt: string;
   }): Promise<boolean>;
+  /** Durable wallet-wide create slot. One uncertain allocation blocks all later creates. */
+  claimWalletAllocation(input: {
+    attemptKey: string;
+    workloadUid: string;
+  }): Promise<
+    | { state: "claimed"; allocationCursor?: string }
+    | { state: "owned"; allocationCursor?: string }
+    | { state: "blocked"; ownerAttemptKey: string }
+  >;
+  prepareWalletAllocation(input: {
+    attemptKey: string;
+    allocationCursor: string;
+  }): Promise<void>;
+  completeWalletAllocation(input: { attemptKey: string }): Promise<void>;
   patchMetadata(input: {
     resource: ComputeWorkload;
     annotations?: Readonly<Record<string, string | null>>;
