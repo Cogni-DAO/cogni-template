@@ -221,3 +221,33 @@ export class KubernetesLeaseLeaderElector {
     }
   }
 }
+
+export interface RenewableLeaderLease {
+  isLeader(): boolean;
+  acquireOrRenew(): Promise<boolean>;
+}
+
+/**
+ * Renew a Lease and fence a process that previously held it on any loss signal.
+ * The runtime callback exits immediately: a stale process must never finish provider IO
+ * while a replacement leader begins reconciling the same resource.
+ */
+export async function renewLeadershipOrFence(
+  lease: RenewableLeaderLease,
+  onLeadershipLost: (cause: unknown) => never
+): Promise<boolean> {
+  const previouslyHeld = lease.isLeader();
+  let renewed: boolean;
+  try {
+    renewed = await lease.acquireOrRenew();
+  } catch (error) {
+    if (previouslyHeld) return onLeadershipLost(error);
+    throw error;
+  }
+  if (previouslyHeld && !renewed) {
+    return onLeadershipLost(
+      new Error("previously held Kubernetes Lease was not renewed")
+    );
+  }
+  return renewed;
+}

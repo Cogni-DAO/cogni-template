@@ -85,8 +85,10 @@ The branch model, deploy-state model, and axioms below are the live contract —
     verification. `Ready=True` is valid only for `status.observedGeneration ==
 metadata.generation`; uncertain mutations fail closed rather than blindly duplicating a
     lease. CR status contains observed state/provenance, never desired state or resolved secret
-    values. Structured logs, Kubernetes Events, and `compute_workload_*` metrics make every
-    outcome visible. Argo's custom health rule is owned by the existing Argo bootstrap config
+    values. Structured logs and Kubernetes Events make current outcomes visible; the controller
+    also exposes `compute_workload_*` on `:9090/metrics`, but the Compose Alloy config does not
+    yet scrape that in-cluster endpoint, so remote metrics ingestion is explicitly not part of
+    this checkpoint. Argo's custom health rule is owned by the existing Argo bootstrap config
     (`infra/k8s/argocd/argocd-cm-patch.yaml`), so an existing cluster receives it only through
     the normal `provision-env` bootstrap refresh—not manual `kubectl`/SSH. A lease dying
     silently is a contract violation of this axiom, not an operational surprise. Health

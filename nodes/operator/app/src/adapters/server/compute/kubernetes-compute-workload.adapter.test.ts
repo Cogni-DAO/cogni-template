@@ -17,6 +17,7 @@ import type { ComputeWorkload } from "@/ports/compute-workload.types";
 import {
   KubernetesComputeWorkloadStateAdapter,
   KubernetesLeaseLeaderElector,
+  renewLeadershipOrFence,
 } from "./kubernetes-compute-workload.adapter";
 
 function apiError(statusCode: number): Error & { statusCode: number } {
@@ -204,5 +205,58 @@ describe("KubernetesLeaseLeaderElector", () => {
         }),
       })
     );
+  });
+});
+
+describe("renewLeadershipOrFence", () => {
+  it("immediately fences a process that loses its previously-held lease", async () => {
+    const fenced = new Error("process fenced");
+    const onLeadershipLost = vi.fn((): never => {
+      throw fenced;
+    });
+    const lease = {
+      isLeader: () => true,
+      acquireOrRenew: vi.fn(async () => false),
+    };
+
+    await expect(renewLeadershipOrFence(lease, onLeadershipLost)).rejects.toBe(
+      fenced
+    );
+    expect(onLeadershipLost).toHaveBeenCalledOnce();
+    expect(onLeadershipLost).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it("fences a prior leader when renewal errors but not an ordinary follower", async () => {
+    const failure = new Error("API unavailable past lease deadline");
+    const fenced = new Error("process fenced");
+    const priorLeaderFence = vi.fn((): never => {
+      throw fenced;
+    });
+    await expect(
+      renewLeadershipOrFence(
+        {
+          isLeader: () => true,
+          acquireOrRenew: async () => {
+            throw failure;
+          },
+        },
+        priorLeaderFence
+      )
+    ).rejects.toBe(fenced);
+    expect(priorLeaderFence).toHaveBeenCalledWith(failure);
+
+    const followerFence = vi.fn((): never => {
+      throw new Error("follower must not be fenced");
+    });
+    await expect(
+      renewLeadershipOrFence(
+        {
+          isLeader: () => false,
+          acquireOrRenew: async () => false,
+        },
+        followerFence
+      )
+    ).resolves.toBe(false);
+    expect(followerFence).not.toHaveBeenCalled();
   });
 });
