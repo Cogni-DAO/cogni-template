@@ -61,6 +61,9 @@ export function buildComputeWorkloadManifest(
     ({ artifact, service }) => ({
       name: service.name,
       artifact,
+      ...(service.runtimeProfile
+        ? { runtimeProfile: service.runtimeProfile }
+        : {}),
       ...(service.secretRefs.length > 0
         ? { secretRefs: service.secretRefs }
         : {}),
