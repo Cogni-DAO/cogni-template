@@ -272,7 +272,11 @@ export const nodeServiceArtifactSchema = z
 
 export type NodeServiceArtifactSpec = z.infer<typeof nodeServiceArtifactSchema>;
 
-/** Bounded v0 resource request for one app-tier service. */
+/**
+ * Bounded v0 resource request for one app-tier service.
+ * `storage_mi` is ephemeral workload storage. Persistent volumes, replication,
+ * backups, and stateful lifecycle are intentionally absent from this contract.
+ */
 export const nodeServiceResourcesSchema = z
   .object({
     // Broad sanity bounds prevent malformed requests; environment/provider
@@ -328,16 +332,6 @@ export const nodeServiceSpecSchema = z
   .strict();
 
 export type NodeServiceSpec = z.infer<typeof nodeServiceSpecSchema>;
-
-const RESERVED_STATE_SERVICE_NAMES = new Set([
-  "db",
-  "database",
-  "doltgres",
-  "postgres",
-  "postgresql",
-  "redis",
-  "temporal",
-]);
 
 /**
  * App-tier workload declaration. Exactly one service owns public ingress; all
@@ -403,17 +397,6 @@ export const nodeDeploymentSchema = z
           });
         }
       });
-      if (
-        RESERVED_STATE_SERVICE_NAMES.has(service.name) ||
-        RESERVED_STATE_SERVICE_NAMES.has(service.artifact.name)
-      ) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["services", index, "name"],
-          message:
-            "state infrastructure (Postgres/Doltgres/Redis/Temporal) is not an app-tier deployment service",
-        });
-      }
     });
   });
 
