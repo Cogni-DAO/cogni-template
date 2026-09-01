@@ -30,8 +30,8 @@ import {
   type InternalListEpochsOutput,
   internalListEpochsOperation,
 } from "@cogni/node-contracts";
-import { internalNodeAppUrl } from "@/shared/node-registry/resolve";
 import type { EpochsRead } from "@/ports";
+import { internalNodeAppUrl } from "@/shared/node-registry/resolve";
 import type { Logger } from "@/shared/observability";
 
 export interface HttpEpochsReadDeps {
