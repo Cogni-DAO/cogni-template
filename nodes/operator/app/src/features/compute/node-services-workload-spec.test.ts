@@ -4,12 +4,15 @@
 import { parseRepoSpec, resolveNodeArtifactBundle } from "@cogni/repo-spec";
 import { describe, expect, it } from "vitest";
 
-import { buildNodeServicesWorkloadSpec } from "./node-services-workload-spec";
+import {
+  buildLegacyCogniAppWorkloadSpec,
+  buildNodeServicesWorkloadSpec,
+} from "./node-services-workload-spec";
 
 const NODE_ID = "00000000-0000-4000-8000-000000000001";
 const SOURCE_SHA = "a".repeat(40);
-const APP_IMAGE = `ghcr.io/example/poly@sha256:${"1".repeat(64)}`;
-const TRADER_IMAGE = `ghcr.io/example/poly-paper-trader@sha256:${"2".repeat(64)}`;
+const APP_IMAGE = `ghcr.io/example/node@sha256:${"1".repeat(64)}`;
+const WORKER_IMAGE = `ghcr.io/example/node-worker@sha256:${"2".repeat(64)}`;
 
 const spec = parseRepoSpec({
   node_id: NODE_ID,
@@ -21,15 +24,15 @@ const spec = parseRepoSpec({
         artifact: { name: "app" },
         port: 3200,
         visibility: "public",
-        bindings: { PAPER_TRADER_URL: "paper-trader" },
+        bindings: { WORKER_URL: "worker" },
       },
       {
-        name: "paper-trader",
+        name: "worker",
         artifact: {
-          name: "paper-trader",
-          dockerfile: "services/paper-trader/Dockerfile",
+          name: "worker",
+          dockerfile: "services/worker/Dockerfile",
         },
-        command: ["python", "-m", "paper_trader"],
+        command: ["python", "-m", "worker"],
         args: ["--host", "0.0.0.0", "--port", "9100"],
         port: 9100,
         visibility: "private",
@@ -44,33 +47,25 @@ const bundle = resolveNodeArtifactBundle(
   {
     schema_version: 1,
     node_id: NODE_ID,
-    source_sha: SOURCE_SHA,
-    repository: "example/poly",
+    source: { repository: "example/node", sha: SOURCE_SHA },
+    artifacts: [
+      { name: "app", image: APP_IMAGE },
+      { name: "worker", image: WORKER_IMAGE },
+    ],
     services: [
-      {
-        service: "app",
-        artifact: "app",
-        source_sha: SOURCE_SHA,
-        image: APP_IMAGE,
-      },
-      {
-        service: "paper-trader",
-        artifact: "paper-trader",
-        source_sha: SOURCE_SHA,
-        image: TRADER_IMAGE,
-      },
+      { name: "app", artifact: "app" },
+      { name: "worker", artifact: "worker" },
     ],
   },
-  { sourceSha: SOURCE_SHA, repository: "example/poly" }
+  { sourceSha: SOURCE_SHA, repository: "example/node" }
 );
 
 describe("buildNodeServicesWorkloadSpec", () => {
   it("builds one public app plus one non-global private sibling by digest", () => {
     const workload = buildNodeServicesWorkloadSpec({
-      slug: "poly",
+      slug: "generic-node",
       bundle,
-      publicUrl: "https://poly-test.cognidao.org",
-      hosts: ["poly-test.cognidao.org"],
+      hosts: ["node-test.example.org"],
     });
 
     expect(workload.services).toHaveLength(2);
@@ -82,55 +77,58 @@ describe("buildNodeServicesWorkloadSpec", () => {
           port: 3200,
           as: 80,
           global: true,
-          hosts: ["poly-test.cognidao.org"],
+          hosts: ["node-test.example.org"],
         },
       ],
-      env: { PAPER_TRADER_URL: "http://paper-trader:9100" },
+      env: { WORKER_URL: "http://worker:9100" },
     });
     expect(workload.services[1]).toMatchObject({
-      name: "paper-trader",
-      image: TRADER_IMAGE,
-      command: ["python", "-m", "paper_trader"],
+      name: "worker",
+      image: WORKER_IMAGE,
+      command: ["python", "-m", "worker"],
       args: ["--host", "0.0.0.0", "--port", "9100"],
       expose: [{ port: 9100, as: 9100, global: false }],
     });
   });
 
-  it("pins bind env after service env and exposes the service-name URL contract", () => {
+  it("derives only topology/runtime env and applies no Cogni or framework policy", () => {
     const workload = buildNodeServicesWorkloadSpec({
-      slug: "poly",
+      slug: "generic-node",
       bundle,
-      publicUrl: "https://poly-test.cognidao.org",
-      envByService: {
-        "paper-trader": {
-          HOST: "127.0.0.1",
-          HOSTNAME: "localhost",
-          PORT: "1",
-        },
-      },
     });
 
-    const trader = workload.services[1];
-    expect(trader?.env).toMatchObject({
+    expect(workload.services[0]?.env).toEqual({
+      WORKER_URL: "http://worker:9100",
+      HOST: "0.0.0.0",
+      HOSTNAME: "0.0.0.0",
+      PORT: "3200",
+    });
+    expect(workload.services[1]?.env).toEqual({
       HOST: "0.0.0.0",
       HOSTNAME: "0.0.0.0",
       PORT: "9100",
     });
-    expect(bundle.services[1]?.service.internalUrl).toBe(
-      "http://paper-trader:9100"
-    );
   });
 
-  it("rejects runtime env that tries to override Git-declared topology", () => {
-    expect(() =>
-      buildNodeServicesWorkloadSpec({
-        slug: "poly",
-        bundle,
-        publicUrl: "https://poly-test.cognidao.org",
-        envByService: {
-          app: { PAPER_TRADER_URL: "https://foreign.example" },
-        },
-      })
-    ).toThrow(/cannot override Git-declared binding/);
+  it("preserves existing Next.js defaults only through explicit compatibility", () => {
+    const workload = buildLegacyCogniAppWorkloadSpec({
+      slug: "legacy-node",
+      bundle,
+      publicUrl: "https://legacy-node.example.org",
+    });
+
+    expect(workload.services[0]?.env).toMatchObject({
+      NODE_NAME: "legacy-node",
+      COGNI_REPO_PATH: "/app",
+      AUTH_TRUST_HOST: "true",
+      NEXTAUTH_URL: "https://legacy-node.example.org",
+      APP_BASE_URL: "https://legacy-node.example.org",
+      WORKER_URL: "http://worker:9100",
+    });
+    expect(workload.services[1]?.env).toEqual({
+      HOST: "0.0.0.0",
+      HOSTNAME: "0.0.0.0",
+      PORT: "9100",
+    });
   });
 });

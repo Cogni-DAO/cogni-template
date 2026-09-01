@@ -4,8 +4,8 @@
 /**
  * Module: `@features/compute/node-services-workload-spec`
  * Purpose: Assemble an atomically resolved node artifact bundle into one provider-neutral workload.
- * Scope: Pure declaration+digest → ProvisionSpec mapping; no registry, secret, provider, or lifecycle I/O.
- * Invariants: DIGEST_PINNED, ONE_PUBLIC_SERVICE, PRIVATE_IS_NON_GLOBAL, BIND_ALL_INTERFACES.
+ * Scope: Pure declaration+digest mapping; no registry, secret, provider, or lifecycle I/O.
+ * Invariants: DIGEST_PINNED, ONE_PUBLIC_SERVICE, PRIVATE_IS_NON_GLOBAL, BIND_ALL_INTERFACES, NO_RAW_ENV_INPUT.
  * Side-effects: none
  * Links: story.5016, task.5065, @cogni/repo-spec artifact bundle
  * @internal
@@ -19,17 +19,17 @@ export interface NodeServicesWorkloadInput {
   readonly slug: string;
   /** Fully resolved, exact-set, digest-pinned artifact bundle. */
   readonly bundle: ResolvedNodeArtifactBundle;
-  /** Canonical public URL injected into the public app service. */
-  readonly publicUrl: string;
   /** Custom hostnames accepted by the public ingress. */
   readonly hosts?: readonly string[];
-  /** Scoped runtime env supplied independently for each service. */
-  readonly envByService?: Readonly<
-    Record<string, Readonly<Record<string, string>>>
-  >;
 }
 
-/** Build one co-located workload from the already-validated complete bundle. */
+export interface LegacyCogniAppCompatibilityInput
+  extends NodeServicesWorkloadInput {
+  /** Canonical URL used by the existing Cogni Next.js app image. */
+  readonly publicUrl: string;
+}
+
+/** Build one generic co-located workload from the validated complete bundle. */
 export function buildNodeServicesWorkloadSpec(
   input: NodeServicesWorkloadInput
 ): ProvisionSpec {
@@ -37,15 +37,6 @@ export function buildNodeServicesWorkloadSpec(
     name: input.slug,
     services: input.bundle.services.map(({ service, image }) => {
       const isPublic = service.visibility === "public";
-      const suppliedEnv = input.envByService?.[service.name] ?? {};
-      const conflictingBinding = Object.keys(service.bindings).find(
-        (envName) => suppliedEnv[envName] !== undefined
-      );
-      if (conflictingBinding) {
-        throw new Error(
-          `[node-workload] Runtime env cannot override Git-declared binding ${service.name}.${conflictingBinding}`
-        );
-      }
       const bindingEnv = Object.fromEntries(
         Object.entries(service.bindings).map(([envName, targetName]) => {
           const target = input.bundle.services.find(
@@ -60,30 +51,18 @@ export function buildNodeServicesWorkloadSpec(
           return [envName, target.service.internalUrl];
         })
       );
-      const serviceEnv = {
-        NODE_NAME: input.slug,
-        COGNI_SERVICE_NAME: service.name,
-        ...(isPublic
-          ? {
-              COGNI_REPO_PATH: "/app",
-              AUTH_TRUST_HOST: "true",
-              NEXTAUTH_URL: input.publicUrl,
-              APP_BASE_URL: input.publicUrl,
-            }
-          : {}),
-        ...suppliedEnv,
-        ...bindingEnv,
-        // BIND_ALL_INTERFACES is not caller-overridable. Images must honor this
-        // declared process contract; the candidate checkpoint proves it live.
-        HOST: service.bindHost,
-        HOSTNAME: service.bindHost,
-        PORT: String(service.port),
-      };
 
       return {
         name: service.name,
         image,
-        env: serviceEnv,
+        // This generic layer accepts no caller-provided values. Every value is
+        // deterministically derived from the Git service/topology declaration.
+        env: {
+          ...bindingEnv,
+          HOST: service.bindHost,
+          HOSTNAME: service.bindHost,
+          PORT: String(service.port),
+        },
         ...(service.command ? { command: service.command } : {}),
         ...(service.args ? { args: service.args } : {}),
         ...service.resources,
@@ -99,5 +78,43 @@ export function buildNodeServicesWorkloadSpec(
         ],
       };
     }),
+  };
+}
+
+/**
+ * Preserve the existing single Next.js node image's non-secret runtime config.
+ *
+ * This compatibility policy is deliberately named and app-specific. It is not
+ * applied by the generic service mapper and it has no arbitrary env input;
+ * secret refs are resolved later at the provider-I/O boundary.
+ */
+export function buildLegacyCogniAppWorkloadSpec(
+  input: LegacyCogniAppCompatibilityInput
+): ProvisionSpec {
+  const workload = buildNodeServicesWorkloadSpec(input);
+  const app = workload.services.find((service) => service.name === "app");
+  if (!app || app.expose?.[0]?.global !== true) {
+    throw new Error(
+      "[node-workload] Legacy Cogni compatibility requires the public app service"
+    );
+  }
+
+  return {
+    ...workload,
+    services: workload.services.map((service) =>
+      service.name === "app"
+        ? {
+            ...service,
+            env: {
+              ...service.env,
+              NODE_NAME: input.slug,
+              COGNI_REPO_PATH: "/app",
+              AUTH_TRUST_HOST: "true",
+              NEXTAUTH_URL: input.publicUrl,
+              APP_BASE_URL: input.publicUrl,
+            },
+          }
+        : service
+    ),
   };
 }
