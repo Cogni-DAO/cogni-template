@@ -738,10 +738,21 @@ mint_db_reader_token() {
 }
 
 openbao_get_field() {
-  local svc="$1" key="$2" tok
-  tok="$(mint_db_reader_token)" || return 1
-  timeout 10 kubectl exec -n openbao openbao-0 -- env BAO_ADDR=http://127.0.0.1:8200 \
-    BAO_TOKEN="${tok}" bao kv get -field="$key" "cogni/${DEPLOY_ENVIRONMENT}/${svc}" 2>/dev/null || true
+  local svc="$1" key="$2" tok val attempt
+  # Retry with a generous timeout. Under deploy-time VM load a single `kubectl exec`
+  # into openbao can exceed a tight timeout; the old `timeout 10 ... 2>/dev/null || true`
+  # then silently yielded an EMPTY value, tripping the downstream `[[ -n ]]` fatal
+  # (e.g. OPENFGA_DB_PASSWORD) even though the secret + policy + token are healthy
+  # (bug.5081: 3/3 prod promotes died here while manual reads succeeded 8/8). Retry so a
+  # transient slow read can't masquerade as an absent secret. Returns value or "" (0).
+  for attempt in 1 2 3; do
+    tok="$(mint_db_reader_token)" || { [[ "$attempt" -lt 3 ]] && sleep 3; continue; }
+    val="$(timeout 30 kubectl exec -n openbao openbao-0 -- env BAO_ADDR=http://127.0.0.1:8200 \
+      BAO_TOKEN="${tok}" bao kv get -field="$key" "cogni/${DEPLOY_ENVIRONMENT}/${svc}" 2>/dev/null)" || val=""
+    [[ -n "$val" ]] && break
+    [[ "$attempt" -lt 3 ]] && sleep 3
+  done
+  printf '%s' "$val"
 }
 
 OPENBAO_RUNTIME_SSOT=false
