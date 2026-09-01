@@ -126,6 +126,16 @@ describe("renderBundleMarkdown", () => {
     // (1) CI: exact one-liner + the --required trap.
     expect(g).toContain("gh pr checks {PR} --watch --fail-fast");
     expect(g).toContain("NOT --required");
+    // Verified against PR #2075: `static` IS a required check, so the reason to
+    // avoid --required is the gates it OMITS (e.g. build), not static. Don't let
+    // the stale "build/static live outside required" claim creep back.
+    expect(g).not.toMatch(/build\/static/);
+    // --watch blocks to a terminal state and never returns 8; exit 8 (pending)
+    // belongs only to the one-shot re-read. Guard against re-mislabeling it.
+    expect(g).toMatch(/one-shot 8=pending/);
+    // Poll must be bounded + fail loud — never an unbounded/​silent hang.
+    expect(g).toMatch(/[Bb]ound/);
+    expect(g).toContain("FAILED");
     // Placeholders are brace-form so the ONLY angle brackets are real tags —
     // an angle-bracket placeholder (<PR>) would collide with the tag grammar.
     expect(g).not.toMatch(/<(PR|candidate|target|node)>/);
@@ -133,7 +143,7 @@ describe("renderBundleMarkdown", () => {
     expect(g).toContain(".buildSha");
     expect(g).toContain("only ground truth");
     // Terse by contract: the whole block must stay short enough to recall.
-    expect(g.length).toBeLessThan(900);
+    expect(g.length).toBeLessThan(1000);
     // The render actually inlines it under a discoverable header.
     const markdown = renderBundleMarkdown(baseInput);
     expect(markdown).toContain("## Watch an async gate — CI · flight · deploy");
