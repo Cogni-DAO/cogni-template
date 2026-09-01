@@ -22,7 +22,67 @@ bills a shared account in USD. Use this when you want a deployment paid with **y
 **self-custody**, with an on-chain audit trail.
 
 Akash removed self-custody from the hosted `console.akash.network` (it "moved to Console Air"), so the
-crypto path is the CLI (`provider-services`) — which is also scriptable and reproducible by an agent.
+crypto path is the **CLI** (`provider-services`) for agents, or **Console Air** (a self-hosted web UI
+that connects your browser wallet) for humans. Both do the same thing; only the signer differs.
+
+---
+
+## The goal in one picture
+
+```
+GOAL: a container running on AKASH, PAID WITH YOUR CRYPTO, at a public URL — and proven.
+
+   ┌─────────────────┐        ┌──────────────────┐        ┌─────────────────────┐
+   │  YOUR WALLET    │  pay   │  AKASH NETWORK   │  runs  │   PUBLIC URL        │
+   │  (Cosmos, e.g.  │──$$$──▶ │  rents a server, │──────▶ │  your app is live   │
+   │   Keplr)        │        │  runs container  │        │                     │
+   │  ~$30 in crypto │        └──────────────────┘        └─────────────────────┘
+   └────────┬────────┘
+            │  you click "Approve" to pay.  🔑 KEY NEVER LEAVES YOUR WALLET.
+            └─ the agent only builds the request & reads results; it never sees a key.
+```
+
+---
+
+## Human quick-start (new user — Keplr + Console Air)
+
+The least-painful path to a first crypto-funded deployment. ~15 minutes.
+
+1. **Wallet.** Install **Keplr** (<https://www.keplr.app/download>) → create wallet → **write the
+   recovery phrase on paper** (never type it into any site) → set a password.
+2. **Run the deploy UI.** Start Console Air locally (no config needed; production defaults):
+   ```bash
+   git clone https://github.com/akash-network/console-air && cd console-air
+   npm install && npm run dev            # serves http://localhost:3000
+   ```
+3. **Connect.** Open `http://localhost:3000` → **Connect Wallet** → **Keplr** → Approve. Copy the
+   `akash1…` address it shows (this is public — safe to share; it cannot move funds).
+4. **Fund.** Buy **~$30 of AKT** on an exchange (Coinbase/Kraken) → withdraw on the **Akash** network,
+   pasting your `akash1…` address in the "To" field. Wait ~5 min for the balance to appear.
+5. **Deploy.** In Console Air pick a template → **Deploy** → **Approve** in Keplr (this is you paying
+   with crypto) → the UI shows your **live URL**.
+
+---
+
+## Wallet auth: what a new user + their AI must know (vNext onboarding)
+
+When a fresh user spins up a node and asks a fresh AI for help, this is the ground truth to give them —
+it prevents the exact thrash this guide was born from:
+
+- **Never share a private key or recovery phrase — with the AI, the app, or anyone.** The only thing
+  that is ever shared is the **public `akash1…` address**. An AI that asks for a key is wrong; refuse.
+- **Akash is a Cosmos chain, not EVM.** Use **Keplr** (native, one install, works everywhere Cosmos).
+- **MetaMask "works" only via a flaky Cosmos Snap add-on**, and that snap derives a _brand-new_ Akash
+  address from MetaMask's seed anyway — so MetaMask offers **zero advantage** here and often fails
+  silently. Steer new users to Keplr.
+- **AKT vs USDC:** Akash accepts both, but _both still require a Cosmos wallet holding the token_.
+  Choosing USDC does **not** remove the wallet step. AKT has a lower take-rate; start with AKT.
+- **The hosted `console.akash.network` is fiat/card only** (managed custodial wallet). Self-custody
+  crypto = **Console Air** (self-host) or the CLI in this guide. There is no hosted "connect wallet and
+  pay crypto" website anymore.
+- **The custody boundary never moves:** the human/wallet signs; the agent orchestrates and verifies.
+  This is what lets automation coexist with `KEY_NEVER_IN_APP` (see "How this seeds automated crypto
+  payment" below).
 
 ---
 
