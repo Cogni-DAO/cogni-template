@@ -17,10 +17,21 @@
  *     full decommission is a separate lifecycle operation.
  *   - ACTIVITY_AUTHORITY_STAYS_DEPLOYED — removing the current `activity_env` is rejected. V1 does not
  *     claim an atomic cross-environment authority transfer; that needs a future fenced protocol.
- *   - ACTIVITY_FOLLOWS_INGEST — adding an env that outranks the current `activity_env` moves the
- *     activity authority with it. Webhooks reach production only, and the receiving operator routes a
- *     repo only when `activityEnv === DEPLOY_ENVIRONMENT`, so a promoted node that keeps a lower
- *     activity authority can never earn a receipt (bug.5079). Authority only ever moves upward.
+ *   - ACTIVITY_FOLLOWS_INGEST — a promotion carries the activity authority with it: `activity_env`
+ *     becomes the highest env the node will be deployed to. Webhooks reach production ONLY, and the
+ *     receiving operator routes a repo only when `activityEnv === DEPLOY_ENVIRONMENT`, so a promoted
+ *     node that keeps a lower authority can never earn a receipt (bug.5079).
+ *
+ *     WHY THIS IS SAFE WITHOUT THE DEFERRED FENCED CUTOVER: the protocol was deferred because moving
+ *     authority could strand a ledger. It cannot here — production is the only env that can ingest a
+ *     Git receipt, so any authority BELOW production has an empty Git ledger by construction. There is
+ *     nothing to strand. This reasoning is load-bearing: if webhooks are ever delivered to more than
+ *     one environment, this move stops being safe and the fenced protocol becomes required. Removing
+ *     the active authority stays rejected (ACTIVITY_AUTHORITY_STAYS_DEPLOYED) — that direction CAN
+ *     strand a production ledger, and this change does not touch it.
+ *
+ *     Known cosmetic residue: a node may hold an empty scheduled epoch in its old authority env, which
+ *     is orphaned by the move. It carries no receipts and no value (bug.5079).
  *   - IDEMPOTENT — requesting the state that already holds (env already present on add / already absent on
  *     remove) yields an EMPTY op list (`{ kind: "no_changes" }`), so the adapter opens no PR.
  *   - DELETE_VIA_SHA_NULL — file removals are emitted as `{ op: "delete", path }`; the adapter maps these
@@ -205,14 +216,12 @@ function planAdd(args: {
     {
       op: "upsert",
       path: CATALOG_PATH(slug),
-      // ACTIVITY_FOLLOWS_INGEST — a promotion carries the activity authority with it.
-      // GitHub App webhooks are delivered to PRODUCTION only, and the receiving operator
-      // routes a repo only when `activityEnv === DEPLOY_ENVIRONMENT`
-      // (attribution-profile-resolver.selectLocalAttributionNodes). Adding an env without
-      // moving `activity_env` therefore produces a node that is deployed and serving but
-      // structurally unable to earn a receipt: its webhooks land in production and are
-      // dropped `unclaimed` — fail-closed, correct, and completely silent. That is
-      // bug.5079, which stranded `levelup` in production with zero receipts.
+      // ACTIVITY_FOLLOWS_INGEST — see the module header for why this needs no fenced
+      // cutover: only production can ingest, so a sub-production authority is provably
+      // empty. Without this, a promoted node is deployed and serving yet structurally
+      // unable to earn a receipt — its webhooks land in production and are dropped
+      // `unclaimed`, fail-closed and silent. That is bug.5079, which left `levelup` live
+      // in production with zero receipts.
       content:
         nextActivityEnv === activityEnv
           ? setCatalogEnvs(current.catalog, nextEnvs)

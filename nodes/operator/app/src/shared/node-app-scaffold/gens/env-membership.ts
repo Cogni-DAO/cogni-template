@@ -92,32 +92,52 @@ function isNodeFormationEnv(value: string): value is NodeFormationEnv {
 }
 
 /**
- * Rank an env by ingest capability. GitHub App webhooks are delivered to PRODUCTION only
- * (one App, one webhook URL), so a node's ability to receive a Git receipt is strictly
- * ordered by how close its activity authority sits to production.
+ * Rank an env by ingest proximity: how close it sits to the one environment that can
+ * actually receive a Git receipt. GitHub App webhooks are delivered to PRODUCTION only
+ * (one App, one webhook URL), so `production` is the maximum by definition.
+ *
+ * Declared explicitly rather than read off `NODE_DEPLOY_ENVS`'s array order. That constant
+ * documents only "every environment that can be managed after birth" — it carries no
+ * ordering contract, so `indexOf` would make its literal order silently load-bearing for a
+ * semantic rule. Re-sorting it (say, alphabetically) would invert the ranking and every
+ * test would still pass, for the wrong reason.
  */
+const ENV_INGEST_RANK: Readonly<Record<NodeFormationEnv, number>> = {
+  "candidate-a": 0,
+  preview: 1,
+  production: 2,
+};
+
 export function envRank(env: NodeFormationEnv): number {
-  return ENV_ORDER.indexOf(env);
+  return ENV_INGEST_RANK[env];
 }
 
 /**
- * Re-emit the catalog row's `activity_env:` line, preserving any trailing comment.
+ * Re-emit the catalog row's `activity_env:` line, carrying any trailing comment across.
  *
- * Deliberately a line rewrite rather than a YAML round-trip: these catalog rows carry
- * load-bearing comments that a serializer would drop, and `setCatalogEnvs` already
- * established the in-place-line idiom (including the horizontal-whitespace-only trailing
- * class that keeps the file's final newline intact — bug.5073).
+ * The trailing comment is preserved on purpose: `ACTIVITY_ENV_LINE_RE` matches it, so a
+ * naive whole-line replacement DELETES it. These rows carry load-bearing comments and a
+ * silent drop is exactly the kind of edit nobody notices in a generated PR.
+ *
+ * Deliberately a line rewrite rather than a YAML round-trip, because a serializer would
+ * drop every comment in the file. Mirrors `setCatalogEnvs`, including its
+ * horizontal-whitespace-only trailing class that keeps the file's final newline (bug.5073).
  */
 export function setCatalogActivityEnv(
   catalogYaml: string,
   env: NodeFormationEnv
 ): string {
-  if (!ACTIVITY_ENV_LINE_RE.test(catalogYaml)) {
+  const match = ACTIVITY_ENV_LINE_RE.exec(catalogYaml);
+  if (!match) {
     throw new Error(
       "catalog row is missing a valid `activity_env: <env>` line; cannot set it."
     );
   }
-  return catalogYaml.replace(ACTIVITY_ENV_LINE_RE, `activity_env: ${env}`);
+  const trailingComment = /#.*$/.exec(match[0])?.[0];
+  const line = trailingComment
+    ? `activity_env: ${env} ${trailingComment}`
+    : `activity_env: ${env}`;
+  return catalogYaml.replace(ACTIVITY_ENV_LINE_RE, line);
 }
 
 /** Re-emit the catalog row's `envs:` flow-sequence line with `envs`, canonically ordered + de-duped. */

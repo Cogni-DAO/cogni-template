@@ -393,6 +393,31 @@ describe("ACTIVITY_FOLLOWS_INGEST (bug.5079)", () => {
     expect(catalogOf(plan)).toContain("activity_env: preview");
   });
 
+  it("carries a trailing comment across the activity_env rewrite", () => {
+    // ACTIVITY_ENV_LINE_RE matches the trailing comment, so a naive whole-line replace
+    // deletes it. These rows carry load-bearing comments and a silent drop in a generated
+    // PR is exactly what nobody notices.
+    const base = baseCurrent(["candidate-a"]);
+    const current = {
+      ...currentWithProduction(["candidate-a"]),
+      catalog: base.catalog.replace(
+        "activity_env: candidate-a",
+        "activity_env: candidate-a # birth authority, moves on promotion"
+      ),
+    };
+
+    const plan = buildEnvDeltaPlan({
+      slug: SLUG,
+      env: "production",
+      present: true,
+      current,
+    });
+
+    expect(catalogOf(plan)).toContain(
+      "activity_env: production # birth authority, moves on promotion"
+    );
+  });
+
   it("takes the HIGHEST deployed env, not just the one being added", () => {
     // The subtle case my first rule got wrong: this node is already in production, and
     // adding `preview` must not pull its authority DOWN to preview — preview cannot ingest
