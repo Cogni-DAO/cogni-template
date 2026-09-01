@@ -35,7 +35,7 @@ import { resolveNodeAndAuthorize } from "@/app/_lib/node-rbac";
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { listEpochsForNode } from "@/features/attribution/read/epoch-views";
-import { type EpochsRead, EpochsReadError } from "@/ports";
+import { type EpochsRead, isEpochsReadError } from "@/ports";
 import { getNodeId } from "@/shared/config";
 
 export const dynamic = "force-dynamic";
@@ -124,14 +124,14 @@ async function readForeignEpochs(
   try {
     return await epochsRead.listEpochsForForeignNode(slug, page);
   } catch (err) {
-    if (err instanceof EpochsReadError && err.status === 404) {
+    if (isEpochsReadError(err) && err.status === 404) {
       return {
         error: `node '${slug}' does not expose the internal epochs read`,
         errorCode: "node_internal_read_unsupported",
         status: 502,
       };
     }
-    if (err instanceof EpochsReadError) {
+    if (isEpochsReadError(err)) {
       return {
         error: `reading node '${slug}' epochs failed upstream`,
         errorCode: "node_internal_read_failed",

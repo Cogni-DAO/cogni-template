@@ -40,6 +40,14 @@ export interface EpochsRead {
  * can decide whether another attempt is worthwhile.
  */
 export class EpochsReadError extends Error {
+  /**
+   * Structural discriminant. `instanceof` is NOT reliable here: Next.js bundles the route and the
+   * adapter separately, so each gets its OWN copy of this class and the check silently returns
+   * false — the error then escapes as a 500. Observed in production on 1acd5762, where the minified
+   * name surfaced in the log as `{"type":"i"}` (bug.5083). Match on this field, never the class.
+   */
+  readonly kind = "epochs_read_error" as const;
+
   constructor(
     message: string,
     readonly status: number,
@@ -48,4 +56,13 @@ export class EpochsReadError extends Error {
     super(message);
     this.name = "EpochsReadError";
   }
+}
+
+/** Bundle-safe type guard for {@link EpochsReadError} — see the note on `kind`. */
+export function isEpochsReadError(err: unknown): err is EpochsReadError {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { kind?: unknown }).kind === "epochs_read_error"
+  );
 }
