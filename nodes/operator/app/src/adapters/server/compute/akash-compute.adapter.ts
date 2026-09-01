@@ -22,8 +22,9 @@
  *     audit account and bids are screened on Console provider data (audited + online +
  *     uptime7d > 0.95 + activeLeases > 0, no 2σ price underbids) — pure logic in
  *     ./akash-provider-screen. Metadata-read failure fails open (signedBy stays the hard gate).
- *   - BOOT_SLO_OR_CLOSE (task.5051): after lease, the workload must serve `/version` within
- *     `bootSloMs` (default 5min) or the deployment is closed (escrow refunds), the provider is
+ *   - BOOT_SLO_OR_CLOSE (task.5051): after lease, the workload must serve `/version` and its
+ *     declared application-readiness path within `bootSloMs` (default 5min), or the deployment
+ *     is closed (escrow refunds), the provider is
  *     recorded as an SLO failure (24h blacklist, 3 strikes permanent — derived from
  *     compute_provider_outcomes), and provisioning retries on the next screened provider up to
  *     `maxProviderAttempts` (default 3) before a terminal BOOT_SLO_TIMEOUT.
@@ -46,6 +47,7 @@ import type {
   ProvisionSpec,
   ProvisionState,
 } from "@cogni/ai-tools";
+import { isValidComputeReadinessPath } from "@/ports/compute-workload.types";
 
 import {
   type AkashProviderInfo,
@@ -55,10 +57,38 @@ import {
 } from "./akash-provider-screen";
 import { type AkashSdlOptions, buildAkashSdl } from "./akash-sdl";
 import type { ProviderOutcomeStore } from "./provider-outcome-store";
-import { safeVersionProbe } from "./safe-version-probe";
+import { safeReadinessProbe, safeVersionProbe } from "./safe-version-probe";
 
 const PROVIDER = "akash";
 const MICRO = 1_000_000;
+
+/** Narrow adapter capability view; the canonical wire field is owned by repo-spec. */
+type ReadinessAwareProvisionService = ProvisionSpec["services"][number] & {
+  readonly readinessPath?: string;
+};
+type ReadinessAwareProvisionSpec = Omit<ProvisionSpec, "services"> & {
+  readonly services: readonly ReadinessAwareProvisionService[];
+};
+
+function declaredReadinessPath(spec: ProvisionSpec): string | undefined {
+  const declared = (spec as ReadinessAwareProvisionSpec).services
+    .map((service) => service.readinessPath)
+    .filter((path): path is string => path !== undefined);
+  if (declared.length > 1) {
+    throw new AkashComputeError(
+      "UNEXPECTED_SHAPE",
+      "at most one service may declare application readiness"
+    );
+  }
+  const path = declared[0];
+  if (path && !isValidComputeReadinessPath(path)) {
+    throw new AkashComputeError(
+      "UNEXPECTED_SHAPE",
+      "declared application readiness path is invalid"
+    );
+  }
+  return path;
+}
 
 /** Overclock Labs audit account — the `signedBy` anchor Console itself screens on. */
 export const AKASH_OVERCLOCK_AUDITOR =
@@ -292,12 +322,14 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     spec: ProvisionSpec;
   }): Promise<ProvisionOutput> {
     const sdl = buildAkashSdl(p.spec, this.sdlOptions);
+    const readinessPath = declaredReadinessPath(p.spec);
     const screening = await this.loadScreeningContext();
     const tried = new Set<string>();
     for (let attempt = 1; attempt <= this.maxProviderAttempts; attempt++) {
       const result = await this.provisionOnce(
         sdl,
         p.spec.name,
+        readinessPath,
         screening,
         tried
       );
@@ -306,7 +338,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     }
     throw new AkashComputeError(
       "BOOT_SLO_TIMEOUT",
-      `workload served no /version within ${this.bootSloMs}ms on ${tried.size} screened provider(s) ` +
+      `workload failed boot proof within ${this.bootSloMs}ms on ${tried.size} screened provider(s) ` +
         `[${[...tried].join(", ")}]; giving up after ${this.maxProviderAttempts} attempts ` +
         "(deployments closed, escrow refunding)"
     );
@@ -323,9 +355,11 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     void p.env;
     void p.idempotencyKey;
     const sdl = buildAkashSdl(p.spec, this.sdlOptions);
+    const readinessPath = declaredReadinessPath(p.spec);
     const result = await this.provisionOnce(
       sdl,
       p.spec.name,
+      readinessPath,
       await this.loadScreeningContext(),
       new Set<string>(),
       onAllocated
@@ -407,7 +441,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
       { data: { sdl } },
       this.writeTimeoutMs
     );
-    return this.awaitBootServing(p.resourceId);
+    return this.awaitBootServing(p.resourceId, declaredReadinessPath(p.spec));
   }
 
   async release(p: { leaseId: string }): Promise<void> {
@@ -442,6 +476,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
   private async provisionOnce(
     sdl: string,
     workload: string,
+    readinessPath: string | undefined,
     screening: ScreeningContext,
     tried: Set<string>,
     onAllocated?: (resource: ProvisionOutput) => Promise<void>
@@ -520,10 +555,11 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     }
 
     // Boot SLO: the lease is paying from here — the workload must PROVE registry egress by
-    // serving /version before the deadline, or the lease closes and the provider is struck.
+    // serving /version plus declared app readiness before the deadline, or the lease closes
+    // and the provider is struck.
     const leasedAt = Date.now();
     try {
-      const output = await this.awaitBootServing(String(dseq));
+      const output = await this.awaitBootServing(String(dseq), readinessPath);
       await this.recordOutcome({
         computeProvider: PROVIDER,
         providerAccount: provider,
@@ -547,7 +583,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
           outcome: "slo_timeout",
           leaseId: String(dseq),
           workload,
-          detail: `no /version within ${this.bootSloMs}ms`,
+          detail: `boot proof incomplete within ${this.bootSloMs}ms`,
         });
         tried.add(provider);
         return { kind: "slo_failed" };
@@ -630,23 +666,31 @@ export class AkashComputeAdapter implements ComputeResourcePort {
   }
 
   /**
-   * Hold the boot SLO: poll deployment status and probe each reported endpoint's `/version`
-   * until one serves, or throw BOOT_SLO_TIMEOUT at the deadline. Status-read failures are
-   * tolerated inside the window (the deadline is the arbiter).
+   * Hold the boot SLO: poll deployment status and require one endpoint to serve `/version`
+   * plus the declared readiness path. Status/probe failures are tolerated inside the window;
+   * the deadline is the arbiter.
    */
-  private async awaitBootServing(dseq: string): Promise<ProvisionOutput> {
+  private async awaitBootServing(
+    dseq: string,
+    readinessPath: string | undefined
+  ): Promise<ProvisionOutput> {
     const deadline = Date.now() + this.bootSloMs;
     for (;;) {
       const output = await this.status({ leaseId: dseq }).catch(() => null);
       if (output) {
         for (const endpoint of output.endpoints) {
-          if (await this.probeVersion(endpoint)) return output;
+          const sourceServing = await this.probeVersion(endpoint);
+          const applicationReady =
+            !readinessPath ||
+            (sourceServing &&
+              (await this.probeReadiness(endpoint, readinessPath)));
+          if (sourceServing && applicationReady) return output;
         }
       }
       if (Date.now() >= deadline) {
         throw new AkashComputeError(
           "BOOT_SLO_TIMEOUT",
-          `deployment ${dseq} served no /version within ${this.bootSloMs}ms`
+          `deployment ${dseq} failed boot proof within ${this.bootSloMs}ms`
         );
       }
       await this.sleep(this.bootPollIntervalMs);
@@ -664,6 +708,32 @@ export class AkashComputeAdapter implements ComputeResourcePort {
         `${base.replace(/\/$/, "")}/version`,
         { method: "GET", signal: controller.signal }
       );
+      return response.ok;
+    } catch {
+      return false;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  /** Unauthenticated bounded GET of the declared public application-readiness path. */
+  private async probeReadiness(
+    endpoint: string,
+    path: string
+  ): Promise<boolean> {
+    if (!this.config.fetchImpl) return safeReadinessProbe(endpoint, path);
+    const base = endpoint.startsWith("http") ? endpoint : `http://${endpoint}`;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
+    try {
+      const url = new URL(base);
+      url.pathname = path;
+      url.search = "";
+      url.hash = "";
+      const response = await this.fetchImpl(url.toString(), {
+        method: "GET",
+        signal: controller.signal,
+      });
       return response.ok;
     } catch {
       return false;

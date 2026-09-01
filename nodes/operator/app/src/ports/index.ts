@@ -91,6 +91,7 @@ export {
   computeWorkloadIdempotencyKey,
   type DeclaredProvisionServiceSpec,
   type DeclaredProvisionSpec,
+  isValidComputeReadinessPath,
 } from "./compute-workload.types";
 export {
   ComputeLifecycleError,

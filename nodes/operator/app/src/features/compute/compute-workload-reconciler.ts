@@ -14,6 +14,7 @@ import {
   computeWorkloadIdempotencyKey,
   decodeAttemptReceipt,
   encodeAttemptReceipt,
+  isValidComputeReadinessPath,
 } from "@/ports/compute-workload.types";
 import type { ComputeWorkloadDnsPort } from "@/ports/compute-workload-dns.port";
 import {
@@ -35,6 +36,14 @@ export interface ComputeWorkloadReconcileDeps {
   readonly leaderEpoch: string;
   readonly assertLeadership: (epoch: string) => Promise<boolean>;
   readonly now: () => Date;
+  readonly recordReadinessTransition: (input: {
+    nodeId: string;
+    environment: string;
+    sourceSha: string;
+    leaseId: string;
+    readinessPath: string;
+    outcomeCode: "ReadinessPassed" | "ReadinessFailed";
+  }) => void;
 }
 
 const SAFE_MESSAGES: Readonly<Record<string, string>> = {
@@ -55,6 +64,8 @@ const SAFE_MESSAGES: Readonly<Record<string, string>> = {
   DnsOwnershipChanged:
     "external workload DNS record no longer matches controller ownership",
   EndpointVerificationFailed: "workload source verification did not succeed",
+  ReadinessDeclarationInvalid:
+    "the public service readiness declaration is invalid",
   MutationClaimConflict: "another controller writer claimed this generation",
   WalletAllocationBlocked:
     "another uncertain wallet allocation must be resolved before creating more compute",
@@ -67,6 +78,10 @@ const SAFE_MESSAGES: Readonly<Record<string, string>> = {
   FinalizationBlocked: "external resource finalization has not completed",
   ServingVerificationPending:
     "waiting for the workload to serve the expected source revision",
+  ReadinessPassed: "declared application readiness probe succeeded",
+  ReadinessFailed: "declared application readiness probe did not succeed",
+  ResourceClosed: "external resource closure was durably observed",
+  ResourceMissing: "external resource absence was durably observed",
 };
 
 function safeMessage(reason: string): string {
@@ -235,6 +250,9 @@ async function toProvisionSpec(
         },
         ...(service.command ? { command: service.command } : {}),
         ...(service.args ? { args: service.args } : {}),
+        ...(service.readinessPath
+          ? { readinessPath: service.readinessPath }
+          : {}),
         cpuUnits: service.cpuUnits,
         memoryMi: service.memoryMi,
         storageMi: service.storageMi,
@@ -262,6 +280,38 @@ async function emit(
 ): Promise<void> {
   await deps.state
     .event({ resource, type, reason, message: safeMessage(reason) })
+    .catch(() => {});
+}
+
+async function emitReadinessTransition(
+  deps: ComputeWorkloadReconcileDeps,
+  resource: ComputeWorkload,
+  leaseId: string,
+  readinessPath: string,
+  outcomeCode: "ReadinessPassed" | "ReadinessFailed"
+): Promise<void> {
+  const previous = resource.status?.conditions.find(
+    (entry) => entry.type === "Ready"
+  );
+  if (previous?.reason === outcomeCode) return;
+  const fields = {
+    nodeId: resource.spec.nodeId,
+    environment: resource.spec.environment,
+    sourceSha: resource.spec.bundle.source.sha,
+    leaseId,
+    readinessPath,
+    outcomeCode,
+  };
+  deps.recordReadinessTransition(fields);
+  await deps.state
+    .event({
+      resource,
+      type: outcomeCode === "ReadinessPassed" ? "Normal" : "Warning",
+      reason: outcomeCode,
+      message: Object.entries(fields)
+        .map(([key, value]) => `${key}=${value}`)
+        .join(" "),
+    })
     .catch(() => {});
 }
 
@@ -317,6 +367,22 @@ function ownershipFailure(
     resource.metadata.name !== resource.spec.nodeId ||
     labels["cogni.io/environment"] !== resource.spec.environment ||
     labels["cogni.io/node-id"] !== resource.spec.nodeId
+  );
+}
+
+function readinessDeclarationInvalid(resource: ComputeWorkload): boolean {
+  const publicServices = resource.spec.workload.services.filter(
+    (service) => service.visibility === "public"
+  );
+  if (
+    publicServices.length !== 1 ||
+    !publicServices[0]?.readinessPath ||
+    !isValidComputeReadinessPath(publicServices[0].readinessPath)
+  ) {
+    return true;
+  }
+  return resource.spec.workload.services.some(
+    (service) => service.visibility === "private" && service.readinessPath
   );
 }
 
@@ -822,7 +888,29 @@ async function observeAndReport(
     observed = await deps.lifecycle.observe({ resourceId: current.id });
   } catch (error) {
     const failure = lifecycleError(error, false);
-    if (failure.kind === "not_found") return "missing";
+    if (failure.kind === "not_found") {
+      await deps.state.patchStatus({
+        resource,
+        status: {
+          ...baseStatus(resource),
+          ...observedIdentity(resource),
+          phase: "Progressing",
+          observedGeneration: resource.metadata.generation,
+          resource: { ...current, state: "closed", endpoints: [] },
+          ...(attempt ? { attempt } : {}),
+          recoveryCount: resource.status?.recoveryCount ?? 0,
+          conditions: [
+            condition(
+              resource,
+              deps.now().toISOString(),
+              "False",
+              "ResourceMissing"
+            ),
+          ],
+        },
+      });
+      return "missing";
+    }
     const now = deps.now().toISOString();
     await deps.state.patchStatus({
       resource,
@@ -845,7 +933,29 @@ async function observeAndReport(
     });
     return "error";
   }
-  if (observed.state === "closed") return "closed";
+  if (observed.state === "closed") {
+    await deps.state.patchStatus({
+      resource,
+      status: {
+        ...baseStatus(resource),
+        ...observedIdentity(resource),
+        phase: "Progressing",
+        observedGeneration: resource.metadata.generation,
+        resource: resourceStatus(observed),
+        ...(attempt ? { attempt } : {}),
+        recoveryCount: resource.status?.recoveryCount ?? 0,
+        conditions: [
+          condition(
+            resource,
+            deps.now().toISOString(),
+            "False",
+            "ResourceClosed"
+          ),
+        ],
+      },
+    });
+    return "closed";
+  }
   if (observed.state !== "active") return "pending";
   let dnsTarget: string | undefined;
   try {
@@ -916,17 +1026,32 @@ async function observeAndReport(
     return "error";
   }
   if (!dnsTarget) return "error";
-  const verified = await deps.lifecycle.verifySource({
+  const sourceVerified = await deps.lifecycle.verifySource({
     endpoints: [`https://${resource.spec.workload.publicHost}`],
     expectedSourceSha: resource.spec.bundle.source.sha,
   });
+  const publicService = resource.spec.workload.services.find(
+    (service) => service.visibility === "public"
+  );
+  const readinessPath = publicService?.readinessPath;
+  const readinessVerified =
+    sourceVerified && readinessPath
+      ? await deps.lifecycle.verifyReadiness({
+          endpoints: [`https://${resource.spec.workload.publicHost}`],
+          path: readinessPath,
+        })
+      : false;
+  const ready = sourceVerified && readinessVerified;
+  const readinessOutcome = readinessVerified
+    ? "ReadinessPassed"
+    : "ReadinessFailed";
   const now = deps.now().toISOString();
   await deps.state.patchStatus({
     resource,
     status: {
       ...baseStatus(resource),
       ...observedIdentity(resource),
-      phase: verified ? "Ready" : "Progressing",
+      phase: ready ? "Ready" : "Progressing",
       observedGeneration: resource.metadata.generation,
       resource: resourceStatus(observed),
       dns: {
@@ -935,7 +1060,7 @@ async function observeAndReport(
       },
       ...(attempt
         ? {
-            attempt: verified
+            attempt: ready
               ? { ...attempt, outcome: "succeeded", completedAt: now }
               : attempt,
           }
@@ -945,12 +1070,21 @@ async function observeAndReport(
         condition(
           resource,
           now,
-          verified ? "True" : "False",
-          verified ? "SourceVerified" : "ServingVerificationPending"
+          ready ? "True" : "False",
+          sourceVerified ? readinessOutcome : "ServingVerificationPending"
         ),
       ],
     },
   });
+  if (sourceVerified && readinessPath) {
+    await emitReadinessTransition(
+      deps,
+      resource,
+      observed.leaseId,
+      readinessPath,
+      readinessOutcome
+    );
+  }
   return "active";
 }
 
@@ -1152,6 +1286,26 @@ export async function reconcileComputeWorkload(
     });
     return;
   }
+  if (readinessDeclarationInvalid(resource)) {
+    const now = deps.now().toISOString();
+    await deps.state.patchStatus({
+      resource,
+      status: {
+        ...baseStatus(resource),
+        phase: "Failed",
+        failure: {
+          reason: "ReadinessDeclarationInvalid",
+          message: safeMessage("ReadinessDeclarationInvalid"),
+          retryable: false,
+        },
+        conditions: [
+          condition(resource, now, "False", "ReadinessDeclarationInvalid"),
+        ],
+      },
+    });
+    await emit(deps, resource, "Warning", "ReadinessDeclarationInvalid");
+    return;
+  }
 
   const finalizers = resource.metadata.finalizers ?? [];
   if (!finalizers.includes(COMPUTE_WORKLOAD_FINALIZER)) {
@@ -1212,15 +1366,17 @@ export async function reconcileComputeWorkload(
       priorAttempt.operation === "recover") &&
     priorAttempt.outcome !== "succeeded"
   ) {
-    const state = await observeAndReport(deps, resource, current, priorAttempt);
-    if (state === "closed" || state === "missing") {
+    if (current.state === "closed") {
       await mutate(
         deps,
         resource,
         "recover",
         (resource.status?.recoveryCount ?? 0) + 1
       );
-    } else if (state === "pending") {
+      return;
+    }
+    const state = await observeAndReport(deps, resource, current, priorAttempt);
+    if (state === "pending") {
       await closeKnown(deps, resource, current);
     }
     return;
@@ -1244,13 +1400,14 @@ export async function reconcileComputeWorkload(
     return;
   }
 
-  const state = await observeAndReport(deps, resource, current);
-  if (state === "closed" || state === "missing") {
+  if (current.state === "closed") {
     await mutate(
       deps,
       resource,
       "recover",
       (resource.status?.recoveryCount ?? 0) + 1
     );
+    return;
   }
+  await observeAndReport(deps, resource, current);
 }
