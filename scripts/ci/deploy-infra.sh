@@ -720,42 +720,58 @@ previous_runtime_env_value() {
 PREVIOUS_OPENFGA_AUTHORIZATION_MODEL_ID="$(previous_runtime_env_value OPENFGA_AUTHORIZATION_MODEL_ID)"
 PREVIOUS_OPENFGA_AUTHORIZATION_MODEL_HASH="$(previous_runtime_env_value OPENFGA_AUTHORIZATION_MODEL_HASH)"
 
-DB_READER_TOKEN=""
-mint_db_reader_token() {
-  if [[ -n "$DB_READER_TOKEN" ]]; then
-    printf '%s\n' "$DB_READER_TOKEN"
-    return 0
-  fi
+# ── OpenBao reads: FILE-cached token + per-path JSON (bug.5081 / bug.5011) ──
+# The prod box (bug.5011) starves openbao, so any single `kubectl exec … bao` can
+# stall. deploy-infra makes ~12 per-field reads, and each `openbao_get_field` runs
+# inside a `$()` subshell — so the old in-memory `DB_READER_TOKEN` cache never
+# persisted and EVERY read re-minted (2 extra round-trips), then read one field.
+# ~36 round-trips → any one stall failed the whole deploy (whack-a-mole; retry alone
+# couldn't beat the count). Fix: cache the reader token AND each path's whole JSON to
+# FILES (survive subshells) → 1 mint + ~3 path reads total, each retried. Field
+# extraction is then local (jq). Caches are cleared once at definition so a prior
+# deploy's /tmp can never serve a stale secret.
+BAO_CACHE_DIR="/tmp/.deploy-infra-bao-cache"
+BAO_TOKEN_FILE="${BAO_CACHE_DIR}/reader-token"
+rm -rf "$BAO_CACHE_DIR" 2>/dev/null || true
+mkdir -p "$BAO_CACHE_DIR"
 
-  local jwt tok
-  jwt="$(timeout 10 kubectl create token db-provisioner -n default 2>/dev/null)" || return 1
-  tok="$(timeout 10 kubectl exec -n openbao openbao-0 -- env BAO_ADDR=http://127.0.0.1:8200 \
-    bao write -field=token auth/kubernetes/login \
-    "role=${DEPLOY_ENVIRONMENT}-db-reader" "jwt=${jwt}" 2>/dev/null)" || return 1
-  [[ -n "$tok" ]] || return 1
-  DB_READER_TOKEN="$tok"
-  printf '%s\n' "$DB_READER_TOKEN"
+mint_db_reader_token() {
+  if [[ -s "$BAO_TOKEN_FILE" ]]; then cat "$BAO_TOKEN_FILE"; return 0; fi
+  local jwt="" tok="" attempt
+  for attempt in 1 2 3; do
+    jwt="$(timeout 15 kubectl create token db-provisioner -n default 2>/dev/null)" || jwt=""
+    if [[ -n "$jwt" ]]; then
+      tok="$(timeout 20 kubectl exec -n openbao openbao-0 -- env BAO_ADDR=http://127.0.0.1:8200 \
+        bao write -field=token auth/kubernetes/login \
+        "role=${DEPLOY_ENVIRONMENT}-db-reader" "jwt=${jwt}" 2>/dev/null)" || tok=""
+      if [[ -n "$tok" ]]; then printf '%s' "$tok" > "$BAO_TOKEN_FILE"; printf '%s' "$tok"; return 0; fi
+    fi
+    [[ "$attempt" -lt 3 ]] && sleep 3
+  done
+  return 1
 }
 
 openbao_get_field() {
-  # NOTE: tok/val MUST be initialized — the whole remote script runs under `set -u`,
-  # so if every mint attempt fails (the `continue` path never assigns val) the final
-  # `printf "$val"` would abort with `val: unbound variable` (bug.5081 follow-up).
-  local svc="$1" key="$2" tok="" val="" attempt
-  # Retry with a generous timeout. Under deploy-time VM load a single `kubectl exec`
-  # into openbao can exceed a tight timeout; the old `timeout 10 ... 2>/dev/null || true`
-  # then silently yielded an EMPTY value, tripping the downstream `[[ -n ]]` fatal
-  # (e.g. OPENFGA_DB_PASSWORD) even though the secret + policy + token are healthy
-  # (bug.5081: 3/3 prod promotes died here while manual reads succeeded 8/8). Retry so a
-  # transient slow read can't masquerade as an absent secret. Returns value or "" (0).
-  for attempt in 1 2 3; do
-    tok="$(mint_db_reader_token)" || { [[ "$attempt" -lt 3 ]] && sleep 3; continue; }
-    val="$(timeout 30 kubectl exec -n openbao openbao-0 -- env BAO_ADDR=http://127.0.0.1:8200 \
-      BAO_TOKEN="${tok}" bao kv get -field="$key" "cogni/${DEPLOY_ENVIRONMENT}/${svc}" 2>/dev/null)" || val=""
-    [[ -n "$val" ]] && break
-    [[ "$attempt" -lt 3 ]] && sleep 3
-  done
-  printf '%s' "$val"
+  # set -u safe: every local initialized (a failed-all-attempts path must not leave
+  # a var unset for the final jq — bug.5081 follow-up). Returns value or "" (rc 0) so
+  # the downstream `[[ -n ]] || log_fatal` keeps its clean "absent" message.
+  local svc="$1" key="$2" tok="" attempt cache=""
+  cache="${BAO_CACHE_DIR}/path-${svc}.json"
+  if [[ ! -s "$cache" ]]; then
+    for attempt in 1 2 3; do
+      tok="$(mint_db_reader_token)" || { [[ "$attempt" -lt 3 ]] && sleep 3; continue; }
+      if timeout 30 kubectl exec -n openbao openbao-0 -- env BAO_ADDR=http://127.0.0.1:8200 \
+        BAO_TOKEN="${tok}" bao kv get -format=json "cogni/${DEPLOY_ENVIRONMENT}/${svc}" 2>/dev/null > "${cache}.tmp" \
+        && [[ -s "${cache}.tmp" ]]; then
+        mv -f "${cache}.tmp" "$cache"; break
+      fi
+      # read failed: drop the cached token in case it expired mid-deploy, then retry
+      rm -f "${cache}.tmp" "$BAO_TOKEN_FILE"
+      [[ "$attempt" -lt 3 ]] && sleep 3
+    done
+  fi
+  [[ -s "$cache" ]] || return 0
+  jq -r --arg k "$key" '.data.data[$k] // empty' "$cache" 2>/dev/null
 }
 
 OPENBAO_RUNTIME_SSOT=false
