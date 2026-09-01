@@ -10,11 +10,11 @@ import { AkashComputeError } from "./akash-compute.adapter";
 import { ComputeWorkloadLifecycleAdapter } from "./compute-workload-lifecycle.adapter";
 
 const SPEC: ProvisionSpec = {
-  name: "poly",
+  name: "sample-node",
   services: [
     {
       name: "app",
-      image: `ghcr.io/cogni-dao/poly@sha256:${"a".repeat(64)}`,
+      image: `ghcr.io/cogni-dao/sample-node@sha256:${"a".repeat(64)}`,
       cpuUnits: 0.5,
       memoryMi: 512,
       storageMi: 1024,
