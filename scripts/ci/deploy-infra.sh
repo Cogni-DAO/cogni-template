@@ -466,6 +466,12 @@ log_info "OpenFGA image (catalog content-hash): ${OPENFGA_IMAGE}"
 COGNI_DEFAULT_NODE_ID="$(default_node_id)"
 log_info "LiteLLM default node (repo-spec primary-host): ${COGNI_DEFAULT_NODE_ID}"
 
+# task.5052 — compute-egress allowlist is catalog-rendered (CATALOG_IS_SSOT):
+# harden-docker-public-ports.sh installs the staged render (even when empty, so
+# catalog removal converges) before rebuilding the DOCKER-USER rules.
+"$REPO_ROOT/scripts/ci/render-compute-egress-allowlist.sh" "$DEPLOY_ENVIRONMENT" > "$ARTIFACT_DIR/compute-egress-allowlist"
+log_info "Compute-egress allowlist (catalog-driven): $(grep -cv '^#' "$ARTIFACT_DIR/compute-egress-allowlist" || true) CIDR rule(s) for ${DEPLOY_ENVIRONMENT}"
+
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Create remote deployment script (heredoc — no variable expansion)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2207,6 +2213,7 @@ scp $SSH_OPTS \
   "$REPO_ROOT/scripts/ci/bootstrap-openfga.sh" \
   "$REPO_ROOT/scripts/ci/reconcile-edge-caddy.remote.sh" \
   "$REPO_ROOT/infra/provision/cherry/harden-docker-public-ports.sh" \
+  "$ARTIFACT_DIR/compute-egress-allowlist" \
   "$REPO_ROOT/scripts/secrets/sync-app-webhook-secret.sh" \
   root@"$VM_HOST":/tmp/
 

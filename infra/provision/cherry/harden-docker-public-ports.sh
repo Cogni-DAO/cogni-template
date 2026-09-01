@@ -59,9 +59,22 @@ iptables -A DOCKER-USER -s 127.0.0.0/8 -m comment --comment "$TAG:loopback" -j A
 # (comments/# allowed); each gets an ACCEPT ahead of the public DROP, scoped to the
 # named ports (default: all internal ports). Empty/absent file = no external compute.
 # Provider egress IPs are multi-tenant — grant only the ports the workload dials.
-# NOTE: this file is VM-local hand-managed state for v0; the platform home is a
-# catalog field rendered by an existing generator (task.5044 follow-up).
-ALLOWLIST_FILE="/etc/cogni/compute-egress-allowlist"
+#
+# task.5052 — the allowlist is CATALOG-RENDERED (CATALOG_IS_SSOT), not hand-managed:
+# deploy-infra.sh renders infra/catalog/*.yaml `compute_egress_cidrs` via
+# scripts/ci/render-compute-egress-allowlist.sh and stages the result at
+# $STAGED_ALLOWLIST on every deploy. Installing it here — even when it contains no
+# allow lines — is what makes catalog REMOVAL converge on the next run. No staged
+# file (cloud-init boot runs before any deploy; a fresh VM has no installed file
+# either) = fail-closed until the first deploy stages one. Paths are overridable
+# for tests only.
+ALLOWLIST_FILE="${ALLOWLIST_FILE:-/etc/cogni/compute-egress-allowlist}"
+STAGED_ALLOWLIST="${STAGED_ALLOWLIST:-/tmp/compute-egress-allowlist}"
+if [ -f "$STAGED_ALLOWLIST" ]; then
+  mkdir -p "$(dirname "$ALLOWLIST_FILE")"
+  install -m 0644 "$STAGED_ALLOWLIST" "$ALLOWLIST_FILE"
+  echo "[harden] installed catalog-rendered compute-egress allowlist -> $ALLOWLIST_FILE"
+fi
 if [ -f "$ALLOWLIST_FILE" ]; then
   while IFS= read -r line; do
     case "$line" in ""|\#*) continue ;; esac
