@@ -79,9 +79,6 @@ describe("buildComputeWorkloadManifest", () => {
     expect(manifest.metadata).toEqual({
       name: NODE_ID,
       namespace: "cogni-candidate-a",
-      annotations: {
-        "argocd.argoproj.io/sync-options": "ServerSideApply=false",
-      },
       labels: {
         "cogni.io/node-id": NODE_ID,
         "cogni.io/environment": "candidate-a",
