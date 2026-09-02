@@ -12,8 +12,16 @@ const options = {
   "manifest-json": { type: "string" },
   host: { type: "string" },
   identity: { type: "string" },
-  "timeout-seconds": { type: "string", default: "420" },
+  "timeout-seconds": { type: "string", default: "900" },
 } as const;
+
+/**
+ * The controller's own allocation budget bounds this wait: one provider attempt
+ * is bidTimeout (90s) + bootSlo (300s) before the on-chain tx, DNS reconcile and
+ * source verify, and it retries up to maxProviderAttempts. A ceiling below that
+ * turns a converging deploy into a hard red before the buildSha proof can run.
+ */
+const MAX_TIMEOUT_SECONDS = 1_800;
 
 async function main(): Promise<void> {
   const { values } = parseArgs({ options, strict: true });
@@ -25,9 +33,11 @@ async function main(): Promise<void> {
   if (
     !Number.isInteger(timeoutSeconds) ||
     timeoutSeconds < 1 ||
-    timeoutSeconds > 900
+    timeoutSeconds > MAX_TIMEOUT_SECONDS
   ) {
-    throw new Error("--timeout-seconds must be an integer between 1 and 900");
+    throw new Error(
+      `--timeout-seconds must be an integer between 1 and ${MAX_TIMEOUT_SECONDS}`
+    );
   }
 
   const expected = JSON.parse(await readFile(manifestPath, "utf8")) as unknown;

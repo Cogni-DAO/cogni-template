@@ -52,6 +52,16 @@ describe("assessComputeWorkloadReadiness", () => {
       "ready_condition_pending",
       { status: { ...live().status, conditions: [] } },
     ],
+    [
+      "deletion_pending",
+      {
+        metadata: {
+          ...expected.metadata,
+          generation: 2,
+          deletionTimestamp: "2026-09-02T21:00:00Z",
+        },
+      },
+    ],
   ])("fails closed with %s", (reason, overrides) => {
     expect(
       assessComputeWorkloadReadiness({ expected, live: live(overrides) })

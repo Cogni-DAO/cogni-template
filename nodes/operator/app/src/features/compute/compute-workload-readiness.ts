@@ -42,6 +42,11 @@ export function assessComputeWorkloadReadiness(input: {
   ) {
     return { ready: false, reason: "identity_mismatch" };
   }
+  // A resource mid-finalization still carries its last Ready status while the
+  // lease behind it is being torn down; that is never a deployable state.
+  if (liveMetadata.deletionTimestamp !== undefined) {
+    return { ready: false, reason: "deletion_pending" };
+  }
   if (stableJson(liveSpec) !== stableJson(expectedSpec)) {
     return { ready: false, reason: "desired_spec_pending" };
   }
@@ -90,7 +95,10 @@ function sortJson(value: unknown): unknown {
   if (!record) return value;
   return Object.fromEntries(
     Object.entries(record)
-      .sort(([left], [right]) => left.localeCompare(right))
+      // Codepoint order, not localeCompare: a locale collator is not a
+      // guaranteed total order, and a tie would sort by input order — which
+      // differs between the rendered manifest and the apiserver's response.
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
       .map(([key, child]) => [key, sortJson(child)])
   );
 }
