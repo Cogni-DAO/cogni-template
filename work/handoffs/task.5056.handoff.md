@@ -54,7 +54,7 @@ bespoke steps. E2E validation, in order:
 - **Stage 2 90%:** flight run 33577821517 succeeded; Argo applied the ComputeWorkload
   (`72aa130b… = toks4`); controller created Akash deployment `1788311231154`, retried as
   `1788311688177`; status now `Progressing / pending / ProviderRejected: external compute
-  provider rejected the operation`. `toks4-test.cognidao.org` = 502.
+provider rejected the operation`. `toks4-test.cognidao.org` = 502.
 - **Five real bugs found + fixed this cycle** (all on proof branch; controller fixes ported
   to #2101): SSH arg-flattening in `assert-target-substrate.sh` (%q); CRD inadmissible
   (CEL `metadata.labels` + cost budget — proven via `kubectl --dry-run=server`); Lease
