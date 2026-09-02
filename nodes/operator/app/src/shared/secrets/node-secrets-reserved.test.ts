@@ -3,6 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  EXTERNAL_WORKLOAD_DENIED_KEYS,
   isExternalWorkloadSecretKey,
   isNodeOwnedSecretKey,
   SUBSTRATE_RESERVED_KEYS,
@@ -43,7 +44,7 @@ describe("node-secrets reserved-key guard (gate 2)", () => {
   });
 });
 
-describe("external-workload secret boundary", () => {
+describe("external-workload secret boundary (gate 3, provenance-keyed)", () => {
   it("allows format-valid node-owned keys without an operator allowlist", () => {
     expect(isExternalWorkloadSecretKey("SOME_BRAND_NEW_VENDOR_KEY")).toBe(true);
     expect(isExternalWorkloadSecretKey("AUTH_SECRET")).toBe(true);
@@ -52,13 +53,60 @@ describe("external-workload secret boundary", () => {
   });
 
   it.each([
-    "LITELLM_MASTER_KEY",
-    "GH_REVIEW_APP_PRIVATE_KEY_BASE64",
-    "IDENTITY_ATTESTATION_PRIVATE_KEY",
-    "APP_DB_PASSWORD",
+    // bug.5093 regression. Every key here is minted FOR ONE NODE and lives only
+    // at cogni/<env>/<node>/<KEY> — blast radius is that node. They were
+    // name-listed as denied, which contradicted this module's own stated rule
+    // and made poly (which carries its own custody + mirror creds) permanently
+    // undeployable to Akash: buildComputeSecretResources hard-throws on any
+    // denied ref. Sensitivity is not provenance; the node's OpenBao namespace
+    // is the authority.
     "POLY_WALLET_AEAD_KEY_HEX",
+    "POLY_WALLET_AEAD_KEY_ID",
+    "PRIVY_APP_ID",
+    "PRIVY_APP_SECRET",
+    "PRIVY_SIGNING_KEY",
+    "PRIVY_USER_WALLETS_APP_SECRET",
+    "PRIVY_USER_WALLETS_SIGNING_KEY",
+    "DOLTHUB_API_TOKEN",
+    "DOLT_CREDS_JWK",
+    "DISCORD_BOT_TOKEN",
+  ])("allows node-owned key %s — sensitivity is not provenance", (key) => {
+    expect(isExternalWorkloadSecretKey(key)).toBe(true);
+    expect(EXTERNAL_WORKLOAD_DENIED_KEYS.has(key)).toBe(false);
+  });
+
+  it("carries no node-specific callout: every denied key is operator/fleet-owned", () => {
+    // Shared platform code must not name a node. If this fails, a node-scoped
+    // key crept back into the denylist — fix the provenance, not the test.
+    const nodeSpecificPrefixes = [
+      "POLY_",
+      "PRIVY_",
+      "DOLTHUB_",
+      "DOLT_CREDS_",
+      "DISCORD_",
+    ];
+    const offenders = [...EXTERNAL_WORKLOAD_DENIED_KEYS].filter((key) =>
+      nodeSpecificPrefixes.some((prefix) => key.startsWith(prefix))
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  it.each([
+    // Denied because the OPERATOR/SUBSTRATE mints, rotates, or fleet-shares the
+    // value — one copy authorizes action beyond the node carrying it.
+    "LITELLM_MASTER_KEY", // one key authenticates the whole fleet to the proxy
+    "OPENROUTER_API_KEY",
+    "AKASH_CONSOLE_API_KEY",
     "CLOUDFLARE_API_TOKEN",
-  ])("denies fleet, custody, or substrate-only key %s", (key) => {
+    "GH_REVIEW_APP_PRIVATE_KEY_BASE64",
+    "GH_GRAFANA_PARENT_SA_TOKEN",
+    "IDENTITY_ATTESTATION_PRIVATE_KEY", // signs every node's attestation
+    "APP_DB_PASSWORD",
+    "POSTGRES_ROOT_PASSWORD",
+    "TEMPORAL_DB_PASSWORD",
+    "GHCR_DEPLOY_TOKEN",
+    "ACTIONS_AUTOMATION_BOT_PAT",
+  ])("denies operator/fleet/substrate-owned key %s", (key) => {
     expect(isExternalWorkloadSecretKey(key)).toBe(false);
   });
 

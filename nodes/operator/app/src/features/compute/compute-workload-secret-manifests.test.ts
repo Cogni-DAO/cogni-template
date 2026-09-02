@@ -83,8 +83,11 @@ describe("buildComputeSecretResources", () => {
 
   it.each([
     "LITELLM_MASTER_KEY",
-    "PRIVY_APP_SECRET",
-  ])("rejects fleet-custody ref %s before render", (key) => {
+    "AKASH_CONSOLE_API_KEY",
+    "IDENTITY_ATTESTATION_PRIVATE_KEY",
+    "APP_DB_PASSWORD",
+    "GHCR_DEPLOY_TOKEN",
+  ])("rejects operator/fleet-owned ref %s before render", (key) => {
     expect(() =>
       buildComputeSecretResources({
         slug: "toks4",
@@ -92,6 +95,35 @@ describe("buildComputeSecretResources", () => {
         secretRefs: [{ key }],
       })
     ).toThrow("secret refs rejected");
+  });
+
+  it("projects node-owned custody + mirror refs (bug.5093 — poly can reach Akash)", () => {
+    // These were name-listed as denied, so this call used to THROW and poly
+    // could never render an external workload at all. They are node-scoped
+    // values at cogni/<env>/<node>/<KEY>; the node's namespace is the authority.
+    const nodeOwned = [
+      "POLY_WALLET_AEAD_KEY_HEX",
+      "POLY_WALLET_AEAD_KEY_ID",
+      "PRIVY_APP_SECRET",
+      "PRIVY_SIGNING_KEY",
+      "DOLTHUB_API_TOKEN",
+      "DISCORD_BOT_TOKEN",
+    ];
+    const resources = buildComputeSecretResources({
+      slug: "poly",
+      environment: "production",
+      secretRefs: nodeOwned.map((key) => ({ key })),
+    });
+    const externalSecret = resources[0]?.manifest as {
+      spec: { data: { secretKey: string; remoteRef: { key: string } }[] };
+    };
+    expect(externalSecret.spec.data.map((entry) => entry.secretKey)).toEqual(
+      [...nodeOwned].sort()
+    );
+    // Least-privilege still holds: every ref is read from the NODE's own path.
+    for (const entry of externalSecret.spec.data) {
+      expect(entry.remoteRef.key).toBe("production/poly");
+    }
   });
 
   it("projects a novel node-owned key — the node's OpenBao namespace is the authority, not a code allowlist", () => {
