@@ -96,6 +96,14 @@
       "$comment": "task.5052 — compute_egress_cidrs is env-scoped through the row's own envs[]: the renderer unions declarations across rows deployed to an env, so a row declaring egress CIDRs must declare envs.",
       "if": { "required": ["compute_egress_cidrs"] },
       "then": { "required": ["envs"] }
+    },
+    {
+      "$comment": "story.5016 — external placement is operator-owned, node-only policy; source_repo supplies the immutable node artifact lineage.",
+      "if": { "required": ["deployment_provider"] },
+      "then": {
+        "properties": { "type": { "const": "node" } },
+        "required": ["source_repo"]
+      }
     }
   ],
   "properties": {
@@ -180,6 +188,17 @@
       },
       "minItems": 1,
       "uniqueItems": true
+    },
+    "deployment_provider": {
+      "type": "object",
+      "description": "Operator-owned per-environment app placement. Omitted environments preserve the k3s default; akash routes only the node app workload through the external ComputeWorkload reconciler.",
+      "additionalProperties": false,
+      "properties": {
+        "candidate-a": { "enum": ["k3s", "akash"] },
+        "preview": { "enum": ["k3s", "akash"] },
+        "production": { "enum": ["k3s", "akash"] }
+      },
+      "minProperties": 1
     },
     "activity_env": {
       "type": "string",

@@ -1,0 +1,87 @@
+name: Materialize ComputeWorkload
+description: Resolve a trusted OCI node bundle and replace one ephemeral checkout overlay.
+
+inputs:
+  app_source_root:
+    { required: true, description: "Absolute application source checkout" }
+  node: { required: true, description: "Catalog node slug" }
+  environment:
+    { required: true, description: "candidate-a, preview, or production" }
+  source_sha: { required: true, description: "Exact node source SHA" }
+  source_repository:
+    { required: true, description: "Canonical GitHub owner/name" }
+  git_read_token:
+    {
+      required: true,
+      description: "Token allowed to read the node source repository",
+    }
+  domain: { required: true, description: "Environment domain" }
+  ghcr_username: { required: true, description: "GHCR reader username" }
+  ghcr_token: { required: true, description: "GHCR reader token" }
+
+runs:
+  using: composite
+  steps:
+    - name: Checkout exact node source
+      uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+      with:
+        repository: ${{ inputs.source_repository }}
+        ref: ${{ inputs.source_sha }}
+        fetch-depth: 1
+        token: ${{ inputs.git_read_token }}
+        path: .compute-node-source
+
+    - name: Set up ORAS
+      uses: oras-project/setup-oras@1d808f7d7f6995cc68b7bf507bfe5c5446e1dc9d # v2.0.1
+
+    - name: Login to GHCR
+      shell: bash
+      env:
+        GHCR_USERNAME: ${{ inputs.ghcr_username }}
+        GHCR_TOKEN: ${{ inputs.ghcr_token }}
+      run: |
+        set -euo pipefail
+        printf '%s' "$GHCR_TOKEN" | oras login ghcr.io --username "$GHCR_USERNAME" --password-stdin
+
+    - name: Set up pnpm
+      uses: pnpm/action-setup@c5ba7f7862a0f64c1b1a05fbac13e0b8e86ba08c # v4
+      with:
+        version: 9.12.2
+
+    - name: Set up Node.js
+      uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      with:
+        node-version: "22"
+        cache: pnpm
+        cache-dependency-path: ${{ inputs.app_source_root }}/pnpm-lock.yaml
+
+    - name: Install typed materializer dependencies
+      shell: bash
+      working-directory: ${{ inputs.app_source_root }}
+      run: pnpm install --frozen-lockfile
+
+    - name: Materialize immutable desired state
+      shell: bash
+      working-directory: ${{ inputs.app_source_root }}
+      env:
+        APP_SOURCE_ROOT: ${{ inputs.app_source_root }}
+        NODE: ${{ inputs.node }}
+        DEPLOYMENT_ENVIRONMENT: ${{ inputs.environment }}
+        SOURCE_SHA: ${{ inputs.source_sha }}
+        BUNDLE_REPOSITORY: ghcr.io/${{ inputs.source_repository }}
+        DOMAIN: ${{ inputs.domain }}
+        COMPUTE_OVERLAY: ${{ runner.temp }}/compute-workload-overlay
+        COGNI_CATALOG_ROOT: infra/catalog
+      run: |
+        set -euo pipefail
+        pnpm --filter operator materialize:compute-workload \
+          --catalog "${APP_SOURCE_ROOT}/infra/catalog/${NODE}.yaml" \
+          --environment "$DEPLOYMENT_ENVIRONMENT" \
+          --repo-spec "${GITHUB_WORKSPACE}/.compute-node-source/.cogni/repo-spec.yaml" \
+          --bundle-repository "$BUNDLE_REPOSITORY" \
+          --source-sha "$SOURCE_SHA" \
+          --domain "$DOMAIN" \
+          --output-dir "$COMPUTE_OVERLAY"
+        rsync -a --delete \
+          "${COMPUTE_OVERLAY}/" \
+          "infra/k8s/overlays/${DEPLOYMENT_ENVIRONMENT}/${NODE}/"

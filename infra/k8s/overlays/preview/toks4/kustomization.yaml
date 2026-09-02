@@ -7,53 +7,25 @@ namespace: cogni-preview
 
 resources:
   - ../../../base/node-app
-  - ../../../base/openfga-external
-  - ../../../base/compute-workload-controller
   - external-secret.yaml
-  - ./secrets-writer-sa.yaml
-  - ./compute-workload-platform-application.yaml
 
-namePrefix: operator-
-
-replacements:
-  - source:
-      kind: Application
-      name: compute-workload-platform
-      fieldPath: spec.destination.namespace
-    targets:
-      - select: { kind: Application, name: compute-workload-platform }
-        fieldPaths: [metadata.namespace]
+namePrefix: toks4-
 
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:be5e99490e9356f70c6af4b38b62cfbd9775f46047202e8c96ead10de35bd1a0"
+    digest: "sha256:cfd0f2335e03e181248f8e4b640aba28c8138d0d70e1ca8cc6f153b48993a027"
 
 patches:
-  - target:
-      kind: Deployment
-      name: compute-workload-controller
-    patch: |
-      - op: replace
-        path: /spec/template/spec/containers/0/env/1/value
-        value: preview
-      - op: replace
-        path: /spec/template/spec/containers/0/env/2/value
-        value: preview.cognidao.org
-      - op: replace
-        path: /spec/template/spec/containers/0/env/3/value
-        value: akash16yr3wxt97ae045a06kr3ycde9srcgpg8syjxxm
-  # Node-specific ConfigMap values.
-  # DNS names must match prefixed Service names (namePrefix applies to all resources).
   - target:
       kind: ConfigMap
       name: node-app-config
     patch: |
       - op: replace
         path: /data/NODE_NAME
-        value: "operator"
-      # Deploy-env name the secrets route stamps onto the OpenBao path
-      # (cogni/<env>/<node>/<KEY>). Distinct from APP_ENV (a build flag).
+        value: "toks4"
+      # Per-env runtime env-name the app stamps onto OpenBao paths + observability
+      # labels (metrics/logger read DEPLOY_ENVIRONMENT; absent → silent "local").
       - op: add
         path: /data/DEPLOY_ENVIRONMENT
         value: "preview"
@@ -62,97 +34,56 @@ patches:
         value: "cogni-preview"
       - op: replace
         path: /data/LITELLM_BASE_URL
-        value: "http://operator-litellm-external:4000"
+        value: "http://toks4-litellm-external:4000"
       - op: replace
         path: /data/TEMPORAL_ADDRESS
-        value: "operator-temporal-external:7233"
+        value: "toks4-temporal-external:7233"
       - op: replace
         path: /data/REDIS_URL
-        value: "redis://operator-redis-external:6379"
+        value: "redis://toks4-redis-external:6379"
       - op: add
         path: /data/NEXTAUTH_URL
-        value: "https://preview.cognidao.org"
-      - op: add
-        path: /data/NODE_MINT_OWNER
-        value: "cogni-test-org"
-      - op: add
-        path: /data/NODE_TEMPLATE_OWNER
-        value: "cogni-test-org"
-      - op: add
-        path: /data/DOLTHUB_OWNER
-        value: "cogni-test-nodes"
-      - op: add
-        path: /data/NODE_SUBMODULE_PARENT_OWNER
-        value: "cogni-test-org"
-      - op: add
-        path: /data/NODE_SUBMODULE_PARENT_REPO
-        value: "cogni-monorepo"
-      - op: add
-        path: /data/OPENFGA_API_URL
-        value: "http://operator-openfga-external:8080"
-      # Node self-serve secret writes — operator's OpenBao writer role (SA +
-      # projected token wired on the Deployment below). OPENBAO_ADDR defaults to
-      # the in-cluster ClusterIP, so only the role name is set here.
-      - op: add
-        path: /data/OPENBAO_NODE_SECRETS_WRITER_ROLE
-        value: "preview-node-secrets-writer"
-  # NodePort assignment (operator = 30000) + instance label on selector.
-  # Instance label prevents cross-node service routing: namePrefix only renames
-  # resource names, not labels/selectors, so without this every Service
-  # round-robins across all node-app pods.
+        value: "https://toks4-preview.cognidao.org"
   - target:
       kind: Service
       name: node-app
     patch: |
       - op: add
         path: /spec/ports/0/nodePort
-        value: 30000
+        value: 31700
+      - op: replace
+        path: /spec/ports/0/targetPort
+        value: 3200
       - op: add
         path: /spec/selector/app.kubernetes.io~1instance
-        value: "operator"
-  # Fix secret refs + instance label on matchLabels and pod template.
+        value: "toks4"
   - target:
       kind: Deployment
       name: node-app
     patch: |
       - op: replace
         path: /spec/template/spec/containers/0/envFrom/1/secretRef/name
-        value: "operator-env-secrets"
+        value: "toks4-env-secrets"
       - op: replace
         path: /spec/template/spec/initContainers/0/envFrom/1/secretRef/name
-        value: "operator-env-secrets"
-      # design.node-self-serve-secrets §1.B: the operator pod's OWN OpenBao
-      # identity, bound by the preview-node-secrets-writer k8s-auth role.
-      # Projected token carries the cogni-openbao audience. SSA (#1642) keeps
-      # this drift-free.
-      - op: add
-        path: /spec/template/spec/serviceAccountName
-        value: secrets-writer
-      - op: add
-        path: /spec/template/spec/volumes
-        value:
-          - name: openbao-token
-            projected:
-              sources:
-                - serviceAccountToken:
-                    path: token
-                    audience: cogni-openbao
-                    expirationSeconds: 3600
-      - op: add
-        path: /spec/template/spec/containers/0/volumeMounts
-        value:
-          - name: openbao-token
-            mountPath: /var/run/secrets/openbao
-            readOnly: true
+        value: "toks4-env-secrets"
+      - op: replace
+        path: /spec/template/spec/initContainers/0/command/2
+        value: exec node /app/app/migrate.mjs /app/app/migrations
+      - op: replace
+        path: /spec/template/spec/containers/0/ports/0/containerPort
+        value: 3200
       - op: add
         path: /spec/selector/matchLabels/app.kubernetes.io~1instance
-        value: "operator"
+        value: "toks4"
       - op: add
         path: /spec/template/metadata/labels/app.kubernetes.io~1instance
-        value: "operator"
+        value: "toks4"
 
-  # task.0423: Doltgres knowledge-plane migrator runs as a second initContainer
-  # on the operator Deployment. DATABASE_URL maps to DOLTGRES_URL.
+  # task.5077: Doltgres knowledge-plane migrator runs as a second initContainer
+  # on the toks4 Deployment. DATABASE_URL maps to DOLTGRES_URL (separate
+  # from the Postgres DATABASE_URL the main container + first initContainer use).
+  # Mirrors operator's pattern verbatim.
   - target:
       kind: Deployment
       name: node-app
@@ -165,15 +96,15 @@ patches:
           command:
             - /bin/sh
             - -c
-            - exec node /app/nodes/$(NODE_NAME)/app/migrate-doltgres.mjs /app/nodes/$(NODE_NAME)/app/doltgres-migrations
+            - exec node /app/app/migrate-doltgres.mjs /app/app/doltgres-migrations
           envFrom:
             - configMapRef:
-                name: operator-node-app-config
+                name: toks4-node-app-config
           env:
             - name: DATABASE_URL
               valueFrom:
                 secretKeyRef:
-                  name: operator-env-secrets
+                  name: toks4-env-secrets
                   key: DOLTGRES_URL
           resources:
             requests:
@@ -182,7 +113,6 @@ patches:
             limits:
               memory: "1Gi"
               cpu: "1000m"
-
   # bug.0295: VM discovery via DNS (cogni-preview.vm.cognidao.org).
   # Convert base headless Services → ExternalName; delete EndpointSlices.
   - target: { kind: Service, name: postgres-external }
@@ -211,16 +141,6 @@ patches:
       kind: Service
       metadata:
         name: litellm-external
-      spec:
-        type: ExternalName
-        externalName: cogni-preview.vm.cognidao.org
-        clusterIP: null
-  - target: { kind: Service, name: openfga-external }
-    patch: |
-      apiVersion: v1
-      kind: Service
-      metadata:
-        name: openfga-external
       spec:
         type: ExternalName
         externalName: cogni-preview.vm.cognidao.org

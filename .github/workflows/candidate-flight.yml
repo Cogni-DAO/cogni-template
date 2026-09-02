@@ -52,8 +52,15 @@ jobs:
       flight_targets_json: ${{ steps.flight-targets.outputs.flight_targets_json }}
       has_flight_targets: ${{ steps.flight-targets.outputs.has_flight_targets }}
       has_image_inputs: ${{ steps.flight-targets.outputs.has_image_inputs }}
-      substrate_node_targets_json: ${{ steps.substrate-targets.outputs.substrate_node_targets_json }}
-      has_substrate_node_targets: ${{ steps.substrate-targets.outputs.has_substrate_node_targets }}
+      substrate_node_targets_json: ${{ steps.substrate-targets.outputs.k3s_node_targets_json }}
+      has_substrate_node_targets: ${{ steps.substrate-targets.outputs.has_k3s_node_targets }}
+      deployment_node_targets_json: ${{ steps.substrate-targets.outputs.deployment_node_targets_json }}
+      has_deployment_node_targets: ${{ steps.substrate-targets.outputs.has_deployment_node_targets }}
+      external_compute_node_targets_json: ${{ steps.substrate-targets.outputs.external_compute_node_targets_json }}
+      has_external_compute_node_targets: ${{ steps.substrate-targets.outputs.has_external_compute_node_targets }}
+      deployment_provider_by_target_json: ${{ steps.substrate-targets.outputs.deployment_provider_by_target_json }}
+      source_repository_by_target_json: ${{ steps.substrate-targets.outputs.source_repository_by_target_json }}
+      source_sha_by_target_json: ${{ steps.substrate-targets.outputs.source_sha_by_target_json }}
     steps:
       - name: Checkout workflow source
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -207,27 +214,30 @@ jobs:
           echo "has_flight_targets=$has_flight_targets" >> "$GITHUB_OUTPUT"
           echo "has_image_inputs=$has_image_inputs" >> "$GITHUB_OUTPUT"
 
-      # The per-node substrate matrix is the deployable TYPE:NODE set: the flight
-      # targets intersected with catalog NODE_TARGETS. Services (e.g.
-      # scheduler-worker) have no node_id and would fail run-node-substrate.sh,
-      # so they are excluded here — matching promote-and-deploy's node_targets_json
-      # semantics. Every node in the set gets its substrate run uniformly; there
-      # is no node-formation special-case.
-      - name: Select substrate node targets
+      - uses: pnpm/action-setup@c5ba7f7862a0f64c1b1a05fbac13e0b8e86ba08c # v4
+        with: { version: 9.12.2 }
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: app-src/pnpm-lock.yaml
+
+      - name: Install typed planner dependencies
+        working-directory: app-src
+        run: pnpm install --frozen-lockfile
+
+      - name: Select deployment targets by provider
         id: substrate-targets
+        working-directory: app-src
         env:
           FLIGHT_TARGETS_JSON: ${{ steps.flight-targets.outputs.flight_targets_json }}
-          COGNI_CATALOG_ROOT: app-src/infra/catalog
         run: |
-          set -euo pipefail
-          # shellcheck source=app-src/scripts/ci/lib/image-tags.sh
-          . app-src/scripts/ci/lib/image-tags.sh
-          node_targets_json=$(printf '%s\n' "${NODE_TARGETS[@]}" | jq -R . | jq -sc .)
-          substrate=$(python3 -c 'import json, sys; flight = json.loads(sys.argv[1] or "[]"); nodes = set(json.loads(sys.argv[2] or "[]")); print(json.dumps([t for t in flight if t in nodes]))' "$FLIGHT_TARGETS_JSON" "$node_targets_json")
-          has_substrate_node_targets=false
-          [ "$substrate" != "[]" ] && has_substrate_node_targets=true
-          echo "substrate_node_targets_json=$substrate" >> "$GITHUB_OUTPUT"
-          echo "has_substrate_node_targets=$has_substrate_node_targets" >> "$GITHUB_OUTPUT"
+          pnpm --filter operator materialize:compute-workload \
+            --catalog-root "${GITHUB_WORKSPACE}/app-src/infra/catalog" \
+            --environment candidate-a \
+            --flight-targets-json "$FLIGHT_TARGETS_JSON" \
+            --github-output "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         if: steps.flight-targets.outputs.has_image_inputs == 'true'
@@ -275,21 +285,45 @@ jobs:
           path: ${{ runner.temp }}/resolved-pr-images.json
           retention-days: 1
 
-  prepare-substrate-deploy-branch:
+  reconcile-compute-egress:
     needs: decide
+    if: needs.decide.result == 'success'
+    runs-on: ubuntu-latest
+    environment: candidate-a
+    steps:
+      - name: Checkout reviewed application source
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          ref: ${{ needs.decide.outputs.head_sha }}
+          fetch-depth: 1
+          path: app-src
+
+      - name: Reconcile catalog-derived external compute egress
+        uses: ./app-src/.github/actions/reconcile-compute-egress
+        with:
+          app_source_root: ${{ github.workspace }}/app-src
+          environment: candidate-a
+          vm_host: ${{ secrets.VM_HOST }}
+          ssh_deploy_key: ${{ secrets.SSH_DEPLOY_KEY }}
+
+  prepare-substrate-deploy-branch:
+    needs: [decide, reconcile-compute-egress]
     if: |
       always() &&
       needs.decide.result == 'success' &&
-      needs.decide.outputs.has_substrate_node_targets == 'true'
+      needs.decide.outputs.has_deployment_node_targets == 'true' &&
+      needs.reconcile-compute-egress.result == 'success'
     strategy:
       fail-fast: false
       matrix:
-        node: ${{ fromJson(needs.decide.outputs.substrate_node_targets_json) }}
+        node: ${{ fromJson(needs.decide.outputs.deployment_node_targets_json) }}
     concurrency:
       group: prepare-substrate-deploy-branch-candidate-a-${{ matrix.node }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: candidate-a
+    env:
+      DEPLOYMENT_PROVIDER: ${{ fromJSON(needs.decide.outputs.deployment_provider_by_target_json)[matrix.node] }}
     steps:
       - name: Checkout app source
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -322,6 +356,20 @@ jobs:
           git -C "app-src/nodes/${NODE}" fetch -q --depth 1 origin "$src_sha"
           git -C "app-src/nodes/${NODE}" checkout -q --detach FETCH_HEAD
 
+      - name: Materialize provider-neutral external workload
+        if: env.DEPLOYMENT_PROVIDER == 'akash'
+        uses: ./app-src/.github/actions/materialize-compute-workload
+        with:
+          app_source_root: ${{ github.workspace }}/app-src
+          node: ${{ matrix.node }}
+          environment: candidate-a
+          source_sha: ${{ needs.decide.outputs.node_source_sha || fromJSON(needs.decide.outputs.source_sha_by_target_json)[matrix.node] }}
+          source_repository: ${{ fromJSON(needs.decide.outputs.source_repository_by_target_json)[matrix.node] }}
+          git_read_token: ${{ secrets.GIT_READ_TOKEN || github.token }}
+          domain: ${{ vars.DOMAIN }}
+          ghcr_username: ${{ secrets.GHCR_DEPLOY_USERNAME || github.actor }}
+          ghcr_token: ${{ secrets.GHCR_DEPLOY_TOKEN || github.token }}
+
       - name: Prepare deploy branch shape
         env:
           GH_TOKEN: ${{ github.token }}
@@ -329,10 +377,14 @@ jobs:
           PER_NODE_BRANCH: deploy/candidate-a-${{ matrix.node }}
         run: |
           set -euo pipefail
-          for required in \
-            "app-src/infra/k8s/overlays/candidate-a/${NODE}" \
-            "app-src/infra/catalog/${NODE}.yaml" \
-            "app-src/nodes/${NODE}/k8s/external-secrets/candidate-a"; do
+          required=(
+            "app-src/infra/k8s/overlays/candidate-a/${NODE}"
+            "app-src/infra/catalog/${NODE}.yaml"
+          )
+          if [ "$DEPLOYMENT_PROVIDER" = "k3s" ]; then
+            required+=("app-src/nodes/${NODE}/k8s/external-secrets/candidate-a")
+          fi
+          for required in "${required[@]}"; do
             if [ ! -e "$required" ]; then
               echo "::error::Missing deploy-shape input at head_sha: $required"
               exit 1
@@ -358,10 +410,12 @@ jobs:
             "infra/k8s/overlays/candidate-a/${NODE}/"
           mkdir -p infra/catalog
           cp "../app-src/infra/catalog/${NODE}.yaml" "infra/catalog/${NODE}.yaml"
-          mkdir -p "nodes/${NODE}/k8s/external-secrets/candidate-a"
-          rsync -a --delete \
-            "../app-src/nodes/${NODE}/k8s/external-secrets/candidate-a/" \
-            "nodes/${NODE}/k8s/external-secrets/candidate-a/"
+          if [ "$DEPLOYMENT_PROVIDER" = "k3s" ]; then
+            mkdir -p "nodes/${NODE}/k8s/external-secrets/candidate-a"
+            rsync -a --delete \
+              "../app-src/nodes/${NODE}/k8s/external-secrets/candidate-a/" \
+              "nodes/${NODE}/k8s/external-secrets/candidate-a/"
+          fi
 
           git add -A
           if git diff --cached --quiet; then
@@ -377,7 +431,7 @@ jobs:
       always() &&
       needs.decide.outputs.has_flight_targets == 'true' &&
       (
-        needs.decide.outputs.has_substrate_node_targets != 'true' ||
+        needs.decide.outputs.has_deployment_node_targets != 'true' ||
         needs.prepare-substrate-deploy-branch.result == 'success'
       )
     # Per-node lane (axiom 18, LANE_ISOLATION). A flight applies ONLY its own
@@ -396,6 +450,8 @@ jobs:
       cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: candidate-a
+    env:
+      DEPLOYMENT_PROVIDER: ${{ fromJSON(needs.decide.outputs.deployment_provider_by_target_json)[matrix.node] }}
     steps:
       - name: Checkout workflow source
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -513,6 +569,8 @@ jobs:
       cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: candidate-a
+    env:
+      DEPLOYMENT_PROVIDER: ${{ fromJSON(needs.decide.outputs.deployment_provider_by_target_json)[matrix.node] }}
     steps:
       - name: Checkout workflow source
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -722,6 +780,8 @@ jobs:
       cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: candidate-a
+    env:
+      DEPLOYMENT_PROVIDER: ${{ fromJSON(needs.decide.outputs.deployment_provider_by_target_json)[matrix.node] }}
     outputs:
       head_sha: ${{ needs.decide.outputs.head_sha }}
     steps:
@@ -756,6 +816,7 @@ jobs:
         run: bash ci-src/scripts/ci/resolve-substrate-gate.sh
 
       - name: Download resolved-pr-images
+        if: env.DEPLOYMENT_PROVIDER == 'k3s'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.1.8
         with:
           name: resolved-pr-images
@@ -781,6 +842,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Snapshot deploy-branch overlay digests (pre-rsync)
+        if: env.DEPLOYMENT_PROVIDER == 'k3s'
         id: snapshot
         working-directory: deploy-branch
         env:
@@ -799,13 +861,18 @@ jobs:
           # Node source already materialized at app-src/nodes/${NODE} by the
           # "Materialize node source at its catalog pin" step (same job).
           rsync -a --delete app-src/infra/k8s/base/ deploy-branch/infra/k8s/base/
-          mkdir -p "deploy-branch/infra/k8s/overlays/candidate-a/${NODE}"
-          rsync -a --delete \
-            "app-src/infra/k8s/overlays/candidate-a/${NODE}/" \
-            "deploy-branch/infra/k8s/overlays/candidate-a/${NODE}/"
+          if [ "$DEPLOYMENT_PROVIDER" = "k3s" ]; then
+            mkdir -p "deploy-branch/infra/k8s/overlays/candidate-a/${NODE}"
+            rsync -a --delete \
+              "app-src/infra/k8s/overlays/candidate-a/${NODE}/" \
+              "deploy-branch/infra/k8s/overlays/candidate-a/${NODE}/"
+          elif [ ! -f "deploy-branch/infra/k8s/overlays/candidate-a/${NODE}/compute-workload.yaml" ]; then
+            echo "::error::Prepared external ComputeWorkload missing from deploy/candidate-a-${NODE}"
+            exit 1
+          fi
           mkdir -p deploy-branch/infra/catalog
           cp "app-src/infra/catalog/${NODE}.yaml" "deploy-branch/infra/catalog/${NODE}.yaml"
-          if [ -d "app-src/nodes/${NODE}/k8s/external-secrets/candidate-a" ]; then
+          if [ "$DEPLOYMENT_PROVIDER" = "k3s" ] && [ -d "app-src/nodes/${NODE}/k8s/external-secrets/candidate-a" ]; then
             mkdir -p "deploy-branch/nodes/${NODE}/k8s/external-secrets/candidate-a"
             rsync -a --delete \
               "app-src/nodes/${NODE}/k8s/external-secrets/candidate-a/" \
@@ -814,6 +881,7 @@ jobs:
 
       - name: Promote this node's digest
         id: promote
+        if: env.DEPLOYMENT_PROVIDER == 'k3s'
         working-directory: deploy-branch
         env:
           PAYLOAD_FILE: ${{ runner.temp }}/resolved-pr-images.json
@@ -823,7 +891,16 @@ jobs:
           COGNI_CATALOG_ROOT: ../app-src/infra/catalog
         run: NODES="$NODE" bash ../ci-src/scripts/ci/promote-build-payload.sh
 
+      - name: Record external workload source identity
+        if: env.DEPLOYMENT_PROVIDER == 'akash'
+        working-directory: deploy-branch
+        env:
+          APP: ${{ matrix.node }}
+          SOURCE_SHA: ${{ needs.decide.outputs.node_source_sha || fromJSON(needs.decide.outputs.source_sha_by_target_json)[matrix.node] }}
+        run: bash ../ci-src/scripts/ci/update-source-sha-map.sh
+
       - name: Restore non-promoted overlay digests (post-rsync self-heal)
+        if: env.DEPLOYMENT_PROVIDER == 'k3s'
         working-directory: deploy-branch
         env:
           PROMOTED_APPS: ${{ steps.promote.outputs.promoted_apps }}
@@ -909,7 +986,7 @@ jobs:
   # no-op run is the proof the live write path is green.
   reconcile-dns:
     needs: [decide]
-    if: needs.decide.result == 'success'
+    if: needs.decide.result == 'success' && needs.decide.outputs.has_substrate_node_targets == 'true'
     # Serialize Cloudflare writes across concurrent flights (mirrors reconcile-appset).
     concurrency:
       group: reconcile-dns-candidate-a
@@ -931,6 +1008,32 @@ jobs:
           ref: ${{ needs.decide.outputs.head_sha }}
           path: app-src
 
+      - uses: pnpm/action-setup@c5ba7f7862a0f64c1b1a05fbac13e0b8e86ba08c # v4
+        with: { version: 9.12.2 }
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          {
+            node-version: "22",
+            cache: pnpm,
+            cache-dependency-path: app-src/pnpm-lock.yaml,
+          }
+
+      - name: Install typed planner dependencies
+        working-directory: app-src
+        run: pnpm install --frozen-lockfile
+
+      - name: Project only legacy k3s DNS targets
+        working-directory: app-src
+        env:
+          K3S_NODE_TARGETS_JSON: ${{ needs.decide.outputs.substrate_node_targets_json }}
+        run: |
+          pnpm --filter operator materialize:compute-workload \
+            --catalog-root "${GITHUB_WORKSPACE}/app-src/infra/catalog" \
+            --environment candidate-a \
+            --catalog-projection-targets-json "$K3S_NODE_TARGETS_JSON" \
+            --output-dir "${RUNNER_TEMP}/k3s-dns-catalog"
+
       - name: Reconcile node DNS (per-node A records → VM IP)
         working-directory: app-src
         env:
@@ -945,6 +1048,7 @@ jobs:
           DNS_RECONCILE_PR_NUMBER: ${{ inputs.pr_number }}
           DNS_RECONCILE_NODE_SLUG: ${{ needs.decide.outputs.node_slug }}
           DNS_RECONCILE_STATUS_URL: ${{ needs.decide.outputs.status_url }}
+          COGNI_CATALOG_ROOT: ${{ runner.temp }}/k3s-dns-catalog
         run: |
           set -euo pipefail
           write_skip_summary() {
@@ -1079,7 +1183,7 @@ jobs:
       always() &&
       needs.decide.outputs.has_flight_targets == 'true' &&
       needs.flight.result != 'skipped' &&
-      needs.reconcile-dns.result == 'success' &&
+      (needs.reconcile-dns.result == 'success' || (needs.decide.outputs.has_substrate_node_targets != 'true' && needs.reconcile-dns.result == 'skipped')) &&
       needs.reconcile-scheduler-worker-routing.result == 'success'
     strategy:
       fail-fast: false
@@ -1091,6 +1195,8 @@ jobs:
       cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: candidate-a
+    env:
+      DEPLOYMENT_PROVIDER: ${{ fromJSON(needs.decide.outputs.deployment_provider_by_target_json)[matrix.node] }}
     steps:
       - name: Checkout workflow source
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -1177,7 +1283,7 @@ jobs:
         run: bash ci-src/scripts/ci/wait-for-argocd.sh
 
       - name: Wait for candidate readiness
-        if: steps.ssh-setup.outputs.has_vm == 'true'
+        if: steps.ssh-setup.outputs.has_vm == 'true' && env.DEPLOYMENT_PROVIDER == 'k3s'
         env:
           DOMAIN: ${{ vars.DOMAIN }}
           PROMOTED_APPS: ${{ matrix.node }}
@@ -1185,21 +1291,13 @@ jobs:
         run: bash ci-src/scripts/ci/wait-for-candidate-ready.sh
 
       - name: Wait for in-cluster services (per-node)
-        if: steps.ssh-setup.outputs.has_vm == 'true'
+        if: steps.ssh-setup.outputs.has_vm == 'true' && env.DEPLOYMENT_PROVIDER == 'k3s'
         env:
           VM_HOST: ${{ secrets.VM_HOST }}
           DEPLOY_ENVIRONMENT: candidate-a
           PROMOTED_APPS: ${{ matrix.node }}
           COGNI_CATALOG_ROOT: app-src/infra/catalog
         run: bash ci-src/scripts/ci/wait-for-in-cluster-services.sh
-
-      - name: Run candidate smoke checks (per-node)
-        if: steps.ssh-setup.outputs.has_vm == 'true'
-        env:
-          DOMAIN: ${{ vars.DOMAIN }}
-          PROMOTED_APPS: ${{ matrix.node }}
-          COGNI_CATALOG_ROOT: app-src/infra/catalog
-        run: bash ci-src/scripts/ci/smoke-candidate.sh
 
       - name: Verify buildSha on endpoint (per-node)
         if: steps.ssh-setup.outputs.has_vm == 'true'
@@ -1209,12 +1307,22 @@ jobs:
           EXPECTED_BUILDSHA: ${{ needs.decide.outputs.node_source_sha || needs.decide.outputs.head_sha }}
           NODES: ${{ matrix.node }}
           COGNI_CATALOG_ROOT: app-src/infra/catalog
+          CUTOVER_TIMEOUT: ${{ env.DEPLOYMENT_PROVIDER == 'akash' && '420' || '90' }}
         run: bash ci-src/scripts/ci/verify-buildsha.sh
+
+      - name: Run candidate smoke checks (per-node)
+        if: steps.ssh-setup.outputs.has_vm == 'true'
+        env:
+          DOMAIN: ${{ vars.DOMAIN }}
+          PROMOTED_APPS: ${{ matrix.node }}
+          COGNI_CATALOG_ROOT: app-src/infra/catalog
+        run: bash ci-src/scripts/ci/smoke-candidate.sh
 
   report-status:
     needs:
       [
         decide,
+        reconcile-compute-egress,
         prepare-substrate-deploy-branch,
         node-substrate,
         assert-substrate,
@@ -1232,7 +1340,10 @@ jobs:
         env:
           HAS_TARGETS: ${{ needs.decide.outputs.has_targets }}
           HAS_FLIGHT_TARGETS: ${{ needs.decide.outputs.has_flight_targets }}
+          HAS_DEPLOYMENT_NODE_TARGETS: ${{ needs.decide.outputs.has_deployment_node_targets }}
+          HAS_EXTERNAL_COMPUTE_NODE_TARGETS: ${{ needs.decide.outputs.has_external_compute_node_targets }}
           HAS_SUBSTRATE_NODE_TARGETS: ${{ needs.decide.outputs.has_substrate_node_targets }}
+          COMPUTE_EGRESS_RESULT: ${{ needs.reconcile-compute-egress.result }}
           PREPARE_SUBSTRATE_DEPLOY_BRANCH_RESULT: ${{ needs.prepare-substrate-deploy-branch.result }}
           NODE_SUBSTRATE_RESULT: ${{ needs.node-substrate.result }}
           ASSERT_SUBSTRATE_RESULT: ${{ needs.assert-substrate.result }}
@@ -1241,7 +1352,7 @@ jobs:
           TARGETS_JSON: ${{ needs.decide.outputs.flight_targets_json }}
         run: |
           set -euo pipefail
-          echo "has_targets=${HAS_TARGETS} has_flight_targets=${HAS_FLIGHT_TARGETS} substrate=${HAS_SUBSTRATE_NODE_TARGETS} prepare_substrate_deploy_branch=${PREPARE_SUBSTRATE_DEPLOY_BRANCH_RESULT} node_substrate=${NODE_SUBSTRATE_RESULT} assert_substrate=${ASSERT_SUBSTRATE_RESULT} flight=${FLIGHT_RESULT} verify=${VERIFY_RESULT} flight_targets=${TARGETS_JSON}"
+          echo "has_targets=${HAS_TARGETS} has_flight_targets=${HAS_FLIGHT_TARGETS} external_compute=${HAS_EXTERNAL_COMPUTE_NODE_TARGETS} compute_egress=${COMPUTE_EGRESS_RESULT} substrate=${HAS_SUBSTRATE_NODE_TARGETS} prepare_substrate_deploy_branch=${PREPARE_SUBSTRATE_DEPLOY_BRANCH_RESULT} node_substrate=${NODE_SUBSTRATE_RESULT} assert_substrate=${ASSERT_SUBSTRATE_RESULT} flight=${FLIGHT_RESULT} verify=${VERIFY_RESULT} flight_targets=${TARGETS_JSON}"
           if [ "$HAS_FLIGHT_TARGETS" != "true" ]; then
             # No k8s app-lever targets. Either nothing affected, or the affected
             # set is type:infra only (e.g. litellm) — which deploys via the
@@ -1252,7 +1363,10 @@ jobs:
             else
               DESC="Candidate flight no-op (no affected nodes)"
             fi
-          elif [ "$HAS_SUBSTRATE_NODE_TARGETS" = "true" ] && [ "$PREPARE_SUBSTRATE_DEPLOY_BRANCH_RESULT" != "success" ]; then
+          elif [ "$HAS_DEPLOYMENT_NODE_TARGETS" = "true" ] && [ "$COMPUTE_EGRESS_RESULT" != "success" ]; then
+            STATE=failure
+            DESC="Candidate flight failed before desired-state write (reconcile-compute-egress=${COMPUTE_EGRESS_RESULT})"
+          elif [ "$HAS_DEPLOYMENT_NODE_TARGETS" = "true" ] && [ "$PREPARE_SUBSTRATE_DEPLOY_BRANCH_RESULT" != "success" ]; then
             STATE=failure
             DESC="Candidate flight failed before promotion (prepare-substrate-deploy-branch=${PREPARE_SUBSTRATE_DEPLOY_BRANCH_RESULT})"
           elif [ "$HAS_SUBSTRATE_NODE_TARGETS" = "true" ] && [ "$NODE_SUBSTRATE_RESULT" != "success" ]; then

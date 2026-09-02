@@ -471,6 +471,9 @@ log_info "LiteLLM default node (repo-spec primary-host): ${COGNI_DEFAULT_NODE_ID
 # catalog removal converges) before rebuilding the DOCKER-USER rules.
 "$REPO_ROOT/scripts/ci/render-compute-egress-allowlist.sh" "$DEPLOY_ENVIRONMENT" > "$ARTIFACT_DIR/compute-egress-allowlist"
 log_info "Compute-egress allowlist (catalog-driven): $(grep -cv '^#' "$ARTIFACT_DIR/compute-egress-allowlist" || true) CIDR rule(s) for ${DEPLOY_ENVIRONMENT}"
+REMOTE_STAGE_ID="${GITHUB_RUN_ID:-local}-${GITHUB_RUN_ATTEMPT:-0}-$$"
+REMOTE_COMPUTE_EGRESS_ALLOWLIST="/tmp/cogni-compute-egress-${REMOTE_STAGE_ID}.allowlist"
+REMOTE_HARDEN_SCRIPT="/tmp/cogni-compute-egress-${REMOTE_STAGE_ID}.hardener.sh"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Create remote deployment script (heredoc — no variable expansion)
@@ -535,9 +538,10 @@ echo -e "\033[0;32m[INFO]\033[0m Docker prerequisites verified"
 # Firewall: close Docker-published internal ports to public internet
 # (idempotent; safe to re-run on every deploy). See bug.5167.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-if [ -f /tmp/harden-docker-public-ports.sh ]; then
+if [ -n "${REMOTE_HARDEN_SCRIPT:-}" ] && [ -f "$REMOTE_HARDEN_SCRIPT" ]; then
   echo -e "\033[0;32m[INFO]\033[0m Hardening Docker-published ports (DOCKER-USER chain)..."
-  bash /tmp/harden-docker-public-ports.sh
+  STAGED_ALLOWLIST="$REMOTE_COMPUTE_EGRESS_ALLOWLIST" bash "$REMOTE_HARDEN_SCRIPT"
+  rm -f "$REMOTE_COMPUTE_EGRESS_ALLOWLIST" "$REMOTE_HARDEN_SCRIPT"
 else
   echo -e "\033[1;33m[WARN]\033[0m harden-docker-public-ports.sh missing — skipping firewall hardening"
 fi
@@ -2228,10 +2232,15 @@ scp $SSH_OPTS \
   "$REPO_ROOT/scripts/ci/ensure-temporal-namespace.sh" \
   "$REPO_ROOT/scripts/ci/bootstrap-openfga.sh" \
   "$REPO_ROOT/scripts/ci/reconcile-edge-caddy.remote.sh" \
-  "$REPO_ROOT/infra/provision/cherry/harden-docker-public-ports.sh" \
-  "$ARTIFACT_DIR/compute-egress-allowlist" \
   "$REPO_ROOT/scripts/secrets/sync-app-webhook-secret.sh" \
   root@"$VM_HOST":/tmp/
+
+scp $SSH_OPTS \
+  "$REPO_ROOT/infra/provision/cherry/harden-docker-public-ports.sh" \
+  "root@${VM_HOST}:${REMOTE_HARDEN_SCRIPT}"
+scp $SSH_OPTS \
+  "$ARTIFACT_DIR/compute-egress-allowlist" \
+  "root@${VM_HOST}:${REMOTE_COMPUTE_EGRESS_ALLOWLIST}"
 
 scp $SSH_OPTS "$REPO_ROOT/infra/openfga/rbac-model.json" root@"$VM_HOST":/tmp/rbac-model.json
 
@@ -2297,7 +2306,7 @@ REMOTE_ENV_VARS=(
   CONNECTIONS_ENCRYPTION_KEY COGNI_NODE_DBS NODE_APP_TARGETS EDGE_ENV_LINES
   LITELLM_NODE_ENDPOINTS COGNI_DEFAULT_NODE_ID ACTIONS_AUTOMATION_BOT_PAT
   LITELLM_IMAGE OPENFGA_IMAGE COMMIT_SHA DEPLOY_ACTOR K8S_SECRETS_ONLY
-  OPERATOR_DATABASE_SERVICE_URL
+  OPERATOR_DATABASE_SERVICE_URL REMOTE_HARDEN_SCRIPT REMOTE_COMPUTE_EGRESS_ALLOWLIST
 )
 REMOTE_ENV_FILE="$ARTIFACT_DIR/deploy-infra-env.sh"
 : > "$REMOTE_ENV_FILE"

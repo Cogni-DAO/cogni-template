@@ -181,13 +181,14 @@ echo "8.8.8.8 via 192.0.2.1 dev eth0 src 192.0.2.10 uid 0"
 EOF
 chmod +x "$FAKEBIN/ip"
 
-for tool in apt-get netfilter-persistent; do
+for tool in apt-get netfilter-persistent flock; do
   printf '#!/usr/bin/env bash\nexit 0\n' > "$FAKEBIN/$tool"
   chmod +x "$FAKEBIN/$tool"
 done
 
 export ALLOWLIST_FILE="$TMPROOT/etc/compute-egress-allowlist"
 export STAGED_ALLOWLIST="$TMPROOT/staged-allowlist"
+export HARDEN_LOCK_FILE="$TMPROOT/harden.lock"
 
 run_harden() {
   PATH="$FAKEBIN:$PATH" bash "$HARDEN" > "$TMPROOT/harden.log" 2>&1 \

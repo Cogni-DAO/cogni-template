@@ -17,3 +17,4 @@ resources:
   - preview-operator-applicationset.yaml
   - preview-poly-applicationset.yaml
   - preview-scheduler-worker-applicationset.yaml
+  - preview-toks4-applicationset.yaml
