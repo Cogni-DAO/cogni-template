@@ -56,7 +56,7 @@ describe("external-workload secret boundary (gate 3, provenance-keyed)", () => {
     // bug.5093 regression. Every key here is minted FOR ONE NODE and lives only
     // at cogni/<env>/<node>/<KEY> — blast radius is that node. They were
     // name-listed as denied, which contradicted this module's own stated rule
-    // and made poly (which carries its own custody + mirror creds) permanently
+    // and made poly (which carries its own per-tenant custody creds) permanently
     // undeployable to Akash: buildComputeSecretResources hard-throws on any
     // denied ref. Sensitivity is not provenance; the node's OpenBao namespace
     // is the authority.
