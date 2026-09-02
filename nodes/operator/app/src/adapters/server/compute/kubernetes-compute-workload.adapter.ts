@@ -301,7 +301,14 @@ export class KubernetesComputeWorkloadStateAdapter
       this.namespace,
       PLURAL,
       input.resource.metadata.name,
-      { status: input.status },
+      {
+        status: {
+          ...input.status,
+          // This endpoint uses JSON Merge Patch. Omitting an optional field
+          // retains its old value, so explicitly delete a resolved failure.
+          failure: input.status.failure ?? null,
+        },
+      },
       undefined,
       "compute-workload-controller",
       undefined,
