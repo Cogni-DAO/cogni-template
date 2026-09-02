@@ -33,6 +33,7 @@ export interface ComputeWorkloadManifest {
   readonly metadata: {
     readonly name: string;
     readonly namespace: string;
+    readonly annotations: Readonly<Record<string, string>>;
     readonly labels: Readonly<Record<string, string>>;
   };
   readonly spec: ComputeWorkloadSpec;
@@ -86,6 +87,9 @@ export function buildComputeWorkloadManifest(
       // workload per node in each environment namespace.
       name: input.bundle.nodeId,
       namespace,
+      annotations: {
+        "argocd.argoproj.io/sync-options": "ServerSideApply=false",
+      },
       labels: {
         "cogni.io/node-id": input.bundle.nodeId,
         "cogni.io/environment": input.environment,
