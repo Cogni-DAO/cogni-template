@@ -32,7 +32,35 @@ describe("CloudflareComputeWorkloadDnsAdapter", () => {
         name: "toks4-test.cognidao.org",
         value: "provider.example",
         type: "CNAME",
+        proxied: true,
+        ttl: 1,
       }),
+      "toks4-test.cognidao.org"
+    );
+  });
+
+  it("enables the Cloudflare edge for an existing DNS-only record", async () => {
+    const port = dns([
+      {
+        id: "record-1",
+        name: "toks4-test.cognidao.org",
+        type: "CNAME",
+        value: "provider.example",
+        proxied: false,
+      },
+    ]);
+    const adapter = new CloudflareComputeWorkloadDnsAdapter({
+      apiToken: "unused",
+      zoneId: "unused",
+      dns: port,
+    });
+    await adapter.reconcile({
+      hostname: "toks4-test.cognidao.org",
+      target: "provider.example",
+    });
+    expect(port.updateRecord).toHaveBeenCalledWith(
+      "record-1",
+      expect.objectContaining({ proxied: true }),
       "toks4-test.cognidao.org"
     );
   });

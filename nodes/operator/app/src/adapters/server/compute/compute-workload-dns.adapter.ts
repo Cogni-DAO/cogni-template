@@ -9,7 +9,7 @@ import {
 
 import { ComputeLifecycleError, type ComputeWorkloadDnsPort } from "@/ports";
 
-const CNAME_TTL_SECONDS = 300;
+const CLOUDFLARE_AUTO_TTL = 1;
 
 function normalized(value: string): string {
   return value.trim().toLowerCase().replace(/\.$/, "");
@@ -37,8 +37,8 @@ export class CloudflareComputeWorkloadDnsAdapter
       name: input.hostname,
       type: "CNAME",
       value: normalized(input.target),
-      ttl: CNAME_TTL_SECONDS,
-      proxied: false,
+      ttl: CLOUDFLARE_AUTO_TTL,
+      proxied: true,
     };
     if (live.length > 1) {
       throw new ComputeLifecycleError("terminal", "DnsOwnershipChanged", false);
@@ -50,7 +50,7 @@ export class CloudflareComputeWorkloadDnsAdapter
     if (
       current &&
       normalized(current.value) === desired.value &&
-      current.proxied !== true
+      current.proxied === true
     ) {
       return;
     }
