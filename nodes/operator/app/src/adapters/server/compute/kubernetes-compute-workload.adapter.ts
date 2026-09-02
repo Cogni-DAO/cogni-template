@@ -342,6 +342,16 @@ export class KubernetesComputeWorkloadStateAdapter
   }
 }
 
+/**
+ * coordination.k8s.io Lease times are MicroTime: the API server requires
+ * exactly six fractional digits and 400s anything else, while the 0.22 client
+ * serializes Date with milliseconds. Serialize explicitly (Date's ms precision
+ * padded to µs) or every lease create/renew fails as a BadRequest.
+ */
+function toMicroTime(value: Date): Date {
+  return value.toISOString().replace("Z", "000Z") as unknown as Date;
+}
+
 /** Lease-based leader election for the dedicated controller Deployment. */
 export class KubernetesLeaseLeaderElector {
   private leader = false;
@@ -407,8 +417,8 @@ export class KubernetesLeaseLeaderElector {
           spec: {
             holderIdentity: this.identity,
             leaseDurationSeconds: this.leaseDurationSeconds,
-            acquireTime: now,
-            renewTime: now,
+            acquireTime: toMicroTime(now),
+            renewTime: toMicroTime(now),
             leaseTransitions: 0,
           },
         });
@@ -450,11 +460,13 @@ export class KubernetesLeaseLeaderElector {
           holderIdentity: this.identity,
           leaseDurationSeconds: this.leaseDurationSeconds,
           ...(transitioned
-            ? { acquireTime: now }
+            ? { acquireTime: toMicroTime(now) }
             : existing.spec?.acquireTime
-              ? { acquireTime: existing.spec.acquireTime }
+              ? {
+                  acquireTime: toMicroTime(new Date(existing.spec.acquireTime)),
+                }
               : {}),
-          renewTime: now,
+          renewTime: toMicroTime(now),
           leaseTransitions:
             (existing.spec?.leaseTransitions ?? 0) + (transitioned ? 1 : 0),
         },

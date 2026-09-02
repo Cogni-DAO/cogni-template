@@ -143,9 +143,14 @@ describe("ComputeWorkload Kubernetes contract", () => {
     expect(crdYaml).toContain(
       "every binding must target a different declared sibling service"
     );
+    // Label↔spec equality CANNOT be a CRD CEL rule (metadata.labels is
+    // outside CRD CEL scope — the API server rejects the whole CRD). The
+    // single-writer materializer + the controller's label-then-spec selection
+    // own that invariant; only metadata.name is CEL-enforceable.
     expect(crdYaml).toContain(
-      "cogni.io/node label must equal spec.workload.name"
+      "metadata.name must equal spec.nodeId (one paid workload per node/env namespace)"
     );
+    expect(crdYaml).not.toContain("self.metadata.labels");
     expect(
       (schema.properties.spec.properties as Record<string, unknown>).bundle
     ).toBeDefined();
@@ -337,12 +342,20 @@ describe("KubernetesLeaseLeaderElector", () => {
       "pod-a"
     );
 
-    await expect(elector.acquireOrRenew()).resolves.toBe(true);
+    await expect(
+      elector.acquireOrRenew(new Date("2026-09-01T12:00:00.226Z"))
+    ).resolves.toBe(true);
     expect(elector.isLeader()).toBe(true);
     expect(createNamespacedLease).toHaveBeenCalledWith(
       "cogni-candidate-a",
       expect.objectContaining({
-        spec: expect.objectContaining({ holderIdentity: "pod-a" }),
+        spec: expect.objectContaining({
+          holderIdentity: "pod-a",
+          // MicroTime: the API server 400s anything without exactly six
+          // fractional digits; the 0.22 client serializes Date with three.
+          acquireTime: "2026-09-01T12:00:00.226000Z",
+          renewTime: "2026-09-01T12:00:00.226000Z",
+        }),
       })
     );
   });
