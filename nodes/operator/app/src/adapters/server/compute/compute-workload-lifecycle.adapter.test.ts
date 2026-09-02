@@ -23,6 +23,39 @@ const SPEC: ProvisionSpec = {
 };
 
 describe("ComputeWorkloadLifecycleAdapter", () => {
+  it.each([
+    ["status_unavailable", "BootStatusUnavailable", "transient", true],
+    ["no_endpoint", "BootEndpointUnavailable", "transient", true],
+    ["version_unavailable", "BootVersionUnavailable", "transient", true],
+    ["source_mismatch", "BootSourceMismatch", "terminal", false],
+    ["readiness_unavailable", "BootReadinessUnavailable", "terminal", false],
+  ] as const)("maps boot stage %s to safe lifecycle reason %s", async (stage, reason, kind, retryable) => {
+    const compute = {
+      balances: async () => [],
+      allocationCursor: vi.fn(async () => "41"),
+      provisionWithAllocation: vi.fn(async () => {
+        throw new AkashComputeError(
+          "BOOT_SLO_TIMEOUT",
+          "provider detail must not escape",
+          undefined,
+          stage
+        );
+      }),
+    };
+    const lifecycle = new ComputeWorkloadLifecycleAdapter(compute);
+
+    await expect(
+      lifecycle.create({
+        environment: "candidate-a",
+        spec: SPEC,
+        expectedSourceSha: "a".repeat(40),
+        idempotencyKey: "durable-key",
+        onPrepared: async () => {},
+        onAllocated: async () => {},
+      })
+    ).rejects.toMatchObject({ kind, reason, retryable });
+  });
+
   it("maps an uncertain mutating transport failure to fail-closed unknown_outcome", async () => {
     const compute = {
       balances: async () => [],
@@ -37,6 +70,7 @@ describe("ComputeWorkloadLifecycleAdapter", () => {
       .create({
         environment: "candidate-a",
         spec: SPEC,
+        expectedSourceSha: "a".repeat(40),
         idempotencyKey: "durable-key",
         onPrepared: async () => {},
         onAllocated: async () => {},
@@ -148,6 +182,7 @@ describe("ComputeWorkloadLifecycleAdapter", () => {
     const input = {
       environment: "candidate-a",
       spec: SPEC,
+      expectedSourceSha: "a".repeat(40),
       idempotencyKey: "key",
       onPrepared: async () => {},
       onAllocated: async () => {},

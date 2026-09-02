@@ -14,23 +14,30 @@ export type ComputeLifecycleFailureKind =
   | "terminal"
   | "unknown_outcome";
 
+export type ComputeLifecycleFailureReason =
+  | "ProviderCredentialMissing"
+  | "ProviderNotFound"
+  | "ProviderTransient"
+  | "ProviderRejected"
+  | "ProviderOutcomeUnknown"
+  | "SecretResolverUnavailable"
+  | "SecretPolicyRejected"
+  | "SecretReferenceMissing"
+  | "DnsCredentialMissing"
+  | "DnsReconcileFailed"
+  | "DnsOwnershipChanged"
+  | "EndpointVerificationFailed"
+  | "BootStatusUnavailable"
+  | "BootEndpointUnavailable"
+  | "BootVersionUnavailable"
+  | "BootSourceMismatch"
+  | "BootReadinessUnavailable";
+
 export class ComputeLifecycleError extends Error {
   constructor(
     public readonly kind: ComputeLifecycleFailureKind,
     /** Stable redacted code safe for CR status, Events, and structured logs. */
-    public readonly reason:
-      | "ProviderCredentialMissing"
-      | "ProviderNotFound"
-      | "ProviderTransient"
-      | "ProviderRejected"
-      | "ProviderOutcomeUnknown"
-      | "SecretResolverUnavailable"
-      | "SecretPolicyRejected"
-      | "SecretReferenceMissing"
-      | "DnsCredentialMissing"
-      | "DnsReconcileFailed"
-      | "DnsOwnershipChanged"
-      | "EndpointVerificationFailed",
+    public readonly reason: ComputeLifecycleFailureReason,
     public readonly retryable: boolean
   ) {
     super(reason);
@@ -43,6 +50,8 @@ export interface ComputeWorkloadLifecyclePort {
   create(input: {
     environment: string;
     spec: ProvisionSpec;
+    /** Exact source revision the workload must report before it is accepted. */
+    expectedSourceSha: string;
     /** Durable controller key. Providers may support it; the controller always records it first. */
     idempotencyKey: string;
     /** Persist the provider-opaque baseline before POST. */
@@ -58,6 +67,8 @@ export interface ComputeWorkloadLifecyclePort {
     resourceId: string;
     environment: string;
     spec: ProvisionSpec;
+    /** Exact source revision the workload must report before it is accepted. */
+    expectedSourceSha: string;
     idempotencyKey: string;
   }): Promise<ProvisionOutput>;
   delete(input: { resourceId: string }): Promise<void>;

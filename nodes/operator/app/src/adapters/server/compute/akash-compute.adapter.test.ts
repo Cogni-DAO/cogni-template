@@ -16,6 +16,7 @@ import type {
 } from "./provider-outcome-store";
 
 const BASE = "https://console-api.akash.network";
+const SOURCE_SHA = "a".repeat(40);
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -72,6 +73,12 @@ interface HarnessOpts {
   serving?: (host: string) => boolean;
   /** Which workload hosts answer fixed /readyz with 2xx. Default: all. */
   ready?: (host: string) => boolean;
+  /** Exact source revision returned by /version. Defaults to SOURCE_SHA. */
+  versionSha?: (host: string) => string;
+  /** Provider-reported endpoints for a deployment. Defaults to one public hostname. */
+  endpoints?: (dseq: string) => readonly string[];
+  /** Whether Console deployment status is readable. Defaults to true. */
+  statusAvailable?: boolean;
 }
 
 /**
@@ -118,7 +125,9 @@ function harness(opts: HarnessOpts = {}) {
     if (u.endsWith("/version")) {
       const host = new URL(u).host;
       const ok = opts.serving ? opts.serving(host) : true;
-      return new Response("{}", { status: ok ? 200 : 503 });
+      return ok
+        ? jsonResponse({ buildSha: opts.versionSha?.(host) ?? SOURCE_SHA })
+        : new Response(null, { status: 503 });
     }
     if (u.endsWith("/readyz")) {
       const host = new URL(u).host;
@@ -127,7 +136,12 @@ function harness(opts: HarnessOpts = {}) {
     }
     const statusMatch = u.match(/\/v1\/deployments\/(\d+)$/);
     if (statusMatch) {
+      if (opts.statusAvailable === false) {
+        return jsonResponse({ error: "unavailable" }, 503);
+      }
       const dseq = statusMatch[1];
+      if (!dseq) throw new Error(`missing dseq in ${u}`);
+      const endpoints = opts.endpoints?.(dseq) ?? [`d${dseq}.prov.akash.pub`];
       return jsonResponse({
         data: {
           deployment: { state: "active" },
@@ -135,7 +149,7 @@ function harness(opts: HarnessOpts = {}) {
             {
               state: "active",
               status: {
-                services: { app: { uris: [`d${dseq}.prov.akash.pub`] } },
+                services: { app: { uris: endpoints } },
               },
             },
           ],
@@ -365,7 +379,7 @@ describe("AkashComputeAdapter", () => {
         });
       }
       if (value === "http://updated.prov.akash.pub/version") {
-        return jsonResponse({ buildSha: "ignored-by-provider-boot-check" });
+        return jsonResponse({ buildSha: SOURCE_SHA });
       }
       if (value === "http://updated.prov.akash.pub/readyz") {
         return new Response(null, { status: 204 });
@@ -377,6 +391,7 @@ describe("AkashComputeAdapter", () => {
       resourceId: "42",
       env: "candidate-a",
       spec: SPEC,
+      expectedSourceSha: SOURCE_SHA,
       idempotencyKey: "durable-controller-key",
     });
 
@@ -583,6 +598,45 @@ describe("AkashComputeAdapter boot SLO", () => {
     bidEntry(dseq, "akash1third", "300"),
   ];
 
+  it.each([
+    ["status_unavailable", { statusAvailable: false }, false],
+    ["no_endpoint", { endpoints: () => [] }, true],
+    ["version_unavailable", { serving: () => false }, true],
+    ["source_mismatch", { versionSha: () => "b".repeat(40) }, false],
+    ["readiness_unavailable", { ready: () => false }, false],
+  ] as const)("classifies a %s boot timeout without leaking probe data", async (stage, probe, providerFailure) => {
+    const { records, store } = memStore();
+    const h = harness({
+      providers: [providerEntry("akash1only")],
+      bids: (dseq) => [bidEntry(dseq, "akash1only", "100")],
+      ...probe,
+    });
+
+    const error = await makeAdapter(h.fetchImpl, {
+      bootSloMs: 0,
+      outcomeStore: store,
+    })
+      .provisionWithAllocation(
+        {
+          env: "t",
+          spec: SPEC,
+          expectedSourceSha: SOURCE_SHA,
+          idempotencyKey: "receipt",
+        },
+        async () => {}
+      )
+      .catch((value: unknown) => value);
+
+    expect(error).toMatchObject({
+      code: "BOOT_SLO_TIMEOUT",
+      bootFailureStage: stage,
+    });
+    expect(h.deletes).toEqual([`${BASE}/v1/deployments/1`]);
+    expect(records.map((record) => record.outcome)).toEqual(
+      providerFailure ? ["slo_timeout"] : []
+    );
+  });
+
   it("closes the lease, records the strike, and boots on the next screened provider", async () => {
     // dseq 1 (akash1first) never serves; dseq 2 (akash1second) serves immediately.
     const h = harness({
@@ -617,7 +671,7 @@ describe("AkashComputeAdapter boot SLO", () => {
     ]);
   });
 
-  it("closes and retries when /version serves but application readiness fails", async () => {
+  it("closes and fails immediately when application readiness is unhealthy", async () => {
     const h = harness({
       providers,
       bids: threeBids,
@@ -626,17 +680,20 @@ describe("AkashComputeAdapter boot SLO", () => {
     });
     const { records, store } = memStore();
 
-    const out = await makeAdapter(h.fetchImpl, {
+    const error = await makeAdapter(h.fetchImpl, {
       bootSloMs: 0,
       outcomeStore: store,
-    }).provision({ env: "t", spec: SPEC });
+    })
+      .provision({ env: "t", spec: SPEC })
+      .catch((value: unknown) => value);
 
     expect(h.deletes).toEqual([`${BASE}/v1/deployments/1`]);
-    expect(out.leaseId).toBe("2");
-    expect(records.map((record) => record.outcome)).toEqual([
-      "slo_timeout",
-      "boot_ok",
-    ]);
+    expect(h.leased).toEqual([{ dseq: "1", provider: "akash1first" }]);
+    expect(error).toMatchObject({
+      code: "BOOT_SLO_TIMEOUT",
+      bootFailureStage: "readiness_unavailable",
+    });
+    expect(records).toEqual([]);
   });
 
   it("gives up with a terminal BOOT_SLO_TIMEOUT after the provider attempt cap", async () => {

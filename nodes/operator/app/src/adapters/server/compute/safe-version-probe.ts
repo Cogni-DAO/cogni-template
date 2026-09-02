@@ -38,12 +38,17 @@ function isPrivateAddress(address: string): boolean {
  * Fetch `/version` with DNS resolution performed by the actual socket lookup callback.
  * Every answer must be globally routable; redirects and IP-literal endpoints are rejected.
  */
+export type SafeVersionProbeResult =
+  | "version_unavailable"
+  | "source_mismatch"
+  | "matched";
+
 async function safeHttpProbe(
   endpoint: string,
   path: string,
   expectedSourceSha: string | undefined,
   timeoutMs = 5_000
-): Promise<boolean> {
+): Promise<SafeVersionProbeResult> {
   const raw =
     endpoint.startsWith("http://") || endpoint.startsWith("https://")
       ? endpoint
@@ -52,7 +57,7 @@ async function safeHttpProbe(
   try {
     url = new URL(raw);
   } catch {
-    return false;
+    return "version_unavailable";
   }
   if (
     (url.protocol !== "http:" && url.protocol !== "https:") ||
@@ -62,7 +67,7 @@ async function safeHttpProbe(
     url.hostname === "localhost" ||
     url.hostname.endsWith(".local")
   )
-    return false;
+    return "version_unavailable";
   url.pathname = path;
   url.search = "";
   url.hash = "";
@@ -78,12 +83,12 @@ async function safeHttpProbe(
     addresses.length === 0 ||
     addresses.some(({ address }) => isPrivateAddress(address))
   ) {
-    return false;
+    return "version_unavailable";
   }
   const selected = addresses[0];
-  if (!selected) return false;
+  if (!selected) return "version_unavailable";
 
-  return new Promise<boolean>((resolve) => {
+  return new Promise<SafeVersionProbeResult>((resolve) => {
     const request = (url.protocol === "https:" ? httpsRequest : httpRequest)(
       url,
       {
@@ -99,12 +104,12 @@ async function safeHttpProbe(
           (response.statusCode ?? 500) >= 300
         ) {
           response.resume();
-          resolve(false);
+          resolve("version_unavailable");
           return;
         }
         if (!expectedSourceSha) {
           response.resume();
-          resolve(true);
+          resolve("matched");
           return;
         }
         let body = "";
@@ -113,20 +118,36 @@ async function safeHttpProbe(
           if (body.length <= 16_384) body += chunk;
         });
         response.on("end", () => {
-          if (body.length > 16_384) return resolve(false);
+          if (body.length > 16_384) return resolve("version_unavailable");
           try {
             const parsed = JSON.parse(body) as { buildSha?: unknown };
-            resolve(parsed.buildSha === expectedSourceSha);
+            if (typeof parsed.buildSha !== "string") {
+              resolve("version_unavailable");
+              return;
+            }
+            resolve(
+              parsed.buildSha === expectedSourceSha
+                ? "matched"
+                : "source_mismatch"
+            );
           } catch {
-            resolve(false);
+            resolve("version_unavailable");
           }
         });
       }
     );
     request.on("timeout", () => request.destroy());
-    request.on("error", () => resolve(false));
+    request.on("error", () => resolve("version_unavailable"));
     request.end();
   });
+}
+
+export function safeVersionProbeResult(
+  endpoint: string,
+  expectedSourceSha: string,
+  timeoutMs = 5_000
+): Promise<SafeVersionProbeResult> {
+  return safeHttpProbe(endpoint, "/version", expectedSourceSha, timeoutMs);
 }
 
 export async function safeVersionProbe(
@@ -134,7 +155,14 @@ export async function safeVersionProbe(
   expectedSourceSha?: string,
   timeoutMs = 5_000
 ): Promise<boolean> {
-  return safeHttpProbe(endpoint, "/version", expectedSourceSha, timeoutMs);
+  return (
+    (await safeHttpProbe(
+      endpoint,
+      "/version",
+      expectedSourceSha,
+      timeoutMs
+    )) === "matched"
+  );
 }
 
 /** Bounded SSRF-safe HTTP 2xx application-readiness probe. */
@@ -142,5 +170,8 @@ export async function safeReadyzProbe(
   endpoint: string,
   timeoutMs = 5_000
 ): Promise<boolean> {
-  return safeHttpProbe(endpoint, "/readyz", undefined, timeoutMs);
+  return (
+    (await safeHttpProbe(endpoint, "/readyz", undefined, timeoutMs)) ===
+    "matched"
+  );
 }
