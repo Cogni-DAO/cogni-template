@@ -12,6 +12,7 @@ import {
   type ComputeWorkloadSecretResolverPort,
   type ComputeWorkloadStatePort,
   type ComputeWorkloadStatus,
+  computeWorkloadIdempotencyKey,
   decodeAttemptReceipt,
 } from "@/ports";
 import {
@@ -495,6 +496,54 @@ describe("reconcileComputeWorkload", () => {
     await run(state, restartedProcess);
     expect(restartedProcess.create).toHaveBeenCalledTimes(1);
     expect(state.current.status?.attempt?.operation).toBe("recover");
+  });
+
+  it("uses the current generation recovery ordinal instead of an inherited counter", async () => {
+    const generation2 = workload({
+      metadata: { ...workload().metadata, generation: 2 },
+    });
+    const state = new MemoryState(
+      workload({
+        metadata: generation2.metadata,
+        status: {
+          ...status(2, "closed"),
+          recoveryCount: 3,
+          attempt: {
+            key: computeWorkloadIdempotencyKey({
+              resource: generation2,
+              operation: "recover",
+              ordinal: 1,
+            }),
+            operation: "recover",
+            ordinal: 1,
+            outcome: "known_failure",
+            retryCount: 0,
+            leaderEpoch: "7:test-controller",
+            startedAt: NOW.toISOString(),
+            completedAt: NOW.toISOString(),
+          },
+          failure: {
+            reason: "RecoveryLimitExceeded",
+            message: "generation recovery limit was reached",
+            retryable: false,
+          },
+        },
+      })
+    );
+    const port = lifecycle();
+    const recordRecoveryLimit = vi.fn();
+
+    await run(state, port, { recordRecoveryLimit });
+
+    expect(port.create).toHaveBeenCalledTimes(1);
+    expect(state.current.status?.attempt).toMatchObject({
+      operation: "recover",
+      ordinal: 2,
+      outcome: "succeeded",
+    });
+    expect(state.current.status?.recoveryCount).toBe(2);
+    expect(state.current.status?.failure).toBeUndefined();
+    expect(recordRecoveryLimit).not.toHaveBeenCalled();
   });
 
   it("stops provider creates after three generation-scoped recovery allocations", async () => {

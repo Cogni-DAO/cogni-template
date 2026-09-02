@@ -391,14 +391,22 @@ export function computeWorkloadPublicHost(
 }
 
 function generationRecoveryCount(resource: ComputeWorkload): number {
+  const attempt = resource.status?.attempt;
+  if (
+    attempt?.operation === "recover" &&
+    attempt.key ===
+      computeWorkloadIdempotencyKey({
+        resource,
+        operation: "recover",
+        ordinal: attempt.ordinal,
+      })
+  ) {
+    return attempt.ordinal;
+  }
   if (resource.status?.desiredGeneration !== resource.metadata.generation) {
     return 0;
   }
-  const attemptOrdinal =
-    resource.status.attempt?.operation === "recover"
-      ? resource.status.attempt.ordinal
-      : 0;
-  return Math.max(resource.status.recoveryCount ?? 0, attemptOrdinal);
+  return resource.status.recoveryCount ?? 0;
 }
 
 async function recoverBounded(
@@ -812,7 +820,10 @@ async function mutate(
             ? { resource: resource.status.resource }
             : {}),
         attempt: failedAttempt,
-        recoveryCount: resource.status?.recoveryCount ?? 0,
+        recoveryCount:
+          operation === "recover"
+            ? ordinal
+            : (resource.status?.recoveryCount ?? 0),
         failure: {
           reason: failure.reason,
           message: safeMessage(failure.reason),
