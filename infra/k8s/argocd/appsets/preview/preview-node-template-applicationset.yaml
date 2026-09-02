@@ -22,7 +22,7 @@ spec:
       name: "preview-{{.name}}"
       namespace: argocd
       annotations:
-        argocd.argoproj.io/compare-options: ServerSideDiff=true
+        argocd.argoproj.io/compare-options: ServerSideDiff=true,IncludeMutationWebhook=true
       finalizers:
         - resources-finalizer.argocd.argoproj.io
     spec:

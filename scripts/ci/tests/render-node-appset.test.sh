@@ -57,6 +57,13 @@ deployable_for_env() {
 bash "$RENDER" --check >/dev/null || fail "committed AppSets are out of sync with the catalog"
 pass "committed AppSets in sync (--check green)"
 
+# The child Application opts into server-side diff so Argo compares structural
+# custom resources through the API server rather than its static type schema.
+yq -e '.spec.template.metadata.annotations."argocd.argoproj.io/compare-options" == "ServerSideDiff=true,IncludeMutationWebhook=true"' \
+  "$APPSETS_DIR/candidate-a/candidate-a-node-template-applicationset.yaml" >/dev/null \
+  || fail "rendered child Application is missing server-side diff with mutation-webhook inclusion"
+pass "child Application enables server-side diff with mutation-webhook inclusion"
+
 # 1. ATOMIC_PER_ENV — each env renders EXACTLY the deployable nodes whose catalog
 # `envs:` lists that env. No cross-env constraint (no ladder): candidate-a is no
 # different from preview/production. Adding a node to an env's catalog `envs`
