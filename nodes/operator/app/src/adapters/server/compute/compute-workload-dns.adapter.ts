@@ -38,7 +38,7 @@ export class CloudflareComputeWorkloadDnsAdapter
       type: "CNAME",
       value: normalized(input.target),
       ttl: CNAME_TTL_SECONDS,
-      proxied: false,
+      proxied: true,
     };
     if (live.length > 1) {
       throw new ComputeLifecycleError("terminal", "DnsOwnershipChanged", false);
@@ -50,7 +50,7 @@ export class CloudflareComputeWorkloadDnsAdapter
     if (
       current &&
       normalized(current.value) === desired.value &&
-      current.proxied !== true
+      current.proxied === true
     ) {
       return;
     }
