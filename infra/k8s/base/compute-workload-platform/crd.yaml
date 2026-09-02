@@ -38,15 +38,14 @@ spec:
         openAPIV3Schema:
           type: object
           required: [spec]
+          # CRD CEL exposes only metadata.name/generateName — label↔spec
+          # equality rules do not compile at admission. The typed materializer
+          # is the single writer of both labels and spec (byte-coupled), and
+          # the controller selects by label then verifies spec, so label drift
+          # cannot route work to the wrong node.
           x-kubernetes-validations:
             - rule: "self.metadata.name == self.spec.nodeId"
               message: metadata.name must equal spec.nodeId (one paid workload per node/env namespace)
-            - rule: "has(self.metadata.labels) && self.metadata.labels['cogni.io/node-id'] == self.spec.nodeId"
-              message: cogni.io/node-id label must equal spec.nodeId
-            - rule: "has(self.metadata.labels) && self.metadata.labels['cogni.io/environment'] == self.spec.environment"
-              message: cogni.io/environment label must equal spec.environment
-            - rule: "has(self.metadata.labels) && self.metadata.labels['cogni.io/node'] == self.spec.workload.name"
-              message: cogni.io/node label must equal spec.workload.name
           properties:
             spec:
               type: object
@@ -101,6 +100,11 @@ spec:
                         properties:
                           name: &dnsName
                             type: string
+                            # maxLength is load-bearing for CEL: the cost
+                            # estimator ignores pattern bounds, and the
+                            # cross-product rules above blow the cost budget
+                            # against unbounded strings.
+                            maxLength: 63
                             pattern: "^[a-z][a-z0-9-]{0,62}$"
                           image:
                             type: string
