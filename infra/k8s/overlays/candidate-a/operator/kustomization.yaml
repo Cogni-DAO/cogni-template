@@ -18,7 +18,7 @@ namePrefix: operator-
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:12483a15e197763b8c74e0ab637ee809837ac8f241bc0c16209f446b716e6536"
+    digest: "sha256:0250cc2e6c01a80172d19b00583b65c50990b27849ca16815e75d2d899511b53"
 
 replacements:
   - source:
@@ -30,6 +30,20 @@ replacements:
         fieldPaths: [metadata.namespace]
 
 patches:
+  # candidate-a runs at ~91% memory-requested; a surge pod cannot schedule and
+  # every rolling update wedges Pending. Single-replica proving env → replace
+  # in place (brief blip is acceptable here; preview/prod keep surge).
+  - target:
+      kind: Deployment
+      name: node-app
+    patch: |
+      - op: replace
+        path: /spec/strategy
+        value:
+          type: RollingUpdate
+          rollingUpdate:
+            maxSurge: 0
+            maxUnavailable: 1
   - target:
       kind: Deployment
       name: compute-workload-controller
