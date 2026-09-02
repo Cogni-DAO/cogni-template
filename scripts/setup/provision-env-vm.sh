@@ -1697,6 +1697,15 @@ else
     log_info "Seeding cogni/${DEPLOY_ENV}/operator/DOLTGRES_PASSWORD — minting fresh (set-once)"
   fi
   seed_kv operator DOLTGRES_PASSWORD "$DOLTGRES_PASSWORD"
+
+  # External-workload DNS runs inside the controller pod, so its vendor
+  # credentials are OpenBao-custodied runtime inputs. Bootstrap them once from
+  # the protected environment bank; day-2 rotation stays on `pnpm secrets:set`.
+  for key in CLOUDFLARE_API_TOKEN CLOUDFLARE_ZONE_ID; do
+    if [[ -z "$(bao_get_field operator "$key")" ]]; then
+      seed_kv operator "$key" "${!key:-}"
+    fi
+  done
   log_info "OpenBao paths seeded for ${DEPLOY_ENV}"
 
   # Write runtime/.env LAST so the VM gets reconciled values, not Phase-2
