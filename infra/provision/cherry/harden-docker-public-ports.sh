@@ -21,6 +21,15 @@
 
 set -euo pipefail
 
+# This script is the sole DOCKER-USER writer, but it is reached by several
+# independently queued workflows. Serialize on the substrate host itself: GitHub
+# concurrency permits only one pending run and therefore cannot be used as a lock
+# without cancelling legitimate sibling-node work.
+HARDEN_LOCK_FILE="${HARDEN_LOCK_FILE:-/run/lock/cogni-harden-docker-public-ports.lock}"
+mkdir -p "$(dirname "$HARDEN_LOCK_FILE")"
+exec 9>"$HARDEN_LOCK_FILE"
+flock -x 9
+
 INTERNAL_PORTS="5432,5435,6379,4000,7233,8080"
 POD_CIDR="10.42.0.0/16"
 SVC_CIDR="10.43.0.0/16"

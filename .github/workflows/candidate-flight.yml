@@ -287,12 +287,9 @@ jobs:
 
   reconcile-compute-egress:
     needs: decide
-    if: needs.decide.outputs.has_deployment_node_targets == 'true'
+    if: needs.decide.result == 'success'
     runs-on: ubuntu-latest
     environment: candidate-a
-    concurrency:
-      group: environment-substrate-candidate-a
-      cancel-in-progress: false
     steps:
       - name: Checkout reviewed application source
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4

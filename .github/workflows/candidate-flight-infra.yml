@@ -34,7 +34,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: environment-substrate-candidate-a
+  group: candidate-flight-infra-candidate-a
   cancel-in-progress: false
 
 jobs:

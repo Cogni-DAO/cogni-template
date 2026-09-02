@@ -47,8 +47,8 @@ runs:
         ssh-keyscan -T 10 -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
         # Run-unique staging prevents stale/cross-run files even if an operator
-        # interrupts a workflow. The calling jobs also share one environment-wide
-        # concurrency domain with every workflow that invokes this hardener.
+        # interrupts a workflow. The hardener itself holds the host-local writer
+        # lock shared by every invocation path.
         remote_base="/tmp/cogni-compute-egress-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}"
         remote_allowlist="${remote_base}.allowlist"
         remote_hardener="${remote_base}.hardener.sh"
@@ -60,14 +60,6 @@ runs:
           -o ServerAliveInterval=10
           -o ServerAliveCountMax=6
         )
-
-        desired_sha=$(sha256sum "$ALLOWLIST" | awk '{print $1}')
-        installed_sha=$(ci_ssh_retry ssh "${ssh_opts[@]}" "root@${VM_HOST}" \
-          "if [ -f /etc/cogni/compute-egress-allowlist ]; then sha256sum /etc/cogni/compute-egress-allowlist | cut -d ' ' -f1; else printf missing; fi")
-        if [ "$desired_sha" = "$installed_sha" ]; then
-          echo "Compute-egress allowlist already converged (${desired_sha})"
-          exit 0
-        fi
 
         ci_ssh_retry scp "${ssh_opts[@]}" \
           "$ALLOWLIST" "root@${VM_HOST}:${remote_allowlist}"
