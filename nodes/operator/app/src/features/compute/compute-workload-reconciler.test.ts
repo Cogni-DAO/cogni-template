@@ -268,6 +268,7 @@ async function run(
     secretResolver?: ComputeWorkloadSecretResolverPort;
     recordReadinessTransition?: ComputeWorkloadReconcileDeps["recordReadinessTransition"];
     recordRecoveryLimit?: ComputeWorkloadReconcileDeps["recordRecoveryLimit"];
+    recordMutationFailure?: ComputeWorkloadReconcileDeps["recordMutationFailure"];
   } = {}
 ) {
   const dns = overrides.dns ?? {
@@ -296,6 +297,7 @@ async function run(
       now: () => NOW,
       recordReadinessTransition,
       recordRecoveryLimit: overrides.recordRecoveryLimit ?? vi.fn(),
+      recordMutationFailure: overrides.recordMutationFailure ?? vi.fn(),
     },
     state.current
   );
@@ -339,6 +341,7 @@ describe("reconcileComputeWorkload", () => {
       expectedSourceSha: SHA,
     });
     expect(port.create).toHaveBeenCalledTimes(1);
+    expect(port.create.mock.calls[0]?.[0].expectedSourceSha).toBe(SHA);
     const env = port.create.mock.calls[0]?.[0].spec.services[0]?.env;
     expect(env).toMatchObject({
       SCHEDULER_API_TOKEN: "scheduler-token",
@@ -677,6 +680,143 @@ describe("reconcileComputeWorkload", () => {
       message: "external compute provider credential is not configured",
       retryable: false,
     });
+  });
+
+  it("persists and emits a safe known boot failure", async () => {
+    const state = new MemoryState(workload());
+    const port = lifecycle();
+    port.create.mockRejectedValueOnce(
+      new ComputeLifecycleError("terminal", "BootSourceMismatch", false)
+    );
+    const recordMutationFailure = vi.fn();
+
+    await run(state, port, { recordMutationFailure });
+
+    expect(state.current.status?.failure).toEqual({
+      reason: "BootSourceMismatch",
+      message: "external workload did not serve the declared source revision",
+      retryable: false,
+    });
+    expect(state.events.at(-1)).toMatchObject({
+      type: "Warning",
+      reason: "BootSourceMismatch",
+    });
+    expect(recordMutationFailure).toHaveBeenCalledWith({
+      nodeId: NODE_ID,
+      environment: "candidate-a",
+      sourceSha: SHA,
+      leaseId: "unallocated",
+      operation: "create",
+      outcomeCode: "BootSourceMismatch",
+    });
+  });
+
+  it.each([
+    ["BootSourceMismatch", "active"],
+    ["BootSourceMismatch", "pending"],
+    ["BootReadinessUnavailable", "active"],
+    ["BootReadinessUnavailable", "pending"],
+  ] as const)("closes the existing lease after same-generation %s observes %s", async (reason, observedState) => {
+    const state = new MemoryState(workload());
+    const port = lifecycle();
+    port.create.mockImplementationOnce(
+      async (input: Parameters<ComputeWorkloadLifecyclePort["create"]>[0]) => {
+        await input.onPrepared("41");
+        await input.onAllocated({
+          provider: "external",
+          leaseId: "lease-41",
+          state: "pending",
+          endpoints: [],
+        });
+        throw new ComputeLifecycleError("terminal", reason, false);
+      }
+    );
+
+    await run(state, port);
+    port.observe.mockResolvedValueOnce({
+      provider: "external",
+      leaseId: "lease-41",
+      state: observedState,
+      endpoints:
+        observedState === "active" ? ["https://sample-node.example"] : [],
+    });
+    await run(state, port);
+    expect(state.current.status?.failure?.reason).toBe(reason);
+    expect(port.create).toHaveBeenCalledTimes(1);
+    await run(state, port);
+
+    expect(state.current.status).toMatchObject({
+      phase: "Failed",
+      desiredGeneration: 1,
+      resource: { id: "lease-41", state: "closed" },
+      failure: { reason, retryable: false },
+    });
+    expect(port.create).toHaveBeenCalledTimes(1);
+    expect(port.observe).toHaveBeenCalledTimes(1);
+    expect(port.delete).toHaveBeenCalledTimes(1);
+    expect(port.delete).toHaveBeenCalledWith({ resourceId: "lease-41" });
+
+    const nextSha = "d".repeat(40);
+    state.current = {
+      ...state.current,
+      metadata: { ...state.current.metadata, generation: 2 },
+      spec: {
+        ...state.current.spec,
+        bundle: {
+          ...state.current.spec.bundle,
+          source: { ...state.current.spec.bundle.source, sha: nextSha },
+        },
+      },
+    };
+    await run(state, port);
+
+    expect(port.create).toHaveBeenCalledTimes(2);
+    expect(port.create.mock.calls[1]?.[0].expectedSourceSha).toBe(nextSha);
+  });
+
+  it("retains a deterministic failure when its provider handle is missing", async () => {
+    const state = new MemoryState(workload());
+    const port = lifecycle();
+    port.create.mockImplementationOnce(
+      async (input: Parameters<ComputeWorkloadLifecyclePort["create"]>[0]) => {
+        await input.onPrepared("41");
+        await input.onAllocated({
+          provider: "external",
+          leaseId: "lease-41",
+          state: "pending",
+          endpoints: [],
+        });
+        throw new ComputeLifecycleError(
+          "terminal",
+          "BootSourceMismatch",
+          false
+        );
+      }
+    );
+
+    await run(state, port);
+    port.observe.mockRejectedValueOnce(
+      new ComputeLifecycleError("not_found", "ProviderNotFound", false)
+    );
+    await run(state, port);
+    await run(state, port);
+
+    expect(state.current.status).toMatchObject({
+      phase: "Failed",
+      desiredGeneration: 1,
+      resource: { id: "lease-41", state: "closed" },
+      failure: { reason: "BootSourceMismatch", retryable: false },
+      conditions: [{ reason: "BootSourceMismatch", status: "False" }],
+    });
+    expect(port.create).toHaveBeenCalledTimes(1);
+    expect(port.delete).not.toHaveBeenCalled();
+
+    state.current = {
+      ...state.current,
+      metadata: { ...state.current.metadata, generation: 2 },
+    };
+    await run(state, port);
+    expect(port.create).toHaveBeenCalledTimes(2);
   });
 
   it("rejects an unsafe secret before provider IO and releases the wallet slot", async () => {

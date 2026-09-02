@@ -103,6 +103,7 @@ export type { ComputeWorkloadDnsPort } from "./compute-workload-dns.port";
 export {
   ComputeLifecycleError,
   type ComputeLifecycleFailureKind,
+  type ComputeLifecycleFailureReason,
   type ComputeWorkloadLifecyclePort,
 } from "./compute-workload-lifecycle.port";
 export type { ComputeWorkloadSecretResolverPort } from "./compute-workload-secret-resolver.port";

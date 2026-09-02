@@ -270,6 +270,8 @@ async function reconcileAll(): Promise<void> {
                     observation,
                     "compute_workload_recovery_limit_exceeded"
                   ),
+                recordMutationFailure: (observation) =>
+                  log.warn(observation, "compute_workload_mutation_failed"),
               },
               resource
             );

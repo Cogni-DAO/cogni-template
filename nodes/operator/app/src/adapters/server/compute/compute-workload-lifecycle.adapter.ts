@@ -21,6 +21,7 @@ interface UpdatableComputeResourcePort extends ComputeResourcePort {
     input: {
       env: string;
       spec: ProvisionSpec;
+      expectedSourceSha: string;
       idempotencyKey: string;
     },
     onAllocated: (resource: ProvisionOutput) => Promise<void>
@@ -29,6 +30,7 @@ interface UpdatableComputeResourcePort extends ComputeResourcePort {
     resourceId: string;
     env: string;
     spec: ProvisionSpec;
+    expectedSourceSha: string;
     idempotencyKey: string;
   }): Promise<ProvisionOutput>;
 }
@@ -51,6 +53,23 @@ function mapError(error: unknown, mutating: boolean): ComputeLifecycleError {
         "unknown_outcome",
         "ProviderOutcomeUnknown",
         false
+      );
+    }
+    if (error.code === "BOOT_SLO_TIMEOUT" && error.bootFailureStage) {
+      const reason = {
+        no_endpoint: "BootEndpointUnavailable",
+        status_unavailable: "BootStatusUnavailable",
+        version_unavailable: "BootVersionUnavailable",
+        source_mismatch: "BootSourceMismatch",
+        readiness_unavailable: "BootReadinessUnavailable",
+      } as const;
+      const retryable =
+        error.bootFailureStage !== "source_mismatch" &&
+        error.bootFailureStage !== "readiness_unavailable";
+      return new ComputeLifecycleError(
+        retryable ? "transient" : "terminal",
+        reason[error.bootFailureStage],
+        retryable
       );
     }
     const retryable =
@@ -93,6 +112,7 @@ export class ComputeWorkloadLifecycleAdapter
   async create(input: {
     environment: string;
     spec: ProvisionSpec;
+    expectedSourceSha: string;
     idempotencyKey: string;
     onPrepared(allocationCursor: string): Promise<void>;
     onAllocated(resource: ProvisionOutput): Promise<void>;
@@ -118,6 +138,7 @@ export class ComputeWorkloadLifecycleAdapter
           {
             env: input.environment,
             spec: input.spec,
+            expectedSourceSha: input.expectedSourceSha,
             idempotencyKey: input.idempotencyKey,
           },
           input.onAllocated
@@ -154,6 +175,7 @@ export class ComputeWorkloadLifecycleAdapter
     resourceId: string;
     environment: string;
     spec: ProvisionSpec;
+    expectedSourceSha: string;
     idempotencyKey: string;
   }): Promise<ProvisionOutput> {
     if (!this.compute.update) {
@@ -164,6 +186,7 @@ export class ComputeWorkloadLifecycleAdapter
         resourceId: input.resourceId,
         env: input.environment,
         spec: input.spec,
+        expectedSourceSha: input.expectedSourceSha,
         idempotencyKey: input.idempotencyKey,
       });
     } catch (error) {

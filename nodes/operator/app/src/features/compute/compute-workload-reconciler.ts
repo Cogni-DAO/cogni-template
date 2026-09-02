@@ -8,6 +8,7 @@ import {
   COMPUTE_WORKLOAD_ATTEMPT_ANNOTATION,
   COMPUTE_WORKLOAD_FINALIZER,
   ComputeLifecycleError,
+  type ComputeLifecycleFailureReason,
   type ComputeWorkload,
   type ComputeWorkloadAttempt,
   type ComputeWorkloadAttemptReceipt,
@@ -52,6 +53,14 @@ export interface ComputeWorkloadReconcileDeps {
     recoveryCount: number;
     outcomeCode: "RecoveryLimitExceeded";
   }) => void;
+  readonly recordMutationFailure: (input: {
+    nodeId: string;
+    environment: string;
+    sourceSha: string;
+    leaseId: string;
+    operation: "create" | "update" | "recover";
+    outcomeCode: ComputeLifecycleFailureReason;
+  }) => void;
 }
 
 const SAFE_MESSAGES: Readonly<Record<string, string>> = {
@@ -60,6 +69,15 @@ const SAFE_MESSAGES: Readonly<Record<string, string>> = {
   ProviderNotFound: "external resource was not found",
   ProviderTransient: "external compute provider is temporarily unavailable",
   ProviderRejected: "external compute provider rejected the operation",
+  BootStatusUnavailable: "external workload status did not become available",
+  BootEndpointUnavailable:
+    "external workload did not publish a serving endpoint",
+  BootVersionUnavailable:
+    "external workload version endpoint did not become available",
+  BootSourceMismatch:
+    "external workload did not serve the declared source revision",
+  BootReadinessUnavailable:
+    "external workload did not pass the fixed readiness endpoint",
   ProviderOutcomeUnknown:
     "external provider mutation outcome is unknown; automatic replay is blocked",
   SecretResolverUnavailable: "declared runtime secrets cannot yet be resolved",
@@ -281,7 +299,10 @@ async function toProvisionSpec(
       };
     })
   );
-  return { name: resource.spec.workload.name, services } as ProvisionSpec;
+  return {
+    name: resource.spec.workload.name,
+    services,
+  } as ProvisionSpec;
 }
 
 async function emit(
@@ -409,6 +430,14 @@ function generationRecoveryCount(resource: ComputeWorkload): number {
   return resource.status.recoveryCount ?? 0;
 }
 
+function blocksSameGenerationRecovery(resource: ComputeWorkload): boolean {
+  return (
+    resource.status?.desiredGeneration === resource.metadata.generation &&
+    (resource.status?.failure?.reason === "BootSourceMismatch" ||
+      resource.status?.failure?.reason === "BootReadinessUnavailable")
+  );
+}
+
 async function recoverBounded(
   deps: ComputeWorkloadReconcileDeps,
   resource: ComputeWorkload
@@ -489,7 +518,8 @@ async function beginAttempt(
   resource: ComputeWorkload,
   operation: ComputeWorkloadAttempt["operation"],
   ordinal: number,
-  retryCount: number
+  retryCount: number,
+  preservedFailure?: ComputeWorkloadStatus["failure"]
 ): Promise<ComputeWorkloadAttempt | undefined> {
   const attempt: ComputeWorkloadAttempt = {
     key: computeWorkloadIdempotencyKey({ resource, operation, ordinal }),
@@ -509,7 +539,7 @@ async function beginAttempt(
     resource,
     status: {
       ...baseStatus(resource),
-      phase: "Progressing",
+      phase: preservedFailure ? "Failed" : "Progressing",
       ...(resource.status?.observedGeneration !== undefined
         ? { observedGeneration: resource.status.observedGeneration }
         : {}),
@@ -521,12 +551,15 @@ async function beginAttempt(
         : {}),
       attempt,
       recoveryCount: resource.status?.recoveryCount ?? 0,
+      ...(preservedFailure ? { failure: preservedFailure } : {}),
       conditions: [
         condition(
           resource,
           attempt.startedAt,
           "False",
-          `${operation[0]?.toUpperCase()}${operation.slice(1)}InProgress`
+          preservedFailure
+            ? preservedFailure.reason
+            : `${operation[0]?.toUpperCase()}${operation.slice(1)}InProgress`
         ),
       ],
     },
@@ -649,11 +682,13 @@ async function mutate(
             resourceId: resource.status?.resource?.id ?? "",
             environment: resource.spec.environment,
             spec,
+            expectedSourceSha: resource.spec.bundle.source.sha,
             idempotencyKey: attempt.key,
           })
         : await deps.lifecycle.create({
             environment: resource.spec.environment,
             spec,
+            expectedSourceSha: resource.spec.bundle.source.sha,
             idempotencyKey: attempt.key,
             onPrepared: async (allocationCursor) => {
               activeAttempt = {
@@ -832,20 +867,32 @@ async function mutate(
         conditions: [condition(resource, completedAt, "False", failure.reason)],
       },
     });
+    const failureFields = {
+      nodeId: resource.spec.nodeId,
+      environment: resource.spec.environment,
+      sourceSha: resource.spec.bundle.source.sha,
+      leaseId: allocated?.id ?? resource.status?.resource?.id ?? "unallocated",
+      operation,
+      outcomeCode: failure.reason,
+    };
+    deps.recordMutationFailure(failureFields);
+    await emit(deps, resource, "Warning", failure.reason);
   }
 }
 
 async function closeKnown(
   deps: ComputeWorkloadReconcileDeps,
   resource: ComputeWorkload,
-  current: NonNullable<ComputeWorkloadStatus["resource"]>
+  current: NonNullable<ComputeWorkloadStatus["resource"]>,
+  preservedFailure?: ComputeWorkloadStatus["failure"]
 ): Promise<boolean> {
   const attempt = await beginAttempt(
     deps,
     resource,
     "delete",
     resource.status?.recoveryCount ?? 0,
-    0
+    0,
+    preservedFailure
   );
   if (!attempt) return false;
   if (!(await deps.assertLeadership(attempt.leaderEpoch))) {
@@ -874,16 +921,17 @@ async function closeKnown(
       resource,
       status: {
         ...baseStatus(resource),
-        phase: "Progressing",
+        phase: preservedFailure ? "Failed" : "Progressing",
         resource: { ...current, state: "closed", endpoints: [] },
         attempt: completed,
         recoveryCount: resource.status?.recoveryCount ?? 0,
+        ...(preservedFailure ? { failure: preservedFailure } : {}),
         conditions: [
           condition(
             resource,
             completed.completedAt ?? deps.now().toISOString(),
             "False",
-            "ServingVerificationPending"
+            preservedFailure?.reason ?? "ServingVerificationPending"
           ),
         ],
       },
@@ -971,28 +1019,35 @@ async function observeAndReport(
   } catch (error) {
     const failure = lifecycleError(error, false);
     if (failure.kind === "not_found") {
+      const generationBlockingFailure = blocksSameGenerationRecovery(resource)
+        ? resource.status?.failure
+        : undefined;
       await deps.state.patchStatus({
         resource,
         status: {
           ...baseStatus(resource),
           ...observedIdentity(resource),
-          phase: "Progressing",
+          phase: generationBlockingFailure ? "Failed" : "Progressing",
           observedGeneration: resource.metadata.generation,
           resource: { ...current, state: "closed", endpoints: [] },
           ...(attempt ? { attempt } : {}),
           recoveryCount: resource.status?.recoveryCount ?? 0,
+          ...(generationBlockingFailure
+            ? { failure: generationBlockingFailure }
+            : {}),
           conditions: [
             condition(
               resource,
               deps.now().toISOString(),
               "False",
-              "ResourceMissing"
+              generationBlockingFailure?.reason ?? "ResourceMissing"
             ),
           ],
         },
       });
       return "missing";
     }
+    if (blocksSameGenerationRecovery(resource)) return "error";
     const now = deps.now().toISOString();
     await deps.state.patchStatus({
       resource,
@@ -1014,6 +1069,46 @@ async function observeAndReport(
       },
     });
     return "error";
+  }
+  const generationBlockingFailure = blocksSameGenerationRecovery(resource)
+    ? resource.status?.failure
+    : undefined;
+  if (generationBlockingFailure) {
+    if (observed.state !== "closed") {
+      await closeKnown(
+        deps,
+        resource,
+        resourceStatus(observed),
+        generationBlockingFailure
+      );
+      return "active";
+    }
+    await deps.state.patchStatus({
+      resource,
+      status: {
+        ...baseStatus(resource),
+        ...observedIdentity(resource),
+        phase: "Failed",
+        observedGeneration: resource.metadata.generation,
+        resource: resourceStatus(observed),
+        ...(attempt ? { attempt } : {}),
+        recoveryCount: resource.status?.recoveryCount ?? 0,
+        failure: generationBlockingFailure,
+        conditions: [
+          condition(
+            resource,
+            deps.now().toISOString(),
+            "False",
+            generationBlockingFailure.reason
+          ),
+        ],
+      },
+    });
+    return observed.state === "closed"
+      ? "closed"
+      : observed.state === "active"
+        ? "active"
+        : "pending";
   }
   if (observed.state === "closed") {
     await deps.state.patchStatus({
@@ -1418,6 +1513,9 @@ export async function reconcileComputeWorkload(
   const priorAttempt =
     resource.status?.attempt ??
     (receipt ? attemptFromReceipt(receipt) : undefined);
+  if (current.state === "closed" && blocksSameGenerationRecovery(resource)) {
+    return;
+  }
   if (
     !resource.status &&
     receipt?.resource &&
@@ -1443,6 +1541,11 @@ export async function reconcileComputeWorkload(
     return;
   }
 
+  if (current.state === "closed") {
+    await recoverBounded(deps, resource);
+    return;
+  }
+
   if (resource.status?.observedGeneration !== resource.metadata.generation) {
     if (
       receipt?.operation === "update" &&
@@ -1461,9 +1564,5 @@ export async function reconcileComputeWorkload(
     return;
   }
 
-  if (current.state === "closed") {
-    await recoverBounded(deps, resource);
-    return;
-  }
   await observeAndReport(deps, resource, current);
 }

@@ -53,7 +53,12 @@ import {
 } from "./akash-provider-screen";
 import { type AkashSdlOptions, buildAkashSdl } from "./akash-sdl";
 import type { ProviderOutcomeStore } from "./provider-outcome-store";
-import { safeReadyzProbe, safeVersionProbe } from "./safe-version-probe";
+import {
+  type SafeVersionProbeResult,
+  safeReadyzProbe,
+  safeVersionProbe,
+  safeVersionProbeResult,
+} from "./safe-version-probe";
 
 const PROVIDER = "akash";
 const MICRO = 1_000_000;
@@ -87,6 +92,13 @@ const DEFAULT_SUBSTRATE_COUNTRY_CODES: readonly string[] = [
 
 /** Unauthenticated `/version` probe timeout against the workload's own ingress. */
 const PROBE_TIMEOUT_MS = 5_000;
+
+export type BootFailureStage =
+  | "status_unavailable"
+  | "no_endpoint"
+  | "version_unavailable"
+  | "source_mismatch"
+  | "readiness_unavailable";
 
 export interface AkashComputeAdapterConfig {
   /** Akash Console API key (Settings → API Keys), sent as `x-api-key`. */
@@ -295,21 +307,27 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     const sdl = buildAkashSdl(p.spec, this.sdlOptions);
     const screening = await this.loadScreeningContext();
     const tried = new Set<string>();
+    let finalBootFailureStage: BootFailureStage = "status_unavailable";
     for (let attempt = 1; attempt <= this.maxProviderAttempts; attempt++) {
       const result = await this.provisionOnce(
         sdl,
         p.spec.name,
+        undefined,
         screening,
         tried
       );
       if (result.kind === "ok") return result.output;
+      finalBootFailureStage = result.stage;
+      if (!isProviderAttributableBootFailure(result.stage)) break;
       // slo_failed: provider recorded + excluded; loop to redeploy on the next one.
     }
     throw new AkashComputeError(
       "BOOT_SLO_TIMEOUT",
       `workload failed boot proof within ${this.bootSloMs}ms on ${tried.size} screened provider(s) ` +
         `[${[...tried].join(", ")}]; giving up after ${this.maxProviderAttempts} attempts ` +
-        "(deployments closed, escrow refunding)"
+        "(deployments closed, escrow refunding)",
+      undefined,
+      finalBootFailureStage
     );
   }
 
@@ -318,7 +336,12 @@ export class AkashComputeAdapter implements ComputeResourcePort {
    * Provider retries belong to the level reconciler so every paid allocation has a receipt.
    */
   async provisionWithAllocation(
-    p: { env: string; spec: ProvisionSpec; idempotencyKey: string },
+    p: {
+      env: string;
+      spec: ProvisionSpec;
+      expectedSourceSha: string;
+      idempotencyKey: string;
+    },
     onAllocated: (resource: ProvisionOutput) => Promise<void>
   ): Promise<ProvisionOutput> {
     void p.env;
@@ -327,6 +350,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     const result = await this.provisionOnce(
       sdl,
       p.spec.name,
+      p.expectedSourceSha,
       await this.loadScreeningContext(),
       new Set<string>(),
       onAllocated
@@ -334,7 +358,9 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     if (result.kind === "ok") return result.output;
     throw new AkashComputeError(
       "BOOT_SLO_TIMEOUT",
-      "allocated workload did not satisfy the boot SLO and was closed"
+      "allocated workload did not satisfy the boot SLO and was closed",
+      undefined,
+      result.stage
     );
   }
 
@@ -395,6 +421,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     resourceId: string;
     env: string;
     spec: ProvisionSpec;
+    expectedSourceSha: string;
     idempotencyKey: string;
   }): Promise<ProvisionOutput> {
     // Console exposes no idempotency-key field. The controller persists this key before IO
@@ -408,7 +435,7 @@ export class AkashComputeAdapter implements ComputeResourcePort {
       { data: { sdl } },
       this.writeTimeoutMs
     );
-    return this.awaitBootServing(p.resourceId);
+    return this.awaitBootServing(p.resourceId, p.expectedSourceSha);
   }
 
   async release(p: { leaseId: string }): Promise<void> {
@@ -443,10 +470,14 @@ export class AkashComputeAdapter implements ComputeResourcePort {
   private async provisionOnce(
     sdl: string,
     workload: string,
+    expectedSourceSha: string | undefined,
     screening: ScreeningContext,
     tried: Set<string>,
     onAllocated?: (resource: ProvisionOutput) => Promise<void>
-  ): Promise<{ kind: "ok"; output: ProvisionOutput } | { kind: "slo_failed" }> {
+  ): Promise<
+    | { kind: "ok"; output: ProvisionOutput }
+    | { kind: "slo_failed"; stage: BootFailureStage }
+  > {
     const created = await this.request<{ dseq?: string; manifest?: unknown }>(
       "POST",
       "/v1/deployments",
@@ -521,11 +552,14 @@ export class AkashComputeAdapter implements ComputeResourcePort {
     }
 
     // Boot SLO: the lease is paying from here — the workload must PROVE registry egress by
-    // serving /version plus fixed /readyz before the deadline, or the lease closes
-    // and the provider is struck.
+    // serving /version plus fixed /readyz before the deadline, or the lease closes.
+    // Only provider-attributable endpoint/version failures count against the provider.
     const leasedAt = Date.now();
     try {
-      const output = await this.awaitBootServing(String(dseq));
+      const output = await this.awaitBootServing(
+        String(dseq),
+        expectedSourceSha
+      );
       await this.recordOutcome({
         computeProvider: PROVIDER,
         providerAccount: provider,
@@ -543,16 +577,22 @@ export class AkashComputeAdapter implements ComputeResourcePort {
         await this.release({ leaseId: String(dseq) }).catch(() => {
           // best-effort close; the SLO strike below is what must land
         });
-        await this.recordOutcome({
-          computeProvider: PROVIDER,
-          providerAccount: provider,
-          outcome: "slo_timeout",
-          leaseId: String(dseq),
-          workload,
-          detail: `boot proof incomplete within ${this.bootSloMs}ms`,
-        });
-        tried.add(provider);
-        return { kind: "slo_failed" };
+        const stage = error.bootFailureStage ?? "status_unavailable";
+        if (isProviderAttributableBootFailure(stage)) {
+          await this.recordOutcome({
+            computeProvider: PROVIDER,
+            providerAccount: provider,
+            outcome: "slo_timeout",
+            leaseId: String(dseq),
+            workload,
+            detail: `boot proof incomplete within ${this.bootSloMs}ms`,
+          });
+          tried.add(provider);
+        }
+        return {
+          kind: "slo_failed",
+          stage,
+        };
       }
       throw error;
     }
@@ -641,31 +681,58 @@ export class AkashComputeAdapter implements ComputeResourcePort {
    * plus fixed `/readyz`. Status/probe failures are tolerated inside the window;
    * the deadline is the arbiter.
    */
-  private async awaitBootServing(dseq: string): Promise<ProvisionOutput> {
+  private async awaitBootServing(
+    dseq: string,
+    expectedSourceSha: string | undefined
+  ): Promise<ProvisionOutput> {
     const deadline = Date.now() + this.bootSloMs;
+    let failureStage: BootFailureStage = "status_unavailable";
     for (;;) {
       const output = await this.status({ leaseId: dseq }).catch(() => null);
       if (output) {
+        if (output.endpoints.length === 0) {
+          failureStage = furtherBootStage(failureStage, "no_endpoint");
+        } else {
+          failureStage = furtherBootStage(failureStage, "version_unavailable");
+        }
         for (const endpoint of output.endpoints) {
-          const sourceServing = await this.probeVersion(endpoint);
-          const applicationReady =
-            sourceServing && (await this.probeReadiness(endpoint));
-          if (sourceServing && applicationReady) return output;
+          const version = await this.probeVersion(endpoint, expectedSourceSha);
+          if (version === "version_unavailable") continue;
+          if (version === "source_mismatch") {
+            failureStage = furtherBootStage(failureStage, "source_mismatch");
+            continue;
+          }
+          failureStage = furtherBootStage(
+            failureStage,
+            "readiness_unavailable"
+          );
+          if (await this.probeReadiness(endpoint)) return output;
         }
       }
       if (Date.now() >= deadline) {
         throw new AkashComputeError(
           "BOOT_SLO_TIMEOUT",
-          `deployment ${dseq} failed boot proof within ${this.bootSloMs}ms`
+          `deployment ${dseq} failed boot proof within ${this.bootSloMs}ms`,
+          undefined,
+          failureStage
         );
       }
       await this.sleep(this.bootPollIntervalMs);
     }
   }
 
-  /** Unauthenticated GET `<endpoint>/version` against the workload ingress; true on 2xx. */
-  private async probeVersion(endpoint: string): Promise<boolean> {
-    if (!this.config.fetchImpl) return safeVersionProbe(endpoint);
+  /** Unauthenticated bounded source-identity check against workload `/version`. */
+  private async probeVersion(
+    endpoint: string,
+    expectedSourceSha: string | undefined
+  ): Promise<SafeVersionProbeResult> {
+    if (!this.config.fetchImpl) {
+      if (expectedSourceSha)
+        return safeVersionProbeResult(endpoint, expectedSourceSha);
+      return (await safeVersionProbe(endpoint))
+        ? "matched"
+        : "version_unavailable";
+    }
     const base = endpoint.startsWith("http") ? endpoint : `http://${endpoint}`;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), PROBE_TIMEOUT_MS);
@@ -674,9 +741,20 @@ export class AkashComputeAdapter implements ComputeResourcePort {
         `${base.replace(/\/$/, "")}/version`,
         { method: "GET", signal: controller.signal }
       );
-      return response.ok;
+      if (!response.ok) return "version_unavailable";
+      if (!expectedSourceSha) {
+        await response.body?.cancel().catch(() => {});
+        return "matched";
+      }
+      const version = (await response.json().catch(() => undefined)) as
+        | { buildSha?: unknown }
+        | undefined;
+      if (typeof version?.buildSha !== "string") return "version_unavailable";
+      return version.buildSha === expectedSourceSha
+        ? "matched"
+        : "source_mismatch";
     } catch {
-      return false;
+      return "version_unavailable";
     } finally {
       clearTimeout(timeoutId);
     }
@@ -829,11 +907,33 @@ export class AkashComputeError extends Error {
   constructor(
     public readonly code: AkashComputeErrorCode,
     message: string,
-    public readonly httpStatus?: number
+    public readonly httpStatus?: number,
+    public readonly bootFailureStage?: BootFailureStage
   ) {
     super(message);
     this.name = "AkashComputeError";
   }
+}
+
+const BOOT_STAGE_ORDER: Readonly<Record<BootFailureStage, number>> = {
+  status_unavailable: 0,
+  no_endpoint: 1,
+  version_unavailable: 2,
+  source_mismatch: 3,
+  readiness_unavailable: 4,
+};
+
+function isProviderAttributableBootFailure(stage: BootFailureStage): boolean {
+  return stage === "no_endpoint" || stage === "version_unavailable";
+}
+
+function furtherBootStage(
+  current: BootFailureStage,
+  observed: BootFailureStage
+): BootFailureStage {
+  return BOOT_STAGE_ORDER[observed] > BOOT_STAGE_ORDER[current]
+    ? observed
+    : current;
 }
 
 function provisionOutputFromDetail(
