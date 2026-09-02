@@ -150,11 +150,11 @@ jobs:
 
   reconcile-compute-egress:
     needs: decide
-    if: needs.decide.outputs.has_external_compute_node_targets == 'true'
+    if: needs.decide.outputs.has_node_targets == 'true'
     runs-on: ubuntu-latest
     environment: ${{ needs.decide.outputs.environment }}
     concurrency:
-      group: compute-egress-${{ needs.decide.outputs.environment }}
+      group: environment-substrate-${{ needs.decide.outputs.environment }}
       cancel-in-progress: false
     steps:
       - name: Checkout reviewed application source
@@ -326,7 +326,7 @@ jobs:
       needs.decide.outputs.has_targets == 'true' &&
       needs.reconcile-appset.result == 'success' &&
       (
-        needs.decide.outputs.has_external_compute_node_targets != 'true' ||
+        needs.decide.outputs.has_node_targets != 'true' ||
         needs.reconcile-compute-egress.result == 'success'
       ) &&
       (
@@ -707,7 +707,7 @@ jobs:
     # which is why candidate-a never hit this. Bounded bump, not unbounded.
     timeout-minutes: 45
     concurrency:
-      group: deploy-infra-${{ needs.decide.outputs.environment }}
+      group: environment-substrate-${{ needs.decide.outputs.environment }}
       cancel-in-progress: false
     env:
       VM_HOST: ${{ secrets.VM_HOST }}

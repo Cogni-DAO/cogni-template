@@ -62,7 +62,7 @@ concurrency:
   # One provision at a time per env. Re-runs of an in-progress provision
   # would race tofu-state + Cloudflare DNS edits. cancel-in-progress: false
   # because a half-applied tofu state should NOT be killed mid-flight.
-  group: provision-env-${{ inputs.env }}
+  group: environment-substrate-${{ inputs.env }}
   cancel-in-progress: false
 
 jobs:

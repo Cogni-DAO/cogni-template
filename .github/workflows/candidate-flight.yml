@@ -287,11 +287,11 @@ jobs:
 
   reconcile-compute-egress:
     needs: decide
-    if: needs.decide.outputs.has_external_compute_node_targets == 'true'
+    if: needs.decide.outputs.has_deployment_node_targets == 'true'
     runs-on: ubuntu-latest
     environment: candidate-a
     concurrency:
-      group: compute-egress-candidate-a
+      group: environment-substrate-candidate-a
       cancel-in-progress: false
     steps:
       - name: Checkout reviewed application source
@@ -315,10 +315,7 @@ jobs:
       always() &&
       needs.decide.result == 'success' &&
       needs.decide.outputs.has_deployment_node_targets == 'true' &&
-      (
-        needs.decide.outputs.has_external_compute_node_targets != 'true' ||
-        needs.reconcile-compute-egress.result == 'success'
-      )
+      needs.reconcile-compute-egress.result == 'success'
     strategy:
       fail-fast: false
       matrix:
@@ -1369,7 +1366,7 @@ jobs:
             else
               DESC="Candidate flight no-op (no affected nodes)"
             fi
-          elif [ "$HAS_EXTERNAL_COMPUTE_NODE_TARGETS" = "true" ] && [ "$COMPUTE_EGRESS_RESULT" != "success" ]; then
+          elif [ "$HAS_DEPLOYMENT_NODE_TARGETS" = "true" ] && [ "$COMPUTE_EGRESS_RESULT" != "success" ]; then
             STATE=failure
             DESC="Candidate flight failed before desired-state write (reconcile-compute-egress=${COMPUTE_EGRESS_RESULT})"
           elif [ "$HAS_DEPLOYMENT_NODE_TARGETS" = "true" ] && [ "$PREPARE_SUBSTRATE_DEPLOY_BRANCH_RESULT" != "success" ]; then
