@@ -21,6 +21,8 @@ spec:
     metadata:
       name: "__ENV__-{{.name}}"
       namespace: argocd
+      annotations:
+        argocd.argoproj.io/compare-options: ServerSideDiff=true
       finalizers:
         - resources-finalizer.argocd.argoproj.io
     spec:
