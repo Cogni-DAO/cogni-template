@@ -1270,7 +1270,9 @@ jobs:
           ssh-keyscan -T 10 -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Wait for ArgoCD sync (per-node)
-        if: steps.ssh-setup.outputs.has_vm == 'true'
+        # This verifier requires a Kubernetes Deployment. External workloads are
+        # gated by the exact-source endpoint verification below.
+        if: steps.ssh-setup.outputs.has_vm == 'true' && env.DEPLOYMENT_PROVIDER == 'k3s'
         env:
           VM_HOST: ${{ secrets.VM_HOST }}
           SSH_OPTS: "-i /home/runner/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=6"
