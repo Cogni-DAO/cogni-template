@@ -17,6 +17,8 @@
 #   - <env>-writer      policy + role  (openbao-writer SA, per-env RW; jwt twin)
 #   - <env>-db-reader   policy + role  (db-provisioner SA, per-env read-only)
 #   - ClusterSecretStore openbao-backend
+#   - argocd-cm         additive merge patch (Argo's `part-of` informer label +
+#                       kustomize --enable-helm + ComputeWorkload health rule)
 #
 # RENAME (additive, safe): the writer SA is `openbao-writer` (was `openbao-operator`).
 # The <env>-writer role binds BOTH names during transition, so consumers still on
@@ -40,6 +42,9 @@ VM_IP="${VM_IP:-${VM_HOST:-}}"
 GH_REPO="${GH_REPO:?GH_REPO is required (owner/repo for the GHA OIDC writer role)}"
 SSH_OPTS="${SSH_OPTS:--o StrictHostKeyChecking=accept-new -o ConnectTimeout=30}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# shellcheck source=./scripts/setup/lib/argocd-cm-patch.sh
+source "$REPO_ROOT/scripts/setup/lib/argocd-cm-patch.sh"
 
 ROOT_TOKEN="${OPENBAO_ROOT_TOKEN:-}"
 if [[ -z "$ROOT_TOKEN" && -n "${OPENBAO_ROOT_TOKEN_LOCAL:-}" && -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
@@ -78,6 +83,25 @@ if ! ssh $SSH_OPTS -o BatchMode=yes -o ConnectTimeout=15 "root@${VM_IP}" true 2>
   exit 1
 fi
 rm -f /tmp/_vmprobe
+
+# ── argocd-cm merge patch (day-two repair for bug.5095) ─────────────────────
+# FIRST, before any OpenBao work: this is what un-wedges a broken Argo. PR #2108
+# pointed an Argo Application at a Git manifest declaring `argocd-cm`; server-side
+# apply took ownership and replaced `metadata.labels` with Argo's tracking label,
+# dropping `app.kubernetes.io/part-of: argocd`. Argo watches its own ConfigMaps
+# through an informer with that label as its selector, so the object went invisible
+# to every controller — `configmap "argocd-cm" not found` for an object that plainly
+# exists — and every Application in the cluster fell to SYNC=Unknown HEALTH=Unknown.
+#
+# The merge patch restores the identity labels, removes Argo's tracking label, and
+# re-asserts the two data keys, all without touching anything else in the object.
+# Identical call to provision-env-vm.sh Phase 5b.1 via the shared helper, so cold
+# start and day two can never drift. Idempotent — a re-run is a no-op.
+log "merge-patching argocd-cm (part-of label + kustomize buildOptions + ComputeWorkload health)..."
+apply_argocd_cm_runtime_patch "$REPO_ROOT" "$VM_IP" "$SSH_OPTS" || {
+  echo "::error::${DEPLOY_ENV}: argocd-cm merge patch failed — Argo may remain wedged (bug.5095)." >&2
+  exit 1
+}
 
 log "reconciling OpenBao substrate for env '${DEPLOY_ENV}' on ${VM_IP}"
 

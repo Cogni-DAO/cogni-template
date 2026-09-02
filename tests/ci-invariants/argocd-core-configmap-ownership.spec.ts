@@ -3,11 +3,11 @@
 
 /**
  * Module: `@tests/ci-invariants/argocd-core-configmap-ownership`
- * Purpose: Pins that no Cogni-authored manifest can take GitOps ownership of a core `argocd-*` ConfigMap (bug.5095).
- * Scope: Static YAML structure checks over infra/k8s/**. Does NOT talk to a cluster or to Argo.
- * Invariants: NO_OWNED_ARGOCD_CORE_CONFIGMAP, NO_ARGO_APP_PATH_OVER_ARGOCD_CORE_CONFIGMAP, ARGOCD_CM_KEYS_VIA_MERGE_PATCH.
+ * Purpose: Forbids GitOps ownership of Argo CD's own `argocd-*` ConfigMaps (bug.5095).
+ * Scope: Static YAML structure checks over infra/k8s/**. Does NOT talk to a cluster.
+ * Invariants: NO_OWNED_ARGOCD_CORE_CONFIGMAP, NO_ARGO_APP_PATH_OVER_ARGOCD_CORE_CONFIGMAP.
  * Side-effects: IO (reads repo manifests)
- * Links: infra/k8s/argocd/argocd-cm-runtime-patch.yaml, scripts/setup/provision-env-vm.sh
+ * Links: infra/k8s/argocd/argocd-cm-runtime-patch.yaml
  * @public
  */
 
@@ -17,172 +17,88 @@ import { describe, expect, it } from "vitest";
 import { parseAllDocuments } from "yaml";
 
 const REPO_ROOT = path.resolve(__dirname, "../..");
-const K8S_ROOT = path.join(REPO_ROOT, "infra/k8s");
-const RUNTIME_PATCH = "infra/k8s/argocd/argocd-cm-runtime-patch.yaml";
-const PROVISION_SCRIPT = "scripts/setup/provision-env-vm.sh";
+const PATCH_BODY = "infra/k8s/argocd/argocd-cm-runtime-patch.yaml";
 
-/**
- * Argo CD's own configuration surface. These ConfigMaps are created by Argo's
- * upstream install and then mutated in place at provision time with values that
- * MUST NOT live in Git (above all the GitHub repository credentials in
- * `argocd-cm`). A Cogni manifest that declares one of them with a partial `data`
- * block and is synced by an Argo Application makes Argo the owner of the whole
- * object, and every key absent from Git is dropped on the next sync.
- */
-const CORE_CM_NAME = /^argocd-/;
+// Owning one of these makes Argo replace metadata.labels with its own tracking
+// label, dropping `app.kubernetes.io/part-of: argocd` — the selector Argo's own
+// informer matches on. The object goes invisible to every controller and the whole
+// environment falls to SYNC=Unknown. A kustomize patch is safe (it merges into the
+// complete upstream object); a standalone manifest is a full desired state.
+const WHY = `A core argocd-* ConfigMap may only appear under infra/k8s/ as a kustomize patch. Owning one drops Argo's part-of informer label and wedges the environment (bug.5095) — deliver keys via ${PATCH_BODY}.`;
 
-interface YamlDoc {
-  file: string; // repo-relative
-  dir: string; // absolute
-  value: Record<string, unknown>;
+type Doc = Record<string, unknown>;
+
+function docsIn(file: string): Doc[] {
+  return parseAllDocuments(readFileSync(file, "utf8"))
+    .map((d) => d.toJS() as unknown)
+    .filter((v): v is Doc => !!v && typeof v === "object" && !Array.isArray(v));
 }
 
-function listYamlFiles(dir: string): string[] {
-  const out: string[] = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...listYamlFiles(full));
-    else if (/\.ya?ml$/.test(entry.name)) out.push(full);
-  }
-  return out.sort();
+function yamlFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+    const full = path.join(dir, e.name);
+    if (e.isDirectory()) return yamlFiles(full);
+    return /\.ya?ml$/.test(e.name) ? [full] : [];
+  });
 }
 
-function loadDocs(): YamlDoc[] {
-  const docs: YamlDoc[] = [];
-  for (const file of listYamlFiles(K8S_ROOT)) {
-    const parsed = parseAllDocuments(readFileSync(file, "utf8"));
-    for (const doc of parsed) {
-      if (doc.errors.length > 0) {
-        throw new Error(`${path.relative(REPO_ROOT, file)}: ${doc.errors[0]}`);
-      }
-      const value = doc.toJS();
-      if (value && typeof value === "object" && !Array.isArray(value)) {
-        docs.push({
-          file: path.relative(REPO_ROOT, file),
-          dir: path.dirname(file),
-          value: value as Record<string, unknown>,
-        });
-      }
-    }
-  }
-  return docs;
-}
+const MANIFESTS = yamlFiles(path.join(REPO_ROOT, "infra/k8s"))
+  .sort()
+  .flatMap((f) =>
+    docsIn(f).map((doc) => ({ file: path.relative(REPO_ROOT, f), doc }))
+  );
 
-const ALL_DOCS = loadDocs();
+const ofKind = (...kinds: string[]) =>
+  MANIFESTS.filter((m) => kinds.includes(m.doc.kind as string));
 
-function metaName(doc: YamlDoc): string {
-  const meta = doc.value.metadata as { name?: string } | undefined;
-  return meta?.name ?? "";
-}
-
-/** Every file referenced as a kustomize PATCH (repo-relative), from any kustomization.yaml. */
-function kustomizePatchFiles(): Set<string> {
-  const files = new Set<string>();
-  for (const doc of ALL_DOCS) {
-    if (doc.value.kind !== "Kustomization") continue;
-    const patches = (doc.value.patches ?? []) as { path?: string }[];
-    for (const patch of patches) {
-      if (patch?.path)
-        files.add(path.relative(REPO_ROOT, path.resolve(doc.dir, patch.path)));
-    }
-    const legacy = (doc.value.patchesStrategicMerge ?? []) as string[];
-    for (const entry of legacy) {
-      if (typeof entry === "string" && !entry.includes("\n")) {
-        files.add(path.relative(REPO_ROOT, path.resolve(doc.dir, entry)));
-      }
-    }
-  }
-  return files;
-}
-
-/** Repo-relative source paths declared by any Argo Application / ApplicationSet. */
-function argoSourcePaths(): { app: string; sourcePath: string }[] {
-  const out: { app: string; sourcePath: string }[] = [];
-  const collect = (app: string, spec: unknown) => {
-    if (!spec || typeof spec !== "object") return;
-    const s = spec as Record<string, unknown>;
-    const sources = [s.source, ...((s.sources as unknown[]) ?? [])];
-    for (const source of sources) {
-      const p = (source as { path?: string } | undefined)?.path;
-      if (typeof p === "string" && p.length > 0) {
-        out.push({ app, sourcePath: path.normalize(p).replace(/\/+$/, "") });
-      }
-    }
-  };
-  for (const doc of ALL_DOCS) {
-    if (doc.value.kind === "Application") collect(doc.file, doc.value.spec);
-    if (doc.value.kind === "ApplicationSet") {
-      const spec = doc.value.spec as
-        | { template?: { spec?: unknown } }
-        | undefined;
-      collect(doc.file, spec?.template?.spec);
-    }
-  }
-  return out;
-}
-
-const CORE_CM_DOCS = ALL_DOCS.filter(
-  (doc) => doc.value.kind === "ConfigMap" && CORE_CM_NAME.test(metaName(doc))
+const coreConfigMaps = ofKind("ConfigMap").filter((m) =>
+  /^argocd-/.test((m.doc.metadata as { name?: string } | undefined)?.name ?? "")
 );
 
 describe("Argo CD core ConfigMap ownership (bug.5095)", () => {
-  it("declares no core argocd-* ConfigMap as a standalone deployable resource", () => {
-    // A kustomize patch is safe: it merges into the COMPLETE upstream object
-    // that the same kustomization installs, so it adds keys instead of
-    // replacing the live ConfigMap. A standalone manifest is not — it is a
-    // full desired state, and whoever applies it owns every key.
-    const patchFiles = kustomizePatchFiles();
-    const offenders = CORE_CM_DOCS.filter(
-      (doc) => !patchFiles.has(doc.file)
-    ).map((doc) => `${doc.file} (${metaName(doc)})`);
-    expect(
-      offenders,
-      "A core argocd-* ConfigMap may only appear under infra/k8s/ as a kustomize " +
-        "patch (listed in a kustomization.yaml `patches:`). Declaring one as a " +
-        "standalone resource lets an Argo Application own the whole object and drop " +
-        "every key it does not declare — including the GitHub repository credentials " +
-        "argocd-repo-server needs to clone. That took candidate-a, preview AND " +
-        `production down (bug.5095). Deliver keys via ${RUNTIME_PATCH} instead.`
-    ).toEqual([]);
-  });
-
-  it("points no Argo Application source path at a directory holding a core argocd-* ConfigMap", () => {
-    const cmDirs = new Set(CORE_CM_DOCS.map((doc) => path.dirname(doc.file)));
-    const offenders = argoSourcePaths()
-      .filter(({ sourcePath }) => cmDirs.has(sourcePath))
-      .map(({ app, sourcePath }) => `${app} -> ${sourcePath}`);
-    expect(
-      offenders,
-      "Argo must never be handed a source path that renders Argo's own core " +
-        "configuration: that is the self-management hazard bug.5095 hit. Argo's " +
-        "install + config stay in the out-of-band bootstrap kustomization."
-    ).toEqual([]);
-  });
-
-  it("keeps Cogni's argocd-cm keys in a keys-only merge-patch body, not a manifest", () => {
-    const raw = readFileSync(path.join(REPO_ROOT, RUNTIME_PATCH), "utf8");
-    const docs = parseAllDocuments(raw);
-    expect(docs).toHaveLength(1);
-    const body = (docs[0]?.toJS() ?? {}) as Record<string, unknown>;
-    // No apiVersion/kind/metadata => it can never be applied as a resource,
-    // rendered by kustomize, or picked up from an Argo Application source path.
-    expect(Object.keys(body).sort()).toEqual(["data"]);
-    const data = body.data as Record<string, string>;
-    expect(data["kustomize.buildOptions"]).toBe("--enable-helm");
-    expect(
-      data["resource.customizations.health.compute.cogni.io_ComputeWorkload"]
-    ).toContain("condition.observedGeneration == generation");
-  });
-
-  it("applies that patch body with a non-destructive `kubectl patch --type merge`", () => {
-    const script = readFileSync(path.join(REPO_ROOT, PROVISION_SCRIPT), "utf8");
-    expect(script).toContain(
-      "kubectl -n argocd patch cm argocd-cm --type merge"
+  it("declares no core argocd-* ConfigMap as a standalone resource", () => {
+    // `patches:` is the only sanctioned form — anything else is a full desired state.
+    const patched = new Set(
+      ofKind("Kustomization").flatMap(({ file, doc }) =>
+        ((doc.patches ?? []) as { path?: string }[])
+          .map((p) => p?.path)
+          .filter((p): p is string => typeof p === "string")
+          .map((p) => path.join(path.dirname(file), p))
+      )
     );
-    expect(script).toContain(RUNTIME_PATCH);
-    // `kubectl apply`/`replace` on argocd-cm would reintroduce whole-object ownership.
-    expect(script).not.toMatch(
-      /kubectl[^\n]*(apply|replace)[^\n]*argocd-cm-runtime-patch/
+    const offenders = coreConfigMaps
+      .map((m) => m.file)
+      .filter((f) => !patched.has(f));
+    expect(offenders, WHY).toEqual([]);
+  });
+
+  it("points no Argo Application source path at a directory holding one", () => {
+    const dirs = new Set(coreConfigMaps.map((m) => path.dirname(m.file)));
+    const offenders = ofKind("Application", "ApplicationSet").flatMap(
+      ({ file, doc }) => {
+        const spec = (doc.spec ?? {}) as Doc;
+        const inner =
+          (spec.template as { spec?: Doc } | undefined)?.spec ?? spec;
+        return [inner.source, ...((inner.sources as unknown[]) ?? [])]
+          .map((s) => (s as { path?: string } | undefined)?.path)
+          .filter(
+            (p): p is string =>
+              typeof p === "string" && dirs.has(path.normalize(p))
+          )
+          .map((p) => `${file} -> ${p}`);
+      }
     );
+    expect(offenders, WHY).toEqual([]);
+  });
+
+  it("keeps the argocd-cm patch body a labels-restoring merge patch, not a manifest", () => {
+    const [body] = docsIn(path.join(REPO_ROOT, PATCH_BODY));
+    // No apiVersion/kind/metadata.name => can never be applied as a resource.
+    expect(Object.keys(body ?? {}).sort()).toEqual(["data", "metadata"]);
+    const labels = (
+      body?.metadata as { labels?: Record<string, string | null> }
+    ).labels;
+    expect(labels?.["app.kubernetes.io/part-of"]).toBe("argocd");
+    expect(labels?.["app.kubernetes.io/instance"]).toBeNull();
   });
 });

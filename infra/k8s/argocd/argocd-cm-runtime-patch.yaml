@@ -1,40 +1,63 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2026 Cogni-DAO
 #
-# argocd-cm-runtime-patch.yaml — the Cogni-owned KEYS of Argo CD's core
-# `argocd-cm` ConfigMap, expressed as a JSON-MERGE-PATCH BODY (not a manifest).
+# argocd-cm-runtime-patch.yaml — Cogni's slice of Argo CD's core `argocd-cm`
+# ConfigMap, expressed as a JSON-MERGE-PATCH BODY (not a manifest).
 #
-# THIS FILE IS DELIBERATELY NOT A ConfigMap MANIFEST. It has no apiVersion /
-# kind / metadata, so it can never be applied as a resource, can never be
-# rendered by kustomize, and can never be handed to an Argo Application as a
-# source path. It is consumed ONLY by:
+# THIS FILE IS DELIBERATELY NOT A ConfigMap MANIFEST. It has no apiVersion,
+# kind, or metadata.name, so it can never be applied as a resource, rendered by
+# kustomize, or handed to an Argo Application as a source path. It is consumed
+# ONLY by:
 #
 #   kubectl -n argocd patch cm argocd-cm --type merge \
 #     --patch-file infra/k8s/argocd/argocd-cm-runtime-patch.yaml
 #
-# WHY A MERGE PATCH AND NOT GITOPS OWNERSHIP (bug.5095):
-#   `argocd-cm` is Argo's OWN core config. Beyond these keys it holds state
-#   that must never be in Git — most importantly the `repository.credentials` /
-#   `repositories` GitHub credentials written at provision time. Declaring the
-#   ConfigMap in Git with only SOME keys and pointing an Argo Application at it
-#   makes Argo the owner of the whole object: on sync (especially with
-#   ServerSideApply=true, which migrates field ownership away from the previous
-#   manager) every key NOT in the Git manifest is dropped. That is exactly what
-#   took candidate-a, preview AND production down on 2026-09-02: argocd-repo-server
-#   lost its GitHub credentials, could no longer `git fetch`, and every
-#   Application across the fleet went to Unknown with auto-sync skipped.
-#   `argocd.argoproj.io/sync-options: Prune=false` does not help — it prevents
-#   DELETION of the object, not destructive replacement of its data.
+# THE INVARIANT THIS PROTECTS: ARGO'S OWN INFORMER SELECTOR MUST SURVIVE (bug.5095).
+#   Argo CD watches its own ConfigMaps and Secrets through an informer with the
+#   label selector `app.kubernetes.io/part-of=argocd`. An object without that
+#   label is invisible to every Argo controller even though it plainly exists in
+#   the API server — the settings manager then logs `configmap "argocd-cm" not
+#   found` and cannot load global project settings, and every Application in the
+#   cluster falls to SYNC=Unknown HEALTH=Unknown.
 #
-#   A merge patch is additive: it sets these keys and leaves every other key
-#   (the credentials, anything Argo itself writes) untouched. No Cogni-authored
-#   Argo Application may own a core `argocd-*` ConfigMap — pinned by
+#   On 2026-09-02 an Argo Application was pointed at a Git manifest that declared
+#   `argocd-cm` (PR #2108). Server-side apply made Argo the owner of the object
+#   and REPLACED `metadata.labels` with its own tracking label
+#   `app.kubernetes.io/instance: cogni-<env>-compute-workload-health`, dropping
+#   `app.kubernetes.io/part-of: argocd`. `argocd-cm` fell out of the informer
+#   cache and the whole fleet stopped reconciling. Note what was NOT damaged: the
+#   `data:` keys survived intact, and there are no credentials in this ConfigMap
+#   to lose — `cogni-dao/cogni` is public and Argo clones it anonymously. The
+#   destroyed field was LABELS.
+#
+#   `argocd.argoproj.io/sync-options: Prune=false` does not help: it prevents
+#   DELETION of the object, not destructive replacement of its fields.
+#
+#   A JSON merge patch is additive and surgical: it restores the two identity
+#   labels, removes ONLY Argo's tracking label (an explicit `null` value deletes
+#   that one key), and leaves every other label and every other `data` key
+#   untouched. No Cogni-authored Argo Application may own a core `argocd-*`
+#   ConfigMap — pinned by
 #   tests/ci-invariants/argocd-core-configmap-ownership.spec.ts.
 #
-# APPLIED BY: scripts/setup/provision-env-vm.sh Phase 5b.1.
-# BACKFILL onto an already-provisioned cluster (no re-provision needed) with the
-# same kubectl command above against that env's kubeconfig. Re-running is a no-op.
-# Changing a key here requires that patch to be re-applied to each live env.
+# APPLIED BY: scripts/setup/lib/argocd-cm-patch.sh, sourced by
+#   scripts/setup/provision-env-vm.sh (cold start, Phase 5b.1) and
+#   scripts/setup/reconcile-env-substrate.sh (day two — the script
+#   `provision-env.yml mode=substrate-only` runs). Re-running is a no-op, so a
+#   wedged live environment is repaired through the audited workflow with no
+#   re-provision. Changing anything here requires re-running one of the two.
+metadata:
+  labels:
+    # The identity labels Argo's upstream install puts on its own ConfigMaps,
+    # matching argocd-rbac-cm / argocd-cmd-params-cm / argocd-tls-certs-cm.
+    # `part-of` is the one the informer selector matches on — restoring it is
+    # what un-wedges a cluster.
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd
+    # Explicit null deletes just this key: Argo's resource-tracking label, left
+    # behind by the Application that wrongly owned this object. While it is
+    # present Argo still considers argocd-cm part of that Application.
+    app.kubernetes.io/instance: null
 data:
   # kustomize-with-helm rendering for the substrate charts (openbao,
   # external-secrets, reloader) — see infra/k8s/argocd/*/kustomization.yaml.

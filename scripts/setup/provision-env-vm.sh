@@ -40,6 +40,8 @@ PROVISION_DIR="$REPO_ROOT/infra/provision/cherry/base"
 
 # shellcheck source=./scripts/setup/lib/fork-identity.sh
 source "$SCRIPT_DIR/lib/fork-identity.sh"
+# shellcheck source=./scripts/setup/lib/argocd-cm-patch.sh
+source "$SCRIPT_DIR/lib/argocd-cm-patch.sh"
 
 # ── Flags ─────────────────────────────────────────────────────
 AUTO_APPROVE=false
@@ -1228,38 +1230,28 @@ phase_5b_timeout() {
 # onto an already-running cluster that was last provisioned before that app
 # existed in-repo (e.g. prod predates the `reloader` Application — bug.5040).
 # Keep the two lists in sync.
-# Cogni's keys in Argo's core `argocd-cm` are delivered as a JSON MERGE PATCH,
-# never as an owned GitOps resource: `kustomize.buildOptions: --enable-helm` for
-# the kustomize-with-helm substrate, plus the ComputeWorkload custom health rule
-# (ci-cd.md Axiom 26). A merge patch ADDS these keys and leaves everything else in
-# the ConfigMap — above all the GitHub `repositories`/`repository.credentials`
-# argocd-repo-server needs to clone, which must never live in Git — untouched.
+# Cogni's slice of Argo's core `argocd-cm` is delivered as an ADDITIVE JSON MERGE
+# PATCH, never as an owned GitOps resource. It carries the identity labels Argo's
+# own informer selects on (`app.kubernetes.io/part-of: argocd`),
+# `kustomize.buildOptions: --enable-helm` for the kustomize-with-helm substrate,
+# and the ComputeWorkload health rule (ci-cd.md Axiom 26).
 #
-# bug.5095: an Argo Application that declared `argocd-cm` in Git with only the
-# health key took ownership of the whole object on sync and dropped those
-# credentials in candidate-a, preview AND production simultaneously; repo-server
-# could no longer `git fetch` and the entire fleet stopped reconciling. The
-# `Prune=false` sync-option prevents deletion, not destructive replacement.
-# tests/ci-invariants/argocd-core-configmap-ownership.spec.ts pins that no
-# manifest under infra/k8s/ may declare a core `argocd-*` ConfigMap again.
+# bug.5095: an Argo Application that declared `argocd-cm` in Git took ownership of
+# the object and server-side apply REPLACED `metadata.labels` with Argo's tracking
+# label, dropping `part-of: argocd`. The ConfigMap fell out of Argo's informer
+# cache — controllers logged `configmap "argocd-cm" not found` for an object that
+# plainly existed — and every Application in candidate-a, preview AND production
+# went to SYNC=Unknown HEALTH=Unknown. The `Prune=false` sync-option prevents
+# deletion of the object, not destructive replacement of its fields.
+# tests/ci-invariants/argocd-core-configmap-ownership.spec.ts pins that no manifest
+# under infra/k8s/ may declare a core `argocd-*` ConfigMap again.
 #
-# The patch body is infra/k8s/argocd/argocd-cm-runtime-patch.yaml, a keys-only
-# YAML fragment (no apiVersion/kind/metadata) so it can never be applied as a
-# resource. It is copied to the VM and applied with `--patch-file`, which keeps
-# the multi-line Lua verbatim instead of shell-escaping it into a JSON one-liner.
-# Backfill onto an already-provisioned cluster with the same kubectl command.
-ARGOCD_CM_PATCH_FILE="$REPO_ROOT/infra/k8s/argocd/argocd-cm-runtime-patch.yaml"
-[[ -f "$ARGOCD_CM_PATCH_FILE" ]] || phase_5b_timeout "missing $ARGOCD_CM_PATCH_FILE"
-log_info "Merge-patching Cogni's argocd-cm keys (kustomize --enable-helm + ComputeWorkload health)..."
-scp $SSH_OPTS "$ARGOCD_CM_PATCH_FILE" root@"$VM_IP":/tmp/argocd-cm-runtime-patch.yaml \
-  || phase_5b_timeout "argocd-cm merge-patch copy failed"
-ssh $SSH_OPTS root@"$VM_IP" '
-  kubectl -n argocd patch cm argocd-cm --type merge \
-    --patch-file /tmp/argocd-cm-runtime-patch.yaml &&
-  rm -f /tmp/argocd-cm-runtime-patch.yaml &&
-  kubectl -n argocd rollout restart deployment argocd-repo-server &&
-  kubectl -n argocd rollout status deployment argocd-repo-server --timeout=120s
-' || phase_5b_timeout "argocd-cm merge patch failed"
+# The copy+patch lives in scripts/setup/lib/argocd-cm-patch.sh so day-two recovery
+# (reconcile-env-substrate.sh, run by `provision-env.yml mode=substrate-only`)
+# applies the exact same patch — a wedged live env is repaired with no re-provision.
+log_info "Merge-patching argocd-cm (part-of label + kustomize --enable-helm + ComputeWorkload health)..."
+apply_argocd_cm_runtime_patch "$REPO_ROOT" "$VM_IP" "$SSH_OPTS" \
+  || phase_5b_timeout "argocd-cm merge patch failed"
 
 SUBSTRATE_FORK_REPO="https://github.com/${GH_REPO}.git"
 for substrate in openbao external-secrets reloader; do
