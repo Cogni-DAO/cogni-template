@@ -30,6 +30,20 @@ replacements:
         fieldPaths: [metadata.namespace]
 
 patches:
+  # candidate-a runs at ~91% memory-requested; a surge pod cannot schedule and
+  # every rolling update wedges Pending. Single-replica proving env → replace
+  # in place (brief blip is acceptable here; preview/prod keep surge).
+  - target:
+      kind: Deployment
+      name: node-app
+    patch: |
+      - op: replace
+        path: /spec/strategy
+        value:
+          type: RollingUpdate
+          rollingUpdate:
+            maxSurge: 0
+            maxUnavailable: 1
   - target:
       kind: Deployment
       name: compute-workload-controller
