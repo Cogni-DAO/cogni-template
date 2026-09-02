@@ -1,0 +1,8 @@
+# Maps the composed provider-http Request's readiness onto the XAkashWorkload, so
+# the XR reports READY once the lease is observed active/synced. Pinned.
+apiVersion: pkg.crossplane.io/v1
+kind: Function
+metadata:
+  name: function-auto-ready
+spec:
+  package: xpkg.upbound.io/crossplane-contrib/function-auto-ready:v0.7.0

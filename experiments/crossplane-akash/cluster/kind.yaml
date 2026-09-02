@@ -1,0 +1,9 @@
+# kind cluster for the crossplane-akash spike.
+# Single node; nothing exotic. Crossplane + provider-http + a mock operator
+# compute API all run inside this cluster so the demo is candidate-independent
+# and spends ZERO real escrow.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: crossplane-akash
+nodes:
+  - role: control-plane

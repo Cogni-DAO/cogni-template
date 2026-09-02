@@ -1,0 +1,20 @@
+# DeploymentRuntimeConfig: shrink provider-http's poll interval to 15s so the
+# crash/adopt and drift-converge steps of the demo happen in seconds, not minutes.
+# Referenced by the Provider via spec.runtimeConfigRef (see demo.sh, which patches
+# the Provider to point here).
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: provider-http-fast
+spec:
+  deploymentTemplate:
+    spec:
+      selector: {}
+      template:
+        spec:
+          containers:
+            - name: package-runtime
+              args:
+                - --poll=15s
+                - --max-reconcile-rate=20
+                - --debug

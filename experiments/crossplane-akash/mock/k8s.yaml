@@ -1,0 +1,63 @@
+# Runs the mock operator compute API inside the kind cluster.
+# server.js is injected via a ConfigMap (mock-operator-src) that demo.sh creates
+# with `kubectl create configmap mock-operator-src --from-file=server.js` — so the
+# source is never duplicated in git. Uses a bare node image; the server has ZERO
+# npm dependencies.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mock-operator
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-operator
+  namespace: mock-operator
+  labels:
+    app: mock-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-operator
+  template:
+    metadata:
+      labels:
+        app: mock-operator
+    spec:
+      containers:
+        - name: mock
+          image: node:22-alpine
+          command: ["node", "/app/server.js"]
+          env:
+            - name: PORT
+              value: "8080"
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 1
+            periodSeconds: 2
+          volumeMounts:
+            - name: src
+              mountPath: /app
+      volumes:
+        - name: src
+          configMap:
+            name: mock-operator-src
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-operator
+  namespace: mock-operator
+spec:
+  selector:
+    app: mock-operator
+  ports:
+    - port: 80
+      targetPort: 8080
+# In-cluster base URL for provider-http Requests:
+#   http://mock-operator.mock-operator.svc.cluster.local

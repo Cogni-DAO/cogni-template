@@ -1,0 +1,21 @@
+# ProviderConfig for provider-http.
+#
+# credentials.source: Secret => provider-http reads the named Secret key and sets
+# it verbatim as the "Authorization" header on EVERY request made with this config.
+# So the Secret value must be the FULL header value, e.g. "Bearer <token>".
+#
+# The token comes from a Kubernetes Secret (operator-compute-auth) that demo.sh
+# creates from the OPERATOR_COMPUTE_TOKEN environment variable — it is NEVER
+# hardcoded in git. For the mock demo any non-empty bearer works; against the real
+# operator this would be a node-scoped agent key with node.flight.
+apiVersion: http.crossplane.io/v1alpha1
+kind: ProviderConfig
+metadata:
+  name: operator-compute
+spec:
+  credentials:
+    source: Secret
+    secretRef:
+      namespace: crossplane-system
+      name: operator-compute-auth
+      key: authorization

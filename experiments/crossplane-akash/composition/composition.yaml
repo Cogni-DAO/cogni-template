@@ -1,0 +1,114 @@
+# Composition — the second (and last) net-new bespoke artifact. It maps an
+# XAkashWorkload to a SINGLE provider-http Request resource that drives the
+# operator compute API:
+#
+#   Create  -> POST   /api/v1/compute/deployments
+#   Observe -> GET    /api/v1/compute/deployments/{leaseId}
+#   Update  -> PUT    /api/v1/compute/deployments/{leaseId}
+#   Delete  -> DELETE /api/v1/compute/deployments/{leaseId}
+#
+# CRASH-SAFE IDENTITY: the leaseId returned by Create is persisted by provider-http
+# into the Request's status.response.body and used to template the Observe/Update/
+# Delete URLs (`.response.body.leaseId`). A re-reconcile therefore Observes the
+# existing lease instead of re-creating it. The residual crash window (POST
+# succeeded on the server but the provider died before persisting status) is closed
+# by the SERVER's idempotency on nodeId — see README "Verdict".
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xakashworkload-http
+spec:
+  compositeTypeRef:
+    apiVersion: compute.cogni.io/v1alpha1
+    kind: XAkashWorkload
+  mode: Pipeline
+  pipeline:
+    - step: render-request
+      functionRef:
+        name: function-go-templating
+      input:
+        apiVersion: gotemplating.fn.crossplane.io/v1beta1
+        kind: GoTemplate
+        source: Inline
+        inline:
+          template: |
+            {{- $xr := .observed.composite.resource }}
+            {{- $spec := $xr.spec }}
+            {{- $base := "http://mock-operator.mock-operator.svc.cluster.local/api/v1/compute/deployments" }}
+            ---
+            apiVersion: http.crossplane.io/v1alpha2
+            kind: Request
+            metadata:
+              annotations:
+                gotemplating.fn.crossplane.io/composition-resource-name: workload-request
+            spec:
+              providerConfigRef:
+                name: {{ $spec.providerConfigName | default "operator-compute" }}
+              forProvider:
+                waitTimeout: 2m
+                headers:
+                  Content-Type:
+                    - application/json
+                payload:
+                  baseUrl: {{ $base | quote }}
+                  # Desired POST/PUT body. Mirrors the operator provision body
+                  # (nodeId is the server's idempotency key).
+                  body: |
+                    {{ dict "nodeId" $spec.nodeId "name" $xr.metadata.name "publicHost" $spec.publicHost "services" $spec.services | toJson }}
+                mappings:
+                  - action: CREATE
+                    method: POST
+                    url: .payload.baseUrl
+                    body: .payload.body
+                  - action: OBSERVE
+                    method: GET
+                    url: '.payload.baseUrl + "/" + (.response.body.leaseId | tostring)'
+                  - action: UPDATE
+                    method: PUT
+                    url: '.payload.baseUrl + "/" + (.response.body.leaseId | tostring)'
+                    body: .payload.body
+                  - action: REMOVE
+                    method: DELETE
+                    url: '.payload.baseUrl + "/" + (.response.body.leaseId | tostring)'
+                # SYNC/DRIFT: up-to-date iff the server's echoed desired-state matches
+                # what we sent and the lease is active. Change any XR field and this
+                # goes false -> provider-http fires the UPDATE (PUT).
+                expectedResponseCheck:
+                  type: CUSTOM
+                  logic: |
+                    if (.response.body.services == .payload.body.services)
+                      and (.response.body.publicHost == .payload.body.publicHost)
+                      and (.response.body.state == "active")
+                    then true else false end
+                # REMOVE confirmation: the server 404s a released lease.
+                isRemovedCheck:
+                  type: CUSTOM
+                  logic: |
+                    if .response.statusCode == 404 then true else false end
+            {{/* Reflect the captured lease back onto the XR status. Guard: on the
+                 first reconcile there are no observed composed resources yet. */}}
+            {{- $req := "" }}
+            {{- if .observed.resources }}
+              {{- $req = index .observed.resources "workload-request" }}
+            {{- end }}
+            {{- if $req }}
+              {{- $st := $req.resource.status }}
+              {{- if and $st $st.response $st.response.body }}
+                {{- $body := $st.response.body | fromJson }}
+                {{- if $body.leaseId }}
+            {{/* No composition-resource-name annotation => go-templating treats
+                 this as a STATUS-ONLY update of the composite, not a composed
+                 resource (so function-auto-ready won't demand it be Ready). */}}
+            ---
+            apiVersion: compute.cogni.io/v1alpha1
+            kind: XAkashWorkload
+            status:
+              leaseId: {{ $body.leaseId | quote }}
+              state: {{ $body.state | default "unknown" | quote }}
+              endpoints: {{ $body.endpoints | default (list) | toJson }}
+                {{- end }}
+              {{- end }}
+            {{- end }}
+    - step: ready
+      functionRef:
+        name: function-auto-ready
