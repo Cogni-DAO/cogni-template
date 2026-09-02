@@ -586,10 +586,12 @@ jobs:
           # ephemeral. Future PR moves tfstate to a remote backend (S3-equiv).
           echo "cleanup complete"
 
-  # substrate-only: reconcile the env's OpenBao SA/role layer on the EXISTING VM
-  # (no tofu/VM/DNS/init). Heals the drift where Phase 5b SAs/roles were never
-  # reconciled outside a cold-start (prod missing db-provisioner; preview missing
-  # both). Token custody v0: operator pastes the env's root token as a masked
+  # substrate-only: reconcile the env's OpenBao SA/role layer AND re-assert the
+  # additive argocd-cm merge patch on the EXISTING VM (no tofu/VM/DNS/init). Heals
+  # the drift where Phase 5b SAs/roles were never reconciled outside a cold-start
+  # (prod missing db-provisioner; preview missing both), and is the day-two repair
+  # path for an Argo wedged by a lost `app.kubernetes.io/part-of` label (bug.5095).
+  # Token custody v0: operator pastes the env's root token as a masked
   # one-shot input — pulled from the init artifact at dispatch, NEVER a standing
   # GH secret (same shape as encryption_passphrase). Endgame (prose, not built at
   # MVP): a substrate-admin k8s-auth role minted short-lived per run, zero root

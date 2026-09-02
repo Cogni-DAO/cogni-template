@@ -1,0 +1,96 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2026 Cogni-DAO
+#
+# argocd-cm-runtime-patch.yaml — Cogni's slice of Argo CD's core `argocd-cm`
+# ConfigMap, expressed as a JSON-MERGE-PATCH BODY (not a manifest).
+#
+# THIS FILE IS DELIBERATELY NOT A ConfigMap MANIFEST. It has no apiVersion,
+# kind, or metadata.name, so it can never be applied as a resource, rendered by
+# kustomize, or handed to an Argo Application as a source path. It is consumed
+# ONLY by:
+#
+#   kubectl -n argocd patch cm argocd-cm --type merge \
+#     --patch-file infra/k8s/argocd/argocd-cm-runtime-patch.yaml
+#
+# THE INVARIANT THIS PROTECTS: ARGO'S OWN INFORMER SELECTOR MUST SURVIVE (bug.5095).
+#   Argo CD watches its own ConfigMaps and Secrets through an informer with the
+#   label selector `app.kubernetes.io/part-of=argocd`. An object without that
+#   label is invisible to every Argo controller even though it plainly exists in
+#   the API server — the settings manager then logs `configmap "argocd-cm" not
+#   found` and cannot load global project settings, and every Application in the
+#   cluster falls to SYNC=Unknown HEALTH=Unknown.
+#
+#   On 2026-09-02 an Argo Application was pointed at a Git manifest that declared
+#   `argocd-cm` (PR #2108). Server-side apply made Argo the owner of the object
+#   and REPLACED `metadata.labels` with its own tracking label
+#   `app.kubernetes.io/instance: cogni-<env>-compute-workload-health`, dropping
+#   `app.kubernetes.io/part-of: argocd`. `argocd-cm` fell out of the informer
+#   cache and the whole fleet stopped reconciling. Note what was NOT damaged: the
+#   `data:` keys survived intact, and there are no credentials in this ConfigMap
+#   to lose — `cogni-dao/cogni` is public and Argo clones it anonymously. The
+#   destroyed field was LABELS.
+#
+#   `argocd.argoproj.io/sync-options: Prune=false` does not help: it prevents
+#   DELETION of the object, not destructive replacement of its fields.
+#
+#   A JSON merge patch is additive and surgical: it restores the two identity
+#   labels, removes ONLY Argo's tracking label (an explicit `null` value deletes
+#   that one key), and leaves every other label and every other `data` key
+#   untouched. No Cogni-authored Argo Application may own a core `argocd-*`
+#   ConfigMap — pinned by
+#   tests/ci-invariants/argocd-core-configmap-ownership.spec.ts.
+#
+# APPLIED BY: scripts/setup/lib/argocd-cm-patch.sh, sourced by
+#   scripts/setup/provision-env-vm.sh (cold start, Phase 5b.1) and
+#   scripts/setup/reconcile-env-substrate.sh (day two — the script
+#   `provision-env.yml mode=substrate-only` runs). Re-running is a no-op, so a
+#   wedged live environment is repaired through the audited workflow with no
+#   re-provision. Changing anything here requires re-running one of the two.
+metadata:
+  labels:
+    # The identity labels Argo's upstream install puts on its own ConfigMaps,
+    # matching argocd-rbac-cm / argocd-cmd-params-cm / argocd-tls-certs-cm.
+    # `part-of` is the one the informer selector matches on — restoring it is
+    # what un-wedges a cluster.
+    app.kubernetes.io/name: argocd-cm
+    app.kubernetes.io/part-of: argocd
+    # Explicit null deletes just this key: Argo's resource-tracking label, left
+    # behind by the Application that wrongly owned this object. While it is
+    # present Argo still considers argocd-cm part of that Application.
+    app.kubernetes.io/instance: null
+data:
+  # kustomize-with-helm rendering for the substrate charts (openbao,
+  # external-secrets, reloader) — see infra/k8s/argocd/*/kustomization.yaml.
+  kustomize.buildOptions: --enable-helm
+
+  # Custom health for the provider-neutral ComputeWorkload CR reconciled by the
+  # operator's compute-workload controller (ci-cd.md Axiom 26,
+  # OPERATOR_OWNS_WORKLOAD_HEALTH). Ready=True only counts when the controller
+  # observed THIS generation, so a stale status can never read Healthy.
+  resource.customizations.health.compute.cogni.io_ComputeWorkload: |
+    hs = {}
+    generation = obj.metadata.generation or 0
+    if obj.status ~= nil and obj.status.conditions ~= nil then
+      for _, condition in ipairs(obj.status.conditions) do
+        if condition.type == "Ready" then
+          if condition.status == "True" and condition.observedGeneration == generation then
+            hs.status = "Healthy"
+            hs.message = condition.message or "expected generation is ready"
+            return hs
+          end
+          if obj.status.phase == "Failed" then
+            hs.status = "Degraded"
+            hs.message = condition.message or condition.reason or "reconciliation failed"
+            return hs
+          end
+          if obj.status.phase == "Unknown" then
+            hs.status = "Suspended"
+            hs.message = condition.message or condition.reason or "external outcome is unknown"
+            return hs
+          end
+        end
+      end
+    end
+    hs.status = "Progressing"
+    hs.message = "waiting for Ready=True at metadata.generation"
+    return hs

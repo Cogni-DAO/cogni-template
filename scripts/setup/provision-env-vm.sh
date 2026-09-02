@@ -40,6 +40,8 @@ PROVISION_DIR="$REPO_ROOT/infra/provision/cherry/base"
 
 # shellcheck source=./scripts/setup/lib/fork-identity.sh
 source "$SCRIPT_DIR/lib/fork-identity.sh"
+# shellcheck source=./scripts/setup/lib/argocd-cm-patch.sh
+source "$SCRIPT_DIR/lib/argocd-cm-patch.sh"
 
 # ── Flags ─────────────────────────────────────────────────────
 AUTO_APPROVE=false
@@ -1228,13 +1230,28 @@ phase_5b_timeout() {
 # onto an already-running cluster that was last provisioned before that app
 # existed in-repo (e.g. prod predates the `reloader` Application — bug.5040).
 # Keep the two lists in sync.
-log_info "Enabling --enable-helm in argocd-cm for kustomize-with-helm substrate..."
-ssh -i "$SSH_KEY" -o StrictHostKeyChecking=no -o ConnectTimeout=15 root@"$VM_IP" '
-  kubectl -n argocd patch cm argocd-cm --type merge \
-    -p "{\"data\":{\"kustomize.buildOptions\":\"--enable-helm\"}}" &&
-  kubectl -n argocd rollout restart deployment argocd-repo-server &&
-  kubectl -n argocd rollout status deployment argocd-repo-server --timeout=120s
-' || phase_5b_timeout "argocd-cm --enable-helm patch failed"
+# Cogni's slice of Argo's core `argocd-cm` is delivered as an ADDITIVE JSON MERGE
+# PATCH, never as an owned GitOps resource. It carries the identity labels Argo's
+# own informer selects on (`app.kubernetes.io/part-of: argocd`),
+# `kustomize.buildOptions: --enable-helm` for the kustomize-with-helm substrate,
+# and the ComputeWorkload health rule (ci-cd.md Axiom 26).
+#
+# bug.5095: an Argo Application that declared `argocd-cm` in Git took ownership of
+# the object and server-side apply REPLACED `metadata.labels` with Argo's tracking
+# label, dropping `part-of: argocd`. The ConfigMap fell out of Argo's informer
+# cache — controllers logged `configmap "argocd-cm" not found` for an object that
+# plainly existed — and every Application in candidate-a, preview AND production
+# went to SYNC=Unknown HEALTH=Unknown. The `Prune=false` sync-option prevents
+# deletion of the object, not destructive replacement of its fields.
+# tests/ci-invariants/argocd-core-configmap-ownership.spec.ts pins that no manifest
+# under infra/k8s/ may declare a core `argocd-*` ConfigMap again.
+#
+# The copy+patch lives in scripts/setup/lib/argocd-cm-patch.sh so day-two recovery
+# (reconcile-env-substrate.sh, run by `provision-env.yml mode=substrate-only`)
+# applies the exact same patch — a wedged live env is repaired with no re-provision.
+log_info "Merge-patching argocd-cm (part-of label + kustomize --enable-helm + ComputeWorkload health)..."
+apply_argocd_cm_runtime_patch "$REPO_ROOT" "$VM_IP" "$SSH_OPTS" \
+  || phase_5b_timeout "argocd-cm merge patch failed"
 
 SUBSTRATE_FORK_REPO="https://github.com/${GH_REPO}.git"
 for substrate in openbao external-secrets reloader; do
