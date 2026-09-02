@@ -217,6 +217,39 @@ describe("ComputeWorkload Kubernetes contract", () => {
     ).resolves.toBe(false);
   });
 
+  it("deletes a stale failure when status becomes healthy", async () => {
+    const patchNamespacedCustomObjectStatus = vi.fn(async () => ({ body: {} }));
+    const state = new KubernetesComputeWorkloadStateAdapter(
+      { patchNamespacedCustomObjectStatus } as unknown as CustomObjectsApi,
+      {} as CoreV1Api,
+      "cogni-candidate-a",
+      "test-controller"
+    );
+
+    await state.patchStatus({
+      resource: declaredWorkload(),
+      status: {
+        phase: "Ready",
+        desiredGeneration: 1,
+        observedGeneration: 1,
+        conditions: [],
+      },
+    });
+
+    expect(patchNamespacedCustomObjectStatus).toHaveBeenCalledWith(
+      "compute.cogni.io",
+      "v1alpha1",
+      "cogni-candidate-a",
+      "computeworkloads",
+      "123e4567-e89b-12d3-a456-426614174001",
+      { status: expect.objectContaining({ phase: "Ready", failure: null }) },
+      undefined,
+      "compute-workload-controller",
+      undefined,
+      expect.any(Object)
+    );
+  });
+
   it("holds one durable wallet-wide allocation across competing workload reconciles", async () => {
     let ledger = {
       metadata: {
