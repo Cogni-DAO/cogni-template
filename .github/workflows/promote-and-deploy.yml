@@ -148,6 +148,30 @@ jobs:
             --legacy-k3s-targets-json "$LEGACY_K3S_TARGETS_JSON" \
             --github-output "$GITHUB_OUTPUT"
 
+  reconcile-compute-egress:
+    needs: decide
+    if: needs.decide.outputs.has_external_compute_node_targets == 'true'
+    runs-on: ubuntu-latest
+    environment: ${{ needs.decide.outputs.environment }}
+    concurrency:
+      group: compute-egress-${{ needs.decide.outputs.environment }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout reviewed application source
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          ref: ${{ needs.decide.outputs.head_sha }}
+          fetch-depth: 1
+          path: app-src
+
+      - name: Reconcile catalog-derived external compute egress
+        uses: ./app-src/.github/actions/reconcile-compute-egress
+        with:
+          app_source_root: ${{ github.workspace }}/app-src
+          environment: ${{ needs.decide.outputs.environment }}
+          vm_host: ${{ secrets.VM_HOST }}
+          ssh_deploy_key: ${{ secrets.SSH_DEPLOY_KEY }}
+
   reconcile-appset:
     needs: decide
     if: needs.decide.outputs.has_targets == 'true'
@@ -296,11 +320,15 @@ jobs:
           bash scripts/ci/reconcile-node-dns.sh "${DEPLOY_ENVIRONMENT}"
 
   promote-k8s:
-    needs: [decide, reconcile-appset, node-substrate]
+    needs: [decide, reconcile-compute-egress, reconcile-appset, node-substrate]
     if: |
       always() &&
       needs.decide.outputs.has_targets == 'true' &&
       needs.reconcile-appset.result == 'success' &&
+      (
+        needs.decide.outputs.has_external_compute_node_targets != 'true' ||
+        needs.reconcile-compute-egress.result == 'success'
+      ) &&
       (
         (needs.decide.outputs.has_k3s_node_targets == 'true' && needs.node-substrate.result == 'success') ||
         (needs.decide.outputs.has_k3s_node_targets != 'true' && needs.node-substrate.result == 'skipped')
