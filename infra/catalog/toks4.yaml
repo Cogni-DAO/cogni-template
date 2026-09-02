@@ -7,7 +7,7 @@ image_tag_suffix: "-toks4"
 migrator_tag_suffix: "-toks4-migrate"
 source_repo: https://github.com/cogni-dao/toks4.git
 image_repository: ghcr.io/cogni-dao/toks4
-source_sha: c4fee69e01a79e433fa7a458e5fc8af57acc525a
+source_sha: 947c241ffa0cf0e31fb614b81e6837633f891e98
 candidate_a_branch: deploy/candidate-a-toks4
 preview_branch: deploy/preview-toks4
 production_branch: deploy/production-toks4
@@ -15,12 +15,11 @@ production_branch: deploy/production-toks4
 # NODE_FORMATION_ENVS; this list is the catalog twin so render-node-appset.sh
 # renders exactly the births appset.ts generates. Trimming a node's reach is a
 # later catalog edit (drop an env here) once its envs are provisioned.
-envs: [candidate-a]
-# story.5016 disposable checkpoint: the operator owns placement policy while
-# this node's repo-spec owns its generic services and private bindings. Omitted
-# rungs keep the existing k3s path byte-for-byte.
+envs: [candidate-a, preview, production]
 deployment_provider:
   candidate-a: akash
+  preview: akash
+  production: akash
 activity_env: candidate-a
 owner_wallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949"
 path_prefix: nodes/toks4/
