@@ -209,6 +209,18 @@ patches:
             limits:
               memory: "1Gi"
               cpu: "1000m"
+  # Keep the single-replica proving environment schedulable after adding the
+  # controller. Production-sized environments retain the 384Mi init request.
+  - target:
+      kind: Deployment
+      name: node-app
+    patch: |
+      - op: replace
+        path: /spec/template/spec/initContainers/0/resources/requests/memory
+        value: "256Mi"
+      - op: replace
+        path: /spec/template/spec/initContainers/1/resources/requests/memory
+        value: "256Mi"
   # bug.0295: VM discovery via DNS (cogni-candidate-a.vm.cognidao.org).
   # Convert base headless Services → ExternalName; delete EndpointSlices.
   - target: { kind: Service, name: postgres-external }
