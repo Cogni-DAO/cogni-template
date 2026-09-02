@@ -5,11 +5,11 @@ import { describe, expect, it } from "vitest";
 import { buildNodeWorkloadSpec } from "./node-workload-spec";
 
 const BASE_INPUT = {
-  slug: "toks4",
+  slug: "sample-node",
   nodeId: "72aa130b-f0ad-495a-a061-9ee1f9c9525d",
-  image: "ghcr.io/cogni-dao/toks4:sha-abc",
+  image: "ghcr.io/cogni-dao/sample-node:sha-abc",
   port: 3200,
-  publicUrl: "https://toks4-akash.example.org",
+  publicUrl: "https://sample-node.example.org",
   env: { DATABASE_URL: "postgresql://x", AUTH_SECRET: "caller-secret" },
 } as const;
 
@@ -29,7 +29,7 @@ describe("buildNodeWorkloadSpec", () => {
     });
   });
 
-  it("caller env overrides defaults; canonical URL + repo path always set", () => {
+  it("preserves caller env while canonical identity config stays authoritative", () => {
     const env = buildNodeWorkloadSpec(BASE_INPUT).services[0]?.env ?? {};
     expect(env.AUTH_SECRET).toBe("caller-secret");
     expect(env.DATABASE_URL).toBe("postgresql://x");
@@ -37,16 +37,16 @@ describe("buildNodeWorkloadSpec", () => {
     expect(env.NEXTAUTH_URL).toBe(BASE_INPUT.publicUrl);
     expect(env.APP_BASE_URL).toBe(BASE_INPUT.publicUrl);
     expect(env.AUTH_TRUST_HOST).toBe("true");
-    expect(env.NODE_NAME).toBe("toks4");
+    expect(env.NODE_NAME).toBe("sample-node");
   });
 
   it("propagates ingress hosts", () => {
     const spec = buildNodeWorkloadSpec({
       ...BASE_INPUT,
-      hosts: ["toks4-akash.example.org"],
+      hosts: ["sample-node.example.org"],
     });
     expect(spec.services[0]?.expose?.[0]?.hosts).toEqual([
-      "toks4-akash.example.org",
+      "sample-node.example.org",
     ]);
   });
 

@@ -23,7 +23,11 @@
 
 import type { ComputeResourcePort } from "@cogni/ai-tools";
 
-import { AkashComputeAdapter, CherryComputeAdapter } from "@/adapters/server";
+import {
+  AkashComputeAdapter,
+  CherryComputeAdapter,
+  createDefaultProviderOutcomeStore,
+} from "@/adapters/server";
 import type { ServerEnv } from "@/shared/env";
 
 /**
@@ -60,6 +64,7 @@ export function createComputeCapability(env: ServerEnv): ComputeResourcePort {
     adapters.push(
       new AkashComputeAdapter({
         apiKey: env.AKASH_CONSOLE_API_KEY,
+        outcomeStore: createDefaultProviderOutcomeStore(),
         timeoutMs: env.COMPUTE_BALANCE_QUERY_TIMEOUT_MS,
         ...(preferredProviders.length > 0 ? { preferredProviders } : {}),
       })
