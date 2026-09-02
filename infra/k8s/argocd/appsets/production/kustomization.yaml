@@ -17,3 +17,4 @@ resources:
   - production-operator-applicationset.yaml
   - production-poly-applicationset.yaml
   - production-scheduler-worker-applicationset.yaml
+  - production-toks4-applicationset.yaml

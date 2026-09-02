@@ -1,0 +1,189 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2026 Cogni-DAO
+
+import { describe, expect, it } from "vitest";
+
+import {
+  resolveDeploymentTargets,
+  resolvePromoteDeploymentTargets,
+} from "./node-deployment-targets";
+
+describe("resolveDeploymentTargets", () => {
+  it("keeps omitted placement on k3s and separates explicit external nodes", () => {
+    expect(
+      resolveDeploymentTargets({
+        catalogRows: [
+          { name: "node-template", type: "node" },
+          {
+            name: "toks4",
+            type: "node",
+            source_repo: "https://github.com/cogni-dao/toks4",
+            source_sha: "0123456789abcdef0123456789abcdef01234567",
+            deployment_provider: { "candidate-a": "akash" },
+          },
+          { name: "scheduler-worker", type: "service" },
+        ],
+        environment: "candidate-a",
+        flightTargets: ["node-template", "toks4", "scheduler-worker"],
+      })
+    ).toEqual({
+      deployment: ["node-template", "toks4"],
+      substrate: ["node-template", "toks4"],
+      external: ["toks4"],
+      providers: {
+        "node-template": "k3s",
+        toks4: "akash",
+        "scheduler-worker": "k3s",
+      },
+      k3s: ["node-template", "scheduler-worker"],
+      k3sNodes: ["node-template"],
+      sourceRepositories: { toks4: "cogni-dao/toks4" },
+      sourceShas: { toks4: "0123456789abcdef0123456789abcdef01234567" },
+    });
+  });
+
+  it("never expands a node-ref flight to sibling catalog rows", () => {
+    const catalogRows = [
+      { name: "operator", type: "node" },
+      {
+        name: "toks4",
+        type: "node",
+        source_repo: "https://github.com/cogni-dao/toks4",
+        source_sha: "0123456789abcdef0123456789abcdef01234567",
+        deployment_provider: { "candidate-a": "akash" },
+      },
+    ];
+
+    expect(
+      resolveDeploymentTargets({
+        catalogRows,
+        environment: "candidate-a",
+        flightTargets: ["operator"],
+      })
+    ).toEqual({
+      deployment: ["operator"],
+      substrate: ["operator"],
+      external: [],
+      providers: { operator: "k3s" },
+      k3s: ["operator"],
+      k3sNodes: ["operator"],
+      sourceRepositories: {},
+      sourceShas: {},
+    });
+    expect(
+      resolveDeploymentTargets({
+        catalogRows,
+        environment: "candidate-a",
+        flightTargets: ["toks4"],
+      })
+    ).toEqual({
+      deployment: ["toks4"],
+      substrate: ["toks4"],
+      external: ["toks4"],
+      providers: { toks4: "akash" },
+      k3s: [],
+      k3sNodes: [],
+      sourceRepositories: { toks4: "cogni-dao/toks4" },
+      sourceShas: { toks4: "0123456789abcdef0123456789abcdef01234567" },
+    });
+  });
+
+  it("fails closed for a target absent from the reviewed catalog", () => {
+    expect(() =>
+      resolveDeploymentTargets({
+        catalogRows: [],
+        environment: "candidate-a",
+        flightTargets: ["unreviewed"],
+      })
+    ).toThrow("Unknown flight target");
+  });
+});
+
+describe("resolvePromoteDeploymentTargets", () => {
+  const catalogRows = [
+    {
+      name: "legacy",
+      type: "node",
+      envs: ["preview", "production"],
+    },
+    { name: "scheduler-worker", type: "service" },
+    {
+      name: "external",
+      type: "node",
+      envs: ["preview"],
+      source_repo: "https://github.com/Cogni-DAO/external.git",
+      source_sha: "0123456789abcdef0123456789abcdef01234567",
+      deployment_provider: { preview: "akash" },
+    },
+  ];
+
+  it("preserves the legacy k3s list and appends eligible external nodes", () => {
+    expect(
+      resolvePromoteDeploymentTargets({
+        catalogRows,
+        environment: "preview",
+        requestedTargets: [],
+        legacyK3sTargets: ["scheduler-worker", "legacy", "external"],
+      })
+    ).toEqual({
+      deployment: ["scheduler-worker", "legacy", "external"],
+      substrate: ["legacy", "external"],
+      external: ["external"],
+      providers: {
+        "scheduler-worker": "k3s",
+        legacy: "k3s",
+        external: "akash",
+      },
+      k3s: ["scheduler-worker", "legacy"],
+      k3sNodes: ["legacy"],
+      sourceRepositories: { external: "cogni-dao/external" },
+      sourceShas: {
+        external: "0123456789abcdef0123456789abcdef01234567",
+      },
+    });
+  });
+
+  it("projects the reviewed catalog pin for an operator-merge preview", () => {
+    const sourceSha = "947c241ffa0cf0e31fb614b81e6837633f891e98";
+    const selection = resolvePromoteDeploymentTargets({
+      catalogRows: [
+        {
+          name: "toks4",
+          type: "node",
+          envs: ["preview"],
+          source_repo: "https://github.com/Cogni-DAO/toks4.git",
+          source_sha: sourceSha,
+          deployment_provider: { preview: "akash" },
+        },
+      ],
+      environment: "preview",
+      requestedTargets: ["toks4"],
+      legacyK3sTargets: [],
+    });
+
+    expect(selection.external).toEqual(["toks4"]);
+    expect(selection.sourceShas).toEqual({ toks4: sourceSha });
+  });
+
+  it("does not admit an external node outside the selected environment", () => {
+    expect(
+      resolvePromoteDeploymentTargets({
+        catalogRows,
+        environment: "production",
+        requestedTargets: ["external"],
+        legacyK3sTargets: [],
+      }).deployment
+    ).toEqual([]);
+  });
+
+  it("never changes a requested k3s target rejected by the legacy resolver", () => {
+    expect(
+      resolvePromoteDeploymentTargets({
+        catalogRows,
+        environment: "preview",
+        requestedTargets: ["legacy"],
+        legacyK3sTargets: [],
+      }).deployment
+    ).toEqual([]);
+  });
+});

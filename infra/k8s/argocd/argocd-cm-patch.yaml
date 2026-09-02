@@ -6,32 +6,3 @@ metadata:
   name: argocd-cm
 data:
   timeout.reconciliation: "30s"
-  # A ComputeWorkload is healthy only when the external provider is serving the
-  # exact Git generation. CR status is observed state, never desired state.
-  resource.customizations.health.compute.cogni.io_ComputeWorkload: |
-    hs = {}
-    generation = obj.metadata.generation or 0
-    if obj.status ~= nil and obj.status.conditions ~= nil then
-      for _, condition in ipairs(obj.status.conditions) do
-        if condition.type == "Ready" then
-          if condition.status == "True" and condition.observedGeneration == generation then
-            hs.status = "Healthy"
-            hs.message = condition.message or "expected generation is ready"
-            return hs
-          end
-          if obj.status.phase == "Failed" then
-            hs.status = "Degraded"
-            hs.message = condition.message or condition.reason or "reconciliation failed"
-            return hs
-          end
-          if obj.status.phase == "Unknown" then
-            hs.status = "Suspended"
-            hs.message = condition.message or condition.reason or "external outcome is unknown"
-            return hs
-          end
-        end
-      end
-    end
-    hs.status = "Progressing"
-    hs.message = "waiting for Ready=True at metadata.generation"
-    return hs
