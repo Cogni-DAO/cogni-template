@@ -251,38 +251,11 @@ deployment_sync_ready() {
   [ "$status" = "Synced" ]
 }
 
-# Read-only fallback until the existing provision-env bootstrap refresh has
-# installed ComputeWorkload custom health in Argo's shared argocd-cm. Exactly
-# one CR may carry a node slug in an environment namespace; Ready must describe
-# the current generation, not a stale successful reconcile.
-compute_workload_ready() {
-  local app="$1" namespace="cogni-${DEPLOY_ENVIRONMENT}"
-  local rows name generation observed ready ready_generation
-  rows=$(kubectl -n "$namespace" get computeworkloads.compute.cogni.io \
-    -l "cogni.io/node=${app}" \
-    -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)
-  if [ "$(printf '%s\n' "$rows" | sed '/^$/d' | wc -l | tr -d ' ')" != "1" ]; then
-    return 1
-  fi
-  name=$(printf '%s\n' "$rows" | sed '/^$/d')
-  read -r generation observed ready ready_generation < <(
-    kubectl -n "$namespace" get computeworkload "$name" \
-      -o jsonpath='{.metadata.generation} {.status.observedGeneration} {range .status.conditions[?(@.type=="Ready")]}{.status} {.observedGeneration}{end}' \
-      2>/dev/null || true
-  )
-  [ -n "$generation" ] &&
-    [ "$generation" = "$observed" ] &&
-    [ "$ready" = "True" ] &&
-    [ "$generation" = "$ready_generation" ]
-}
-
-compute_workload_state() {
-  local app="$1" namespace="cogni-${DEPLOY_ENVIRONMENT}"
-  kubectl -n "$namespace" get computeworkloads.compute.cogni.io \
-    -l "cogni.io/node=${app}" \
-    -o jsonpath='{range .items[*]}{.metadata.name}{" generation="}{.metadata.generation}{" observed="}{.status.observedGeneration}{" phase="}{.status.phase}{" ready="}{range .status.conditions[?(@.type=="Ready")]}{.status}{" readyObserved="}{.observedGeneration}{" reason="}{.reason}{end}{"\n"}{end}' \
-    2>/dev/null || true
-}
+# ComputeWorkload readiness deliberately has NO hand-rolled poll here: the
+# Argo health Lua in infra/k8s/argocd/argocd-cm-patch.yaml owns CR health
+# (Ready at current generation), and the run-level external proof is
+# verify-buildsha.sh polling the node's public /version. Keeping provider
+# readiness out of this frozen script is the CICD platform boundary.
 
 # Assert the Deployment's new ReplicaSet has reached desired count and is
 # Available. Called AFTER sync.revision + Healthy. Closes bug.0326's actual
@@ -433,12 +406,6 @@ wait_for_app() {
     can_proceed_to_rollout_check() {
       local health="$1"
       local phase="$2"
-      if [ "$external" = "true" ]; then
-        # Before the declarative bootstrap refresh, Argo may report Unknown for
-        # this CR. The controller status remains the authoritative live gate.
-        compute_workload_ready "$app"
-        return $?
-      fi
       [ "$health" = "Healthy" ] && return 0
       [ "$health" = "Progressing" ] && [ "$phase" = "Succeeded" ] && return 0
       return 1
@@ -455,7 +422,7 @@ wait_for_app() {
       # — that's not part of the contract and false-fails on slow terminations.
       if rollout_check "$app_name"; then
         if [ "$external" = "true" ]; then
-          echo "  ✅ ${app_name} at ${REV:0:8} (ComputeWorkload Ready at current generation; Argo health=${HEALTH})"
+          echo "  ✅ ${app_name} at ${REV:0:8} (external placement; Argo health=${HEALTH} — live proof is verify-buildsha)"
         else
           echo "  ✅ ${app_name} at ${REV:0:8} (Healthy + new RS available)"
         fi
@@ -473,8 +440,6 @@ wait_for_app() {
 
     if [ -n "$deployment" ]; then
       echo "    ${app_name}: rev=${REV:0:8} expected=${EXPECTED_SHA:0:8} health=${HEALTH} phase=${SYNC_PHASE} deployment=${deployment} deploymentStatus=${deployment_status:-<missing>} (waiting...)"
-    elif [ "$external" = "true" ]; then
-      echo "    ${app_name}: rev=${REV:0:8} expected=${EXPECTED_SHA:0:8} health=${HEALTH} phase=${SYNC_PHASE} compute=$(compute_workload_state "$app") (waiting...)"
     else
       echo "    ${app_name}: rev=${REV:0:8} expected=${EXPECTED_SHA:0:8} health=${HEALTH} phase=${SYNC_PHASE} (waiting...)"
     fi
@@ -499,7 +464,7 @@ wait_for_app() {
     -o jsonpath='{range .status.operationState.syncResult.resources[*]}{.kind}{"/"}{.namespace}{"/"}{.name}{" status="}{.status}{" hook="}{.hookPhase}{" msg="}{.message}{"\n"}{end}' \
     2>&1 | sed 's/^/    /' || true
   if [ "$external" = "true" ]; then
-    echo "  ▸ ComputeWorkload status: $(compute_workload_state "$app")"
+    echo "  ▸ external placement: CR health is Argo-owned (argocd-cm Lua); inspect the ComputeWorkload via kubectl for detail"
   fi
   dump_pod_diagnostics "$app_name" "$deployment"
   return 1
