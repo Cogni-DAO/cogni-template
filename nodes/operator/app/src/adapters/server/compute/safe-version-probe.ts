@@ -94,8 +94,15 @@ async function safeHttpProbe(
       {
         method: "GET",
         timeout: timeoutMs,
-        lookup: (_hostname, _options, callback) => {
-          callback(null, selected.address, selected.family as 4 | 6);
+        lookup: (_hostname, options, callback) => {
+          // Node 22 may request every candidate for connection-family
+          // autoselection. Return the already-vetted address in the callback
+          // shape it requested; a scalar here raises ERR_INVALID_IP_ADDRESS.
+          if (options.all) {
+            callback(null, [selected]);
+            return;
+          }
+          callback(null, selected.address, selected.family);
         },
       },
       (response) => {
