@@ -88,9 +88,15 @@ metadata.generation`; uncertain mutations fail closed rather than blindly duplic
     values. Structured logs and Kubernetes Events make current outcomes visible; the controller
     also exposes `compute_workload_*` on `:9090/metrics`, but the Compose Alloy config does not
     yet scrape that in-cluster endpoint, so remote metrics ingestion is explicitly not part of
-    this checkpoint. Argo's custom health rule is continuously owned by the per-environment
-    control-plane root through `infra/k8s/argocd/runtime-config`; it is not a manual cluster
-    patch or a provision-time-only mutation. A lease dying silently is a contract violation
+    this checkpoint. Argo's custom health rule is a **key inside Argo's own `argocd-cm`**, so it is
+    delivered by an additive `kubectl patch cm argocd-cm --type merge` from the
+    versioned patch body `infra/k8s/argocd/argocd-cm-runtime-patch.yaml`, never by an
+    Argo Application that owns the ConfigMap. `argocd-cm` also holds the GitHub
+    repository credentials that must not live in Git; declaring it in Git with only the
+    health key made Argo the owner and dropped those credentials across all three
+    environments at once (bug.5095). No Cogni-authored Argo Application may own a core
+    `argocd-*` ConfigMap — pinned by
+    `tests/ci-invariants/argocd-core-configmap-ownership.spec.ts`. A lease dying silently is a contract violation
     of this axiom, not an operational surprise. Health endpoints contract:
     [`health-probes.md`](./health-probes.md).
 

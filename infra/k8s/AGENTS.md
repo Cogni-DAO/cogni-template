@@ -47,9 +47,9 @@ k8s/
 │   ├── kustomization.yaml   # Non-HA Argo CD v2.13.4 install
 │   ├── ksops-cmp.yaml       # SOPS CMP plugin for secret decryption
 │   ├── repo-server-patch.yaml # ksops sidecar
+│   ├── argocd-cm-runtime-patch.yaml # Cogni's argocd-cm keys as a MERGE-PATCH body (never a manifest)
 │   ├── appsets/<env>/       # generated one-AppSet-per-(env,node) desired state
-│   ├── control-plane/<env>/ # env-scoped app-of-apps continuously reconciled by Argo
-│   └── runtime-config/      # shared Argo runtime behavior owned by those env roots
+│   └── control-plane/<env>/ # env-scoped app-of-apps continuously reconciled by Argo
 ├── base/                    # Kustomize bases
 │   ├── node-app/            # Shared base for operator, poly, resy
 │   ├── openfga-external/    # Operator opt-in bridge to Compose OpenFGA

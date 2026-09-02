@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2026 Cogni-DAO
+#
+# argocd-cm-runtime-patch.yaml — the Cogni-owned KEYS of Argo CD's core
+# `argocd-cm` ConfigMap, expressed as a JSON-MERGE-PATCH BODY (not a manifest).
+#
+# THIS FILE IS DELIBERATELY NOT A ConfigMap MANIFEST. It has no apiVersion /
+# kind / metadata, so it can never be applied as a resource, can never be
+# rendered by kustomize, and can never be handed to an Argo Application as a
+# source path. It is consumed ONLY by:
+#
+#   kubectl -n argocd patch cm argocd-cm --type merge \
+#     --patch-file infra/k8s/argocd/argocd-cm-runtime-patch.yaml
+#
+# WHY A MERGE PATCH AND NOT GITOPS OWNERSHIP (bug.5095):
+#   `argocd-cm` is Argo's OWN core config. Beyond these keys it holds state
+#   that must never be in Git — most importantly the `repository.credentials` /
+#   `repositories` GitHub credentials written at provision time. Declaring the
+#   ConfigMap in Git with only SOME keys and pointing an Argo Application at it
+#   makes Argo the owner of the whole object: on sync (especially with
+#   ServerSideApply=true, which migrates field ownership away from the previous
+#   manager) every key NOT in the Git manifest is dropped. That is exactly what
+#   took candidate-a, preview AND production down on 2026-09-02: argocd-repo-server
+#   lost its GitHub credentials, could no longer `git fetch`, and every
+#   Application across the fleet went to Unknown with auto-sync skipped.
+#   `argocd.argoproj.io/sync-options: Prune=false` does not help — it prevents
+#   DELETION of the object, not destructive replacement of its data.
+#
+#   A merge patch is additive: it sets these keys and leaves every other key
+#   (the credentials, anything Argo itself writes) untouched. No Cogni-authored
+#   Argo Application may own a core `argocd-*` ConfigMap — pinned by
+#   tests/ci-invariants/argocd-core-configmap-ownership.spec.ts.
+#
+# APPLIED BY: scripts/setup/provision-env-vm.sh Phase 5b.1.
+# BACKFILL onto an already-provisioned cluster (no re-provision needed) with the
+# same kubectl command above against that env's kubeconfig. Re-running is a no-op.
+# Changing a key here requires that patch to be re-applied to each live env.
+data:
+  # kustomize-with-helm rendering for the substrate charts (openbao,
+  # external-secrets, reloader) — see infra/k8s/argocd/*/kustomization.yaml.
+  kustomize.buildOptions: --enable-helm
+
+  # Custom health for the provider-neutral ComputeWorkload CR reconciled by the
+  # operator's compute-workload controller (ci-cd.md Axiom 26,
+  # OPERATOR_OWNS_WORKLOAD_HEALTH). Ready=True only counts when the controller
+  # observed THIS generation, so a stale status can never read Healthy.
+  resource.customizations.health.compute.cogni.io_ComputeWorkload: |
+    hs = {}
+    generation = obj.metadata.generation or 0
+    if obj.status ~= nil and obj.status.conditions ~= nil then
+      for _, condition in ipairs(obj.status.conditions) do
+        if condition.type == "Ready" then
+          if condition.status == "True" and condition.observedGeneration == generation then
+            hs.status = "Healthy"
+            hs.message = condition.message or "expected generation is ready"
+            return hs
+          end
+          if obj.status.phase == "Failed" then
+            hs.status = "Degraded"
+            hs.message = condition.message or condition.reason or "reconciliation failed"
+            return hs
+          end
+          if obj.status.phase == "Unknown" then
+            hs.status = "Suspended"
+            hs.message = condition.message or condition.reason or "external outcome is unknown"
+            return hs
+          end
+        end
+      end
+    end
+    hs.status = "Progressing"
+    hs.message = "waiting for Ready=True at metadata.generation"
+    return hs
