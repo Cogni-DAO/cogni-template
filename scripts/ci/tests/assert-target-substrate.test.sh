@@ -30,16 +30,23 @@ EOF
 touch "$REMOTE_ROOT/opt/cogni-template-edge/docker-compose.yml"
 touch "$REMOTE_ROOT/opt/cogni-template-runtime/docker-compose.yml"
 
+# Faithful to real ssh: everything after the host is JOINED into one command
+# string and re-parsed by the remote shell (this flattening is exactly what
+# eats unquoted empty args — the caller must %q-quote).
 cat > "$FAKEBIN/ssh" <<'EOF'
 #!/usr/bin/env bash
-while [ "$#" -gt 0 ] && [ "$1" != "bash" ]; do
-  shift
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    root@*) shift; break ;;
+    *) shift ;;
+  esac
 done
-[ "${1:-}" = "bash" ] || { echo "fake ssh: missing bash command" >&2; exit 2; }
-shift
-[ "${1:-}" = "-s" ] && shift
-[ "${1:-}" = "--" ] && shift
-PATH="${FAKE_REMOTE_PATH}:${PATH}" bash -s -- "$@"
+cmd="$*"
+case "$cmd" in
+  bash*) ;;
+  *) echo "fake ssh: missing bash command" >&2; exit 2 ;;
+esac
+PATH="${FAKE_REMOTE_PATH}:${PATH}" bash -c "$cmd"
 EOF
 chmod +x "$FAKEBIN/ssh"
 

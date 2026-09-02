@@ -338,9 +338,15 @@ local ssh_opts=()
 read -r -a ssh_opts <<< "$ssh_opts_raw"
 probe_log=$(mktemp)
 set +e
-"$ssh_bin" "${ssh_opts[@]}" "root@${vm_host}" bash -s -- \
+# SSH flattens argv into one remote command string, so an EMPTY positional arg
+# (remote_root outside tests) vanishes and every later arg shifts left —
+# provider then lands in $9 and prefixes all remote paths. %q-quote each arg so
+# the remote shell re-parses the exact vector, empties included.
+local remote_args
+remote_args=$(printf '%q ' \
   "$DEPLOY_ENVIRONMENT" "$node" "$node_db" "$node_host" "$edge_key" "$node_port" \
-  "$app_wait_attempts" "$app_wait_sleep_seconds" "$remote_root" "$provider" < "$remote_script" 2>&1 | tee "$probe_log"
+  "$app_wait_attempts" "$app_wait_sleep_seconds" "$remote_root" "$provider")
+"$ssh_bin" "${ssh_opts[@]}" "root@${vm_host}" "bash -s -- ${remote_args}" < "$remote_script" 2>&1 | tee "$probe_log"
 ssh_rc=${PIPESTATUS[0]}
 set -e
 if grep -Eq '(^|\r)(\[FAIL\]|::error::assert-target-substrate:)' "$probe_log"; then
