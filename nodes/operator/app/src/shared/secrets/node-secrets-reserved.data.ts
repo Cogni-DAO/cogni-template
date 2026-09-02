@@ -97,10 +97,12 @@ export function isNodeOwnedSecretKey(key: string): boolean {
  *
  * Invariants:
  *   - PROVENANCE_NOT_NAMES: entries are justified by who mints/owns the value,
- *     not by how scary the key sounds. Shared platform code carries no
- *     node-specific callouts (bug.5093: name-listing `POLY_*`/`PRIVY_*`/
- *     `DOLTHUB_*` here made poly undeployable to Akash and contradicted this
- *     file's own doc comment).
+ *     not by how scary the key sounds. Shared platform code names no NODE
+ *     (bug.5093: name-listing `POLY_*`/`PRIVY_*`/`DISCORD_BOT_TOKEN` here made
+ *     poly undeployable to Akash and contradicted this file's own doc comment).
+ *     Naming a shared SERVICE the operator owns — `DOLTHUB_*`, `LITELLM_*` — is
+ *     NOT a callout: the rule bans enumerating one node's secrets, not
+ *     protecting fleet credentials that no node owns or needs.
  *   - DENYLIST_NOT_ALLOWLIST: an unknown key is allowed. Adding an entry
  *     requires naming the operator/fleet/substrate owner of its value.
  */
