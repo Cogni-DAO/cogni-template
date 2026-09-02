@@ -11,9 +11,9 @@
  *   - PROVIDER_AGNOSTIC boundary: SDL never escapes this dir — callers hand in ProvisionSpec,
  *     the adapter submits the rendered YAML, and only ProvisionOutput comes back.
  *   - INTERNAL_EXPOSE_IS_MESH: a non-global expose renders `to: [service: <sibling>]` for every
- *     sibling, so co-located services reach each other by service name. (Generic translator
- *     capability — node workloads themselves are APP-ONLY per node-workload-spec; infra
- *     sidecars on decentralized compute are the rejected anti-pattern.)
+ *     sibling, so generic co-located app-tier services reach each other by service-name DNS.
+ *     Exactly one service owns global ingress; stateful/shared infrastructure remains outside
+ *     the v0 workload boundary.
  * Side-effects: none (pure)
  * Links: ProvisionSpec (@cogni/ai-tools), https://akash.network/docs (SDL reference),
  *   infra/akash/README.md (catalog-driven renderer is the vNext home; task.5044)
@@ -56,6 +56,7 @@ export function buildAkashSdl(
     services[svc.name] = {
       image: svc.image,
       ...(svc.command ? { command: [...svc.command] } : {}),
+      ...(svc.args ? { args: [...svc.args] } : {}),
       ...(svc.env
         ? { env: Object.entries(svc.env).map(([k, v]) => `${k}=${v}`) }
         : {}),

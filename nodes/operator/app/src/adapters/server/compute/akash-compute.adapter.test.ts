@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: 2026 Cogni-DAO
 
 import { describe, expect, it, vi } from "vitest";
+import { parse as parseYaml } from "yaml";
 import {
   AKASH_OVERCLOCK_AUDITOR,
   AkashComputeAdapter,
@@ -172,12 +173,14 @@ const SPEC = {
       ],
     },
     {
-      name: "db",
-      image: "postgres:16-alpine",
+      name: "echo-sidecar",
+      image: "ghcr.io/example/echo-sidecar@sha256:abc",
+      command: ["node", "server.mjs"],
+      args: ["--host", "0.0.0.0", "--port", "9100"],
       cpuUnits: 0.25,
       memoryMi: 512,
       storageMi: 1024,
-      expose: [{ port: 5432, as: 5432, global: false }],
+      expose: [{ port: 9100, as: 9100, global: false }],
     },
   ],
 } as const;
@@ -193,10 +196,28 @@ describe("buildAkashSdl", () => {
     expect(sdl).toContain("PORT=3000");
     expect(sdl).toContain("toks4.example.org");
     expect(sdl).toContain("denom: uakt");
-    // global expose on app; internal expose on db routes to the sibling by name
+    // global expose on app; private sibling routes only to app by service name
     expect(sdl).toContain("global: true");
     expect(sdl).toContain("service: app");
-    expect(sdl).not.toContain("service: db");
+    expect(sdl).not.toContain("service: echo-sidecar");
+    const rendered = parseYaml(sdl) as {
+      services: Record<
+        string,
+        { args?: string[]; expose?: { to: Record<string, unknown>[] }[] }
+      >;
+    };
+    expect(rendered.services["echo-sidecar"]?.args).toEqual([
+      "--host",
+      "0.0.0.0",
+      "--port",
+      "9100",
+    ]);
+    expect(rendered.services["echo-sidecar"]?.expose?.[0]?.to).toEqual([
+      { service: "app" },
+    ]);
+    expect(
+      rendered.services["echo-sidecar"]?.expose?.[0]?.to
+    ).not.toContainEqual({ global: true });
   });
 
   it("anchors placement signedBy.allOf to the given auditors", () => {
