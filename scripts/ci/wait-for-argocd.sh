@@ -260,7 +260,7 @@ compute_workload_ready() {
   local rows name generation observed ready ready_generation
   rows=$(kubectl -n "$namespace" get computeworkloads.compute.cogni.io \
     -l "cogni.io/node=${app}" \
-    -o jsonpath='{range .items[*]}{.metadata.name}{"\\n"}{end}' 2>/dev/null || true)
+    -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)
   if [ "$(printf '%s\n' "$rows" | sed '/^$/d' | wc -l | tr -d ' ')" != "1" ]; then
     return 1
   fi
@@ -280,7 +280,7 @@ compute_workload_state() {
   local app="$1" namespace="cogni-${DEPLOY_ENVIRONMENT}"
   kubectl -n "$namespace" get computeworkloads.compute.cogni.io \
     -l "cogni.io/node=${app}" \
-    -o jsonpath='{range .items[*]}{.metadata.name}{" generation="}{.metadata.generation}{" observed="}{.status.observedGeneration}{" phase="}{.status.phase}{" ready="}{range .status.conditions[?(@.type=="Ready")]}{.status}{" readyObserved="}{.observedGeneration}{" reason="}{.reason}{end}{"\\n"}{end}' \
+    -o jsonpath='{range .items[*]}{.metadata.name}{" generation="}{.metadata.generation}{" observed="}{.status.observedGeneration}{" phase="}{.status.phase}{" ready="}{range .status.conditions[?(@.type=="Ready")]}{.status}{" readyObserved="}{.observedGeneration}{" reason="}{.reason}{end}{"\n"}{end}' \
     2>/dev/null || true
 }
 
