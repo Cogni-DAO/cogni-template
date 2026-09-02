@@ -33,6 +33,7 @@ describe("CloudflareComputeWorkloadDnsAdapter", () => {
         value: "provider.example",
         type: "CNAME",
         proxied: true,
+        ttl: 1,
       }),
       "toks4-test.cognidao.org"
     );
