@@ -1,0 +1,53 @@
+apiVersion: compute.cogni.io/v1alpha1
+kind: ComputeWorkload
+metadata:
+  name: 72aa130b-f0ad-495a-a061-9ee1f9c9525d
+  namespace: cogni-candidate-a
+  labels:
+    cogni.io/node-id: 72aa130b-f0ad-495a-a061-9ee1f9c9525d
+    cogni.io/environment: candidate-a
+    cogni.io/node: toks4
+spec:
+  nodeId: 72aa130b-f0ad-495a-a061-9ee1f9c9525d
+  environment: candidate-a
+  bundle:
+    ref: ghcr.io/cogni-dao/toks4@sha256:6490b435251c38489a81385b5425749f53811a8a26e98f8f744f2aac26b79cae
+    source:
+      repository: cogni-dao/toks4
+      sha: fbcbaee8f43a57b094bf51a95e4c38248e0515bb
+    artifacts:
+      - name: app
+        image: ghcr.io/cogni-dao/toks4@sha256:59cb17fbf66a7b44ef75449afb0f3b4f1955c77001d8a40180e7349099a2e073
+      - name: echo-sidecar
+        image: ghcr.io/cogni-dao/toks4-echo-sidecar@sha256:b6c65940226f3ced075eb2f8dcc0fecf1fe21cd683331535206db986c5fcd546
+  workload:
+    name: toks4
+    publicHost: toks4-test.cognidao.org
+    services:
+      - name: app
+        artifact: app
+        runtimeProfile: cogni-node-app-v1
+        secretRefs:
+          - key: AUTH_SECRET
+          - key: DATABASE_URL
+          - key: DATABASE_SERVICE_URL
+          - key: SCHEDULER_API_TOKEN
+          - key: BILLING_INGEST_TOKEN
+          - key: LITELLM_VIRTUAL_KEY
+        port: 3200
+        visibility: public
+        bindings:
+          ECHO_SIDECAR_URL: echo-sidecar
+        bindHost: 0.0.0.0
+        cpuUnits: 2
+        memoryMi: 2048
+        storageMi: 4096
+      - name: echo-sidecar
+        artifact: echo-sidecar
+        port: 9100
+        visibility: private
+        bindings: {}
+        bindHost: 0.0.0.0
+        cpuUnits: 0.1
+        memoryMi: 128
+        storageMi: 128
