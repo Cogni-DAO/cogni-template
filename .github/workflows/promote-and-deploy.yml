@@ -929,7 +929,7 @@ jobs:
 
       - name: Wait for ArgoCD sync (per-node)
         # This verifier requires a Kubernetes Deployment. External workloads are
-        # gated by the exact-source endpoint verification below.
+        # gated by the current-generation ComputeWorkload check below.
         if: steps.cell.outputs.promoted == 'true' && env.DEPLOYMENT_PROVIDER == 'k3s'
         env:
           SSH_OPTS: "-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=6"
@@ -938,6 +938,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: bash app-src/scripts/ci/wait-for-argocd.sh
+
+      - name: Wait for external ComputeWorkload readiness
+        if: steps.cell.outputs.promoted == 'true' && env.DEPLOYMENT_PROVIDER != 'k3s'
+        uses: ./.github/actions/wait-for-compute-workload
+        with:
+          app_source_root: ${{ github.workspace }}/app-src
+          manifest: ${{ github.workspace }}/deploy-branch/infra/k8s/overlays/${{ needs.decide.outputs.environment }}/${{ matrix.node }}/compute-workload.yaml
+          vm_host: ${{ secrets.VM_HOST }}
+          ssh_identity: /home/runner/.ssh/deploy_key
 
       - name: Wait for in-cluster services (per-node)
         if: steps.cell.outputs.promoted == 'true' && env.DEPLOYMENT_PROVIDER == 'k3s'

@@ -1271,7 +1271,7 @@ jobs:
 
       - name: Wait for ArgoCD sync (per-node)
         # This verifier requires a Kubernetes Deployment. External workloads are
-        # gated by the exact-source endpoint verification below.
+        # gated by the current-generation ComputeWorkload check below.
         if: steps.ssh-setup.outputs.has_vm == 'true' && env.DEPLOYMENT_PROVIDER == 'k3s'
         env:
           VM_HOST: ${{ secrets.VM_HOST }}
@@ -1283,6 +1283,15 @@ jobs:
           GH_REPO: ${{ github.repository }}
           COGNI_CATALOG_ROOT: app-src/infra/catalog
         run: bash ci-src/scripts/ci/wait-for-argocd.sh
+
+      - name: Wait for external ComputeWorkload readiness
+        if: steps.ssh-setup.outputs.has_vm == 'true' && env.DEPLOYMENT_PROVIDER != 'k3s'
+        uses: ./ci-src/.github/actions/wait-for-compute-workload
+        with:
+          app_source_root: ${{ github.workspace }}/app-src
+          manifest: ${{ github.workspace }}/deploy-branch/infra/k8s/overlays/candidate-a/${{ matrix.node }}/compute-workload.yaml
+          vm_host: ${{ secrets.VM_HOST }}
+          ssh_identity: /home/runner/.ssh/deploy_key
 
       - name: Wait for candidate readiness
         if: steps.ssh-setup.outputs.has_vm == 'true' && env.DEPLOYMENT_PROVIDER == 'k3s'
