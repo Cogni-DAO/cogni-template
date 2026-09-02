@@ -8,17 +8,41 @@ namespace: cogni-preview
 resources:
   - ../../../base/node-app
   - ../../../base/openfga-external
+  - ../../../base/compute-workload-controller
   - external-secret.yaml
   - ./secrets-writer-sa.yaml
+  - ./compute-workload-platform-application.yaml
 
 namePrefix: operator-
+
+replacements:
+  - source:
+      kind: Application
+      name: compute-workload-platform
+      fieldPath: spec.destination.namespace
+    targets:
+      - select: { kind: Application, name: compute-workload-platform }
+        fieldPaths: [metadata.namespace]
 
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:21370fbe1cb85db51a5459a339ec09800c702358a9a84eb9a92458882b3f3957"
+    digest: "sha256:914294b4ac22331d50fa02cea2322326a8499775f285bc2870c1be2edec5e72f"
 
 patches:
+  - target:
+      kind: Deployment
+      name: compute-workload-controller
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/env/1/value
+        value: preview
+      - op: replace
+        path: /spec/template/spec/containers/0/env/2/value
+        value: preview.cognidao.org
+      - op: replace
+        path: /spec/template/spec/containers/0/env/3/value
+        value: akash16yr3wxt97ae045a06kr3ycde9srcgpg8syjxxm
   # Node-specific ConfigMap values.
   # DNS names must match prefixed Service names (namePrefix applies to all resources).
   - target:
