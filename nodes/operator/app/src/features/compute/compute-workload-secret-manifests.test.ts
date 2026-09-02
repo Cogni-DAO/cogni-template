@@ -87,6 +87,9 @@ describe("buildComputeSecretResources", () => {
     "IDENTITY_ATTESTATION_PRIVATE_KEY",
     "APP_DB_PASSWORD",
     "GHCR_DEPLOY_TOKEN",
+    // Fleet-shared, not node-owned: one DoltHub credential for the whole fleet.
+    "DOLTHUB_API_TOKEN",
+    "DOLT_CREDS_JWK",
   ])("rejects operator/fleet-owned ref %s before render", (key) => {
     expect(() =>
       buildComputeSecretResources({
@@ -97,7 +100,7 @@ describe("buildComputeSecretResources", () => {
     ).toThrow("secret refs rejected");
   });
 
-  it("projects node-owned custody + mirror refs (bug.5093 — poly can reach Akash)", () => {
+  it("projects node-owned custody refs (bug.5093 — poly can reach Akash)", () => {
     // These were name-listed as denied, so this call used to THROW and poly
     // could never render an external workload at all. They are node-scoped
     // values at cogni/<env>/<node>/<KEY>; the node's namespace is the authority.
@@ -106,7 +109,6 @@ describe("buildComputeSecretResources", () => {
       "POLY_WALLET_AEAD_KEY_ID",
       "PRIVY_APP_SECRET",
       "PRIVY_SIGNING_KEY",
-      "DOLTHUB_API_TOKEN",
       "DISCORD_BOT_TOKEN",
     ];
     const resources = buildComputeSecretResources({

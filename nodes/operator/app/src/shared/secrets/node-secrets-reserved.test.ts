@@ -67,28 +67,41 @@ describe("external-workload secret boundary (gate 3, provenance-keyed)", () => {
     "PRIVY_SIGNING_KEY",
     "PRIVY_USER_WALLETS_APP_SECRET",
     "PRIVY_USER_WALLETS_SIGNING_KEY",
-    "DOLTHUB_API_TOKEN",
-    "DOLT_CREDS_JWK",
     "DISCORD_BOT_TOKEN",
   ])("allows node-owned key %s — sensitivity is not provenance", (key) => {
     expect(isExternalWorkloadSecretKey(key)).toBe(true);
     expect(EXTERNAL_WORKLOAD_DENIED_KEYS.has(key)).toBe(false);
   });
 
-  it("carries no node-specific callout: every denied key is operator/fleet-owned", () => {
-    // Shared platform code must not name a node. If this fails, a node-scoped
-    // key crept back into the denylist — fix the provenance, not the test.
-    const nodeSpecificPrefixes = [
-      "POLY_",
-      "PRIVY_",
-      "DOLTHUB_",
-      "DOLT_CREDS_",
-      "DISCORD_",
-    ];
+  it("names no NODE: every denied key is operator/fleet/substrate-owned", () => {
+    // Shared platform code must not enumerate a particular NODE's secrets.
+    // Naming a shared SERVICE the operator owns is NOT a callout — DOLTHUB and
+    // LITELLM are fleet services (`tier: A1, service: _shared`), one value
+    // fanned to every node, owned by no node. So this guard bans node-owned
+    // prefixes only, and explicitly allow-lists the fleet-shared group.
+    const nodeOwnedPrefixes = ["POLY_", "PRIVY_", "DISCORD_"];
     const offenders = [...EXTERNAL_WORKLOAD_DENIED_KEYS].filter((key) =>
-      nodeSpecificPrefixes.some((prefix) => key.startsWith(prefix))
+      nodeOwnedPrefixes.some((prefix) => key.startsWith(prefix))
     );
     expect(offenders).toEqual([]);
+  });
+
+  it.each([
+    // Fleet-shared (`service: _shared`) — ONE DoltHub credential across the
+    // whole fleet, structurally identical to LITELLM_MASTER_KEY. No node owns
+    // or needs these, so they must not reach a rented multi-tenant provider.
+    "DOLTHUB_API_TOKEN",
+    "DOLT_CREDS_JWK",
+    "DOLT_CREDS_KEYID",
+    "DOLTHUB_OAUTH_CLIENT_ID",
+    "DOLTHUB_OAUTH_CLIENT_SECRET",
+  ])("denies fleet-shared DoltHub credential %s", (key) => {
+    expect(isExternalWorkloadSecretKey(key)).toBe(false);
+  });
+
+  it("still allows DOLTHUB_OWNER — an org name, not a credential", () => {
+    // Deliberately NOT restored: `_shared`, but it carries no authorization.
+    expect(isExternalWorkloadSecretKey("DOLTHUB_OWNER")).toBe(true);
   });
 
   it.each([

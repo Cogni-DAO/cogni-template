@@ -47,6 +47,7 @@ describe("ComputeWorkloadSecretResolverAdapter", () => {
     "APP_DB_PASSWORD",
     "CLOUDFLARE_API_TOKEN",
     "ACTIONS_AUTOMATION_BOT_PAT",
+    "DOLT_CREDS_JWK",
     "not-shell-safe",
   ])("fails closed before reading operator/fleet-owned %s", async (key) => {
     const readNamespacedSecret = vi.fn();
@@ -68,7 +69,6 @@ describe("ComputeWorkloadSecretResolverAdapter", () => {
         data: {
           POLY_WALLET_AEAD_KEY_HEX: Buffer.from("deadbeef").toString("base64"),
           PRIVY_APP_SECRET: Buffer.from("privy-secret").toString("base64"),
-          DOLTHUB_API_TOKEN: Buffer.from("dh-token").toString("base64"),
         },
       },
     }));
@@ -82,13 +82,11 @@ describe("ComputeWorkloadSecretResolverAdapter", () => {
         refs: [
           { key: "POLY_WALLET_AEAD_KEY_HEX" },
           { key: "PRIVY_APP_SECRET" },
-          { key: "DOLTHUB_API_TOKEN" },
         ],
       })
     ).resolves.toEqual({
       POLY_WALLET_AEAD_KEY_HEX: "deadbeef",
       PRIVY_APP_SECRET: "privy-secret",
-      DOLTHUB_API_TOKEN: "dh-token",
     });
   });
 

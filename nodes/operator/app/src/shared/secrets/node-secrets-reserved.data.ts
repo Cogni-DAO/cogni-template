@@ -120,6 +120,19 @@ export const EXTERNAL_WORKLOAD_DENIED_KEYS: ReadonlySet<string> = new Set([
   // (compute-workload-reconciler.ts), so the real master key never leaves here.
   "LITELLM_MASTER_KEY",
   "OPENROUTER_API_KEY",
+  // Fleet-shared DoltHub credentials (`tier: A1, service: _shared`, same shape
+  // as LITELLM_MASTER_KEY above). ONE value is fanned into every node's path by
+  // secret-materialize.sh — these are NOT per-node material, so they are not a
+  // node-specific callout: DOLTHUB is a shared SERVICE, not a node. The
+  // no-callouts rule bans enumerating a particular NODE's secrets; it does not
+  // stop the operator protecting its own fleet credentials. No node needs
+  // these, so shipping a fleet-wide DoltHub write token to a rented
+  // multi-tenant provider is pure blast radius for zero benefit.
+  "DOLTHUB_API_TOKEN",
+  "DOLT_CREDS_JWK",
+  "DOLT_CREDS_KEYID",
+  "DOLTHUB_OAUTH_CLIENT_ID",
+  "DOLTHUB_OAUTH_CLIENT_SECRET",
   // Fleet identity material. The attestation seed signs EVERY node's identity
   // and its public half is pinned fleet-wide (task.5024); the review App key
   // is one GitHub App installed across every node repo.
