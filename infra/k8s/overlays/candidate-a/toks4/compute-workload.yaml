@@ -3,6 +3,8 @@ kind: ComputeWorkload
 metadata:
   name: 72aa130b-f0ad-495a-a061-9ee1f9c9525d
   namespace: cogni-candidate-a
+  annotations:
+    argocd.argoproj.io/sync-options: ServerSideApply=false
   labels:
     cogni.io/node-id: 72aa130b-f0ad-495a-a061-9ee1f9c9525d
     cogni.io/environment: candidate-a
