@@ -60,6 +60,7 @@ import {
   insertCaddyBlock,
   insertNetworkNode,
   insertSchedulerEndpoint,
+  NODE_DEPLOY_ENVS,
   NODE_FORMATION_ENVS,
   type NodeFormationEnv,
   nextFreeNodePort,
@@ -3107,22 +3108,37 @@ export class GitHubRepoWriter implements DeployPlanePort {
     // Scheduler-worker endpoint splice: the catalog now carries this submodule node's
     // node_id projection (above), and the routing renderer enumerates every catalog
     // type:node (is_built_by_this_repo lifted from the routing CSVs). So splice this node
-    // into the base configmap from the projected node_id — keeping it drift-clean with the
-    // catalog, born-green so chat/completions works on first flight (verify-scheduler-endpoints).
+    // into every rendered routing map from the projected node_id — keeping it drift-clean
+    // with the catalog, born-green so chat/completions works on first flight
+    // (verify-scheduler-endpoints).
     if ("nodeRepoUrl" in input) {
-      const schedulerConfigmapPath =
-        "infra/k8s/base/scheduler-worker/configmap.yaml";
-      const currentConfigmap = await this.fetchFileText({
-        owner,
-        repo,
-        path: schedulerConfigmapPath,
-        ref: "main",
-      });
-      if (currentConfigmap) {
-        await addBlob(
-          schedulerConfigmapPath,
-          insertSchedulerEndpoint(currentConfigmap, slug, input.nodeId)
-        );
+      // bug.5094 — the routing map is rendered twice from one catalog: the
+      // env-invariant placement-DEFAULT in the shared base ConfigMap, and each
+      // deploy env's PROVIDER-RESOLVED map in its overlay patch. A birth is always
+      // k3s (deployment_provider absent → K3S_IS_DEFAULT), so the SAME splice is
+      // byte-identical for every file; splicing base alone would leave every
+      // formation PR drift-red against render-scheduler-worker-endpoints.sh --check
+      // AND unrouted in preview/production.
+      const schedulerEndpointPaths = [
+        "infra/k8s/base/scheduler-worker/configmap.yaml",
+        ...NODE_DEPLOY_ENVS.map(
+          (env) =>
+            `infra/k8s/overlays/${env}/scheduler-worker/node-endpoints.patch.yaml`
+        ),
+      ];
+      for (const schedulerEndpointPath of schedulerEndpointPaths) {
+        const currentConfigmap = await this.fetchFileText({
+          owner,
+          repo,
+          path: schedulerEndpointPath,
+          ref: "main",
+        });
+        if (currentConfigmap) {
+          await addBlob(
+            schedulerEndpointPath,
+            insertSchedulerEndpoint(currentConfigmap, slug, input.nodeId)
+          );
+        }
       }
 
       // network-nodes roster splice: the operator runtime image can't fs-glob infra/catalog,
