@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
-// SPDX-FileCopyrightText: 2026 Cogni-DAO
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
  * Module: `@cogni/repo-spec/node-app-deployment`
- * Purpose: ONE source of truth for the `cogni-node-app-v1` deployment declaration a Cogni node
- *   carries in its own `.cogni/repo-spec.yaml` — the block the node scaffold emits, the block the
- *   external-compute (Akash) gates require, and the block the failure message tells an author to add.
- * Scope: Pure data + YAML rendering over the repo-spec schema. No I/O, no provider vocabulary,
- *   no node names.
+ * Purpose: Holds the one source of truth for the `cogni-node-app-v1` deployment declaration.
+ *   It is the block a node carries in its own `.cogni/repo-spec.yaml` — what the node scaffold
+ *   emits, what the external-compute gates require, and what a failure message tells you to add.
+ * Scope: Pure data plus YAML rendering over the repo-spec schema; does not perform I/O, select a
+ *   provider, resolve secret values, or name any node.
  * Invariants:
  *   - PROFILE_OWNS_ITS_SECRET_CONTRACT: `cogni-node-app-v1` is a named runtime profile declared in
  *     the repo-spec, so the logical secret keys that profile needs to boot are declared beside it.
