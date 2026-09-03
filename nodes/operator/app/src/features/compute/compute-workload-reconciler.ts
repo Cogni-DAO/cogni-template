@@ -432,6 +432,23 @@ function blocksSameGenerationRecovery(resource: ComputeWorkload): boolean {
   );
 }
 
+/**
+ * A definitive provider failure that burned the whole per-key mutation budget. The
+ * idempotency key carries `metadata.generation`, so re-asserting the same desired state
+ * recomputes the *same* key and the replay guard refuses it forever. Only a fresh
+ * recovery ordinal can make progress, and only when the receipt proves the provider
+ * definitively failed without ever handing back a handle.
+ */
+function exhaustedRetryBudgetNeedsRecovery(resource: ComputeWorkload): boolean {
+  return (
+    resource.status?.desiredGeneration === resource.metadata.generation &&
+    resource.status?.failure?.reason === "RetryLimitExceeded" &&
+    resource.status?.attempt?.outcome === "known_failure" &&
+    (resource.status.attempt.operation === "create" ||
+      resource.status.attempt.operation === "recover")
+  );
+}
+
 async function recoverBounded(
   deps: ComputeWorkloadReconcileDeps,
   resource: ComputeWorkload
@@ -1507,6 +1524,11 @@ export async function reconcileComputeWorkload(
       return;
     }
     if (isReplaySafeKnownFailure(receipt)) {
+      // Replaying the exhausted key is a guaranteed no-op; escalate the ordinal instead.
+      if (exhaustedRetryBudgetNeedsRecovery(resource)) {
+        await recoverBounded(deps, resource);
+        return;
+      }
       await mutate(deps, resource, receipt.operation, receipt.ordinal, true);
       return;
     }
@@ -1518,6 +1540,10 @@ export async function reconcileComputeWorkload(
         resource.status?.attempt ??
           (receipt ? attemptFromReceipt(receipt) : undefined)
       );
+      return;
+    }
+    if (exhaustedRetryBudgetNeedsRecovery(resource)) {
+      await recoverBounded(deps, resource);
       return;
     }
     await mutate(deps, resource, "create", 0);

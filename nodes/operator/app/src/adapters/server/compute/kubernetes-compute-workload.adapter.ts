@@ -363,6 +363,7 @@ function toMicroTime(value: Date): Date {
 export class KubernetesLeaseLeaderElector {
   private leader = false;
   private epoch: string | undefined;
+  private renewedAtMs = 0;
 
   constructor(
     private readonly api: CoordinationV1Api,
@@ -378,6 +379,17 @@ export class KubernetesLeaseLeaderElector {
 
   currentEpoch(): string | undefined {
     return this.leader ? this.epoch : undefined;
+  }
+
+  /**
+   * True while the last *successful* renewal still covers `now`. No other replica can
+   * take over inside that window, so a failed renewal call is not yet a lost lease.
+   */
+  leaseHeldThrough(now = new Date()): boolean {
+    return (
+      this.renewedAtMs > 0 &&
+      now.getTime() <= this.renewedAtMs + this.leaseDurationSeconds * 1000
+    );
   }
 
   /** Live dispatch guard used after the per-resource CAS and immediately before provider I/O. */
@@ -410,11 +422,10 @@ export class KubernetesLeaseLeaderElector {
       existing = (await this.api.readNamespacedLease(this.name, this.namespace))
         .body;
     } catch (error) {
-      if (statusCode(error) !== 404) {
-        this.leader = false;
-        this.epoch = undefined;
-        throw error;
-      }
+      // Leadership is defined by the lease deadline, not by one API call. Dropping the
+      // held flag here would make the *next* consecutive failure look like an ordinary
+      // follower error, so an expired lease could never fence an in-flight mutation.
+      if (statusCode(error) !== 404) throw error;
     }
 
     if (!existing) {
@@ -431,11 +442,13 @@ export class KubernetesLeaseLeaderElector {
         });
         this.leader = true;
         this.epoch = `0:${this.identity}`;
+        this.renewedAtMs = now.getTime();
         return true;
       } catch (error) {
         if (statusCode(error) !== 409) throw error;
         this.leader = false;
         this.epoch = undefined;
+        this.renewedAtMs = 0;
         return false;
       }
     }
@@ -450,6 +463,7 @@ export class KubernetesLeaseLeaderElector {
     if (holder !== this.identity && holder && !expired) {
       this.leader = false;
       this.epoch = undefined;
+      this.renewedAtMs = 0;
       return false;
     }
 
@@ -480,11 +494,13 @@ export class KubernetesLeaseLeaderElector {
       });
       this.leader = true;
       this.epoch = `${(existing.spec?.leaseTransitions ?? 0) + (transitioned ? 1 : 0)}:${this.identity}`;
+      this.renewedAtMs = now.getTime();
       return true;
     } catch (error) {
       if (statusCode(error) !== 409) throw error;
       this.leader = false;
       this.epoch = undefined;
+      this.renewedAtMs = 0;
       return false;
     }
   }
@@ -493,12 +509,18 @@ export class KubernetesLeaseLeaderElector {
 export interface RenewableLeaderLease {
   isLeader(): boolean;
   acquireOrRenew(): Promise<boolean>;
+  leaseHeldThrough(now?: Date): boolean;
 }
 
 /**
- * Renew a Lease and fence a process that previously held it on any loss signal.
+ * Renew a Lease and fence a process that previously held it on a real loss signal.
  * The runtime callback exits immediately: a stale process must never finish provider IO
  * while a replacement leader begins reconciling the same resource.
+ *
+ * A failed renewal *call* is not a lost lease. No replica can take over until the last
+ * successful renewal expires, so fencing before that deadline is a self-inflicted outage
+ * that strands an in-flight provider mutation as an unresolvable `prepared` attempt.
+ * Transient errors inside the window propagate instead, and the next tick retries.
  */
 export async function renewLeadershipOrFence(
   lease: RenewableLeaderLease,
@@ -509,10 +531,13 @@ export async function renewLeadershipOrFence(
   try {
     renewed = await lease.acquireOrRenew();
   } catch (error) {
-    if (previouslyHeld) return onLeadershipLost(error);
+    if (previouslyHeld && !lease.leaseHeldThrough()) {
+      return onLeadershipLost(error);
+    }
     throw error;
   }
   if (previouslyHeld && !renewed) {
+    // A definitive answer: the Lease is held by someone else, or the CAS lost.
     return onLeadershipLost(
       new Error("previously held Kubernetes Lease was not renewed")
     );
