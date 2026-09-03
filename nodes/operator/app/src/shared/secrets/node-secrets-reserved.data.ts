@@ -79,36 +79,72 @@ export function isNodeOwnedSecretKey(key: string): boolean {
 }
 
 /**
- * Fleet, custody, and substrate-control credentials that may never cross into
- * an externally hosted workload, even when a CR declares the logical key.
- * Node-owned application keys are intentionally allowed by default; the
- * node/env OpenBao namespace is the authority, not an operator code allowlist.
+ * Gate 3: may a logical secret key cross into an EXTERNALLY HOSTED workload
+ * (Akash and friends), where the operator controls neither the host nor the
+ * disk? A DENYLIST, keyed on PROVENANCE — never on a node's name.
+ *
+ * The rule, stated once: a key is denied iff the OPERATOR/SUBSTRATE mints,
+ * rotates, or fleet-shares its value. Those credentials authorize action
+ * BEYOND the node that would carry them — one exfiltrated copy compromises the
+ * fleet, not one tenant — so no CR may ship them off-substrate, even when the
+ * CR legitimately declares the logical key.
+ *
+ * The converse is equally load-bearing: a key whose value the NODE owns —
+ * minted for that node, living only at `cogni/<env>/<node>/<KEY>`, blast
+ * radius = that node — is ALLOWED BY DEFAULT, however sensitive it is.
+ * Custody, wallet, and vendor-API keys are a node's own business; the node/env
+ * OpenBao namespace + OpenFGA are the authority, not an operator code list.
+ *
+ * Invariants:
+ *   - PROVENANCE_NOT_NAMES: entries are justified by who mints/owns the value,
+ *     not by how scary the key sounds. Shared platform code names no NODE
+ *     (bug.5093: name-listing `POLY_*`/`PRIVY_*`/`DISCORD_BOT_TOKEN` here made
+ *     poly undeployable to Akash and contradicted this file's own doc comment).
+ *     Naming a shared SERVICE the operator owns — `DOLTHUB_*`, `LITELLM_*` — is
+ *     NOT a callout: the rule bans enumerating one node's secrets, not
+ *     protecting fleet credentials that no node owns or needs.
+ *   - DENYLIST_NOT_ALLOWLIST: an unknown key is allowed. Adding an entry
+ *     requires naming the operator/fleet/substrate owner of its value.
  */
 export const EXTERNAL_WORKLOAD_DENIED_KEYS: ReadonlySet<string> = new Set([
+  // Operator control-plane API credentials. The operator mints these against
+  // its own vendor accounts; a copy lets the holder drive fleet infrastructure
+  // (deploy compute, rewrite DNS, read fleet telemetry) from anywhere.
   "AKASH_CONSOLE_API_KEY",
   "CLOUDFLARE_API_TOKEN",
   "CLOUDFLARE_ZONE_ID",
+  "GH_GRAFANA_PARENT_SA_TOKEN",
+  // Fleet-shared AI-gateway credentials (`service: _shared` / operator-owned
+  // in infra/secrets-catalog.yaml). ONE value authenticates the whole fleet, so
+  // it spends every node's budget. A workload gets the node-scoped
+  // `LITELLM_VIRTUAL_KEY` instead — the cogni-node-app-v1 runtime profile
+  // renames that virtual key to LITELLM_MASTER_KEY inside the container
+  // (compute-workload-reconciler.ts), so the real master key never leaves here.
   "LITELLM_MASTER_KEY",
   "OPENROUTER_API_KEY",
-  "IDENTITY_ATTESTATION_PRIVATE_KEY",
-  "GH_REVIEW_APP_ID",
-  "GH_REVIEW_APP_PRIVATE_KEY_BASE64",
-  "GH_GRAFANA_PARENT_SA_TOKEN",
-  "POLY_WALLET_AEAD_KEY_HEX",
-  "POLY_WALLET_AEAD_KEY_ID",
-  "PRIVY_APP_ID",
-  "PRIVY_APP_SECRET",
-  "PRIVY_AUTH_PRIVATE_KEY",
-  "PRIVY_SIGNING_KEY",
-  "PRIVY_USER_WALLETS_APP_SECRET",
-  "PRIVY_USER_WALLETS_SIGNING_KEY",
-  "DOLTHUB_OWNER",
-  "DOLTHUB_CREDENTIALS",
-  "DOLTHUB_TOKEN",
+  // Fleet-shared DoltHub credentials (`tier: A1, service: _shared`, same shape
+  // as LITELLM_MASTER_KEY above). ONE value is fanned into every node's path by
+  // secret-materialize.sh — these are NOT per-node material, so they are not a
+  // node-specific callout: DOLTHUB is a shared SERVICE, not a node. The
+  // no-callouts rule bans enumerating a particular NODE's secrets; it does not
+  // stop the operator protecting its own fleet credentials. No node needs
+  // these, so shipping a fleet-wide DoltHub write token to a rented
+  // multi-tenant provider is pure blast radius for zero benefit.
   "DOLTHUB_API_TOKEN",
   "DOLT_CREDS_JWK",
   "DOLT_CREDS_KEYID",
-  "DISCORD_BOT_TOKEN",
+  "DOLTHUB_OAUTH_CLIENT_ID",
+  "DOLTHUB_OAUTH_CLIENT_SECRET",
+  // Fleet identity material. The attestation seed signs EVERY node's identity
+  // and its public half is pinned fleet-wide (task.5024); the review App key
+  // is one GitHub App installed across every node repo.
+  "IDENTITY_ATTESTATION_PRIVATE_KEY",
+  "GH_REVIEW_APP_ID",
+  "GH_REVIEW_APP_PRIVATE_KEY_BASE64",
+  // Substrate-owned database role material (secrets-management.md Invariant 15).
+  // Minted by the DB provisioners, not by the node; they authorize direct
+  // in-cluster Postgres/Doltgres role login, bypassing the node's app layer.
+  // An external workload reaches its data through its own DSN, not these.
   "APP_DB_PASSWORD",
   "APP_DB_SERVICE_PASSWORD",
   "APP_DB_READONLY_PASSWORD",
@@ -117,6 +153,9 @@ export const EXTERNAL_WORKLOAD_DENIED_KEYS: ReadonlySet<string> = new Set([
   "DOLTGRES_WRITER_PASSWORD",
   "POSTGRES_ROOT_PASSWORD",
   "TEMPORAL_DB_PASSWORD",
+  // Supply-chain credentials owned by the operator's CI plane. These write to
+  // repos, registries, and Actions — the inputs every node's image is built
+  // from — so a leak compromises the fleet upstream of any single node.
   "SSH_DEPLOY_KEY",
   "GHCR_DEPLOY_TOKEN",
   "ACTIONS_AUTOMATION_BOT_PAT",
@@ -125,7 +164,10 @@ export const EXTERNAL_WORKLOAD_DENIED_KEYS: ReadonlySet<string> = new Set([
 
 const NODE_SECRET_KEY_PATTERN = /^[A-Z_][A-Z0-9_]{0,127}$/;
 
-/** Declared key is format-safe and not an operator/fleet custody credential. */
+/**
+ * Gate 3: declared key is format-safe and not an operator/fleet/substrate
+ * credential. Node-owned keys — including custody and wallet material — pass.
+ */
 export function isExternalWorkloadSecretKey(key: string): boolean {
   return (
     NODE_SECRET_KEY_PATTERN.test(key) && !EXTERNAL_WORKLOAD_DENIED_KEYS.has(key)

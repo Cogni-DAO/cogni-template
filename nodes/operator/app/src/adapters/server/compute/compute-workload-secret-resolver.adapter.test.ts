@@ -41,13 +41,15 @@ describe("ComputeWorkloadSecretResolverAdapter", () => {
 
   it.each([
     "LITELLM_MASTER_KEY",
-    "PRIVY_APP_SECRET",
+    "OPENROUTER_API_KEY",
     "GH_REVIEW_APP_PRIVATE_KEY_BASE64",
     "IDENTITY_ATTESTATION_PRIVATE_KEY",
     "APP_DB_PASSWORD",
-    "POLY_WALLET_AEAD_KEY_HEX",
+    "CLOUDFLARE_API_TOKEN",
+    "ACTIONS_AUTOMATION_BOT_PAT",
+    "DOLT_CREDS_JWK",
     "not-shell-safe",
-  ])("fails closed before reading or minting %s", async (key) => {
+  ])("fails closed before reading operator/fleet-owned %s", async (key) => {
     const readNamespacedSecret = vi.fn();
     const resolver = new ComputeWorkloadSecretResolverAdapter(
       { readNamespacedSecret } as never,
@@ -57,6 +59,35 @@ describe("ComputeWorkloadSecretResolverAdapter", () => {
       resolver.resolve({ ...scope, refs: [{ key }] })
     ).rejects.toMatchObject({ reason: "SecretPolicyRejected" });
     expect(readNamespacedSecret).not.toHaveBeenCalled();
+  });
+
+  it("resolves node-owned custody keys (bug.5093 — poly to Akash)", async () => {
+    // Previously SecretPolicyRejected on the key NAME. These values are minted
+    // per-node at cogni/<env>/<node>/<KEY>; the node owns them, so they cross.
+    const readNamespacedSecret = vi.fn(async () => ({
+      body: {
+        data: {
+          POLY_WALLET_AEAD_KEY_HEX: Buffer.from("deadbeef").toString("base64"),
+          PRIVY_APP_SECRET: Buffer.from("privy-secret").toString("base64"),
+        },
+      },
+    }));
+    const resolver = new ComputeWorkloadSecretResolverAdapter(
+      { readNamespacedSecret } as never,
+      "cogni-candidate-a"
+    );
+    await expect(
+      resolver.resolve({
+        ...scope,
+        refs: [
+          { key: "POLY_WALLET_AEAD_KEY_HEX" },
+          { key: "PRIVY_APP_SECRET" },
+        ],
+      })
+    ).resolves.toEqual({
+      POLY_WALLET_AEAD_KEY_HEX: "deadbeef",
+      PRIVY_APP_SECRET: "privy-secret",
+    });
   });
 
   it("returns the declared node-scoped virtual key under its generic logical name", async () => {
