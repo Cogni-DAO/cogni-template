@@ -18,7 +18,7 @@ namePrefix: operator-
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:65d0792287c7ffd857c6977d8019c30081bda92112108db25150d1ed4d7754de"
+    digest: "sha256:0250cc2e6c01a80172d19b00583b65c50990b27849ca16815e75d2d899511b53"
 
 replacements:
   - source:
@@ -30,20 +30,6 @@ replacements:
         fieldPaths: [metadata.namespace]
 
 patches:
-  # candidate-a runs at ~91% memory-requested; a surge pod cannot schedule and
-  # every rolling update wedges Pending. Single-replica proving env → replace
-  # in place (brief blip is acceptable here; preview/prod keep surge).
-  - target:
-      kind: Deployment
-      name: node-app
-    patch: |
-      - op: replace
-        path: /spec/strategy
-        value:
-          type: RollingUpdate
-          rollingUpdate:
-            maxSurge: 0
-            maxUnavailable: 1
   - target:
       kind: Deployment
       name: compute-workload-controller
@@ -209,18 +195,6 @@ patches:
             limits:
               memory: "1Gi"
               cpu: "1000m"
-  # Keep the single-replica proving environment schedulable after adding the
-  # controller. Production-sized environments retain the 384Mi init request.
-  - target:
-      kind: Deployment
-      name: node-app
-    patch: |
-      - op: replace
-        path: /spec/template/spec/initContainers/0/resources/requests/memory
-        value: "256Mi"
-      - op: replace
-        path: /spec/template/spec/initContainers/1/resources/requests/memory
-        value: "256Mi"
   # bug.0295: VM discovery via DNS (cogni-candidate-a.vm.cognidao.org).
   # Convert base headless Services → ExternalName; delete EndpointSlices.
   - target: { kind: Service, name: postgres-external }
