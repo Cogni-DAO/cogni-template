@@ -56,19 +56,28 @@ required_keys_csv="$(paste -sd, - <<<"$required_keys")"
 egress_cidrs="$(yq -r '.compute_egress_cidrs[]?.cidr' "$catalog_file" | sort -u)"
 [ -n "$egress_cidrs" ] \
   || fail "external-compute target '$node' has no compute_egress_cidrs"
-egress_cidrs_csv="$(paste -sd, - <<<"$egress_cidrs")"
+expected_egress_rules="$(
+  COGNI_CATALOG_ROOT="$COGNI_CATALOG_ROOT" \
+    bash "${SCRIPT_DIR}/render-compute-egress-allowlist.sh" "$DEPLOY_ENVIRONMENT" \
+    | sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d'
+)"
+[ -n "$expected_egress_rules" ] \
+  || fail "rendered compute egress allowlist is empty for external-compute target '$node'"
+expected_egress_sha256="$(printf '%s\n' "$expected_egress_rules" | sha256sum | awk '{print $1}')"
+expected_egress_rule_count="$(printf '%s\n' "$expected_egress_rules" | wc -l | tr -d '[:space:]')"
 
 local ssh_opts=()
 read -r -a ssh_opts <<< "$ssh_opts_raw"
 "$ssh_bin" "${ssh_opts[@]}" "root@${vm_host}" bash -s -- \
-  "$DEPLOY_ENVIRONMENT" "$node" "$required_keys_csv" "$egress_cidrs_csv" \
-  "$egress_allowlist" <<'REMOTE'
+  "$DEPLOY_ENVIRONMENT" "$node" "$required_keys_csv" "$expected_egress_sha256" \
+  "$expected_egress_rule_count" "$egress_allowlist" <<'REMOTE'
 set -euo pipefail
 env_name="$1"
 node="$2"
 required_keys_csv="$3"
-egress_cidrs_csv="$4"
-egress_allowlist="$5"
+expected_egress_sha256="$4"
+expected_egress_rule_count="$5"
+egress_allowlist="$6"
 namespace="cogni-${env_name}"
 controller="operator-compute-workload-controller"
 
@@ -108,12 +117,12 @@ mark_ok "all declared workload secret refs are materialized"
 
 [ -s "$egress_allowlist" ] \
   || fail "installed compute egress allowlist is missing"
-IFS=',' read -r -a egress_cidrs <<< "$egress_cidrs_csv"
-for cidr in "${egress_cidrs[@]}"; do
-  grep -Fqx "$cidr" "$egress_allowlist" \
-    || fail "installed compute egress allowlist is missing catalog CIDR: $cidr"
-done
-mark_ok "catalog compute egress CIDRs are installed"
+installed_egress_rules="$(sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' "$egress_allowlist")"
+installed_egress_sha256="$(printf '%s\n' "$installed_egress_rules" | sha256sum | awk '{print $1}')"
+installed_egress_rule_count="$(printf '%s\n' "$installed_egress_rules" | sed '/^$/d' | wc -l | tr -d '[:space:]')"
+[ "$installed_egress_sha256" = "$expected_egress_sha256" ] \
+  || fail "installed compute egress rules differ from canonical catalog render (installed=${installed_egress_rule_count}, expected=${expected_egress_rule_count})"
+mark_ok "canonical catalog compute egress rules are installed"
 
 echo "External compute preconditions ready for ${node} in ${env_name}."
 REMOTE
