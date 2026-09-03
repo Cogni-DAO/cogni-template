@@ -17,13 +17,28 @@ metadata:
   name: provider-akash
 rules:
   - apiGroups: ["akash.crossplane.io"]
-    resources: ["akashdeployments", "akashdeployments/status", "akashdeployments/finalizers"]
+    resources:
+      [
+        "akashdeployments",
+        "akashdeployments/status",
+        "akashdeployments/finalizers",
+      ]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: ["akash.crossplane.io"]
-    resources: ["providerconfigs", "providerconfigs/status", "providerconfigs/finalizers"]
+    resources:
+      [
+        "providerconfigs",
+        "providerconfigs/status",
+        "providerconfigs/finalizers",
+      ]
     verbs: ["get", "list", "watch", "update", "patch"]
   - apiGroups: ["akash.crossplane.io"]
-    resources: ["providerconfigusages", "providerconfigusages/status", "providerconfigusages/finalizers"]
+    resources:
+      [
+        "providerconfigusages",
+        "providerconfigusages/status",
+        "providerconfigusages/finalizers",
+      ]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   - apiGroups: [""]
     resources: ["secrets"]
