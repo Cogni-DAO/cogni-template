@@ -336,6 +336,7 @@ name: toks4
 type: node
 node_id: 72aa130b-f0ad-495a-a061-9ee1f9c9525d
 path_prefix: nodes/toks4/
+envs: [candidate-a]
 compute_egress_cidrs:
   - cidr: 80.200.246.35/32
     comment: test provider
@@ -378,7 +379,8 @@ exit 1
 EOF
 chmod +x "$EXTERNAL_BIN/kubectl"
 EXTERNAL_ALLOWLIST="$TMPROOT/compute-egress-allowlist"
-printf '%s\n' '80.200.246.35/32' > "$EXTERNAL_ALLOWLIST"
+COGNI_CATALOG_ROOT="$EXTERNAL_SRC/infra/catalog" \
+  bash scripts/ci/render-compute-egress-allowlist.sh candidate-a > "$EXTERNAL_ALLOWLIST"
 EXTERNAL_ENV=(
   TARGET=toks4
   DEPLOYMENT_PROVIDER=akash
@@ -405,6 +407,31 @@ if env "${EXTERNAL_ENV[@]}" FAKE_MISSING_AKASH_CREDENTIAL=1 \
   exit 1
 fi
 grep -q "controller provider/DNS credentials" "$TMPROOT/external-missing-credential.out"
+
+CANONICAL_EXTERNAL_ALLOWLIST="$TMPROOT/canonical-compute-egress-allowlist"
+cp "$EXTERNAL_ALLOWLIST" "$CANONICAL_EXTERNAL_ALLOWLIST"
+for malformed_rule in \
+  '80.200.246.35/32' \
+  '80.200.246.35/32:5432,5435,6379,4000' \
+  '80.200.246.35/32:5432,5435,6379,4000,7233,8080' \
+  '203.0.113.7/32:5432,5435,6379,4000,7233'; do
+  printf '%s\n' "$malformed_rule" > "$EXTERNAL_ALLOWLIST"
+  if env "${EXTERNAL_ENV[@]}" \
+    bash scripts/ci/assert-target-substrate.sh >"$TMPROOT/external-wrong-egress.out" 2>&1; then
+    echo "expected non-canonical external compute egress rule to fail: $malformed_rule" >&2
+    exit 1
+  fi
+  grep -q "egress rules differ from canonical catalog render" "$TMPROOT/external-wrong-egress.out"
+done
+cp "$CANONICAL_EXTERNAL_ALLOWLIST" "$EXTERNAL_ALLOWLIST"
+printf '%s\n' '203.0.113.7/32:5432,5435,6379,4000,7233' >> "$EXTERNAL_ALLOWLIST"
+if env "${EXTERNAL_ENV[@]}" \
+  bash scripts/ci/assert-target-substrate.sh >"$TMPROOT/external-extra-egress.out" 2>&1; then
+  echo "expected extra external compute egress rule to fail" >&2
+  exit 1
+fi
+grep -q "egress rules differ from canonical catalog render" "$TMPROOT/external-extra-egress.out"
+cp "$CANONICAL_EXTERNAL_ALLOWLIST" "$EXTERNAL_ALLOWLIST"
 
 cat > "$EXTERNAL_SRC/nodes/toks4/.cogni/repo-spec.yaml" <<'YAML'
 deployment:
