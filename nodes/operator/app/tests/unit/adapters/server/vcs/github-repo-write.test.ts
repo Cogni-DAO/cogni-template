@@ -2877,6 +2877,79 @@ describe("GitHubRepoWriter.syncCanonicalFilesToFork", () => {
       prNumber: 9,
     });
   });
+
+  // task.5078 — the Tier-1 lists are ROOTS, not the delivered set. A workflow that invokes a script,
+  // and a contract barrel that re-exports a module, must carry those files in the SAME sync or the
+  // fork receives a build that cannot run (no fork but node-template could publish an Akash bundle).
+  it("delivers the transitive closure of the declared roots (TIER1_IS_CLOSED)", async () => {
+    const source = {
+      ".github/workflows/pr-build.yml":
+        'jobs:\n  manifest:\n    steps:\n      - run: node "$GITHUB_WORKSPACE/scripts/ci/record-node-bundle-publication.mjs"\n',
+      "scripts/ci/record-node-bundle-publication.mjs":
+        'import { readFileSync } from "node:fs";\n',
+      "packages/repo-spec/src/index.ts":
+        'export { buildNodeArtifactBundle } from "./artifact-bundle.js";\n',
+      "packages/repo-spec/src/artifact-bundle.ts": 'import { z } from "zod";\n',
+      "packages/repo-spec/package.json": '{ "name": "@cogni/repo-spec" }\n',
+    };
+    routeHandlers = {
+      "GET /repos/{owner}/{repo}/contents/{path}": contentsHandler(source, {}),
+      "POST /repos/{owner}/{repo}/git/blobs": () => ({ sha: "blob" }),
+      "GET /repos/{owner}/{repo}/git/ref/{ref}": () => ({
+        object: { sha: "fork-main" },
+      }),
+      "GET /repos/{owner}/{repo}/git/commits/{commit_sha}": () => ({
+        tree: { sha: "fork-tree" },
+      }),
+      "POST /repos/{owner}/{repo}/git/trees": () => ({ sha: "mirror-tree" }),
+      "POST /repos/{owner}/{repo}/git/commits": () => ({
+        sha: "mirror-commit",
+      }),
+      "POST /repos/{owner}/{repo}/git/refs": () => ({}),
+      "POST /repos/{owner}/{repo}/pulls": () => ({
+        number: 11,
+        html_url: "https://github.com/cogni-test-org/test-cog/pull/11",
+      }),
+      "PATCH /repos/{owner}/{repo}/pulls/{pull_number}": () => ({}),
+    };
+
+    const result = await makeWriter().syncCanonicalFilesToFork({
+      ...syncInput(),
+      canonicalPaths: [
+        ".github/workflows/pr-build.yml",
+        "packages/repo-spec/src/index.ts",
+      ],
+    });
+
+    expect(result.status).toBe("pr_opened");
+    expect(result.changedPaths).toEqual([
+      ".github/workflows/pr-build.yml",
+      "packages/repo-spec/src/index.ts",
+      // Derived — never hand-listed, and exactly what the forks were missing.
+      "scripts/ci/record-node-bundle-publication.mjs",
+      "packages/repo-spec/src/artifact-bundle.ts",
+      "packages/repo-spec/package.json",
+    ]);
+  });
+
+  it("fails closed when a re-exported contract module is absent at the source", async () => {
+    routeHandlers = {
+      "GET /repos/{owner}/{repo}/contents/{path}": contentsHandler(
+        {
+          "packages/repo-spec/src/index.ts":
+            'export { buildNodeArtifactBundle } from "./artifact-bundle.js";\n',
+        },
+        {}
+      ),
+    };
+
+    await expect(
+      makeWriter().syncCanonicalFilesToFork({
+        ...syncInput(),
+        canonicalPaths: ["packages/repo-spec/src/index.ts"],
+      })
+    ).rejects.toThrow(/packages\/repo-spec\/src\/artifact-bundle\.ts/);
+  });
 });
 
 describe("GitHubRepoWriter.syncTemplateUpstreamToFork", () => {

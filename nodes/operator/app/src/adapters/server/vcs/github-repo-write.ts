@@ -49,6 +49,7 @@ import type {
   SyncTemplateUpstreamInput,
   SyncTemplateUpstreamResult,
 } from "@/ports";
+import { resolveCanonicalPathClosure } from "@/shared/node-app-scaffold/canonical-path-closure";
 import {
   buildEnvDeltaPlan,
   type EnvPlanCurrent,
@@ -1260,24 +1261,33 @@ export class GitHubRepoWriter implements DeployPlanePort {
     const shortSha = sourceSha.slice(0, 8);
     const branch = SYNC_BRANCH;
 
-    // Read each canonical file from source@sourceSha; diff against the fork's main; keep changed-only.
-    const changedPaths: string[] = [];
-    const entries: GitTreeEntry[] = [];
-    for (const path of canonicalPaths) {
-      const sourceContent = await this.readFileAtRef(
-        srcOctokit,
-        sourceOwner,
-        sourceRepo,
-        path,
-        sourceSha
-      );
-      if (sourceContent === null) {
+    // Expand the DECLARED roots to their transitive Tier-1 closure at source@sourceSha
+    // (TIER1_IS_CLOSED): the scripts a canonical workflow invokes and the modules a canonical
+    // contract barrel re-exports must ship in the SAME sync, or the fork gets a workflow that
+    // calls missing scripts and a barrel that re-exports a missing module (task.5078).
+    const closure = await resolveCanonicalPathClosure({
+      roots: canonicalPaths,
+      read: (path) =>
+        this.readFileAtRef(
+          srcOctokit,
+          sourceOwner,
+          sourceRepo,
+          path,
+          sourceSha
+        ),
+      onMissingRequired: (path) => {
         throw deployPlaneError(
           "canonical_missing",
           `canonical file ${path} not found in ${sourceOwner}/${sourceRepo}@${shortSha}`,
           422
         );
-      }
+      },
+    });
+
+    // Diff each resolved file against the fork's main; keep changed-only.
+    const changedPaths: string[] = [];
+    const entries: GitTreeEntry[] = [];
+    for (const { path, content: sourceContent } of closure) {
       const targetContent = await this.readFileAtRef(
         tgtOctokit,
         targetOwner,
