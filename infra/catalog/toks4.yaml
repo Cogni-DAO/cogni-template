@@ -1,0 +1,34 @@
+name: toks4
+type: node
+port: 3200
+node_port: 31700
+dockerfile: nodes/toks4/app/Dockerfile
+image_tag_suffix: "-toks4"
+migrator_tag_suffix: "-toks4-migrate"
+source_repo: https://github.com/cogni-dao/toks4.git
+image_repository: ghcr.io/cogni-dao/toks4
+source_sha: 947c241ffa0cf0e31fb614b81e6837633f891e98
+candidate_a_branch: deploy/candidate-a-toks4
+preview_branch: deploy/preview-toks4
+production_branch: deploy/production-toks4
+# task.5017 — per-env node-set (deploy ⊆ provisioned). A wizard birth enters all
+# NODE_FORMATION_ENVS; this list is the catalog twin so render-node-appset.sh
+# renders exactly the births appset.ts generates. Trimming a node's reach is a
+# later catalog edit (drop an env here) once its envs are provisioned.
+envs: [candidate-a, preview, production]
+deployment_provider:
+  candidate-a: akash
+  preview: akash
+  production: akash
+activity_env: candidate-a
+owner_wallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949"
+path_prefix: nodes/toks4/
+node_id: 72aa130b-f0ad-495a-a061-9ee1f9c9525d
+# task.5052 (story.5016) — this node's workload runs on Akash; these provider
+# egress CIDRs may dial the env VM's substrate ports (5432,5435,6379,4000,7233).
+# Rendered per-env (union over rows deployed to the env) by
+# scripts/ci/render-compute-egress-allowlist.sh and applied by
+# infra/provision/cherry/harden-docker-public-ports.sh. Absent = fail-closed.
+compute_egress_cidrs:
+  - cidr: 80.200.246.35/32
+    comment: shared egress NAT of Akash providers zencloud + digitalfrontier (story.5016)
