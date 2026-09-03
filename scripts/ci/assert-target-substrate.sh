@@ -110,7 +110,11 @@ mark_ok "all declared workload secret refs are materialized"
   || fail "installed compute egress allowlist is missing"
 IFS=',' read -r -a egress_cidrs <<< "$egress_cidrs_csv"
 for cidr in "${egress_cidrs[@]}"; do
-  grep -Fqx "$cidr" "$egress_allowlist" \
+  # render-compute-egress-allowlist.sh emits "<cidr>:<ports>" per line, so match the
+  # CIDR anchored at line start followed by its port list (or end of line). Never
+  # `grep -Fx` on the bare CIDR: that can never match a rendered line, so it fails
+  # closed on a correctly configured host.
+  grep -Eq "^${cidr//./\\.}(:|\$)" "$egress_allowlist" \
     || fail "installed compute egress allowlist is missing catalog CIDR: $cidr"
 done
 mark_ok "catalog compute egress CIDRs are installed"
