@@ -22,6 +22,7 @@ import {
   encodeAttemptReceipt,
 } from "@/ports";
 import { hostForNode } from "@/shared/node-registry/resolve";
+import { COGNI_NODE_APP_V1_REQUIRED_SECRET_KEYS } from "./node-services-workload-spec";
 import { buildNodeAppIdentityEnv } from "./node-workload-spec";
 
 const MAX_MUTATION_RETRIES = 3;
@@ -179,15 +180,6 @@ function sharedSubstrateEnv(
   }
 }
 
-const LEGACY_COGNI_APP_REQUIRED_ENV = [
-  "AUTH_SECRET",
-  "DATABASE_URL",
-  "DATABASE_SERVICE_URL",
-  "LITELLM_VIRTUAL_KEY",
-  "SCHEDULER_API_TOKEN",
-  "BILLING_INGEST_TOKEN",
-] as const;
-
 /** Explicit node-app compatibility policy; generic/private services do not inherit it. */
 function legacyCogniAppEnv(input: {
   resource: ComputeWorkload;
@@ -198,7 +190,9 @@ function legacyCogniAppEnv(input: {
   if (input.runtimeProfile !== "cogni-node-app-v1") {
     return { ...input.bindings, ...input.secrets };
   }
-  if (LEGACY_COGNI_APP_REQUIRED_ENV.some((key) => !input.secrets[key])) {
+  if (
+    COGNI_NODE_APP_V1_REQUIRED_SECRET_KEYS.some((key) => !input.secrets[key])
+  ) {
     throw new ComputeLifecycleError(
       "terminal",
       "SecretReferenceMissing",

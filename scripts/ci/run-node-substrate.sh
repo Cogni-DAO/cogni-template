@@ -4,8 +4,10 @@
 #
 # run-node-substrate.sh <env> <node> — the ONE per-node substrate runner.
 #
-# Materialize node-owned OpenBao secrets, then read-only reconcile (substrate
-# readiness + per-node db-provision) for a SINGLE node in a SINGLE env. This is
+# Materialize node-owned OpenBao secrets, then run the provider-specific preflight
+# for a SINGLE node in a SINGLE env. k3s performs the existing read-only reconcile
+# (substrate readiness + per-node db-provision); external compute performs the
+# read-only Akash prerequisite assertion and never runs k3s/DB provisioning. This is
 # the foundation for uniform substrate behavior across the whole node lifecycle:
 # candidate-a flight, preview promote, production promote all call this identically
 # — there is no "node-formation" special-case. Whoever the deployable set is, each node
@@ -34,6 +36,13 @@ TARGET_NODE="${2:?usage: run-node-substrate.sh <env> <node>}"
 # Script paths overridable for tests (mirrors the *_SSH_BIN seam in the callees).
 MATERIALIZE_BIN="${RUN_NODE_SUBSTRATE_MATERIALIZE_BIN:-$SCRIPT_DIR/secret-materialize.sh}"
 RECONCILE_BIN="${RUN_NODE_SUBSTRATE_RECONCILE_BIN:-$SCRIPT_DIR/reconcile-node-substrate.sh}"
+ASSERT_BIN="${RUN_NODE_SUBSTRATE_ASSERT_BIN:-$SCRIPT_DIR/assert-target-substrate.sh}"
+DEPLOYMENT_PROVIDER="${DEPLOYMENT_PROVIDER:-k3s}"
+
+case "$DEPLOYMENT_PROVIDER" in
+  k3s|akash) ;;
+  *) echo "::error::run-node-substrate: unsupported DEPLOYMENT_PROVIDER '$DEPLOYMENT_PROVIDER'" >&2; exit 1 ;;
+esac
 
 # Normalize COGNI_CATALOG_ROOT to an ABSOLUTE path so both callees resolve the
 # catalog identically regardless of cwd. They disagree on relative paths:
@@ -55,9 +64,14 @@ if [ -n "${COGNI_CATALOG_ROOT:-}" ]; then
   export COGNI_CATALOG_ROOT
 fi
 
-echo "[run-node-substrate] ${DEPLOY_ENVIRONMENT}/${TARGET_NODE}: materialize → reconcile"
+echo "[run-node-substrate] ${DEPLOY_ENVIRONMENT}/${TARGET_NODE} (${DEPLOYMENT_PROVIDER}): materialize → preflight"
 
 bash "$MATERIALIZE_BIN" "$DEPLOY_ENVIRONMENT" "$TARGET_NODE"
-bash "$RECONCILE_BIN" "$DEPLOY_ENVIRONMENT" "$TARGET_NODE"
+if [ "$DEPLOYMENT_PROVIDER" = "k3s" ]; then
+  bash "$RECONCILE_BIN" "$DEPLOY_ENVIRONMENT" "$TARGET_NODE"
+else
+  TARGET="$TARGET_NODE" DEPLOYMENT_PROVIDER="$DEPLOYMENT_PROVIDER" \
+    bash "$ASSERT_BIN" "$DEPLOY_ENVIRONMENT" "$TARGET_NODE"
+fi
 
-echo "[run-node-substrate] ${DEPLOY_ENVIRONMENT}/${TARGET_NODE}: substrate ready"
+echo "[run-node-substrate] ${DEPLOY_ENVIRONMENT}/${TARGET_NODE}: provider preflight ready"
