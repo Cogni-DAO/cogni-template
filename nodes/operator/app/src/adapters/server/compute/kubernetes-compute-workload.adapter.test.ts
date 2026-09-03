@@ -458,6 +458,157 @@ describe("KubernetesLeaseLeaderElector", () => {
     );
   });
 
+  it("keeps the renewal window open across a transient API error until it expires", async () => {
+    const lease: V1Lease = {
+      metadata: { resourceVersion: "9" },
+      spec: {
+        holderIdentity: "pod-a",
+        renewTime: new Date("2026-09-01T12:00:00.000Z"),
+        leaseDurationSeconds: 30,
+        leaseTransitions: 1,
+      },
+    };
+    const readNamespacedLease = vi.fn(async () => ({ body: lease }));
+    const api = {
+      readNamespacedLease,
+      replaceNamespacedLease: vi.fn(async () => ({ body: lease })),
+    } as unknown as CoordinationV1Api;
+    const elector = new KubernetesLeaseLeaderElector(
+      api,
+      "cogni-candidate-a",
+      "compute-workload-controller",
+      "pod-a"
+    );
+
+    await expect(
+      elector.acquireOrRenew(new Date("2026-09-01T12:00:00.000Z"))
+    ).resolves.toBe(true);
+
+    readNamespacedLease.mockRejectedValueOnce(apiError(503));
+    await expect(elector.acquireOrRenew()).rejects.toBeTruthy();
+
+    // Nobody else can take the Lease before it expires, so this process still holds it.
+    expect(elector.leaseHeldThrough(new Date("2026-09-01T12:00:29.000Z"))).toBe(
+      true
+    );
+    expect(elector.leaseHeldThrough(new Date("2026-09-01T12:00:31.000Z"))).toBe(
+      false
+    );
+  });
+
+  it("closes the renewal window as soon as another replica definitively holds the lease", async () => {
+    const mine: V1Lease = {
+      metadata: { resourceVersion: "9" },
+      spec: {
+        holderIdentity: "pod-a",
+        renewTime: new Date("2026-09-01T12:00:00.000Z"),
+        leaseDurationSeconds: 30,
+        leaseTransitions: 1,
+      },
+    };
+    const readNamespacedLease = vi.fn(async () => ({ body: mine }));
+    const api = {
+      readNamespacedLease,
+      replaceNamespacedLease: vi.fn(async () => ({ body: mine })),
+    } as unknown as CoordinationV1Api;
+    const elector = new KubernetesLeaseLeaderElector(
+      api,
+      "cogni-candidate-a",
+      "compute-workload-controller",
+      "pod-a"
+    );
+
+    await elector.acquireOrRenew(new Date("2026-09-01T12:00:00.000Z"));
+    readNamespacedLease.mockResolvedValueOnce({
+      body: {
+        metadata: { resourceVersion: "10" },
+        spec: {
+          holderIdentity: "pod-b",
+          renewTime: new Date("2026-09-01T12:00:05.000Z"),
+          leaseDurationSeconds: 30,
+          leaseTransitions: 2,
+        },
+      },
+    });
+
+    await expect(
+      elector.acquireOrRenew(new Date("2026-09-01T12:00:06.000Z"))
+    ).resolves.toBe(false);
+    expect(elector.leaseHeldThrough(new Date("2026-09-01T12:00:06.000Z"))).toBe(
+      false
+    );
+  });
+
+  it("survives five consecutive renew failures inside the deadline and fences past it", async () => {
+    const lease: V1Lease = {
+      metadata: { resourceVersion: "9" },
+      spec: {
+        holderIdentity: "pod-a",
+        renewTime: new Date("2026-09-01T12:00:00.000Z"),
+        leaseDurationSeconds: 30,
+        leaseTransitions: 1,
+      },
+    };
+    const readNamespacedLease = vi.fn(async () => ({ body: lease }));
+    const api = {
+      readNamespacedLease,
+      replaceNamespacedLease: vi.fn(async () => ({ body: lease })),
+    } as unknown as CoordinationV1Api;
+    const elector = new KubernetesLeaseLeaderElector(
+      api,
+      "cogni-candidate-a",
+      "compute-workload-controller",
+      "pod-a"
+    );
+    const fence = vi.fn((): never => {
+      throw new Error("fenced");
+    });
+
+    await elector.acquireOrRenew(new Date("2026-09-01T12:00:00.000Z"));
+
+    // The production symptom: a saturated k3s API server drops the 5s renew calls.
+    // Five in a row still sit inside the 30s deadline, so none of them may fence.
+    for (let tick = 1; tick <= 5; tick += 1) {
+      readNamespacedLease.mockRejectedValueOnce(apiError(503));
+      const at = new Date(
+        `2026-09-01T12:00:${String(tick * 5).padStart(2, "0")}.000Z`
+      );
+      await expect(
+        renewLeadershipOrFence(
+          {
+            isLeader: () => elector.isLeader(),
+            acquireOrRenew: () => elector.acquireOrRenew(at),
+            leaseHeldThrough: () => elector.leaseHeldThrough(at),
+          },
+          fence
+        )
+      ).rejects.toBeTruthy();
+      expect(elector.isLeader()).toBe(true);
+    }
+    expect(fence).not.toHaveBeenCalled();
+
+    // Past the deadline with no successful renew, another replica may take over: fence.
+    readNamespacedLease.mockRejectedValueOnce(apiError(503));
+    const past = new Date("2026-09-01T12:00:31.000Z");
+    await expect(
+      renewLeadershipOrFence(
+        {
+          isLeader: () => elector.isLeader(),
+          acquireOrRenew: () => elector.acquireOrRenew(past),
+          leaseHeldThrough: () => elector.leaseHeldThrough(past),
+        },
+        fence
+      )
+    ).rejects.toThrow("fenced");
+    expect(fence).toHaveBeenCalledOnce();
+
+    // A recovered API renews normally without a lease transition.
+    await expect(
+      elector.acquireOrRenew(new Date("2026-09-01T12:00:32.000Z"))
+    ).resolves.toBe(true);
+    expect(elector.currentEpoch()).toBe("1:pod-a");
+  });
+
   it("guards dispatch with the live holder identity and lease-transition epoch", async () => {
     const lease: V1Lease = {
       metadata: { resourceVersion: "9" },
@@ -498,6 +649,8 @@ describe("renewLeadershipOrFence", () => {
     const lease = {
       isLeader: () => true,
       acquireOrRenew: vi.fn(async () => false),
+      // Even inside a live window, a definitive "someone else holds it" must fence.
+      leaseHeldThrough: () => true,
     };
 
     await expect(renewLeadershipOrFence(lease, onLeadershipLost)).rejects.toBe(
@@ -507,7 +660,7 @@ describe("renewLeadershipOrFence", () => {
     expect(onLeadershipLost).toHaveBeenCalledWith(expect.any(Error));
   });
 
-  it("fences a prior leader when renewal errors but not an ordinary follower", async () => {
+  it("fences a prior leader when renewal errors past the lease deadline but not an ordinary follower", async () => {
     const failure = new Error("API unavailable past lease deadline");
     const fenced = new Error("process fenced");
     const priorLeaderFence = vi.fn((): never => {
@@ -520,6 +673,7 @@ describe("renewLeadershipOrFence", () => {
           acquireOrRenew: async () => {
             throw failure;
           },
+          leaseHeldThrough: () => false,
         },
         priorLeaderFence
       )
@@ -534,10 +688,32 @@ describe("renewLeadershipOrFence", () => {
         {
           isLeader: () => false,
           acquireOrRenew: async () => false,
+          leaseHeldThrough: () => false,
         },
         followerFence
       )
     ).resolves.toBe(false);
     expect(followerFence).not.toHaveBeenCalled();
+  });
+
+  it("does not fence a transient renewal error inside the unexpired lease window", async () => {
+    const failure = new Error("socket hang up");
+    const fence = vi.fn((): never => {
+      throw new Error("must not fence a lease nobody else can take");
+    });
+
+    await expect(
+      renewLeadershipOrFence(
+        {
+          isLeader: () => true,
+          acquireOrRenew: async () => {
+            throw failure;
+          },
+          leaseHeldThrough: () => true,
+        },
+        fence
+      )
+    ).rejects.toBe(failure);
+    expect(fence).not.toHaveBeenCalled();
   });
 });

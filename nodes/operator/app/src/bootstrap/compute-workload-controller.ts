@@ -175,20 +175,35 @@ createServer(async (request, response) => {
   response.writeHead(404).end();
 }).listen(9090, "0.0.0.0");
 
+/** Kubernetes API failures carry no provider secrets; the message is what makes a fence diagnosable. */
+function causeFields(cause: unknown): Record<string, string | number> {
+  const status = (
+    cause as { statusCode?: number; response?: { statusCode?: number } } | null
+  )?.statusCode;
+  return {
+    causeType: cause instanceof Error ? cause.name : "unknown",
+    causeMessage:
+      cause instanceof Error
+        ? cause.message
+        : typeof cause === "string"
+          ? cause
+          : "unknown",
+    ...(typeof status === "number" ? { causeStatus: status } : {}),
+  };
+}
+
 async function renewLeadership(): Promise<void> {
   try {
     await renewLeadershipOrFence(leader, (cause) => {
       kubeReachable = false;
       leaderGauge.set(0);
       log.fatal(
-        {
-          reason: "LeadershipLost",
-          causeType: cause instanceof Error ? cause.name : "unknown",
-        },
+        { reason: "LeadershipLost", ...causeFields(cause) },
         "compute_workload_leadership_lost_process_fenced"
       );
-      // Immediate fencing is intentional. In-flight mutations already have a durable
-      // attempt marker, so restart fails closed instead of allowing two leaders to write.
+      // Fencing is reserved for a lease we can no longer prove we hold. In-flight mutations
+      // already have a durable attempt marker, so restart fails closed instead of allowing
+      // two leaders to write.
       process.exit(1);
     });
     kubeReachable = true;
@@ -199,7 +214,8 @@ async function renewLeadership(): Promise<void> {
     log.error(
       {
         reason: "LeaderRenewFailed",
-        causeType: error instanceof Error ? error.name : "unknown",
+        leaseHeldThrough: leader.leaseHeldThrough(),
+        ...causeFields(error),
       },
       "compute_workload_leader_renew_failed"
     );
