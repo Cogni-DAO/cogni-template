@@ -226,10 +226,10 @@ lane as transitional.
 17. **PLACEMENT_DOES_NOT_GATE_PROVISIONING** (bug.5098/bug.5099, proven live 2026-09-03). A node's
     `deployment_provider.<env>` decides **where its app runs**. It MUST NOT decide **whether the node
     gets provisioned**. Every `type: node` target is materialized on every flight/promote regardless of
-    provider; only the *steps* branch. Concretely: the `node-substrate` job must be matrixed over **all**
+    provider; only the _steps_ branch. Concretely: the `node-substrate` job must be matrixed over **all**
     node targets (the typed planner already emits this wider list), never over a k3s-only list, with
     provider-specific work — the k3s Caddy/NodePort edge reconcile, the external DNS reconcile — selected
-    *inside* the job. `secret-materialize` runs for everyone.
+    _inside_ the job. `secret-materialize` runs for everyone.
 
     **The failure this prevents:** flipping a node to `akash` silently removed it from
     `k3s_node_targets_json`, so nothing ever created its secrets. It stayed invisible because the first
@@ -238,12 +238,12 @@ lane as transitional.
     ESO failed at `spec.data[0]`, `cannot find secret data for key: "AUTH_SECRET"`). A node is a node.
     Where it runs is not who it is.
 
-18. **PROVIDER_SECRET_DELTAS_ARE_DECLARED_NOT_RENAMED.** When a provider genuinely needs a *different*
+18. **PROVIDER_SECRET_DELTAS_ARE_DECLARED_NOT_RENAMED.** When a provider genuinely needs a _different_
     secret from the k3s default, that difference is a **catalog entry**, never an undeclared rename in a
     runtime profile. The external-workload profile requires a per-node `LITELLM_VIRTUAL_KEY` instead of the
     fleet-shared `LITELLM_MASTER_KEY` — correct, because a fleet-shared credential must never be shipped to a
     rented third-party host (see `EXTERNAL_WORKLOAD_DENIED_KEYS`). But the new name was added only as a
-    *consumer*: no catalog entry, no generator, no registration step. Per
+    _consumer_: no catalog entry, no generator, no registration step. Per
     [`CATALOG_IS_THE_ONE_READER`](#core-invariants), a key a pod consumes but the catalog never declares can
     never fan out — it will be hand-seeded once and then silently carried forever. Declaration must precede
     consumption.

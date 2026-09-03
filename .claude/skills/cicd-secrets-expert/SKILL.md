@@ -188,11 +188,12 @@ out of the job that provisions it. `node-substrate` — which runs `secret-mater
 `k3s_node_targets_json` in both `candidate-flight.yml` and `promote-and-deploy.yml`. Flip a node's provider
 and it silently leaves the population that gets served. Nothing errors; nobody creates its secrets.
 
-**Why it hides:** the first external nodes were k3s nodes *first*. They kept the secrets they already had,
+**Why it hides:** the first external nodes were k3s nodes _first_. They kept the secrets they already had,
 so test and preview looked healthy while inheriting from a k3s past. The defect only surfaces in an
 environment where that node never ran on k3s. Do not treat a green lower environment as evidence.
 
 **Two rules:**
+
 1. **Branch the steps, never the population.** Every `type: node` target gets materialized regardless of
    provider; only provider-specific work (k3s Caddy/NodePort edge reconcile vs external DNS reconcile) is
    selected inside the job. The typed planner already emits the correct wider node list — prefer it over the

@@ -501,15 +501,15 @@ This is the product MVP. A new node dev should clone the node repo, run one setu
 A node has two independent axes. Conflating them is the single most expensive mistake made against this
 architecture to date, so they are stated separately:
 
-| axis | owner | declared in | answers |
-|---|---|---|---|
-| **Provisioning** | operator substrate | the secrets catalog + node registry | does this node exist, and does it have its DB, secrets and identity? |
-| **Placement** | operator catalog | `infra/catalog/<node>.yaml` `deployment_provider.<env>` | where does its app process run — our k3s, or external compute (Akash)? |
+| axis             | owner              | declared in                                             | answers                                                                |
+| ---------------- | ------------------ | ------------------------------------------------------- | ---------------------------------------------------------------------- |
+| **Provisioning** | operator substrate | the secrets catalog + node registry                     | does this node exist, and does it have its DB, secrets and identity?   |
+| **Placement**    | operator catalog   | `infra/catalog/<node>.yaml` `deployment_provider.<env>` | where does its app process run — our k3s, or external compute (Akash)? |
 
 **Every node is provisioned identically. Placement selects only which deployment steps run.** A node
 moved to external compute still needs exactly the same DB role, the same OpenBao path, the same
-ExternalSecret and the same identity it needed before; nothing about *where the process runs* changes
-*who the node is*.
+ExternalSecret and the same identity it needed before; nothing about _where the process runs_ changes
+_who the node is_.
 
 The corollary is the part that bites: **a placement change is also a provisioning change** whenever the
 target substrate needs a different credential shape. External compute cannot receive fleet-shared
@@ -520,7 +520,7 @@ them. See `docs/spec/secrets-management.md` invariants 17 (`PLACEMENT_DOES_NOT_G
 
 Practical rule for reviewers: if a change makes a node's provisioning conditional on its provider — a
 job matrixed over "the k3s nodes", a step gated on `provider == k3s` that creates state rather than
-deploying it — that is the bug. Branch the *steps*, never the *population*.
+deploying it — that is the bug. Branch the _steps_, never the _population_.
 
 ## Decision Rules
 
