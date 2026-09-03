@@ -60,7 +60,13 @@ export function buildComputeWorkloadManifest(
 
   const services: DeclaredProvisionServiceSpec[] = input.bundle.services.map(
     ({ artifact, service }) => {
-      assertRuntimeProfileSecretRefs(service);
+      assertRuntimeProfileSecretRefs({
+        serviceName: service.name,
+        ...(service.runtimeProfile
+          ? { runtimeProfile: service.runtimeProfile }
+          : {}),
+        secretRefs: service.secretRefs,
+      });
       return {
         name: service.name,
         artifact,
