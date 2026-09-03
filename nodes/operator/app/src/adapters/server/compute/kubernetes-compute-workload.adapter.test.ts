@@ -641,16 +641,18 @@ describe("KubernetesLeaseLeaderElector", () => {
 });
 
 describe("renewLeadershipOrFence", () => {
-  it("immediately fences a process that loses its previously-held lease", async () => {
+  it("fences a process whose lease was genuinely taken over", async () => {
     const fenced = new Error("process fenced");
     const onLeadershipLost = vi.fn((): never => {
       throw fenced;
     });
     const lease = {
       isLeader: () => true,
+      // KubernetesLeaseLeaderElector zeroes `renewedAtMs` on the genuine-takeover branch
+      // (`holder !== identity && !expired`), so a real loss always presents as
+      // leaseHeldThrough() === false. That is the signal that must fence.
       acquireOrRenew: vi.fn(async () => false),
-      // Even inside a live window, a definitive "someone else holds it" must fence.
-      leaseHeldThrough: () => true,
+      leaseHeldThrough: () => false,
     };
 
     await expect(renewLeadershipOrFence(lease, onLeadershipLost)).rejects.toBe(
@@ -658,6 +660,49 @@ describe("renewLeadershipOrFence", () => {
     );
     expect(onLeadershipLost).toHaveBeenCalledOnce();
     expect(onLeadershipLost).toHaveBeenCalledWith(expect.any(Error));
+  });
+
+  it("does not fence a CAS conflict while the earned lease window is still live", async () => {
+    // The 409 branch of acquireOrRenew preserves `renewedAtMs`, so an unsuccessful
+    // renewal inside the window is a stale-resourceVersion conflict, not a lost lease.
+    // Fencing here strands in-flight provider IO as an unresolvable `prepared` attempt.
+    const onLeadershipLost = vi.fn((): never => {
+      throw new Error("must not fence");
+    });
+    const lease = {
+      isLeader: () => true,
+      acquireOrRenew: vi.fn(async () => false),
+      leaseHeldThrough: () => true,
+    };
+
+    await expect(
+      renewLeadershipOrFence(lease, onLeadershipLost)
+    ).rejects.toThrow(/held window has not lapsed/);
+    expect(onLeadershipLost).not.toHaveBeenCalled();
+  });
+
+  it("fences once a CAS conflict outlives the lease window", async () => {
+    const fenced = new Error("process fenced");
+    const onLeadershipLost = vi.fn((): never => {
+      throw fenced;
+    });
+    let live = true;
+    const lease = {
+      isLeader: () => true,
+      acquireOrRenew: vi.fn(async () => false),
+      leaseHeldThrough: () => live,
+    };
+
+    await expect(
+      renewLeadershipOrFence(lease, onLeadershipLost)
+    ).rejects.toThrow(/held window has not lapsed/);
+    expect(onLeadershipLost).not.toHaveBeenCalled();
+
+    live = false;
+    await expect(renewLeadershipOrFence(lease, onLeadershipLost)).rejects.toBe(
+      fenced
+    );
+    expect(onLeadershipLost).toHaveBeenCalledOnce();
   });
 
   it("fences a prior leader when renewal errors past the lease deadline but not an ordinary follower", async () => {
