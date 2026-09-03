@@ -435,7 +435,7 @@ post_json() {
 
 jq -n --rawfile hash "$work_dir/hash" '{keys: [$hash]}' > "$work_dir/by-hash.json"
 post_json "$work_dir/by-hash.json" "$work_dir/by-hash-response.json" || exit 1
-hash_count=$(jq -er '.info | length' "$work_dir/by-hash-response.json") || { echo lookup-invalid-json; exit 1; }
+hash_count=$(jq -er '.info | arrays | length' "$work_dir/by-hash-response.json") || { echo lookup-invalid-json; exit 1; }
 if [[ "$hash_count" -gt 1 ]]; then echo key-hash-collision; exit 1; fi
 if [[ "$hash_count" -eq 1 ]] && ! jq -e --rawfile alias "$work_dir/alias" \
     '.info[0].key_alias == $alias' "$work_dir/by-hash-response.json" >/dev/null; then
@@ -445,7 +445,7 @@ fi
 
 jq -n --rawfile alias "$work_dir/alias" '{key_aliases: [$alias]}' > "$work_dir/by-alias.json"
 post_json "$work_dir/by-alias.json" "$work_dir/by-alias-response.json" || exit 1
-alias_count=$(jq -er '.info | length' "$work_dir/by-alias-response.json") || { echo lookup-invalid-json; exit 1; }
+alias_count=$(jq -er '.info | arrays | length' "$work_dir/by-alias-response.json") || { echo lookup-invalid-json; exit 1; }
 if [[ "$alias_count" -gt 1 ]]; then echo alias-collision; exit 1; fi
 
 if [[ "$hash_count" -eq 1 ]]; then

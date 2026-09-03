@@ -153,6 +153,10 @@ fi
 touch "$FAKE_LITELLM_STORE"
 case "$url" in
   */v2/key/info)
+    if [[ "${FAKE_LITELLM_INVALID_INFO:-}" == "1" ]]; then
+      respond 200 '{}'
+      exit 0
+    fi
     wanted_hash="$(jq -r '.keys[0] // empty' "$body_file")"
     wanted_alias="$(jq -r '.key_aliases[0] // empty' "$body_file")"
     info='[]'
@@ -391,6 +395,35 @@ grep -q 'lookup-http-503' "$TMPROOT/out-unavailable.txt" \
   || { echo "LiteLLM outage did not return a redacted status" >&2; exit 1; }
 if grep -qF "$VK" "$TMPROOT/out-unavailable.txt" || grep -qF "$COLLIDING_KEY" "$TMPROOT/out-unavailable.txt"; then
   echo "LiteLLM key leaked in unavailable failure" >&2
+  exit 1
+fi
+
+# A nominal 200 with a malformed lookup body is not evidence that the key or
+# alias is absent. It must fail before generation rather than creating through
+# an API-contract drift or broken proxy response.
+set +e
+env \
+  VM_HOST=fake \
+  DOMAIN=test.cognidao.org \
+  SSH_OPTS="-i fake-key -o StrictHostKeyChecking=no" \
+  SECRET_MATERIALIZE_SSH_BIN="$FAKEBIN/ssh" \
+  FAKE_REMOTE_PATH="$FAKEBIN" \
+  FAKE_BAO_ROOT="$BAO_ROOT" \
+  FAKE_LITELLM_STORE="$LITELLM_STORE" \
+  FAKE_LITELLM_LOG="$LITELLM_LOG" \
+  FAKE_LITELLM_MASTER_KEY=sk-cogni-operator-master \
+  FAKE_LITELLM_INVALID_INFO=1 \
+  bash scripts/ci/secret-materialize.sh candidate-a node-template > "$TMPROOT/out-invalid-info.txt" 2>&1
+INVALID_INFO_RC=$?
+set -e
+test "$INVALID_INFO_RC" -ne 0 \
+  || { echo "malformed LiteLLM lookup must fail materialization" >&2; exit 1; }
+grep -q 'lookup-invalid-json' "$TMPROOT/out-invalid-info.txt" \
+  || { echo "malformed LiteLLM lookup did not return a redacted error" >&2; exit 1; }
+test "$(grep -c '^generate ' "$LITELLM_LOG")" = 1 \
+  || { echo "malformed LiteLLM lookup must not call /key/generate" >&2; exit 1; }
+if grep -qF "$VK" "$TMPROOT/out-invalid-info.txt" || grep -qF "$COLLIDING_KEY" "$TMPROOT/out-invalid-info.txt"; then
+  echo "LiteLLM key leaked in malformed lookup failure" >&2
   exit 1
 fi
 
