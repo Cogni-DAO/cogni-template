@@ -41,6 +41,35 @@ export interface NodeServicesWorkloadSpec
   readonly services: readonly NodeServicesProvisionServiceSpec[];
 }
 
+/** Secret contract required by the explicit legacy Cogni application profile. */
+export const COGNI_NODE_APP_V1_REQUIRED_SECRET_KEYS = [
+  "AUTH_SECRET",
+  "DATABASE_URL",
+  "DATABASE_SERVICE_URL",
+  "LITELLM_VIRTUAL_KEY",
+  "SCHEDULER_API_TOKEN",
+  "BILLING_INGEST_TOKEN",
+] as const;
+
+/** Fail before desired-state mutation when the profile omits a runtime requirement. */
+export function assertRuntimeProfileSecretRefs(input: {
+  readonly runtimeProfile?: "cogni-node-app-v1";
+  readonly secretRefs: readonly { readonly key: string }[];
+}): void {
+  if (input.runtimeProfile !== "cogni-node-app-v1") {
+    return;
+  }
+  const declared = new Set(input.secretRefs.map((ref) => ref.key));
+  const missing = COGNI_NODE_APP_V1_REQUIRED_SECRET_KEYS.filter(
+    (key) => !declared.has(key)
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `[node-workload] cogni-node-app-v1 is missing secret_refs: ${missing.join(", ")}`
+    );
+  }
+}
+
 /** Build one generic co-located workload from the validated complete bundle. */
 export function buildNodeServicesWorkloadSpec(
   input: NodeServicesWorkloadInput
@@ -48,6 +77,7 @@ export function buildNodeServicesWorkloadSpec(
   return {
     name: input.slug,
     services: input.bundle.services.map(({ service, image }) => {
+      assertRuntimeProfileSecretRefs(service);
       const isPublic = service.visibility === "public";
       const bindingEnv = Object.fromEntries(
         Object.entries(service.bindings).map(([envName, targetName]) => {

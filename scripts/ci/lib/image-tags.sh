@@ -133,6 +133,44 @@ is_remote_source_artifact_target() {
   [ -n "$source_repo" ] && ! is_built_by_this_repo "$1"
 }
 
+# Resolve the immutable source revision for a remote-source target during
+# promotion. One resolver is shared by artifact digest selection and the
+# node-substrate checkout so they cannot materialize different revisions.
+# Priority: an explicitly dispatched node SHA, preview provenance when
+# forwarding preview to production, then the reviewed catalog snapshot when
+# an operator source SHA addresses that snapshot. Every path fails closed.
+resolve_remote_source_sha() {
+  local target="$1"
+  local explicit_node_sha="${2:-}"
+  local operator_source_sha="${3:-}"
+  local catalog_source_sha="${4:-}"
+  local preview_forward="${5:-false}"
+  local preview_source_sha_map="${6:-}"
+  local resolved=""
+
+  if [ -n "$explicit_node_sha" ]; then
+    resolved="$explicit_node_sha"
+  elif [ "$preview_forward" = "true" ]; then
+    if [ -z "$preview_source_sha_map" ] || [ ! -f "$preview_source_sha_map" ]; then
+      echo "[ERROR] remote-source target ${target}: preview provenance map is required" >&2
+      return 1
+    fi
+    resolved=$(jq -r --arg target "$target" '.[$target] // ""' "$preview_source_sha_map")
+  elif [ -n "$operator_source_sha" ] && [ -n "$catalog_source_sha" ]; then
+    resolved="$catalog_source_sha"
+  else
+    echo "[ERROR] remote-source target ${target}: requires node_source_sha, preview provenance, or an operator source_sha with reviewed catalog source_sha" >&2
+    return 1
+  fi
+
+  if ! [[ "$resolved" =~ ^[0-9a-fA-F]{40}$ ]]; then
+    echo "[ERROR] remote-source target ${target}: resolved source SHA is not 40 hex characters" >&2
+    return 1
+  fi
+
+  printf '%s' "$resolved"
+}
+
 image_name_for_target() {
   printf '%s' "$IMAGE_NAME_APP"
 }
