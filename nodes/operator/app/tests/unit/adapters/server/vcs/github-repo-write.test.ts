@@ -1677,6 +1677,8 @@ source_repo: https://github.com/Cogni-DAO/atlas.git
 path_prefix: nodes/atlas/
 envs: [candidate-a]
 activity_env: candidate-a
+deployment_provider:
+  candidate-a: akash
 owner_wallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949"
 `,
           "infra/catalog/operator.yaml": `name: operator
@@ -1710,6 +1712,9 @@ owner_wallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949"
         repoName: "atlas",
         deployEnvs: ["candidate-a"],
         activityEnv: "candidate-a",
+        // bug.5106 — declared placement is projected so the operator can resolve WHERE this
+        // node runs without reading the catalog on the hot path.
+        deploymentProviders: { "candidate-a": "akash" },
         ownerWallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949",
       },
       {
@@ -1720,9 +1725,47 @@ owner_wallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949"
         repoName: "cogni",
         deployEnvs: ["candidate-a", "preview", "production"],
         activityEnv: "production",
+        // No `deployment_provider` row ⇒ empty map ⇒ K3S_IS_DEFAULT everywhere.
+        deploymentProviders: {},
         ownerWallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949",
       },
     ]);
+  });
+
+  it("fails loud on a deployment_provider outside the declared vocabulary (bug.5106)", async () => {
+    const sourceRef = "0123456789012345678901234567890123456789";
+    routeHandlers = {
+      "GET /repos/{owner}/{repo}/contents/{path}": (params) => {
+        if (params.path === "infra/catalog") {
+          return [{ name: "atlas.yaml", type: "file" }];
+        }
+        return {
+          type: "file",
+          encoding: "base64",
+          content: encode(`name: atlas
+type: node
+node_id: 11111111-1111-4111-8111-111111111111
+source_repo: https://github.com/Cogni-DAO/atlas.git
+path_prefix: nodes/atlas/
+envs: [candidate-a]
+activity_env: candidate-a
+deployment_provider:
+  candidate-a: fly-io
+owner_wallet: "0x070075F1389Ae1182aBac722B36CA12285d0c949"
+`),
+        };
+      },
+    };
+
+    // A placement the address resolver cannot honour must never reach the registry as a silent
+    // k3s default — one bad row fails the whole reconcile, like every other malformed field.
+    await expect(
+      makeWriter().listCatalogNodes({
+        parentOwner: "Cogni-DAO",
+        parentRepo: "cogni",
+        sourceRef,
+      })
+    ).rejects.toMatchObject({ code: "invalid_catalog", status: 409 });
   });
 
   it("rejects an invalid in-repo node identity", async () => {
