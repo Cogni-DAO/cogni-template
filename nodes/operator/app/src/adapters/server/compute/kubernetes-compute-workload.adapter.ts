@@ -498,9 +498,15 @@ export class KubernetesLeaseLeaderElector {
       return true;
     } catch (error) {
       if (statusCode(error) !== 409) throw error;
+      // A CAS conflict is NOT proof another holder took over. Our cached resourceVersion
+      // goes stale routinely on a slow API server (production k3s serves /healthz in
+      // 1-10s with a multi-GB kine datastore), and the update then 409s even though we
+      // are still the recorded holder. Deliberately preserve `renewedAtMs` so
+      // `leaseHeldThrough()` can still vouch for the window we already earned; the caller
+      // decides whether that window makes fencing premature. Zeroing it here is what made
+      // every conflict look like a lost lease.
       this.leader = false;
       this.epoch = undefined;
-      this.renewedAtMs = 0;
       return false;
     }
   }
@@ -537,7 +543,17 @@ export async function renewLeadershipOrFence(
     throw error;
   }
   if (previouslyHeld && !renewed) {
-    // A definitive answer: the Lease is held by someone else, or the CAS lost.
+    // An unsuccessful renewal is not automatically a lost lease. `acquireOrRenew` also
+    // returns false on a 409 CAS conflict, which a slow API server produces routinely.
+    // While our last *successful* renewal still covers now, no replica can have taken
+    // over, so fencing here is a self-inflicted outage that strands in-flight provider
+    // IO as an unresolvable `prepared` attempt. Propagate and let the next tick retry;
+    // once the window lapses `leaseHeldThrough()` goes false and we fence for real.
+    if (lease.leaseHeldThrough()) {
+      throw new Error(
+        "Kubernetes Lease renewal did not succeed, but the held window has not lapsed"
+      );
+    }
     return onLeadershipLost(
       new Error("previously held Kubernetes Lease was not renewed")
     );
