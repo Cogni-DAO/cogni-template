@@ -1043,6 +1043,214 @@ describe("reconcileComputeWorkload", () => {
     });
   });
 
+  it("escalates a re-asserted generation past an exhausted create retry budget", async () => {
+    const resource = workload();
+    const exhaustedKey = computeWorkloadIdempotencyKey({
+      resource,
+      operation: "create",
+      ordinal: 0,
+    });
+    const receipt: ComputeWorkloadAttemptReceipt = {
+      key: exhaustedKey,
+      operation: "create",
+      ordinal: 0,
+      outcome: "known_failure",
+      leaderEpoch: "7:test-controller",
+      retryCount: 2,
+      startedAt: NOW.toISOString(),
+    };
+    const state = new MemoryState(
+      workload({
+        metadata: {
+          ...resource.metadata,
+          annotations: {
+            [COMPUTE_WORKLOAD_ATTEMPT_ANNOTATION]:
+              encodeAttemptReceipt(receipt),
+          },
+        },
+        status: {
+          phase: "Failed",
+          desiredGeneration: resource.metadata.generation,
+          attempt: { ...receipt, completedAt: NOW.toISOString() },
+          recoveryCount: 0,
+          failure: {
+            reason: "RetryLimitExceeded",
+            message: "known-outcome retry limit was exceeded",
+            retryable: false,
+          },
+          conditions: [],
+        },
+      })
+    );
+    const port = lifecycle();
+
+    await run(state, port);
+
+    expect(port.create).toHaveBeenCalledTimes(1);
+    // The exhausted budget belongs to the create key; recovery gets its own namespace.
+    expect(port.create.mock.calls[0]?.[0].idempotencyKey).not.toBe(
+      exhaustedKey
+    );
+    expect(port.create.mock.calls[0]?.[0].idempotencyKey).toBe(
+      computeWorkloadIdempotencyKey({
+        resource,
+        operation: "recover",
+        ordinal: 1,
+      })
+    );
+    expect(state.current.status).toMatchObject({
+      phase: "Progressing",
+      resource: { id: "lease-42" },
+      recoveryCount: 1,
+      attempt: { operation: "recover", ordinal: 1, outcome: "succeeded" },
+    });
+    expect(state.current.status?.failure).toBeUndefined();
+  });
+
+  it("bounds handle-less retry-budget escalation at three recovery allocations", async () => {
+    const resource = workload();
+    const state = new MemoryState(
+      workload({
+        metadata: {
+          ...resource.metadata,
+          annotations: {
+            [COMPUTE_WORKLOAD_ATTEMPT_ANNOTATION]: encodeAttemptReceipt({
+              key: computeWorkloadIdempotencyKey({
+                resource,
+                operation: "create",
+                ordinal: 0,
+              }),
+              operation: "create",
+              ordinal: 0,
+              outcome: "known_failure",
+              leaderEpoch: "7:test-controller",
+              retryCount: 2,
+              startedAt: NOW.toISOString(),
+            }),
+          },
+        },
+        status: {
+          phase: "Failed",
+          desiredGeneration: resource.metadata.generation,
+          attempt: {
+            key: computeWorkloadIdempotencyKey({
+              resource,
+              operation: "create",
+              ordinal: 0,
+            }),
+            operation: "create",
+            ordinal: 0,
+            outcome: "known_failure",
+            retryCount: 2,
+            leaderEpoch: "7:test-controller",
+            startedAt: NOW.toISOString(),
+            completedAt: NOW.toISOString(),
+          },
+          recoveryCount: 0,
+          failure: {
+            reason: "RetryLimitExceeded",
+            message: "known-outcome retry limit was exceeded",
+            retryable: false,
+          },
+          conditions: [],
+        },
+      })
+    );
+    const port = lifecycle();
+    // A retryable known failure is exactly what burns a per-key budget in production.
+    port.create.mockRejectedValue(
+      new ComputeLifecycleError("terminal", "ProviderTransient", true)
+    );
+    const recordRecoveryLimit = vi.fn();
+
+    for (let pass = 0; pass < 24; pass += 1) {
+      await run(state, port, { recordRecoveryLimit });
+    }
+
+    const ordinals = new Set(
+      port.create.mock.calls.map((call) => call[0].idempotencyKey)
+    );
+    expect([...ordinals]).toEqual([
+      computeWorkloadIdempotencyKey({
+        resource,
+        operation: "recover",
+        ordinal: 1,
+      }),
+      computeWorkloadIdempotencyKey({
+        resource,
+        operation: "recover",
+        ordinal: 2,
+      }),
+      computeWorkloadIdempotencyKey({
+        resource,
+        operation: "recover",
+        ordinal: 3,
+      }),
+    ]);
+    expect(state.current.status?.phase).toBe("Failed");
+    expect(state.current.status?.failure?.reason).toBe("RecoveryLimitExceeded");
+    expect(state.current.status?.recoveryCount).toBe(3);
+    expect(recordRecoveryLimit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        recoveryCount: 3,
+        outcomeCode: "RecoveryLimitExceeded",
+      })
+    );
+
+    const createsAtLimit = port.create.mock.calls.length;
+    await run(state, port, { recordRecoveryLimit });
+    expect(port.create.mock.calls.length).toBe(createsAtLimit);
+  });
+
+  it("keeps an exhausted retry budget blocked when the last outcome was not definitive", async () => {
+    const resource = workload();
+    const receipt: ComputeWorkloadAttemptReceipt = {
+      key: computeWorkloadIdempotencyKey({
+        resource,
+        operation: "create",
+        ordinal: 0,
+      }),
+      operation: "create",
+      ordinal: 0,
+      outcome: "unknown",
+      leaderEpoch: "7:test-controller",
+      retryCount: 2,
+      startedAt: NOW.toISOString(),
+    };
+    const state = new MemoryState(
+      workload({
+        metadata: {
+          ...resource.metadata,
+          annotations: {
+            [COMPUTE_WORKLOAD_ATTEMPT_ANNOTATION]:
+              encodeAttemptReceipt(receipt),
+          },
+        },
+        status: {
+          phase: "Failed",
+          desiredGeneration: resource.metadata.generation,
+          attempt: { ...receipt, completedAt: NOW.toISOString() },
+          recoveryCount: 0,
+          failure: {
+            reason: "RetryLimitExceeded",
+            message: "known-outcome retry limit was exceeded",
+            retryable: false,
+          },
+          conditions: [],
+        },
+      })
+    );
+    const port = lifecycle();
+
+    await run(state, port);
+
+    expect(port.create).not.toHaveBeenCalled();
+    expect(state.current.status).toMatchObject({
+      phase: "Unknown",
+      failure: { reason: "OrphanRisk", retryable: false },
+    });
+  });
+
   it("retries a definitive recover failure when no resource handle exists", async () => {
     const receipt: ComputeWorkloadAttemptReceipt = {
       key: "recover-known-failure",
