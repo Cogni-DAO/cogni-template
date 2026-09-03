@@ -164,6 +164,21 @@ export interface CatalogNodeDefinition {
   readonly deployEnvs: readonly ("candidate-a" | "preview" | "production")[];
   readonly activityEnv: "candidate-a" | "preview" | "production";
   readonly ownerWallet: string;
+  /**
+   * The row's `deployment_provider` — WHERE this node's app runs, per environment. Projected into
+   * the registry so the operator can resolve a node's address from declared placement instead of
+   * assuming every node is a cluster neighbour (bug.5106). An omitted environment is `k3s`
+   * (K3S_IS_DEFAULT). The union is mirrored (not imported) from
+   * `@shared/node-registry/placement` — `ports` may not import `shared`.
+   */
+  readonly deploymentProviders: Readonly<
+    Partial<
+      Record<
+        "candidate-a" | "preview" | "production",
+        "k3s" | "akash" | undefined
+      >
+    >
+  >;
 }
 
 export interface ResolveNodeRepoInput {

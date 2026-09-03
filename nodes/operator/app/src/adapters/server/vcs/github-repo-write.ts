@@ -80,6 +80,7 @@ import {
   makeNodeLocalMatcher,
   parseNodeLocalPaths,
 } from "@/shared/node-app-scaffold/node-local-paths";
+import { NODE_DEPLOYMENT_PROVIDERS } from "@/shared/node-registry/placement";
 import {
   NODE_REPO_POLICY_PATH,
   type NodeRepoPolicy,
@@ -399,6 +400,9 @@ function parseCatalogPorts(
 /** Slugs that are catalog `type: node` but are never fork-sync targets. */
 const FORK_SYNC_EXCLUDED_SLUGS = new Set(["node-template", "operator"]);
 
+/** The declared placement vocabulary — one list, shared with the runtime address resolver. */
+const NODE_DEPLOYMENT_PROVIDER_SCHEMA = z.enum(NODE_DEPLOYMENT_PROVIDERS);
+
 const CatalogRegistryRowSchema = z
   .object({
     name: z.string().min(1),
@@ -409,6 +413,17 @@ const CatalogRegistryRowSchema = z
     envs: z.array(z.enum(["candidate-a", "preview", "production"])),
     activity_env: z.enum(["candidate-a", "preview", "production"]),
     owner_wallet: z.string().regex(/^0x[0-9a-fA-F]{40}$/),
+    // bug.5106 — WHERE this node's app runs, per env. Mirrors `deployment_provider` in
+    // infra/catalog/_schema.json (`additionalProperties: false`, enum k3s|akash), so a row this
+    // parser accepts is exactly a row CI accepts. Absent = every env on k3s (K3S_IS_DEFAULT).
+    deployment_provider: z
+      .object({
+        "candidate-a": NODE_DEPLOYMENT_PROVIDER_SCHEMA.optional(),
+        preview: NODE_DEPLOYMENT_PROVIDER_SCHEMA.optional(),
+        production: NODE_DEPLOYMENT_PROVIDER_SCHEMA.optional(),
+      })
+      .strict()
+      .optional(),
   })
   .superRefine((row, ctx) => {
     if (!row.envs.includes(row.activity_env)) {
@@ -1508,6 +1523,7 @@ export class GitHubRepoWriter implements DeployPlanePort {
         deployEnvs: row.data.envs,
         activityEnv: row.data.activity_env,
         ownerWallet: row.data.owner_wallet,
+        deploymentProviders: row.data.deployment_provider ?? {},
       });
     }
 
