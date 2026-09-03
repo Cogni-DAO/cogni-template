@@ -1429,6 +1429,39 @@ patches:
         if (path === ".gitmodules") {
           return Promise.reject(statusError(404, "not found"));
         }
+        // bug.5094 — the GENERATED per-env scheduler-worker routing patch. A birth
+        // must splice the new node into EVERY deploy env's map (and the shared base
+        // default), else the PR is drift-red vs render-scheduler-worker-endpoints.sh
+        // AND the node is unrouted wherever it later deploys.
+        const endpointsEnv = path.match(
+          /^infra\/k8s\/overlays\/([^/]+)\/scheduler-worker\/node-endpoints\.patch\.yaml$/
+        )?.[1];
+        if (endpointsEnv !== undefined) {
+          return {
+            type: "file",
+            encoding: "base64",
+            content: encode(`apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scheduler-worker-config
+data:
+  COGNI_NODE_ENDPOINTS: "node-template=http://node-template-node-app:3000,b927a9dd-6132-4fc9-a51e-e3cee2568e3c=http://node-template-node-app:3000"
+`),
+          };
+        }
+        if (path === "infra/k8s/base/scheduler-worker/configmap.yaml") {
+          return {
+            type: "file",
+            encoding: "base64",
+            content: encode(`apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scheduler-worker-config
+data:
+  COGNI_NODE_ENDPOINTS: "node-template=http://node-template-node-app:3000,b927a9dd-6132-4fc9-a51e-e3cee2568e3c=http://node-template-node-app:3000"
+`),
+          };
+        }
         if (path.startsWith("infra/k8s/overlays/")) {
           const env = path.split("/")[3];
           return {
@@ -1586,6 +1619,27 @@ node_port: 30200
             item.path.startsWith("infra/k8s/overlays/production/atlas/")
           )
         ).toBe(false);
+
+        // ROUTING DRIFT-GREEN PROOF (bug.5094): the publish PR MUST splice the new node into
+        // the shared base default AND every deploy env's provider-resolved map. Splicing base
+        // alone leaves the PR drift-red (render-scheduler-worker-endpoints.sh --check) and the
+        // node unrouted in preview/production. A birth is always k3s → in-cluster convention.
+        for (const routingPath of [
+          "infra/k8s/base/scheduler-worker/configmap.yaml",
+          "infra/k8s/overlays/candidate-a/scheduler-worker/node-endpoints.patch.yaml",
+          "infra/k8s/overlays/preview/scheduler-worker/node-endpoints.patch.yaml",
+          "infra/k8s/overlays/production/scheduler-worker/node-endpoints.patch.yaml",
+        ]) {
+          const routingEntry = tree.find((item) => item.path === routingPath);
+          expect(routingEntry, routingPath).toBeDefined();
+          const routing = blobs.get(routingEntry?.sha ?? "");
+          expect(routing, routingPath).toContain(
+            "atlas=http://atlas-node-app:3000,11111111-1111-4111-8111-111111111111=http://atlas-node-app:3000"
+          );
+          expect(routing, routingPath).toContain(
+            "node-template=http://node-template-node-app:3000"
+          );
+        }
 
         // ROSTER DRIFT-GREEN PROOF (#1957): the publish PR MUST splice the new node into the
         // committed web-node roster in the SAME tree as the catalog row it adds — else the
