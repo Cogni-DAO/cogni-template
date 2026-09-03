@@ -182,7 +182,6 @@ describe("renderXAkashWorkload", () => {
       renderXAkashWorkload(
         decl({
           services: [
-            // @ts-expect-error deliberately invalid visibility
             {
               name: "app",
               image: "img/a:1",
@@ -190,6 +189,7 @@ describe("renderXAkashWorkload", () => {
               memoryMi: 256,
               storageMi: 512,
               port: 3000,
+              // @ts-expect-error deliberately invalid visibility
               visibility: "world",
             },
           ],
