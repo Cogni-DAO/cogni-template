@@ -327,8 +327,8 @@ jobs:
         needs.reconcile-compute-egress.result == 'success'
       ) &&
       (
-        (needs.decide.outputs.has_k3s_node_targets == 'true' && needs.node-substrate.result == 'success') ||
-        (needs.decide.outputs.has_k3s_node_targets != 'true' && needs.node-substrate.result == 'skipped')
+        (needs.decide.outputs.has_node_targets == 'true' && needs.node-substrate.result == 'success') ||
+        (needs.decide.outputs.has_node_targets != 'true' && needs.node-substrate.result == 'skipped')
       )
     strategy:
       fail-fast: false
@@ -597,17 +597,21 @@ jobs:
           path: out/
           retention-days: 1
 
-  # Per-node substrate (materialize -> reconcile) per-env BEFORE pods, on EVERY env
-  # (Invariant 16). One job calls run-node-substrate.sh for each type:node target,
-  # uniform across candidate-a/preview/production with no special-case.
-  # Orchestration only; logic lives in run-node-substrate.sh.
+  # Per-node provider preflight on EVERY env (Invariant 16). All nodes materialize
+  # source:agent secrets. k3s then runs the full substrate reconcile; Akash runs
+  # read-only controller/credential/secret/egress assertions before promote-k8s
+  # writes a ComputeWorkload generation. Orchestration only; provider behavior
+  # lives in run-node-substrate.sh and the provider map comes from the typed planner.
   node-substrate:
     needs: [decide, reconcile-appset, reconcile-dns]
     if: |
       always() &&
-      needs.decide.outputs.has_k3s_node_targets == 'true' &&
+      needs.decide.outputs.has_node_targets == 'true' &&
       needs.reconcile-appset.result == 'success' &&
-      needs.reconcile-dns.result == 'success'
+      (
+        needs.reconcile-dns.result == 'success' ||
+        (needs.decide.outputs.has_k3s_node_targets != 'true' && needs.reconcile-dns.result == 'skipped')
+      )
     strategy:
       fail-fast: false
       # Same shared-VM SSH fan-out as reconcile-appset (run-node-substrate.sh
@@ -615,14 +619,14 @@ jobs:
       # trip sshd MaxStartups (see reconcile-appset above).
       max-parallel: 3
       matrix:
-        node: ${{ fromJson(needs.decide.outputs.k3s_node_targets_json) }}
+        node: ${{ fromJson(needs.decide.outputs.node_targets_json) }}
     concurrency:
       group: node-substrate-${{ needs.decide.outputs.environment }}-${{ matrix.node }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: ${{ needs.decide.outputs.environment }}
     env:
-      DEPLOYMENT_PROVIDER: k3s
+      DEPLOYMENT_PROVIDER: ${{ fromJSON(needs.decide.outputs.deployment_provider_by_target_json)[matrix.node] }}
     steps:
       - name: Checkout app source
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -674,7 +678,7 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -T 10 -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      - name: Run node substrate (materialize -> reconcile)
+      - name: Run node provider preflight
         env:
           VM_HOST: ${{ secrets.VM_HOST }}
           SSH_OPTS: "-i /home/runner/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=6"
@@ -691,8 +695,8 @@ jobs:
       needs.decide.outputs.has_targets == 'true' &&
       needs.promote-k8s.result == 'success' &&
       (
-        (needs.decide.outputs.has_k3s_node_targets == 'true' && needs.node-substrate.result == 'success') ||
-        (needs.decide.outputs.has_k3s_node_targets != 'true' && needs.node-substrate.result == 'skipped')
+        (needs.decide.outputs.has_node_targets == 'true' && needs.node-substrate.result == 'success') ||
+        (needs.decide.outputs.has_node_targets != 'true' && needs.node-substrate.result == 'skipped')
       )
     runs-on: ubuntu-latest
     needs: [decide, promote-k8s, node-substrate]
@@ -866,8 +870,8 @@ jobs:
       always() &&
       needs.promote-k8s.result == 'success' &&
       (
-        (needs.decide.outputs.has_k3s_node_targets == 'true' && needs.node-substrate.result == 'success') ||
-        (needs.decide.outputs.has_k3s_node_targets != 'true' && needs.node-substrate.result == 'skipped')
+        (needs.decide.outputs.has_node_targets == 'true' && needs.node-substrate.result == 'success') ||
+        (needs.decide.outputs.has_node_targets != 'true' && needs.node-substrate.result == 'skipped')
       ) &&
       (needs.deploy-infra.result == 'success' || needs.deploy-infra.result == 'skipped')
     strategy:

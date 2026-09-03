@@ -85,4 +85,21 @@ case "$seen_root" in
   *) echo "COGNI_CATALOG_ROOT must be exported ABSOLUTE to callees; got: $seen_root" >&2; exit 1 ;;
 esac
 
+# ── Case 5: external compute materializes + asserts, but never runs the k3s
+#    reconcile/DB-provision phase. Provider is supplied by the typed workflow map. ─
+mk_stub "$TMPROOT/mat.sh" materialize 0
+mk_stub "$TMPROOT/rec.sh" reconcile 0
+mk_stub "$TMPROOT/assert.sh" assert 0
+: > "$ORDER"
+DEPLOYMENT_PROVIDER=akash \
+RUN_NODE_SUBSTRATE_MATERIALIZE_BIN="$TMPROOT/mat.sh" \
+RUN_NODE_SUBSTRATE_RECONCILE_BIN="$TMPROOT/rec.sh" \
+RUN_NODE_SUBSTRATE_ASSERT_BIN="$TMPROOT/assert.sh" \
+  bash "$RUNNER" production toks4 >/dev/null
+got="$(paste -sd'|' - < "$ORDER")"
+want="materialize production toks4|assert production toks4"
+[ "$got" = "$want" ] || { echo "external phase mismatch:
+  got:  $got
+  want: $want" >&2; exit 1; }
+
 echo "PASS: run-node-substrate.test.sh"

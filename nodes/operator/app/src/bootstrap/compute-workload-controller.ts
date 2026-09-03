@@ -145,7 +145,7 @@ const secretResolver = new ComputeWorkloadSecretResolverAdapter(
   namespace
 );
 if (!apiKey) {
-  log.warn(
+  log.error(
     { reason: "ProviderCredentialMissing" },
     "compute_workload_controller_dormant"
   );
