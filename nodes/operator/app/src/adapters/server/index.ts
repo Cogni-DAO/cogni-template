@@ -97,8 +97,11 @@ export {
 } from "./compute/compute-workload-lifecycle.adapter";
 export { ComputeWorkloadSecretResolverAdapter } from "./compute/compute-workload-secret-resolver.adapter";
 export {
+  describeKubernetesError,
   KubernetesComputeWorkloadStateAdapter,
   KubernetesLeaseLeaderElector,
+  type LeadershipLoss,
+  type LeadershipLossReason,
   renewLeadershipOrFence,
 } from "./compute/kubernetes-compute-workload.adapter";
 export { createDefaultProviderOutcomeStore } from "./compute/provider-outcome-store";

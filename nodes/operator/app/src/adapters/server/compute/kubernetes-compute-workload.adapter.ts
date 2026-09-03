@@ -363,6 +363,10 @@ function toMicroTime(value: Date): Date {
 export class KubernetesLeaseLeaderElector {
   private leader = false;
   private epoch: string | undefined;
+  /** holderIdentity from the most recent successful Lease observation. */
+  private observedHolder: string | undefined;
+  /** Epoch-ms at which the most recently observed Lease stops being ours. */
+  private observedDeadlineMs: number | undefined;
 
   constructor(
     private readonly api: CoordinationV1Api,
@@ -378,6 +382,41 @@ export class KubernetesLeaseLeaderElector {
 
   currentEpoch(): string | undefined {
     return this.leader ? this.epoch : undefined;
+  }
+
+  /**
+   * Definitive evidence that a previously held Lease is gone — not merely unreachable.
+   * `undefined` means the last observation still shows us as holder inside the deadline,
+   * so a failed renew is a communication failure and the next tick may retry.
+   */
+  leadershipLoss(now = new Date()): LeadershipLoss | undefined {
+    if (this.observedHolder && this.observedHolder !== this.identity) {
+      return {
+        reason: "HolderChanged",
+        holderIdentity: this.observedHolder,
+        ...(this.observedDeadlineMs === undefined
+          ? {}
+          : { deadline: new Date(this.observedDeadlineMs).toISOString() }),
+      };
+    }
+    if (
+      this.observedDeadlineMs === undefined ||
+      now.getTime() > this.observedDeadlineMs
+    ) {
+      return {
+        reason: "LeaseExpired",
+        ...(this.observedHolder ? { holderIdentity: this.observedHolder } : {}),
+        ...(this.observedDeadlineMs === undefined
+          ? {}
+          : { deadline: new Date(this.observedDeadlineMs).toISOString() }),
+      };
+    }
+    return undefined;
+  }
+
+  private observe(holder: string | undefined, deadlineMs: number): void {
+    this.observedHolder = holder;
+    this.observedDeadlineMs = deadlineMs;
   }
 
   /** Live dispatch guard used after the per-resource CAS and immediately before provider I/O. */
@@ -410,11 +449,10 @@ export class KubernetesLeaseLeaderElector {
       existing = (await this.api.readNamespacedLease(this.name, this.namespace))
         .body;
     } catch (error) {
-      if (statusCode(error) !== 404) {
-        this.leader = false;
-        this.epoch = undefined;
-        throw error;
-      }
+      // A read failure says nothing about who holds the Lease. Leave the last
+      // observation intact so `leadershipLoss` can distinguish an unreachable API
+      // server from an actual loss, and let the caller decide.
+      if (statusCode(error) !== 404) throw error;
     }
 
     if (!existing) {
@@ -431,6 +469,10 @@ export class KubernetesLeaseLeaderElector {
         });
         this.leader = true;
         this.epoch = `0:${this.identity}`;
+        this.observe(
+          this.identity,
+          now.getTime() + this.leaseDurationSeconds * 1000
+        );
         return true;
       } catch (error) {
         if (statusCode(error) !== 409) throw error;
@@ -447,6 +489,7 @@ export class KubernetesLeaseLeaderElector {
     const duration =
       (existing.spec?.leaseDurationSeconds ?? this.leaseDurationSeconds) * 1000;
     const expired = now.getTime() > renewedAt + duration;
+    this.observe(holder, renewedAt + duration);
     if (holder !== this.identity && holder && !expired) {
       this.leader = false;
       this.epoch = undefined;
@@ -480,42 +523,80 @@ export class KubernetesLeaseLeaderElector {
       });
       this.leader = true;
       this.epoch = `${(existing.spec?.leaseTransitions ?? 0) + (transitioned ? 1 : 0)}:${this.identity}`;
+      this.observe(
+        this.identity,
+        now.getTime() + this.leaseDurationSeconds * 1000
+      );
       return true;
     } catch (error) {
+      // A lost write race is not a lost Lease: the read above still showed it as ours,
+      // so the next tick re-reads and either renews or observes the real new holder.
       if (statusCode(error) !== 409) throw error;
-      this.leader = false;
-      this.epoch = undefined;
       return false;
     }
   }
 }
 
+export type LeadershipLossReason = "LeaseExpired" | "HolderChanged";
+
+export interface LeadershipLoss {
+  readonly reason: LeadershipLossReason;
+  readonly holderIdentity?: string;
+  readonly deadline?: string;
+}
+
 export interface RenewableLeaderLease {
   isLeader(): boolean;
   acquireOrRenew(): Promise<boolean>;
+  leadershipLoss(now?: Date): LeadershipLoss | undefined;
 }
 
 /**
- * Renew a Lease and fence a process that previously held it on any loss signal.
+ * Renew a Lease, tolerating renewal failures until the observed Lease is provably gone.
+ *
+ * A thrown or unsuccessful renew is a *communication* failure — the Kubernetes API server
+ * dropping a connection under load says nothing about who holds the Lease, and with a 5s
+ * renew inside a 30s Lease roughly six attempts fit before another replica may take over.
+ * Only `leadershipLoss()` — a passed deadline, or a different `holderIdentity` — fences.
  * The runtime callback exits immediately: a stale process must never finish provider IO
  * while a replacement leader begins reconciling the same resource.
  */
 export async function renewLeadershipOrFence(
   lease: RenewableLeaderLease,
-  onLeadershipLost: (cause: unknown) => never
+  onLeadershipLost: (cause: unknown, loss: LeadershipLoss) => never,
+  onRenewDeferred?: (cause: unknown) => void
 ): Promise<boolean> {
   const previouslyHeld = lease.isLeader();
-  let renewed: boolean;
+  let cause: unknown;
   try {
-    renewed = await lease.acquireOrRenew();
+    if (await lease.acquireOrRenew()) return true;
+    cause = new Error("Kubernetes Lease renew did not succeed");
   } catch (error) {
-    if (previouslyHeld) return onLeadershipLost(error);
-    throw error;
+    if (!previouslyHeld) throw error;
+    cause = error;
   }
-  if (previouslyHeld && !renewed) {
-    return onLeadershipLost(
-      new Error("previously held Kubernetes Lease was not renewed")
-    );
-  }
-  return renewed;
+  if (!previouslyHeld) return false;
+
+  const loss = lease.leadershipLoss();
+  if (loss) return onLeadershipLost(cause, loss);
+  onRenewDeferred?.(cause);
+  return false;
+}
+
+/** Loggable shape of a Kubernetes client failure — name alone is not diagnosable. */
+export function describeKubernetesError(error: unknown): {
+  causeType: string;
+  causeMessage: string;
+  causeStatus?: number;
+  causeReason?: string;
+} {
+  const status = statusCode(error);
+  const reason = (error as { body?: { reason?: unknown } } | null | undefined)
+    ?.body?.reason;
+  return {
+    causeType: error instanceof Error ? error.name : typeof error,
+    causeMessage: error instanceof Error ? error.message : String(error),
+    ...(status === undefined ? {} : { causeStatus: status }),
+    ...(typeof reason === "string" ? { causeReason: reason } : {}),
+  };
 }

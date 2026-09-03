@@ -22,6 +22,7 @@ import {
   ComputeWorkloadSecretResolverAdapter,
   DormantComputeWorkloadDnsAdapter,
   DormantComputeWorkloadLifecycleAdapter,
+  describeKubernetesError,
   KubernetesComputeWorkloadStateAdapter,
   KubernetesLeaseLeaderElector,
   renewLeadershipOrFence,
@@ -177,30 +178,44 @@ createServer(async (request, response) => {
 
 async function renewLeadership(): Promise<void> {
   try {
-    await renewLeadershipOrFence(leader, (cause) => {
-      kubeReachable = false;
-      leaderGauge.set(0);
-      log.fatal(
-        {
-          reason: "LeadershipLost",
-          causeType: cause instanceof Error ? cause.name : "unknown",
-        },
-        "compute_workload_leadership_lost_process_fenced"
-      );
-      // Immediate fencing is intentional. In-flight mutations already have a durable
-      // attempt marker, so restart fails closed instead of allowing two leaders to write.
-      process.exit(1);
-    });
-    kubeReachable = true;
+    const renewed = await renewLeadershipOrFence(
+      leader,
+      (cause, loss) => {
+        kubeReachable = false;
+        leaderGauge.set(0);
+        log.fatal(
+          {
+            reason: "LeadershipLost",
+            loss: loss.reason,
+            ...(loss.holderIdentity
+              ? { holderIdentity: loss.holderIdentity }
+              : {}),
+            ...(loss.deadline ? { leaseDeadline: loss.deadline } : {}),
+            ...describeKubernetesError(cause),
+          },
+          "compute_workload_leadership_lost_process_fenced"
+        );
+        // Fencing on a *proven* loss is intentional. In-flight mutations already have a
+        // durable attempt marker, so restart fails closed instead of letting two leaders write.
+        process.exit(1);
+      },
+      (cause) => {
+        // The Lease is still ours inside its deadline; the API server is just unreachable.
+        // Stop reporting ready, keep leadership, and let the next 5s tick retry.
+        kubeReachable = false;
+        log.warn(
+          { reason: "LeaderRenewDeferred", ...describeKubernetesError(cause) },
+          "compute_workload_leader_renew_deferred"
+        );
+      }
+    );
+    if (renewed) kubeReachable = true;
     leaderGauge.set(leader.isLeader() ? 1 : 0);
   } catch (error) {
     kubeReachable = false;
     leaderGauge.set(0);
     log.error(
-      {
-        reason: "LeaderRenewFailed",
-        causeType: error instanceof Error ? error.name : "unknown",
-      },
+      { reason: "LeaderRenewFailed", ...describeKubernetesError(error) },
       "compute_workload_leader_renew_failed"
     );
   }
@@ -285,7 +300,7 @@ async function reconcileAll(): Promise<void> {
             log.error(
               {
                 reason: "ReconcileFailed",
-                causeType: error instanceof Error ? error.name : "unknown",
+                ...describeKubernetesError(error),
                 ...labels,
                 durationMs: Date.now() - started,
               },
@@ -300,10 +315,7 @@ async function reconcileAll(): Promise<void> {
   } catch (error) {
     kubeReachable = false;
     log.error(
-      {
-        reason: "ListFailed",
-        causeType: error instanceof Error ? error.name : "unknown",
-      },
+      { reason: "ListFailed", ...describeKubernetesError(error) },
       "compute_workload_list_failed"
     );
   } finally {

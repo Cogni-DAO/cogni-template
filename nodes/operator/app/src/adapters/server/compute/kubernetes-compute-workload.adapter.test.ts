@@ -18,8 +18,10 @@ import { parse, parseDocument } from "yaml";
 import type { ComputeWorkload } from "@/ports";
 
 import {
+  describeKubernetesError,
   KubernetesComputeWorkloadStateAdapter,
   KubernetesLeaseLeaderElector,
+  type LeadershipLoss,
   renewLeadershipOrFence,
 } from "./kubernetes-compute-workload.adapter";
 
@@ -489,30 +491,213 @@ describe("KubernetesLeaseLeaderElector", () => {
   });
 });
 
-describe("renewLeadershipOrFence", () => {
-  it("immediately fences a process that loses its previously-held lease", async () => {
-    const fenced = new Error("process fenced");
-    const onLeadershipLost = vi.fn((): never => {
-      throw fenced;
-    });
-    const lease = {
-      isLeader: () => true,
-      acquireOrRenew: vi.fn(async () => false),
+describe("KubernetesLeaseLeaderElector transient-failure tolerance", () => {
+  function heldLease(renewTime: string): V1Lease {
+    return {
+      metadata: { resourceVersion: "11" },
+      spec: {
+        holderIdentity: "pod-a",
+        renewTime: new Date(renewTime),
+        leaseDurationSeconds: 30,
+        leaseTransitions: 1,
+      },
     };
+  }
 
-    await expect(renewLeadershipOrFence(lease, onLeadershipLost)).rejects.toBe(
-      fenced
+  it("keeps leadership across consecutive read failures inside the lease deadline", async () => {
+    const lease = heldLease("2026-09-01T12:00:00.000Z");
+    let failing = false;
+    const api = {
+      readNamespacedLease: vi.fn(async () => {
+        if (failing) throw apiError(500);
+        return { body: lease };
+      }),
+      replaceNamespacedLease: vi.fn(async () => ({ body: lease })),
+    } as unknown as CoordinationV1Api;
+    const elector = new KubernetesLeaseLeaderElector(
+      api,
+      "cogni-production",
+      "compute-workload-controller",
+      "pod-a"
     );
-    expect(onLeadershipLost).toHaveBeenCalledOnce();
-    expect(onLeadershipLost).toHaveBeenCalledWith(expect.any(Error));
+
+    await expect(
+      elector.acquireOrRenew(new Date("2026-09-01T12:00:01.000Z"))
+    ).resolves.toBe(true);
+
+    failing = true;
+    // Five consecutive 5s ticks — the whole window a 30s lease can absorb.
+    for (let tick = 1; tick <= 5; tick += 1) {
+      const now = new Date(
+        Date.parse("2026-09-01T12:00:01.000Z") + tick * 5_000
+      );
+      await expect(elector.acquireOrRenew(now)).rejects.toMatchObject({
+        statusCode: 500,
+      });
+      expect(elector.isLeader()).toBe(true);
+      expect(elector.leadershipLoss(now)).toBeUndefined();
+    }
   });
 
-  it("fences a prior leader when renewal errors but not an ordinary follower", async () => {
-    const failure = new Error("API unavailable past lease deadline");
-    const fenced = new Error("process fenced");
-    const priorLeaderFence = vi.fn((): never => {
-      throw fenced;
+  it("reports LeaseExpired once the observed deadline passes without a renew", () => {
+    const api = {} as unknown as CoordinationV1Api;
+    const elector = new KubernetesLeaseLeaderElector(
+      api,
+      "cogni-production",
+      "compute-workload-controller",
+      "pod-a"
+    );
+
+    // Never observed: fail closed rather than assume leadership.
+    expect(
+      elector.leadershipLoss(new Date("2026-09-01T12:00:00.000Z"))
+    ).toEqual({ reason: "LeaseExpired" });
+  });
+
+  it("expires leadership when the deadline passes and detects a different holder", async () => {
+    const lease = heldLease("2026-09-01T12:00:00.000Z");
+    let current: V1Lease = lease;
+    let failing = false;
+    const api = {
+      readNamespacedLease: vi.fn(async () => {
+        if (failing) throw apiError(503);
+        return { body: current };
+      }),
+      replaceNamespacedLease: vi.fn(async () => ({ body: current })),
+    } as unknown as CoordinationV1Api;
+    const elector = new KubernetesLeaseLeaderElector(
+      api,
+      "cogni-production",
+      "compute-workload-controller",
+      "pod-a"
+    );
+
+    await elector.acquireOrRenew(new Date("2026-09-01T12:00:01.000Z"));
+    expect(
+      elector.leadershipLoss(new Date("2026-09-01T12:00:30.000Z"))
+    ).toBeUndefined();
+    failing = true;
+    await expect(
+      elector.acquireOrRenew(new Date("2026-09-01T12:00:32.000Z"))
+    ).rejects.toMatchObject({ statusCode: 503 });
+    expect(
+      elector.leadershipLoss(new Date("2026-09-01T12:00:32.000Z"))
+    ).toEqual({
+      reason: "LeaseExpired",
+      holderIdentity: "pod-a",
+      deadline: "2026-09-01T12:00:31.000Z",
     });
+
+    // The API server recovers and another replica now holds the lease.
+    failing = false;
+    current = {
+      metadata: { resourceVersion: "12" },
+      spec: {
+        holderIdentity: "pod-b",
+        renewTime: new Date("2026-09-01T12:00:35.000Z"),
+        leaseDurationSeconds: 30,
+        leaseTransitions: 2,
+      },
+    };
+    await expect(
+      elector.acquireOrRenew(new Date("2026-09-01T12:00:36.000Z"))
+    ).resolves.toBe(false);
+    expect(elector.isLeader()).toBe(false);
+    expect(
+      elector.leadershipLoss(new Date("2026-09-01T12:00:36.000Z"))
+    ).toMatchObject({ reason: "HolderChanged", holderIdentity: "pod-b" });
+  });
+
+  it("treats a lost replace race as transient rather than a lost lease", async () => {
+    const lease = heldLease("2026-09-01T12:00:00.000Z");
+    let conflict = false;
+    const api = {
+      readNamespacedLease: vi.fn(async () => ({ body: lease })),
+      replaceNamespacedLease: vi.fn(async () => {
+        if (conflict) throw apiError(409);
+        return { body: lease };
+      }),
+    } as unknown as CoordinationV1Api;
+    const elector = new KubernetesLeaseLeaderElector(
+      api,
+      "cogni-production",
+      "compute-workload-controller",
+      "pod-a"
+    );
+
+    await elector.acquireOrRenew(new Date("2026-09-01T12:00:01.000Z"));
+    conflict = true;
+    await expect(
+      elector.acquireOrRenew(new Date("2026-09-01T12:00:06.000Z"))
+    ).resolves.toBe(false);
+    expect(
+      elector.leadershipLoss(new Date("2026-09-01T12:00:06.000Z"))
+    ).toBeUndefined();
+  });
+});
+
+describe("renewLeadershipOrFence", () => {
+  function fenceCallback(): {
+    fence: (cause: unknown, loss: LeadershipLoss) => never;
+    calls: Array<{ cause: unknown; loss: LeadershipLoss }>;
+    fenced: Error;
+  } {
+    const calls: Array<{ cause: unknown; loss: LeadershipLoss }> = [];
+    const fenced = new Error("process fenced");
+    return {
+      calls,
+      fenced,
+      fence: (cause, loss) => {
+        calls.push({ cause, loss });
+        throw fenced;
+      },
+    };
+  }
+
+  it("defers instead of fencing while renewal fails inside the lease deadline", async () => {
+    const failure = apiError(500);
+    const { fence, calls } = fenceCallback();
+    const deferred: unknown[] = [];
+    const lease = {
+      isLeader: () => true,
+      acquireOrRenew: vi.fn(async () => {
+        throw failure;
+      }),
+      leadershipLoss: () => undefined,
+    };
+
+    for (let tick = 0; tick < 5; tick += 1) {
+      await expect(
+        renewLeadershipOrFence(lease, fence, (cause) => deferred.push(cause))
+      ).resolves.toBe(false);
+    }
+    expect(calls).toHaveLength(0);
+    expect(deferred).toEqual([failure, failure, failure, failure, failure]);
+    expect(lease.isLeader()).toBe(true);
+  });
+
+  it("defers an unsuccessful renew that is not a proven loss", async () => {
+    const { fence, calls } = fenceCallback();
+    const deferred: unknown[] = [];
+    await expect(
+      renewLeadershipOrFence(
+        {
+          isLeader: () => true,
+          acquireOrRenew: async () => false,
+          leadershipLoss: () => undefined,
+        },
+        fence,
+        (cause) => deferred.push(cause)
+      )
+    ).resolves.toBe(false);
+    expect(calls).toHaveLength(0);
+    expect(deferred[0]).toBeInstanceOf(Error);
+  });
+
+  it("fences when renewal fails past the lease deadline", async () => {
+    const failure = apiError(503);
+    const { fence, calls, fenced } = fenceCallback();
+    const deferred: unknown[] = [];
     await expect(
       renewLeadershipOrFence(
         {
@@ -520,24 +705,92 @@ describe("renewLeadershipOrFence", () => {
           acquireOrRenew: async () => {
             throw failure;
           },
+          leadershipLoss: () => ({
+            reason: "LeaseExpired" as const,
+            deadline: "2026-09-01T12:00:31.000Z",
+          }),
         },
-        priorLeaderFence
+        fence,
+        (cause) => deferred.push(cause)
       )
     ).rejects.toBe(fenced);
-    expect(priorLeaderFence).toHaveBeenCalledWith(failure);
+    expect(deferred).toEqual([]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.cause).toBe(failure);
+    expect(calls[0]?.loss.reason).toBe("LeaseExpired");
+  });
 
-    const followerFence = vi.fn((): never => {
-      throw new Error("follower must not be fenced");
+  it("fences immediately when another identity holds the lease, deadline notwithstanding", async () => {
+    const { fence, calls, fenced } = fenceCallback();
+    const deferred: unknown[] = [];
+    await expect(
+      renewLeadershipOrFence(
+        {
+          isLeader: () => true,
+          acquireOrRenew: async () => false,
+          leadershipLoss: () => ({
+            reason: "HolderChanged" as const,
+            holderIdentity: "pod-b",
+            // Deadline is still in the future; the holder change alone fences.
+            deadline: "2999-01-01T00:00:00.000Z",
+          }),
+        },
+        fence,
+        (cause) => deferred.push(cause)
+      )
+    ).rejects.toBe(fenced);
+    expect(deferred).toEqual([]);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.loss).toMatchObject({
+      reason: "HolderChanged",
+      holderIdentity: "pod-b",
     });
+  });
+
+  it("never fences an ordinary follower and propagates its renewal error", async () => {
+    const failure = apiError(500);
+    const { fence, calls } = fenceCallback();
+    await expect(
+      renewLeadershipOrFence(
+        {
+          isLeader: () => false,
+          acquireOrRenew: async () => {
+            throw failure;
+          },
+          leadershipLoss: () => ({ reason: "LeaseExpired" as const }),
+        },
+        fence
+      )
+    ).rejects.toBe(failure);
     await expect(
       renewLeadershipOrFence(
         {
           isLeader: () => false,
           acquireOrRenew: async () => false,
+          leadershipLoss: () => ({ reason: "LeaseExpired" as const }),
         },
-        followerFence
+        fence
       )
     ).resolves.toBe(false);
-    expect(followerFence).not.toHaveBeenCalled();
+    expect(calls).toHaveLength(0);
+  });
+});
+
+describe("describeKubernetesError", () => {
+  it("carries the message, HTTP status, and API reason a fence log needs", () => {
+    const error = Object.assign(new Error("socket hang up"), {
+      statusCode: 500,
+      body: { reason: "InternalError" },
+    });
+    expect(describeKubernetesError(error)).toEqual({
+      causeType: "Error",
+      causeMessage: "socket hang up",
+      causeStatus: 500,
+      causeReason: "InternalError",
+    });
+    expect(describeKubernetesError("boom")).toEqual({
+      causeType: "string",
+      causeMessage: "boom",
+    });
   });
 });
