@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 // SPDX-FileCopyrightText: 2026 Cogni-DAO
 //
-// Mock Akash Console compute API for the provider-akash demo. Extends the spike
-// mock (experiments/crossplane-akash/mock/server.js) with ONE route the custom
-// provider's crash-safe adoption path needs:
+// Mock Akash Console compute API for the provider-akash demo. Adds the ONE route
+// the custom provider's crash-safe adoption path needs (the provider-http spike
+// that preceded this is in git history + Dolt `crossplane-akash-spike-proven`):
 //
 //   GET /api/v1/compute/deployments?nodeId=<key>  -> { deployment: <active|null> }
 //
