@@ -378,7 +378,10 @@ exit 1
 EOF
 chmod +x "$EXTERNAL_BIN/kubectl"
 EXTERNAL_ALLOWLIST="$TMPROOT/compute-egress-allowlist"
-printf '%s\n' '80.200.246.35/32' > "$EXTERNAL_ALLOWLIST"
+# Mirror render-compute-egress-allowlist.sh output exactly: "<cidr>:<ports>".
+# The previous bare-CIDR fixture did not match the renderer, which is how a
+# whole-line `grep -Fx` shipped and failed closed on every real host.
+printf '%s\n' '80.200.246.35/32:5432,5435,6379,4000,7233' > "$EXTERNAL_ALLOWLIST"
 EXTERNAL_ENV=(
   TARGET=toks4
   DEPLOYMENT_PROVIDER=akash
