@@ -50,6 +50,7 @@ declare -A _image_tags_node_id_cache=()
 declare -A _image_tags_type_cache=()
 declare -A _image_tags_pathprefix_cache=()
 declare -A _image_tags_source_repo_cache=()
+declare -A _image_tags_provider_cache=()
 for _t in "${ALL_TARGETS[@]}"; do
   _ty=$(yq -N '.type' "${_image_tags_catalog_root}/${_t}.yaml")
   _image_tags_type_cache["$_t"]="$_ty"
@@ -66,6 +67,10 @@ for _t in "${ALL_TARGETS[@]}"; do
   _image_tags_pathprefix_cache["$_t"]="$_pp"
   _sr=$(yq -N '.source_repo // ""' "${_image_tags_catalog_root}/${_t}.yaml")
   _image_tags_source_repo_cache["$_t"]="$_sr"
+  # Per-env PLACEMENT (story.5016 `deployment_provider`), cached as an
+  # `env=provider;env=provider` string so a lookup costs no extra yq.
+  _dp=$(yq -N '.deployment_provider // {} | to_entries | map(.key + "=" + .value) | join(";")' "${_image_tags_catalog_root}/${_t}.yaml")
+  _image_tags_provider_cache["$_t"]="$_dp"
   _rs="${_image_tags_spec_root}/${_pp}.cogni/repo-spec.yaml"
   if [ -n "$_pp" ] && [ -f "$_rs" ]; then
     # In-repo node: repo-spec is the readable identity SSOT (REPO_SPEC_IS_IDENTITY_SSOT).
@@ -78,12 +83,58 @@ for _t in "${ALL_TARGETS[@]}"; do
   fi
   _image_tags_node_id_cache["$_t"]="$_nid"
 done
-unset _t _ty _s _p _np _pp _sr _rs _nid
+unset _t _ty _s _p _np _pp _sr _dp _rs _nid
 
 # True for type:infra targets — built in CI but deployed via Compose-on-VM,
 # not k8s/Argo. Overlay / promotion / gitops-coverage loops skip these.
 is_infra_target() {
   [ "${_image_tags_type_cache[$1]:-}" = "infra" ]
+}
+
+# Resolve a target's operator-owned placement for one environment (story.5016).
+# Shell twin of resolveNodeDeploymentProvider() in
+# nodes/operator/app/src/features/compute/node-deployment-provider.ts — ONE
+# placement reader per language, same semantics, so a shell lane can never
+# disagree with the typed planner that drives the flight/promote matrices.
+#
+# K3S_IS_DEFAULT: an absent per-env override resolves to `k3s`, the pre-existing
+# in-cluster lane. Only environments the catalog actually declares divert.
+#   deployment_provider_for_target TARGET ENV   # → k3s | akash
+deployment_provider_for_target() {
+  local target="$1" env="${2:-}" map rest provider
+  if [ -z "${_image_tags_provider_cache[$target]+x}" ]; then
+    echo "[ERROR] image-tags: unknown target: $target" >&2
+    return 1
+  fi
+  if [ -z "$env" ]; then
+    echo "[ERROR] image-tags: deployment_provider_for_target requires an environment for '$target'" >&2
+    return 1
+  fi
+  provider="k3s"
+  map=";${_image_tags_provider_cache[$target]};"
+  case "$map" in
+    *";${env}="*)
+      rest="${map#*";${env}="}"
+      provider="${rest%%;*}"
+      ;;
+  esac
+  case "$provider" in
+    k3s|akash) printf '%s' "$provider" ;;
+    *)
+      echo "[ERROR] image-tags: unsupported deployment_provider '$provider' for '$target' in env '$env' (expected k3s|akash)" >&2
+      return 1
+      ;;
+  esac
+}
+
+# True when <target> deploys to <env> through the in-cluster k3s/Argo lane, i.e.
+# the env VM owns its address, workload, and substrate. False for an externally
+# placed node (akash), whose ComputeWorkload controller owns those instead.
+#   is_k3s_placed TARGET ENV
+is_k3s_placed() {
+  local provider
+  provider="$(deployment_provider_for_target "$1" "$2")" || return 1
+  [ "$provider" = "k3s" ]
 }
 
 canonical_github_repo_key() {
