@@ -1,5 +1,15 @@
-// SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2026 Cogni-DAO
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@infra/crossplane/mock/server`
+ * Purpose: In-memory mock of the Akash Console compute API for the provider-akash kind demo, serving the by-key adoption lookup the crash-safe Observe path relies on.
+ * Scope: Local demo test-double only; no real escrow, no external network, not production.
+ * Invariants: Idempotent on the deterministic node key — a replayed create returns the same lease, never a second.
+ * Side-effects: IO (in-memory store; an optional HTTP listener when run as a standalone server).
+ * Links: infra/crossplane/README.md, infra/crossplane/provider-akash/internal/console/client.go
+ * @internal
+ */
 //
 // Mock Akash Console compute API for the provider-akash demo. Adds the ONE route
 // the custom provider's crash-safe adoption path needs (the provider-http spike

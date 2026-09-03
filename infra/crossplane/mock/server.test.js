@@ -1,5 +1,15 @@
-// SPDX-License-Identifier: Apache-2.0
-// SPDX-FileCopyrightText: 2026 Cogni-DAO
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@infra/crossplane/mock/server.test`
+ * Purpose: Unit tests for the mock Akash Console compute API, proving the no-double-spend idempotency and the by-key adoption lookup the crash-safe provider Observe depends on.
+ * Scope: Local demo test-double only; runs on the Node built-in test runner and does not hit the network.
+ * Invariants: A replayed create returns the same lease (distinct-lease count unchanged); release is idempotent; by-key lookup is deterministic.
+ * Side-effects: IO (spins the in-memory store; asserts via the Node test runner).
+ * Links: infra/crossplane/mock/server.js, infra/crossplane/README.md
+ * @internal
+ */
 //
 // Unit tests for the mock Akash Console compute API.
 // Run: node --test   (Node >= 18, built-in test runner)
