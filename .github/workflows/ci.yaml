@@ -434,6 +434,9 @@ jobs:
       - name: node overlay renderer tests
         run: bash scripts/ci/tests/render-node-overlays.test.sh
 
+      - name: operator rollout strategy tests
+        run: bash scripts/ci/tests/operator-rollout-strategy.test.sh
+
       - name: scheduler runtime routing tests
         run: bash scripts/ci/tests/scheduler-runtime-routing.test.sh
 
