@@ -303,14 +303,69 @@ node_database_csv() {
   done
 }
 
+# Operator-owned per-environment app placement, read from the ONE place the
+# catalog already declares it (`deployment_provider.<env>`, infra/catalog/_schema.json).
+# Absent = k3s, byte-for-byte the same default as resolveNodeDeploymentProvider()
+# in nodes/operator/app/src/features/compute/node-deployment-provider.ts.
+# PLACEMENT_IS_NOT_A_SECOND_LIST: never enumerate "the akash nodes" anywhere —
+# derive placement from the row, so adding/moving a node is one catalog edit.
+deployment_provider_for_target() {
+  local node="$1" env="$2" provider
+  if [ -z "${_image_tags_primary_cache[$node]+x}" ]; then
+    echo "[ERROR] image-tags: unknown target: $node" >&2
+    return 1
+  fi
+  [ -n "$env" ] || { echo "[ERROR] image-tags: deployment_provider_for_target needs an env" >&2; return 1; }
+  provider=$(yq -N ".deployment_provider.\"${env}\" // \"k3s\"" "${_image_tags_catalog_root}/${node}.yaml")
+  [ -n "$provider" ] && [ "$provider" != "null" ] || provider="k3s"
+  case "$provider" in
+    k3s|akash) printf '%s' "$provider" ;;
+    *)
+      echo "[ERROR] image-tags: unsupported deployment_provider '$provider' for '$node' in env '$env'" >&2
+      return 1
+      ;;
+  esac
+}
+
+# bug.5094 — the address a CHERRY-RESIDENT caller must dial to reach a node's app.
+# Placement decides the address, not the caller:
+#   k3s   → the in-cluster Service DNS convention (unchanged; do not regress the fleet)
+#   akash → the node's public canonical URL, i.e. the SAME host the ComputeWorkload
+#           publishes (computeWorkloadPublicHost → hostForNode → host_for_node here),
+#           because a node that left the cluster has no `<slug>-node-app` Service.
+# `domain` is the env's public domain (domain_for_env in scripts/setup/lib/fork-identity.sh);
+# only akash rows need it, so a pure-k3s render may pass "".
+node_app_url_for_target() {
+  local node="$1" env="$2" domain="${3:-}" provider
+  provider="$(deployment_provider_for_target "$node" "$env")" || return 1
+  if [ "$provider" = "akash" ]; then
+    if [ -z "$domain" ]; then
+      echo "[ERROR] image-tags: node '$node' is deployment_provider=akash in '$env' but no domain was supplied to resolve its public URL" >&2
+      return 1
+    fi
+    printf 'https://%s' "$(host_for_node "$node" "$domain")"
+  else
+    printf 'http://%s-node-app:3000' "$node"
+  fi
+}
+
 node_internal_service_endpoint_csv() {
   # Routing (NOT build): the scheduler-worker must poll a queue per repo-spec UUID for
   # EVERY catalog type:node, including submodule nodes this repo does not build.
   # `is_built_by_this_repo` is a build-target filter and belongs only in build selection.
-  local sep="" node node_id url
+  #
+  # With no args this renders the PLACEMENT-DEFAULT (all-k3s) map that lives in the
+  # kustomize BASE ConfigMap — a base default, exactly like TEMPORAL_NAMESPACE and
+  # IMAGE_DIGEST there. With `<env> <domain>` it renders the env's PROVIDER-RESOLVED
+  # map that the per-env overlay patches in, which is the value that reaches a cluster.
+  local env="${1:-}" domain="${2:-}" sep="" node node_id url
   for node in "${NODE_TARGETS[@]}"; do
     node_id="$(node_id_for_target "$node")" || return 1
-    url="http://${node}-node-app:3000"
+    if [ -n "$env" ]; then
+      url="$(node_app_url_for_target "$node" "$env" "$domain")" || return 1
+    else
+      url="http://${node}-node-app:3000"
+    fi
     printf '%s%s=%s,%s=%s' "$sep" "$node" "$url" "$node_id" "$url"
     sep=","
   done
@@ -319,11 +374,23 @@ node_internal_service_endpoint_csv() {
 node_billing_endpoint_csv() {
   # Routing (NOT build): billing attribution resolves a node_id per catalog type:node
   # for EVERY node, submodule or not. Build filtering does not belong here.
-  local host="$1" sep="" node node_id port url
+  #
+  # LiteLLM runs in Compose on the env VM, so a k3s node is reached at the VM's
+  # NodePort. bug.5094: an akash node has no NodePort on that VM — it is reached at
+  # its public URL, resolved from the same catalog placement as every other consumer.
+  local host="$1" env="${2:-}" domain="${3:-}" sep="" node node_id port url provider
   for node in "${NODE_TARGETS[@]}"; do
     node_id="$(node_id_for_target "$node")" || return 1
-    port="$(node_port_for_target "$node")" || return 1
-    url="http://${host}:${port}"
+    provider="k3s"
+    if [ -n "$env" ]; then
+      provider="$(deployment_provider_for_target "$node" "$env")" || return 1
+    fi
+    if [ "$provider" = "akash" ]; then
+      url="$(node_app_url_for_target "$node" "$env" "$domain")" || return 1
+    else
+      port="$(node_port_for_target "$node")" || return 1
+      url="http://${host}:${port}"
+    fi
     printf '%s%s=%s,%s=%s' "$sep" "$node" "$url" "$node_id" "$url"
     sep=","
   done
