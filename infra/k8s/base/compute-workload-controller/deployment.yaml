@@ -1,0 +1,86 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2026 Cogni-DAO
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: compute-workload-controller
+  annotations:
+    reloader.stakater.com/auto: "true"
+  labels:
+    app.kubernetes.io/name: compute-workload-controller
+    app.kubernetes.io/part-of: cogni
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: compute-workload-controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: compute-workload-controller
+        app.kubernetes.io/part-of: cogni
+    spec:
+      serviceAccountName: compute-workload-controller
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: controller
+          image: ghcr.io/cogni-dao/cogni-template:placeholder
+          imagePullPolicy: IfNotPresent
+          command:
+            [node, /app/nodes/operator/app/compute-workload-controller.mjs]
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef: { fieldPath: metadata.namespace }
+            - name: CONTROLLER_ENVIRONMENT
+              value: replace-in-overlay
+            - name: DEPLOYMENT_DOMAIN
+              value: replace-in-overlay
+            - name: AKASH_ALLOWED_PROVIDERS
+              value: ""
+            - name: AKASH_CONSOLE_API_KEY_FILE
+              value: /var/run/secrets/compute/AKASH_CONSOLE_API_KEY
+          ports:
+            - name: metrics
+              containerPort: 9090
+          volumeMounts:
+            - name: compute-provider-credentials
+              mountPath: /var/run/secrets/compute
+              readOnly: true
+          resources:
+            requests: { cpu: 50m, memory: 96Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+            readOnlyRootFilesystem: true
+          livenessProbe:
+            httpGet: { path: /livez, port: metrics }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet: { path: /readyz, port: metrics }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: compute-provider-credentials
+          projected:
+            sources:
+              - secret:
+                  name: operator-env-secrets
+                  # The shared controller can start without provider credentials so
+                  # k3s-only environments remain ready. Missing credentials log at
+                  # error level, and every catalog-selected Akash preflight fails
+                  # before desired-state mutation until this key is present.
+                  optional: true
+                  items:
+                    - key: AKASH_CONSOLE_API_KEY
+                      path: AKASH_CONSOLE_API_KEY
+                    - key: CLOUDFLARE_API_TOKEN
+                      path: CLOUDFLARE_API_TOKEN
+                    - key: CLOUDFLARE_ZONE_ID
+                      path: CLOUDFLARE_ZONE_ID

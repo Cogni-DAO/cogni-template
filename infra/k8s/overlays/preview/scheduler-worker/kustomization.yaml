@@ -13,9 +13,16 @@ resources:
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:746f754383ab1838d1be21c188b423e214a7370b19a7b07edb6f0f8f38ed15a0"
+    digest: "sha256:303c2d9dff5279981837ca9172b765a7411a2f40554003d4c9d79e54d74140fe"
 
 patches:
+  # GENERATED sibling (render-scheduler-worker-endpoints.sh): this env's
+  # PROVIDER-RESOLVED COGNI_NODE_ENDPOINTS. bug.5094 — a node placed on akash has
+  # no in-cluster Service, so its address is env-variant and belongs here, not in
+  # the shared base. Listed first so the base default is replaced before the
+  # env-specific ops below apply.
+  - path: node-endpoints.patch.yaml
+
   # Patch ConfigMap with staging-specific values
   - target:
       kind: ConfigMap
