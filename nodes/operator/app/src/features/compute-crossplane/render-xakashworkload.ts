@@ -102,7 +102,9 @@ export function renderXAkashWorkload(
       );
     }
     if (seen.has(s.name)) {
-      throw new Error(`renderXAkashWorkload: duplicate service name ${JSON.stringify(s.name)}`);
+      throw new Error(
+        `renderXAkashWorkload: duplicate service name ${JSON.stringify(s.name)}`
+      );
     }
     seen.add(s.name);
     if (!s.image || s.image.trim() === "") {
@@ -136,6 +138,16 @@ export function renderXAkashWorkload(
       visibility: s.visibility,
     };
   });
+
+  // Akash exposes exactly one global ingress per lease, and the operator's
+  // ComputeWorkload CRD enforces the same — mirror that invariant here so a bad
+  // declaration fails at render time, not at reconcile time.
+  const publicCount = services.filter((s) => s.visibility === "public").length;
+  if (publicCount !== 1) {
+    throw new Error(
+      `renderXAkashWorkload: exactly one public service is required (found ${publicCount})`
+    );
+  }
 
   return {
     apiVersion: "compute.cogni.io/v1alpha1",
