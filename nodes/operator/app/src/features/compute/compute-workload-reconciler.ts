@@ -1274,6 +1274,20 @@ function attemptFromReceipt(
   };
 }
 
+function isReplaySafeKnownFailure(
+  receipt: ComputeWorkloadAttemptReceipt | undefined
+): receipt is ComputeWorkloadAttemptReceipt & {
+  readonly operation: "create" | "recover";
+  readonly outcome: "known_failure";
+  readonly resource?: undefined;
+} {
+  return (
+    receipt?.outcome === "known_failure" &&
+    receipt.resource === undefined &&
+    (receipt.operation === "create" || receipt.operation === "recover")
+  );
+}
+
 async function recoverUncertainAllocation(
   deps: ComputeWorkloadReconcileDeps,
   resource: ComputeWorkload,
@@ -1493,6 +1507,10 @@ export async function reconcileComputeWorkload(
       !receipt.allocationCursor
     ) {
       // The cursor is persisted before POST, so this state proves provider I/O did not start.
+      await mutate(deps, resource, receipt.operation, receipt.ordinal);
+      return;
+    }
+    if (isReplaySafeKnownFailure(receipt)) {
       await mutate(deps, resource, receipt.operation, receipt.ordinal);
       return;
     }

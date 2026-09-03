@@ -7,6 +7,7 @@ import {
   COMPUTE_WORKLOAD_FINALIZER,
   ComputeLifecycleError,
   type ComputeWorkload,
+  type ComputeWorkloadAttemptReceipt,
   type ComputeWorkloadDnsPort,
   type ComputeWorkloadLifecyclePort,
   type ComputeWorkloadSecretResolverPort,
@@ -14,6 +15,7 @@ import {
   type ComputeWorkloadStatus,
   computeWorkloadIdempotencyKey,
   decodeAttemptReceipt,
+  encodeAttemptReceipt,
 } from "@/ports";
 import {
   type ComputeWorkloadReconcileDeps,
@@ -857,6 +859,156 @@ describe("reconcileComputeWorkload", () => {
     expect(state.current.status?.failure).toMatchObject({
       reason: "SecretResolverUnavailable",
       retryable: true,
+    });
+  });
+
+  it("retries a definitive pre-allocation failure after its prerequisite recovers", async () => {
+    const state = new MemoryState(workload());
+    const port = lifecycle();
+    await run(state, port, {
+      secretResolver: {
+        resolve: vi.fn(async () => {
+          throw new ComputeLifecycleError(
+            "transient",
+            "SecretResolverUnavailable",
+            true
+          );
+        }),
+      },
+    });
+
+    expect(port.create).not.toHaveBeenCalled();
+    expect(
+      decodeAttemptReceipt(
+        state.current.metadata.annotations?.[
+          COMPUTE_WORKLOAD_ATTEMPT_ANNOTATION
+        ]
+      )
+    ).toMatchObject({
+      operation: "create",
+      outcome: "known_failure",
+      retryCount: 0,
+    });
+
+    await run(state, port);
+
+    expect(port.create).toHaveBeenCalledTimes(1);
+    expect(state.current.status).toMatchObject({
+      phase: "Progressing",
+      resource: { id: "lease-42" },
+      attempt: {
+        operation: "create",
+        outcome: "succeeded",
+        retryCount: 1,
+      },
+    });
+    const completedReceipt = decodeAttemptReceipt(
+      state.current.metadata.annotations?.[COMPUTE_WORKLOAD_ATTEMPT_ANNOTATION]
+    );
+    expect(completedReceipt).toMatchObject({
+      key: state.current.status?.attempt?.key,
+      operation: "create",
+      outcome: "succeeded",
+      resource: { id: "lease-42" },
+    });
+    expect(state.current.status?.failure).toBeUndefined();
+  });
+
+  it("retries a definitive recover failure when no resource handle exists", async () => {
+    const receipt: ComputeWorkloadAttemptReceipt = {
+      key: "recover-known-failure",
+      operation: "recover",
+      ordinal: 1,
+      outcome: "known_failure",
+      leaderEpoch: "7:test-controller",
+      retryCount: 0,
+      startedAt: NOW.toISOString(),
+    };
+    const state = new MemoryState(
+      workload({
+        metadata: {
+          ...workload().metadata,
+          annotations: {
+            [COMPUTE_WORKLOAD_ATTEMPT_ANNOTATION]:
+              encodeAttemptReceipt(receipt),
+          },
+        },
+      })
+    );
+    const port = lifecycle();
+
+    await run(state, port);
+
+    expect(port.create).toHaveBeenCalledTimes(1);
+    expect(state.current.status).toMatchObject({
+      resource: { id: "lease-42" },
+      recoveryCount: 1,
+      attempt: { operation: "recover", outcome: "succeeded" },
+    });
+  });
+
+  it.each([
+    ["create", "unknown"],
+    ["create", "prepared"],
+    ["create", "allocated"],
+    ["update", "known_failure"],
+    ["delete", "known_failure"],
+  ] as const)("keeps an ambiguous %s/%s receipt behind OrphanRisk", async (operation, outcome) => {
+    const receipt: ComputeWorkloadAttemptReceipt = {
+      key: `${operation}-${outcome}`,
+      operation,
+      ordinal: 0,
+      outcome,
+      leaderEpoch: "7:test-controller",
+      retryCount: 0,
+      startedAt: NOW.toISOString(),
+    };
+    const state = new MemoryState(
+      workload({
+        metadata: {
+          ...workload().metadata,
+          annotations: {
+            [COMPUTE_WORKLOAD_ATTEMPT_ANNOTATION]:
+              encodeAttemptReceipt(receipt),
+          },
+        },
+      })
+    );
+    const port = lifecycle();
+
+    await run(state, port);
+
+    expect(port.create).not.toHaveBeenCalled();
+    expect(port.update).not.toHaveBeenCalled();
+    expect(port.delete).not.toHaveBeenCalled();
+    expect(port.recoverCreate).not.toHaveBeenCalled();
+    expect(state.current.status).toMatchObject({
+      phase: "Unknown",
+      failure: { reason: "OrphanRisk", retryable: false },
+    });
+  });
+
+  it("keeps an undecodable mutation marker behind OrphanRisk", async () => {
+    const state = new MemoryState(
+      workload({
+        metadata: {
+          ...workload().metadata,
+          annotations: {
+            [COMPUTE_WORKLOAD_ATTEMPT_ANNOTATION]: "legacy-marker",
+          },
+        },
+      })
+    );
+    const port = lifecycle();
+
+    await run(state, port);
+
+    expect(port.create).not.toHaveBeenCalled();
+    expect(port.update).not.toHaveBeenCalled();
+    expect(port.delete).not.toHaveBeenCalled();
+    expect(state.current.status).toMatchObject({
+      phase: "Unknown",
+      failure: { reason: "OrphanRisk", retryable: false },
     });
   });
 
